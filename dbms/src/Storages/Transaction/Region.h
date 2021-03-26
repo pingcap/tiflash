@@ -1,12 +1,17 @@
 #pragma once
 
-#include <Storages/Transaction/IndexReaderCreate.h>
 #include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <common/logger_useful.h>
 
 #include <shared_mutex>
+
+namespace kvrpcpb
+{
+class ReadIndexResponse;
+class ReadIndexRequest;
+} // namespace kvrpcpb
 
 namespace DB
 {
@@ -23,8 +28,11 @@ class KVStoreTaskLock;
 class Context;
 class TMTContext;
 struct WriteCmdsView;
-enum class TiFlashApplyRes : uint32_t;
-struct SnapshotViewArray;
+enum class EngineStoreApplyRes : uint32_t;
+struct SSTViewVec;
+struct TiFlashRaftProxyHelper;
+class RegionMockTest;
+struct ReadIndexResult;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 class Region : public std::enable_shared_from_this<Region>
@@ -34,8 +42,8 @@ public:
 
     const static std::string log_name;
 
-    static const auto PutFlag = CFModifyFlag::PutFlag;
-    static const auto DelFlag = CFModifyFlag::DelFlag;
+    static const auto PutFlag = RecordKVFormat::CFModifyFlag::PutFlag;
+    static const auto DelFlag = RecordKVFormat::CFModifyFlag::DelFlag;
 
     class CommittedScanner : private boost::noncopyable
     {
@@ -56,13 +64,13 @@ public:
 
         auto next(bool need_value = true) { return store->readDataByWriteIt(write_map_it++, need_value); }
 
-        LockInfoPtr getLockInfo(const RegionLockReadQuery & query) { return store->getLockInfo(query); }
+        DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) { return store->getLockInfo(query); }
 
         size_t writeMapSize() const { return write_map_size; }
 
     private:
         RegionPtr store;
-        std::shared_lock<std::shared_mutex> lock;
+        std::shared_lock<std::shared_mutex> lock; // A shared_lock so that we can concurrently read committed data.
 
         size_t write_map_size = 0;
         RegionData::ConstWriteCFIter write_map_it;
@@ -87,12 +95,12 @@ public:
 
     private:
         RegionPtr store;
-        std::unique_lock<std::shared_mutex> lock;
+        std::unique_lock<std::shared_mutex> lock; // A unique_lock so that we can safely remove committed data.
     };
 
 public:
     explicit Region(RegionMeta && meta_);
-    explicit Region(RegionMeta && meta_, const IndexReaderCreateFunc & index_reader_create);
+    explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
 
     void insert(const std::string & cf, TiKVKey && key, TiKVValue && value);
     void insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value);
@@ -102,7 +110,7 @@ public:
     CommittedRemover createCommittedRemover(bool use_lock = true);
 
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
-    static RegionPtr deserialize(ReadBuffer & buf, const IndexReaderCreateFunc * index_reader_create = nullptr);
+    static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
     std::string getDebugString(std::stringstream & ss) const;
     RegionID id() const;
@@ -112,7 +120,6 @@ public:
 
     bool isPendingRemove() const;
     void setPendingRemove();
-    bool isPeerRemoved() const;
     raft_serverpb::PeerState peerState() const;
 
     bool isMerging() const;
@@ -133,7 +140,7 @@ public:
         return region1.meta == region2.meta && region1.data == region2.data;
     }
 
-    ReadIndexResult learnerRead();
+    ReadIndexResult learnerRead(UInt64 start_ts);
 
     /// If server is terminating, return true (read logic should throw NOT_FOUND exception and let upper layer retry other store).
     TerminateWaitIndex waitIndex(UInt64 index, const std::atomic_bool & terminated);
@@ -145,10 +152,7 @@ public:
     RegionVersion version() const;
     RegionVersion confVer() const;
 
-    /// version, conf_version, range
-    std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> dumpVersionRange() const;
-
-    HandleRange<HandleID> getHandleRangeByTable(TableID table_id) const;
+    RegionMetaSnapshot dumpRegionMetaSnapshot() const;
 
     void assignRegion(Region && new_region);
 
@@ -162,17 +166,16 @@ public:
     metapb::Region getMetaRegion() const;
     raft_serverpb::MergeState getMergeState() const;
 
-    void tryPreDecodeTiKVValue(TMTContext & tmt);
-
     TableID getMappedTableID() const;
-    TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
-    void handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term);
+    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
+    void handleIngestSST(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt);
 
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
 
 private:
     Region() = delete;
     friend class RegionRaftCommandDelegate;
+    friend class RegionMockTest;
 
     // Private methods no need to lock mutex, normally
 
@@ -183,7 +186,7 @@ private:
     RegionDataReadInfo readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
     RegionData::WriteCFIter removeDataByWriteIt(const RegionData::WriteCFIter & write_it);
 
-    LockInfoPtr getLockInfo(const RegionLockReadQuery & query) const;
+    DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
 
     RegionPtr splitInto(RegionMeta && meta);
     void setPeerState(raft_serverpb::PeerState state);
@@ -191,23 +194,17 @@ private:
 private:
     RegionData data;
     mutable std::shared_mutex mutex;
-    mutable std::mutex predecode_mutex;
 
     RegionMeta meta;
 
-    IndexReaderPtr index_reader;
-
-    mutable std::atomic<Timepoint> last_persist_time = Timepoint::min();
     mutable std::atomic<Timepoint> last_compact_log_time = Timepoint::min();
-
-    // dirty_flag is used to present whether this region need to be persisted.
-    mutable std::atomic<size_t> dirty_flag = 1;
 
     Logger * log;
 
     const TableID mapped_table_id;
 
     std::atomic<UInt64> snapshot_event_flag{1};
+    const TiFlashRaftProxyHelper * proxy_helper{nullptr};
 };
 
 class RegionRaftCommandDelegate : public Region, private boost::noncopyable
@@ -233,5 +230,7 @@ private:
     void execRollbackMerge(
         const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
 };
+
+kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 start_ts = 0);
 
 } // namespace DB

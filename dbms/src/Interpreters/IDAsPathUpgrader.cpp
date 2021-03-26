@@ -143,40 +143,44 @@ void renamePath(const String & old_path, const String & new_path, Poco::Logger *
     }
 }
 
-void writeTableDefinitionToFile(const FileProviderPtr & file_provider, const String & table_meta_path, const ASTPtr & query, bool fsync_metadata)
+void writeTableDefinitionToFile(
+    const FileProviderPtr & file_provider, const String & table_meta_path, const ASTPtr & query, bool fsync_metadata)
 {
     String table_meta_tmp_path = table_meta_path + ".tmp";
     {
         String statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFileProvider out(file_provider, table_meta_tmp_path, EncryptionPath(table_meta_tmp_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(file_provider, table_meta_tmp_path, EncryptionPath(table_meta_tmp_path, ""), true, nullptr,
+            statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (fsync_metadata)
             out.sync();
         out.close();
     }
-    file_provider->renameFile(table_meta_tmp_path, EncryptionPath(table_meta_tmp_path, ""),
-        table_meta_path, EncryptionPath(table_meta_path, ""));
+    file_provider->renameFile(
+        table_meta_tmp_path, EncryptionPath(table_meta_tmp_path, ""), table_meta_path, EncryptionPath(table_meta_path, ""), true);
 }
 
-void writeDatabaseDefinitionToFile(const FileProviderPtr & file_provider, const String & database_meta_path, const ASTPtr & query, bool fsync_metadata)
+void writeDatabaseDefinitionToFile(
+    const FileProviderPtr & file_provider, const String & database_meta_path, const ASTPtr & query, bool fsync_metadata)
 {
     String db_meta_tmp_path = database_meta_path + ".tmp";
     {
         String statement = getDatabaseDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFileProvider out(file_provider, db_meta_tmp_path, EncryptionPath(db_meta_tmp_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(file_provider, db_meta_tmp_path, EncryptionPath(db_meta_tmp_path, ""), true, nullptr,
+            statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (fsync_metadata)
             out.sync();
         out.close();
     }
-    file_provider->renameFile(db_meta_tmp_path, EncryptionPath(db_meta_tmp_path, ""),
-        database_meta_path, EncryptionPath(database_meta_path, ""));
+    file_provider->renameFile(
+        db_meta_tmp_path, EncryptionPath(db_meta_tmp_path, ""), database_meta_path, EncryptionPath(database_meta_path, ""), true);
 }
 
 ASTPtr parseCreateDatabaseAST(const String & statement)
@@ -216,7 +220,10 @@ void tryRemoveDirectory(const String & directory, Poco::Logger * log, bool recur
 
 // This function will tidy up path and compare if them are the same one.
 // For example "/tmp/data/a.sql" is equal to "/tmp//data//a.sql"
-inline bool isSamePath(const String & lhs, const String & rhs) { return Poco::Path{lhs}.toString() == Poco::Path{rhs}.toString(); }
+inline bool isSamePath(const String & lhs, const String & rhs)
+{
+    return Poco::Path{lhs}.absolute().toString() == Poco::Path{rhs}.absolute().toString();
+}
 
 } // namespace
 
@@ -371,7 +378,7 @@ void IDAsPathUpgrader::DatabaseDiskInfo::renameToTmpDirectories(const Context & 
         true);
 
     // Rename database data dir for multi-paths
-    auto root_pool = ctx.getExtraPaths();
+    auto root_pool = ctx.getPathPool();
     for (const auto & extra_path : root_pool.listPaths())
         renamePath(                                                          //
             doGetExtraDirectory(extra_path, /*escape*/ true, /*tmp*/ false), //
@@ -481,7 +488,7 @@ static void dropAbsentDatabase(
     const String old_data_dir_not_escaped = db_info.getDataDirectory(root_path, false);
     tryRemoveDirectory(old_data_dir_not_escaped, log, true);
 
-    const auto & data_extra_paths = context.getExtraPaths();
+    const auto & data_extra_paths = context.getPathPool();
     for (const auto & extra_root_path : data_extra_paths.listPaths())
     {
         tryRemoveDirectory(db_info.getExtraDirectory(extra_root_path), log, true);
@@ -562,7 +569,7 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
             if (Poco::File dir(escaped_db_data_dir); !dir.exists())
                 dir.createDirectory();
 
-            const auto & data_extra_paths = global_context.getExtraPaths();
+            const auto & data_extra_paths = global_context.getPathPool();
             for (const auto & extra_root_path : data_extra_paths.listPaths())
             {
                 auto escaped_extra_dir = db_info.getExtraDirectory(extra_root_path, /*escape=*/true);
@@ -611,7 +618,7 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
             }
 
             // Fix extra path.
-            const auto & data_extra_paths = global_context.getExtraPaths();
+            const auto & data_extra_paths = global_context.getPathPool();
             for (const auto & extra_root_path : data_extra_paths.listPaths())
             {
                 // It was created by old PathPool, both database name and table name are not escaped.
@@ -631,7 +638,7 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
             // clean not escaped database dir created by old PathPool
             const String not_escaped_data_dir = db_info.getDataDirectory(root_path, /*escape*/ false);
             tryRemoveDirectory(not_escaped_data_dir, log, true);
-            const auto & data_extra_paths = global_context.getExtraPaths();
+            const auto & data_extra_paths = global_context.getPathPool();
             for (const auto & extra_root_path : data_extra_paths.listPaths())
             {
                 auto not_escaped_extra_data_dir = db_info.getExtraDirectory(extra_root_path, /*escape*/ false);
@@ -735,7 +742,7 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
         // Remove old data dir
         const String old_data_dir = db_info.getDataDirectory(root_path);
         tryRemoveDirectory(old_data_dir, log);
-        const auto & data_extra_paths = global_context.getExtraPaths();
+        const auto & data_extra_paths = global_context.getPathPool();
         for (const auto & extra_root_path : data_extra_paths.listPaths())
         {
             tryRemoveDirectory(db_info.getExtraDirectory(extra_root_path), log);
@@ -762,7 +769,7 @@ void IDAsPathUpgrader::renameTable(
 
     {
         // Rename data path for multi disk
-        auto data_extra_paths = global_context.getExtraPaths();
+        auto data_extra_paths = global_context.getPathPool();
         for (const auto & extra_root_path : data_extra_paths.listPaths())
         {
             auto old_tbl_extra_data_path = table.getExtraDirectory(extra_root_path, db_info);

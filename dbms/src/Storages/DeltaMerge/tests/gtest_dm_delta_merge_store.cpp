@@ -1,11 +1,15 @@
+#include <Common/FailPoint.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Poco/File.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Segment.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
-#include <test_utils/TiflashTestBasic.h>
 
 #include <memory>
 
@@ -13,58 +17,129 @@
 
 namespace DB
 {
+
+namespace FailPoints
+{
+extern const char pause_before_dt_background_delta_merge[];
+extern const char pause_until_dt_background_delta_merge[];
+extern const char force_triggle_background_merge_delta[];
+extern const char force_triggle_foreground_flush[];
+} // namespace FailPoints
+
 namespace DM
 {
 namespace tests
 {
 
-class DeltaMergeStore_test : public ::testing::Test
+enum TestMode
+{
+    V1_BlockOnly,
+    V2_BlockOnly,
+    V2_FileOnly,
+    V2_Mix,
+};
+
+String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
+{
+    const auto mode = info.param;
+    switch (mode)
+    {
+    case TestMode::V1_BlockOnly:
+        return "V1_BlockOnly";
+    case TestMode::V2_BlockOnly:
+        return "V2_BlockOnly";
+    case TestMode::V2_FileOnly:
+        return "V2_FileOnly";
+    case TestMode::V2_Mix:
+        return "V2_Mix";
+    default:
+        return "Unknown";
+    }
+}
+
+class DeltaMergeStore_test : public ::testing::Test, public testing::WithParamInterface<TestMode>
 {
 public:
-    DeltaMergeStore_test() : name("DeltaMergeStore_test"), path(DB::tests::TiFlashTestEnv::getTemporaryPath() + name) {}
+    DeltaMergeStore_test() : name("DeltaMergeStore_test") {}
 
-protected:
-    static void SetUpTestCase() { DB::tests::TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase() {}
 
     void cleanUp()
     {
         // drop former-gen table's data in disk
-        Poco::File file(path);
-        if (file.exists())
-            file.remove(true);
+        const String p = DB::tests::TiFlashTestEnv::getTemporaryPath();
+        if (Poco::File f{p}; f.exists())
+        {
+            f.remove(true);
+            f.createDirectories();
+        }
     }
 
     void SetUp() override
     {
+
         cleanUp();
+
+        mode = GetParam();
+
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+            setStorageFormat(1);
+            break;
+        case TestMode::V2_BlockOnly:
+        case TestMode::V2_FileOnly:
+        case TestMode::V2_Mix:
+            setStorageFormat(2);
+            break;
+        }
 
         context = std::make_unique<Context>(DMTestEnv::getContext());
         store   = reload();
     }
 
-    DeltaMergeStorePtr reload(const ColumnDefinesPtr & pre_define_columns = {})
+    DeltaMergeStorePtr
+    reload(const ColumnDefinesPtr & pre_define_columns = {}, bool is_common_handle = false, size_t rowkey_column_size = 1)
     {
-        auto         cols                 = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
+        auto         cols                 = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle) : pre_define_columns;
         ColumnDefine handle_column_define = (*cols)[0];
 
         DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
-            *context, path, false, "test", name, *cols, handle_column_define, DeltaMergeStore::Settings());
+            *context, false, "test", name, *cols, handle_column_define, is_common_handle, rowkey_column_size, DeltaMergeStore::Settings());
         return s;
+    }
+
+    std::pair<RowKeyRange, std::vector<PageId>> genDMFile(DMContext & context, const Block & block)
+    {
+        auto file_id      = context.storage_pool.newDataPageId();
+        auto input_stream = std::make_shared<OneBlockInputStream>(block);
+        auto delegate     = context.path_pool.getStableDiskDelegator();
+        auto store_path   = delegate.choosePath();
+        auto dmfile       = writeIntoNewDMFile(
+            context, std::make_shared<ColumnDefines>(store->getTableColumns()), input_stream, file_id, store_path, false);
+
+        delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
+
+        auto &      pk_column = block.getByPosition(0).column;
+        auto        min_pk    = pk_column->getInt(0);
+        auto        max_pk    = pk_column->getInt(block.rows() - 1);
+        HandleRange range(min_pk, max_pk + 1);
+
+        return {RowKeyRange::fromHandleRange(range), {file_id}};
     }
 
 private:
     // the table name
     String name;
-    // the path to the dir of table
-    String path;
 
 protected:
+    TestMode mode;
     // a ptr to context, we can reload context with different settings if need.
     std::unique_ptr<Context> context;
     DeltaMergeStorePtr       store;
 };
 
-TEST_F(DeltaMergeStore_test, Create)
+TEST_P(DeltaMergeStore_test, Create)
 try
 {
     // create table
@@ -75,7 +150,7 @@ try
         auto & h = store->getHandle();
         ASSERT_EQ(h.name, EXTRA_HANDLE_COLUMN_NAME);
         ASSERT_EQ(h.id, EXTRA_HANDLE_COLUMN_ID);
-        ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_TYPE));
+        ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_INT_TYPE));
     }
     {
         // check column structure of store
@@ -86,7 +161,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, OpenWithExtraColumns)
+TEST_P(DeltaMergeStore_test, OpenWithExtraColumns)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -114,7 +189,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, SimpleWriteRead)
+TEST_P(DeltaMergeStore_test, SimpleWriteRead)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -174,7 +249,20 @@ try
             }
             block.insert(std::move(i8));
         }
-        store->write(*context, context->getSettingsRef(), block);
+
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly:
+            store->write(*context, context->getSettingsRef(), block);
+            break;
+        default: {
+            auto dm_context        = store->newDMContext(*context, context->getSettingsRef());
+            auto [range, file_ids] = genDMFile(*dm_context, block);
+            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            break;
+        }
+        }
     }
 
     {
@@ -188,7 +276,7 @@ try
         BlockInputStreamPtr in      = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -264,14 +352,27 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DeleteRead)
+TEST_P(DeltaMergeStore_test, DeleteRead)
 try
 {
     const size_t num_rows_write = 128;
     {
         // Create a block with sequential Int64 handle in range [0, 128)
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
-        store->write(*context, context->getSettingsRef(), block);
+
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly:
+            store->write(*context, context->getSettingsRef(), block);
+            break;
+        default: {
+            auto dm_context        = store->newDMContext(*context, context->getSettingsRef());
+            auto [range, file_ids] = genDMFile(*dm_context, block);
+            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            break;
+        }
+        }
     }
     // Test Reading first
     {
@@ -279,7 +380,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -307,7 +408,7 @@ try
     const size_t num_deleted_rows = 64;
     {
         HandleRange range(0, num_deleted_rows);
-        store->deleteRange(*context, context->getSettingsRef(), range);
+        store->deleteRange(*context, context->getSettingsRef(), RowKeyRange::fromHandleRange(range));
     }
     // Read after deletion
     {
@@ -315,7 +416,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -343,7 +444,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, WriteMultipleBlock)
+TEST_P(DeltaMergeStore_test, WriteMultipleBlock)
 try
 {
     const size_t num_write_rows = 32;
@@ -353,11 +454,42 @@ try
         Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false);
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false);
         Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows, 3 * num_write_rows, false);
-        store->write(*context, context->getSettingsRef(), block1);
-        store->write(*context, context->getSettingsRef(), block2);
-        store->write(*context, context->getSettingsRef(), block3);
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly: {
+            store->write(*context, context->getSettingsRef(), block1);
+            store->write(*context, context->getSettingsRef(), block2);
+            store->write(*context, context->getSettingsRef(), block3);
+            break;
+        }
+        case TestMode::V2_FileOnly: {
+            auto dm_context          = store->newDMContext(*context, context->getSettingsRef());
+            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            auto [range2, file_ids2] = genDMFile(*dm_context, block2);
+            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto range               = range1.merge(range2).merge(range3);
+            auto file_ids            = file_ids1;
+            file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
+            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
+            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            break;
+        }
+        case TestMode::V2_Mix: {
+            auto dm_context          = store->newDMContext(*context, context->getSettingsRef());
+            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto range               = range1.merge(range3);
+            auto file_ids            = file_ids1;
+            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
+            store->writeRegionSnapshot(dm_context, range, file_ids, false);
 
-        store->flushCache(*context);
+            store->write(*context, context->getSettingsRef(), block2);
+            break;
+        }
+        }
+
+        store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
 
     {
@@ -365,7 +497,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -399,14 +531,46 @@ try
         Block  block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false, tso1);
         Block  block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false, tso1);
         Block  block3 = DMTestEnv::prepareSimpleWriteBlock(num_write_rows / 2, num_write_rows / 2 + num_write_rows, false, tso2);
-        store->write(*context, context->getSettingsRef(), block1);
-        store->write(*context, context->getSettingsRef(), block2);
-        store->write(*context, context->getSettingsRef(), block3);
 
-        store->flushCache(*context);
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly: {
+            store->write(*context, context->getSettingsRef(), block1);
+            store->write(*context, context->getSettingsRef(), block2);
+            store->write(*context, context->getSettingsRef(), block3);
+            break;
+        }
+        case TestMode::V2_FileOnly: {
+            auto dm_context          = store->newDMContext(*context, context->getSettingsRef());
+            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            auto [range2, file_ids2] = genDMFile(*dm_context, block2);
+            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto range               = range1.merge(range2).merge(range3);
+            auto file_ids            = file_ids1;
+            file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
+            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
+            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            break;
+        }
+        case TestMode::V2_Mix: {
+            store->write(*context, context->getSettingsRef(), block2);
+
+            auto dm_context          = store->newDMContext(*context, context->getSettingsRef());
+            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto range               = range1.merge(range3);
+            auto file_ids            = file_ids1;
+            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
+            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            break;
+        }
+        }
+
+        store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
 
-    store->compact(*context);
+    store->compact(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
 
     // Read without version
     {
@@ -414,7 +578,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -444,7 +608,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ UInt64(1),
                                              EMPTY_FILTER,
@@ -474,7 +638,7 @@ CATCH
 // DEPRECATED:
 //   This test case strongly depends on implementation of `shouldSplit()` and `shouldMerge()`.
 //   The machanism of them may be changed one day. So uncomment the test if need.
-TEST_F(DeltaMergeStore_test, DISABLED_WriteLargeBlock)
+TEST_P(DeltaMergeStore_test, DISABLED_WriteLargeBlock)
 try
 {
     DB::Settings settings = context->getSettings();
@@ -498,7 +662,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              settings,
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -536,7 +700,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              settings,
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -569,7 +733,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, ReadWithSpecifyTso)
+TEST_P(DeltaMergeStore_test, ReadWithSpecifyTso)
 try
 {
     const UInt64 tso1          = 4;
@@ -594,7 +758,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -616,7 +780,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso2,
                                             EMPTY_FILTER,
@@ -638,7 +802,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
@@ -660,7 +824,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1 - 1,
                                             EMPTY_FILTER,
@@ -678,7 +842,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, Split)
+TEST_P(DeltaMergeStore_test, Split)
 try
 {
     // set some params to smaller threshold so that we can trigger split faster
@@ -700,8 +864,35 @@ try
                 num_rows_write_in_total + 1 + num_rows_per_write,
                 false);
 
-            store->write(*context, settings, block);
-            store->flushCache(*context);
+            auto write_as_file = [&]() {
+                auto dm_context        = store->newDMContext(*context, context->getSettingsRef());
+                auto [range, file_ids] = genDMFile(*dm_context, block);
+                store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            };
+
+            switch (mode)
+            {
+            case TestMode::V1_BlockOnly:
+            case TestMode::V2_BlockOnly:
+                store->write(*context, settings, block);
+                break;
+            case TestMode::V2_FileOnly:
+                write_as_file();
+                break;
+            case TestMode::V2_Mix: {
+                if ((std::rand() % 2) == 0)
+                {
+                    store->write(*context, settings, block);
+                }
+                else
+                {
+                    write_as_file();
+                }
+                break;
+            }
+            }
+
+            store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
             num_rows_write_in_total += num_rows_per_write;
         }
 
@@ -718,7 +909,7 @@ try
                                                 context->getSettingsRef(),
                                                 //                                                settings,
                                                 columns,
-                                                {HandleRange::newAll()},
+                                                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
@@ -766,7 +957,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DDLChangeInt8ToInt32)
+TEST_P(DeltaMergeStore_test, DDLChangeInt8ToInt32)
 try
 {
     const String      col_name_ddl        = "i8";
@@ -833,7 +1024,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -880,7 +1071,7 @@ try
 CATCH
 
 
-TEST_F(DeltaMergeStore_test, DDLDropColumn)
+TEST_P(DeltaMergeStore_test, DDLDropColumn)
 try
 {
     const String      col_name_to_drop = "i8";
@@ -946,7 +1137,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -981,7 +1172,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DDLAddColumn)
+TEST_P(DeltaMergeStore_test, DDLAddColumn)
 try
 {
     const String      col_name_c1 = "i8";
@@ -1000,11 +1191,11 @@ try
 
     const size_t num_rows_write = 128;
     {
-        // write to store
+        // write to store with column c1
         Block block;
         {
             block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-            // Add a column of col1:String for test
+            // Add a column of i8:Int8 for test
             ColumnWithTypeAndName col1({}, std::make_shared<DataTypeInt8>(), col_name_c1, col_id_c1);
             {
                 IColumn::MutablePtr m_col1 = col1.type->createColumn();
@@ -1040,7 +1231,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -1096,7 +1287,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DDLAddColumnFloat32)
+TEST_P(DeltaMergeStore_test, DDLAddColumnFloat32)
 try
 {
     const String      col_name_to_add = "f32";
@@ -1104,8 +1295,9 @@ try
     const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float32");
 
     // write some rows before DDL
+    size_t num_rows_write = 1;
     {
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, 1, false);
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
         store->write(*context, context->getSettingsRef(), block);
     }
 
@@ -1141,38 +1333,36 @@ try
         auto in = store->read(*context,
                               context->getSettingsRef(),
                               store->getTableColumns(),
-                              {HandleRange::newAll()},
+                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
+        size_t num_rows_read = 0;
         while (Block block = in->read())
         {
-            for (auto & itr : block)
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(col_name_to_add));
+            const auto & col = block.getByName(col_name_to_add);
+            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
+            ASSERT_EQ(col.name, col_name_to_add);
+            for (size_t i = 0; i < block.rows(); ++i)
             {
-                auto c = itr.column;
-                for (size_t i = 0; i < c->size(); i++)
-                {
-                    if (itr.name == "f32")
-                    {
-                        Field tmp;
-                        c->get(i, tmp);
-                        // There is some loss of precision during the convertion, so we just do a rough comparison
-                        Float64 epsilon = 0.00001;
-                        Float64 v       = std::abs(tmp.get<Float64>());
-                        EXPECT_TRUE(v - 1.125 < epsilon);
-                    }
-                }
+                Field tmp;
+                col.column->get(i, tmp);
+                // There is some loss of precision during the convertion, so we just do a rough comparison
+                EXPECT_FLOAT_EQ(tmp.get<Float64>(), 1.125);
             }
         }
         in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
     }
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DDLAddColumnDateTime)
+TEST_P(DeltaMergeStore_test, DDLAddColumnDateTime)
 try
 {
     const String      col_name_to_add = "dt";
@@ -1217,7 +1407,7 @@ try
         auto in = store->read(*context,
                               context->getSettingsRef(),
                               store->getTableColumns(),
-                              {HandleRange::newAll()},
+                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
@@ -1244,7 +1434,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DDLRenameColumn)
+TEST_P(DeltaMergeStore_test, DDLRenameColumn)
 try
 {
     const String      col_name_before_ddl = "i8";
@@ -1312,7 +1502,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -1361,7 +1551,7 @@ try
 CATCH
 
 // Test rename pk column when pk_is_handle = true.
-TEST_F(DeltaMergeStore_test, DDLRenamePKColumn)
+TEST_P(DeltaMergeStore_test, DDLRenamePKColumn)
 try
 {
     const String      col_name_before_ddl = "pk1";
@@ -1438,7 +1628,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -1492,7 +1682,7 @@ try
             BlockInputStreams ins     = store->read(*context,
                                                 context->getSettingsRef(),
                                                 columns,
-                                                {HandleRange::newAll()},
+                                                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
@@ -1534,6 +1724,609 @@ try
     }
 }
 CATCH
+
+TEST_P(DeltaMergeStore_test, DDL_issue1341)
+try
+{
+    // issue 1341: Background task may use a wrong schema to compact data
+
+    const String      col_name_to_add   = "f32";
+    const ColId       col_id_to_add     = 2;
+    const DataTypePtr col_type_to_add   = DataTypeFactory::instance().get("Float32");
+    const auto        col_default_value = toField(DecimalField(Decimal32(1125), 3)); // 1.125
+
+    // write some rows before DDL
+    size_t num_rows_write = 1;
+    {
+        // Enable pause before delta-merge
+        FailPointHelper::enableFailPoint(FailPoints::pause_before_dt_background_delta_merge);
+        // Enable pause until delta-merge is done
+        FailPointHelper::enableFailPoint(FailPoints::pause_until_dt_background_delta_merge);
+        FailPointHelper::enableFailPoint(FailPoints::force_triggle_background_merge_delta);
+
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    // DDL add column f32 with default value
+    {
+        AlterCommands commands;
+        {
+            AlterCommand com;
+            com.type        = AlterCommand::ADD_COLUMN;
+            com.data_type   = col_type_to_add;
+            com.column_name = col_name_to_add;
+
+            // mock default value
+            // actual ddl is like: ADD COLUMN `f32` Float32 DEFAULT 1.125
+            auto cast = std::make_shared<ASTFunction>();
+            {
+                cast->name      = "CAST";
+                ASTPtr arg      = std::make_shared<ASTLiteral>(toField(DecimalField(Decimal32(1125), 3)));
+                cast->arguments = std::make_shared<ASTExpressionList>();
+                cast->children.push_back(cast->arguments);
+                cast->arguments->children.push_back(arg);
+                cast->arguments->children.push_back(ASTPtr()); // dummy alias
+            }
+            com.default_expression = cast;
+            commands.emplace_back(std::move(com));
+        }
+        ColumnID _col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, _col_to_add, *context);
+    }
+
+    // try read
+    {
+        auto in = store->read(*context,
+                              context->getSettingsRef(),
+                              store->getTableColumns(),
+                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                              /* num_streams= */ 1,
+                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                              EMPTY_FILTER,
+                              /* expected_block_size= */ 1024)[0];
+
+        in->readPrefix();
+        size_t num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(col_name_to_add));
+            const auto & col = block.getByName(col_name_to_add);
+            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
+            ASSERT_EQ(col.name, col_name_to_add);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                Field tmp;
+                col.column->get(i, tmp);
+                // There is some loss of precision during the convertion, so we just do a rough comparison
+                EXPECT_FLOAT_EQ(std::abs(tmp.get<Float64>()), 1.125);
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+
+    {
+        // write and triggle flush
+        FailPointHelper::enableFailPoint(FailPoints::force_triggle_foreground_flush);
+
+        Block                 block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write * 2, false);
+        ColumnWithTypeAndName f_col(nullptr, col_type_to_add, col_name_to_add, col_id_to_add, col_default_value);
+        {
+            IColumn::MutablePtr m_col       = f_col.type->createColumn();
+            auto &              column_data = typeid_cast<ColumnVector<Float32> &>(*m_col).getData();
+            column_data.resize(num_rows_write);
+            for (size_t i = 0; i < num_rows_write; ++i)
+            {
+                column_data[i] = static_cast<Float32>(3.1415);
+            }
+            f_col.column = std::move(m_col);
+        }
+        block.insert(f_col);
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    // disable pause so that delta-merge can continue
+    FailPointHelper::disableFailPoint(FailPoints::pause_before_dt_background_delta_merge);
+    // wait till delta-merge is done
+    FAIL_POINT_PAUSE(FailPoints::pause_until_dt_background_delta_merge);
+    {
+        auto in = store->read(*context,
+                              context->getSettingsRef(),
+                              store->getTableColumns(),
+                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                              /* num_streams= */ 1,
+                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                              EMPTY_FILTER,
+                              /* expected_block_size= */ 1024)[0];
+
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            ASSERT_EQ(block.rows(), num_rows_write * 2);
+            ASSERT_TRUE(block.has(col_name_to_add));
+            const auto & col = block.getByName(col_name_to_add);
+            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
+            ASSERT_EQ(col.name, col_name_to_add);
+            Field tmp;
+            tmp = (*col.column)[0];
+            EXPECT_FLOAT_EQ(tmp.get<Float64>(), 1.125); // fill with default value
+            tmp = (*col.column)[1];
+            EXPECT_FLOAT_EQ(tmp.get<Float64>(), 3.1415); // keep the value we inserted
+        }
+        in->readSuffix();
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStore_test, CreateWithCommonHandle)
+try
+{
+    auto table_column_defines = DMTestEnv::getDefaultColumns(true);
+    cleanUp();
+    store = reload(table_column_defines, true, 2);
+    {
+        // check handle column of store
+        auto & h = store->getHandle();
+        ASSERT_EQ(h.name, EXTRA_HANDLE_COLUMN_NAME);
+        ASSERT_EQ(h.id, EXTRA_HANDLE_COLUMN_ID);
+        ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_STRING_TYPE));
+    }
+    {
+        // check column structure of store
+        auto & cols = store->getTableColumns();
+        // version & tag column added
+        ASSERT_EQ(cols.size(), 3UL);
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStore_test, SimpleWriteReadCommonHandle)
+try
+{
+    const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
+    const ColumnDefine col_i8_define(3, "i8", std::make_shared<DataTypeInt8>());
+    size_t             rowkey_column_size = 2;
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns(true);
+        table_column_defines->emplace_back(col_str_define);
+        table_column_defines->emplace_back(col_i8_define);
+
+        cleanUp();
+        store = reload(table_column_defines, true, rowkey_column_size);
+    }
+
+    {
+        // check column structure
+        const auto & cols = store->getTableColumns();
+        ASSERT_EQ(cols.size(), 5UL);
+        const auto & str_col = cols[3];
+        ASSERT_EQ(str_col.name, col_str_define.name);
+        ASSERT_EQ(str_col.id, col_str_define.id);
+        ASSERT_TRUE(str_col.type->equals(*col_str_define.type));
+        const auto & i8_col = cols[4];
+        ASSERT_EQ(i8_col.name, col_i8_define.name);
+        ASSERT_EQ(i8_col.id, col_i8_define.id);
+        ASSERT_TRUE(i8_col.type->equals(*col_i8_define.type));
+    }
+
+    const size_t num_rows_write = 128;
+    {
+        // write to store
+        Block block;
+        {
+            block = DMTestEnv::prepareSimpleWriteBlock(0,
+                                                       num_rows_write,
+                                                       false,
+                                                       2,
+                                                       EXTRA_HANDLE_COLUMN_NAME,
+                                                       EXTRA_HANDLE_COLUMN_ID,
+                                                       EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                       true,
+                                                       rowkey_column_size);
+            // Add a column of col2:String for test
+            ColumnWithTypeAndName col2({}, col_str_define.type, col_str_define.name, col_str_define.id);
+            {
+                IColumn::MutablePtr m_col2 = col2.type->createColumn();
+                for (size_t i = 0; i < num_rows_write; i++)
+                {
+                    String s = DB::toString(i);
+                    Field  field(s.c_str(), s.size());
+                    m_col2->insert(field);
+                }
+                col2.column = std::move(m_col2);
+            }
+            block.insert(std::move(col2));
+
+            // Add a column of i8:Int8 for test
+            ColumnWithTypeAndName i8({}, col_i8_define.type, col_i8_define.name, col_i8_define.id);
+            {
+                IColumn::MutablePtr m_i8 = i8.type->createColumn();
+                for (size_t i = 0; i < num_rows_write; i++)
+                {
+                    Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                    m_i8->insert(Field(num));
+                }
+                i8.column = std::move(m_i8);
+            }
+            block.insert(std::move(i8));
+        }
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    {
+        // TODO read data from more than one block
+        // TODO read data from mutli streams
+        // TODO read partial columns from store
+        // TODO read data of max_version
+
+        // read all columns from store
+        const auto &        columns = store->getTableColumns();
+        BlockInputStreamPtr in      = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
+                    }
+                    else if (iter.name == col_str_define.name)
+                    {
+                        //printf("%s:%s\n", col_str_define.name.c_str(), c->getDataAt(i).data);
+                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
+                    }
+                    else if (iter.name == col_i8_define.name)
+                    {
+                        //printf("%s:%lld\n", col_i8_define.name.c_str(), c->getInt(i));
+                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                        EXPECT_EQ(c->getInt(i), num);
+                    }
+                }
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+
+    {
+        // test readRaw
+        const auto &        columns = store->getTableColumns();
+        BlockInputStreamPtr in      = store->readRaw(*context, context->getSettingsRef(), columns, 1)[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
+                    }
+                    else if (iter.name == col_str_define.name)
+                    {
+                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
+                    }
+                    else if (iter.name == col_i8_define.name)
+                    {
+                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                        EXPECT_EQ(c->getInt(i), num);
+                    }
+                }
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStore_test, WriteMultipleBlockWithCommonHandle)
+try
+{
+    const size_t num_write_rows       = 32;
+    const size_t rowkey_column_size   = 2;
+    auto         table_column_defines = DMTestEnv::getDefaultColumns(true);
+
+    {
+        cleanUp();
+        store = reload(table_column_defines, true, rowkey_column_size);
+    }
+
+    // Test write multi blocks without overlap
+    {
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0,
+                                                          1 * num_write_rows,
+                                                          false,
+                                                          2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows,
+                                                          2 * num_write_rows,
+                                                          false,
+                                                          2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows,
+                                                          3 * num_write_rows,
+                                                          false,
+                                                          2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        store->write(*context, context->getSettingsRef(), block1);
+        store->write(*context, context->getSettingsRef(), block2);
+        store->write(*context, context->getSettingsRef(), block3);
+
+        store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    }
+
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, 3 * num_write_rows);
+    }
+
+    store = reload(table_column_defines, true, rowkey_column_size);
+
+    // Test write multi blocks with overlap
+    {
+        UInt64 tso1   = 1;
+        UInt64 tso2   = 100;
+        Block  block1 = DMTestEnv::prepareSimpleWriteBlock(0,
+                                                          1 * num_write_rows,
+                                                          false,
+                                                          tso1,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        Block  block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows,
+                                                          2 * num_write_rows,
+                                                          false,
+                                                          tso1,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        Block  block3 = DMTestEnv::prepareSimpleWriteBlock(num_write_rows / 2,
+                                                          num_write_rows / 2 + num_write_rows,
+                                                          false,
+                                                          tso2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        store->write(*context, context->getSettingsRef(), block1);
+        store->write(*context, context->getSettingsRef(), block2);
+        store->write(*context, context->getSettingsRef(), block3);
+
+        store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    }
+
+    store->compact(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+    // Read without version
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, 3 * num_write_rows);
+    }
+    // Read with version
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ UInt64(1),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, 2 * num_write_rows);
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStore_test, DeleteReadWithCommonHandle)
+try
+{
+    const size_t num_rows_write     = 128;
+    size_t       rowkey_column_size = 2;
+    {
+        // Create a block with sequential Int64 handle in range [0, 128)
+        auto table_column_difines = DMTestEnv::getDefaultColumns(true);
+
+        cleanUp();
+        store = reload(table_column_difines, true, rowkey_column_size);
+
+        Block block = DMTestEnv::prepareSimpleWriteBlock(
+            0, 128, false, 2, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_STRING_TYPE, true, rowkey_column_size);
+        store->write(*context, context->getSettingsRef(), block);
+    }
+    // Test Reading first
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+    // Delete range [0, 64)
+    const size_t num_deleted_rows = 64;
+    {
+        std::stringstream ss;
+        ss << TiDB::CodecFlagInt;
+        DB::EncodeInt64(Int64(0), ss);
+        ss << TiDB::CodecFlagInt;
+        DB::EncodeInt64(Int64(0), ss);
+        RowKeyValue start(true, std::make_shared<String>(ss.str()));
+        ss.str("");
+        ss << TiDB::CodecFlagInt;
+        DB::EncodeInt64(Int64(num_deleted_rows), ss);
+        ss << TiDB::CodecFlagInt;
+        DB::EncodeInt64(Int64(num_deleted_rows), ss);
+        RowKeyValue end(true, std::make_shared<String>(ss.str()));
+        RowKeyRange range(start, end, true, 2);
+        store->deleteRange(*context, context->getSettingsRef(), range);
+    }
+    // Read after deletion
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        // Range after deletion is [64, 128)
+                        DMTestEnv::verifyClusteredIndexValue(
+                            c->operator[](i).get<String>(), i + Int64(num_deleted_rows), rowkey_column_size);
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, num_rows_write - num_deleted_rows);
+    }
+}
+CATCH
+
+INSTANTIATE_TEST_CASE_P(TestMode, //
+                        DeltaMergeStore_test,
+                        testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix),
+                        testModeToString);
 
 } // namespace tests
 } // namespace DM

@@ -438,6 +438,15 @@ struct FormatImpl<DataTypeMyDateTime>
     }
 };
 
+template <typename DecimalType>
+struct FormatImpl<DataTypeDecimal<DecimalType>>
+{
+    static void execute(const typename DataTypeDecimal<DecimalType>::FieldType v, WriteBuffer & wb, const DataTypeDecimal<DecimalType> * tp, const DateLUTImpl *)
+    {
+        writeText(v, tp->getScale(), wb);
+    }
+};
+
 template <typename FieldType>
 struct FormatImpl<DataTypeEnum<FieldType>>
 {
@@ -1296,6 +1305,7 @@ public:
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
     bool isInjective(const Block &) override { return true; }
+    bool useDefaultImplementationForConstants() const override { return true; }
     bool useDefaultImplementationForNulls() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
@@ -1318,14 +1328,13 @@ public:
     /// converted to 230000
     static constexpr int scale_multiplier[] = {1000000,100000,10000,1000,100,10,1};
 
-    template<typename T>
+    template <typename T>
     void decimalToMyDatetime(const ColumnPtr & input_col, ColumnUInt64::Container & datetime_res, ColumnUInt8::Container & null_res,
-            UInt32 scale, Int256 & scale_divisor, Int256 & scale_round_divisor)
+        UInt32 scale, Int256 & scale_divisor, Int256 & scale_round_divisor)
     {
         const auto & timezone_info = context.getTimezoneInfo();
         const auto * datelut = timezone_info.timezone;
-        const auto decimal_col = checkAndGetColumn<ColumnDecimal<T>>(input_col.get());
-        const typename ColumnDecimal<T>::Container & vec_from = decimal_col->getData();
+
         Int64 scale_divisor_64 = 1;
         Int64 scale_round_divisor_64 = 1;
         bool scale_divisor_fit_64 = false;
@@ -1335,14 +1344,18 @@ public:
             scale_round_divisor_64 = static_cast<Int64>(scale_round_divisor);
             scale_divisor_fit_64 = true;
         }
-        for (size_t i = 0; i < decimal_col->size(); i++)
-        {
-            const auto & decimal = vec_from[i];
+
+        auto handle_func = [&](const T & decimal, size_t index) {
+            if (null_res[index])
+            {
+                datetime_res[index] = 0;
+                return;
+            }
             if (decimal.value < 0)
             {
-                null_res[i] = 1;
-                datetime_res[i] = 0;
-                continue;
+                null_res[index] = 1;
+                datetime_res[index] = 0;
+                return;
             }
             Int64 integer_part;
             Int64 fsp_part = 0;
@@ -1381,9 +1394,9 @@ public:
             }
             if (integer_part > std::numeric_limits<Int32>::max() || integer_part < 0)
             {
-                null_res[i] = 1;
-                datetime_res[i] = 0;
-                continue;
+                null_res[index] = 1;
+                datetime_res[index] = 0;
+                return;
             }
 
             if (timezone_info.timezone_offset != 0)
@@ -1398,16 +1411,43 @@ public:
                     throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
             }
             MyDateTime result(datelut->toYear(integer_part), datelut->toMonth(integer_part), datelut->toDayOfMonth(integer_part),
-                                  datelut->toHour(integer_part), datelut->toMinute(integer_part), datelut->toSecond(integer_part), fsp_part);
-            null_res[i] = 0;
-            datetime_res[i] = result.toPackedUInt();
+                datelut->toHour(integer_part), datelut->toMinute(integer_part), datelut->toSecond(integer_part), fsp_part);
+            null_res[index] = 0;
+            datetime_res[index] = result.toPackedUInt();
+        };
+
+        if (auto decimal_col = checkAndGetColumn<ColumnDecimal<T>>(input_col.get()))
+        {
+            const typename ColumnDecimal<T>::Container & vec_from = decimal_col->getData();
+
+            for (size_t i = 0; i < decimal_col->size(); i++)
+            {
+                const auto & decimal = vec_from[i];
+                handle_func(decimal, i);
+            }
+        }
+        else if (auto const_decimal_col = checkAndGetColumn<ColumnConst>(input_col.get()))
+        {
+            const auto decimal_value = const_decimal_col->getValue<T>();
+            for (size_t i = 0; i < const_decimal_col->size(); i++)
+            {
+                handle_func(decimal_value, i);
+            }
+        }
+        else
+        {
+            throw Exception("Invalid data type of input_col: " + input_col->getName());
         }
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
     {
         const auto & input_column = block.getByPosition(arguments[0]).column;
-        const auto & decimal_column = input_column->isColumnNullable() ? dynamic_cast<const ColumnNullable &>(*input_column).getNestedColumnPtr() : input_column;
+        ColumnPtr decimal_column = input_column;
+        if (decimal_column->isColumnNullable())
+        {
+            decimal_column = dynamic_cast<const ColumnNullable &>(*decimal_column).getNestedColumnPtr();
+        }
         size_t rows = decimal_column->size();
 
 
@@ -1527,12 +1567,16 @@ public:
             auto format = col_const->getValue<String>();
             ColumnString::Chars_t & data_to = col_to->getChars();
             ColumnString::Offsets & offsets_to = col_to->getOffsets();
-            data_to.resize(size * maxFormattedDateTimeStringLength(format));
+            auto max_length = maxFormattedDateTimeStringLength(format);
+            data_to.resize(size * max_length);
             offsets_to.resize(size);
             WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            String result_container;
+            result_container.reserve(max_length);
+            auto formatter = MyDateTimeFormatter(format);
             for (size_t i = 0; i < size; i++)
             {
-                writeMyDateTimeTextWithFormat(vec_from[i], write_buffer, format);
+                writeMyDateTimeTextWithFormat(vec_from[i], write_buffer, formatter, result_container);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
             }
@@ -1977,7 +2021,7 @@ private:
         element_wrappers.reserve(from_element_types.size());
 
         /// Create conversion wrapper for each element in tuple
-        for (const auto & idx_type : ext::enumerate(from_type->getElements()))
+        for (const auto idx_type : ext::enumerate(from_type->getElements()))
             element_wrappers.push_back(prepare(idx_type.second, to_element_types[idx_type.first]));
 
         return [element_wrappers, from_element_types, to_element_types]
@@ -2003,7 +2047,7 @@ private:
             element_block.insert({ nullptr, std::make_shared<DataTypeTuple>(to_element_types), "" });
 
             /// invoke conversion for each element
-            for (const auto & idx_element_wrapper : ext::enumerate(element_wrappers))
+            for (const auto idx_element_wrapper : ext::enumerate(element_wrappers))
                 idx_element_wrapper.second(element_block, { idx_element_wrapper.first },
                     tuple_size + idx_element_wrapper.first);
 

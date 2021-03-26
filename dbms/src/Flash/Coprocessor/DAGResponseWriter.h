@@ -13,32 +13,42 @@
 namespace DB
 {
 
-/// Serializes the stream of blocks in TiDB DAG response format.
-template <bool streaming>
+/// do not need be thread safe since it is only used in single thread env
+struct ExecutionSummary
+{
+    UInt64 time_processed_ns;
+    UInt64 num_produced_rows;
+    UInt64 num_iterations;
+    UInt64 concurrency;
+    ExecutionSummary() : time_processed_ns(0), num_produced_rows(0), num_iterations(0), concurrency(0) {}
+
+    void merge(const ExecutionSummary & other)
+    {
+        time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
+        num_produced_rows += other.num_produced_rows;
+        num_iterations += other.num_iterations;
+        concurrency += other.concurrency;
+    }
+};
+
 class DAGResponseWriter
 {
 public:
-    DAGResponseWriter(tipb::SelectResponse * response_, StreamWriterPtr writer_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
-        std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_, bool collect_execute_summary_,
-        bool return_executor_id_);
+    DAGResponseWriter(Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_,
+        DAGContext & dag_context_);
+    void fillTiExecutionSummary(tipb::ExecutorExecutionSummary * execution_summary, ExecutionSummary & current, const String & executor_id);
+    void addExecuteSummaries(tipb::SelectResponse & response);
+    virtual void write(const Block & block) = 0;
+    virtual void finishWrite() = 0;
+    virtual ~DAGResponseWriter() = default;
 
-    void write(const Block & block);
-    void finishWrite();
-    void encodeChunkToDAGResponse();
-    void addExecuteSummaries(tipb::SelectResponse * dag_response);
-
-private:
-    tipb::SelectResponse * dag_response;
-    StreamWriterPtr writer;
-    std::vector<tipb::FieldType> result_field_types;
+protected:
     Int64 records_per_chunk;
     tipb::EncodeType encode_type;
-    std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
-    Int64 current_records_num;
+    std::vector<tipb::FieldType> result_field_types;
     DAGContext & dag_context;
-    bool collect_execute_summary;
-    bool return_executor_id;
-    std::vector<std::tuple<UInt64, UInt64, UInt64>> previous_execute_stats;
+    std::unordered_map<String, ExecutionSummary> previous_execution_stats;
+    std::unordered_set<String> local_executors;
 };
 
 } // namespace DB

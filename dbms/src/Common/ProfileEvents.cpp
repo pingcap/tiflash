@@ -172,6 +172,8 @@
     M(DMWriteBytes) \
     M(DMWriteBlock) \
     M(DMWriteBlockNS) \
+    M(DMWriteFile) \
+    M(DMWriteFileNS) \
     M(DMDeleteRange) \
     M(DMDeleteRangeNS) \
     M(DMAppendDeltaPrepare) \

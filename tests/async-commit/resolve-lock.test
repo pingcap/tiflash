@@ -1,0 +1,86 @@
+mysql> drop table if exists test.t;
+mysql> create table test.t (id int) partition by range(id) (partition p1 values less than (100), partition p2 values less than (200));
+
+mysql> alter table test.t set tiflash replica 1;
+
+mysql> set @@global.tidb_enable_async_commit=1; set @@global.tidb_allow_batch_cop=0;
+
+curl_tidb> get fail/github.com/pingcap/tidb/server/enableTestAPI
+return
+
+curl_tidb> put fail/github.com/pingcap/tidb/store/tikv/asyncCommitDoNothing return
+curl_tidb> put fail/github.com/pingcap/tidb/store/tikv/commitFailedSkipCleanup return
+curl_tidb> put fail/github.com/pingcap/tidb/store/tikv/prewritePrimaryFail 0%return
+curl_tidb> put fail/github.com/pingcap/tidb/store/tikv/prewriteSecondaryFail 0%return
+
+mysql> insert into test.t values (1), (101);
+
+func> wait_table test t
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
++------+
+| id   |
++------+
+|    1 |
+|  101 |
++------+
+
+mysql> set @@tidb_isolation_read_engines='tikv'; update test.t set id=id+1;
+
+SLEEP 4
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
++------+
+| id   |
++------+
+|    2 |
+|  102 |
++------+
+
+mysql> set @@global.tidb_allow_batch_cop=2;
+
+mysql> set @@tidb_isolation_read_engines='tikv'; update test.t set id=id+1;
+
+SLEEP 4
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
++------+
+| id   |
++------+
+|    3 |
+|  103 |
++------+
+
+curl_tidb> put fail/github.com/pingcap/tidb/store/tikv/prewritePrimaryFail return
+
+mysql> set @@tidb_isolation_read_engines='tikv'; update test.t set id=id+1;
+ERROR 1105 (HY000) at line 1: injected error on prewriting primary batch
+
+SLEEP 4
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
++------+
+| id   |
++------+
+|    3 |
+|  103 |
++------+
+
+curl_tidb> delete fail/github.com/pingcap/tidb/store/tikv/prewritePrimaryFail
+
+curl_tidb> put fail/github.com/pingcap/tidb/store/tikv/prewriteSecondaryFail return
+
+mysql> set @@tidb_isolation_read_engines='tikv'; update test.t set id=id+1;
+ERROR 1105 (HY000) at line 1: injected error on prewriting secondary batch
+
+SLEEP 4
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t order by id;
++------+
+| id   |
++------+
+|    3 |
+|  103 |
++------+
+
+mysql> drop table if exists test.t;

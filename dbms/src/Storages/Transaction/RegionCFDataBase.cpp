@@ -6,6 +6,8 @@
 namespace DB
 {
 
+using CFModifyFlag = RecordKVFormat::CFModifyFlag;
+
 template <typename Trait>
 const TiKVKey & RegionCFDataBase<Trait>::getTiKVKey(const Value & val)
 {
@@ -28,17 +30,20 @@ template <typename Trait>
 RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value)
 {
     const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
-    return insert(std::move(key), std::move(value), raw_key);
-}
-
-template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, const DecodedTiKVKey & raw_key)
-{
-    Pair kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
-    if (shouldIgnoreInsert(kv_pair.second))
+    auto kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
+    if (!kv_pair)
         return 0;
 
-    return insert(std::move(kv_pair));
+    return insert(std::move(*kv_pair));
+}
+
+template <>
+RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value)
+{
+    Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), std::move(value));
+    // according to the process of pessimistic lock, just overwrite.
+    data.insert_or_assign(std::move(kv_pair.first), std::move(kv_pair.second));
+    return 0;
 }
 
 template <typename Trait>
@@ -46,10 +51,8 @@ void RegionCFDataBase<Trait>::finishInsert(typename Map::iterator)
 {}
 
 template <>
-void RegionCFDataBase<RegionDefaultCFDataTrait>::finishInsert(typename Map::iterator it)
-{
-    pre_decode.add(getTiKVValuePtr(it->second));
-}
+void RegionCFDataBase<RegionDefaultCFDataTrait>::finishInsert(typename Map::iterator)
+{}
 
 template <>
 void RegionCFDataBase<RegionWriteCFDataTrait>::finishInsert(typename Map::iterator write_it)
@@ -64,11 +67,7 @@ void RegionCFDataBase<RegionWriteCFDataTrait>::finishInsert(typename Map::iterat
 
     if (write_type == CFModifyFlag::PutFlag)
     {
-        if (short_value)
-        {
-            pre_decode.add(short_value);
-        }
-        else
+        if (!short_value)
         {
             auto & default_cf_map = RegionData::getDefaultCFMap(this);
 
@@ -91,7 +90,7 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair)
     auto & map = data;
     auto [it, ok] = map.emplace(std::move(kv_pair));
     if (!ok)
-        throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toHex(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toDebugString(), ErrorCodes::LOGICAL_ERROR);
 
     finishInsert(it);
     return calcTiKVKeyValueSize(it->second);
@@ -127,20 +126,6 @@ template <>
 bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreRemove(const RegionCFDataBase::Value & value)
 {
     return RegionWriteCFDataTrait::getWriteType(value) == CFModifyFlag::DelFlag;
-}
-
-template <typename Trait>
-bool RegionCFDataBase<Trait>::shouldIgnoreInsert(const RegionCFDataBase::Value &)
-{
-    return false;
-}
-
-template <>
-bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreInsert(const RegionCFDataBase::Value & value)
-{
-    // only keep records with DelFlag or PutFlag.
-    const auto flag = RegionWriteCFDataTrait::getWriteType(value);
-    return flag != CFModifyFlag::DelFlag && flag != CFModifyFlag::PutFlag;
 }
 
 template <typename Trait>
@@ -298,23 +283,143 @@ typename RegionCFDataBase<Trait>::Data & RegionCFDataBase<Trait>::getDataMut()
     return data;
 }
 
-template <typename Trait>
-CFDataPreDecode<Trait> & RegionCFDataBase<Trait>::getCFDataPreDecode()
-{
-    return pre_decode;
-}
-
-template <>
-RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(
-    std::pair<RegionLockCFDataTrait::Key, RegionLockCFDataTrait::Value> && kv_pair)
-{
-    // according to the process of pessimistic lock, just overwrite.
-    data.insert_or_assign(std::move(kv_pair.first), std::move(kv_pair.second));
-    return true;
-}
-
 template struct RegionCFDataBase<RegionWriteCFDataTrait>;
 template struct RegionCFDataBase<RegionDefaultCFDataTrait>;
 template struct RegionCFDataBase<RegionLockCFDataTrait>;
 
+
+namespace RecordKVFormat
+{
+
+// https://github.com/tikv/tikv/blob/master/components/txn_types/src/lock.rs
+inline void decodeLockCfValue(DecodedLockCFValue & res)
+{
+    const TiKVValue & value = *res.val;
+    const char * data = value.data();
+    size_t len = value.dataSize();
+
+    kvrpcpb::Op lock_type = kvrpcpb::Op_MIN;
+    switch (readUInt8(data, len))
+    {
+        case LockType::Put:
+            lock_type = kvrpcpb::Op::Put;
+            break;
+        case LockType::Delete:
+            lock_type = kvrpcpb::Op::Del;
+            break;
+        case LockType::Lock:
+            lock_type = kvrpcpb::Op::Lock;
+            break;
+        case LockType::Pessimistic:
+            lock_type = kvrpcpb::Op::PessimisticLock;
+            break;
+    }
+    res.lock_type = lock_type;
+    res.primary_lock = readVarString<std::string_view>(data, len);
+    res.lock_version = readVarUInt(data, len);
+
+    if (len > 0)
+    {
+        res.lock_ttl = readVarUInt(data, len);
+        while (len > 0)
+        {
+            char flag = readUInt8(data, len);
+            switch (flag)
+            {
+                case SHORT_VALUE_PREFIX:
+                {
+                    size_t str_len = readUInt8(data, len);
+                    if (len < str_len)
+                        throw Exception("content len shorter than short value len", ErrorCodes::LOGICAL_ERROR);
+                    // no need short value
+                    readRawString<nullptr_t>(data, len, str_len);
+                    break;
+                };
+                case MIN_COMMIT_TS_PREFIX:
+                {
+                    res.min_commit_ts = readUInt64(data, len);
+                    break;
+                }
+                case FOR_UPDATE_TS_PREFIX:
+                {
+                    res.lock_for_update_ts = readUInt64(data, len);
+                    break;
+                }
+                case TXN_SIZE_PREFIX:
+                {
+                    res.txn_size = readUInt64(data, len);
+                    break;
+                }
+                case ASYNC_COMMIT_PREFIX:
+                {
+                    res.use_async_commit = true;
+                    auto start = data;
+                    UInt64 cnt = readVarUInt(data, len);
+                    for (UInt64 i = 0; i < cnt; ++i)
+                    {
+                        readVarString<nullptr_t>(data, len);
+                    }
+                    auto end = data;
+                    res.secondaries = {start, static_cast<size_t>(end - start)};
+                    break;
+                }
+                case ROLLBACK_TS_PREFIX:
+                {
+                    UInt64 cnt = readVarUInt(data, len);
+                    for (UInt64 i = 0; i < cnt; ++i)
+                    {
+                        readUInt64(data, len);
+                    }
+                    break;
+                }
+                default:
+                {
+                    std::string msg = std::string("invalid flag ") + flag + " in lock value " + value.toDebugString();
+                    throw Exception(msg, ErrorCodes::LOGICAL_ERROR);
+                }
+            }
+        }
+    }
+    if (len != 0)
+        throw Exception("invalid lock value " + value.toDebugString(), ErrorCodes::LOGICAL_ERROR);
+}
+
+DecodedLockCFValue::DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std::shared_ptr<const TiKVValue> val_)
+    : key(std::move(key_)), val(std::move(val_))
+{
+    decodeLockCfValue(*this);
+}
+
+void DecodedLockCFValue::intoLockInfo(kvrpcpb::LockInfo & res) const
+{
+    res.set_lock_type(lock_type);
+    res.set_primary_lock(primary_lock.data(), primary_lock.size());
+    res.set_lock_version(lock_version);
+    res.set_lock_ttl(lock_ttl);
+    res.set_min_commit_ts(min_commit_ts);
+    res.set_lock_for_update_ts(lock_for_update_ts);
+    res.set_txn_size(txn_size);
+    res.set_use_async_commit(use_async_commit);
+    res.set_key(decodeTiKVKey(*key));
+
+    if (use_async_commit)
+    {
+        auto data = secondaries.data();
+        auto len = secondaries.size();
+        UInt64 cnt = readVarUInt(data, len);
+        for (UInt64 i = 0; i < cnt; ++i)
+        {
+            res.add_secondaries(readVarString<std::string>(data, len));
+        }
+    }
+}
+
+std::unique_ptr<kvrpcpb::LockInfo> DecodedLockCFValue::intoLockInfo() const
+{
+    auto res = std::make_unique<kvrpcpb::LockInfo>();
+    intoLockInfo(*res);
+    return res;
+}
+
+} // namespace RecordKVFormat
 } // namespace DB

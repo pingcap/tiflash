@@ -23,6 +23,7 @@
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
@@ -51,6 +52,8 @@
 #include <Interpreters/Context.h>
 #include <Common/DNSCache.h>
 #include <Encryption/DataKeyManager.h>
+#include <Encryption/FileProvider.h>
+#include <Encryption/RateLimiter.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <IO/PersistedCache.h>
@@ -124,7 +127,7 @@ struct ContextShared
     String tmp_path;                                        /// The path to the temporary files that occur when processing the request.
     String flags_path;                                      /// Path to the directory with some control flags for server maintenance.
     String user_files_path;                                 /// Path to the directory with user provided files, usable by 'file' table function.
-    PathPool extra_paths;                                   /// The extra data directories. Some Storage Engine like DeltaMerge will store the main data in them if specified.
+    PathPool path_pool;                                     /// The data directories. RegionPersister and some Storage Engine like DeltaMerge will use this to manage data placement on disks.
     ConfigurationPtr config;                                /// Global configuration settings.
 
     Databases databases;                                    /// List of databases and tables in them.
@@ -141,12 +144,14 @@ struct ContextShared
     mutable DBGInvoker dbg_invoker;                         /// Execute inner functions, debug only.
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache;     /// Cache of minmax index in compressed files.
+    mutable DM::DeltaIndexManagerPtr delta_index_manager;   /// Manage the Delta Indies of Segments.
     ProcessList process_list;                               /// Executing queries at the moment.
     MergeList merge_list;                                   /// The list of executable merge (for (Replicated)?MergeTree)
     ViewDependencies view_dependencies;                     /// Current dependencies
     ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
     InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
     BackgroundProcessingPoolPtr background_pool;            /// The thread pool for the background work performed by the tables.
+    BackgroundProcessingPoolPtr blockable_background_pool;  /// The thread pool for the blockable background work performed by the tables.
     mutable TMTContextPtr tmt_context;                      /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros;                            /// Substitutions extracted from config.
     std::unique_ptr<Compiler> compiler;                     /// Used for dynamic compilation of queries' parts if it necessary.
@@ -163,6 +168,7 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr;               /// Path capacity metrics
     TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
     FileProviderPtr file_provider;                          /// File provider.
+    RateLimiterPtr rate_limiter;                            /// Rate Limiter.
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -515,10 +521,10 @@ String Context::getUserFilesPath() const
     return shared->user_files_path;
 }
 
-PathPool & Context::getExtraPaths() const
+PathPool & Context::getPathPool() const
 {
     auto lock = getLock();
-    return shared->extra_paths;
+    return shared->path_pool;
 }
 
 void Context::setPath(const String & path)
@@ -555,10 +561,17 @@ void Context::setUserFilesPath(const String & path)
     shared->user_files_path = path;
 }
 
-void Context::setExtraPaths(const std::vector<String> & extra_paths_, PathCapacityMetricsPtr global_capacity_)
+void Context::setPathPool( //
+    const Strings & main_data_paths,
+    const Strings & latest_data_paths,
+    const Strings & kvstore_paths,
+    bool enable_raft_compatible_mode,
+    PathCapacityMetricsPtr global_capacity_,
+    FileProviderPtr file_provider_)
 {
     auto lock = getLock();
-    shared->extra_paths = PathPool(extra_paths_, global_capacity_);
+    shared->path_pool = PathPool(
+        main_data_paths, latest_data_paths, kvstore_paths, global_capacity_, file_provider_, enable_raft_compatible_mode);
 }
 
 void Context::setConfig(const ConfigurationPtr & config)
@@ -577,7 +590,9 @@ void Context::setUsersConfig(const ConfigurationPtr & config)
 {
     auto lock = getLock();
     shared->users_config = config;
+    // parse "users.*"
     shared->security_manager->loadFromConfig(*shared->users_config);
+    // parse "quotas.*"
     shared->quotas.loadFromConfig(*shared->users_config);
 }
 
@@ -591,20 +606,20 @@ void Context::calculateUserSettings()
 {
     auto lock = getLock();
 
-    String profile = shared->security_manager->getUser(client_info.current_user)->profile;
+    String profile_name = shared->security_manager->getUser(client_info.current_user)->profile;
 
     /// 1) Set default settings (hardcoded values)
     /// NOTE: we ignore global_context settings (from which it is usually copied)
     /// NOTE: global_context settings are immutable and not auto updated
     settings = Settings();
 
-    /// 2) Apply settings from default profile
+    /// 2) Apply settings from default profile ("profiles.*" in `users_config`)
     auto default_profile_name = getDefaultProfileName();
-    if (profile != default_profile_name)
+    if (profile_name != default_profile_name)
         settings.setProfile(default_profile_name, *shared->users_config);
 
     /// 3) Apply settings from current user
-    settings.setProfile(profile, *shared->users_config);
+    settings.setProfile(profile_name, *shared->users_config);
 }
 
 
@@ -1291,6 +1306,15 @@ ProcessList::Element * Context::getProcessListElement() const
     return process_list_elem;
 }
 
+void Context::setDAGContext(DAGContext * dag_context_)
+{
+    dag_context = dag_context_;
+}
+
+DAGContext * Context::getDAGContext() const
+{
+    return dag_context;
+}
 
 void Context::setUncompressedCache(size_t max_size_in_bytes)
 {
@@ -1399,6 +1423,29 @@ void Context::dropMinMaxIndexCache() const
         shared->minmax_index_cache->reset();
 }
 
+bool Context::isDeltaIndexLimited() const
+{
+    // Don't need to use a lock here, as delta_index_manager should be set at starting up.
+    if(!shared->delta_index_manager)
+        return false;
+    return shared->delta_index_manager->isLimit();
+}
+
+void Context::setDeltaIndexManager(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+
+    if (shared->delta_index_manager)
+        throw Exception("DeltaIndexManager has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->delta_index_manager = std::make_shared<DM::DeltaIndexManager>(cache_size_in_bytes);
+}
+
+DM::DeltaIndexManagerPtr Context::getDeltaIndexManager() const
+{
+    auto lock = getLock();
+    return shared->delta_index_manager;
+}
 
 void Context::dropCaches() const
 {
@@ -1419,6 +1466,15 @@ BackgroundProcessingPool & Context::getBackgroundPool()
     return *shared->background_pool;
 }
 
+BackgroundProcessingPool & Context::getBlockableBackgroundPool()
+{
+    // TODO: choose a better thread pool size and maybe a better name for the pool
+    auto lock = getLock();
+    if (!shared->blockable_background_pool)
+        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
+    return *shared->blockable_background_pool;
+}
+
 void Context::setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker)
 {
     auto lock = getLock();
@@ -1435,25 +1491,24 @@ DDLWorker & Context::getDDLWorker() const
     return *shared->ddl_worker;
 }
 
-void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
-                               const std::unordered_set<std::string> & ignore_databases,
-                               const std::string & kvstore_path,
-                               ::TiDB::StorageEngine engine,
-                               bool disable_bg_flush,
-                               pingcap::ClusterConfig cluster_config)
+void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, ignore_databases, kvstore_path, engine, disable_bg_flush, cluster_config);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config);
 }
 
-void Context::initializePathCapacityMetric(const std::vector<std::string> & all_path, std::vector<size_t> && all_capacity)
+void Context::initializePathCapacityMetric(                                           //
+    size_t global_capacity_quota,                                                     //
+    const Strings & main_data_paths, const std::vector<size_t> & main_capacity_quota, //
+    const Strings & latest_data_paths, const std::vector<size_t> & latest_capacity_quota)
 {
     auto lock = getLock();
     if (shared->path_capacity_ptr)
         throw Exception("PathCapacityMetrics instance has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->path_capacity_ptr = std::make_shared<PathCapacityMetrics>(all_path, all_capacity);
+    shared->path_capacity_ptr = std::make_shared<PathCapacityMetrics>(
+        global_capacity_quota, main_data_paths, main_capacity_quota, latest_data_paths, latest_capacity_quota);
 }
 
 PathCapacityMetricsPtr Context::getPathCapacity() const
@@ -1520,6 +1575,20 @@ FileProviderPtr Context::getFileProvider() const
 {
     auto lock = getLock();
     return shared->file_provider;
+}
+
+void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, UInt64 rate_limit_per_sec)
+{
+    auto lock = getLock();
+    if (shared->rate_limiter)
+        throw Exception("RateLimiter has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+    shared->rate_limiter = std::make_shared<RateLimiter>(metrics, rate_limit_per_sec);
+}
+
+RateLimiterPtr Context::getRateLimiter() const
+{
+    auto lock = getLock();
+    return shared->rate_limiter;
 }
 
 zkutil::ZooKeeperPtr Context::getZooKeeper() const
@@ -1919,7 +1988,7 @@ SessionCleaner::~SessionCleaner()
 
 void SessionCleaner::run()
 {
-    setThreadName("HTTPSessionCleaner");
+    setThreadName("SessionCleaner");
 
     std::unique_lock<std::mutex> lock{mutex};
 
@@ -1931,6 +2000,4 @@ void SessionCleaner::run()
             break;
     }
 }
-
-
 }

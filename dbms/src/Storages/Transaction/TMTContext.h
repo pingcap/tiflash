@@ -20,6 +20,11 @@ using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 class BackgroundService;
 using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
 
+class MPPTaskManager;
+using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
+
+struct TiFlashRaftConfig;
+
 class TMTContext : private boost::noncopyable
 {
 public:
@@ -40,10 +45,7 @@ public:
 
     bool isBgFlushDisabled() const { return disable_bg_flush; }
 
-    // TODO: get flusher args from config file
-    explicit TMTContext(Context & context, const std::vector<std::string> & addrs,
-        const std::unordered_set<std::string> & ignore_databases_, const std::string & kv_store_path, TiDB::StorageEngine engine_,
-        bool disable_bg_flush_, const pingcap::ClusterConfig & cluster_config);
+    explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
@@ -52,9 +54,9 @@ public:
 
     pingcap::kv::Cluster * getKVCluster() { return cluster.get(); }
 
-    IndexReaderPtr createIndexReader() const;
+    MPPTaskManagerPtr getMPPTaskManager();
 
-    void restore();
+    void restore(const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
     const std::unordered_set<std::string> & getIgnoreDatabases() const;
 
@@ -66,6 +68,8 @@ public:
     void setTerminated();
 
     const KVClusterPtr & getCluster() const { return cluster; }
+
+    UInt64 replicaReadMaxThread() const { return replica_read_max_thread.load(std::memory_order::memory_order_relaxed); }
 
 private:
     Context & context;
@@ -82,12 +86,14 @@ private:
 
     const std::unordered_set<std::string> ignore_databases;
     SchemaSyncerPtr schema_syncer;
+    MPPTaskManagerPtr mpp_task_manager;
 
     ::TiDB::StorageEngine engine;
 
     bool disable_bg_flush;
 
     std::atomic_bool terminated{false};
+    std::atomic_uint64_t replica_read_max_thread{1};
 };
 
 } // namespace DB

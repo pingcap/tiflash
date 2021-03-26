@@ -15,6 +15,8 @@
 
 #include <DataStreams/SizeLimits.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Interpreters/ExpressionActions.h>
+#include <common/ThreadPool.h>
 
 
 namespace DB
@@ -235,8 +237,9 @@ class Join
 {
 public:
     Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
-         const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_,
-         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators);
+         const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency = 1,
+         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators, const String & left_filter_column = "",
+         const String & right_filter_column = "", const String & other_filter_column = "", ExpressionActionsPtr other_condition_ptr = nullptr);
 
     bool empty() { return type == Type::EMPTY; }
 
@@ -248,7 +251,11 @@ public:
     /** Add block of data from right hand of JOIN to the map.
       * Returns false, if some limit was exceeded and you should not insert more data.
       */
+    bool insertFromBlockInternal(Block * stored_block, size_t block_index);
+
     bool insertFromBlock(const Block & block);
+
+    void insertFromBlockASync(const Block & block, ThreadPool & thread_pool);
 
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
@@ -276,6 +283,12 @@ public:
 
     ASTTableJoin::Kind getKind() const { return kind; }
 
+    bool useNulls() const { return use_nulls; }
+    const Names & getLeftJoinKeys() const { return key_names_left; }
+    size_t getBuildConcurrency() const { return build_concurrency; }
+    bool isBuildSetExceeded() const { return build_set_exceeded.load(); }
+
+    void setFinishBuildTable(bool);
 
     /// Reference to the row in block.
     struct RowRef
@@ -351,15 +364,15 @@ public:
     template <typename Mapped>
     struct MapsTemplate
     {
-        std::unique_ptr<HashMap<UInt8, Mapped, TrivialHash, HashTableFixedGrower<8>>>   key8;
-        std::unique_ptr<HashMap<UInt16, Mapped, TrivialHash, HashTableFixedGrower<16>>> key16;
-        std::unique_ptr<HashMap<UInt32, Mapped, HashCRC32<UInt32>>>                     key32;
-        std::unique_ptr<HashMap<UInt64, Mapped, HashCRC32<UInt64>>>                     key64;
-        std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped>>                        key_string;
-        std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped>>                        key_fixed_string;
-        std::unique_ptr<HashMap<UInt128, Mapped, UInt128HashCRC32>>                     keys128;
-        std::unique_ptr<HashMap<UInt256, Mapped, UInt256HashCRC32>>                     keys256;
-        std::unique_ptr<HashMap<UInt128, Mapped, UInt128TrivialHash>>                   hashed;
+        std::unique_ptr<ConcurrentHashMap<UInt8, Mapped, TrivialHash, HashTableFixedGrower<8>>>   key8;
+        std::unique_ptr<ConcurrentHashMap<UInt16, Mapped, TrivialHash, HashTableFixedGrower<16>>> key16;
+        std::unique_ptr<ConcurrentHashMap<UInt32, Mapped, HashCRC32<UInt32>>>                     key32;
+        std::unique_ptr<ConcurrentHashMap<UInt64, Mapped, HashCRC32<UInt64>>>                     key64;
+        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>>                        key_string;
+        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>>                        key_fixed_string;
+        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, UInt128HashCRC32>>                     keys128;
+        std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, UInt256HashCRC32>>                     keys256;
+        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, UInt128TrivialHash>>                   hashed;
     };
 
     using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;
@@ -381,20 +394,38 @@ private:
     /// Substitute NULLs for non-JOINed rows.
     bool use_nulls;
 
+    size_t build_concurrency;
+    std::atomic_bool build_set_exceeded;
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
+    String left_filter_column;
+    String right_filter_column;
+    String other_filter_column;
+    ExpressionActionsPtr other_condition_ptr;
+    ASTTableJoin::Strictness original_strictness;
     /** Blocks of "right" table.
       */
     BlocksList blocks;
+    /// mutex to protect concurrent insert to blocks
+    std::mutex blocks_lock;
+    /// keep original block for concurrent build
+    Blocks original_blocks;
 
     MapsAny maps_any;            /// For ANY LEFT|INNER JOIN
     MapsAll maps_all;            /// For ALL LEFT|INNER JOIN
     MapsAnyFull maps_any_full;    /// For ANY RIGHT|FULL JOIN
     MapsAllFull maps_all_full;    /// For ALL RIGHT|FULL JOIN
 
+    /// For right/full join, including
+    /// 1. Rows with NULL join keys
+    /// 2. Rows that are filtered by right join conditions
+    RowRefList rows_not_inserted_to_map;
+    /// mutex to protect concurrent insert to rows_not_inserted_to_map
+    std::mutex not_inserted_rows_mutex;
+
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
-    Arena pool;
+    Arenas pools;
 
 private:
     Type type = Type::EMPTY;
@@ -407,6 +438,10 @@ private:
     Block sample_block_with_columns_to_add;
     /// Block with key columns in the same order they appear in the right-side table.
     Block sample_block_with_keys;
+
+    mutable std::mutex build_table_mutex;
+    mutable std::condition_variable build_table_cv;
+    bool have_finish_build;
 
     Poco::Logger * log;
 
@@ -429,6 +464,13 @@ private:
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     void joinBlockImpl(Block & block, const Maps & maps) const;
+
+    /** Handle non-equal join conditions
+      *
+      * @param block
+      */
+    void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
+
 
     void joinBlockImplCross(Block & block) const;
 };

@@ -7,6 +7,7 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
+
 namespace TiDB
 {
 struct TableInfo;
@@ -17,6 +18,7 @@ namespace DB
 
 struct SchemaNameMapper;
 class ASTStorage;
+class Region;
 
 /**
  * An interface for Storages synced from TiDB.
@@ -40,7 +42,7 @@ public:
 
     virtual void flushCache(const Context & /*context*/) {}
 
-    virtual void flushCache(const Context & /*context*/, const DB::HandleRange<HandleID> & /* range_to_flush */) {}
+    virtual void flushCache(const Context & /*context*/, const Region & /* region */) {}
 
     virtual BlockInputStreamPtr status() { return {}; }
 
@@ -72,12 +74,12 @@ public:
         = 0;
 
     /** Rename the table.
-      * 
+      *
       * Renaming a name in a file with metadata, the name in the list of tables in the RAM, is done separately.
       * Different from `IStorage::rename`, storage's data path do not contain database name, nothing to do with data path, `new_path_to_db` is ignored.
       * But `getDatabaseName` and `getTableInfo` means we usally store database name / TiDB table info as member in storage,
       * we need to update database name with `new_database_name`, and table name in tidb table info with `new_display_table_name`.
-      * 
+      *
       * Called when the table structure is locked for write.
       * TODO: For TiFlash, we can rename without any lock on data?
       */
@@ -113,6 +115,10 @@ public:
     }
 
     virtual SortDescription getPrimarySortDescription() const = 0;
+
+    virtual bool isCommonHandle() const { return false; }
+
+    virtual size_t getRowKeyColumnSize() const { return 1; }
 
 private:
     virtual DataTypePtr getPKTypeImpl() const = 0;

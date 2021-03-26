@@ -1,10 +1,10 @@
 #!/usr/bin/python3
 import errno
+import fcntl
+import logging
 import os
 import socket
 import time
-import fcntl
-import logging
 
 import requests
 
@@ -34,14 +34,22 @@ class FLOCK(object):
             return False
 
 
+def gen_http_kwargs():
+    import conf
+    kwargs = {"timeout": conf.flash_conf.max_time_out}
+    http_name = 'http'
+    if conf.flash_conf.enable_tls:
+        kwargs["verify"] = conf.flash_conf.ca_path
+        kwargs['cert'] = (conf.flash_conf.cert_path, conf.flash_conf.key_path)
+        http_name = 'https'
+    return http_name, kwargs
+
+
 def curl_http(uri, params=None):
     if params is None:
         params = {}
-    import conf
-    if conf.flash_conf.enable_tls and conf.flash_conf.ca_path != "":
-        r = requests.get('https://{}'.format(uri), params, timeout=conf.flash_conf.update_rule_interval, verify=conf.flash_conf.ca_path, cert=(conf.flash_conf.cert_path, conf.flash_conf.key_path))
-    else:
-        r = requests.get('http://{}'.format(uri), params, timeout=conf.flash_conf.update_rule_interval)
+    http_name, kwargs = gen_http_kwargs()
+    r = requests.get('{}://{}'.format(http_name, uri), params, **kwargs)
     return r
 
 
@@ -56,20 +64,14 @@ def try_get_json(r):
 
 
 def post_http(uri, params):
-    import conf
-    if conf.flash_conf.enable_tls and conf.flash_conf.ca_path != "":
-        r = requests.post('https://{}'.format(uri), json=params, timeout=conf.flash_conf.update_rule_interval, verify=conf.flash_conf.ca_path, cert=(conf.flash_conf.cert_path, conf.flash_conf.key_path))
-    else:
-        r = requests.post('http://{}'.format(uri), json=params, timeout=conf.flash_conf.update_rule_interval)
+    http_name, kwargs = gen_http_kwargs()
+    r = requests.post('{}://{}'.format(http_name, uri), json=params, **kwargs)
     return r
 
 
 def delete_http(uri):
-    import conf
-    if conf.flash_conf.enable_tls and conf.flash_conf.ca_path != "":
-        r = requests.delete('https://{}'.format(uri), timeout=conf.flash_conf.update_rule_interval, verify=conf.flash_conf.ca_path, cert=(conf.flash_conf.cert_path, conf.flash_conf.key_path))
-    else:
-        r = requests.delete('http://{}'.format(uri), timeout=conf.flash_conf.update_rule_interval)
+    http_name, kwargs = gen_http_kwargs()
+    r = requests.delete('{}://{}'.format(http_name, uri), **kwargs)
     return r
 
 

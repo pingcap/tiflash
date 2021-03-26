@@ -12,30 +12,30 @@ namespace DM
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    DMFileBlockInputStream(const Context &       context,
-                           UInt64                max_read_version,
-                           bool                  enable_clean_read,
-                           UInt64                hash_salt,
-                           const DMFilePtr &     dmfile,
-                           const ColumnDefines & read_columns,
-                           const HandleRange &   handle_range,
-                           const RSOperatorPtr & filter,
-                           ColumnCachePtr &      column_cache_,
-                           const IdSetPtr &      read_packs,
-                           size_t                expected_size = DMFILE_READ_ROWS_THRESHOLD)
+    DMFileBlockInputStream(const Context &        context,
+                           UInt64                 max_read_version,
+                           bool                   enable_clean_read,
+                           UInt64                 hash_salt,
+                           const DMFilePtr &      dmfile,
+                           const ColumnDefines &  read_columns,
+                           const RowKeyRange &    rowkey_range,
+                           const RSOperatorPtr &  filter,
+                           const ColumnCachePtr & column_cache_,
+                           const IdSetPtr &       read_packs,
+                           size_t                 expected_size = DMFILE_READ_ROWS_THRESHOLD)
         : reader(dmfile,
                  read_columns,
                  // clean read
                  enable_clean_read,
                  max_read_version,
                  // filters
-                 handle_range,
+                 rowkey_range,
                  filter,
                  read_packs,
                  // caches
                  hash_salt,
-                 context.getGlobalContext().getMarkCache().get(),
-                 context.getGlobalContext().getMinMaxIndexCache().get(),
+                 context.getGlobalContext().getMarkCache(),
+                 context.getGlobalContext().getMinMaxIndexCache(),
                  context.getSettingsRef().dt_enable_stable_column_cache,
                  column_cache_,
                  context.getSettingsRef().min_bytes_to_use_direct_io,
@@ -58,6 +58,8 @@ public:
 private:
     DMFileReader reader;
 };
+
+using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 
 } // namespace DM
 } // namespace DB

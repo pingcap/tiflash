@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/MemoryTracker.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/ExpressionAnalyzer.h> /// SubqueriesForSets
 #include <Poco/Logger.h>
@@ -25,7 +26,7 @@ public:
 
     CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
         std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
-        const SizeLimits & network_transfer_limits);
+        const SizeLimits & network_transfer_limits, Int64 mpp_task_id_);
 
     String getName() const override { return "CreatingSets"; }
 
@@ -48,12 +49,17 @@ private:
 
     size_t rows_to_transfer = 0;
     size_t bytes_to_transfer = 0;
+    Int64 mpp_task_id = 0;
+
+    std::vector<std::thread> workers;
+    std::mutex exception_mutex;
+    std::vector<std::exception_ptr> exception_from_workers;
 
     using Logger = Poco::Logger;
     Logger * log = &Logger::get("CreatingSetsBlockInputStream");
 
     void createAll();
-    void createOne(SubqueryForSet & subquery);
+    void createOne(SubqueryForSet & subquery, MemoryTracker * memory_tracker);
 };
 
 } // namespace DB

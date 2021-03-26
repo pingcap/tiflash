@@ -1,4 +1,5 @@
 #include <Common/MyTime.h>
+#include <Functions/FunctionsDateTime.h>
 #include <Poco/String.h>
 
 #include <cctype>
@@ -7,8 +8,6 @@
 
 namespace DB
 {
-
-using std::sprintf;
 
 int adjustYear(int year)
 {
@@ -47,44 +46,204 @@ int getFracIndex(const String & format)
     return idx;
 }
 
+// helper for date part splitting, punctuation characters are valid separators anywhere,
+// while space and 'T' are valid separators only between date and time.
+bool isValidSeperator(char c, int previous_parts)
+{
+    if (isPunctuation(c))
+        return true;
+
+    return previous_parts == 2 && (c == ' ' || c == 'T');
+}
+
 std::vector<String> parseDateFormat(String format)
 {
     format = Poco::trimInPlace(format);
 
+    if (format.size() == 0)
+        return {};
+
+    if (!std::isdigit(format[0]) || !std::isdigit(format[format.size() - 1]))
+    {
+        return {};
+    }
+
     std::vector<String> seps;
+    seps.reserve(6);
     size_t start = 0;
     for (size_t i = 0; i < format.size(); i++)
     {
-        if (i == 0 || i + 1 == format.size())
+        if (isValidSeperator(format[i], seps.size()))
         {
-            if (!std::isdigit(format[i]))
-                return {};
+            int previous_parts = seps.size();
+            seps.push_back(format.substr(start, i - start));
+            start = i + 1;
+
+            for (size_t j = i + 1; j < format.size(); j++)
+            {
+                if (!isValidSeperator(format[j], previous_parts))
+                    break;
+                start++;
+                i++;
+            }
             continue;
         }
 
         if (!std::isdigit(format[i]))
         {
-            if (!std::isdigit(format[i - 1]))
-                return {};
-            seps.push_back(format.substr(start, i - start));
-            start = i + 1;
+            return {};
         }
     }
     seps.push_back(format.substr(start));
     return seps;
 }
 
-std::pair<std::vector<String>, String> splitDatetime(String format)
+// GetTimezone parses the trailing timezone information of a given time string literal. If idx = -1 is returned, it
+// means timezone information not found, otherwise it indicates the index of the starting index of the timezone
+// information. If the timezone contains sign, hour part and/or minute part, it will be returned as is, otherwise an
+// empty string will be returned.
+//
+// Supported syntax:
+//   MySQL compatible: ((?P<tz_sign>[-+])(?P<tz_hour>[0-9]{2}):(?P<tz_minute>[0-9]{2})){0,1}$, see
+//     https://dev.mysql.com/doc/refman/8.0/en/time-zone-support.html and https://dev.mysql.com/doc/refman/8.0/en/datetime.html
+//     the first link specified that timezone information should be in "[H]H:MM, prefixed with a + or -" while the
+//     second link specified that for string literal, "hour values less than than 10, a leading zero is required.".
+//   ISO-8601: Z|((((?P<tz_sign>[-+])(?P<tz_hour>[0-9]{2})(:(?P<tz_minute>[0-9]{2}){0,1}){0,1})|((?P<tz_minute>[0-9]{2}){0,1}){0,1}))$
+//     see https://www.cl.cam.ac.uk/~mgk25/iso-time.html
+std::tuple<int, String, String, String, String> getTimeZone(const String & literal)
 {
-    int idx = getFracIndex(format);
-    String frac;
-    if (idx > 0)
+    static const std::map<int, std::tuple<int, int>> valid_idx_combinations{
+        {100, {0, 0}}, // 23:59:59Z
+        {30, {2, 0}},  // 23:59:59+08
+        {50, {4, 2}},  // 23:59:59+0800
+        {63, {5, 2}},  // 23:59:59+08:00
+        // postgres supports the following additional syntax that deviates from ISO8601, although we won't support it
+        // currently, it will be fairly easy to add in the current parsing framework
+        // 23:59:59Z+08
+        // 23:59:59Z+08:00
+    };
+
+    String tz_sign, tz_hour, tz_sep, tz_minute;
+
+    // idx is for the position of the starting of the timezone information
+    // zidx is for the z symbol
+    // sidx is for the sign
+    // spidx is for the separator
+    int idx = -1, zidx = -1, sidx = -1, spidx = -1;
+
+    size_t l = literal.size();
+
+    for (int i = l - 1; i >= 0; i--)
     {
-        frac = format.substr(idx + 1);
-        format = format.substr(0, idx);
+        if (literal[i] == 'Z')
+        {
+            zidx = i;
+            break;
+        }
+        if (sidx == -1 && (literal[i] == '-' || literal[i] == '+'))
+        {
+            sidx = i;
+        }
+        if (spidx == -1 && literal[i] == ':')
+        {
+            spidx = i;
+        }
     }
-    return std::make_pair(parseDateFormat(format), std::move(frac));
+    // we could enumerate all valid combinations of these values and look it up in a table, see validIdxCombinations
+    // zidx can be -1 (23:59:59+08:00), l-1 (23:59:59Z)
+    // sidx can be -1, l-3, l-5, l-6
+    // spidx can be -1, l-3
+    int k = 0;
+    if (l - zidx == 1)
+    {
+        k += 100;
+    }
+    if (int t = l - sidx; t == 3 || t == 5 || t == 6)
+    {
+        k += t * 10;
+    }
+    if (l - spidx == 3)
+    {
+        k += 3;
+    }
+    if (auto tmp = valid_idx_combinations.find(k); tmp != valid_idx_combinations.end())
+    {
+        auto [h, m] = valid_idx_combinations.at(k);
+        int hidx = l - h;
+        int midx = l - m;
+        auto validate = [](const String & v) { return '0' <= v[0] && v[0] <= '9' && '0' <= v[1] && v[1] <= '9'; };
+        if (sidx != -1)
+        {
+            tz_sign = literal.substr(sidx, 1);
+            idx = sidx;
+        }
+        if (zidx != -1)
+        {
+            idx = zidx;
+        }
+        if ((l - spidx) == 3)
+        {
+            tz_sep = literal.substr(spidx, 1);
+        }
+        if (h != 0)
+        {
+            tz_hour = literal.substr(hidx, 2);
+            if (!validate(tz_hour))
+            {
+                return std::make_tuple(-1, "", "", "", "");
+            }
+        }
+        if (m != 0)
+        {
+            tz_minute = literal.substr(midx, 2);
+            if (!validate(tz_minute))
+            {
+                return std::make_tuple(-1, "", "", "", "");
+            }
+        }
+        return std::make_tuple(idx, tz_sign, tz_hour, tz_sep, tz_minute);
+    }
+    return std::make_tuple(-1, "", "", "", "");
 }
+
+// TODO: make unified helper
+bool isPunctuation(char c)
+{
+    return (c >= 0x21 && c <= 0x2F) || (c >= 0x3A && c <= 0x40) || (c >= 0x5B && c <= 0x60) || (c >= 0x7B && c <= 0x7E);
+}
+
+std::tuple<std::vector<String>, String, bool, String, String, String, String> splitDatetime(String format)
+{
+    std::vector<String> seps;
+    String frac;
+    bool has_tz = false;
+    auto [tz_idx, tz_sign, tz_hour, tz_sep, tz_minute] = getTimeZone(format);
+    if (tz_idx > 0)
+    {
+        has_tz = true;
+        while (tz_idx > 0 && isPunctuation(format[tz_idx - 1]))
+        {
+            // in case of multiple separators, e.g. 2020-10--10
+            tz_idx--;
+        }
+        format = format.substr(0, tz_idx);
+    }
+    int frac_idx = getFracIndex(format);
+    if (frac_idx > 0)
+    {
+        frac = format.substr(frac_idx + 1);
+        while (frac_idx > 0 && isPunctuation(format[frac_idx - 1]))
+        {
+            // in case of multiple separators, e.g. 2020-10-10 11:00:00..123456
+            frac_idx--;
+        }
+        format = format.substr(0, frac_idx);
+    }
+    seps = parseDateFormat(format);
+    return std::make_tuple(std::move(seps), std::move(frac), std::move(has_tz), std::move(tz_sign), std::move(tz_hour), std::move(tz_sep),
+        std::move(tz_minute));
+}
+
 
 MyTimeBase::MyTimeBase(UInt64 packed)
 {
@@ -130,26 +289,10 @@ UInt64 MyTimeBase::toCoreTime() const
 }
 
 // the implementation is the same as TiDB
-String MyTimeBase::dateFormat(const String & layout) const
+void MyTimeBase::dateFormat(const String & layout, String & result) const
 {
-    String result;
-    bool in_pattern_match = false;
-    for (size_t i = 0; i < layout.size(); i++)
-    {
-        char x = layout[i];
-        if (in_pattern_match)
-        {
-            convertDateFormat(x, result);
-            in_pattern_match = false;
-            continue;
-        }
-
-        if (x == '%')
-            in_pattern_match = true;
-        else
-            result.push_back(x);
-    }
-    return result;
+    auto formatter = MyDateTimeFormatter(layout);
+    formatter.format(*this, result);
 }
 
 // the implementation is the same as TiDB
@@ -302,24 +445,29 @@ static const String weekday_names[] = {
     "Saturday",
 };
 
-String abbrDayOfMonth(int day)
-{
-    switch (day)
-    {
-        case 1:
-        case 21:
-        case 31:
-            return "st";
-        case 2:
-        case 22:
-            return "nd";
-        case 3:
-        case 23:
-            return "rd";
-        default:
-            return "th";
-    }
-}
+static const String abbr_day_of_month[] = {
+    "th",
+    "st",
+    "nd",
+    "rd",
+    "th",
+    "th",
+    "th",
+    "th",
+    "th",
+    "th",
+};
+
+#define INT_TO_STRING                                                                                                                   \
+    "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", \
+        "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52",   \
+        "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "63", "64", "65", "66", "67", "68", "69", "70", "71", "72", "73",   \
+        "74", "75", "76", "77", "78", "79", "80", "81", "82", "83", "84", "85", "86", "87", "88", "89", "90", "91", "92", "93", "94",   \
+        "95", "96", "97", "98", "99",
+
+static const String int_to_2_width_string[] = {"00", "01", "02", "03", "04", "05", "06", "07", "08", "09", INT_TO_STRING};
+
+static const String int_to_string[] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", INT_TO_STRING};
 
 int MyTimeBase::weekDay() const
 {
@@ -333,254 +481,57 @@ int MyTimeBase::weekDay() const
     return diff;
 }
 
-// the implementation is the same as TiDB
-void MyTimeBase::convertDateFormat(char c, String & result) const
+// TODO: support parse time from float string
+Field parseMyDateTime(const String & str, int8_t fsp)
 {
-    switch (c)
+    // Since we only use DateLUTImpl as parameter placeholder of AddSecondsImpl::execute
+    // and it's costly to construct a DateLUTImpl, a shared static instance is enough.
+    static const DateLUTImpl lut = DateLUT::instance("UTC");
+
+    Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
+
+    bool hhmmss = false;
+
+    auto [seps, frac_str, has_tz, tz_sign, tz_hour, tz_sep, tz_minute] = splitDatetime(str);
+
+    bool truncated_or_incorrect = false;
+
+    // noAbsorb tests if can absorb FSP or TZ
+    auto noAbsorb = [](const std::vector<String> & seps) {
+        // if we have more than 5 parts (i.e. 6), the tailing part can't be absorbed
+        // or if we only have 1 part, but its length is longer than 4, then it is at least YYMMD, in this case, FSP can
+        // not be absorbed, and it will be handled later, and the leading sign prevents TZ from being absorbed, because
+        // if date part has no separators, we can't use -/+ as separators between date & time.
+        return seps.size() > 5 || (seps.size() == 1 && seps[0].size() > 4);
+    };
+
+    if (!frac_str.empty())
     {
-        case 'b':
+        if (!noAbsorb(seps))
         {
-            if (month == 0 || month > 12)
-            {
-                throw Exception("invalid time format");
-            }
-            result.append(abbrev_month_names[month - 1]);
-            break;
-        }
-        case 'M':
-        {
-            if (month == 0 || month > 12)
-            {
-                throw Exception("invalid time format");
-            }
-            result.append(month_names[month - 1]);
-            break;
-        }
-        case 'm':
-        {
-            char buf[16];
-            sprintf(buf, "%02d", month);
-            result.append(String(buf));
-            break;
-        }
-        case 'c':
-        {
-            char buf[16];
-            sprintf(buf, "%d", month);
-            result.append(String(buf));
-            break;
-        }
-        case 'D':
-        {
-            char buf[16];
-            sprintf(buf, "%d", day);
-            result.append(String(buf));
-            result.append(abbrDayOfMonth(day));
-            break;
-        }
-        case 'd':
-        {
-            char buf[16];
-            sprintf(buf, "%02d", day);
-            result.append(String(buf));
-            break;
-        }
-        case 'e':
-        {
-            char buf[16];
-            sprintf(buf, "%d", day);
-            result.append(String(buf));
-            break;
-        }
-        case 'j':
-        {
-            char buf[16];
-            sprintf(buf, "%03d", yearDay());
-            result.append(String(buf));
-            break;
-        }
-        case 'H':
-        {
-            char buf[16];
-            sprintf(buf, "%02d", hour);
-            result.append(String(buf));
-            break;
-        }
-        case 'k':
-        {
-            char buf[16];
-            sprintf(buf, "%d", hour);
-            result.append(String(buf));
-            break;
-        }
-        case 'h':
-        case 'I':
-        {
-            char buf[16];
-            if (hour % 12 == 0)
-                sprintf(buf, "%d", 12);
-            else
-                sprintf(buf, "%02d", hour);
-            result.append(String(buf));
-            break;
-        }
-        case 'l':
-        {
-            char buf[16];
-            if (hour % 12 == 0)
-                sprintf(buf, "%d", 12);
-            else
-                sprintf(buf, "%d", hour);
-            result.append(String(buf));
-            break;
-        }
-        case 'i':
-        {
-            char buf[16];
-            sprintf(buf, "%02d", minute);
-            result.append(String(buf));
-            break;
-        }
-        case 'p':
-        {
-            if ((hour / 12) % 2)
-                result.append(String("PM"));
-            else
-                result.append(String("AM"));
-            break;
-        }
-        case 'r':
-        {
-            char buf[24];
-            auto h = hour % 24;
-            if (h == 0)
-                sprintf(buf, "%02d:%02d:%02d AM", 12, minute, second);
-            else if (h == 12)
-                sprintf(buf, "%02d:%02d:%02d PM", 12, minute, second);
-            else if (h < 12)
-                sprintf(buf, "%02d:%02d:%02d AM", h, minute, second);
-            else
-                sprintf(buf, "%02d:%02d:%02d PM", h - 12, minute, second);
-            result.append(String(buf));
-            break;
-        }
-        case 'T':
-        {
-            char buf[24];
-            sprintf(buf, "%02d:%02d:%02d", hour, minute, second);
-            result.append(String(buf));
-            break;
-        }
-        case 'S':
-        case 's':
-        {
-            char buf[16];
-            sprintf(buf, "%02d", second);
-            result.append(String(buf));
-            break;
-        }
-        case 'f':
-        {
-            char buf[16];
-            sprintf(buf, "%06d", micro_second);
-            result.append(String(buf));
-            break;
-        }
-        case 'U':
-        {
-            char buf[16];
-            auto w = week(0);
-            sprintf(buf, "%02d", w);
-            result.append(String(buf));
-            break;
-        }
-        case 'u':
-        {
-            char buf[16];
-            auto w = week(1);
-            sprintf(buf, "%02d", w);
-            result.append(String(buf));
-            break;
-        }
-        case 'V':
-        {
-            char buf[16];
-            auto w = week(2);
-            sprintf(buf, "%02d", w);
-            result.append(String(buf));
-            break;
-        }
-        case 'v':
-        {
-            char buf[16];
-            auto [year, week] = calcWeek(3);
-            std::ignore = year;
-            sprintf(buf, "%02d", week);
-            result.append(String(buf));
-            break;
-        }
-        case 'a':
-        {
-            auto week_day = weekDay();
-            result.append(abbrev_weekday_names[week_day]);
-            break;
-        }
-        case 'W':
-        {
-            auto week_day = weekDay();
-            result.append(weekday_names[week_day]);
-            break;
-        }
-        case 'w':
-        {
-            auto week_day = weekDay();
-            result.append(std::to_string(week_day));
-            break;
-        }
-        case 'X':
-        {
-            char buf[16];
-            auto [year, week] = calcWeek(6);
-            std::ignore = week;
-            sprintf(buf, "%04d", year);
-            result.append(String(buf));
-            break;
-        }
-        case 'x':
-        {
-            char buf[16];
-            auto [year, week] = calcWeek(3);
-            std::ignore = week;
-            sprintf(buf, "%04d", year);
-            result.append(String(buf));
-            break;
-        }
-        case 'Y':
-        {
-            char buf[16];
-            sprintf(buf, "%04d", year);
-            result.append(String(buf));
-            break;
-        }
-        case 'y':
-        {
-            char buf[16];
-            sprintf(buf, "%02d", year % 100);
-            result.append(String(buf));
-            break;
-        }
-        default:
-        {
-            result.push_back(c);
+            seps.push_back(frac_str);
+            frac_str = "";
         }
     }
-}
 
-Field parseMyDateTime(const String & str)
-{
-    Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
-
-    auto [seps, frac_str] = splitDatetime(str);
+    if (has_tz && !tz_sign.empty())
+    {
+        // if tz_sign is empty, it's sure that the string literal contains timezone (e.g., 2010-10-10T10:10:10Z),
+        // therefore we could safely skip this branch.
+        if (!noAbsorb(seps) && !(tz_minute != "" && tz_sep == ""))
+        {
+            // we can't absorb timezone if there is no separate between tz_hour and tz_minute
+            if (!tz_hour.empty())
+            {
+                seps.push_back(tz_hour);
+            }
+            if (!tz_minute.empty())
+            {
+                seps.push_back(tz_minute);
+            }
+            has_tz = false;
+        }
+    }
 
     switch (seps.size())
     {
@@ -590,43 +541,51 @@ Field parseMyDateTime(const String & str)
             size_t l = seps[0].size();
             switch (l)
             {
-                case 14:
-                    // YYYYMMDDHHMMSS
-                    {
-                        std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second);
-                        break;
-                    }
-                case 12:
+                case 14: // YYYYMMDDHHMMSS
+                {
+                    std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second);
+                    hhmmss = true;
+                    break;
+                }
+                case 12: // YYMMDDHHMMSS
                 {
                     std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second);
                     year = adjustYear(year);
+                    hhmmss = true;
                     break;
                 }
-                case 11:
+                case 11: // YYMMDDHHMMS
                 {
                     std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second);
                     year = adjustYear(year);
+                    hhmmss = true;
                     break;
                 }
-                case 10:
+                case 10: // YYMMDDHHMM
                 {
                     std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute);
                     year = adjustYear(year);
                     break;
                 }
-                case 9:
+                case 9: // YYMMDDHHM
                 {
                     std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute);
                     year = adjustYear(year);
                     break;
                 }
-                case 8:
+                case 8: // YYYYMMDD
                 {
                     std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day);
                     break;
                 }
-                case 6:
-                case 5:
+                case 7: // YYMMDDH
+                {
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour);
+                    year = adjustYear(year);
+                    break;
+                }
+                case 6: // YYMMDD
+                case 5: // YYMMD
                 {
                     std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day);
                     year = adjustYear(year);
@@ -634,19 +593,82 @@ Field parseMyDateTime(const String & str)
                 }
                 default:
                 {
-                    throw Exception("Wrong datetime format");
+                    throw TiFlashException("Wrong datetime format: " + str, Errors::Types::WrongValue);
                 }
+            }
+            if (l == 5 || l == 6 || l == 8)
+            {
+                // YYMMDD or YYYYMMDD
+                // We must handle float => string => datetime, the difference is that fractional
+                // part of float type is discarded directly, while fractional part of string type
+                // is parsed to HH:MM:SS.
+                int ret = 0;
+                switch (frac_str.size())
+                {
+                    case 0:
+                        ret = 1;
+                        break;
+                    case 1:
+                    case 2:
+                    {
+                        ret = std::sscanf(frac_str.c_str(), "%2d ", &hour);
+                        break;
+                    }
+                    case 3:
+                    case 4:
+                    {
+                        ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute);
+                        break;
+                    }
+                    default:
+                    {
+                        ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second);
+                        break;
+                    }
+                }
+                truncated_or_incorrect = (ret == 0);
+            }
+            if (l == 9 || l == 10)
+            {
+                if (frac_str.empty())
+                {
+                    second = 0;
+                }
+                else
+                {
+                    truncated_or_incorrect = (std::sscanf(frac_str.c_str(), "%2d ", &second) == 0);
+                }
+            }
+            if (truncated_or_incorrect)
+            {
+                throw TiFlashException("Datetime truncated: " + str, Errors::Types::Truncated);
             }
             break;
         }
         case 3:
         {
+            // YYYY-MM-DD
             scanTimeArgs(seps, {&year, &month, &day});
+            break;
+        }
+        case 4:
+        {
+            // YYYY-MM-DD HH
+            scanTimeArgs(seps, {&year, &month, &day, &hour});
+            break;
+        }
+        case 5:
+        {
+            // YYYY-MM-DD HH-MM
+            scanTimeArgs(seps, {&year, &month, &day, &hour, &minute});
             break;
         }
         case 6:
         {
+            // We don't have fractional seconds part.
+            // YYYY-MM-DD HH-MM-SS
             scanTimeArgs(seps, {&year, &month, &day, &hour, &minute, &second});
+            hhmmss = true;
             break;
         }
         default:
@@ -655,36 +677,133 @@ Field parseMyDateTime(const String & str)
         }
     }
 
+    // If str is sepereated by delimiters, the first one is year, and if the year is 2 digit,
+    // we should adjust it.
+    // TODO: adjust year is very complex, now we only consider the simplest way.
+    if (seps[0].size() == 2)
+    {
+        if (year == 0 && month == 0 && day == 0 && hour == 0 && minute == 0 && second == 0 && frac_str.empty())
+        {
+            // Skip a special case "00-00-00".
+        }
+        else
+        {
+            year = adjustYear(year);
+        }
+    }
+
     UInt32 micro_second = 0;
-    // TODO This is a simple implement, without processing overflow.
-    if (frac_str.size() > 6)
+    if (hhmmss && !frac_str.empty())
     {
-        frac_str = frac_str.substr(0, 6);
+        // If input string is "20170118.999", without hhmmss, fsp is meaningless.
+        // TODO: this case is not only meaningless, but erroneous, please confirm.
+        if (static_cast<size_t>(fsp) >= frac_str.size())
+        {
+            micro_second = std::stoul(frac_str);
+            micro_second = micro_second * std::pow(10, 6 - frac_str.size());
+        }
+        else
+        {
+            auto result_frac = frac_str.substr(0, fsp + 1);
+            micro_second = std::stoul(result_frac);
+            micro_second = (micro_second + 5) / 10;
+            // Overflow
+            if (micro_second >= std::pow(10, fsp))
+            {
+                MyDateTime datetime(year, month, day, hour, minute, second, 0);
+                UInt64 result = AddSecondsImpl::execute(datetime.toPackedUInt(), 1, lut);
+                MyDateTime result_datetime(result);
+                year = result_datetime.year;
+                month = result_datetime.month;
+                day = result_datetime.day;
+                hour = result_datetime.hour;
+                minute = result_datetime.minute;
+                second = result_datetime.second;
+                micro_second = 0;
+            }
+            else
+            {
+                micro_second = micro_second * std::pow(10, 6 - fsp);
+            }
+        }
     }
 
-    if (frac_str.size() > 0)
+    MyDateTime result(year, month, day, hour, minute, second, micro_second);
+
+    if (has_tz)
     {
-        micro_second = std::stoul(frac_str);
-        for (size_t i = frac_str.size(); i < 6; i++)
-            micro_second *= 10;
+        if (!hhmmss)
+        {
+            throw TiFlashException("Invalid datetime value: " + str, Errors::Types::WrongValue);
+        }
+        if (!tz_hour.empty())
+        {
+            delta_hour = (tz_hour[0] - '0') * 10 + (tz_hour[1] - '0');
+        }
+        if (!tz_minute.empty())
+        {
+            delta_minute = (tz_minute[0] - '0') * 10 + (tz_minute[1] - '0');
+        }
+        // allowed delta range is [-14:00, 14:00], and we will intentionally reject -00:00
+        if (delta_hour > 14 || delta_minute > 59 || (delta_hour == 14 && delta_minute != 0)
+            || (tz_sign == "-" && delta_hour == 0 && delta_minute == 0))
+        {
+            throw TiFlashException("Invalid datetime value: " + str, Errors::Types::WrongValue);
+        }
+        // by default, if the temporal string literal does not contain timezone information, it will be in the timezone
+        // specified by the time_zone system variable. However, if the timezone is specified in the string literal, we
+        // will use the specified timezone to interpret the string literal and convert it into the system timezone.
+        int offset = delta_hour * 60 * 60 + delta_minute * 60;
+        if (tz_sign == "-")
+        {
+            offset = -offset;
+        }
+        auto tmp = AddSecondsImpl::execute(result.toPackedUInt(), -offset, lut);
+        result = MyDateTime(tmp);
     }
 
-    return MyDateTime(year, month, day, hour, minute, second, micro_second).toPackedUInt();
+    return result.toPackedUInt();
 }
 
 String MyDateTime::toString(int fsp) const
 {
-    String result = dateFormat("%Y-%m-%d %H:%i:%s");
+    const static String format = "%Y-%m-%d %H:%i:%s";
+    String result;
+    result.reserve(maxFormattedDateTimeStringLength(format));
+    dateFormat(format, result);
+    auto length = result.length();
     if (fsp > 0)
     {
-        char buf[16];
-        sprintf(buf, ".%06d", micro_second);
-        result.append(String(buf, fsp + 1));
+        result.append(".")
+            .append(int_to_2_width_string[micro_second / 10000])
+            .append(int_to_2_width_string[micro_second % 10000 / 100])
+            .append(int_to_2_width_string[micro_second % 100]);
+        result.resize(length + fsp + 1);
     }
     return result;
 }
 
-bool isZeroDate(UInt64 time) { return time == 0; }
+inline bool isZeroDate(UInt64 time) { return time == 0; }
+
+inline bool supportedByDateLUT(const MyDateTime & my_time) { return my_time.year >= 1970; }
+
+/// DateLUT only support time from year 1970, in some corner cases, the input date may be
+/// 1969-12-31, need extra logical to handle it
+inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone)
+{
+    if likely (supportedByDateLUT(my_time))
+        return time_zone.makeDateTime(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
+    if likely (my_time.year == 1969 && my_time.month == 12 && my_time.day == 31)
+    {
+        /// - 3600 * 24 + my_time.hour * 3600 + my_time.minute * 60 + my_time.second is UTC based, need to adjust
+        /// the epoch according to the input time_zone
+        return -3600 * 24 + my_time.hour * 3600 + my_time.minute * 60 + my_time.second - time_zone.getOffsetAtStartEpoch();
+    }
+    else
+    {
+        throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
+    }
+}
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to)
 {
@@ -694,8 +813,7 @@ void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & tim
         return;
     }
     MyDateTime from_my_time(from_time);
-    time_t epoch = time_zone_from.makeDateTime(
-        from_my_time.year, from_my_time.month, from_my_time.day, from_my_time.hour, from_my_time.minute, from_my_time.second);
+    time_t epoch = getEpochSecond(from_my_time, time_zone_from);
     if (unlikely(epoch + time_zone_to.getOffsetAtStartEpoch() + SECONDS_PER_DAY < 0))
         throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
     MyDateTime to_my_time(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch),
@@ -711,8 +829,7 @@ void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, c
         return;
     }
     MyDateTime from_my_time(from_time);
-    time_t epoch = time_zone.makeDateTime(
-        from_my_time.year, from_my_time.month, from_my_time.day, from_my_time.hour, from_my_time.minute, from_my_time.second);
+    time_t epoch = getEpochSecond(from_my_time, time_zone);
     epoch += offset;
     if (unlikely(epoch + SECONDS_PER_DAY < 0))
         throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
@@ -811,6 +928,319 @@ size_t maxFormattedDateTimeStringLength(const String & format)
             result++;
     }
     return std::max<size_t>(result, 1);
+}
+
+MyDateTime numberToDateTime(Int64 number)
+{
+    MyDateTime datetime(0);
+
+    auto get_datetime = [](const Int64 & num) {
+        auto ymd = num / 1000000;
+        auto hms = num - ymd * 1000000;
+
+        UInt16 year = ymd / 10000;
+        ymd %= 10000;
+        UInt8 month = ymd / 100;
+        UInt8 day = ymd % 100;
+
+        UInt16 hour = hms / 10000;
+        hms %= 10000;
+        UInt8 minute = hms / 100;
+        UInt8 second = hms % 100;
+
+        return MyDateTime(year, month, day, hour, minute, second, 0);
+    };
+
+    if (number == 0)
+        return datetime;
+
+    // datetime type
+    if (number >= 10000101000000)
+    {
+        return get_datetime(number);
+    }
+
+    // check MMDD
+    if (number < 101)
+    {
+        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDD: 2000-2069
+    if (number <= 69 * 10000 + 1231)
+    {
+        number = (number + 200000000) * 1000000;
+        return get_datetime(number);
+    }
+
+    // check YYMMDD
+    if (number <= 991231)
+    {
+        number = (number + 19000000) * 1000000;
+        return get_datetime(number);
+    }
+
+    // check YYYYMMDD
+    if (number <= 10000101)
+    {
+        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
+    }
+
+    // check hhmmss
+    if (number <= 99991231)
+    {
+        number = number * 1000000;
+        return get_datetime(number);
+    }
+
+    // check MMDDhhmmss
+    if (number < 101000000)
+    {
+        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDDhhmmss: 2000-2069
+    if (number <= 69 * 10000000000 + 1231235959)
+    {
+        number += 20000000000000;
+        return get_datetime(number);
+    }
+
+    // check YYMMDDhhmmss
+    if (number < 70 * 10000000000 + 101000000)
+    {
+        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
+    }
+
+    if (number <= 991231235959)
+    {
+        number += 19000000000000;
+        return get_datetime(number);
+    }
+
+    return get_datetime(number);
+}
+
+MyDateTimeFormatter::MyDateTimeFormatter(const String & layout)
+{
+    bool in_pattern_match = false;
+    for (size_t i = 0; i < layout.size(); i++)
+    {
+        char x = layout[i];
+        if (in_pattern_match)
+        {
+            switch (x)
+            {
+                case 'b':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        if (unlikely(datetime.month == 0 || datetime.month > 12))
+                            throw Exception("invalid time format");
+                        result.append(abbrev_month_names[datetime.month - 1]);
+                    });
+                    break;
+                case 'M':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        if (unlikely(datetime.month == 0 || datetime.month > 12))
+                            throw Exception("invalid time format");
+                        result.append(month_names[datetime.month - 1]);
+                    });
+                    break;
+                case 'm':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_2_width_string[datetime.month]); });
+                    break;
+                case 'c':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_string[datetime.month]); });
+                    break;
+                case 'D':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        if (datetime.day >= 11 && datetime.day <= 13)
+                            result.append(int_to_string[datetime.day]).append("th");
+                        else
+                            result.append(int_to_string[datetime.day]).append(abbr_day_of_month[datetime.day % 10]);
+                    });
+                    break;
+                case 'd':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_2_width_string[datetime.day]); });
+                    break;
+                case 'e':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_string[datetime.day]); });
+                    break;
+                case 'j':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto year_day = datetime.yearDay();
+                        result.append(int_to_string[year_day / 100]).append(int_to_2_width_string[year_day % 100]);
+                    });
+                    break;
+                case 'H':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_2_width_string[datetime.hour]); });
+                    break;
+                case 'k':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_string[datetime.hour]); });
+                    break;
+                case 'h':
+                case 'I':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        if (datetime.hour % 12 == 0)
+                            result.append("12");
+                        else
+                            result.append(int_to_2_width_string[datetime.hour]);
+                    });
+                    break;
+                case 'l':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        if (datetime.hour % 12 == 0)
+                            result.append("12");
+                        else
+                            result.append(int_to_string[datetime.hour]);
+                    });
+                    break;
+                case 'i':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_2_width_string[datetime.minute]); });
+                    break;
+                case 'p':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        if ((datetime.hour / 12) % 2)
+                            result.append("PM");
+                        else
+                            result.append("AM");
+                    });
+                    break;
+                case 'r':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto h = datetime.hour % 24;
+                        if (h == 0)
+                            result.append("12:")
+                                .append(int_to_2_width_string[datetime.minute])
+                                .append(":")
+                                .append(int_to_2_width_string[datetime.second])
+                                .append(" AM");
+                        else if (h == 12)
+                            result.append("12:")
+                                .append(int_to_2_width_string[datetime.minute])
+                                .append(":")
+                                .append(int_to_2_width_string[datetime.second])
+                                .append(" PM");
+                        else if (h < 12)
+                            result.append(int_to_2_width_string[h])
+                                .append(":")
+                                .append(int_to_2_width_string[datetime.minute])
+                                .append(":")
+                                .append(int_to_2_width_string[datetime.second])
+                                .append(" AM");
+                        else
+                            result.append(int_to_2_width_string[h - 12])
+                                .append(":")
+                                .append(int_to_2_width_string[datetime.minute])
+                                .append(":")
+                                .append(int_to_2_width_string[datetime.second])
+                                .append(" PM");
+                    });
+                    break;
+                case 'T':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        result.append(int_to_2_width_string[datetime.hour])
+                            .append(":")
+                            .append(int_to_2_width_string[datetime.minute])
+                            .append(":")
+                            .append(int_to_2_width_string[datetime.second]);
+                    });
+                    break;
+                case 'S':
+                case 's':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_2_width_string[datetime.second]); });
+                    break;
+                case 'f':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        result.append(int_to_2_width_string[datetime.micro_second / 10000])
+                            .append(int_to_2_width_string[datetime.micro_second % 10000 / 100])
+                            .append(int_to_2_width_string[datetime.micro_second % 100]);
+                    });
+                    break;
+                case 'U':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto w = datetime.week(0);
+                        result.append(int_to_2_width_string[w]);
+                    });
+                    break;
+                case 'u':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto w = datetime.week(1);
+                        result.append(int_to_2_width_string[w]);
+                    });
+                    break;
+                case 'V':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto w = datetime.week(2);
+                        result.append(int_to_2_width_string[w]);
+                    });
+                    break;
+                case 'v':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto [year, week] = datetime.calcWeek(3);
+                        std::ignore = year;
+                        result.append(int_to_2_width_string[week]);
+                    });
+                    break;
+                case 'a':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto week_day = datetime.weekDay();
+                        result.append(abbrev_weekday_names[week_day]);
+                    });
+                    break;
+                case 'W':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto week_day = datetime.weekDay();
+                        result.append(weekday_names[week_day]);
+                    });
+                    break;
+                case 'w':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto week_day = datetime.weekDay();
+                        result.append(int_to_string[week_day]);
+                    });
+                    break;
+                case 'X':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto [year, week] = datetime.calcWeek(6);
+                        std::ignore = week;
+                        result.append(int_to_2_width_string[year / 100]).append(int_to_2_width_string[year % 100]);
+                    });
+                    break;
+                case 'x':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto [year, week] = datetime.calcWeek(3);
+                        std::ignore = week;
+                        result.append(int_to_2_width_string[year / 100]).append(int_to_2_width_string[year % 100]);
+                    });
+                    break;
+                case 'Y':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        result.append(int_to_2_width_string[datetime.year / 100]).append(int_to_2_width_string[datetime.year % 100]);
+                    });
+                    break;
+                case 'y':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_2_width_string[datetime.year % 100]); });
+                    break;
+                default:
+                    formatters.emplace_back([x](const MyTimeBase &, String & result) { result.push_back(x); });
+            }
+            in_pattern_match = false;
+            continue;
+        }
+        if (x == '%')
+            in_pattern_match = true;
+        else
+            formatters.emplace_back([x](const MyTimeBase &, String & result) { result.push_back(x); });
+    }
 }
 
 } // namespace DB

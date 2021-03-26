@@ -38,8 +38,7 @@ static constexpr bool PAGE_CHECKSUM_ON_READ = true;
 
 namespace PageMetaFormat
 {
-using WBSize          = UInt32;
-using PageFileVersion = PageFile::Version;
+using WBSize = UInt32;
 // TODO we should align these alias with type in PageCache
 using PageTag    = UInt64;
 using IsPut      = std::underlying_type<WriteBatch::WriteType>::type;
@@ -69,7 +68,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     WBSize meta_write_bytes = 0;
     size_t data_write_bytes = 0;
 
-    meta_write_bytes += sizeof(WBSize) + sizeof(PageFileVersion) + sizeof(WriteBatch::SequenceID);
+    meta_write_bytes += sizeof(WBSize) + sizeof(PageFormat::Version) + sizeof(WriteBatch::SequenceID);
 
     for (const auto & write : wb.getWrites())
     {
@@ -104,7 +103,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     char * data_pos = data_buffer;
 
     PageUtil::put(meta_pos, meta_write_bytes);
-    PageUtil::put(meta_pos, PageFile::CURRENT_VERSION);
+    PageUtil::put(meta_pos, STORAGE_FORMAT_CURRENT.page);
     PageUtil::put(meta_pos, wb.getSequence());
 
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
@@ -114,8 +113,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
-        {
+        case WriteBatch::WriteType::UPSERT: {
             PageFlags  flags;
             Checksum   page_checksum = 0;
             PageOffset page_offset   = 0;
@@ -255,7 +253,7 @@ bool PageFile::MetaMergingReader::hasNext() const
     return (status == Status::Uninitialized) || (status == Status::Opened && meta_file_offset < meta_size);
 }
 
-void PageFile::MetaMergingReader::moveNext()
+void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
 {
     curr_edit.clear();
     curr_write_batch_sequence = 0;
@@ -284,19 +282,22 @@ void PageFile::MetaMergingReader::moveNext()
     }
 
     WriteBatch::SequenceID wb_sequence    = 0;
-    const auto             binary_version = PageUtil::get<PageMetaFormat::PageFileVersion>(pos);
-    if (binary_version == 1)
+    const auto             binary_version = PageUtil::get<PageFormat::Version>(pos);
+    switch (binary_version)
     {
+    case PageFormat::V1:
         wb_sequence = 0;
-    }
-    else if (binary_version == PageFile::VERSION_FLASH_341)
-    {
+        break;
+    case PageFormat::V2:
         wb_sequence = PageUtil::get<WriteBatch::SequenceID>(pos);
+        break;
+    default:
+        throw Exception("PageFile binary version not match, unknown [version=" + DB::toString(binary_version) + "] [file=" + page_file.metaPath() + "]", ErrorCodes::LOGICAL_ERROR);
     }
-    else
-    {
-        throw Exception("PageFile binary version not match, unknown version: " + DB::toString(binary_version), ErrorCodes::LOGICAL_ERROR);
-    }
+
+    // return the binary_version if `v` is not null
+    if (unlikely(v != nullptr))
+        *v = binary_version;
 
     // check the checksum of WriteBatch
     const auto wb_bytes_without_checksum = wb_bytes - sizeof(PageMetaFormat::Checksum);
@@ -319,29 +320,35 @@ void PageFile::MetaMergingReader::moveNext()
         switch (write_type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
-        {
+        case WriteBatch::WriteType::UPSERT: {
             PageMetaFormat::PageFlags flags;
 
             auto      page_id = PageUtil::get<PageId>(pos);
             PageEntry entry;
-            if (binary_version == PageFile::VERSION_BASE)
+            switch (binary_version)
             {
+            case PageFormat::V1: {
                 entry.file_id = page_file.getFileId();
                 entry.level   = page_file.getLevel();
+                break;
             }
-            else if (binary_version == PageFile::VERSION_FLASH_341)
-            {
+            case PageFormat::V2: {
                 entry.file_id = PageUtil::get<PageFileId>(pos);
                 entry.level   = PageUtil::get<PageFileLevel>(pos);
                 flags         = PageUtil::get<PageMetaFormat::PageFlags>(pos);
+                break;
             }
+            default:
+                throw Exception("PageFile binary version not match, unknown version: " + DB::toString(binary_version),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+
             entry.tag      = PageUtil::get<PageMetaFormat::PageTag>(pos);
             entry.offset   = PageUtil::get<PageMetaFormat::PageOffset>(pos);
             entry.size     = PageUtil::get<PageSize>(pos);
             entry.checksum = PageUtil::get<PageMetaFormat::Checksum>(pos);
 
-            if (binary_version == PageFile::VERSION_FLASH_341)
+            if (binary_version == PageFormat::V2)
             {
                 const UInt64 num_fields = PageUtil::get<UInt64>(pos);
                 entry.field_offsets.reserve(num_fields);
@@ -366,14 +373,12 @@ void PageFile::MetaMergingReader::moveNext()
             }
             break;
         }
-        case WriteBatch::WriteType::DEL:
-        {
+        case WriteBatch::WriteType::DEL: {
             auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.del(page_id);
             break;
         }
-        case WriteBatch::WriteType::REF:
-        {
+        case WriteBatch::WriteType::REF: {
             const auto ref_id  = PageUtil::get<PageId>(pos);
             const auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.ref(ref_id, page_id);
@@ -396,20 +401,14 @@ void PageFile::MetaMergingReader::moveNext()
 // PageFile::Writer
 // =========================================================
 
-PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create_new_file)
-    : page_file(page_file_),
-      sync_on_write(sync_on_write_),
-      data_file_path(page_file.dataPath()),
-      meta_file_path(page_file.metaPath()),
-      data_file{nullptr},
-      meta_file{nullptr},
-      last_write_time(Clock::now())
+PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool truncate_if_exists)
+    : page_file(page_file_), sync_on_write(sync_on_write_), data_file{nullptr}, meta_file{nullptr}, last_write_time(Clock::now())
 {
     // Create data and meta file, prevent empty page folder from being removed by GC.
     data_file = page_file.file_provider->newWritableFile(
-        page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_file);
+        page_file.dataPath(), page_file.dataEncryptionPath(), truncate_if_exists, /*create_new_encryption_info_*/ truncate_if_exists);
     meta_file = page_file.file_provider->newWritableFile(
-        page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_file);
+        page_file.metaPath(), page_file.metaEncryptionPath(), truncate_if_exists, /*create_new_encryption_info_*/ truncate_if_exists);
     data_file->close();
     meta_file->close();
 }
@@ -422,7 +421,12 @@ PageFile::Writer::~Writer()
     closeFd();
 }
 
-size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
+const String & PageFile::Writer::parentPath() const
+{
+    return page_file.parent_path;
+}
+
+size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const RateLimiterPtr & rate_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -439,13 +443,13 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
-    auto write_buf = [&](WritableFilePtr & file, UInt64 offset, const std::string & path, ByteBuffer buf) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), path);
+    auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf) {
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), rate_limiter);
         if (sync_on_write)
             PageUtil::syncFile(file);
     };
-    write_buf(data_file, page_file.data_file_pos, data_file_path, data_buf);
-    write_buf(meta_file, page_file.meta_file_pos, meta_file_path, meta_buf);
+    write_buf(data_file, page_file.data_file_pos, data_buf);
+    write_buf(meta_file, page_file.meta_file_pos, meta_buf);
 
     page_file.data_file_pos += data_buf.size();
     page_file.meta_file_pos += meta_buf.size();
@@ -488,7 +492,8 @@ void PageFile::Writer::closeFd()
 
 PageFile::Reader::Reader(PageFile & page_file)
     : data_file_path(page_file.dataPath()),
-      data_file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())}, last_read_time(Clock::now())
+      data_file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())},
+      last_read_time(Clock::now())
 {
 }
 
@@ -838,8 +843,8 @@ void PageFile::setFormal()
 {
     if (type != Type::Temp)
         return;
-    auto old_meta_encryption_path = metaEncryptionPath();
-    auto old_data_encryption_path = dataEncryptionPath();
+    auto       old_meta_encryption_path = metaEncryptionPath();
+    auto       old_data_encryption_path = dataEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Formal;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
@@ -855,8 +860,8 @@ size_t PageFile::setLegacy()
         return 0;
     // Rename to legacy dir. Note that we can NOT remove the data part before
     // successfully rename to legacy status.
-    auto old_meta_encryption_path = metaEncryptionPath();
-    auto old_data_encryption_path = dataEncryptionPath();
+    auto       old_meta_encryption_path = metaEncryptionPath();
+    auto       old_data_encryption_path = dataEncryptionPath();
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
@@ -881,13 +886,13 @@ size_t PageFile::setCheckpoint()
                             ErrorCodes::LOGICAL_ERROR);
     }
 
-    auto old_meta_encryption_path = metaEncryptionPath();
+    auto       old_meta_encryption_path = metaEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Checkpoint;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
     file.renameTo(folderPath());
     file_provider->deleteEncryptionInfo(old_meta_encryption_path);
-    // Remove the data part, should be a emtpy file.
+    // Remove the data part, should be an emtpy file.
     return removeDataIfExists();
 }
 
@@ -897,7 +902,7 @@ size_t PageFile::removeDataIfExists() const
     if (auto data_file = Poco::File(dataPath()); data_file.exists())
     {
         bytes_removed = data_file.getSize();
-        file_provider->deleteFile(dataPath(), dataEncryptionPath());
+        file_provider->deleteRegularFile(dataPath(), dataEncryptionPath());
     }
     return bytes_removed;
 }
@@ -909,8 +914,8 @@ void PageFile::destroy() const
     if (file.exists())
     {
         // remove meta first, then remove data
-        file_provider->deleteFile(metaPath(), metaEncryptionPath());
-        file_provider->deleteFile(dataPath(), dataEncryptionPath());
+        file_provider->deleteRegularFile(metaPath(), metaEncryptionPath());
+        file_provider->deleteRegularFile(dataPath(), dataEncryptionPath());
 
         // drop dir
         file.remove(true);

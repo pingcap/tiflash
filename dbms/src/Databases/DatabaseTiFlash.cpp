@@ -32,6 +32,12 @@ extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char exception_drop_table_during_remove_meta[];
+extern const char exception_before_rename_table_old_meta_removed[];
+} // namespace FailPoints
+
 static constexpr size_t METADATA_FILE_BUFFER_SIZE = 32768;
 
 DatabaseTiFlash::DatabaseTiFlash(
@@ -158,8 +164,8 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
         const String statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_path, ""),
-            statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
+            true, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (settings.fsync_metadata)
@@ -178,12 +184,12 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
 
         /// If it was ATTACH query and file with table metadata already exist
         /// (so, ATTACH is done after DETACH), then rename atomically replaces old file with new one.
-        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
-                table_metadata_path, EncryptionPath(table_metadata_path, ""));
+        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), table_metadata_path,
+            EncryptionPath(table_metadata_path, ""), true);
     }
     catch (...)
     {
-        context.getFileProvider()->deleteFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
+        context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }
@@ -198,8 +204,8 @@ void DatabaseTiFlash::removeTable(const Context & context, const String & table_
         // full apply schema from TiDB. And the old table's metadata and data
         // will be removed.
         String table_metadata_path = getTableMetadataPath(table_name);
-        FAIL_POINT_TRIGGER_EXCEPTION(exception_drop_table_during_remove_meta);
-        context.getFileProvider()->deleteFile(table_metadata_path, EncryptionPath(table_metadata_path, ""));
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_drop_table_during_remove_meta);
+        context.getFileProvider()->deleteRegularFile(table_metadata_path, EncryptionPath(table_metadata_path, ""));
     }
     catch (...)
     {
@@ -266,9 +272,18 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         }
         statement = getTableDefinitionFromCreateQuery(ast);
 
+        // 1. Assume the case that we need to rename the file `t_31.sql.tmp` to `t_31.sql`,
+        // and t_31.sql already exists and is a encrypted file.
+        // 2. The implementation in this function assume that the rename operation is atomic.
+        // 3. If we create new encryption info for `t_31.sql.tmp`,
+        // then we cannot rename the encryption info and the file in an atomic operation.
+        bool use_target_encrypt_info = context.getFileProvider()->isFileEncrypted(EncryptionPath(new_tbl_meta_file, ""));
+        EncryptionPath encryption_path
+            = use_target_encrypt_info ? EncryptionPath(new_tbl_meta_file, "") : EncryptionPath(new_tbl_meta_file_tmp, "");
         {
-            WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file, ""),
-                statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+            bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
+            WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, encryption_path, create_new_encryption_info,
+                nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();
             if (context.getSettingsRef().fsync_metadata)
@@ -279,16 +294,16 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         try
         {
             /// rename atomically replaces the old file with the new one.
-            context.getFileProvider()->renameFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""),
-                new_tbl_meta_file, EncryptionPath(new_tbl_meta_file, ""));
+            context.getFileProvider()->renameFile(
+                new_tbl_meta_file_tmp, encryption_path, new_tbl_meta_file, EncryptionPath(new_tbl_meta_file, ""), !use_target_encrypt_info);
         }
         catch (...)
         {
-            context.getFileProvider()->deleteFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""));
+            context.getFileProvider()->deleteRegularFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""));
             throw;
         }
 
-        FAIL_POINT_TRIGGER_EXCEPTION(exception_before_rename_table_old_meta_removed);
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_rename_table_old_meta_removed);
 
         // If only display name updated, don't remove `old_tbl_meta_file`.
         if (!isSamePath(old_tbl_meta_file, new_tbl_meta_file))
@@ -296,7 +311,8 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
             // If process crash before removing old table meta file, we will continue or rollback this
             // rename command next time `loadTables` is called. See `loadTables` and
             // `DatabaseLoading::startupTables` for more details.
-            Poco::File{old_tbl_meta_file}.remove(); // Then remove old meta file
+            context.getFileProvider()->deleteRegularFile(
+                old_tbl_meta_file, EncryptionPath(old_tbl_meta_file, "")); // Then remove old meta file
         }
     }
 
@@ -344,9 +360,14 @@ void DatabaseTiFlash::alterTable(
 
     statement = getTableDefinitionFromCreateQuery(ast);
 
+    // refer to the comment in `renameTable`
+    bool use_target_encrypt_info = context.getFileProvider()->isFileEncrypted(EncryptionPath(table_metadata_path, ""));
+    EncryptionPath encryption_path
+        = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
     {
-        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_path, ""),
-            statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info,
+            nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (context.getSettingsRef().fsync_metadata)
@@ -357,12 +378,12 @@ void DatabaseTiFlash::alterTable(
     try
     {
         /// rename atomically replaces the old file with the new one.
-        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
-                table_metadata_path, EncryptionPath(table_metadata_path, ""));
+        context.getFileProvider()->renameFile(table_metadata_tmp_path, encryption_path, table_metadata_path,
+            EncryptionPath(table_metadata_path, ""), !use_target_encrypt_info);
     }
     catch (...)
     {
-        context.getFileProvider()->deleteFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
+        context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }
@@ -439,17 +460,18 @@ void DatabaseTiFlash::shutdown()
 }
 
 
-void DatabaseTiFlash::drop()
+void DatabaseTiFlash::drop(const Context & context)
 {
     // Remove metadata dir for this database
     if (auto dir = Poco::File(getMetadataPath()); dir.exists())
     {
-        dir.remove(false);
+        context.getFileProvider()->deleteDirectory(getMetadataPath(), false, false);
     }
-    // Removd meta file for this database
+    // Remove meta file for this database
     if (auto meta_file = Poco::File(getDatabaseMetadataPath(getMetadataPath())); meta_file.exists())
     {
-        meta_file.remove();
+        context.getFileProvider()->deleteRegularFile(
+            getDatabaseMetadataPath(getMetadataPath()), EncryptionPath(getDatabaseMetadataPath(getMetadataPath()), ""));
     }
 }
 

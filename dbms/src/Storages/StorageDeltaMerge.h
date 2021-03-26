@@ -4,10 +4,11 @@
 #include <Core/SortDescription.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/Range.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiDB.h>
 #include <common/logger_useful.h>
 
@@ -48,18 +49,24 @@ public:
     /// Write from raft layer.
     void write(Block && block, const Settings & settings);
 
-    void flushCache(const Context & context) override { flushCache(context, DM::HandleRange::newAll()); }
-
-    void flushCache(const Context & context, const DB::HandleRange<HandleID> & range_to_flush) override
+    void flushCache(const Context & context) override
     {
-        flushCache(context, toDMHandleRange(range_to_flush));
+        /// todo fix hardcoded value
+        flushCache(context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     }
 
-    void flushCache(const Context & context, const DM::HandleRange & range_to_flush);
+    void flushCache(const Context & context, const Region & region) override
+    {
+        flushCache(context,
+            DM::RowKeyRange::fromRegionRange(
+                region.getRange(), region.getRange()->getMappedTableID(), is_common_handle, rowkey_column_size));
+    }
+
+    void flushCache(const Context & context, const DM::RowKeyRange & range_to_flush);
 
     void mergeDelta(const Context & context) override;
 
-    void deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings);
+    void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 
     void rename(const String & new_path_to_db,
         const String & new_database_name,
@@ -100,8 +107,13 @@ public:
 
     const DM::DeltaMergeStorePtr & getStore() { return store; }
 
+    bool isCommonHandle() const override { return is_common_handle; }
+
+    size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
+
+
 protected:
-    StorageDeltaMerge(const String & path_,
+    StorageDeltaMerge( //
         const String & db_engine,
         const String & db_name_,
         const String & name_,
@@ -125,13 +137,14 @@ private:
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
 
-    String path;
-
     const bool data_path_contains_database_name = false;
 
     DM::DeltaMergeStorePtr store;
 
     Strings pk_column_names; // TODO: remove it. Only use for debug from ch-client.
+    bool is_common_handle;
+    bool pk_is_handle;
+    size_t rowkey_column_size;
     OrderedNameSet hidden_columns;
 
     // The table schema synced from TiDB

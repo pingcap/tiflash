@@ -1,14 +1,17 @@
 #pragma once
 
-#include <Poco/Util/AbstractConfiguration.h>
 #include <Core/Defines.h>
 #include <Core/Field.h>
-
 #include <Interpreters/SettingsCommon.h>
+#include <Poco/Util/AbstractConfiguration.h>
 
 
 namespace DB
 {
+namespace Constant
+{
+inline static constexpr UInt64 MB = 1024UL * 1024UL;
+}
 
 /** Settings of query execution.
   */
@@ -32,6 +35,9 @@ struct Settings
     M(SettingUInt64, read_tso, DEFAULT_MAX_READ_TSO, "tmt read tso.") \
     M(SettingInt64, dag_records_per_chunk, DEFAULT_DAG_RECORDS_PER_CHUNK, "default chunk size of a DAG response.") \
     M(SettingInt64, schema_version, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, "tmt schema version.") \
+    M(SettingUInt64, mpp_task_timeout, DEFAULT_MPP_TASK_TIMEOUT, "mpp task max endurable time.") \
+    M(SettingUInt64, mpp_task_running_timeout, DEFAULT_MPP_TASK_RUNNING_TIMEOUT, "mpp task max time that running without any progress.") \
+    M(SettingUInt64, mpp_task_waiting_timeout, DEFAULT_MPP_TASK_WAITING_TIMEOUT, "mpp task max time that waiting first data block from source input stream.") \
     M(SettingInt64, safe_point_update_interval_seconds, 1, "The interval in seconds to update safe point from PD.")\
     M(SettingUInt64, batch_commands_threads, 0, "Number of threads to use for handling batch commands concurrently. 0 means - same as 'max_threads'.") \
     M(SettingUInt64, min_compress_block_size, DEFAULT_MIN_COMPRESS_BLOCK_SIZE, "The actual size of the block to compress, if the uncompressed data less than max_compress_block_size is no less than this value and no less than the volume of data for one mark.") \
@@ -40,7 +46,9 @@ struct Settings
     M(SettingUInt64, max_insert_block_size, DEFAULT_INSERT_BLOCK_SIZE, "The maximum block size for insertion, if we control the creation of blocks for insertion.") \
     M(SettingUInt64, min_insert_block_size_rows, DEFAULT_INSERT_BLOCK_SIZE, "Squash blocks passed to INSERT query to specified size in rows, if blocks are not big enough.") \
     M(SettingUInt64, min_insert_block_size_bytes, (DEFAULT_INSERT_BLOCK_SIZE * 256), "Squash blocks passed to INSERT query to specified size in bytes, if blocks are not big enough.") \
-    M(SettingMaxThreads, max_threads, 0, "The maximum number of threads to execute the request. By default, it is determined automatically.") \
+    M(SettingMaxThreads, max_threads, 0, "The maximum number of threads to execute the request. By default, it is determined automatically.")          \
+    M(SettingUInt64, cop_pool_size, 0, "The number of threads to handle cop requests. By default, it is determined automatically.")                \
+    M(SettingUInt64, batch_cop_pool_size, 0, "The number of threads to handle batch cop requests. By default, it is determined automatically.") \
     M(SettingUInt64, max_read_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to read from the filesystem.") \
     M(SettingUInt64, max_distributed_connections, DEFAULT_MAX_DISTRIBUTED_CONNECTIONS, "The maximum number of connections for distributed processing of one query (should be greater than max_threads).") \
     M(SettingUInt64, max_query_size, DEFAULT_MAX_QUERY_SIZE, "Which part of the query can be read into RAM for parsing (the remaining data for INSERT, if any, is read later)") \
@@ -101,7 +109,7 @@ struct Settings
     M(SettingBool, force_index_by_date, 0, "Throw an exception if there is a partition key in a table, and it is not used.") \
     M(SettingBool, force_primary_key, 0, "Throw an exception if there is primary key in a table, and it is not used.") \
     \
-    M(SettingUInt64, mark_cache_min_lifetime, 10000, "If the maximum size of mark_cache is exceeded, delete only records older than mark_cache_min_lifetime seconds.") \
+    M(SettingUInt64, mark_cache_min_lifetime, 0, "If the maximum size of mark_cache is exceeded, delete only records older than mark_cache_min_lifetime seconds.") \
     \
     M(SettingFloat, max_streams_to_max_threads_ratio, 1, "Allows you to use more sources than the number of threads - to more evenly distribute work across threads. It is assumed that this is a temporary solution, since it will be possible in the future to make the number of sources equal to the number of threads, but for each source to dynamically select available work for itself.") \
     \
@@ -235,10 +243,11 @@ struct Settings
     M(SettingUInt64, shared_query_clients, 0, "How many clients will share the same query_id. If > 0, enable shared query mode.")\
     M(SettingString, query_id, "", "The query_id, only for testing.")\
     M(SettingUInt64, mutable_deduper, 5, "The deduper used by MutableMergeTree storage. By default 5. 0: OriginStreams, 1: OriginUnity, 2: ReplacingUnity, 3: ReplacingPartitioning, 4: DedupPartitioning, 5: ReplacingPartitioningOpt.")\
-    M(SettingUInt64, delta_merge_size, 10000000, "The delta rows limit in memory. After that delta rows will be flushed.")\
     \
     M(SettingUInt64, dt_segment_limit_rows, 1000000, "Average rows of segments in DeltaTree Engine")\
-    M(SettingUInt64, dt_segment_delta_limit_rows, 80000, "Max rows of segment delta in DeltaTree Engine ")\
+    M(SettingUInt64, dt_segment_delta_limit_rows, 80000, "Max rows of segment delta in DeltaTree Engine")\
+    M(SettingUInt64, dt_segment_force_merge_delta_deletes, 10, "Delta delete ranges before force merge into stable")\
+    M(SettingUInt64, dt_segment_force_merge_delta_rows, 10000000, "Delta rows before force merge into stable")\
     M(SettingUInt64, dt_segment_delta_cache_limit_rows, 4000, "Max rows of cache in segment delta in DeltaTree Engine")\
     M(SettingUInt64, dt_segment_delta_small_pack_rows, 512, "Determine whether a pack in delta is small or not")\
     M(SettingUInt64, dt_segment_stable_pack_rows, DEFAULT_MERGE_BLOCK_SIZE, "Expected stable pack rows in DeltaTree Engine")\
@@ -251,10 +260,27 @@ struct Settings
     M(SettingBool, dt_flush_after_write, false, "Flush cache or not after write in DeltaTree Engine.")\
     M(SettingBool, dt_enable_skippable_place, true, "Enable skippable place or not in DeltaTree Engine.")\
     M(SettingBool, dt_enable_stable_column_cache, true, "Enable column cache for StorageDeltaMerge.") \
-    M(SettingUInt64, dt_storage_pool_log_write_slots, 4, "Max write concurrency for each StoragePool.log.") \
-    M(SettingUInt64, dt_storage_pool_data_write_slots, 1, "Max write concurrency for each StoragePool.data.") \
-    M(SettingUInt64, dt_storage_pool_meta_write_slots, 2, "Max write concurrency for each StoragePool.meta.") \
+    M(SettingBool, dt_enable_single_file_mode_dmfile, false, "Enable write DMFile in single file mode.") \
     M(SettingUInt64, dt_open_file_max_idle_seconds, 15, "Max idle time of opening files, 0 means infinite.") \
+    M(SettingFloat, dt_page_gc_low_write_prob, 0.10, "Probability to run gc when write there is few writes") \
+    \
+    M(SettingUInt64, dt_storage_pool_log_write_slots, 4, "Max write concurrency for each StoragePool.log.") \
+    M(SettingUInt64, dt_storage_pool_log_gc_min_file_num, 10, "Min number of page files to compact") \
+    M(SettingUInt64, dt_storage_pool_log_gc_min_legacy_num, 3, "Min number of legacy page files to compact") \
+    M(SettingUInt64, dt_storage_pool_log_gc_min_bytes, 128 * Constant::MB, "Min bytes of page data to compact") \
+    M(SettingFloat, dt_storage_pool_log_gc_max_valid_rate, 0.35, "Max valid rate of deciding a page file can be compact") \
+    \
+    M(SettingUInt64, dt_storage_pool_data_write_slots, 1, "Max write concurrency for each StoragePool.data.") \
+    M(SettingUInt64, dt_storage_pool_data_gc_min_file_num, 10, "Min number of page files to compact") \
+    M(SettingUInt64, dt_storage_pool_data_gc_min_legacy_num, 3, "Min number of legacy page files to compact") \
+    M(SettingUInt64, dt_storage_pool_data_gc_min_bytes, 128 * Constant::MB, "Min bytes of page data to compact") \
+    M(SettingFloat, dt_storage_pool_data_gc_max_valid_rate, 0.35, "Max valid rate of deciding a page file can be compact") \
+    \
+    M(SettingUInt64, dt_storage_pool_meta_write_slots, 2, "Max write concurrency for each StoragePool.meta.") \
+    M(SettingUInt64, dt_storage_pool_meta_gc_min_file_num, 10, "Min number of page files to compact") \
+    M(SettingUInt64, dt_storage_pool_meta_gc_min_legacy_num, 3, "Min number of legacy page files to compact") \
+    M(SettingUInt64, dt_storage_pool_meta_gc_min_bytes, 128 * Constant::MB, "Min bytes of page data to compact") \
+    M(SettingFloat, dt_storage_pool_meta_gc_max_valid_rate, 0.35, "Max valid rate of deciding a page file can be compact") \
     \
     M(SettingUInt64, max_rows_in_set, 0, "Maximum size of the set (in number of elements) resulting from the execution of the IN section.") \
     M(SettingUInt64, max_bytes_in_set, 0, "Maximum size of the set (in bytes in memory) resulting from the execution of the IN section.") \
@@ -272,6 +298,7 @@ struct Settings
     M(SettingUInt64, max_bytes_in_distinct, 0, "Maximum total size of state (in uncompressed bytes) in memory for the execution of DISTINCT.") \
     M(SettingOverflowMode<false>, distinct_overflow_mode, OverflowMode::THROW, "What to do when the limit is exceeded.") \
     \
+    M(SettingBool, join_concurrent_build, true, "Build hash table concurrently for join.") \
     M(SettingUInt64, max_memory_usage, 0, "Maximum memory usage for processing of single query. Zero means unlimited.") \
     M(SettingUInt64, max_memory_usage_for_user, 0, "Maximum memory usage for processing all concurrently running queries for the user. Zero means unlimited.") \
     M(SettingUInt64, max_memory_usage_for_all_queries, 0, "Maximum memory usage for processing all concurrently running queries on the server. Zero means unlimited.") \
@@ -322,4 +349,4 @@ struct Settings
 };
 
 
-}
+} // namespace DB

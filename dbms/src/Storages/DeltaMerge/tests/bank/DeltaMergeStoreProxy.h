@@ -1,14 +1,14 @@
 #pragma once
 
+#include <Core/Types.h>
 #include <DataTypes/DataTypeString.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <test_utils/TiflashTestBasic.h>
-
-#include <Core/Types.h>
 #include <Storages/DeltaMerge/tests/bank/IDGenerator.h>
 #include <Storages/DeltaMerge/tests/bank/SimpleDB.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
+#include <TestUtils/TiFlashTestBasic.h>
+
 #include <cstddef>
 #include <iostream>
 #include <memory>
@@ -35,7 +35,7 @@ public:
         table_column_defines->emplace_back(col_balance_define);
         ColumnDefine handle_column_define = (*table_column_defines)[0];
         store                             = std::make_shared<DeltaMergeStore>(
-            *context, path, "test", name, *table_column_defines, handle_column_define, DeltaMergeStore::Settings());
+            *context, true, "test", name, *table_column_defines, handle_column_define, false, 1, DeltaMergeStore::Settings());
     }
     void upsertRow(UInt64 id, UInt64 balance, UInt64 tso);
 

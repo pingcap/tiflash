@@ -6,8 +6,9 @@
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/DeltaMerge/PKRange.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
@@ -29,12 +30,12 @@ using DMContextPtr = std::shared_ptr<DMContext>;
 using NotCompress  = std::unordered_set<ColId>;
 using SegmentIdSet = std::unordered_set<UInt64>;
 
-static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
+inline static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct SegmentStat
 {
     UInt64      segment_id;
-    HandleRange range;
+    RowKeyRange range;
 
     UInt64 rows          = 0;
     UInt64 size          = 0;
@@ -118,6 +119,13 @@ struct DeltaMergeStoreStat
     UInt64 background_tasks_length = 0;
 };
 
+struct RegionSplitRes
+{
+    RowKeyValues split_points;
+    size_t       exact_rows;
+    size_t       exact_bytes;
+};
+
 // It is used to prevent hash conflict of file caches.
 static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
 
@@ -128,8 +136,9 @@ public:
     {
         NotCompress not_compress_columns{};
     };
+    static Settings EMPTY_SETTINGS;
 
-    using SegmentSortedMap = std::map<PKRange::End, SegmentPtr, std::less<>>;
+    using SegmentSortedMap = std::map<RowKeyValueRef, SegmentPtr, std::less<>>;
     using SegmentMap       = std::unordered_map<PageId, SegmentPtr>;
 
     enum ThreadType
@@ -215,26 +224,28 @@ public:
     {
     private:
         using TaskQueue = std::queue<BackgroundTask, std::list<BackgroundTask>>;
-        TaskQueue tasks;
+        TaskQueue light_tasks;
+        TaskQueue heavy_tasks;
 
         std::mutex mutex;
 
     public:
-        size_t length() { return tasks.size(); }
+        size_t length() { return light_tasks.size() + heavy_tasks.size(); }
 
-        void addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
+        bool addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
 
-        BackgroundTask nextTask(Logger * log_);
+        BackgroundTask nextTask(bool is_heavy, Logger * log_);
     };
 
     DeltaMergeStore(Context &             db_context, //
-                    const String &        path_,
                     bool                  data_path_contains_database_name,
                     const String &        db_name,
                     const String &        tbl_name,
                     const ColumnDefines & columns,
                     const ColumnDefine &  handle,
-                    const Settings &      settings_);
+                    bool                  is_common_handle_,
+                    size_t                rowkey_column_size_,
+                    const Settings &      settings_ = EMPTY_SETTINGS);
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
@@ -251,8 +262,22 @@ public:
 
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
-    // Deprated
-    void deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range);
+    void writeRegionSnapshot(const DMContextPtr & dm_context, //
+                             const RowKeyRange &  range,
+                             std::vector<PageId>  file_ids,
+                             bool                 clear_data_in_range);
+
+    void writeRegionSnapshot(const Context &      db_context, //
+                             const DB::Settings & db_settings,
+                             const RowKeyRange &  range,
+                             std::vector<PageId>  file_ids,
+                             bool                 clear_data_in_range)
+    {
+        auto dm_context = newDMContext(db_context, db_settings);
+        return writeRegionSnapshot(dm_context, range, file_ids, clear_data_in_range);
+    }
+
+    void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
 
     BlockInputStreams readRaw(const Context &       db_context,
                               const DB::Settings &  db_settings,
@@ -264,7 +289,7 @@ public:
     BlockInputStreams read(const Context &       db_context,
                            const DB::Settings &  db_settings,
                            const ColumnDefines & columns_to_read,
-                           const HandleRanges &  sorted_ranges,
+                           const RowKeyRanges &  sorted_ranges,
                            size_t                num_streams,
                            UInt64                max_version,
                            const RSOperatorPtr & filter,
@@ -272,19 +297,19 @@ public:
                            const SegmentIdSet &  read_segments       = {});
 
     /// Force flush all data to disk.
-    void flushCache(const Context & context, const HandleRange & range = HandleRange::newAll())
+    void flushCache(const Context & context, const RowKeyRange & range)
     {
         auto dm_context = newDMContext(context, context.getSettingsRef());
         flushCache(dm_context, range);
     }
 
-    void flushCache(const DMContextPtr & dm_context, const HandleRange & range);
+    void flushCache(const DMContextPtr & dm_context, const RowKeyRange & range);
 
     /// Do merge delta for all segments. Only used for debug.
     void mergeDeltaAll(const Context & context);
 
     /// Compact fregment packs into bigger one.
-    void compact(const Context & context, const HandleRange & range = HandleRange::newAll());
+    void compact(const Context & context, const RowKeyRange & range);
 
     /// Apply `commands` on `table_columns`
     void applyAlters(const AlterCommands &         commands, //
@@ -302,10 +327,24 @@ public:
     void                check(const Context & db_context);
     DeltaMergeStoreStat getStat();
     SegmentStats        getSegmentStats();
+    bool                isCommonHandle() const { return is_common_handle; }
+    size_t              getRowKeyColumnSize() const { return rowkey_column_size; }
 
-private:
+public:
+    /// Methods mainly used by region split.
+
+    RowsAndBytes getRowsAndBytesInRange(const Context & db_context, const RowKeyRange & check_range, bool is_exact);
+    RowsAndBytes getRowsAndBytesInRange(DMContext & dm_context, const RowKeyRange & check_range, bool is_exact);
+
+    /// Get the split point of region with check_range. Currently only do half split.
+    RegionSplitRes
+    getRegionSplitPoint(const Context & db_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
+
+    RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
+
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
 
+private:
     bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
@@ -313,27 +352,32 @@ private:
 
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
-    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment);
-    void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
+    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+    void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
     SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
 
-    bool handleBackgroundTask();
+    bool handleBackgroundTask(bool heavy);
 
     bool isSegmentValid(const SegmentPtr & segment);
 
-    void restoreExtraPathCapacity();
+    void restoreStableFiles();
+
+    SegmentReadTasks getReadTasksByRanges(DMContext &          dm_context,
+                                          const RowKeyRanges & sorted_ranges,
+                                          size_t               expected_tasks_count = 1,
+                                          const SegmentIdSet & read_segments        = {});
 
 private:
-    String      path;
-    PathPool    extra_paths;
-    Context &   global_context;
-    Settings    settings;
-    StoragePool storage_pool;
+    Context &       global_context;
+    StoragePathPool path_pool;
+    Settings        settings;
+    StoragePool     storage_pool;
 
     String db_name;
     String table_name;
 
-    PrimaryKeyPtr pk;
+    bool   is_common_handle;
+    size_t rowkey_column_size;
 
     ColumnDefines original_table_columns;
     BlockPtr      original_table_header; // Used to speed up getHeader()
@@ -349,6 +393,9 @@ private:
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
+
+    BackgroundProcessingPool &           blockable_background_pool;
+    BackgroundProcessingPool::TaskHandle blockable_background_pool_handle;
 
     /// end of range -> segment
     SegmentSortedMap segments;

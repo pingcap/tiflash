@@ -153,7 +153,7 @@ void TCPHandler::runImpl()
          *  The client will be able to accept it, if it did not happen while sending another packet and the client has not disconnected yet.
          */
         std::unique_ptr<Exception> exception;
-        LockInfos lock_infos;
+        LockInfoPtr lock_info;
         std::vector<UInt64> region_ids;
         bool network_error = false;
 
@@ -227,11 +227,11 @@ void TCPHandler::runImpl()
         catch (LockException & e)
         {
             state.io.onException();
-            lock_infos = std::move(e.lock_infos);
+            lock_info = std::move(e.lock_info);
         }
         catch (RegionException & e)
         {
-            sendRegionException(e.region_ids);
+            sendRegionException({e.unavailable_region.begin(), e.unavailable_region.end()});
         }
         catch (const Exception & e)
         {
@@ -281,8 +281,8 @@ void TCPHandler::runImpl()
         {
             if (exception)
                 sendException(*exception);
-            else if (!lock_infos.empty())
-                sendLockInfos(lock_infos);
+            else if (lock_info)
+                sendLockInfos(lock_info);
         }
         catch (...)
         {
@@ -859,16 +859,15 @@ void TCPHandler::sendRegionException(const std::vector<UInt64> & region_ids) {
     out->next();
 }
 
-void TCPHandler::sendLockInfos(const LockInfos & lock_infos)
+void TCPHandler::sendLockInfos(const LockInfoPtr & lock_info)
 {
     writeVarUInt(Protocol::Server::LockInfos, *out);
-    writeVarUInt(lock_infos.size(), *out);
-    for (auto & lock_info : lock_infos)
+    writeVarUInt(1, *out);
     {
-        writeStringBinary(lock_info->primary_lock, *out);
-        writeVarUInt(lock_info->lock_version, *out);
-        writeStringBinary(lock_info->key, *out);
-        writeVarUInt(lock_info->lock_ttl, *out);
+        writeStringBinary(lock_info->primary_lock(), *out);
+        writeVarUInt(lock_info->lock_version(), *out);
+        writeStringBinary(lock_info->key(), *out);
+        writeVarUInt(lock_info->lock_ttl(), *out);
     }
     out->next();
 }

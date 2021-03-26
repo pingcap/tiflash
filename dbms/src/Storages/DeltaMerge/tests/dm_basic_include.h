@@ -7,7 +7,8 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
 {
@@ -15,6 +16,8 @@ namespace DM
 {
 namespace tests
 {
+
+#define GET_REGION_RANGE(start, end, table_id) RowKeyRange::fromHandleRange(::DB::DM::HandleRange((start), (end))).toRegionRange((table_id))
 
 // Add this so that we can call typeFromString under namespace DB::DM::tests
 using DB::tests::typeFromString;
@@ -28,9 +31,21 @@ inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_exp
     if (lhs == rhs)
         return ::testing::AssertionSuccess();
     else
-        return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toString(), rhs.toString(), false);
+        return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toDebugString(), rhs.toDebugString(), false);
+}
+/// helper functions for comparing HandleRange
+inline ::testing::AssertionResult RowKeyRangeCompare(const char *        lhs_expr,
+                                                     const char *        rhs_expr, //
+                                                     const RowKeyRange & lhs,
+                                                     const RowKeyRange & rhs)
+{
+    if (lhs == rhs)
+        return ::testing::AssertionSuccess();
+    else
+        return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toDebugString(), rhs.toDebugString(), false);
 }
 #define ASSERT_RANGE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::DM::tests::HandleRangeCompare, val1, val2)
+#define ASSERT_ROWKEY_RANGE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::DM::tests::RowKeyRangeCompare, val1, val2)
 #define EXPECT_RANGE_EQ(val1, val2) EXPECT_PRED_FORMAT2(::DB::DM::tests::HandleRangeCompare, val1, val2)
 #define GET_GTEST_FULL_NAME                                                                     \
     (String() + ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() + "." \
@@ -39,17 +54,17 @@ inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_exp
 class DMTestEnv
 {
 public:
-    static Context & getContext(const ::DB::Settings & settings = DB::Settings())
+    static Context getContext(const ::DB::Settings & settings = DB::Settings())
     {
         return ::DB::tests::TiFlashTestEnv::getContext(settings);
     }
 
     static constexpr const char * pk_name = "_tidb_rowid";
 
-    static ColumnDefinesPtr getDefaultColumns()
+    static ColumnDefinesPtr getDefaultColumns(bool is_common_handle = false)
     {
         ColumnDefinesPtr columns = std::make_shared<ColumnDefines>();
-        columns->emplace_back(ColumnDefine(EXTRA_HANDLE_COLUMN_ID, pk_name, std::make_shared<DataTypeInt64>()));
+        columns->emplace_back(getExtraHandleColumnDefine(is_common_handle));
         columns->emplace_back(getVersionColumnDefine());
         columns->emplace_back(getTagColumnDefine());
         return columns;
@@ -66,10 +81,12 @@ public:
     static Block prepareSimpleWriteBlock(size_t         beg,
                                          size_t         end,
                                          bool           reversed,
-                                         UInt64         tso       = 2,
-                                         const String & pk_name_  = pk_name,
-                                         ColumnID       pk_col_id = EXTRA_HANDLE_COLUMN_ID,
-                                         DataTypePtr    pk_type   = EXTRA_HANDLE_COLUMN_TYPE)
+                                         UInt64         tso                = 2,
+                                         const String & pk_name_           = pk_name,
+                                         ColumnID       pk_col_id          = EXTRA_HANDLE_COLUMN_ID,
+                                         DataTypePtr    pk_type            = EXTRA_HANDLE_COLUMN_INT_TYPE,
+                                         bool           is_common_handle   = false,
+                                         size_t         rowkey_column_size = 1)
     {
         Block        block;
         const size_t num_rows = (end - beg);
@@ -81,13 +98,27 @@ public:
                 for (size_t i = 0; i < num_rows; i++)
                 {
                     Field field;
-                    if (!reversed)
+                    if (is_common_handle)
                     {
-                        field = Int64(beg + i);
+                        Int64             value = reversed ? end - 1 - i : beg + i;
+                        std::stringstream ss;
+                        for (size_t index = 0; index < rowkey_column_size; index++)
+                        {
+                            ss << TiDB::CodecFlagInt;
+                            ::DB::EncodeInt64(value, ss);
+                        }
+                        field = ss.str();
                     }
                     else
                     {
-                        field = Int64(end - 1 - i);
+                        if (!reversed)
+                        {
+                            field = Int64(beg + i);
+                        }
+                        else
+                        {
+                            field = Int64(end - 1 - i);
+                        }
                     }
                     m_col->insert(field);
                 }
@@ -179,16 +210,30 @@ public:
 
     /// prepare a row like this:
     /// {"pk":pk, "version":tso, "delete_mark":mark, "colname":value}
-    static Block prepareOneRowBlock(Int64 pk, UInt64 tso, UInt8 mark, const String & colname, const String & value)
+    static Block prepareOneRowBlock(
+        Int64 pk, UInt64 tso, UInt8 mark, const String & colname, const String & value, bool is_common_handle, size_t rowkey_column_size)
     {
         Block        block;
         const size_t num_rows = 1;
         {
-            ColumnWithTypeAndName col1(EXTRA_HANDLE_COLUMN_TYPE, pk_name);
+            ColumnWithTypeAndName col1(is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, pk_name);
             {
                 IColumn::MutablePtr m_col = col1.type->createColumn();
                 // insert form large to small
-                m_col->insert(pk);
+                if (is_common_handle)
+                {
+                    Field             field;
+                    std::stringstream ss;
+                    for (size_t index = 0; index < rowkey_column_size; index++)
+                    {
+                        ss << TiDB::CodecFlagInt;
+                        ::DB::EncodeInt64(pk, ss);
+                    }
+                    field = ss.str();
+                    m_col->insert(field);
+                }
+                else
+                    m_col->insert(pk);
                 col1.column = std::move(m_col);
             }
             block.insert(col1);
@@ -221,8 +266,71 @@ public:
         }
         return block;
     }
-};
 
+    static void verifyClusteredIndexValue(const String & value, Int64 ans, size_t rowkey_column_size)
+    {
+        size_t cursor = 0;
+        size_t k      = 0;
+        for (; cursor < value.size() && k < rowkey_column_size; k++)
+        {
+            cursor++;
+            Int64 i_value = DB::DecodeInt64(cursor, value);
+            EXPECT_EQ(i_value, ans);
+        }
+        EXPECT_EQ(k, rowkey_column_size);
+        EXPECT_EQ(cursor, value.size());
+    }
+
+    static RowKeyRange getRowKeyRangeForClusteredIndex(Int64 start, Int64 end, size_t rowkey_column_size)
+    {
+        std::stringstream ss;
+        for (size_t i = 0; i < rowkey_column_size; i++)
+        {
+            ss << TiDB::CodecFlagInt;
+            EncodeInt64(start, ss);
+        }
+        RowKeyValue start_key = RowKeyValue(true, std::make_shared<String>(ss.str()));
+        ss.str("");
+        for (size_t i = 0; i < rowkey_column_size; i++)
+        {
+            ss << TiDB::CodecFlagInt;
+            EncodeInt64(end, ss);
+        }
+        RowKeyValue end_key = RowKeyValue(true, std::make_shared<String>(ss.str()));
+        return RowKeyRange(start_key, end_key, true, rowkey_column_size);
+    }
+
+    static Block prepareBlockWithIncreasingPKAndTs(size_t rows, Int64 start_pk, UInt64 start_ts)
+    {
+        Block block;
+        {
+            {
+                auto & col_def = getExtraHandleColumnDefine(false);
+                auto   col     = col_def.type->createColumn();
+                for (size_t i = 0; i < rows; ++i)
+                    col->insert((Int64)(start_pk + i));
+                block.insert(ColumnWithTypeAndName(std::move(col), col_def.type, col_def.name, col_def.id));
+            }
+
+            {
+                auto & col_def = getVersionColumnDefine();
+                auto   col     = col_def.type->createColumn();
+                for (size_t i = 0; i < rows; ++i)
+                    col->insert((UInt64)(start_ts + i));
+                block.insert(ColumnWithTypeAndName(std::move(col), col_def.type, col_def.name, col_def.id));
+            }
+
+            {
+                auto & col_def = getTagColumnDefine();
+                auto   col     = col_def.type->createColumn();
+                for (size_t i = 0; i < rows; ++i)
+                    col->insert((UInt64)0);
+                block.insert(ColumnWithTypeAndName(std::move(col), col_def.type, col_def.name, col_def.id));
+            }
+        }
+        return block;
+    }
+};
 
 } // namespace tests
 } // namespace DM

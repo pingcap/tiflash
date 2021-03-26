@@ -1,3 +1,4 @@
+#include <Common/TiFlashMetrics.h>
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -6,9 +7,11 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
+#include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
+#include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
-#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -59,34 +62,54 @@ template <bool batch>
 void DAGDriver<batch>::execute()
 try
 {
-    DAGContext dag_context;
-    DAGQuerySource dag(context, dag_context, regions, dag_request, writer, batch);
+    auto start_time = Clock::now();
+    DAGContext dag_context(dag_request);
+    context.setDAGContext(&dag_context);
+    DAGQuerySource dag(context, regions, dag_request, batch);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw TiFlashException("DAG is not query.", Errors::Coprocessor::Internal);
 
+    auto end_time = Clock::now();
+    Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+    dag_context.compile_time_ns = compile_time_ns;
+    LOG_DEBUG(log, "Compile dag request cost " << compile_time_ns / 1000000 << " ms");
+
+    BlockOutputStreamPtr dag_output_stream = nullptr;
     if constexpr (!batch)
     {
-        bool collect_exec_summary = dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries();
-        BlockOutputStreamPtr dag_output_stream
-            = std::make_shared<DAGBlockOutputStream>(dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
-                dag.getResultFieldTypes(), streams.in->getHeader(), dag_context, collect_exec_summary, dag_request.has_root_executor());
+        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<UnaryDAGResponseWriter>(
+            dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), dag_context);
+        dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
     }
     else
     {
-        streams.in->readPrefix();
-        while (streams.in->read())
-            ;
-        streams.in->readSuffix();
+        auto streaming_writer = std::make_shared<StreamWriter>(writer);
+        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(streaming_writer,
+            std::vector<Int64>(), tipb::ExchangeType::PassThrough, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
+            dag.getResultFieldTypes(), dag_context);
+        dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
+        copyData(*streams.in, *dag_output_stream);
+    }
+
+    auto process_info = context.getProcessListElement()->getInfo();
+    auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
+    if constexpr (!batch)
+    {
+        GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_cop).Observe(peak_memory);
+    }
+    else
+    {
+        GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_super_batch).Observe(peak_memory);
     }
 
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {
         LOG_DEBUG(log,
-            __PRETTY_FUNCTION__ << ": dag request with encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
+            __PRETTY_FUNCTION__ << ": dag request without encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
                                 << " seconds, produce " << p_stream->getProfileInfo().rows << " rows, " << p_stream->getProfileInfo().bytes
                                 << " bytes.");
 
@@ -139,9 +162,12 @@ void DAGDriver<batch>::recordError(Int32 err_code, const String & err_msg)
 {
     if constexpr (batch)
     {
-        std::ignore = err_code;
+        tipb::SelectResponse dag_response;
+        tipb::Error * error = dag_response.mutable_error();
+        error->set_code(err_code);
+        error->set_msg(err_msg);
         coprocessor::BatchResponse err_response;
-        err_response.set_other_error(err_msg);
+        err_response.set_data(dag_response.SerializeAsString());
         writer->Write(err_response);
     }
     else

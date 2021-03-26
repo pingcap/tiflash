@@ -1,6 +1,7 @@
 #!/usr/bin/python3
-import logging
 import argparse
+import logging
+
 import version
 
 version_info = ''
@@ -12,6 +13,8 @@ parser = argparse.ArgumentParser(description='TiFlash Cluster Manager', formatte
 parser.add_argument('--version', '-v', help='show version', action='version', version=version_info)
 parser.add_argument('--config', help='path of config file *.toml', required=True)
 parser.add_argument('--log_level', help='log level', default='INFO', choices=['INFO', 'DEBUG', 'WARN'])
+parser.add_argument('--check_online_update', help='check can do online rolling update for TiFlash', action='store_true')
+parser.add_argument('--clean_pd_rules', help='clean all placement rules about tiflash in pd', action='store_true')
 
 args = parser.parse_args()
 

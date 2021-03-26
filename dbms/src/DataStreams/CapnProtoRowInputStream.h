@@ -1,6 +1,6 @@
 #pragma once
-#include <Common/config.h>
 #if USE_CAPNP
+#include <Common/config.h>
 
 #include <Core/Block.h>
 #include <DataStreams/IRowInputStream.h>

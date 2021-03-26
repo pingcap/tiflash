@@ -1,5 +1,6 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <Storages/Page/gc/DataCompactor.h>
+#include <Storages/PathPool.h>
 
 #ifndef NDEBUG
 #include <Storages/Page/mock/MockUtils.h>
@@ -9,11 +10,11 @@ namespace DB
 {
 
 template <typename SnapshotPtr>
-DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage)
+DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStorage::Config gc_config)
     : storage_name(storage.storage_name),
-      storage_path(storage.storage_path),
+      delegator(storage.delegator),
       file_provider(storage.getFileProvider()),
-      config(storage.config),
+      config(std::move(gc_config)),
       log(storage.log),
       page_file_log(storage.page_file_log)
 {
@@ -34,8 +35,8 @@ DataCompactor<SnapshotPtr>::tryMigrate(                                  //
     std::tie(candidates, result.bytes_migrate, result.num_migrate_pages) = selectCandidateFiles(page_files, valid_pages, writing_file_ids);
 
     result.candidate_size = candidates.size();
-    result.do_compaction  = result.candidate_size >= config.merge_hint_low_used_file_num
-        || (candidates.size() >= 2 && result.bytes_migrate >= config.merge_hint_low_used_file_total_size);
+    result.do_compaction
+        = result.candidate_size >= config.gc_min_files || (candidates.size() >= 2 && result.bytes_migrate >= config.gc_min_bytes);
 
     // Scan over all `candidates` and do migrate.
     PageEntriesEdit migrate_entries_edit;
@@ -46,10 +47,9 @@ DataCompactor<SnapshotPtr>::tryMigrate(                                  //
     else
     {
         LOG_DEBUG(log,
-                  storage_name << " DataCompactor::tryMigrate exit without compaction, candidates size: " //
-                               << result.candidate_size << ", total byte size: " << result.bytes_migrate
-                               << ", low_used_file_num: " << config.merge_hint_low_used_file_num
-                               << ", low_use_file_total_size: " << config.merge_hint_low_used_file_total_size);
+                  storage_name << " DataCompactor::tryMigrate exit without compaction, [candidates size=" //
+                               << result.candidate_size << "] [total byte size=" << result.bytes_migrate << "], Config{ "
+                               << config.toDebugString() << " }");
     }
 
     return {result, std::move(migrate_entries_edit)};
@@ -108,8 +108,14 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
 
         // Don't gc writing page file.
         bool is_candidate = (writing_file_ids.count(page_file.fileIdLevel()) == 0)
-            && (valid_rate < config.merge_hint_low_used_rate || file_size < config.file_small_size);
-        // LOG_TRACE(log, storage_name << " " << page_file.toString() << " valid rate: " << valid_rate);
+            && (valid_rate < config.gc_max_valid_rate //
+                || file_size < config.file_small_size //
+                || (std::fabs(config.gc_max_valid_rate - 1.0) < std::numeric_limits<double>::epsilon()));
+#ifdef PAGE_STORAGE_UTIL_DEBUGGGING
+        LOG_TRACE(log,
+                  storage_name << " " << page_file.toString() << " [valid rate=" << DB::toString(valid_rate, 2)
+                               << "] [file size=" << file_size << "]");
+#endif
         if (!is_candidate)
         {
             continue;
@@ -142,7 +148,8 @@ DataCompactor<SnapshotPtr>::migratePages( //
     const PageFileIdAndLevel migrate_file_id{largest_file_id, level + 1};
 
     // In case that those files are hold by snapshot and do migratePages to same PageFile again, we need to check if gc_file is already exist.
-    if (PageFile::isPageFileExist(migrate_file_id, storage_path, file_provider, PageFile::Type::Formal, page_file_log))
+    const String pf_parent_path = delegator->choosePath(migrate_file_id);
+    if (PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log))
     {
         LOG_INFO(log,
                  storage_name << " GC migration to PageFile_" //
@@ -152,10 +159,10 @@ DataCompactor<SnapshotPtr>::migratePages( //
 
     // Create a tmp PageFile for migration
     PageFile gc_file = PageFile::newPageFile(
-        migrate_file_id.first, migrate_file_id.second, storage_path, file_provider, PageFile::Type::Temp, page_file_log);
+        migrate_file_id.first, migrate_file_id.second, pf_parent_path, file_provider, PageFile::Type::Temp, page_file_log);
     LOG_INFO(log,
              storage_name << " GC decide to migrate " << candidates.size() << " files, containing " << migrate_page_count
-                          << " pages to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel());
+                          << " pages to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel() << ", path " << pf_parent_path);
 
     PageEntriesEdit gc_file_edit;
     size_t          bytes_written = 0;
@@ -281,6 +288,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
     }
 
     // Free gc_file_writer and sync
+    delegator->addPageFileUsedSize(gc_file_id, bytes_written, gc_file.parentPath(), /*need_insert_location*/ true);
     return {std::move(gc_file_edit), bytes_written};
 }
 
@@ -316,7 +324,8 @@ void DataCompactor<SnapshotPtr>::logMigrationDetails(const MigrateInfos & infos,
     remove_stream << "]";
     LOG_DEBUG(log,
               storage_name << " Migrate pages to PageFile_" << migrate_file_id.first << "_" << migrate_file_id.second
-                           << ", mirgrate: " << migrate_stream.str() << ", remove: " << remove_stream.str());
+                           << ", migrate: " << migrate_stream.str() << ", remove: " << remove_stream.str() << ", Config{ "
+                           << config.toDebugString() << " }");
 }
 
 

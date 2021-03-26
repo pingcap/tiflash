@@ -1,9 +1,8 @@
-#include <fcntl.h>
-#include <unistd.h>
-
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Encryption/PosixWritableFile.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace ProfileEvents
 {
@@ -22,8 +21,9 @@ extern const int CANNOT_OPEN_FILE;
 extern const int CANNOT_CLOSE_FILE;
 } // namespace ErrorCodes
 
-PosixWritableFile::PosixWritableFile(const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode)
-    : file_name{file_name_}
+PosixWritableFile::PosixWritableFile(
+    const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode, const RateLimiterPtr & rate_limiter_)
+    : file_name{file_name_}, rate_limiter{rate_limiter_}
 {
     doOpenFile(truncate_when_exists_, flags, mode);
 }
@@ -41,7 +41,8 @@ void PosixWritableFile::open()
 {
     if (fd != -1)
         return;
-    doOpenFile(false, -1, 0666);
+    // The mode is only valid when creating the file, the `0666` is ignored.
+    doOpenFile(/*truncate_when_exists=*/false, -1, 0666);
 }
 
 void PosixWritableFile::close()
@@ -49,12 +50,24 @@ void PosixWritableFile::close()
     if (0 != ::close(fd))
         throw Exception("Cannot close file", ErrorCodes::CANNOT_CLOSE_FILE);
 
+    metric_increment.changeTo(0); // Subtract metrics for `CurrentMetrics::OpenFileForWrite`
+
     fd = -1;
 }
 
-ssize_t PosixWritableFile::write(char * buf, size_t size) { return ::write(fd, buf, size); }
+ssize_t PosixWritableFile::write(char * buf, size_t size)
+{
+    if (rate_limiter)
+        rate_limiter->request((UInt64)size);
+    return ::write(fd, buf, size);
+}
 
-ssize_t PosixWritableFile::pwrite(char * buf, size_t size, off_t offset) const { return ::pwrite(fd, buf, size, offset); }
+ssize_t PosixWritableFile::pwrite(char * buf, size_t size, off_t offset) const
+{
+    if (rate_limiter)
+        rate_limiter->request((UInt64)size);
+    return ::pwrite(fd, buf, size, offset);
+}
 
 void PosixWritableFile::doOpenFile(bool truncate_when_exists_, int flags, mode_t mode)
 {
@@ -80,6 +93,8 @@ void PosixWritableFile::doOpenFile(bool truncate_when_exists_, int flags, mode_t
         ProfileEvents::increment(ProfileEvents::FileOpenFailed);
         throwFromErrno("Cannot open file " + file_name, errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     }
+
+    metric_increment.changeTo(1); // Add metrics for `CurrentMetrics::OpenFileForWrite`
 
 #ifdef __APPLE__
     if (o_direct)

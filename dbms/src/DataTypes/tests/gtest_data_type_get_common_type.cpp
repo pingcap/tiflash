@@ -2,7 +2,7 @@
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/getMostSubtype.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <sstream>
 
@@ -70,12 +70,13 @@ TEST(DataType_test, getLeastSuperType)
             getLeastSupertype(typesFromString("Tuple(Int8,UInt8) Tuple(UInt8,Int8)"))->equals(*typeFromString("Tuple(Int16,Int16)")));
         ASSERT_TRUE(getLeastSupertype(typesFromString("Tuple(Nullable(Nothing)) Tuple(Nullable(UInt8))"))
                         ->equals(*typeFromString("Tuple(Nullable(UInt8))")));
+        ASSERT_TRUE(getLeastSupertype(typesFromString("Int64 UInt64"))->equals(*typeFromString("Decimal(20,0)")));
+        ASSERT_TRUE(getLeastSupertype(typesFromString("Tuple(Int64) Tuple(UInt64)"))->equals(*typeFromString("Tuple(Decimal(20,0))")));
+        ASSERT_TRUE(getLeastSupertype(typesFromString("Int32 UInt64"))->equals(*typeFromString("Decimal(20,0)")));
 
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Int8 String")));
-        EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Int64 UInt64")));
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Float32 UInt64")));
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Float64 Int64")));
-        EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Tuple(Int64) Tuple(UInt64)")));
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Tuple(Int64, Int8) Tuple(UInt64)")));
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Array(Int64) Array(String)")));
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Date MyDate")));

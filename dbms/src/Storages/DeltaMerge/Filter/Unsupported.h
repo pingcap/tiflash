@@ -22,7 +22,7 @@ public:
 
     Attrs getAttrs() override { return {}; }
 
-    String toString() override
+    String toDebugString() override
     {
         return R"({"op":")" + name() +     //
             R"(","reason":")" + reason +   //

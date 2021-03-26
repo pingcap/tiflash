@@ -1,3 +1,4 @@
+#include <Common/TiFlashBuildInfo.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
@@ -21,24 +22,44 @@ namespace DB
 #define APPLY_FOR_METRICS(M, F)                                                                                                           \
     M(tiflash_coprocessor_request_count, "Total number of request", Counter, F(type_batch, {"type", "batch"}),                            \
         F(type_batch_cop, {"type", "batch_cop"}), F(type_cop, {"type", "cop"}), F(type_cop_dag, {"type", "cop_dag"}),                     \
-        F(type_super_batch, {"type", "super_batch"}), F(type_super_batch_cop_dag, {"type", "super_batch_cop_dag"}))                       \
+        F(type_super_batch, {"type", "super_batch"}), F(type_super_batch_cop_dag, {"type", "super_batch_cop_dag"}),                       \
+        F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}), F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}),             \
+        F(type_cancel_mpp_task, {"type", "mpp_establish_conn"}))                                                                          \
+    M(tiflash_coprocessor_handling_request_count, "Number of handling request", Gauge, F(type_batch, {"type", "batch"}),                  \
+        F(type_batch_cop, {"type", "batch_cop"}), F(type_cop, {"type", "cop"}), F(type_cop_dag, {"type", "cop_dag"}),                     \
+        F(type_super_batch, {"type", "super_batch"}), F(type_super_batch_cop_dag, {"type", "super_batch_cop_dag"}),                       \
+        F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}), F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}),             \
+        F(type_cancel_mpp_task, {"type", "mpp_establish_conn"}))                                                                          \
     M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                   \
         F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                        \
-        F(type_limit, {"type", "limit"}))                                                                                                 \
+        F(type_limit, {"type", "limit"}), F(type_join, {"type", "join"}), F(type_exchange_sender, {"type", "exchange_sender"}),           \
+        F(type_exchange_receiver, {"type", "exchange_receiver"}), F(type_projection, {"type", "projection"}))                             \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                  \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}),         \
-        F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{0.0005, 2, 20}))                                                        \
+        F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
+        F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.0005, 2, 30}),                                          \
+        F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.0005, 2, 30}))                                                \
+    M(tiflash_coprocessor_request_memory_usage, "Bucketed histogram of request memory usage", Histogram,                                  \
+        F(type_cop, {{"type", "cop"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                                   \
+        F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                   \
+        F(type_dispatch_mpp_task, {{"type", "mpp_dispatch_mpp_task"}}, ExpBuckets{1024 * 1024, 2, 16}))                                   \
     M(tiflash_coprocessor_request_error, "Total number of request error", Counter, F(reason_meet_lock, {"reason", "meet_lock"}),          \
         F(reason_region_not_found, {"reason", "region_not_found"}), F(reason_epoch_not_match, {"reason", "epoch_not_match"}),             \
         F(reason_kv_client_error, {"reason", "kv_client_error"}), F(reason_internal_error, {"reason", "internal_error"}),                 \
         F(reason_other_error, {"reason", "other_error"}))                                                                                 \
     M(tiflash_coprocessor_request_handle_seconds, "Bucketed histogram of request handle duration", Histogram,                             \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}),         \
-        F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{0.0005, 2, 20}))                                                        \
+        F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
+        F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.0005, 2, 30}),                                          \
+        F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.0005, 2, 30}))                                                \
     M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter)                                                        \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                          \
     M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                         \
         F(type_full, {"type", "full"}), F(type_failed, {"type", "failed"}))                                                               \
+    M(tiflash_schema_trigger_count, "Total number of each kinds of schema sync trigger", Counter, /**/                                    \
+        F(type_timer, {"type", "timer"}), F(type_raft_decode, {"type", "raft_decode"}), F(type_cop_read, {"type", "cop_read"}))           \
     M(tiflash_schema_internal_ddl_count, "Total number of each kinds of internal ddl operations", Counter,                                \
         F(type_create_table, {"type", "create_table"}), F(type_create_db, {"type", "create_db"}),                                         \
         F(type_drop_table, {"type", "drop_table"}), F(type_drop_db, {"type", "drop_db"}), F(type_rename_table, {"type", "rename_table"}), \
@@ -74,10 +95,38 @@ namespace DB
         F(type_seg_split, {{"type", "seg_split"}}, ExpBuckets{0.0005, 2, 20}),                                                            \
         F(type_seg_merge, {{"type", "seg_merge"}}, ExpBuckets{0.0005, 2, 20}),                                                            \
         F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.0005, 2, 20}))                                          \
+    M(tiflash_storage_throughput_bytes, "Calculate the throughput of tasks of storage in bytes", Gauge,           /**/                    \
+        F(type_write, {"type", "write"}),                                                                         /**/                    \
+        F(type_delta_merge, {"type", "delta_merge"}),                                                             /**/                    \
+        F(type_split, {"type", "split"}),                                                                         /**/                    \
+        F(type_merge, {"type", "merge"}))                                                                         /**/                    \
+    M(tiflash_storage_throughput_rows, "Calculate the throughput of tasks of storage in rows", Gauge,             /**/                    \
+        F(type_write, {"type", "write"}),                                                                         /**/                    \
+        F(type_delta_merge, {"type", "delta_merge"}),                                                             /**/                    \
+        F(type_split, {"type", "split"}),                                                                         /**/                    \
+        F(type_merge, {"type", "merge"}))                                                                         /**/                    \
+    M(tiflash_storage_write_stall_duration_seconds, "The write stall duration of storage, in seconds", Histogram, /**/                    \
+        F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}),                                            /**/                    \
+        F(type_delete_range, {{"type", "delete_range"}}, ExpBuckets{0.0005, 2, 20}))                              /**/                    \
     M(tiflash_storage_page_gc_count, "Total number of page's gc execution.", Counter, F(type_exec, {"type", "exec"}),                     \
         F(type_low_write, {"type", "low_write"}))                                                                                         \
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
-        F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}), F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}))
+        F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}), F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}))   \
+    M(tiflash_storage_rate_limiter_total_request_bytes, "RateLimiter total requested bytes", Counter)                                     \
+    M(tiflash_storage_rate_limiter_total_alloc_bytes, "RateLimiter total allocated bytes", Counter)                                       \
+    M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                   \
+        Histogram, /* these command usually cost servel seconds, increase the start bucket to 50ms */                                     \
+        F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                            \
+        F(type_apply_snapshot_predecode, {{"type", "snapshot_predecode"}}, ExpBuckets{0.05, 2, 10}),                                      \
+        F(type_apply_snapshot_flush, {{"type", "snapshot_flush"}}, ExpBuckets{0.05, 2, 10}))                                              \
+    M(tiflash_raft_process_keys, "Total number of keys processed in some types of Raft commands", Counter,                                \
+        F(type_apply_snapshot, {"type", "apply_snapshot"}), F(type_ingest_sst, {"type", "ingest_sst"}))                                   \
+    M(tiflash_raft_apply_write_command_duration_seconds, "Bucketed histogram of applying write command Raft logs", Histogram,             \
+        F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))                                                                    \
+    M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
+        F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
+    M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
+        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))
 
 
 struct ExpBuckets

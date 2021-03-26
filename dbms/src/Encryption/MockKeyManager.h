@@ -15,17 +15,11 @@ public:
 
     FileEncryptionInfo getFile(const String & fname) override;
 
-    FileEncryptionInfo newFile(const String & fname) override { return getFile(fname); }
+    FileEncryptionInfo newFile(const String & fname) override;
 
-    void deleteFile(const String & fname) override { std::ignore = fname; }
+    void deleteFile(const String & fname, bool /*throw_on_error*/) override { std::ignore = fname; }
 
     void linkFile(const String & src_fname, const String & dst_fname) override
-    {
-        std::ignore = src_fname;
-        std::ignore = dst_fname;
-    }
-
-    void renameFile(const String & src_fname, const String & dst_fname) override
     {
         std::ignore = src_fname;
         std::ignore = dst_fname;

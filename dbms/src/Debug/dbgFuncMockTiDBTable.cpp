@@ -36,7 +36,7 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
 
     auto schema_str = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     String handle_pk_name = "";
-    if (args.size() == 4)
+    if (args.size() >= 4)
         handle_pk_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
 
     ASTPtr columns_ast;
@@ -49,7 +49,9 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
     ColumnsDescription columns
         = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
 
-    String engine_type("tmt");
+    String engine_type("dt");
+    if (context.getTMTContext().getEngineType() == ::TiDB::StorageEngine::TMT)
+        engine_type = "tmt";
     if (args.size() == 5)
         engine_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[4]).value);
 

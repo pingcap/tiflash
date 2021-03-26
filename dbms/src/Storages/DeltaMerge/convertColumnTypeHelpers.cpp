@@ -211,6 +211,16 @@ bool castNonNullNumericColumn(const DataTypePtr &  disk_type_not_null_,
             return true;
         }
     }
+    else if (checkDataType<DataTypeEnum8>(disk_type_not_null) && checkDataType<DataTypeEnum8>(read_type_not_null))
+    {
+        memory_col_not_null->insertRangeFrom(*disk_col_not_null, rows_offset, rows_limit);
+        return true;
+    }
+    else if (checkDataType<DataTypeEnum16>(disk_type_not_null) && checkDataType<DataTypeEnum16>(read_type_not_null))
+    {
+        memory_col_not_null->insertRangeFrom(*disk_col_not_null, rows_offset, rows_limit);
+        return true;
+    }
 
     // else is not support
     return false;
@@ -290,24 +300,21 @@ void convertColumnByColumnDefine(const DataTypePtr &  disk_type,
     read_define_not_null.type = read_type_not_null;
     if (disk_type_not_null->equals(*read_type_not_null))
     {
-        // just change from nullable -> not null / not null -> nullable
-        memory_col_not_null->insertRangeFrom(*disk_col_not_null, rows_offset, rows_limit);
-
         if (null_map)
         {
-            /// We are applying cast from nullable to not null, scan to fill "NULL" with default value
-
+            /// Applying cast from nullable -> not null, scan to fill "NULL" with default value
             for (size_t i = 0; i < rows_limit; ++i)
             {
                 if (unlikely(null_map->getInt(i) != 0))
-                {
-                    // `from_col[i]` is "NULL", fill `to_col[rows_offset + i]` with default value
-                    // TiDB/MySQL don't support this, should not call here.
-                    throw Exception("Reading mismatch data type pack. Cast from " + disk_type->getName() + " to " + read_type->getName()
-                                        + " with \"NULL\" value is NOT supported!",
-                                    ErrorCodes::NOT_IMPLEMENTED);
-                }
+                    memory_col_not_null->insert(read_define.default_value);
+                else
+                    memory_col_not_null->insertFrom(*disk_col_not_null, i);
             }
+        }
+        else
+        {
+            /// Applying cast from not null -> nullable, simply copy from origin column
+            memory_col_not_null->insertRangeFrom(*disk_col_not_null, rows_offset, rows_limit);
         }
     }
     else if (!castNonNullNumericColumn(
@@ -319,6 +326,32 @@ void convertColumnByColumnDefine(const DataTypePtr &  disk_type,
     }
 }
 
+std::pair<bool, bool> checkColumnTypeCompatibility(const DataTypePtr & source_type, const DataTypePtr & target_type)
+{
+    if (unlikely(!isSupportedDataTypeCast(source_type, target_type)))
+    {
+        return std::make_pair(false, false);
+    }
+
+    bool need_cast_data = true;
+    /// Currently, cast Enum to Enum is allowed only if from_type
+    /// is a subset of the target_type, so when cast from source
+    /// enum type to target enum type, the data do not need to be
+    /// casted.
+    bool source_is_null = source_type->isNullable();
+    bool target_is_null = source_type->isNullable();
+    if (source_is_null && target_is_null)
+    {
+        need_cast_data = !(typeid_cast<const DataTypeNullable *>(source_type.get())->isEnum()
+                           && typeid_cast<const DataTypeNullable *>(target_type.get())->isEnum());
+    }
+    else if (!source_is_null && !target_is_null)
+    {
+        need_cast_data = !(source_type->isEnum() && target_type->isEnum());
+    }
+    return std::make_pair(true, need_cast_data);
+}
+
 ColumnPtr convertColumnByColumnDefineIfNeed(const DataTypePtr & from_type, ColumnPtr && from_col, const ColumnDefine & to_column_define)
 {
     // No need to convert
@@ -326,11 +359,16 @@ ColumnPtr convertColumnByColumnDefineIfNeed(const DataTypePtr & from_type, Colum
         return std::move(from_col);
 
     // Check if support
-    if (unlikely(!isSupportedDataTypeCast(from_type, to_column_define.type)))
+    auto [compatible, need_data_cast] = checkColumnTypeCompatibility(from_type, to_column_define.type);
+    if (unlikely(!compatible))
     {
         throw Exception("Reading mismatch data type pack. Cast from " + from_type->getName() + " to " + to_column_define.type->getName()
                             + " is NOT supported!",
                         ErrorCodes::NOT_IMPLEMENTED);
+    }
+    if (unlikely(!need_data_cast))
+    {
+        return std::move(from_col);
     }
 
     // Cast column's data from DataType in disk to what we need now

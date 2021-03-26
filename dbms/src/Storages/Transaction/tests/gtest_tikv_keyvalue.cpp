@@ -2,7 +2,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVHelper.h>
 #include <Storages/Transaction/TiKVRange.h>
-#include <gtest/gtest.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include "region_helper.h"
 
@@ -55,40 +55,95 @@ TEST(TiKVKeyValue_test, PortedTests)
     }
 
     {
-        auto lock_value
-            = RecordKVFormat::encodeLockCfValue(Region::PutFlag, "primary key", 421321, std::numeric_limits<UInt64>::max(), "value");
-        auto [lock_type, primary, ts, ttl, min_commit_ts] = RecordKVFormat::decodeLockCfValue(lock_value);
-        ASSERT_TRUE(Region::PutFlag == lock_type);
-        ASSERT_TRUE("primary key" == primary);
-        ASSERT_TRUE(421321 == ts);
-        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ttl);
-        ASSERT_TRUE(0 == min_commit_ts);
-    }
+        std::string shor_value = "value";
+        auto lock_value = RecordKVFormat::encodeLockCfValue(
+            Region::DelFlag, "primary key", 421321, std::numeric_limits<UInt64>::max(), &shor_value, 66666);
+        auto ori_key = std::make_shared<const TiKVKey>(RecordKVFormat::genKey(1, 88888));
+        auto lock = RecordKVFormat::DecodedLockCFValue(ori_key, std::make_shared<TiKVValue>(std::move(lock_value)));
+        {
+            auto & lock_info = lock;
+            ASSERT_TRUE(kvrpcpb::Op::Del == lock_info.lock_type);
+            ASSERT_TRUE("primary key" == lock_info.primary_lock);
+            ASSERT_TRUE(421321 == lock_info.lock_version);
+            ASSERT_TRUE(std::numeric_limits<UInt64>::max() == lock_info.lock_ttl);
+            ASSERT_TRUE(66666 == lock_info.min_commit_ts);
+            ASSERT_TRUE(ori_key == lock_info.key);
+        }
+        {
+            auto lock_info = lock.intoLockInfo();
+            ASSERT_TRUE(kvrpcpb::Op::Del == lock_info->lock_type());
+            ASSERT_TRUE("primary key" == lock_info->primary_lock());
+            ASSERT_TRUE(421321 == lock_info->lock_version());
+            ASSERT_TRUE(std::numeric_limits<UInt64>::max() == lock_info->lock_ttl());
+            ASSERT_TRUE(66666 == lock_info->min_commit_ts());
+            ASSERT_TRUE(RecordKVFormat::decodeTiKVKey(*ori_key) == lock_info->key());
+        }
 
-    {
-        auto lock_value = RecordKVFormat::encodeLockCfValue(Region::PutFlag, "primary key", 421321, std::numeric_limits<UInt64>::max());
-        auto [lock_type, primary, ts, ttl, min_commit_ts] = RecordKVFormat::decodeLockCfValue(lock_value);
-        ASSERT_TRUE(Region::PutFlag == lock_type);
-        ASSERT_TRUE("primary key" == primary);
-        ASSERT_TRUE(421321 == ts);
-        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ttl);
-        ASSERT_TRUE(0 == min_commit_ts);
+        {
+            RegionLockCFData d;
+            auto k1 = RecordKVFormat::genKey(1, 123);
+            auto k2 = RecordKVFormat::genKey(1, 124);
+            d.insert(TiKVKey::copyFrom(k1),
+                RecordKVFormat::encodeLockCfValue(
+                    Region::PutFlag, "primary key", 8765, std::numeric_limits<UInt64>::max(), nullptr, 66666));
+            d.insert(TiKVKey::copyFrom(k2),
+                RecordKVFormat::encodeLockCfValue(
+                    Region::DelFlag, "primary key", 5678, std::numeric_limits<UInt64>::max(), nullptr, 66666));
+            ASSERT_TRUE(d.getSize() == 2);
+            ASSERT_TRUE(
+                std::get<2>(d.getData().find(RegionLockCFDataTrait::Key{nullptr, std::string_view(k2.data(), k2.dataSize())})->second)
+                    ->lock_version
+                == 5678);
+            d.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(k1.data(), k1.dataSize())}, true);
+            ASSERT_TRUE(d.getSize() == 1);
+            d.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(k2.data(), k2.dataSize())}, true);
+            ASSERT_TRUE(d.getSize() == 0);
+        }
     }
 
     {
         auto write_value = RecordKVFormat::encodeWriteCfValue(Region::DelFlag, std::numeric_limits<UInt64>::max(), "value");
-        auto [write_type, ts, short_value] = RecordKVFormat::decodeWriteCfValue(write_value);
-        ASSERT_TRUE(Region::DelFlag == write_type);
-        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ts);
-        ASSERT_TRUE("value" == *short_value);
+        auto write_record = RecordKVFormat::decodeWriteCfValue(write_value);
+        ASSERT_TRUE(write_record);
+        ASSERT_TRUE(Region::DelFlag == write_record->write_type);
+        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == write_record->prewrite_ts);
+        ASSERT_TRUE("value" == *write_record->short_value);
+        RegionWriteCFData d;
+        d.insert(RecordKVFormat::genKey(1, 2, 3), RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value"));
+        ASSERT_TRUE(d.getSize() == 1);
+
+        ASSERT_TRUE(d.insert(RecordKVFormat::genKey(1, 2, 3), RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value", true)) == 0);
+        ASSERT_TRUE(d.getSize() == 1);
+
+        ASSERT_TRUE(d.insert(RecordKVFormat::genKey(1, 2, 3),
+                        RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::LockFlag, 4, "value"))
+            == 0);
+        ASSERT_TRUE(d.getSize() == 1);
+
+        auto pk = RecordKVFormat::getRawTiDBPK(RecordKVFormat::genRawKey(1, 2));
+        d.remove(RegionWriteCFData::Key{pk, 3});
+        ASSERT_TRUE(d.getSize() == 0);
     }
 
     {
         auto write_value = RecordKVFormat::encodeWriteCfValue(Region::DelFlag, std::numeric_limits<UInt64>::max());
-        auto [write_type, ts, short_value] = RecordKVFormat::decodeWriteCfValue(write_value);
-        ASSERT_TRUE(Region::DelFlag == write_type);
-        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ts);
-        ASSERT_TRUE(nullptr == short_value);
+        auto write_record = RecordKVFormat::decodeWriteCfValue(write_value);
+        ASSERT_TRUE(write_record);
+        ASSERT_TRUE(Region::DelFlag == write_record->write_type);
+        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == write_record->prewrite_ts);
+        ASSERT_TRUE(nullptr == write_record->short_value);
+    }
+
+    {
+        auto write_value = RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::RollbackFlag, 8888, "test");
+        auto write_record = RecordKVFormat::decodeWriteCfValue(write_value);
+        ASSERT_TRUE(!write_record);
+    }
+
+    {
+        auto write_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 8888, "qwer", true);
+        auto write_record = RecordKVFormat::decodeWriteCfValue(write_value);
+        ASSERT_TRUE(!write_record);
     }
 
     {
@@ -257,7 +312,7 @@ TEST(TiKVKeyValue_test, PortedTests)
         s[0] = char(1);
         s[3] = char(111);
         const auto & key = TiKVKey(s.data(), s.size());
-        ASSERT_TRUE(key.toHex() == "[1 32 33 6f]");
+        ASSERT_EQ(key.toDebugString(), "0132336F");
     }
 
     {
@@ -274,10 +329,10 @@ TEST(TiKVKeyValue_test, PortedTests)
         RegionRangeKeys range(RecordKVFormat::genKey(1, 2, 3), RecordKVFormat::genKey(2, 4, 100));
         ASSERT_TRUE(RecordKVFormat::getTs(range.comparableKeys().first.key) == 3);
         ASSERT_TRUE(RecordKVFormat::getTs(range.comparableKeys().second.key) == 100);
-        ASSERT_TRUE(RecordKVFormat::getTableId(range.rawKeys().first) == 1);
-        ASSERT_TRUE(RecordKVFormat::getTableId(range.rawKeys().second) == 2);
-        ASSERT_TRUE(RecordKVFormat::getHandle(range.rawKeys().first) == 2);
-        ASSERT_TRUE(RecordKVFormat::getHandle(range.rawKeys().second) == 4);
+        ASSERT_TRUE(RecordKVFormat::getTableId(*range.rawKeys().first) == 1);
+        ASSERT_TRUE(RecordKVFormat::getTableId(*range.rawKeys().second) == 2);
+        ASSERT_TRUE(RecordKVFormat::getHandle(*range.rawKeys().first) == 2);
+        ASSERT_TRUE(RecordKVFormat::getHandle(*range.rawKeys().second) == 4);
 
         ASSERT_TRUE(range.comparableKeys().first.state == TiKVRangeKey::NORMAL);
         ASSERT_TRUE(range.comparableKeys().second.state == TiKVRangeKey::NORMAL);
@@ -317,6 +372,43 @@ TEST(TiKVKeyValue_test, PortedTests)
     ASSERT_TRUE(res);
 }
 
+TEST(TiKVKeyValue_test, Redact)
+try
+{
+    String table_info_json
+        = R"json({"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"a","O":"a"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":3,"Flen":10,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"b","O":"b"},"offset":1,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":3,"Flen":20,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"c","O":"c"},"offset":2,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":0,"Flen":11,"Tp":3}}],"comment":"","id":49,"index_info":[{"id":1,"idx_cols":[{"length":-1,"name":{"L":"a","O":"a"},"offset":0},{"length":-1,"name":{"L":"b","O":"b"},"offset":1}],"idx_name":{"L":"primary","O":"primary"},"index_type":1,"is_global":false,"is_invisible":false,"is_primary":true,"is_unique":true,"state":5,"tbl_name":{"L":"","O":""}}],"is_common_handle":true,"name":{"L":"pt","O":"pt"},"partition":null,"pk_is_handle":false,"schema_version":25,"state":5,"update_timestamp":421444995366518789})json";
+    TiDB::TableInfo table_info(table_info_json);
+    ASSERT_TRUE(table_info.is_common_handle);
+
+    TiKVKey start, end;
+    {
+        start = RecordKVFormat::genKey(table_info, std::vector{Field{"aaa", strlen("aaa")}, Field{"abc", strlen("abc")}});
+        end = RecordKVFormat::genKey(table_info, std::vector{Field{"bbb", strlen("bbb")}, Field{"abc", strlen("abc")}});
+    }
+    RegionRangeKeys range(std::move(start), std::move(end));
+    auto & raw_keys = range.rawKeys();
+    ASSERT_EQ(RecordKVFormat::getTableId(*raw_keys.first), 49);
+    ASSERT_EQ(RecordKVFormat::getTableId(*raw_keys.second), 49);
+
+    auto raw_pk1 = RecordKVFormat::getRawTiDBPK(*raw_keys.first);
+    auto raw_pk2 = RecordKVFormat::getRawTiDBPK(*raw_keys.second);
+
+    Redact::setRedactLog(false);
+    // These will print the value
+    EXPECT_NE(raw_pk1.toDebugString(), "?");
+    EXPECT_NE(raw_pk2.toDebugString(), "?");
+    EXPECT_NE(RecordKVFormat::DecodedTiKVKeyRangeToDebugString(raw_keys), "[?, ?)");
+
+    Redact::setRedactLog(true);
+    // These will print '?' instead of value
+    EXPECT_EQ(raw_pk1.toDebugString(), "?");
+    EXPECT_EQ(raw_pk2.toDebugString(), "?");
+    EXPECT_EQ(RecordKVFormat::DecodedTiKVKeyRangeToDebugString(raw_keys), "[?, ?)");
+
+    Redact::setRedactLog(false); // restore flags
+}
+CATCH
+
 namespace
 {
 
@@ -331,7 +423,7 @@ HandleRange<HandleID> parseTestCase(std::vector<std::vector<u_char>> && seq)
     for (const auto ch : seq[1])
         end_key_s += ch;
     RegionRangeKeys range{RecordKVFormat::encodeAsTiKVKey(start_key_s), RecordKVFormat::encodeAsTiKVKey(end_key_s)};
-    return range.getHandleRangeByTable(45);
+    return getHandleRangeByTable(range.rawKeys(), 45);
 }
 
 HandleRange<HandleID> parseTestCase2(std::vector<std::vector<u_char>> && seq)
@@ -342,7 +434,7 @@ HandleRange<HandleID> parseTestCase2(std::vector<std::vector<u_char>> && seq)
     for (const auto ch : seq[1])
         end_key_s += ch;
     RegionRangeKeys range{TiKVKey::copyFrom(start_key_s), TiKVKey::copyFrom(end_key_s)};
-    return range.getHandleRangeByTable(45);
+    return getHandleRangeByTable(range.rawKeys(), 45);
 }
 
 std::string rangeToString(const HandleRange<HandleID> & r)
@@ -385,14 +477,4 @@ try
 
     // clang-format on
 }
-catch (const Exception & e)
-{
-    std::string text = e.displayText();
-
-    auto embedded_stack_trace_pos = text.find("Stack trace");
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
-    if (std::string::npos == embedded_stack_trace_pos)
-        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
-
-    throw;
-}
+CATCH

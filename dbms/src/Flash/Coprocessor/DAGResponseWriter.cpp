@@ -1,172 +1,135 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Coprocessor/ArrowChunkCodec.h>
-#include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
-#include <Flash/Coprocessor/DefaultChunkCodec.h>
 
 namespace DB
 {
 
-namespace ErrorCodes
+void DAGResponseWriter::fillTiExecutionSummary(
+    tipb::ExecutorExecutionSummary * execution_summary, ExecutionSummary & current, const String & executor_id)
 {
-extern const int UNSUPPORTED_PARAMETER;
-extern const int LOGICAL_ERROR;
-} // namespace ErrorCodes
+    auto & prev_stats = previous_execution_stats[executor_id];
 
-template <bool streaming>
-DAGResponseWriter<streaming>::DAGResponseWriter(tipb::SelectResponse * dag_response_, StreamWriterPtr writer_, Int64 records_per_chunk_,
-    tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_,
-    bool collect_execute_summary_, bool return_executor_id_)
-    : dag_response(dag_response_),
-      writer(std::move(writer_)),
-      result_field_types(std::move(result_field_types_)),
-      records_per_chunk(records_per_chunk_),
-      encode_type(encode_type_),
-      current_records_num(0),
-      dag_context(dag_context_),
-      collect_execute_summary(collect_execute_summary_),
-      return_executor_id(return_executor_id_)
-{
-    previous_execute_stats.resize(dag_context.profile_streams_map.size(), std::make_tuple(0, 0, 0));
-    if (encode_type == tipb::EncodeType::TypeDefault)
-    {
-        chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
-    }
-    else if (encode_type == tipb::EncodeType::TypeChunk)
-    {
-        chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(result_field_types);
-    }
-    else if (encode_type == tipb::EncodeType::TypeCHBlock)
-    {
-        chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(result_field_types);
-        records_per_chunk = -1;
-    }
-    else
-    {
-        throw TiFlashException("Only Default and Arrow encode type is supported in DAGBlockOutputStream.",
-            Errors::Coprocessor::Unimplemented);
-    }
-    if (dag_response)
-        dag_response->set_encode_type(encode_type);
+    execution_summary->set_time_processed_ns(current.time_processed_ns - prev_stats.time_processed_ns);
+    execution_summary->set_num_produced_rows(current.num_produced_rows - prev_stats.num_produced_rows);
+    execution_summary->set_num_iterations(current.num_iterations - prev_stats.num_iterations);
+    execution_summary->set_concurrency(current.concurrency - prev_stats.concurrency);
+    prev_stats = current;
+    if (dag_context.return_executor_id)
+        execution_summary->set_executor_id(executor_id);
 }
 
-template <bool streaming>
-void DAGResponseWriter<streaming>::addExecuteSummaries(tipb::SelectResponse * response)
+void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
 {
-    if (!collect_execute_summary)
+    if (!dag_context.collect_execution_summaries)
         return;
-    // add ExecutorExecutionSummary info
-    for (auto & p : dag_context.profile_streams_map)
+    /// add execution_summary for local executor
+    for (auto & p : dag_context.getProfileStreamsMap())
     {
-        auto * executeSummary = response->add_execution_summaries();
-        UInt64 time_processed_ns = 0;
-        UInt64 num_produced_rows = 0;
-        UInt64 num_iterations = 0;
+        ExecutionSummary current;
+        /// part 1: local execution info
         for (auto & streamPtr : p.second.input_streams)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
             {
-                time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
-                num_produced_rows += p_stream->getProfileInfo().rows;
-                num_iterations += p_stream->getProfileInfo().blocks;
+                current.time_processed_ns = std::max(current.time_processed_ns, p_stream->getProfileInfo().execution_time);
+                current.num_produced_rows += p_stream->getProfileInfo().rows;
+                current.num_iterations += p_stream->getProfileInfo().blocks;
+            }
+            current.concurrency++;
+        }
+        /// part 2: remote execution info
+        for (auto & streamPtr : dag_context.getRemoteInputStreams())
+        {
+            auto remote_execution_summaries = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr
+                ? dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get())->getRemoteExecutionSummaries()
+                : dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get())->getRemoteExecutionSummaries();
+            if (remote_execution_summaries != nullptr)
+            {
+                const auto & remote_execution_info = remote_execution_summaries->find(p.first);
+                if (remote_execution_info != remote_execution_summaries->end())
+                {
+                    for (const auto & remote_execution_summary : remote_execution_info->second)
+                    {
+                        current.merge(remote_execution_summary);
+                    }
+                }
             }
         }
-        for (auto & join_alias : dag_context.qb_id_to_join_alias_map[p.second.qb_id])
+        /// part 3: for join need to add the build time
+        for (auto & join_alias : dag_context.getQBIdToJoinAliasMap()[p.second.qb_id])
         {
-            if (dag_context.profile_streams_map_for_join_build_side.find(join_alias)
-                != dag_context.profile_streams_map_for_join_build_side.end())
+            UInt64 process_time_for_build = 0;
+            if (dag_context.getProfileStreamsMapForJoinBuildSide().find(join_alias)
+                != dag_context.getProfileStreamsMapForJoinBuildSide().end())
             {
-                UInt64 process_time_for_build = 0;
-                for (auto & join_stream : dag_context.profile_streams_map_for_join_build_side[join_alias])
+                for (auto & join_stream : dag_context.getProfileStreamsMapForJoinBuildSide()[join_alias])
                 {
                     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_stream.get()))
                         process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
                 }
-                time_processed_ns += process_time_for_build;
             }
+            current.time_processed_ns += process_time_for_build;
         }
-        executeSummary->set_time_processed_ns(time_processed_ns);
-        executeSummary->set_num_produced_rows(num_produced_rows);
-        executeSummary->set_num_iterations(num_iterations);
-        if (return_executor_id)
-            executeSummary->set_executor_id(p.first);
-    }
-}
 
-template <>
-void DAGResponseWriter<false>::encodeChunkToDAGResponse()
-{
-    auto dag_chunk = dag_response->add_chunks();
-    dag_chunk->set_rows_data(chunk_codec_stream->getString());
-    chunk_codec_stream->clear();
-    current_records_num = 0;
-}
-
-template <>
-void DAGResponseWriter<true>::encodeChunkToDAGResponse()
-{
-    ::coprocessor::BatchResponse resp;
-
-    tipb::SelectResponse stream_dag_response;
-    stream_dag_response.set_encode_type(encode_type);
-    auto dag_chunk = stream_dag_response.add_chunks();
-    dag_chunk->set_rows_data(chunk_codec_stream->getString());
-    chunk_codec_stream->clear();
-    current_records_num = 0;
-    addExecuteSummaries(&stream_dag_response);
-    std::string dag_data;
-    stream_dag_response.SerializeToString(&dag_data);
-    resp.set_data(dag_data);
-
-    writer->write(resp);
-}
-
-template <bool streaming>
-void DAGResponseWriter<streaming>::finishWrite()
-{
-    if (current_records_num > 0)
-    {
-        encodeChunkToDAGResponse();
-    }
-    if constexpr (!streaming)
-    {
-        addExecuteSummaries(dag_response);
-    }
-}
-
-template <bool streaming>
-void DAGResponseWriter<streaming>::write(const Block & block)
-{
-    if (block.columns() != result_field_types.size())
-        throw TiFlashException(
-            "Output column size mismatch with field type size", Errors::Coprocessor::Internal);
-    if (records_per_chunk == -1)
-    {
-        current_records_num = 0;
-        if (block.rows() > 0)
+        current.time_processed_ns += dag_context.compile_time_ns;
+        fillTiExecutionSummary(response.add_execution_summaries(), current, p.first);
+        /// do not have an easy and meaningful way to get the execution summary for exchange sender
+        /// executor, however, TiDB requires execution summary for all the executors, so just return
+        /// its child executor's execution summary
+        if (dag_context.isMPPTask() && p.first == dag_context.exchange_sender_execution_summary_key)
         {
-            chunk_codec_stream->encode(block, 0, block.rows());
-            encodeChunkToDAGResponse();
+            current.concurrency = dag_context.final_concurrency;
+            fillTiExecutionSummary(response.add_execution_summaries(), current, dag_context.exchange_sender_executor_id);
         }
     }
-    else
+    /// add executionSummary for remote executor
+    std::unordered_map<String, ExecutionSummary> merged_remote_execution_summaries;
+    for (auto & streamPtr : dag_context.getRemoteInputStreams())
     {
-        size_t rows = block.rows();
-        for (size_t row_index = 0; row_index < rows;)
+        auto remote_execution_summaries = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr
+            ? dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get())->getRemoteExecutionSummaries()
+            : dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get())->getRemoteExecutionSummaries();
+        if (remote_execution_summaries != nullptr)
         {
-            if (current_records_num >= records_per_chunk)
+            for (auto & p : *remote_execution_summaries)
             {
-                encodeChunkToDAGResponse();
+                if (local_executors.find(p.first) == local_executors.end())
+                {
+                    auto & current = merged_remote_execution_summaries[p.first];
+                    for (const auto & remote_execution_summary : p.second)
+                    {
+                        current.merge(remote_execution_summary);
+                    }
+                }
             }
-            const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);
-            chunk_codec_stream->encode(block, row_index, upper);
-            current_records_num += (upper - row_index);
-            row_index = upper;
         }
     }
+    for (auto & p : merged_remote_execution_summaries)
+        fillTiExecutionSummary(response.add_execution_summaries(), p.second, p.first);
 }
 
-template class DAGResponseWriter<false>;
-template class DAGResponseWriter<true>;
+DAGResponseWriter::DAGResponseWriter(
+    Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_)
+    : records_per_chunk(records_per_chunk_),
+      encode_type(encode_type_),
+      result_field_types(std::move(result_field_types_)),
+      dag_context(dag_context_)
+{
+    for (auto & p : dag_context.getProfileStreamsMap())
+    {
+        local_executors.insert(p.first);
+    }
+    if (encode_type == tipb::EncodeType::TypeCHBlock)
+    {
+        records_per_chunk = -1;
+    }
+    if (encode_type != tipb::EncodeType::TypeCHBlock && encode_type != tipb::EncodeType::TypeChunk
+        && encode_type != tipb::EncodeType::TypeDefault)
+    {
+        throw TiFlashException(
+            "Only Default/Arrow/CHBlock encode type is supported in DAGBlockOutputStream.", Errors::Coprocessor::Unimplemented);
+    }
+}
 
 } // namespace DB

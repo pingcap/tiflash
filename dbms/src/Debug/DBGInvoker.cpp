@@ -83,13 +83,17 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("region_prepare_merge", MockRaftCommand::dbgFuncPrepareMerge);
     regSchemalessFunc("region_commit_merge", MockRaftCommand::dbgFuncCommitMerge);
     regSchemalessFunc("region_rollback_merge", MockRaftCommand::dbgFuncRollbackMerge);
+    regSchemalessFunc("store_pre_handle_region_snap", MockRaftCommand::dbgFuncStorePreHandleSnapshot);
+    regSchemalessFunc("apply_pre_handle_region_snap", MockRaftCommand::dbgFuncApplyPreHandleSnapshot);
 
     regSchemalessFunc("init_fail_point", DbgFailPointFunc::dbgInitFailPoint);
     regSchemalessFunc("enable_fail_point", DbgFailPointFunc::dbgEnableFailPoint);
     regSchemalessFunc("disable_fail_point", DbgFailPointFunc::dbgDisableFailPoint);
 
-    regSchemafulFunc("dag", dbgFuncDAG);
-    regSchemafulFunc("mock_dag", dbgFuncMockDAG);
+    regSchemafulFunc("dag", dbgFuncTiDBQuery);
+    regSchemafulFunc("mock_dag", dbgFuncMockTiDBQuery);
+    regSchemafulFunc("tidb_query", dbgFuncTiDBQuery);
+    regSchemafulFunc("tidb_mock_query", dbgFuncMockTiDBQuery);
 
     regSchemalessFunc("region_mock_ingest_sst", dbgFuncIngestSST);
 

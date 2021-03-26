@@ -5,22 +5,26 @@
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Macros.h>
+#include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
+#include <Common/formatReadable.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Common/setThreadName.h>
+#include <Encryption/DataKeyManager.h>
+#include <Encryption/FileProvider.h>
+#include <Encryption/MockKeyManager.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
-#include <Encryption/DataKeyManager.h>
-#include <Encryption/MockKeyManager.h>
-#include <Encryption/FileProvider.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
@@ -31,18 +35,23 @@
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
-#include <Storages/MutableSupport.h>
+#include <Poco/Timestamp.h>
+#include <RaftStoreProxyFFI/VersionCheck.h>
+#include <Server/RaftConfigParser.h>
+#include <Server/StorageConfigParser.h>
+#include <Server/UserConfigParser.h>
+#include <Storages/FormatVersion.h>
 #include <Storages/PathCapacityMetrics.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
+#include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <common/ErrorHandlers.h>
+#include <common/config_common.h>
 #include <common/getMemoryAmount.h>
 #include <common/logger_useful.h>
 #include <sys/resource.h>
@@ -63,6 +72,16 @@
 #include <Poco/Net/Context.h>
 #include <Poco/Net/SecureServerSocket.h>
 #include <grpc++/grpc++.h>
+#endif
+
+#if USE_JEMALLOC
+#include <jemalloc/jemalloc.h>
+#endif
+
+#ifndef NDEBUG
+#ifdef FIU_ENABLE
+#include <fiu.h>
+#endif
 #endif
 
 namespace CurrentMetrics
@@ -92,6 +111,8 @@ static std::string getCanonicalPath(std::string path)
     return path;
 }
 
+static String getNormalizedPath(const String & s) { return getCanonicalPath(Poco::Path{s}.toString()); }
+
 void Server::uninitialize()
 {
     logger().information("shutting down");
@@ -113,6 +134,12 @@ struct TiFlashProxyConfig
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
 
+    const char * ENGINE_STORE_VERSION = "engine-version";
+    const char * ENGINE_STORE_GIT_HASH = "engine-git-hash";
+    const char * ENGINE_STORE_ADDRESS = "engine-addr";
+    const char * ENGINE_STORE_ADVERTISE_ADDRESS = "advertise-engine-addr";
+    const char * PD_ENDPOINTS = "pd-endpoints";
+
     TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
         if (!config.has(config_prefix))
@@ -120,15 +147,26 @@ struct TiFlashProxyConfig
 
         Poco::Util::AbstractConfiguration::Keys keys;
         config.keys(config_prefix, keys);
-        for (const auto & key : keys)
         {
-            const auto k = config_prefix + "." + key;
-            val_map["--" + key] = config.getString(k);
-        }
+            std::unordered_map<std::string, std::string> args_map;
+            for (const auto & key : keys)
+            {
+                const auto k = config_prefix + "." + key;
+                args_map[key] = config.getString(k);
+            }
+            args_map[PD_ENDPOINTS] = config.getString("raft.pd_addr");
+            args_map[ENGINE_STORE_VERSION] = TiFlashBuildInfo::getReleaseVersion();
+            args_map[ENGINE_STORE_GIT_HASH] = TiFlashBuildInfo::getGitHash();
+            if (!args_map.count(ENGINE_STORE_ADDRESS))
+                args_map[ENGINE_STORE_ADDRESS] = config.getString("flash.service_addr");
+            else
+                args_map[ENGINE_STORE_ADVERTISE_ADDRESS] = args_map[ENGINE_STORE_ADDRESS];
 
-        val_map["--pd-endpoints"] = config.getString("raft.pd_addr");
-        val_map["--tiflash-version"] = TiFlashBuildInfo::getReleaseVersion();
-        val_map["--tiflash-git-hash"] = TiFlashBuildInfo::getGitHash();
+            for (auto && [k, v] : args_map)
+            {
+                val_map.emplace("--" + k, std::move(v));
+            }
+        }
 
         args.push_back("TiFlash Proxy");
         for (const auto & v : val_map)
@@ -142,112 +180,11 @@ struct TiFlashProxyConfig
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
-
-struct TiFlashRaftConfig
-{
-    const std::string learner_key = "engine";
-    const std::string learner_value = "tiflash";
-    std::vector<std::string> pd_addrs;
-    std::unordered_set<std::string> ignore_databases{"system"};
-    std::string kvstore_path;
-    // Actually it is "flash.service_addr"
-    std::string flash_server_addr;
-
-    static const TiDB::StorageEngine DEFAULT_ENGINE = TiDB::StorageEngine::DT;
-    bool disable_bg_flush = false;
-    TiDB::StorageEngine engine = DEFAULT_ENGINE;
-
-public:
-    TiFlashRaftConfig(const std::string & path, Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
-};
-
-/// Load raft related configs.
-TiFlashRaftConfig::TiFlashRaftConfig(const std::string & path, Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
-    : ignore_databases{"system"}, kvstore_path{path + "kvstore/"}
-{
-    flash_server_addr = config.getString("flash.service_addr", "0.0.0.0:3930");
-
-    if (config.has("raft"))
-    {
-        if (config.has("raft.pd_addr"))
-        {
-            String pd_service_addrs = config.getString("raft.pd_addr");
-            Poco::StringTokenizer string_tokens(pd_service_addrs, ",");
-            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
-            {
-                pd_addrs.push_back(*it);
-            }
-            LOG_INFO(log, "Found pd addrs: " << pd_service_addrs);
-        }
-        else
-        {
-            LOG_INFO(log, "Not found pd addrs.");
-        }
-
-        if (config.has("raft.ignore_databases"))
-        {
-            String ignore_dbs = config.getString("raft.ignore_databases");
-            Poco::StringTokenizer string_tokens(ignore_dbs, ",");
-            std::stringstream ss;
-            bool first = true;
-            for (auto string_token : string_tokens)
-            {
-                string_token = Poco::trimInPlace(string_token);
-                ignore_databases.emplace(string_token);
-                if (first)
-                    first = false;
-                else
-                    ss << ", ";
-                ss << string_token;
-            }
-            LOG_INFO(log, "Found ignore databases:" << ss.str());
-        }
-
-        if (config.has("raft.kvstore_path"))
-        {
-            kvstore_path = config.getString("raft.kvstore_path");
-        }
-
-        if (config.has("raft.storage_engine"))
-        {
-            String s_engine = config.getString("raft.storage_engine");
-            std::transform(s_engine.begin(), s_engine.end(), s_engine.begin(), [](char ch) { return std::tolower(ch); });
-            if (s_engine == "tmt")
-                engine = ::TiDB::StorageEngine::TMT;
-            else if (s_engine == "dt")
-                engine = ::TiDB::StorageEngine::DT;
-            else
-                engine = DEFAULT_ENGINE;
-        }
-
-        /// "tmt" engine ONLY support disable_bg_flush = false.
-        /// "dt" engine ONLY support disable_bg_flush = true.
-
-        String disable_bg_flush_conf = "raft.disable_bg_flush";
-        if (engine == ::TiDB::StorageEngine::TMT)
-        {
-            if (config.has(disable_bg_flush_conf) && config.getBool(disable_bg_flush_conf))
-                throw Exception("Illegal arguments: disable background flush while using engine " + MutableSupport::txn_storage_name,
-                    ErrorCodes::INVALID_CONFIG_PARAMETER);
-            disable_bg_flush = false;
-        }
-        else if (engine == ::TiDB::StorageEngine::DT)
-        {
-            /// If background flush is enabled, read will not triggle schema sync.
-            /// Which means that we may get the wrong result with outdated schema.
-            if (config.has(disable_bg_flush_conf) && !config.getBool(disable_bg_flush_conf))
-                throw Exception("Illegal arguments: enable background flush while using engine " + MutableSupport::delta_tree_storage_name,
-                    ErrorCodes::INVALID_CONFIG_PARAMETER);
-            disable_bg_flush = true;
-        }
-    }
-}
-
 pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config)
 {
     pingcap::ClusterConfig config;
-    config.learner_key = raft_config.learner_key;
-    config.learner_value = raft_config.learner_value;
+    config.tiflash_engine_key = raft_config.engine_key;
+    config.tiflash_engine_value = raft_config.engine_value;
     config.ca_path = security_config.ca_path;
     config.cert_path = security_config.cert_path;
     config.key_path = security_config.key_path;
@@ -273,9 +210,104 @@ void printGRPCLog(gpr_log_func_args * args)
     }
 }
 
+struct HTTPServer : Poco::Net::HTTPServer
+{
+    HTTPServer(Poco::Net::HTTPRequestHandlerFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket,
+        Poco::Net::HTTPServerParams::Ptr pParams)
+        : Poco::Net::HTTPServer(pFactory, threadPool, socket, pParams)
+    {}
+
+protected:
+    void run() override
+    {
+        setThreadName("HTTPServer");
+        Poco::Net::HTTPServer::run();
+    }
+};
+
+struct TCPServer : Poco::Net::TCPServer
+{
+    TCPServer(Poco::Net::TCPServerConnectionFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket,
+        Poco::Net::TCPServerParams::Ptr pParams)
+        : Poco::Net::TCPServer(pFactory, threadPool, socket, pParams)
+    {}
+
+protected:
+    void run() override
+    {
+        setThreadName("TCPServer");
+        Poco::Net::TCPServer::run();
+    }
+};
+
+void UpdateMallocConfig([[maybe_unused]] Logger * log)
+{
+#ifdef RUN_FAIL_RETURN
+    static_assert(false);
+#endif
+#define RUN_FAIL_RETURN(f)                                    \
+    do                                                        \
+    {                                                         \
+        if (f)                                                \
+        {                                                     \
+            LOG_ERROR(log, "Fail to update jemalloc config"); \
+            return;                                           \
+        }                                                     \
+    } while (0)
+#if USE_JEMALLOC
+    const char * version;
+    bool old_b, new_b = true;
+    size_t old_max_thd, new_max_thd = 1;
+    size_t sz_b = sizeof(bool), sz_st = sizeof(size_t), sz_ver = sizeof(version);
+
+    RUN_FAIL_RETURN(je_mallctl("version", &version, &sz_ver, nullptr, 0));
+    LOG_INFO(log, "Got jemalloc version: " << version);
+
+    auto malloc_conf = getenv("MALLOC_CONF");
+    if (malloc_conf)
+    {
+        LOG_INFO(log, "Got environment variable MALLOC_CONF: " << malloc_conf);
+    }
+    else
+    {
+        LOG_INFO(log, "Not found environment variable MALLOC_CONF");
+    }
+
+    RUN_FAIL_RETURN(je_mallctl("opt.background_thread", (void *)&old_b, &sz_b, nullptr, 0));
+    RUN_FAIL_RETURN(je_mallctl("opt.max_background_threads", (void *)&old_max_thd, &sz_st, nullptr, 0));
+
+    LOG_INFO(log, "Got jemalloc config: opt.background_thread " << old_b << ", opt.max_background_threads " << old_max_thd);
+
+    if (!malloc_conf && !old_b)
+    {
+        LOG_INFO(log, "Try to use background_thread of jemalloc to handle purging asynchronously");
+
+        RUN_FAIL_RETURN(je_mallctl("max_background_threads", nullptr, nullptr, (void *)&new_max_thd, sz_st));
+        LOG_INFO(log, "Set jemalloc.max_background_threads " << new_max_thd);
+
+        RUN_FAIL_RETURN(je_mallctl("background_thread", nullptr, nullptr, (void *)&new_b, sz_b));
+        LOG_INFO(log, "Set jemalloc.background_thread " << new_b);
+    }
+#endif
+#undef RUN_FAIL_RETURN
+}
+
+extern "C" {
+void run_raftstore_proxy_ffi(int argc, const char ** argv, const EngineStoreServerHelper *);
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
+    setThreadName("TiFlashMain");
+
     Logger * log = &logger();
+#ifndef NDEBUG
+#ifdef FIU_ENABLE
+    fiu_init(0); // init failpoint
+#endif
+#endif
+
+    UpdateMallocConfig(log);
 
     registerFunctions();
     registerAggregateFunctions();
@@ -285,35 +317,36 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
     TiFlashProxyConfig proxy_conf(config());
-    TiFlashServer tiflash_instance_wrap{};
-    TiFlashServerHelper helper{
+    EngineStoreServerWrap tiflash_instance_wrap{};
+    EngineStoreServerHelper helper{
         // a special number, also defined in proxy
-        .magic_number = 0x13579BDF,
-        .version = 11,
+        .magic_number = RAFT_STORE_PROXY_MAGIC_NUMBER,
+        .version = RAFT_STORE_PROXY_VERSION,
         .inner = &tiflash_instance_wrap,
         .fn_gen_cpp_string = GenCppRawString,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
         .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
-        .fn_handle_apply_snapshot = HandleApplySnapshot,
         .fn_atomic_update_proxy = AtomicUpdateProxy,
         .fn_handle_destroy = HandleDestroy,
         .fn_handle_ingest_sst = HandleIngestSST,
         .fn_handle_check_terminated = HandleCheckTerminated,
-        .fn_handle_compute_fs_stats = HandleComputeFsStats,
-        .fn_handle_get_tiflash_status = HandleGetTiFlashStatus,
+        .fn_handle_compute_store_stats = HandleComputeStoreStats,
+        .fn_handle_get_engine_store_server_status = HandleGetTiFlashStatus,
         .fn_pre_handle_snapshot = PreHandleSnapshot,
         .fn_apply_pre_handled_snapshot = ApplyPreHandledSnapshot,
-        .fn_gc_pre_handled_snapshot = GcPreHandledSnapshot,
-        .fn_handle_get_table_sync_status = HandleGetTableSyncStatus,
-        .gc_cpp_string = GcCppString,
+        .fn_handle_http_request = HandleHttpRequest,
+        .fn_check_http_uri_available = CheckHttpUriAvailable,
+        .fn_gc_raw_cpp_ptr = GcRawCppPtr,
+        .fn_gen_batch_read_index_res = GenBatchReadIndexRes,
+        .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
     };
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
         if (!proxy_conf.is_proxy_runnable)
             return;
-
-        LOG_INFO(log, "start tiflash proxy");
-        run_tiflash_proxy_ffi((int)proxy_conf.args.size(), proxy_conf.args.data(), &helper);
+        setThreadName("RaftStoreProxy");
+        LOG_INFO(log, "Start raft store proxy");
+        run_raftstore_proxy_ffi((int)proxy_conf.args.size(), proxy_conf.args.data(), &helper);
     });
 
     if (proxy_conf.is_proxy_runnable)
@@ -338,7 +371,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             return;
         }
         LOG_INFO(log, "let tiflash proxy shutdown");
-        tiflash_instance_wrap.status = TiFlashStatus::Stopped;
+        tiflash_instance_wrap.status = EngineStoreServerStatus::Stopped;
         tiflash_instance_wrap.tmt = nullptr;
         LOG_INFO(log, "wait for tiflash proxy thread to join");
         proxy_runner.join();
@@ -359,8 +392,32 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(Context::ApplicationType::SERVER);
 
-    bool has_zookeeper = config().has("zookeeper");
+    /// Init File Provider
+    if (proxy_conf.is_proxy_runnable)
+    {
+        bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
+        if (enable_encryption)
+        {
+            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
+            enable_encryption = (method != EncryptionMethod::Plaintext);
+        }
+        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+        global_context->initializeFileProvider(key_manager, enable_encryption);
+    }
+    else
+    {
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
+        global_context->initializeFileProvider(key_manager, false);
+    }
 
+    /// ===== Paths related configuration initialized start ===== ///
+    /// Note that theses global variables should be initialized by the following order:
+    // 1. capacity
+    // 2. path pool
+    // 3. TMTContext
+
+
+    // TODO: remove this configuration left by ClickHouse
     std::vector<String> all_fast_path;
     if (config().has("fast_path"))
     {
@@ -371,64 +428,46 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Poco::StringTokenizer string_tokens(fast_paths, ",");
             for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
             {
-                all_fast_path.emplace_back(getCanonicalPath(std::string(*it)));
-                LOG_DEBUG(log, "Fast data part candidate path: " << getCanonicalPath(std::string(*it)));
+                all_fast_path.emplace_back(getNormalizedPath(std::string(*it)));
+                LOG_DEBUG(log, "Fast data part candidate path: " << all_fast_path.back());
             }
         }
     }
-    std::vector<String> all_normal_path;
-    std::vector<size_t> all_capacity;
-    if (config().has("capacity"))
-    {
-        // TODO: support human readable format for capacity, mark_cache_size, minmax_index_cache_size
-        // eg. 100GiB, 10MiB
-        String capacities = config().getString("capacity");
-        Poco::trimInPlace(capacities);
-        Poco::StringTokenizer string_tokens(capacities, ",");
-        for (auto it = string_tokens.begin(); it != string_tokens.end(); ++it)
-        {
-            const std::string & s = *it;
-            size_t capacity = parse<size_t>(s.data(), s.size());
-            all_capacity.emplace_back(capacity);
-        }
-    }
-    {
 
-        String paths = config().getString("path");
-        Poco::trimInPlace(paths);
-        if (paths.empty())
-            throw Exception("path configuration parameter is empty");
-        Poco::StringTokenizer string_tokens(paths, ",");
-        size_t idx = 0;
-        for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
-        {
-            all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
-            if (all_capacity.size() < all_normal_path.size())
-                all_capacity.emplace_back(0);
-            LOG_DEBUG(log, "Data part candidate path: " << std::string(*it) << ", capacity: " << all_capacity[idx++]);
-        }
-    }
-    global_context->initializePathCapacityMetric(all_normal_path, std::move(all_capacity));
+    // Deprecated settings.
+    // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
+    // "0" by default, means no quota, the actual disk capacity is used.
+    size_t global_capacity_quota = 0;
+    TiFlashStorageConfig storage_config;
+    std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
 
-    bool path_realtime_mode = config().getBool("path_realtime_mode", false);
-    std::vector<String> extra_paths(all_normal_path.begin(), all_normal_path.end());
-    for (auto & p : extra_paths)
-        p += "/data";
+    if (storage_config.format_version)
+        setStorageFormat(storage_config.format_version);
 
-    if (path_realtime_mode && all_normal_path.size() > 1)
-        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()), global_context->getPathCapacity());
-    else
-        global_context->setExtraPaths(extra_paths, global_context->getPathCapacity());
+    global_context->initializePathCapacityMetric(                           //
+        global_capacity_quota,                                              //
+        storage_config.main_data_paths, storage_config.main_capacity_quota, //
+        storage_config.latest_data_paths, storage_config.latest_capacity_quota);
+    TiFlashRaftConfig raft_config = TiFlashRaftConfig::parseSettings(config(), log);
+    global_context->setPathPool(            //
+        storage_config.main_data_paths,     //
+        storage_config.latest_data_paths,   //
+        storage_config.kvstore_data_path,   //
+        raft_config.enable_compatible_mode, //
+        global_context->getPathCapacity(), global_context->getFileProvider());
 
-    const std::string path = all_normal_path[0];
-    TiFlashRaftConfig raft_config(path, config(), log);
-    // Use pd address to define which default_database we use by defauly.
+    // Use pd address to define which default_database we use by default.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
     std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
+    Strings all_normal_path = storage_config.getAllNormalPaths();
+    const std::string path = all_normal_path[0];
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
+    /// ===== Paths related configuration initialized end ===== ///
+
     security_config = TiFlashSecurityConfig(config(), log);
+    Redact::setRedactLog(security_config.redact_info_log);
 
     /// Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
@@ -493,7 +532,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             if (it->isFile() && startsWith(it.name(), "tmp"))
             {
                 LOG_DEBUG(log, "Removing old temporary file " << it->path());
-                it->remove();
+                global_context->getFileProvider()->deleteRegularFile(it->path(), EncryptionPath(it->path(), ""));
             }
         }
     }
@@ -552,19 +591,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /* already_loaded = */ true);
 
     /// Initialize users config reloader.
-    std::string users_config_path = config().getString("users_config", config_path);
-    /// If path to users' config isn't absolute, try guess its root (current) dir.
-    /// At first, try to find it in dir of main config, after will use current dir.
-    if (users_config_path.empty() || users_config_path[0] != '/')
-    {
-        std::string config_dir = Poco::Path(config_path).parent().toString();
-        if (Poco::File(config_dir + users_config_path).exists())
-            users_config_path = config_dir + users_config_path;
-    }
-    auto users_config_reloader = std::make_unique<ConfigReloader>(
-        users_config_path,
-        [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
-        /* already_loaded = */ false);
+    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]() {
@@ -604,30 +631,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMarkCache(mark_cache_size);
 
     /// Size of cache for minmax index, used by DeltaMerge engine.
-    size_t minmax_index_cache_size
-        = config().has("minmax_index_cache_size") ? config().getUInt64("minmax_index_cache_size") : mark_cache_size;
+    size_t minmax_index_cache_size = config().getUInt64("minmax_index_cache_size", mark_cache_size);
     if (minmax_index_cache_size)
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
+
+    /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
+    size_t delta_index_cache_size = config().getUInt64("delta_index_cache_size", 0);
+    global_context->setDeltaIndexManager(delta_index_cache_size);
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
-    /// Init File Provider
-    if (proxy_conf.is_proxy_runnable)
+    /// Init Rate Limiter
     {
-        bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
-        if (enable_encryption)
-        {
-            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
-            enable_encryption = (method != EncryptionMethod::Plaintext);
-        }
-        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
-        global_context->initializeFileProvider(key_manager, enable_encryption);
-    }
-    else
-    {
-        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
-        global_context->initializeFileProvider(key_manager, true);
+        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), storage_config.bg_task_io_rate_limit);
     }
 
     /// Set path for format schema files
@@ -640,18 +657,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// After attaching system databases we can initialize system log.
     global_context->initializeSystemLogs();
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
-    attachSystemTablesServer(*global_context->getDatabase("system"), has_zookeeper);
+    attachSystemTablesServer(*global_context->getDatabase("system"), false);
 
     {
-        LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(raft_config.engine));
         /// create TMTContext
         auto cluster_config = getClusterConfig(security_config, raft_config);
-        global_context->createTMTContext(raft_config.pd_addrs,
-            raft_config.ignore_databases,
-            raft_config.kvstore_path,
-            raft_config.engine,
-            raft_config.disable_bg_flush,
-            cluster_config);
+        global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
     }
 
@@ -712,8 +723,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     {
+        if (proxy_conf.is_proxy_runnable && !tiflash_instance_wrap.proxy_helper)
+            throw Exception("Raft Proxy Helper is not set, should not happen");
         /// initialize TMTContext
-        global_context->getTMTContext().restore();
+        global_context->getTMTContext().restore(tiflash_instance_wrap.proxy_helper);
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
@@ -770,17 +783,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Shut down flash service");
     });
 
-    if (has_zookeeper && config().has("distributed_ddl"))
-    {
-        /// DDL worker should be started after all tables were loaded
-        String ddl_zookeeper_path = config().getString("distributed_ddl.path", "/clickhouse/task_queue/ddl/");
-        global_context->setDDLWorker(std::make_shared<DDLWorker>(ddl_zookeeper_path, *global_context, &config(), "distributed_ddl"));
-    }
-
     {
         Poco::Timespan keep_alive_timeout(config().getUInt("keep_alive_timeout", 10), 0);
 
-        Poco::ThreadPool server_pool(3, config().getUInt("max_connections", 1024));
+        Poco::ThreadPool server_pool(1, config().getUInt("max_connections", 1024));
         Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
         http_params->setTimeout(settings.receive_timeout);
         http_params->setKeepAliveTimeout(keep_alive_timeout);
@@ -792,8 +798,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         bool listen_try = config().getBool("listen_try", false);
         if (listen_hosts.empty())
         {
-            listen_hosts.emplace_back("::1");
-            listen_hosts.emplace_back("127.0.0.1");
+            listen_hosts.emplace_back("0.0.0.0");
             listen_try = true;
         }
 
@@ -862,7 +867,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
                     servers.emplace_back(
-                        new Poco::Net::HTTPServer(new HTTPHandlerFactory(*this, "HTTPHandler-factory"), server_pool, socket, http_params));
+                        new HTTPServer(new HTTPHandlerFactory(*this, "HTTPHandler-factory"), server_pool, socket, http_params));
 
                     LOG_INFO(log, "Listening http://" + address.toString());
                 }
@@ -878,7 +883,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
                         security_config.key_path,
                         security_config.cert_path,
-                        security_config.ca_path);
+                        security_config.ca_path,
+                        Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+                    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name
+                        = [&](const Poco::Crypto::X509Certificate & cert) {
+                              if (security_config.allowed_common_names.empty())
+                              {
+                                  return true;
+                              }
+                              return security_config.allowed_common_names.count(cert.commonName()) > 0;
+                          };
+                    context->setAdhocVerification(check_common_name);
                     std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
@@ -886,7 +901,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
                     servers.emplace_back(
-                        new Poco::Net::HTTPServer(new HTTPHandlerFactory(*this, "HTTPSHandler-factory"), server_pool, socket, http_params));
+                        new HTTPServer(new HTTPHandlerFactory(*this, "HTTPSHandler-factory"), server_pool, socket, http_params));
 
                     LOG_INFO(log, "Listening https://" + address.toString());
 #else
@@ -907,8 +922,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("tcp_port"));
                     socket.setReceiveTimeout(settings.receive_timeout);
                     socket.setSendTimeout(settings.send_timeout);
-                    servers.emplace_back(
-                        new Poco::Net::TCPServer(new TCPHandlerFactory(*this), server_pool, socket, new Poco::Net::TCPServerParams));
+                    servers.emplace_back(new TCPServer(new TCPHandlerFactory(*this), server_pool, socket, new Poco::Net::TCPServerParams));
 
                     LOG_INFO(log, "Listening tcp: " + address.toString());
                 }
@@ -929,7 +943,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("tcp_port_secure"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);
                     socket.setSendTimeout(settings.send_timeout);
-                    servers.emplace_back(new Poco::Net::TCPServer(
+                    servers.emplace_back(new TCPServer(
                         new TCPHandlerFactory(*this, /* secure= */ true), server_pool, socket, new Poco::Net::TCPServerParams));
                     LOG_INFO(log, "Listening tcp_secure: " + address.toString());
 #else
@@ -953,7 +967,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("interserver_http_port"));
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
-                    servers.emplace_back(new Poco::Net::HTTPServer(
+                    servers.emplace_back(new HTTPServer(
                         new InterserverIOHTTPHandlerFactory(*this, "InterserverIOHTTPHandler-factory"), server_pool, socket, http_params));
 
                     LOG_INFO(log, "Listening interserver http: " + address.toString());
@@ -1068,7 +1082,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             metrics_transmitters.emplace_back(std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
         }
 
-        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics);
+        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics, security_config);
 
         SessionCleaner session_cleaner(*global_context);
         ClusterManagerService cluster_manager_service(*global_context, config_path);
@@ -1077,7 +1091,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             tiflash_instance_wrap.tmt = &global_context->getTMTContext();
             LOG_INFO(log, "let tiflash proxy start all services");
-            tiflash_instance_wrap.status = TiFlashStatus::Running;
+            tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
+            while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            LOG_INFO(log, "proxy is ready to serve, try to wake up all region leader by sending read index request");
+            {
+                std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
+                tiflash_instance_wrap.tmt->getKVStore()->traverseRegions([&batch_read_index_req](RegionID, const RegionPtr & region) {
+                    batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region));
+                });
+                tiflash_instance_wrap.proxy_helper->batchReadIndex(batch_read_index_req);
+            }
+            LOG_INFO(log, "start to wait for terminal signal");
+        }
+
+        {
+            // Report the unix timestamp, git hash, release version
+            auto metrics = global_context->getTiFlashMetrics();
+            Poco::Timestamp ts;
+            GET_METRIC(metrics, tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
         waitForTerminationRequest();
@@ -1089,7 +1121,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             if (proxy_conf.is_proxy_runnable)
             {
                 LOG_INFO(log, "wait tiflash proxy to stop all services");
-                while (!tiflash_instance_wrap.proxy_helper->checkServiceStopped())
+                while (tiflash_instance_wrap.proxy_helper->getProxyStatus() != RaftProxyStatus::Stopped)
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 LOG_INFO(log, "all services in tiflash proxy are stopped");
             }

@@ -9,7 +9,7 @@ set (CONFIG_COMMON ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config.h)
 set (CONFIG_BUILD ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config_build.cpp)
 
 include (cmake/version.cmake)
-message (STATUS "Will build ${VERSION_FULL} (${TIFLASH_VERSION_FULL})")
+message (STATUS "Will build ${VERSION_FULL} (TiFlash ${TIFLASH_RELEASE_VERSION})")
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config.h.in ${CONFIG_COMMON})
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config_version.h.in ${CONFIG_VERSION})
 
@@ -28,6 +28,10 @@ if (NOT NO_WERROR)
 endif ()
 
 find_package (Threads)
+
+if (ENABLE_TESTS)
+    add_definitions(-DFIU_ENABLE)
+endif()
 
 include_directories (src)
 add_subdirectory (src)
@@ -78,6 +82,7 @@ add_headers_only(dbms src/Server)
 
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
 list (APPEND clickhouse_common_io_headers ${CONFIG_VERSION} ${CONFIG_COMMON})
+list (APPEND clickhouse_common_io_headers ${fiu_include_dirs})
 
 list (APPEND dbms_sources src/Functions/IFunction.cpp src/Functions/FunctionFactory.cpp src/Functions/FunctionHelpers.cpp)
 list (APPEND dbms_headers src/Functions/IFunction.h src/Functions/FunctionFactory.h src/Functions/FunctionHelpers.h)
@@ -118,6 +123,7 @@ else ()
     install (TARGETS dbms LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT clickhouse)
 endif ()
 
+target_include_directories(dbms PUBLIC "${TIFLASH_PROXY_FFI_SRC}")
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO" OR CMAKE_BUILD_TYPE_UC STREQUAL "MINSIZEREL")
     # Won't generate debug info for files with heavy template instantiation to achieve faster linking and lower size.
@@ -157,10 +163,12 @@ target_link_libraries (clickhouse_common_io
     ${EXECINFO_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     ${CMAKE_DL_LIBS}
+    fiu
     prometheus-cpp::core
     prometheus-cpp::push
     prometheus-cpp::pull
 )
+target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 
 target_link_libraries (dbms
     clickhouse_parsers
@@ -179,8 +187,6 @@ target_link_libraries (dbms
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
 )
-
-target_include_directories (dbms BEFORE PRIVATE ${kvClient_INCLUDE_DIR})
 
 if (NOT USE_INTERNAL_RE2_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${RE2_INCLUDE_DIR})
@@ -254,9 +260,6 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
 
-#use libfiu
-target_include_directories(dbms PUBLIC ${fiu_include_dirs})
-
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})
@@ -270,8 +273,6 @@ add_subdirectory (tests)
 
 if (ENABLE_TESTS)
     include (${ClickHouse_SOURCE_DIR}/cmake/find_gtest.cmake)
-
-    add_definitions(-DFIU_ENABLE)
 
     if (USE_INTERNAL_GTEST_LIBRARY)
         # Google Test from sources
@@ -288,7 +289,12 @@ if (ENABLE_TESTS)
 
     # attach all dbms gtest sources
     grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms dbms_gtest_sources)
-    add_executable(gtests_dbms EXCLUDE_FROM_ALL ${dbms_gtest_sources})
+    add_executable(gtests_dbms EXCLUDE_FROM_ALL
+        ${dbms_gtest_sources}
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
+    )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions)
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas)

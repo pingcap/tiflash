@@ -12,8 +12,9 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
 #include <Storages/Page/WriteBatch.h>
+#include <Storages/PathPool.h>
 #include <common/logger_useful.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <atomic>
 #include <chrono>
@@ -45,27 +46,28 @@ public:
     }
 
 protected:
-    static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase() {}
 
     void SetUp() override
     {
         // drop dir if exists
-        Poco::File file(path);
-        if (file.exists())
+        if (Poco::File file(path); file.exists())
         {
             file.remove(true);
         }
         // default test config
-        config.file_roll_size           = 4 * MB;
-        config.merge_hint_low_used_rate = 0.5;
-        config.num_write_slots          = 4; // At most 4 threads for write
+        config.file_roll_size    = 4 * MB;
+        config.gc_max_valid_rate = 0.5;
+        config.num_write_slots   = 4; // At most 4 threads for write
 
         storage = reopenWithConfig(config);
     }
 
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
-        auto storage = std::make_shared<PageStorage>("test.t", path, config_, file_provider);
+        auto spool     = TiFlashTestEnv::getContext().getPathPool().withTable("test", "t", false);
+        auto delegator = spool.getPSDiskDelegatorSingle("log");
+        auto storage   = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider);
         storage->restore();
         return storage;
     }

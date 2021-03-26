@@ -5,7 +5,6 @@
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -40,10 +39,14 @@ grpc::Status BatchCoprocessorHandler::execute()
             case COP_REQ_TYPE_DAG:
             {
                 GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_count, type_super_batch_cop_dag).Increment();
+                GET_METRIC(cop_context.metrics, tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Increment();
+                SCOPE_EXIT(
+                    { GET_METRIC(cop_context.metrics, tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Decrement(); });
+
                 const auto dag_request = ({
                     tipb::DAGRequest dag_req;
                     dag_req.ParseFromString(cop_request->data());
-                    dag_req;
+                    std::move(dag_req);
                 });
                 std::unordered_map<RegionID, RegionInfo> regions;
                 for (auto & r : cop_request->regions())
@@ -84,14 +87,12 @@ grpc::Status BatchCoprocessorHandler::execute()
     catch (const Exception & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n" << e.getStackTrace().toString());
-        return recordError(
-            e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
+        return recordError(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
     }
     catch (const pingcap::Exception & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": KV Client Exception: " << e.message());
-        return recordError(
-            e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
+        return recordError(grpc::StatusCode::INTERNAL, e.message());
     }
     catch (const std::exception & e)
     {

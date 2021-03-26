@@ -1,7 +1,5 @@
 tmp_path = "/tmp/tiflash/data/tmp"
 display_name = "TiFlash"
-default_profile = "default"
-users_config = "users.toml"
 # specify paths used for store data, multiple path should be seperated by comma
 path = "/tmp/tiflash/data/db"
 capacity = "107374182400" 
@@ -10,10 +8,8 @@ capacity = "107374182400"
 # capacity = "0,0,0"
 mark_cache_size = 5368709120
 minmax_index_cache_size = 5368709120
-listen_host = "0.0.0.0"
 tcp_port = 9000
 http_port = 8123
-interserver_http_port = 9009
 [logger]
 	count = 10
 	errorlog = "/tmp/tiflash/log/error.log"

@@ -98,7 +98,7 @@ int openFile(const std::string & path)
 
 inline void touchFile(const std::string & path)
 {
-    auto fd = openFile<false>(path);
+    auto                      fd = openFile<false>(path);
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite};
     if (fd > 0)
         ::close(fd);
@@ -108,7 +108,7 @@ inline void touchFile(const std::string & path)
 
 void syncFile(WritableFilePtr & file);
 
-void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const std::string & path);
+void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const RateLimiterPtr & rate_limiter);
 
 void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes);
 

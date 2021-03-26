@@ -16,7 +16,7 @@ using RSOperatorPtr = std::shared_ptr<RSOperator>;
 using RSOperators   = std::vector<RSOperatorPtr>;
 using Fields        = std::vector<Field>;
 
-static const RSOperatorPtr EMPTY_FILTER{};
+inline static const RSOperatorPtr EMPTY_FILTER{};
 
 struct RSCheckParam
 {
@@ -35,8 +35,8 @@ protected:
 public:
     virtual ~RSOperator() = default;
 
-    virtual String name()     = 0;
-    virtual String toString() = 0;
+    virtual String name()          = 0;
+    virtual String toDebugString() = 0;
 
     // TODO: implement a batch check version
 
@@ -63,11 +63,11 @@ public:
 
     Attrs getAttrs() override { return {attr}; }
 
-    String toString() override
+    String toDebugString() override
     {
         return R"({"op":")" + name() +       //
             R"(","col":")" + attr.col_name + //
-            R"(","value":")" + applyVisitor(FieldVisitorToString(), value) + "\"}";
+            R"(","value":")" + applyVisitor(FieldVisitorToDebugString(), value) + "\"}";
     }
 };
 
@@ -88,11 +88,11 @@ public:
         return attrs;
     }
 
-    String toString() override
+    String toDebugString() override
     {
         String s = R"({"op":")" + name() + R"(","children":[)";
         for (auto & child : children)
-            s += child->toString() + ",";
+            s += child->toDebugString() + ",";
         s.pop_back();
         return s + "]}";
     }

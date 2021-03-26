@@ -10,7 +10,6 @@ option (ENABLE_CLICKHOUSE_LOCAL "Enable local" OFF)
 option (ENABLE_CLICKHOUSE_BENCHMARK "Enable benchmark" OFF)
 option (ENABLE_CLICKHOUSE_PERFORMANCE "Enable performance" OFF)
 option (ENABLE_CLICKHOUSE_TOOLS "Enable tools: compressor format extract-from-config-lib" OFF)
-option (ENABLE_CLICKHOUSE_COPIER "Enable copier" OFF)
 
 configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
 
@@ -26,11 +25,11 @@ add_library (clickhouse-server-lib
     Server.cpp
     StatusFile.cpp
     TCPHandler.cpp
+    StorageConfigParser.cpp
+    UserConfigParser.cpp
+    RaftConfigParser.cpp
     ClusterManagerService.cpp)
 
-set(TIFLASH_PROXY_LIB_PATH ${ClickHouse_SOURCE_DIR}/libs/libtiflash-proxy)
-set(TIFLASH_PROXY_LIBRARY "TIFLASH_PROXY_LIBRARY-NOTFOUND")
-find_library(TIFLASH_PROXY_LIBRARY NAMES tiflash_proxy HINTS ${TIFLASH_PROXY_LIB_PATH})
 target_link_libraries(clickhouse-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
 
 target_link_libraries (clickhouse-server-lib clickhouse_common_io daemon clickhouse_storages_system clickhouse_functions clickhouse_aggregate_functions clickhouse_table_functions)
@@ -61,9 +60,6 @@ target_link_libraries (clickhouse-compressor-lib clickhouse_common_io ${Boost_PR
 add_library (clickhouse-format-lib ${SPLIT_SHARED} Format.cpp)
 target_link_libraries (clickhouse-format-lib dbms clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
 
-add_library (clickhouse-copier-lib ClusterCopier.cpp)
-target_link_libraries (clickhouse-copier-lib clickhouse-server-lib clickhouse_functions clickhouse_aggregate_functions)
-
 if (USE_EMBEDDED_COMPILER)
     link_directories (${LLVM_LIBRARY_DIRS})
     add_subdirectory ("Compiler-${LLVM_VERSION}")
@@ -87,11 +83,9 @@ if (CLICKHOUSE_SPLIT_BINARY)
     target_link_libraries (clickhouse-compressor clickhouse-compressor-lib)
     add_executable (clickhouse-format clickhouse-format.cpp)
     target_link_libraries (clickhouse-format clickhouse-format-lib)
-    add_executable (clickhouse-copier clickhouse-copier.cpp)
-    target_link_libraries (clickhouse-copier clickhouse-copier-lib)
 
     set (CLICKHOUSE_ALL_TARGETS clickhouse-server clickhouse-client clickhouse-local clickhouse-benchmark clickhouse-performance-test
-            clickhouse-extract-from-config clickhouse-format clickhouse-copier)
+            clickhouse-extract-from-config clickhouse-format)
 
     if (USE_EMBEDDED_COMPILER)
         add_executable (clickhouse-clang clickhouse-clang.cpp)
@@ -137,9 +131,6 @@ else ()
         clickhouse-format-lib
     )
     endif ()
-    if (ENABLE_CLICKHOUSE_COPIER)
-        target_link_libraries (tiflash clickhouse-copier-lib)
-    endif ()
 
     set (CLICKHOUSE_BUNDLE)
     if (ENABLE_CLICKHOUSE_SERVER)
@@ -177,11 +168,6 @@ else ()
            ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-format
            DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT tiflash)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-extract-from-config clickhouse-compressor clickhouse-format)
-    endif ()
-    if (ENABLE_CLICKHOUSE_COPIER)
-        add_custom_target (clickhouse-copier ALL COMMAND ${CMAKE_COMMAND} -E create_symlink tiflash clickhouse-copier DEPENDS tiflash)
-        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-copier DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT tiflash)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-copier)
     endif ()
     # install always because depian package want this files:
     add_custom_target (clickhouse-clang ALL COMMAND ${CMAKE_COMMAND} -E create_symlink tiflash clickhouse-clang DEPENDS tiflash)

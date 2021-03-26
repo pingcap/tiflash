@@ -2,6 +2,7 @@
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
 #include <Databases/IDatabase.h>
+#include <Encryption/FileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/InterpreterDropQuery.h>
@@ -25,6 +26,10 @@ extern const int READONLY;
 extern const int FAIL_POINT_ERROR;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char exception_between_drop_meta_and_data[];
+}
 
 InterpreterDropQuery::InterpreterDropQuery(const ASTPtr & query_ptr_, Context & context_) : query_ptr(query_ptr_), context(context_) {}
 
@@ -145,7 +150,7 @@ BlockIO InterpreterDropQuery::execute()
                     storage->removeFromTMTContext();
             });
 
-            FAIL_POINT_TRIGGER_EXCEPTION(exception_between_drop_meta_and_data);
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_between_drop_meta_and_data);
 
             /// Delete table data
             table.first->drop();
@@ -156,10 +161,13 @@ BlockIO InterpreterDropQuery::execute()
             const String database_data_path = database->getDataPath();
             if (!database_data_path.empty())
             {
-                String table_data_path = database_data_path + "/" + escapeForFileName(current_table_name);
+                String table_data_path
+                    = database_data_path + (endsWith(database_data_path, "/") ? "" : "/") + escapeForFileName(current_table_name);
 
                 if (Poco::File(table_data_path).exists())
-                    Poco::File(table_data_path).remove(true);
+                {
+                    context.getFileProvider()->deleteDirectory(table_data_path, false, true);
+                }
             }
         }
     }
@@ -181,7 +189,7 @@ BlockIO InterpreterDropQuery::execute()
         auto database = context.detachDatabase(database_name);
 
         /// Delete the database and remove its data / meta directory if need.
-        database->drop();
+        database->drop(context);
     }
 
     return {};

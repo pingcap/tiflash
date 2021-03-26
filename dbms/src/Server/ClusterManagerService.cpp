@@ -10,9 +10,10 @@
 namespace DB
 {
 
-const std::string CLUSTER_MANAGER_PATH_KEY = "flash.flash_cluster.cluster_manager_path";
+const std::string TIFLASH_PREFIX = "flash";
+const std::string CLUSTER_MANAGER_PATH_KEY = TIFLASH_PREFIX + ".flash_cluster.cluster_manager_path";
 const std::string BIN_NAME = "flash_cluster_manager";
-const std::string TASK_INTERVAL_KEY = "flash.flash_cluster.update_rule_interval";
+const std::string TASK_INTERVAL_KEY = TIFLASH_PREFIX + ".flash_cluster.update_rule_interval";
 
 constexpr long MILLISECOND = 1000;
 constexpr long INIT_DELAY = 5;
@@ -35,23 +36,30 @@ catch (DB::Exception & e)
 }
 
 ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::string & config_path)
-    : context(context_), timer(), log(&Logger::get("ClusterManagerService"))
+    : context(context_), timer("ClusterManager"), log(&Logger::get("ClusterManagerService"))
 {
     const auto & conf = context.getConfigRef();
 
-    if (!conf.has(CLUSTER_MANAGER_PATH_KEY))
+    const auto default_bin_path = conf.getString("application.dir") + "flash_cluster_manager";
+
+    if (!conf.has(TIFLASH_PREFIX))
     {
-        LOG_WARNING(log, "cluster manager will not run because of no config option");
+        LOG_WARNING(log, "TiFlash service is not specified, cluster manager can not be started");
         return;
     }
 
-    auto bin_path = conf.getString(CLUSTER_MANAGER_PATH_KEY) + Poco::Path::separator() + BIN_NAME;
+    if (!conf.has(CLUSTER_MANAGER_PATH_KEY))
+    {
+        LOG_WARNING(log, "Binary path of cluster manager is not set, try to use default: " << default_bin_path);
+    }
+
+    auto bin_path = conf.getString(CLUSTER_MANAGER_PATH_KEY, default_bin_path) + Poco::Path::separator() + BIN_NAME;
     auto task_interval = conf.getInt(TASK_INTERVAL_KEY, 10);
 
     if (!Poco::File(bin_path).exists())
     {
-        LOG_ERROR(log, "binary file of cluster manager does not exist: " << bin_path);
-        throw Exception("Binary file of cluster manager does not exist", ErrorCodes::LOGICAL_ERROR);
+        LOG_ERROR(log, "Binary file of cluster manager does not exist in " << bin_path << ", can not sync tiflash replica");
+        return;
     }
 
     std::vector<std::string> args;

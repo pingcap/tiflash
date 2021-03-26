@@ -99,6 +99,8 @@ inline auto QuotaValues<std::atomic<size_t>>::tuple() const
 /// Time, rounded down to start of interval; limits for that interval and accumulated values.
 struct QuotaForInterval
 {
+    constexpr static const char * DEFAULT_QUOTA_NAME = "default";
+
     std::atomic<time_t> rounded_time {0};
     size_t duration = 0;
     bool randomize = false;

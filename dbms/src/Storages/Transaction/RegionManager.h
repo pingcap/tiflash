@@ -2,6 +2,10 @@
 
 #include <Storages/Transaction/Types.h>
 
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+
 namespace DB
 {
 

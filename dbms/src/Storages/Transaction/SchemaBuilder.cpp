@@ -1,6 +1,7 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <DataTypes/DataTypeString.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/MockSchemaGetter.h>
 #include <Debug/MockSchemaNameMapper.h>
@@ -35,11 +36,20 @@ namespace ErrorCodes
 extern const int DDL_ERROR;
 extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char exception_after_step_1_in_exchange_partition[];
+extern const char exception_before_step_2_rename_in_exchange_partition[];
+extern const char exception_after_step_2_in_exchange_partition[];
+extern const char exception_before_step_3_rename_in_exchange_partition[];
+extern const char exception_after_step_3_in_exchange_partition[];
+} // namespace FailPoints
 
 bool isReservedDatabase(Context & context, const String & database_name)
 {
     return context.getTMTContext().getIgnoreDatabases().count(database_name) > 0;
 }
+
 
 inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const ColumnInfo & column_info)
 {
@@ -86,10 +96,31 @@ AlterCommand newRenameColCommand(const String & old_col, const String & new_col,
     return command;
 }
 
-using ColumnInfos = std::vector<ColumnInfo>;
-using ColumnInfosModifier = std::function<void(ColumnInfos & column_infos)>;
-using SchemaChange = std::pair<AlterCommands, ColumnInfosModifier>;
+using TableInfoModifier = std::function<void(TableInfo & table_info)>;
+using SchemaChange = std::pair<AlterCommands, TableInfoModifier>;
 using SchemaChanges = std::vector<SchemaChange>;
+
+bool typeDiffers(const TiDB::ColumnInfo & a, const TiDB::ColumnInfo & b)
+{
+    if (a.tp != b.tp || a.hasNotNullFlag() != b.hasNotNullFlag() || a.hasUnsignedFlag() != b.hasUnsignedFlag())
+        return true;
+    if (a.tp == TypeEnum || a.tp == TypeSet)
+    {
+        if (a.elems.size() != b.elems.size())
+            return true;
+        for (size_t i = 0; i < a.elems.size(); i++)
+        {
+            if (a.elems[i].first != b.elems[i].first)
+                return true;
+        }
+        return false;
+    }
+    else if (a.tp == TypeNewDecimal)
+    {
+        return a.flen != b.flen || a.decimal != b.decimal;
+    }
+    return false;
+}
 
 /// When schema change detected, the modification to original table info must be preserved as well.
 /// With the preserved table info modifications, table info changes along with applying alter commands.
@@ -125,7 +156,8 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
         }
         if (!drop_commands.empty())
         {
-            result.emplace_back(std::move(drop_commands), [column_ids_to_drop{std::move(column_ids_to_drop)}](ColumnInfos & column_infos) {
+            result.emplace_back(std::move(drop_commands), [column_ids_to_drop{std::move(column_ids_to_drop)}](TableInfo & table_info) {
+                auto & column_infos = table_info.columns;
                 column_infos.erase(std::remove_if(column_infos.begin(),
                                        column_infos.end(),
                                        [&](const auto & column_info) { return column_ids_to_drop.count(column_info.id) > 0; }),
@@ -162,12 +194,27 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
                 = newRenameColCommand(rename_pair.first.name, rename_pair.second.name, rename_pair.second.id, orig_table_info);
             auto rename_modifier
                 = [column_id = rename_command.column_id, old_name = rename_command.column_name, new_name = rename_command.new_column_name](
-                      ColumnInfos & column_infos) {
+                      TableInfo & table_info) {
+                      auto & column_infos = table_info.columns;
                       auto it = std::find_if(column_infos.begin(), column_infos.end(), [&](const auto & column_info) {
                           return column_info.id == column_id && column_info.name == old_name;
                       });
                       if (it != column_infos.end())
                           it->name = new_name;
+                      if (table_info.is_common_handle)
+                      {
+                          /// TiDB only saves column name(not column id) in index info, so have to update primary
+                          /// index info when rename column
+                          auto & index_info = table_info.getPrimaryIndexInfo();
+                          for (auto & col : index_info.idx_cols)
+                          {
+                              if (col.name == old_name)
+                              {
+                                  col.name = new_name;
+                                  break;
+                              }
+                          }
+                      }
                   };
             rename_commands.emplace_back(std::move(rename_command));
             result.emplace_back(std::move(rename_commands), rename_modifier);
@@ -187,8 +234,7 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
                       if (column_info_.id == orig_column_info.id && column_info_.name != orig_column_info.name)
                           LOG_INFO(log, "detect column " << orig_column_info.name << " rename to " << column_info_.name);
 
-                      return column_info_.id == orig_column_info.id
-                          && (column_info_.tp != orig_column_info.tp || column_info_.hasNotNullFlag() != orig_column_info.hasNotNullFlag());
+                      return column_info_.id == orig_column_info.id && typeDiffers(column_info_, orig_column_info);
                   });
 
             if (column_info != table_info.columns.end())
@@ -205,7 +251,8 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
         }
         if (!alter_commands.empty())
         {
-            result.emplace_back(std::move(alter_commands), [alter_map{std::move(alter_map)}](ColumnInfos & column_infos) {
+            result.emplace_back(std::move(alter_commands), [alter_map{std::move(alter_map)}](TableInfo & table_info) {
+                auto & column_infos = table_info.columns;
                 std::for_each(column_infos.begin(), column_infos.end(), [&](auto & column_info) {
                     if (auto it = alter_map.find(column_info.id); it != alter_map.end())
                         column_info = it->second;
@@ -238,7 +285,8 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
         }
         if (!add_commands.empty())
         {
-            result.emplace_back(std::move(add_commands), [new_column_infos{std::move(new_column_infos)}](ColumnInfos & column_infos) {
+            result.emplace_back(std::move(add_commands), [new_column_infos{std::move(new_column_infos)}](TableInfo & table_info) {
+                auto & column_infos = table_info.columns;
                 std::for_each(new_column_infos.begin(), new_column_infos.end(), [&](auto & new_column_info) {
                     column_infos.emplace_back(std::move(new_column_info));
                 });
@@ -287,7 +335,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
     for (const auto & schema_change : schema_changes)
     {
         /// Update column infos by applying schema change in this step.
-        schema_change.second(orig_table_info.columns);
+        schema_change.second(orig_table_info);
         /// Update schema version aggressively for the sake of correctness.
         orig_table_info.schema_version = target_version;
         storage->alterFromTiDB(schema_change.first, name_mapper.mapDatabaseName(*db_info), orig_table_info, name_mapper, context);
@@ -640,7 +688,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     auto orig_table_info = storage->getTableInfo();
     orig_table_info.partition = table_info->partition;
     storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*pt_db_info), orig_table_info, name_mapper, context);
-    FAIL_POINT_TRIGGER_EXCEPTION(exception_after_step_1_in_exchange_partition);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_after_step_1_in_exchange_partition);
 
     /// step 2 change non partition table to a partition of the partition table
     storage = tmt_context.getStorages().get(npt_table_id);
@@ -653,11 +701,11 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     /// partition does not have explicit name, so use default name here
     orig_table_info.name = name_mapper.mapTableName(orig_table_info);
     storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*npt_db_info), orig_table_info, name_mapper, context);
-    FAIL_POINT_TRIGGER_EXCEPTION(exception_before_step_2_rename_in_exchange_partition);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_step_2_rename_in_exchange_partition);
 
     if (npt_db_info->id != pt_db_info->id)
         applyRenamePhysicalTable(pt_db_info, orig_table_info, storage);
-    FAIL_POINT_TRIGGER_EXCEPTION(exception_after_step_2_in_exchange_partition);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_after_step_2_in_exchange_partition);
 
     /// step 3 change partition of the partition table to non partition table
     table_info = getter.getTableInfo(npt_db_info->id, pt_partition_id);
@@ -672,11 +720,11 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     orig_table_info.is_partition_table = false;
     orig_table_info.name = table_info->name;
     storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*pt_db_info), orig_table_info, name_mapper, context);
-    FAIL_POINT_TRIGGER_EXCEPTION(exception_before_step_3_rename_in_exchange_partition);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_step_3_rename_in_exchange_partition);
 
     if (npt_db_info->id != pt_db_info->id)
         applyRenamePhysicalTable(npt_db_info, orig_table_info, storage);
-    FAIL_POINT_TRIGGER_EXCEPTION(exception_after_step_3_in_exchange_partition);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_after_step_3_in_exchange_partition);
 }
 
 template <typename Getter, typename NameMapper>
@@ -709,17 +757,37 @@ static ASTPtr parseCreateStatement(const String & statement)
     return ast;
 }
 
+String createDatabaseStmt(Context & context, const DBInfo & db_info, const SchemaNameMapper & name_mapper)
+{
+    auto mapped = name_mapper.mapDatabaseName(db_info);
+    if (isReservedDatabase(context, mapped))
+        throw TiFlashException("Database " + name_mapper.debugDatabaseName(db_info) + " is reserved", Errors::DDL::Internal);
+
+    // R"raw(
+    // CREATE DATABASE IF NOT EXISTS `db_xx`
+    // ENGINE = TiFlash('<json-db-info>', <format-version>)
+    // )raw";
+
+    String stmt;
+    WriteBufferFromString stmt_buf(stmt);
+    writeString("CREATE DATABASE IF NOT EXISTS ", stmt_buf);
+    writeBackQuotedString(mapped, stmt_buf);
+    writeString(" ENGINE = TiFlash('", stmt_buf);
+    writeEscapedString(db_info.serialize(), stmt_buf); // must escaped for json-encoded text
+    writeString("', ", stmt_buf);
+    writeIntText(DatabaseTiFlash::CURRENT_VERSION, stmt_buf);
+    writeString(")", stmt_buf);
+    return stmt;
+}
+
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(TiDB::DBInfoPtr db_info)
 {
     GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_create_db).Increment();
     LOG_INFO(log, "Creating database " << name_mapper.debugDatabaseName(*db_info));
-    auto mapped = name_mapper.mapDatabaseName(*db_info);
-    if (isReservedDatabase(context, mapped))
-        throw TiFlashException("Database " + name_mapper.debugDatabaseName(*db_info) + " is reserved", Errors::DDL::Internal);
 
-    const String statement = "CREATE DATABASE IF NOT EXISTS " + backQuoteIfNeed(mapped) + " ENGINE = TiFlash('" + db_info->serialize()
-        + "', " + DB::toString(DatabaseTiFlash::CURRENT_VERSION) + ")";
+    auto statement = createDatabaseStmt(context, *db_info, name_mapper);
+
     ASTPtr ast = parseCreateStatement(statement);
 
     InterpreterCreateQuery interpreter(ast, context);
@@ -777,10 +845,12 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, con
         }
     }
 
-    // FIXME: Fix it after cluster index supported in TiDB 5.0
-    if (pks.size() != 1 || !table_info.pk_is_handle)
+    if (!table_info.pk_is_handle)
     {
-        columns.emplace_back(NameAndTypePair(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeInt64>()));
+        if (table_info.is_common_handle)
+            columns.emplace_back(NameAndTypePair(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeString>()));
+        else
+            columns.emplace_back(NameAndTypePair(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeInt64>()));
         pks.clear();
         pks.emplace_back(MutableSupport::tidb_pk_column_name);
     }

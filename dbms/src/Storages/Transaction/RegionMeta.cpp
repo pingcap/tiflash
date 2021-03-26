@@ -1,4 +1,4 @@
-#include <Storages/Transaction/RaftCommandResult.h>
+#include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionMeta.h>
 
 #pragma GCC diagnostic push
@@ -196,36 +196,14 @@ void RegionMeta::assignRegionMeta(RegionMeta && rhs)
 }
 
 void MetaRaftCommandDelegate::execChangePeer(
-    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
+    const raft_cmdpb::AdminRequest &, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    const auto & change_peer_request = request.change_peer();
     const auto & new_region = response.change_peer().region();
 
-    bool pending_remove = false;
-    switch (change_peer_request.change_type())
-    {
-        case eraftpb::ConfChangeType::AddNode:
-        case eraftpb::ConfChangeType::AddLearnerNode:
-        {
-            // change the peers of region, add conf_ver.
-            doSetRegion(new_region);
-            break;
-        }
-        case eraftpb::ConfChangeType::RemoveNode:
-        {
-            if (peer.id() == change_peer_request.peer().id())
-                pending_remove = true;
-
-            doSetRegion(new_region);
-            break;
-        }
-        default:
-            throw Exception(std::string(__PRETTY_FUNCTION__) + ": unsupported cmd", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    if (pending_remove)
+    doSetRegion(new_region);
+    if (doCheckPeerRemoved())
         region_state.setState(raft_serverpb::PeerState::Tombstone);
     else
         region_state.setState(raft_serverpb::PeerState::Normal);
@@ -274,8 +252,8 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
 static void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state)
 {
     if (response.has_split() && !(response.split().left() == region_state.getRegion()))
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": current region:\n" + region_state.getRegion().DebugString() + "\nexpect:\n"
-                + response.split().left().DebugString() + "\nshould not happen",
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": current region:\n" + region_state.getRegion().ShortDebugString()
+                + "\nexpect:\n" + response.split().left().ShortDebugString() + "\nshould not happen",
             ErrorCodes::LOGICAL_ERROR);
 }
 
@@ -344,12 +322,10 @@ void MetaRaftCommandDelegate::execPrepareMerge(
     CheckRegionForMergeCmd(response, region_state);
 }
 
-bool RegionMeta::isPeerRemoved() const
+bool RegionMeta::doCheckPeerRemoved() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
-
-    if (region_state.getState() == raft_serverpb::PeerState::Tombstone)
-        return true;
+    if (region_state.getRegion().peers().empty())
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": got empty peers, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     for (const auto & region_peer : region_state.getRegion().peers())
     {
@@ -368,10 +344,10 @@ bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
         && meta1.region_state == meta2.region_state;
 }
 
-std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> RegionMeta::dumpVersionRange() const
+RegionMetaSnapshot RegionMeta::dumpRegionMetaSnapshot() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return {region_state.getVersion(), region_state.getConfVersion(), region_state.getRange()};
+    return {region_state.getVersion(), region_state.getConfVersion(), region_state.getRange(), peer};
 }
 
 MetaRaftCommandDelegate & RegionMeta::makeRaftCommandDelegate()

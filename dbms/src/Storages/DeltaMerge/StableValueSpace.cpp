@@ -11,9 +11,7 @@ namespace DB
 namespace DM
 {
 
-const Int64 StableValueSpace::CURRENT_VERSION = 1;
-
-void StableValueSpace::setFiles(const DMFiles & files_, DMContext * dm_context, HandleRange range)
+void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context)
 {
     UInt64 rows  = 0;
     UInt64 bytes = 0;
@@ -28,7 +26,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, DMContext * dm_context, 
     }
     else
     {
-        auto index_cache = dm_context->db_context.getGlobalContext().getMinMaxIndexCache().get();
+        auto index_cache = dm_context->db_context.getGlobalContext().getMinMaxIndexCache();
         auto hash_salt   = dm_context->hash_salt;
         for (auto & file : files_)
         {
@@ -47,7 +45,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, DMContext * dm_context, 
 void StableValueSpace::saveMeta(WriteBatch & meta_wb)
 {
     MemoryWriteBuffer buf(0, 8192);
-    writeIntBinary(CURRENT_VERSION, buf);
+    writeIntBinary(STORAGE_FORMAT_CURRENT.stable, buf);
     writeIntBinary(valid_rows, buf);
     writeIntBinary(valid_bytes, buf);
     writeIntBinary((UInt64)files.size(), buf);
@@ -66,7 +64,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     UInt64               version, valid_rows, valid_bytes, size;
     readIntBinary(version, buf);
-    if (version != CURRENT_VERSION)
+    if (version != StableFormat::V1)
         throw Exception("Unexpected version: " + DB::toString(version));
 
     readIntBinary(valid_rows, buf);
@@ -78,7 +76,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
         readIntBinary(ref_id, buf);
 
         auto file_id          = context.storage_pool.data().getNormalPageId(ref_id);
-        auto file_parent_path = context.extra_paths.getPath(file_id) + "/" + STABLE_FOLDER_NAME;
+        auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
 
         auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, ref_id, file_parent_path);
         stable->files.push_back(dmfile);
@@ -154,10 +152,11 @@ using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 SnapshotPtr StableValueSpace::createSnapshot()
 {
-    auto snap        = std::make_shared<Snapshot>();
-    snap->id         = id;
-    snap->valid_rows = valid_rows;
-    snap->stable     = this->shared_from_this();
+    auto snap         = std::make_shared<Snapshot>();
+    snap->id          = id;
+    snap->valid_rows  = valid_rows;
+    snap->valid_bytes = valid_bytes;
+    snap->stable      = this->shared_from_this();
 
     for (size_t i = 0; i < files.size(); i++)
     {
@@ -168,11 +167,20 @@ SnapshotPtr StableValueSpace::createSnapshot()
     return snap;
 }
 
+void StableValueSpace::drop(const FileProviderPtr & file_provider)
+{
+    for (auto & file : files)
+    {
+        file->remove(file_provider);
+    }
+}
+
 SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DMContext &     context, //
                                                                         const ColumnDefines & read_columns,
-                                                                        const HandleRange &   handle_range,
+                                                                        const RowKeyRange &   rowkey_range,
                                                                         const RSOperatorPtr & filter,
                                                                         UInt64                max_data_version,
+                                                                        size_t                expected_block_size,
                                                                         bool                  enable_clean_read)
 {
     LOG_DEBUG(log, __FUNCTION__ << " max_data_version: " << max_data_version << ", enable_clean_read: " << enable_clean_read);
@@ -187,12 +195,52 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
             context.hash_salt,
             stable->files[i],
             read_columns,
-            handle_range,
+            rowkey_range,
             filter,
             column_caches[i],
-            IdSetPtr{}));
+            IdSetPtr{},
+            expected_block_size));
     }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
+}
+
+RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range)
+{
+    if (valid_rows == 0)
+        return {0, 0};
+    size_t match_packs       = 0;
+    size_t total_match_rows  = 0;
+    size_t total_match_bytes = 0;
+    for (auto & f : stable->files)
+    {
+        DMFilePackFilter filter(f,
+                                context.db_context.getGlobalContext().getMinMaxIndexCache(),
+                                context.hash_salt,
+                                range,
+                                RSOperatorPtr{},
+                                IdSetPtr{},
+                                context.db_context.getFileProvider());
+        auto &           pack_stats = f->getPackStats();
+        auto &           use_packs  = filter.getUsePacks();
+        for (size_t i = 0; i < pack_stats.size(); ++i)
+        {
+            if (use_packs[i])
+            {
+                ++match_packs;
+                total_match_rows += pack_stats[i].rows;
+                total_match_bytes += pack_stats[i].bytes;
+            }
+        }
+    }
+    if (!total_match_rows || !match_packs)
+        return {0, 0};
+    Float64 avg_pack_rows  = total_match_rows / match_packs;
+    Float64 avg_pack_bytes = total_match_bytes / match_packs;
+    // By average, the first and last pack are only half covered by the range.
+    // And if this range only covers one pack, then return the pack's stat.
+    size_t approx_rows  = std::max(avg_pack_rows, total_match_rows - avg_pack_rows / 2);
+    size_t approx_bytes = std::max(avg_pack_bytes, total_match_bytes - avg_pack_bytes / 2);
+    return {approx_rows, approx_bytes};
 }
 
 } // namespace DM

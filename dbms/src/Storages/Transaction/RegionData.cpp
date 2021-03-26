@@ -2,6 +2,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/ColumnFamily.h>
 #include <Storages/Transaction/RegionData.h>
+#include <Storages/Transaction/RegionLockInfo.h>
 
 namespace DB
 {
@@ -12,23 +13,23 @@ HandleID RawTiDBPK::getHandleID() const
     return RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(pk->data()));
 }
 
-void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
+void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value)
 {
     switch (cf)
     {
         case ColumnFamilyType::Write:
         {
-            cf_data_size += write_cf.insert(std::move(key), std::move(value), raw_key);
+            cf_data_size += write_cf.insert(std::move(key), std::move(value));
             return;
         }
         case ColumnFamilyType::Default:
         {
-            cf_data_size += default_cf.insert(std::move(key), std::move(value), raw_key);
+            cf_data_size += default_cf.insert(std::move(key), std::move(value));
             return;
         }
         case ColumnFamilyType::Lock:
         {
-            lock_cf.insert(std::move(key), std::move(value), raw_key);
+            lock_cf.insert(std::move(key), std::move(value));
             return;
         }
         default:
@@ -36,43 +37,52 @@ void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKe
     }
 }
 
-void RegionData::removeLockCF(const DecodedTiKVKey & raw_key)
+void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
 {
-    auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
-    lock_cf.remove(pk, true);
-}
-
-void RegionData::removeDefaultCF(const TiKVKey & key, const DecodedTiKVKey & raw_key)
-{
-    auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
-    Timestamp ts = RecordKVFormat::getTs(key);
-    cf_data_size -= default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
-}
-
-void RegionData::removeWriteCF(const TiKVKey & key, const DecodedTiKVKey & raw_key)
-{
-    auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
-    Timestamp ts = RecordKVFormat::getTs(key);
-
-    cf_data_size -= write_cf.remove(RegionWriteCFData::Key{pk, ts}, true);
+    switch (cf)
+    {
+        case ColumnFamilyType::Write:
+        {
+            auto raw_key = RecordKVFormat::decodeTiKVKey(key);
+            auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
+            Timestamp ts = RecordKVFormat::getTs(key);
+            // removed by gc, may not exist.
+            cf_data_size -= write_cf.remove(RegionWriteCFData::Key{pk, ts}, true);
+            return;
+        }
+        case ColumnFamilyType::Default:
+        {
+            auto raw_key = RecordKVFormat::decodeTiKVKey(key);
+            auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
+            Timestamp ts = RecordKVFormat::getTs(key);
+            // removed by gc, may not exist.
+            cf_data_size -= default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
+            return;
+        }
+        case ColumnFamilyType::Lock:
+        {
+            lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
+            return;
+        }
+        default:
+            throw Exception(std::string(__PRETTY_FUNCTION__) + " with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
+    }
 }
 
 RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & write_it)
 {
     const auto & [key, value, decoded_val] = write_it->second;
     const auto & [pk, ts] = write_it->first;
-    const auto & [write_type, prewrite_ts, short_str] = decoded_val;
 
     std::ignore = ts;
     std::ignore = value;
     std::ignore = key;
-    std::ignore = short_str;
 
-    if (write_type == PutFlag)
+    if (decoded_val.write_type == RecordKVFormat::CFModifyFlag::PutFlag)
     {
         auto & map = default_cf.getDataMut();
 
-        if (auto data_it = map.find({pk, prewrite_ts}); data_it != map.end())
+        if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
         {
             cf_data_size -= RegionDefaultCFData::calcTiKVKeyValueSize(data_it->second);
             map.erase(data_it);
@@ -90,59 +100,47 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
     const auto & [pk, ts] = write_it->first;
 
     std::ignore = value;
-
-    const auto & [write_type, prewrite_ts, short_value] = decoded_val;
-
     std::ignore = value;
-    std::ignore = prewrite_ts;
 
     if (!need_value)
-        return std::make_tuple(pk, write_type, ts, nullptr);
+        return std::make_tuple(pk, decoded_val.write_type, ts, nullptr);
 
-    if (write_type != PutFlag)
-        return std::make_tuple(pk, write_type, ts, nullptr);
+    if (decoded_val.write_type != RecordKVFormat::CFModifyFlag::PutFlag)
+        return std::make_tuple(pk, decoded_val.write_type, ts, nullptr);
 
-    if (!short_value)
+    if (!decoded_val.short_value)
     {
         const auto & map = default_cf.getData();
-        if (auto data_it = map.find({pk, prewrite_ts}); data_it != map.end())
-            return std::make_tuple(pk, write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
+        if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
+            return std::make_tuple(pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
         else
-            throw Exception("Raw TiDB PK: " + (pk.toHex()) + ", Prewrite ts: " + std::to_string(prewrite_ts)
-                    + " can not found in default cf for key: " + key->toHex(),
+            throw Exception("Raw TiDB PK: " + (pk.toDebugString()) + ", Prewrite ts: " + std::to_string(decoded_val.prewrite_ts)
+                    + " can not found in default cf for key: " + key->toDebugString(),
                 ErrorCodes::LOGICAL_ERROR);
     }
 
-    return std::make_tuple(pk, write_type, ts, short_value);
+    return std::make_tuple(pk, decoded_val.write_type, ts, decoded_val.short_value);
 }
 
-LockInfoPtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
+DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
 {
-    enum LockType : UInt8
-    {
-        Put = 'P',
-        Delete = 'D',
-        Lock = 'L',
-        Pessimistic = 'S',
-    };
-
     for (const auto & [pk, value] : lock_cf.getData())
     {
         std::ignore = pk;
 
-        const auto & [tikv_key, tikv_val, decoded_val, decoded_key] = value;
-        const auto & [lock_type, primary, ts, ttl, min_commit_ts] = decoded_val;
+        const auto & [tikv_key, tikv_val, lock_info_ptr] = value;
         std::ignore = tikv_key;
         std::ignore = tikv_val;
+        auto & lock_info = *lock_info_ptr;
 
-        if (ts > query.read_tso || lock_type == Lock || lock_type == Pessimistic)
+        if (lock_info.lock_version > query.read_tso || lock_info.lock_type == kvrpcpb::Op::Lock
+            || lock_info.lock_type == kvrpcpb::Op::PessimisticLock)
             continue;
-        if (min_commit_ts > query.read_tso)
+        if (lock_info.min_commit_ts > query.read_tso)
             continue;
-        if (query.bypass_lock_ts && query.bypass_lock_ts->count(ts))
+        if (query.bypass_lock_ts && query.bypass_lock_ts->count(lock_info.lock_version))
             continue;
-
-        return std::make_unique<LockInfo>(LockInfo{primary, ts, *decoded_key, ttl});
+        return lock_info_ptr;
     }
 
     return nullptr;

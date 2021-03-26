@@ -1,5 +1,5 @@
-#include <Common/config.h>
 #if USE_CAPNP
+#include <Common/config.h>
 
 #include <Common/escapeForFileName.h>
 #include <IO/ReadBuffer.h>
@@ -9,6 +9,7 @@
 #include <capnp/dynamic.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/range/join.hpp>
+
 #include <common/logger_useful.h>
 
 

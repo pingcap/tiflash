@@ -1,5 +1,16 @@
 #pragma once
 
+#include <Core/NamesAndTypes.h>
+#include <Core/Types.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <IO/CompressionSettings.h>
+#include <Interpreters/ClientInfo.h>
+#include <Interpreters/Settings.h>
+#include <Interpreters/TimezoneInfo.h>
+#include <Storages/PartPathSelector.h>
+#include <common/MultiVersion.h>
+#include <grpc++/grpc++.h>
+
 #include <chrono>
 #include <condition_variable>
 #include <functional>
@@ -8,32 +19,22 @@
 #include <thread>
 #include <unordered_set>
 
-#include <common/MultiVersion.h>
-#include <Core/Types.h>
-#include <Core/NamesAndTypes.h>
-#include <grpc++/grpc++.h>
-#include <Interpreters/Settings.h>
-#include <Interpreters/ClientInfo.h>
-#include <Interpreters/TimezoneInfo.h>
-#include <IO/CompressionSettings.h>
-#include <Encryption/FileProvider.h>
-#include <pingcap/Config.h>
-#include <Storages/PartPathSelector.h>
-#include <Storages/Transaction/ProxyFFIType.h>
-#include <Storages/Transaction/StorageEngineType.h>
-
+namespace pingcap
+{
+struct ClusterConfig;
+}
 
 namespace Poco
 {
-    namespace Net
-    {
-        class IPAddress;
-    }
+namespace Net
+{
+class IPAddress;
 }
+} // namespace Poco
 
 namespace zkutil
 {
-    class ZooKeeper;
+class ZooKeeper;
 }
 
 
@@ -90,11 +91,19 @@ using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;
 class PathPool;
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
+class KeyManager;
+using KeyManagerPtr = std::shared_ptr<KeyManager>;
+class FileProvider;
+using FileProviderPtr = std::shared_ptr<FileProvider>;
+class RateLimiter;
+using RateLimiterPtr = std::shared_ptr<RateLimiter>;
+struct TiFlashRaftConfig;
 
 namespace DM
 {
 class MinMaxIndexCache;
-}
+class DeltaIndexManager;
+} // namespace DM
 
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
@@ -125,21 +134,21 @@ private:
 
     ClientInfo client_info;
 
-    std::shared_ptr<QuotaForIntervals> quota;           /// Current quota. By default - empty quota, that have no limits.
+    std::shared_ptr<QuotaForIntervals> quota; /// Current quota. By default - empty quota, that have no limits.
     String current_database;
-    Settings settings;                                  /// Setting for query execution.
+    Settings settings; /// Setting for query execution.
     using ProgressCallback = std::function<void(const Progress & progress)>;
-    ProgressCallback progress_callback;                 /// Callback for tracking progress of query execution.
-    ProcessListElement * process_list_elem = nullptr;   /// For tracking total resource usage for query.
+    ProgressCallback progress_callback;               /// Callback for tracking progress of query execution.
+    ProcessListElement * process_list_elem = nullptr; /// For tracking total resource usage for query.
 
-    String default_format;  /// Format, used when server formats data by itself and if query does not have FORMAT specification.
-                            /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
-    TableAndCreateASTs external_tables;     /// Temporary tables.
-    Tables table_function_results;          /// Temporary tables obtained by execution of table functions. Keyed by AST tree id.
+    String default_format;              /// Format, used when server formats data by itself and if query does not have FORMAT specification.
+                                        /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
+    TableAndCreateASTs external_tables; /// Temporary tables.
+    Tables table_function_results;      /// Temporary tables obtained by execution of table functions. Keyed by AST tree id.
     Context * query_context = nullptr;
-    Context * session_context = nullptr;    /// Session context or nullptr. Could be equal to this.
-    Context * global_context = nullptr;     /// Global context or nullptr. Could be equal to this.
-    SystemLogsPtr system_logs;              /// Used to log queries and operations on parts
+    Context * session_context = nullptr; /// Session context or nullptr. Could be equal to this.
+    Context * global_context = nullptr;  /// Global context or nullptr. Could be equal to this.
+    SystemLogsPtr system_logs;           /// Used to log queries and operations on parts
 
     UInt64 session_close_cycle = 0;
     bool session_is_used = false;
@@ -147,6 +156,8 @@ private:
     bool use_l0_opt = true;
 
     TimezoneInfo timezone_info;
+
+    DAGContext * dag_context = nullptr;
 
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
@@ -165,13 +176,19 @@ public:
     String getTemporaryPath() const;
     String getFlagsPath() const;
     String getUserFilesPath() const;
-    PathPool & getExtraPaths() const;
+    PathPool & getPathPool() const;
 
     void setPath(const String & path);
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
     void setUserFilesPath(const String & path);
-    void setExtraPaths(const std::vector<String> & extra_paths, PathCapacityMetricsPtr global_capacity);
+
+    void setPathPool(const Strings & main_data_paths,
+        const Strings & latest_data_paths,
+        const Strings & kvstore_paths,
+        bool enable_raft_compatible_mode,
+        PathCapacityMetricsPtr global_capacity_,
+        FileProviderPtr file_provider);
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
@@ -240,7 +257,7 @@ public:
     void setCurrentDatabase(const String & name);
     void setCurrentQueryId(const String & query_id);
 
-    String getDefaultFormat() const;    /// If default_format is not specified, some global default format is returned.
+    String getDefaultFormat() const; /// If default_format is not specified, some global default format is returned.
     void setDefaultFormat(const String & name);
 
     MultiVersion<Macros>::Version getMacros() const;
@@ -290,7 +307,8 @@ public:
     const Databases getDatabases() const;
     Databases getDatabases();
 
-    std::shared_ptr<Context> acquireSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
+    std::shared_ptr<Context> acquireSession(
+        const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
     void releaseSession(const String & session_id, std::chrono::steady_clock::duration timeout);
 
     /// Close sessions, that has been expired. Returns how long to wait for next session to be expired, if no new sessions will be added.
@@ -330,6 +348,9 @@ public:
     /// Can return nullptr if the query was not inserted into the ProcessList.
     ProcessListElement * getProcessListElement() const;
 
+    void setDAGContext(DAGContext * dag_context);
+    DAGContext * getDAGContext() const;
+
     /// List all queries.
     ProcessList & getProcessList();
     const ProcessList & getProcessList() const;
@@ -354,7 +375,7 @@ public:
     /// Execute inner functions, debug only.
     DBGInvoker & getDBGInvoker() const;
 
-    TMTContext & getTMTContext() const ;
+    TMTContext & getTMTContext() const;
 
     /// Create a cache of marks of specified size. This can be done only once.
     void setMarkCache(size_t cache_size_in_bytes);
@@ -365,6 +386,10 @@ public:
     std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
     void dropMinMaxIndexCache() const;
 
+    bool isDeltaIndexLimited() const;
+    void setDeltaIndexManager(size_t cache_size_in_bytes);
+    std::shared_ptr<DM::DeltaIndexManager> getDeltaIndexManager() const;
+
     /** Clear the caches of the uncompressed blocks and marks.
       * This is usually done when renaming tables, changing the type of columns, deleting a table.
       *  - since caches are linked to file names, and become incorrect.
@@ -373,25 +398,24 @@ public:
       */
     void dropCaches() const;
 
-    void setUseL0Opt(bool use_l0_opt) ;
+    void setUseL0Opt(bool use_l0_opt);
     bool useL0Opt() const;
 
     BackgroundProcessingPool & getBackgroundPool();
+    BackgroundProcessingPool & getBlockableBackgroundPool();
 
     void setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker);
     DDLWorker & getDDLWorker() const;
 
-    void createTMTContext(const std::vector<std::string> & pd_addrs,
-                          const std::unordered_set<std::string> & ignore_databases,
-                          const std::string & kvstore_path,
-                          ::TiDB::StorageEngine engine,
-                          bool disable_bg_tasks,
-                          pingcap::ClusterConfig cluster_config = {});
+    void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
 
-    void initializePathCapacityMetric(const std::vector<std::string> & all_path, std::vector<size_t> && all_capacity);
+    void initializePathCapacityMetric(                                                    //
+        size_t global_capacity_quota,                                                     //
+        const Strings & main_data_paths, const std::vector<size_t> & main_capacity_quota, //
+        const Strings & latest_data_paths, const std::vector<size_t> & latest_capacity_quota);
     PathCapacityMetricsPtr getPathCapacity() const;
 
     void initializePartPathSelector(std::vector<std::string> && all_path, std::vector<std::string> && all_fast_path);
@@ -402,6 +426,9 @@ public:
 
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
+
+    void initializeRateLimiter(TiFlashMetricsPtr metrics, UInt64 rate_limit_per_sec);
+    RateLimiterPtr getRateLimiter() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;
@@ -443,9 +470,9 @@ public:
 
     enum class ApplicationType
     {
-        SERVER,         /// The program is run as clickhouse-server daemon (default behavior)
-        CLIENT,         /// clickhouse-client
-        LOCAL           /// clickhouse-local
+        SERVER, /// The program is run as clickhouse-server daemon (default behavior)
+        CLIENT, /// clickhouse-client
+        LOCAL   /// clickhouse-local
     };
 
     ApplicationType getApplicationType() const;
@@ -510,10 +537,7 @@ private:
 class SessionCleaner
 {
 public:
-    SessionCleaner(Context & context_)
-        : context{context_}
-    {
-    }
+    SessionCleaner(Context & context_) : context{context_} {}
     ~SessionCleaner();
 
 private:
@@ -527,4 +551,4 @@ private:
     std::thread thread{&SessionCleaner::run, this};
 };
 
-}
+} // namespace DB

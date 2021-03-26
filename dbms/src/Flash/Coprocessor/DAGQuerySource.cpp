@@ -14,44 +14,40 @@ namespace ErrorCodes
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
-    const tipb::DAGRequest & dag_request_, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_, const bool is_batch_cop_)
-    : writer(std::make_shared<StreamWriter>(writer_)),
-      context(context_),
-      dag_context(dag_context_),
-      regions(regions_),
-      dag_request(dag_request_),
-      metrics(context.getTiFlashMetrics()),
-      is_batch_cop(is_batch_cop_)
+DAGQuerySource::DAGQuerySource(Context & context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
+    const tipb::DAGRequest & dag_request_, const bool is_batch_cop_)
+    : context(context_), regions(regions_), dag_request(dag_request_), is_batch_cop(is_batch_cop_)
 {
     if (dag_request.has_root_executor())
     {
-        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.root_executor());
+        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.root_executor(), context.getTiFlashMetrics());
     }
     else
     {
-        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors());
+        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors(), context.getTiFlashMetrics());
     }
-    root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(dag_context.qb_id_to_join_alias_map);
+    root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(context.getDAGContext()->getQBIdToJoinAliasMap());
     for (Int32 i : dag_request.output_offsets())
         root_query_block->output_offsets.push_back(i);
-    if (root_query_block->aggregation != nullptr)
+    for (UInt32 i : dag_request.output_offsets())
     {
-        for (auto & field_type : root_query_block->output_field_types)
-            result_field_types.push_back(field_type);
-    }
-    else
-    {
-        for (UInt32 i : dag_request.output_offsets())
-        {
-            result_field_types.push_back(root_query_block->output_field_types[i]);
-        }
+        if (unlikely(i >= root_query_block->output_field_types.size()))
+            throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Invalid output offset(schema has "
+                    + std::to_string(root_query_block->output_field_types.size()) + " columns, access index " + std::to_string(i),
+                Errors::Coprocessor::BadRequest);
+        result_field_types.push_back(root_query_block->output_field_types[i]);
     }
     analyzeDAGEncodeType();
 }
 
 void DAGQuerySource::analyzeDAGEncodeType()
 {
+    if (getDAGContext().isMPPTask() && !getDAGContext().isRootMPPTask())
+    {
+        /// always use CHBlock encode type for data exchange between TiFlash nodes
+        encode_type = tipb::EncodeType::TypeCHBlock;
+        return;
+    }
     encode_type = dag_request.encode_type();
     if (isUnsupportedEncodeType(getResultFieldTypes(), encode_type))
         encode_type = tipb::EncodeType::TypeDefault;

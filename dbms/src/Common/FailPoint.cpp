@@ -1,0 +1,140 @@
+#include <Common/FailPoint.h>
+
+#include <boost/core/noncopyable.hpp>
+#include <condition_variable>
+#include <mutex>
+
+namespace DB
+{
+std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
+
+#define APPLY_FOR_FAILPOINTS(M)                                   \
+    M(exception_between_drop_meta_and_data)                       \
+    M(exception_between_alter_data_and_meta)                      \
+    M(exception_drop_table_during_remove_meta)                    \
+    M(exception_between_rename_table_data_and_metadata)           \
+    M(exception_between_create_database_meta_and_directory)       \
+    M(exception_before_rename_table_old_meta_removed)             \
+    M(exception_after_step_1_in_exchange_partition)               \
+    M(exception_before_step_2_rename_in_exchange_partition)       \
+    M(exception_after_step_2_in_exchange_partition)               \
+    M(exception_before_step_3_rename_in_exchange_partition)       \
+    M(exception_after_step_3_in_exchange_partition)               \
+    M(region_exception_after_read_from_storage_some_error)        \
+    M(region_exception_after_read_from_storage_all_error)         \
+    M(exception_before_dmfile_remove_encryption)                  \
+    M(exception_before_dmfile_remove_from_disk)                   \
+    M(force_enable_region_persister_compatible_mode)              \
+    M(force_disable_region_persister_compatible_mode)             \
+    M(force_triggle_background_merge_delta)                       \
+    M(force_triggle_foreground_flush)                             \
+    M(exception_before_mpp_register_non_root_mpp_task)            \
+    M(exception_before_mpp_register_tunnel_for_non_root_mpp_task) \
+    M(exception_during_mpp_register_tunnel_for_non_root_mpp_task) \
+    M(exception_before_mpp_non_root_task_run)                     \
+    M(exception_during_mpp_non_root_task_run)                     \
+    M(exception_before_mpp_register_root_mpp_task)                \
+    M(exception_before_mpp_register_tunnel_for_root_mpp_task)     \
+    M(exception_before_mpp_root_task_run)                         \
+    M(exception_during_mpp_root_task_run)
+
+#define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)  \
+    M(pause_after_learner_read)               \
+    M(hang_in_execution)                      \
+    M(pause_before_dt_background_delta_merge) \
+    M(pause_until_dt_background_delta_merge)
+
+namespace FailPoints
+{
+#define M(NAME) extern const char NAME[] = #NAME "";
+APPLY_FOR_FAILPOINTS(M)
+APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
+#undef M
+} // namespace FailPoints
+
+#ifdef FIU_ENABLE
+class FailPointChannel : private boost::noncopyable
+{
+public:
+    // wake up all waiting threads when destroy
+    ~FailPointChannel() { notify_all(); }
+
+    void wait()
+    {
+        std::unique_lock lock(m);
+        cv.wait(lock);
+    }
+
+    void notify_all()
+    {
+        std::unique_lock lock(m);
+        cv.notify_all();
+    }
+
+private:
+    std::mutex m;
+    std::condition_variable cv;
+};
+
+void FailPointHelper::enableFailPoint(const String & fail_point_name)
+{
+#define M(NAME)                                                                                             \
+    if (fail_point_name == FailPoints::NAME)                                                                \
+    {                                                                                                       \
+        /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
+        fiu_enable(FailPoints::NAME, 1, nullptr, FIU_ONETIME);                                              \
+        return;                                                                                             \
+    }
+
+    APPLY_FOR_FAILPOINTS(M)
+#undef M
+
+#define M(NAME)                                                                                             \
+    if (fail_point_name == FailPoints::NAME)                                                                \
+    {                                                                                                       \
+        /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
+        fiu_enable(FailPoints::NAME, 1, nullptr, FIU_ONETIME);                                              \
+        fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>());       \
+        return;                                                                                             \
+    }
+
+    APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
+#undef M
+    throw Exception("Cannot find fail point " + fail_point_name, ErrorCodes::FAIL_POINT_ERROR);
+}
+
+void FailPointHelper::disableFailPoint(const String & fail_point_name)
+{
+    if (auto iter = fail_point_wait_channels.find(fail_point_name); iter != fail_point_wait_channels.end())
+    {
+        /// can not rely on deconstruction to do the notify_all things, because
+        /// if someone wait on this, the deconstruct will never be called.
+        iter->second->notify_all();
+        fail_point_wait_channels.erase(iter);
+    }
+    fiu_disable(fail_point_name.c_str());
+}
+
+void FailPointHelper::wait(const String & fail_point_name)
+{
+    if (auto iter = fail_point_wait_channels.find(fail_point_name); iter == fail_point_wait_channels.end())
+        throw Exception("Can not find channel for fail point " + fail_point_name);
+    else
+    {
+        auto ptr = iter->second;
+        ptr->wait();
+    }
+}
+#else
+class FailPointChannel
+{
+};
+
+void FailPointHelper::enableFailPoint(const String &) {}
+
+void FailPointHelper::disableFailPoint(const String &) {}
+
+void FailPointHelper::wait(const String &) {}
+#endif
+
+} // namespace DB

@@ -2,8 +2,10 @@
 
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageStorage.h>
+
 
 namespace DB
 {
@@ -11,21 +13,24 @@ namespace DM
 {
 struct WriteBatches;
 struct DMContext;
+class RSOperator;
+using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 class StableValueSpace;
 using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 
-static const String STABLE_FOLDER_NAME = "stable";
-
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
-    StableValueSpace(PageId id_) : id(id_), log(&Logger::get("StableValueSpace")) {}
+    StableValueSpace(PageId id_)
+        : id(id_), log(&Logger::get("StableValueSpace"))
+    {
+    }
 
     // Set DMFiles for this value space.
-    // If this value space is logical splited, specify `range` and `dm_context` so that we can get more precise
+    // If this value space is logical split, specify `range` and `dm_context` so that we can get more precise
     // bytes and rows.
-    void setFiles(const DMFiles & files_, DMContext * dm_context = nullptr, HandleRange range = HandleRange::newAll());
+    void setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context = nullptr);
 
     PageId          getId() { return id; }
     void            saveMeta(WriteBatch & meta_wb);
@@ -43,18 +48,46 @@ public:
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
 
+    struct Snapshot;
+    using SnapshotPtr = std::shared_ptr<Snapshot>;
+
     struct Snapshot : public std::enable_shared_from_this<Snapshot>, private boost::noncopyable
     {
-        Snapshot() : log(&Logger::get("StableValueSpace::Snapshot")) {}
         StableValueSpacePtr stable;
-        ColumnCachePtrs     column_caches;
 
         PageId id;
         UInt64 valid_rows;
+        UInt64 valid_bytes;
+
+        bool   is_common_handle;
+        size_t rowkey_column_size;
+
+        /// TODO: The members below are not actually snapshots, they should not be here.
+
+        ColumnCachePtrs column_caches;
+
+        Snapshot() : log(&Logger::get("StableValueSpace::Snapshot")) {}
+
+        SnapshotPtr clone()
+        {
+            auto c                = std::make_shared<Snapshot>();
+            c->stable             = stable;
+            c->id                 = id;
+            c->valid_rows         = valid_rows;
+            c->valid_bytes        = valid_bytes;
+
+            for (size_t i = 0; i < column_caches.size(); i++)
+            {
+                auto column_cache = std::make_shared<ColumnCache>();
+                c->column_caches.emplace_back(column_cache);
+            }
+            return c;
+        }
 
         PageId getId() { return id; }
 
         size_t getRows() { return valid_rows; }
+        size_t getBytes() { return valid_bytes; }
 
         const DMFiles & getDMFiles() { return stable->getDMFiles(); }
 
@@ -70,21 +103,23 @@ public:
 
         SkippableBlockInputStreamPtr getInputStream(const DMContext &     context, //
                                                     const ColumnDefines & read_columns,
-                                                    const HandleRange &   handle_range,
+                                                    const RowKeyRange &   rowkey_range,
                                                     const RSOperatorPtr & filter,
                                                     UInt64                max_data_version,
+                                                    size_t                expected_block_size,
                                                     bool                  enable_clean_read);
+
+        RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range);
 
     private:
         Logger * log;
     };
-    using SnapshotPtr = std::shared_ptr<Snapshot>;
 
     SnapshotPtr createSnapshot();
 
-private:
-    static const Int64 CURRENT_VERSION;
+    void drop(const FileProviderPtr & file_provider);
 
+private:
     const PageId id;
 
     // Valid rows is not always the sum of rows in file,

@@ -244,24 +244,21 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
 // PageFile::Writer
 // =========================================================
 
-PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_)
+PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create_new_file)
     : page_file(page_file_),
       sync_on_write(sync_on_write_),
-      data_file_path(page_file.dataPath()),
-      meta_file_path(page_file.metaPath()),
-      data_file_fd(PageUtil::openFile<false>(data_file_path)),
-      meta_file_fd(PageUtil::openFile<false>(meta_file_path))
-{
-}
+      data_file(page_file.file_provider->newWritableFile(page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_file)),
+      meta_file(page_file.file_provider->newWritableFile(page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_file))
+{}
 
 PageFile::Writer::~Writer()
 {
     SCOPE_EXIT({
-        ::close(data_file_fd);
-        ::close(meta_file_fd);
+        data_file->close();
+        meta_file->close();
     });
-    PageUtil::syncFile(data_file_fd, data_file_path);
-    PageUtil::syncFile(meta_file_fd, meta_file_path);
+    PageUtil::syncFile(data_file);
+    PageUtil::syncFile(meta_file);
 }
 
 void PageFile::Writer::write(const WriteBatch & wb, PageEntriesEdit & edit)
@@ -275,14 +272,14 @@ void PageFile::Writer::write(const WriteBatch & wb, PageEntriesEdit & edit)
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
-    auto write_buf = [&](int fd, UInt64 offset, const std::string & path, ByteBuffer buf) {
-        PageUtil::writeFile(fd, offset, buf.begin(), buf.size(), path);
+    auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf) {
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size());
         if (sync_on_write)
-            PageUtil::syncFile(fd, path);
+            PageUtil::syncFile(file);
     };
 
-    write_buf(data_file_fd, page_file.data_file_pos, data_file_path, data_buf);
-    write_buf(meta_file_fd, page_file.meta_file_pos, meta_file_path, meta_buf);
+    write_buf(data_file, page_file.data_file_pos, data_buf);
+    write_buf(meta_file, page_file.meta_file_pos, meta_buf);
 
     page_file.data_file_pos += data_buf.size();
     page_file.meta_file_pos += meta_buf.size();
@@ -293,13 +290,14 @@ void PageFile::Writer::write(const WriteBatch & wb, PageEntriesEdit & edit)
 // =========================================================
 
 PageFile::Reader::Reader(PageFile & page_file)
-    : data_file_path(page_file.dataPath()), data_file_fd(PageUtil::openFile<true>(data_file_path))
+    : data_file_path(page_file.dataPath()),
+      data_file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())}
 {
 }
 
 PageFile::Reader::~Reader()
 {
-    ::close(data_file_fd);
+    data_file->close();
 }
 
 PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
@@ -329,7 +327,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
     PageMap page_map;
     for (const auto & [page_id, page_cache] : to_read)
     {
-        PageUtil::readFile(data_file_fd, page_cache.offset, pos, page_cache.size, data_file_path);
+        PageUtil::readFile(data_file, page_cache.offset, pos, page_cache.size);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -378,7 +376,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     {
         auto && [page_id, page_cache] = *it;
 
-        PageUtil::readFile(data_file_fd, page_cache.offset, data_buf, page_cache.size, data_file_path);
+        PageUtil::readFile(data_file, page_cache.offset, data_buf, page_cache.size);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -415,19 +413,22 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
 
 const PageFile::Version PageFile::CURRENT_VERSION = 1;
 
-PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, PageFile::Type type_, bool is_create, Logger * log_)
-    : file_id(file_id_), level(level_), type(type_), parent_path(parent_path), data_file_pos(0), meta_file_pos(0), log(log_)
+PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, const FileProviderPtr & file_provider_, PageFile::Type type_, bool is_create, Logger * log_)
+    : file_id(file_id_), level(level_), type(type_), parent_path(parent_path), file_provider(file_provider_), data_file_pos(0), meta_file_pos(0), log(log_)
 {
     if (is_create)
     {
         Poco::File file(folderPath());
         if (file.exists())
+        {
+            deleteEncryptionInfo();
             file.remove(true);
+        }
         file.createDirectories();
     }
 }
 
-std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path, const String & page_file_name, Logger * log)
+std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider, const String & page_file_name, Logger * log)
 {
 
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
@@ -446,11 +447,12 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
 
     PageFileId file_id = std::stoull(ss[1]);
     UInt32     level   = std::stoi(ss[2]);
-    PageFile   pf(file_id, level, parent_path, Type::Formal, /* is_create */ false, log);
+    PageFile   pf(file_id, level, parent_path, file_provider, Type::Formal, /* is_create */ false, log);
     if (ss[0] == folder_prefix_temp)
     {
         LOG_INFO(log, "Temporary page file, ignored: " + page_file_name);
-        return {{}, Type::Temp};
+        pf.type = Type::Temp;
+        return {pf, Type::Temp};
     }
     else if (ss[0] == folder_prefix_legacy)
     {
@@ -497,14 +499,14 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
     return {{}, Type::Invalid};
 }
 
-PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::string & parent_path, PageFile::Type type, Logger * log)
+PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider, PageFile::Type type, Logger * log)
 {
-    return PageFile(file_id, level, parent_path, type, true, log);
+    return PageFile(file_id, level, parent_path, file_provider, type, true, log);
 }
 
-PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const std::string & parent_path, PageFile::Type type, Logger * log)
+PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider, PageFile::Type type, Logger * log)
 {
-    return PageFile(file_id, level, parent_path, type, false, log);
+    return PageFile(file_id, level, parent_path, file_provider, type, false, log);
 }
 
 void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
@@ -517,17 +519,11 @@ void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
                         ErrorCodes::LOGICAL_ERROR);
 
     const size_t file_size = file.getSize();
-    const int    file_fd   = PageUtil::openFile<true, false>(path);
-    // File not exists.
-    if (unlikely(!file_fd))
-        return;
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForRead};
-    SCOPE_EXIT({ ::close(file_fd); });
+    auto meta_file = file_provider->newRandomAccessFile(path, EncryptionPath(path, ""));
 
     char * meta_data = (char *)alloc(file_size);
     SCOPE_EXIT({ free(meta_data, file_size); });
-
-    PageUtil::readFile(file_fd, 0, meta_data, file_size, path);
+    meta_file->pread(meta_data, file_size, 0);
 
     // analyze meta file and update page_entries
     std::tie(this->meta_file_pos, this->data_file_pos)
@@ -538,9 +534,15 @@ void PageFile::setFormal()
 {
     if (type != Type::Temp)
         return;
+    auto old_meta_encryption_path = metaEncryptionPath();
+    auto old_data_encryption_path = dataEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Formal;
+    file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
+    file_provider->linkEncryptionInfo(old_data_encryption_path, dataEncryptionPath());
     file.renameTo(folderPath());
+    file_provider->deleteEncryptionInfo(old_meta_encryption_path);
+    file_provider->deleteEncryptionInfo(old_data_encryption_path);
 }
 
 void PageFile::setLegacy()
@@ -549,9 +551,14 @@ void PageFile::setLegacy()
         return;
     // Rename to legacy dir. Note that we can NOT remove the data part before
     // successfully rename to legacy status.
+    auto old_meta_encryption_path = metaEncryptionPath();
+    auto old_data_encryption_path = dataEncryptionPath();
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
+    file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
     formal_dir.renameTo(folderPath());
+    file_provider->deleteEncryptionInfo(old_meta_encryption_path);
+    file_provider->deleteEncryptionInfo(old_data_encryption_path);
     // remove the data part
     if (auto data_file = Poco::File(dataPath()); data_file.exists())
     {
@@ -563,16 +570,19 @@ void PageFile::setCheckpoint()
 {
     if (type != Type::Temp)
         return;
+    auto old_meta_encryption_path = metaEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Checkpoint;
+    file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
     file.renameTo(folderPath());
+    file_provider->deleteEncryptionInfo(old_meta_encryption_path);
 }
 
 void PageFile::removeDataIfExists() const
 {
     if (auto data_file = Poco::File(dataPath()); data_file.exists())
     {
-        data_file.remove();
+        file_provider->deleteRegularFile(dataPath(), dataEncryptionPath());
     }
 }
 
@@ -583,18 +593,8 @@ void PageFile::destroy() const
     if (file.exists())
     {
         // remove meta first, then remove data
-        Poco::File meta_file(metaPath());
-        if (meta_file.exists())
-        {
-            meta_file.remove();
-        }
-        Poco::File data_file(dataPath());
-        if (data_file.exists())
-        {
-            data_file.remove();
-        }
-        // drop dir
-        file.remove(true);
+        file_provider->deleteRegularFile(metaPath(), metaEncryptionPath());
+        file_provider->deleteRegularFile(dataPath(), dataEncryptionPath());
     }
 }
 

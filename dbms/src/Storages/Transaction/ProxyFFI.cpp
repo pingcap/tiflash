@@ -1,10 +1,16 @@
+#include <Common/CurrentMetrics.h>
 #include <Interpreters/Context.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <sys/statvfs.h>
+
+namespace CurrentMetrics
+{
+extern const Metric RaftNumSnapshotsPendingApply;
+}
 
 namespace DB
 {
@@ -39,11 +45,17 @@ const std::string & CFToName(const ColumnFamilyType type)
     }
 }
 
-TiFlashRawString GenCppRawString(BaseBuffView view) { return view.len ? new std::string(view.data, view.len) : nullptr; }
+RawCppPtr GenCppRawString(BaseBuffView view)
+{
+    return GenRawCppPtr(view.len ? RawCppString::New(view.data, view.len) : nullptr, RawCppPtrTypeImpl::String);
+}
 
-static_assert(alignof(TiFlashServerHelper) == alignof(void *));
+static_assert(alignof(EngineStoreServerHelper) == alignof(RawVoidPtr));
 
-TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, WriteCmdsView cmds, RaftCmdHeader header)
+static_assert(sizeof(RaftStoreProxyPtr) == sizeof(ConstRawVoidPtr));
+static_assert(alignof(RaftStoreProxyPtr) == alignof(ConstRawVoidPtr));
+
+EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server, WriteCmdsView cmds, RaftCmdHeader header)
 {
     try
     {
@@ -56,7 +68,8 @@ TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, WriteCmdsView c
     }
 }
 
-TiFlashApplyRes HandleAdminRaftCmd(const TiFlashServer * server, BaseBuffView req_buff, BaseBuffView resp_buff, RaftCmdHeader header)
+EngineStoreApplyRes HandleAdminRaftCmd(
+    const EngineStoreServerWrap * server, BaseBuffView req_buff, BaseBuffView resp_buff, RaftCmdHeader header)
 {
     try
     {
@@ -76,26 +89,15 @@ TiFlashApplyRes HandleAdminRaftCmd(const TiFlashServer * server, BaseBuffView re
     }
 }
 
-void HandleApplySnapshot(
-    const TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SnapshotViewArray snaps, uint64_t index, uint64_t term)
+static_assert(sizeof(RaftStoreProxyFFIHelper) == sizeof(TiFlashRaftProxyHelper));
+static_assert(alignof(RaftStoreProxyFFIHelper) == alignof(TiFlashRaftProxyHelper));
+
+void AtomicUpdateProxy(DB::EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy)
 {
-    try
-    {
-        metapb::Region region;
-        region.ParseFromArray(region_buff.data, (int)region_buff.len);
-        auto & kvstore = server->tmt->getKVStore();
-        kvstore->handleApplySnapshot(std::move(region), peer_id, snaps, index, term, *server->tmt);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-        exit(-1);
-    }
+    server->proxy_helper = static_cast<TiFlashRaftProxyHelper *>(proxy);
 }
 
-void AtomicUpdateProxy(DB::TiFlashServer * server, DB::TiFlashRaftProxyHelper * proxy) { server->proxy_helper = proxy; }
-
-void HandleDestroy(TiFlashServer * server, RegionId region_id)
+void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id)
 {
     try
     {
@@ -109,7 +111,7 @@ void HandleDestroy(TiFlashServer * server, RegionId region_id)
     }
 }
 
-TiFlashApplyRes HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header)
+EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec snaps, RaftCmdHeader header)
 {
     try
     {
@@ -123,15 +125,19 @@ TiFlashApplyRes HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps,
     }
 }
 
-uint8_t HandleCheckTerminated(TiFlashServer * server) { return server->tmt->getTerminated().load(std::memory_order_relaxed) ? 1 : 0; }
-
-FsStats HandleComputeFsStats(TiFlashServer * server)
+uint8_t HandleCheckTerminated(EngineStoreServerWrap * server)
 {
-    FsStats res; // res.ok = false by default
+    return server->tmt->getTerminated().load(std::memory_order_relaxed) ? 1 : 0;
+}
+
+StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server)
+{
+    StoreStats res; // res.fs_stats.ok = false by default
     try
     {
         auto global_capacity = server->tmt->getContext().getPathCapacity();
-        res = global_capacity->getFsStats();
+        res.fs_stats = global_capacity->getFsStats();
+        // TODO: set engine read/write stats
     }
     catch (...)
     {
@@ -140,39 +146,96 @@ FsStats HandleComputeFsStats(TiFlashServer * server)
     return res;
 }
 
-TiFlashStatus HandleGetTiFlashStatus(TiFlashServer * server) { return server->status.load(); }
+EngineStoreServerStatus HandleGetTiFlashStatus(EngineStoreServerWrap * server) { return server->status.load(); }
 
-bool TiFlashRaftProxyHelper::checkServiceStopped() const { return fn_handle_check_service_stopped(proxy_ptr); }
+RaftProxyStatus TiFlashRaftProxyHelper::getProxyStatus() const { return fn_handle_get_proxy_status(proxy_ptr); }
+
+BaseBuffView strIntoView(const std::string & view) { return BaseBuffView(view.data(), view.size()); }
+
 bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const { return fn_is_encryption_enabled(proxy_ptr); }
 EncryptionMethod TiFlashRaftProxyHelper::getEncryptionMethod() const { return fn_encryption_method(proxy_ptr); }
-FileEncryptionInfo TiFlashRaftProxyHelper::getFile(std::string_view view) const { return fn_handle_get_file(proxy_ptr, view); }
-FileEncryptionInfo TiFlashRaftProxyHelper::newFile(std::string_view view) const { return fn_handle_new_file(proxy_ptr, view); }
-FileEncryptionInfo TiFlashRaftProxyHelper::deleteFile(std::string_view view) const { return fn_handle_delete_file(proxy_ptr, view); }
-FileEncryptionInfo TiFlashRaftProxyHelper::linkFile(std::string_view src, std::string_view dst) const
+FileEncryptionInfo TiFlashRaftProxyHelper::getFile(const std::string & view) const
 {
-    return fn_handle_link_file(proxy_ptr, src, dst);
+    return fn_handle_get_file(proxy_ptr, strIntoView(view));
 }
-FileEncryptionInfo TiFlashRaftProxyHelper::renameFile(std::string_view src, std::string_view dst) const
+FileEncryptionInfo TiFlashRaftProxyHelper::newFile(const std::string & view) const
 {
-    return fn_handle_rename_file(proxy_ptr, src, dst);
+    return fn_handle_new_file(proxy_ptr, strIntoView(view));
+}
+FileEncryptionInfo TiFlashRaftProxyHelper::deleteFile(const std::string & view) const
+{
+    return fn_handle_delete_file(proxy_ptr, strIntoView(view));
+}
+FileEncryptionInfo TiFlashRaftProxyHelper::linkFile(const std::string & src, const std::string & dst) const
+{
+    return fn_handle_link_file(proxy_ptr, strIntoView(src), strIntoView(dst));
 }
 
-struct PreHandleSnapshotRes
+struct CppStrVec
 {
-    RegionPtr region;
+    std::vector<std::string> data;
+    std::vector<BaseBuffView> view;
+    CppStrVec(std::vector<std::string> && data_) : data(std::move(data_)) { updateView(); }
+    CppStrVec(const CppStrVec &) = delete;
+    void updateView();
+    CppStrVecView intoOuterView() const { return {view.data(), view.size()}; }
 };
 
-void * PreHandleSnapshot(
-    TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SnapshotViewArray snaps, uint64_t index, uint64_t term)
+void CppStrVec::updateView()
+{
+    view.clear();
+    view.reserve(data.size());
+    for (const auto & e : data)
+    {
+        view.emplace_back(strIntoView(e));
+    }
+}
+
+kvrpcpb::ReadIndexResponse TiFlashRaftProxyHelper::readIndex(const kvrpcpb::ReadIndexRequest & req) const
+{
+    auto res = batchReadIndex({req});
+    return std::move(res->at(0).first);
+}
+
+BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req) const
+{
+    std::vector<std::string> req_strs;
+    req_strs.reserve(req.size());
+    for (auto & r : req)
+    {
+        req_strs.emplace_back(r.SerializeAsString());
+    }
+    CppStrVec data(std::move(req_strs));
+    assert(req_strs.empty());
+    auto outer_view = data.intoOuterView();
+    BatchReadIndexRes res(reinterpret_cast<BatchReadIndexRes::pointer>(fn_handle_batch_read_index(proxy_ptr, outer_view)));
+    return res;
+}
+
+struct PreHandledSnapshot
+{
+    ~PreHandledSnapshot() { CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply); }
+    PreHandledSnapshot(const RegionPtr & region_, RegionPtrWrap::CachePtr && cache_) : region(region_), cache(std::move(cache_))
+    {
+        CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
+    }
+    RegionPtr region;
+    RegionPtrWrap::CachePtr cache;
+};
+
+RawCppPtr PreHandleSnapshot(
+    EngineStoreServerWrap * server, BaseBuffView region_buff, uint64_t peer_id, SSTViewVec snaps, uint64_t index, uint64_t term)
 {
     try
     {
         metapb::Region region;
         region.ParseFromArray(region_buff.data, (int)region_buff.len);
-        auto & kvstore = server->tmt->getKVStore();
-        auto new_region = kvstore->preHandleSnapshot(std::move(region), peer_id, snaps, index, term, *server->tmt);
-        auto res = new PreHandleSnapshotRes{new_region};
-        return res;
+        auto & tmt = *server->tmt;
+        auto & kvstore = tmt.getKVStore();
+        auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term);
+        auto new_region_block_cache = kvstore->preHandleSnapshot(new_region, snaps, tmt);
+        auto res = new PreHandledSnapshot{new_region, std::move(new_region_block_cache)};
+        return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshot);
     }
     catch (...)
     {
@@ -181,13 +244,12 @@ void * PreHandleSnapshot(
     }
 }
 
-void ApplyPreHandledSnapshot(TiFlashServer * server, void * res)
+void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot * snap)
 {
-    PreHandleSnapshotRes * snap = reinterpret_cast<PreHandleSnapshotRes *>(res);
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        kvstore->handleApplySnapshot(snap->region, *server->tmt);
+        kvstore->handlePreApplySnapshot(RegionPtrWrap{snap->region, std::move(snap->cache)}, *server->tmt);
     }
     catch (...)
     {
@@ -196,13 +258,40 @@ void ApplyPreHandledSnapshot(TiFlashServer * server, void * res)
     }
 }
 
-void GcPreHandledSnapshot(TiFlashServer *, void * res)
+void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, RawCppPtrType type)
 {
-    PreHandleSnapshotRes * snap = reinterpret_cast<PreHandleSnapshotRes *>(res);
-    delete snap;
+    switch (static_cast<RawCppPtrTypeImpl>(type))
+    {
+        case RawCppPtrTypeImpl::PreHandledSnapshot:
+        {
+            PreHandledSnapshot * snap = reinterpret_cast<PreHandledSnapshot *>(res);
+            ApplyPreHandledSnapshot(server, snap);
+            break;
+        }
+        default:
+            LOG_ERROR(&Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
+            exit(-1);
+    }
 }
 
-void GcCppString(TiFlashServer *, TiFlashRawString s) { delete s; }
+void GcRawCppPtr(EngineStoreServerWrap *, RawVoidPtr ptr, RawCppPtrType type)
+{
+    if (ptr)
+    {
+        switch (static_cast<RawCppPtrTypeImpl>(type))
+        {
+            case RawCppPtrTypeImpl::String:
+                delete reinterpret_cast<RawCppStringPtr>(ptr);
+                break;
+            case RawCppPtrTypeImpl::PreHandledSnapshot:
+                delete reinterpret_cast<PreHandledSnapshot *>(ptr);
+                break;
+            default:
+                LOG_ERROR(&Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
+                exit(-1);
+        }
+    }
+}
 
 const char * IntoEncryptionMethodName(EncryptionMethod method)
 {
@@ -215,5 +304,21 @@ const char * IntoEncryptionMethodName(EncryptionMethod method)
     };
     return EncryptionMethodName[static_cast<uint8_t>(method)];
 }
+
+RawVoidPtr GenBatchReadIndexRes(uint64_t cap)
+{
+    auto res = new BatchReadIndexRes::element_type();
+    res->reserve(cap);
+    return res;
+}
+
+void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t region_id)
+{
+    kvrpcpb::ReadIndexResponse res;
+    res.ParseFromArray(view.data, view.len);
+    reinterpret_cast<BatchReadIndexRes::pointer>(resp)->emplace_back(std::move(res), region_id);
+}
+
+RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_) { return RawCppPtr{ptr_, static_cast<RawCppPtrType>(type_)}; }
 
 } // namespace DB

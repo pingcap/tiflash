@@ -26,7 +26,7 @@ public:
     };
 
 public:
-    DataCompactor(const PageStorage & storage);
+    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config);
 
     /**
      * Take a snapshot from PageStorage and try to migrate data if some PageFiles used rate is low.
@@ -80,11 +80,11 @@ private:
 
 private:
     const String & storage_name;
-    const String & storage_path;
 
-    FileProviderPtr file_provider;
+    PSDiskDelegatorPtr delegator;
+    FileProviderPtr    file_provider;
 
-    const PageStorage::Config & config;
+    const PageStorage::Config config;
 
     Poco::Logger * log;
     Poco::Logger * page_file_log;

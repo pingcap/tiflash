@@ -2,6 +2,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
+#include <Storages/Transaction/TiDB.h>
 
 #include "dm_basic_include.h"
 
@@ -9,6 +10,8 @@ namespace DB
 {
 namespace DM
 {
+extern void setColumnDefineDefaultValue(const TiDB::TableInfo & table_info, ColumnDefine & define);
+
 namespace tests
 {
 
@@ -137,7 +140,7 @@ TEST(ConvertColumnType_test, CastNumeric)
 
 TEST(ConvertColumnType_test, CastNullableToNotNull)
 {
-    const Strings to_types = {"Int16", "Int32", "Int64"};
+    const Strings to_types = {"Int8", "Int16", "Int32", "Int64"};
 
     DataTypePtr      disk_data_type = typeFromString("Nullable(Int8)");
     MutableColumnPtr disk_col       = disk_data_type->createColumn();
@@ -148,10 +151,11 @@ TEST(ConvertColumnType_test, CastNullableToNotNull)
     for (const String & to_type : to_types)
     {
         ColumnDefine read_define(0, "c", typeFromString(to_type));
-        auto         memory_column = convertColumnByColumnDefineIfNeed(disk_data_type, disk_col->getPtr(), read_define);
+        read_define.default_value = Field(Int64(99));
+        auto memory_column        = convertColumnByColumnDefineIfNeed(disk_data_type, disk_col->getPtr(), read_define);
 
         Int64 val1 = memory_column->getInt(0);
-        ASSERT_EQ(val1, 0); // "NULL" value is cast to 0
+        ASSERT_EQ(val1, 99); // "NULL" value is cast to default value
         Int64 val2 = memory_column->getInt(1);
         ASSERT_EQ(val2, 127L);
         Int64 val3 = memory_column->getUInt(2);
@@ -161,7 +165,7 @@ TEST(ConvertColumnType_test, CastNullableToNotNull)
 
 TEST(ConvertColumnType_test, CastNullableToNotNullWithNonZeroDefaultValue)
 {
-    const Strings to_types = {"Int16", "Int32", "Int64"};
+    const Strings to_types = {"Int8", "Int16", "Int32", "Int64"};
 
     DataTypePtr      disk_data_type = typeFromString("Nullable(Int8)");
     MutableColumnPtr disk_col       = disk_data_type->createColumn();
@@ -240,6 +244,67 @@ TEST(ConvertColumnType_test, CastNotNullToNullable)
         ASSERT_EQ(f.get<Int64>(), -1L);
     }
 }
+
+TEST(ConvertColumnType_test, GetDefaultValue)
+try
+{
+    const String json_table_info
+        = R"json({"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"a","O":"a"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":4099,"Flen":768,"Tp":15}},{"comment":"","default":"3.14","default_bit":null,"id":2,"name":{"L":"f","O":"f"},"offset":1,"origin_default":"3.14","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":0,"Flen":12,"Tp":4}},{"comment":"","default":"3.14","default_bit":null,"id":3,"name":{"L":"f2","O":"f2"},"offset":2,"origin_default":"3.14","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":1,"Flen":12,"Tp":4}}],"comment":"","id":627,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":252,"state":5,"tiflash_replica":{"Count":0},"update_timestamp":422031263342264329})json";
+
+    TiDB::TableInfo table_info(json_table_info);
+    const auto &    columns = table_info.columns;
+    EXPECT_EQ(columns.size(), 3UL);
+
+    DM::ColumnDefine cd;
+
+    size_t num_rows = 100;
+    {
+        cd.id   = 2;
+        cd.type = typeFromString("Nullable(Float32)");
+        DM::setColumnDefineDefaultValue(table_info, cd);
+        EXPECT_EQ(cd.default_value.getType(), Field::Types::Float64);
+        EXPECT_FLOAT_EQ(cd.default_value.safeGet<Float64>(), 3.14);
+        auto col = createColumnWithDefaultValue(cd, num_rows);
+        ASSERT_EQ(col->size(), num_rows);
+        for (size_t i = 0; i < num_rows; ++i)
+        {
+            Field f = (*col)[i];
+            EXPECT_FLOAT_EQ(f.get<Float64>(), 3.14);
+        }
+        // Try to copy using inserRangeFrom
+        auto col2 = cd.type->createColumn();
+        col2->insertRangeFrom(*col, 0, num_rows);
+        for (size_t i = 0; i < num_rows; ++i)
+        {
+            Field f = (*col2)[i];
+            EXPECT_FLOAT_EQ(f.get<Float64>(), 3.14);
+        }
+    }
+
+    {
+        cd.id   = 3;
+        cd.type = typeFromString("Float32");
+        DM::setColumnDefineDefaultValue(table_info, cd);
+        EXPECT_EQ(cd.default_value.getType(), Field::Types::Float64);
+        EXPECT_FLOAT_EQ(cd.default_value.safeGet<double>(), 3.14);
+        auto col = createColumnWithDefaultValue(cd, num_rows);
+        ASSERT_EQ(col->size(), num_rows);
+        for (size_t i = 0; i < num_rows; ++i)
+        {
+            Field f = (*col)[i];
+            EXPECT_FLOAT_EQ(f.get<Float64>(), 3.14);
+        }
+        // Try to copy using inserRangeFrom
+        auto col2 = cd.type->createColumn();
+        col2->insertRangeFrom(*col, 0, num_rows);
+        for (size_t i = 0; i < num_rows; ++i)
+        {
+            Field f = (*col2)[i];
+            EXPECT_FLOAT_EQ(f.get<Float64>(), 3.14);
+        }
+    }
+}
+CATCH
 
 } // namespace tests
 } // namespace DM

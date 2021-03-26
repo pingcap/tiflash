@@ -15,6 +15,7 @@
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
 #include <Poco/JSON/Parser.h>
+#include <tipb/expression.pb.h>
 #pragma GCC diagnostic pop
 
 namespace DB::ErrorCodes
@@ -274,6 +275,42 @@ struct TiFlashReplicaInfo
     void deserialize(Poco::JSON::Object::Ptr & json);
 };
 
+struct IndexColumnInfo
+{
+    IndexColumnInfo() = default;
+
+    explicit IndexColumnInfo(Poco::JSON::Object::Ptr json);
+
+    Poco::JSON::Object::Ptr getJSONObject() const;
+
+    void deserialize(Poco::JSON::Object::Ptr json);
+
+    String name;
+    Int32 offset;
+    Int32 length;
+};
+struct IndexInfo
+{
+    IndexInfo() = default;
+
+    explicit IndexInfo(Poco::JSON::Object::Ptr json);
+
+    Poco::JSON::Object::Ptr getJSONObject() const;
+
+    void deserialize(Poco::JSON::Object::Ptr json);
+
+    Int64 id;
+    String idx_name;
+    String tbl_name;
+    std::vector<IndexColumnInfo> idx_cols;
+    SchemaState state;
+    Int32 index_type;
+    bool is_unique;
+    bool is_primary;
+    bool is_invisible;
+    bool is_global;
+};
+
 struct TableInfo
 {
     TableInfo() = default;
@@ -294,8 +331,15 @@ struct TableInfo
     String name;
     // Columns are listed in the order in which they appear in the schema.
     std::vector<ColumnInfo> columns;
+    /// index_infos stores the index info from TiDB. But we do not store all
+    /// the index infos because most of the index info is useless in TiFlash.
+    /// If is_common_handle = true, the primary index info is stored
+    /// otherwise, all of the index info are ignored
+    std::vector<IndexInfo> index_infos;
     SchemaState state = StateNone;
     bool pk_is_handle = false;
+    /// when is_common_handle = true, it means this table is a clustered index table
+    bool is_common_handle = false;
     String comment;
     Timestamp update_timestamp = 0;
     bool is_partition_table = false;
@@ -322,10 +366,18 @@ struct TableInfo
     TableInfoPtr producePartitionTableInfo(TableID table_or_partition_id, const DB::SchemaNameMapper & name_mapper) const;
 
     bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == DB::InvalidTableID && partition.enable; }
+
+    /// should not be called if is_common_handle = false
+    const IndexInfo & getPrimaryIndexInfo() const { return index_infos[0]; }
+
+    IndexInfo & getPrimaryIndexInfo() { return index_infos[0]; }
 };
 
 using DBInfoPtr = std::shared_ptr<DBInfo>;
 
 String genJsonNull();
+
+tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
+ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 
 } // namespace TiDB

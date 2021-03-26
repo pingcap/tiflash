@@ -1,314 +1,294 @@
 #pragma once
 
-#include <Common/escapeForFileName.h>
 #include <Core/Types.h>
-#include <Poco/File.h>
-#include <Poco/Path.h>
-#include <Storages/PathCapacityMetrics.h>
-#include <common/logger_useful.h>
+#include <Storages/Page/PageDefines.h>
 
-#include <random>
 #include <unordered_map>
+
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
+
+class PathCapacityMetrics;
+using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
+class FileProvider;
+using FileProviderPtr = std::shared_ptr<FileProvider>;
+
+/// A class to manage global paths.
+class PathPool;
+/// A class to manage paths for the specified storage.
+class StoragePathPool;
+
+/// ===== Delegators to StoragePathPool ===== ///
+/// Delegators to StoragePathPool. Use for managing the path of DTFiles.
+class StableDiskDelegator;
+/// Delegators to StoragePathPool. Use by PageStorage for managing the path of PageFiles.
+class PSDiskDelegator;
+using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
+class PSDiskDelegatorMulti;
+class PSDiskDelegatorSingle;
+class PSDiskDelegatorRaft;
+
+
+/// A class to manage global paths.
 class PathPool
 {
 public:
-    using DMFilePathMap = std::unordered_map<UInt64, UInt32>;
-    struct PathInfo
-    {
-        String path;
-        size_t total_size;
-        std::unordered_map<UInt64, size_t> file_size_map;
-    };
-    using PathInfos = std::vector<PathInfo>;
-
     PathPool() = default;
 
-    PathPool(const std::vector<String> & paths_, PathCapacityMetricsPtr global_capacity_)
-        : global_capacity{std::move(global_capacity_)}, log{&Logger::get("PathPool")}
-    {
-        for (auto & path : paths_)
-        {
-            PathInfo info;
-            info.path = path;
-            info.total_size = 0;
-            path_infos.emplace_back(info);
-        }
-    }
+    // Constructor to be used during initialization
+    PathPool(                                                                    //
+        const Strings & main_data_paths, const Strings & latest_data_paths,      //
+        const Strings & kvstore_paths,                                           //
+        PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_, //
+        bool enable_raft_compatible_mode_ = false);
 
-private:
-    PathPool(const std::vector<String> & paths_, const String & database_, const String & table_, bool path_need_database_name_,
-        PathCapacityMetricsPtr global_capacity_)
-        : database(database_),
-          table(table_),
-          path_need_database_name{path_need_database_name_},
-          global_capacity{std::move(global_capacity_)},
-          log{&Logger::get("PathPool")}
-    {
-        for (auto & path : paths_)
-        {
-            PathInfo info;
-            info.path = getStorePath(path, database, table);
-            info.total_size = 0;
-            path_infos.emplace_back(info);
-        }
-    }
+    // Constructor to create PathPool for one Storage
+    StoragePathPool withTable(const String & database_, const String & table_, bool path_need_database_name_) const;
+
+    bool isRaftCompatibleModeEnabled() const { return enable_raft_compatible_mode; }
+
+    // Generate a delegator for managing the paths of `RegionPersister`.
+    // Those paths are generated from `kvstore_paths`.
+    // User should keep the pointer to track the PageFileID -> path index mapping.
+    PSDiskDelegatorPtr getPSDiskDelegatorRaft();
 
 public:
-    PathPool(const PathPool & path_pool) : global_capacity{path_pool.global_capacity}
+    /// Methods for the root PathPool ///
+    Strings listPaths() const;
+
+public:
+    struct PageFileIdLvlHasher
     {
-        path_infos.clear();
-        path_map = path_pool.path_map;
-        for (auto & path_info : path_pool.path_infos)
+        std::size_t operator()(const PageFileIdAndLevel & id_lvl) const
         {
-            path_infos.emplace_back(path_info);
+            return std::hash<PageFileId>()(id_lvl.first) ^ std::hash<PageFileLevel>()(id_lvl.second);
         }
-        database = path_pool.database;
-        table = path_pool.table;
-        path_need_database_name = path_pool.path_need_database_name;
-        log = path_pool.log;
-    }
+    };
+    using PageFilePathMap = std::unordered_map<PageFileIdAndLevel, UInt32, PageFileIdLvlHasher>;
 
-    PathPool & operator=(const PathPool & path_pool)
-    {
-        path_infos.clear();
-        path_map = path_pool.path_map;
-        for (auto & path_info : path_pool.path_infos)
-        {
-            path_infos.emplace_back(path_info);
-        }
-        database = path_pool.database;
-        table = path_pool.table;
-        path_need_database_name = path_pool.path_need_database_name;
-        global_capacity = path_pool.global_capacity;
-        log = path_pool.log;
-        return *this;
-    }
-
-    PathPool withTable(const String & database_, const String & table_, bool path_need_database_name_) const
-    {
-        if (unlikely(!database.empty() || !table.empty()))
-            throw Exception("Already has database or table");
-        std::vector<String> paths_;
-        for (auto & path_info : path_infos)
-        {
-            paths_.emplace_back(path_info.path);
-        }
-        return PathPool(paths_, database_, table_, path_need_database_name_, global_capacity);
-    }
-
-    void rename(const String & new_database, const String & new_table, bool clean_rename)
-    {
-        if (unlikely(database.empty() && table.empty()))
-            throw Exception("Can not do rename for root PathPool");
-
-        if (unlikely(new_database.empty() || new_table.empty()))
-            throw Exception("Can not rename for PathPool to " + new_database + "." + new_table);
-
-        if (clean_rename)
-        {
-            // caller ensure that no path need to be renamed.
-            if (unlikely(path_need_database_name))
-            {
-                throw Exception("Can not do clean rename with path_need_database_name is true!");
-            }
-            std::lock_guard<std::mutex> lock{mutex};
-            database = new_database;
-            table = new_table;
-        }
-        else
-        {
-            // Note: changing these path is not atomic, we may lost data if process is crash here.
-
-            std::lock_guard<std::mutex> lock{mutex};
-            // Get root path without database and table
-            std::vector<String> root_paths;
-            for (auto & path_info : path_infos)
-            {
-                String root_path = Poco::Path(path_info.path).parent().toString();
-                root_paths.emplace_back(root_path);
-            }
-
-            std::vector<String> new_paths;
-            for (const auto & root_path : root_paths)
-            {
-                const String new_path = getStorePath(root_path, new_database, new_table);
-                new_paths.emplace_back(new_path);
-                renamePath(getStorePath(root_path, database, table), new_path);
-            }
-
-            database.clear();
-            table.clear();
-            *this = withTable(new_database, new_table, path_need_database_name);
-        }
-    }
-
-    void drop(bool recursive, bool must_success = true)
-    {
-        if (unlikely(database.empty() && table.empty()))
-            throw Exception("Can not do drop for root PathPool");
-
-        std::lock_guard<std::mutex> lock{mutex};
-        for (auto & path_info : path_infos)
-        {
-            try
-            {
-                Poco::File dir(path_info.path);
-                if (dir.exists())
-                    dir.remove(recursive);
-
-                // update global used size
-                global_capacity->freeUsedSize(path_info.path, path_info.total_size);
-            }
-            catch (Poco::DirectoryNotEmptyException & e)
-            {
-                if (must_success)
-                    throw;
-                else
-                {
-                    // just ignore and keep that directory if it is not empty
-                    LOG_WARNING(log, "Can not remove directory: " << path_info.path << ", it is not empty");
-                }
-            }
-        }
-    }
-
-    const String & choosePath() const
-    {
-        std::lock_guard<std::mutex> lock{mutex};
-        UInt64 total_size = 0;
-        for (auto & path_info : path_infos)
-        {
-            total_size += path_info.total_size;
-        }
-        if (total_size == 0)
-        {
-            LOG_DEBUG(log, "database " + database + " table " + table + " no dmfile currently. Choose path 0.");
-            return path_infos[0].path;
-        }
-
-        std::vector<double> ratio;
-        for (auto & path_info : path_infos)
-        {
-            ratio.push_back((double)(total_size - path_info.total_size) / ((path_infos.size() - 1) * total_size));
-        }
-        double rand_number = (double)rand() / RAND_MAX;
-        double ratio_sum = 0;
-        for (size_t i = 0; i < ratio.size(); i++)
-        {
-            ratio_sum += ratio[i];
-            if ((rand_number < ratio_sum) || (i == ratio.size() - 1))
-            {
-                LOG_DEBUG(log, "database " + database + " table " + table + " choose path " + std::to_string(i));
-                return path_infos[i].path;
-            }
-        }
-        throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    const String & getPath(UInt64 file_id) const
-    {
-        std::lock_guard<std::mutex> lock{mutex};
-        if (unlikely(path_map.find(file_id) == path_map.end()))
-            throw Exception("Cannot find DMFile for id " + std::to_string(file_id));
-        return path_infos[path_map.at(file_id)].path;
-    }
-
-    void addDMFile(UInt64 file_id, size_t file_size, const String & path)
-    {
-        std::lock_guard<std::mutex> lock{mutex};
-        if (path_map.find(file_id) != path_map.end())
-        {
-            auto & path_info = path_infos[path_map.at(file_id)];
-            path_info.total_size -= path_info.file_size_map.at(file_id);
-            path_map.erase(file_id);
-            path_info.file_size_map.erase(file_id);
-        }
-        UInt32 index = UINT32_MAX;
-        for (size_t i = 0; i < path_infos.size(); i++)
-        {
-            if (path_infos[i].path == path)
-            {
-                index = i;
-                break;
-            }
-        }
-        if (unlikely(index == UINT32_MAX))
-            throw Exception("Unrecognized path " + path);
-        path_map.emplace(file_id, index);
-        path_infos[index].file_size_map.emplace(file_id, file_size);
-        path_infos[index].total_size += file_size;
-        // update global used size
-        global_capacity->addUsedSize(path, file_size);
-    }
-
-    void removeDMFile(UInt64 file_id)
-    {
-        std::lock_guard<std::mutex> lock{mutex};
-        if (unlikely(path_map.find(file_id) == path_map.end()))
-            throw Exception("Cannot find DMFile for id " + std::to_string(file_id));
-        UInt32 index = path_map.at(file_id);
-        const auto file_size = path_infos[index].file_size_map.at(file_id);
-        path_infos[index].total_size -= file_size;
-        path_map.erase(file_id);
-        path_infos[index].file_size_map.erase(file_id);
-        // update global used size
-        global_capacity->freeUsedSize(path_infos[index].path, file_size);
-    }
-
-    std::vector<String> listPaths() const
-    {
-        std::lock_guard<std::mutex> lock{mutex};
-        std::vector<String> paths;
-        for (auto & path_info : path_infos)
-        {
-            paths.push_back(path_info.path);
-        }
-        return paths;
-    }
-
-    bool empty() const
-    {
-        std::lock_guard<std::mutex> lock{mutex};
-        return path_infos.empty();
-    }
+    friend class PSDiskDelegatorRaft;
 
 private:
-    String getStorePath(const String & extra_path_root, const String & database_name, const String & table_name)
-    {
-        if (path_need_database_name)
-            return extra_path_root + "/" + escapeForFileName(database_name) + "/" + escapeForFileName(table_name);
-        else
-            return extra_path_root + "/" + escapeForFileName(table_name);
-    }
+    Strings main_data_paths;
+    Strings latest_data_paths;
+    Strings kvstore_paths;
 
-    void renamePath(const String & old_path, const String & new_path)
-    {
-        LOG_INFO(log, "Renaming " << old_path << " to " << new_path);
-        if (auto file = Poco::File{old_path}; file.exists())
-            file.renameTo(new_path);
-        else
-            LOG_WARNING(log, "Path \"" << old_path << "\" is missed.");
-    }
+    bool enable_raft_compatible_mode;
+
+    PathCapacityMetricsPtr global_capacity;
+
+    FileProviderPtr file_provider;
+
+    Poco::Logger * log;
+};
+
+class StableDiskDelegator : private boost::noncopyable
+{
+public:
+    StableDiskDelegator(StoragePathPool & pool_) : pool(pool_) {}
+
+    Strings listPaths() const;
+
+    String choosePath() const;
+
+    String getDTFilePath(UInt64 file_id) const;
+
+    void addDTFile(UInt64 file_id, size_t file_size, std::string_view path);
+
+    void removeDTFile(UInt64 file_id);
 
 private:
-    DMFilePathMap path_map;
-    PathInfos path_infos;
+    StoragePathPool & pool;
+};
+
+class PSDiskDelegator : private boost::noncopyable
+{
+public:
+    virtual ~PSDiskDelegator() {}
+
+    virtual size_t numPaths() const = 0;
+
+    virtual String defaultPath() const = 0;
+
+    virtual Strings listPaths() const = 0;
+
+    virtual String choosePath(const PageFileIdAndLevel & id_lvl) = 0;
+
+    virtual size_t addPageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location)
+        = 0;
+
+    virtual String getPageFilePath(const PageFileIdAndLevel & id_lvl) const = 0;
+
+    virtual void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size) = 0;
+};
+
+class PSDiskDelegatorMulti : public PSDiskDelegator
+{
+public:
+    PSDiskDelegatorMulti(StoragePathPool & pool_, String prefix) : pool(pool_), path_prefix(std::move(prefix)) {}
+
+    size_t numPaths() const override;
+
+    String defaultPath() const override;
+
+    Strings listPaths() const override;
+
+    String choosePath(const PageFileIdAndLevel & id_lvl) override;
+
+    size_t addPageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location) override;
+
+    String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
+
+    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size) override;
+
+private:
+    StoragePathPool & pool;
+    const String path_prefix;
+    // PageFileID -> path index
+    PathPool::PageFilePathMap page_path_map;
+};
+
+class PSDiskDelegatorSingle : public PSDiskDelegator
+{
+public:
+    PSDiskDelegatorSingle(StoragePathPool & pool_, String prefix) : pool(pool_), path_prefix(std::move(prefix)) {}
+
+    size_t numPaths() const override;
+
+    String defaultPath() const override;
+
+    Strings listPaths() const override;
+
+    String choosePath(const PageFileIdAndLevel & id_lvl) override;
+
+    size_t addPageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location) override;
+
+    String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
+
+    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size) override;
+
+private:
+    StoragePathPool & pool;
+    const String path_prefix;
+};
+
+class PSDiskDelegatorRaft : public PSDiskDelegator
+{
+public:
+    PSDiskDelegatorRaft(PathPool & pool_);
+
+    size_t numPaths() const override;
+
+    String defaultPath() const override;
+
+    Strings listPaths() const override;
+
+    String choosePath(const PageFileIdAndLevel & id_lvl) override;
+
+    size_t addPageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location) override;
+
+    String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
+
+    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size) override;
+
+private:
+    struct RaftPathInfo
+    {
+        String path;
+    };
+    using RaftPathInfos = std::vector<RaftPathInfo>;
+
+    PathPool & pool;
+    mutable std::mutex mutex;
+    RaftPathInfos raft_path_infos;
+    // PageFileID -> path index
+    PathPool::PageFilePathMap page_path_map;
+};
+
+/// A class to manage paths for the specified storage.
+class StoragePathPool
+{
+public:
+    static constexpr const char * STABLE_FOLDER_NAME = "stable";
+
+    StoragePathPool(const Strings & main_data_paths, const Strings & latest_data_paths, //
+        String database_, String table_, bool path_need_database_name_,                 //
+        PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_);
+
+    StoragePathPool(const StoragePathPool & rhs);
+    StoragePathPool & operator=(const StoragePathPool & rhs);
+
+    // Generate a lightweight delegator for managing stable data, such as choosing path for DTFile or getting DTFile path by ID and so on.
+    // Those paths are generated from `main_path_infos` and `STABLE_FOLDER_NAME`
+    StableDiskDelegator getStableDiskDelegator() { return StableDiskDelegator(*this); }
+
+    // Generate a delegator for managing the paths of `StoragePool`.
+    // Those paths are generated from `latest_path_infos` and `prefix`.
+    // User should keep the pointer to track the PageFileID -> path index mapping.
+    PSDiskDelegatorPtr getPSDiskDelegatorMulti(const String & prefix) { return std::make_shared<PSDiskDelegatorMulti>(*this, prefix); }
+
+    // Generate a delegator for managing the paths of `StoragePool`.
+    // Those paths are generated from the first path of `latest_path_infos` and `prefix`
+    PSDiskDelegatorPtr getPSDiskDelegatorSingle(const String & prefix) { return std::make_shared<PSDiskDelegatorSingle>(*this, prefix); }
+
+    void rename(const String & new_database, const String & new_table, bool clean_rename);
+
+    void drop(bool recursive, bool must_success = true);
+
+private:
+    String getStorePath(const String & extra_path_root, const String & database_name, const String & table_name);
+
+    void renamePath(const String & old_path, const String & new_path);
+
+private:
+    using DMFilePathMap = std::unordered_map<UInt64, UInt32>;
+    struct MainPathInfo
+    {
+        String path;
+        // DMFileID -> file size
+        std::unordered_map<UInt64, size_t> file_size_map;
+    };
+    using MainPathInfos = std::vector<MainPathInfo>;
+    struct LatestPathInfo
+    {
+        String path;
+    };
+    using LatestPathInfos = std::vector<LatestPathInfo>;
+
+    friend class StableDiskDelegator;
+    friend class PSDiskDelegatorMulti;
+    friend class PSDiskDelegatorSingle;
+
+private:
+    // Path, size
+    MainPathInfos main_path_infos;
+    LatestPathInfos latest_path_infos;
+    // DMFileID -> path index
+    DMFilePathMap dt_file_path_map;
 
     String database;
     String table;
 
+    // Note that we keep an assumption that the size of `main_path_infos` and `latest_path_infos` won't be changed during the whole runtime.
+    // This mutex mainly used to protect the `dt_file_path_map` , `page_path_map` of each path.
     mutable std::mutex mutex;
 
     bool path_need_database_name = false;
 
     PathCapacityMetricsPtr global_capacity;
 
+    FileProviderPtr file_provider;
+
     Poco::Logger * log;
 };
-
-using PathPoolPtr = std::shared_ptr<PathPool>;
 
 } // namespace DB
