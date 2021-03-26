@@ -14,7 +14,8 @@ struct MockTiDBTable
 
     // Inject mocked TiDB table.
     // Usage:
-    //   ./storages-client.sh "DBGInvoke mock_tidb_table(database_name, table_name, 'col1 type1, col2 type2, ...'[, engine])"
+    //   ./storages-client.sh "DBGInvoke mock_tidb_table(database_name, table_name, 'col1 type1, col2 type2, ...' [, handle_pk_name, engine-type(tmt|dt|buggy)])"
+
     //   engine: [tmt, dt, buggy], tmt by default
     static void dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output);
 

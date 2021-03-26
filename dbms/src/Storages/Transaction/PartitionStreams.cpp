@@ -25,7 +25,8 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 
-static void writeRegionDataToStorage(Context & context, const RegionPtrWrap & region, RegionDataReadInfoList & data_list_read, Logger * log)
+static void writeRegionDataToStorage(
+    Context & context, const RegionPtrWithBlock & region, RegionDataReadInfoList & data_list_read, Logger * log)
 {
     constexpr auto FUNCTION_NAME = __FUNCTION__;
     const auto & tmt = context.getTMTContext();
@@ -271,7 +272,7 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
 }
 
 void RegionTable::writeBlockByRegion(
-    Context & context, const RegionPtrWrap & region, RegionDataReadInfoList & data_list_to_remove, Logger * log, bool lock_region)
+    Context & context, const RegionPtrWithBlock & region, RegionDataReadInfoList & data_list_to_remove, Logger * log, bool lock_region)
 {
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
     if (region.pre_decode_cache)
@@ -377,7 +378,7 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
 }
 
 /// pre-decode region data into block cache and remove
-RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Context & context)
+RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Context & context)
 {
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
     try

@@ -23,7 +23,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
+void KVStore::checkAndApplySnapshot(const RegionPtrWithBlock & new_region, TMTContext & tmt)
 {
     auto region_id = new_region->id();
     auto old_region = getRegion(region_id);
@@ -124,7 +124,7 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
     onSnapshot(new_region, old_region, old_applied_index, tmt);
 }
 
-void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
+void KVStore::onSnapshot(const RegionPtrWithBlock & new_region_wrap, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
 {
     RegionID region_id = new_region_wrap->id();
 
@@ -215,7 +215,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
 }
 
 
-extern RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr &, Context &);
+extern RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr &, Context &);
 
 RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, const SSTViewVec snaps, TMTContext & tmt)
 {
@@ -276,7 +276,7 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, con
     return cache;
 }
 
-void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
+void KVStore::handlePreApplySnapshot(const RegionPtrWithBlock & new_region, TMTContext & tmt)
 {
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 
@@ -325,7 +325,7 @@ void KVStore::handleApplySnapshot(
     metapb::Region && region, UInt64 peer_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
-    handlePreApplySnapshot(RegionPtrWrap{new_region, preHandleSnapshot(new_region, snaps, tmt)}, tmt);
+    handlePreApplySnapshot(RegionPtrWithBlock{new_region, preHandleSnapshot(new_region, snaps, tmt)}, tmt);
 }
 
 EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)

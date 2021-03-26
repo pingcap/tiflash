@@ -100,7 +100,7 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     return false;
 }
 
-RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWrap & region, bool try_persist) const
+RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & region, bool try_persist) const
 {
     auto & tmt = context->getTMTContext();
 
@@ -319,7 +319,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_
     return tryFlushRegion(region, try_persist);
 }
 
-RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWrap & region, bool try_persist)
+RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist)
 {
     RegionID region_id = region->id();
 

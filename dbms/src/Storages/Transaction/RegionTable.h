@@ -35,7 +35,7 @@ class Block;
 struct MockTiDBTable;
 class RegionRangeKeys;
 class RegionTaskLock;
-struct RegionPtrWrap;
+struct RegionPtrWithBlock;
 class RegionScanFilter;
 using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
 
@@ -120,7 +120,7 @@ public:
 
     bool tryFlushRegions();
     RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
-    RegionDataReadInfoList tryFlushRegion(const RegionPtrWrap & region, bool try_persist);
+    RegionDataReadInfoList tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist);
 
     void handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id) const;
@@ -130,7 +130,7 @@ public:
     /// assuming that newer schema can always apply to older data by setting force_decode to true in RegionBlockReader::read.
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
     static void writeBlockByRegion(Context & context,
-        const RegionPtrWrap & region,
+        const RegionPtrWithBlock & region,
         RegionDataReadInfoList & data_list_to_remove,
         Logger * log,
         bool lock_region = true);
@@ -184,7 +184,7 @@ private:
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id);
     InternalRegion & doGetInternalRegion(TableID table_id, RegionID region_id);
 
-    RegionDataReadInfoList flushRegion(const RegionPtrWrap & region, bool try_persist) const;
+    RegionDataReadInfoList flushRegion(const RegionPtrWithBlock & region, bool try_persist) const;
     bool shouldFlush(const InternalRegion & region) const;
     RegionID pickRegionToFlush();
 
@@ -227,13 +227,13 @@ struct RegionPreDecodeBlockData
 };
 
 // A wrap of RegionPtr, could try to use its block cache while writing region data to storage.
-struct RegionPtrWrap
+struct RegionPtrWithBlock
 {
     using Base = RegionPtr;
     using CachePtr = std::unique_ptr<RegionPreDecodeBlockData>;
 
     /// can accept const ref of RegionPtr without cache
-    RegionPtrWrap(const Base & base_, CachePtr cache = nullptr) : base(base_), pre_decode_cache(std::move(cache)) {}
+    RegionPtrWithBlock(const Base & base_, CachePtr cache = nullptr) : base(base_), pre_decode_cache(std::move(cache)) {}
 
     /// to be compatible with usage as RegionPtr.
     Base::element_type * operator->() const { return base.operator->(); }
