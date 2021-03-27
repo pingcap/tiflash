@@ -760,7 +760,8 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     }
     for (Int32 i = 0; i < aggregation.group_by_size(); i++)
     {
-        String & name = aggregated_columns[i + aggregation.agg_func_size()].name;
+        Int32 output_column_index = i + aggregation.agg_func_size();
+        String & name = aggregated_columns[output_column_index].name;
         String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name, false);
         if (name != updated_name)
         {
@@ -771,7 +772,7 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
         }
         else
         {
-            updated_aggregated_columns.emplace_back(name, aggregated_columns[i + aggregation.agg_func_size()].type);
+            updated_aggregated_columns.emplace_back(name, aggregated_columns[output_column_index].type);
             step.required_output.push_back(name);
         }
     }
