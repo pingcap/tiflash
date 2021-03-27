@@ -51,6 +51,8 @@ mysql> drop table if exists test.t;
 #####
 ### Test case for applying raft snapshot for tombstoned table
 mysql> create table test.t(id int);
+# It is important that TiFlash has synced the table schema
+>> DBGInvoke __refresh_schemas()
 
 # Insert some record
 mysql> insert into test.t values (3),(4);
