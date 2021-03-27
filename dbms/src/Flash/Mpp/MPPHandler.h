@@ -517,8 +517,16 @@ public:
             it->second.to_be_cancelled = true;
             LOG_WARNING(log, "Begin cancel query: " + std::to_string(query_id));
         }
+        std::vector<std::thread> cancel_workers;
         for (auto task_it = it->second.task_map.rbegin(); task_it != it->second.task_map.rend(); task_it++)
-            task_it->second->cancel(reason);
+        {
+            std::thread t(&MPPTask::cancel, task_it->second, std::ref(reason));
+            cancel_workers.push_back(std::move(t));
+        }
+        for (auto & worker : cancel_workers)
+        {
+            worker.join();
+        }
         MPPQueryTaskSet canceled_task_set;
         {
             std::lock_guard<std::mutex> lock(mu);
