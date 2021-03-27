@@ -796,6 +796,8 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
 
     auto & current_columns = getCurrentInputColumns();
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
+    /// TiDB can not guarantee that the field type in DAG request is accurate, so in order to make things work,
+    /// TiFlash will append extra type cast if needed.
     bool need_append_type_cast = false;
     std::vector<bool> need_append_type_cast_vec;
     if (!output_offsets.empty())
