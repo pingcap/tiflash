@@ -517,8 +517,8 @@ public:
             it->second.to_be_cancelled = true;
             LOG_WARNING(log, "Begin cancel query: " + std::to_string(query_id));
         }
-        for (auto & task_id : it->second.task_map)
-            task_id.second->cancel(reason);
+        for (auto task_it = it->second.task_map.rbegin(); task_it != it->second.task_map.rend(); task_it++)
+            task_it->second->cancel(reason);
         MPPQueryTaskSet canceled_task_set;
         {
             std::lock_guard<std::mutex> lock(mu);
