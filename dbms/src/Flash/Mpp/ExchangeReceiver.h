@@ -151,7 +151,14 @@ public:
         ExchangeReceiverResult result;
         if (status != NORMAL)
         {
-            result = {nullptr, 0, "ExchangeReceiver", true, err.message(), false};
+            String msg;
+            if (status == CANCELED)
+                msg = "query canceled";
+            else if (status == CLOSED)
+                msg = "ExchangeReceiver closed";
+            else
+                msg = err.message();
+            result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
         }
         else if (result_buffer.empty())
         {
