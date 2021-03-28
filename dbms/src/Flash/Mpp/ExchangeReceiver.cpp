@@ -41,6 +41,7 @@ void ExchangeReceiver::setUpConnection()
 
 void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 {
+    bool meet_error = false;
     try
     {
         auto sender_task = new mpp::TaskMeta();
@@ -68,6 +69,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             }
             if (!decodePacket(packet, source_index, req_info))
             {
+                meet_error = true;
                 LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
                 break;
             }
@@ -91,6 +93,8 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
     }
     std::lock_guard<std::mutex> lock(mu);
     live_connections--;
+    if (meet_error && status == NORMAL)
+        status = ERROR;
     cv.notify_all();
     LOG_DEBUG(log, "read thread end!!! live connections: " << std::to_string(live_connections));
 }

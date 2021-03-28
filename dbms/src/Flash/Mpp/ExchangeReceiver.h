@@ -40,6 +40,14 @@ struct ExchangeReceiverResult
     ExchangeReceiverResult() : ExchangeReceiverResult(nullptr, 0) {}
 };
 
+enum Status
+{
+    NORMAL,
+    ERROR,
+    CANCELED,
+    CLOSED,
+};
+
 class ExchangeReceiver
 {
 public:
@@ -60,7 +68,7 @@ private:
     std::condition_variable cv;
     std::queue<ExchangeReceiverResult> result_buffer;
     Int32 live_connections;
-    bool meet_error;
+    Status status;
     Exception err;
     Logger * log;
 
@@ -78,8 +86,8 @@ private:
             ret = false;
         }
         std::unique_lock<std::mutex> lock(mu);
-        cv.wait(lock, [&] { return result_buffer.size() < max_buffer_size || meet_error; });
-        if (!meet_error)
+        cv.wait(lock, [&] { return result_buffer.size() < max_buffer_size || status != NORMAL; });
+        if (status == NORMAL)
         {
             if (resp_ptr != nullptr)
                 result_buffer.emplace(resp_ptr, source_index, req_info);
@@ -102,7 +110,7 @@ public:
           task_meta(meta),
           max_buffer_size(max_buffer_size_),
           live_connections(0),
-          meet_error(false),
+          status(NORMAL),
           log(&Logger::get("exchange_receiver"))
     {
         for (int i = 0; i < exc.field_types_size(); i++)
@@ -116,6 +124,11 @@ public:
 
     ~ExchangeReceiver()
     {
+        {
+            std::unique_lock<std::mutex> lk(mu);
+            status = CLOSED;
+            cv.notify_all();
+        }
         for (auto & worker : workers)
         {
             worker.join();
@@ -125,7 +138,7 @@ public:
     void cancel()
     {
         std::unique_lock<std::mutex> lk(mu);
-        meet_error = true;
+        status = CANCELED;
         cv.notify_all();
     }
 
@@ -134,9 +147,9 @@ public:
     ExchangeReceiverResult nextResult()
     {
         std::unique_lock<std::mutex> lk(mu);
-        cv.wait(lk, [&] { return !result_buffer.empty() || live_connections == 0 || meet_error; });
+        cv.wait(lk, [&] { return !result_buffer.empty() || live_connections == 0 || status != NORMAL; });
         ExchangeReceiverResult result;
-        if (meet_error)
+        if (status != NORMAL)
         {
             result = {nullptr, 0, "ExchangeReceiver", true, err.message(), false};
         }

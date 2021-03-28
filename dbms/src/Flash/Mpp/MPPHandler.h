@@ -515,14 +515,19 @@ public:
             if (it == mpp_query_map.end())
                 return;
             it->second.to_be_cancelled = true;
-            LOG_WARNING(log, "Begin cancel query: " + std::to_string(query_id));
         }
+        LOG_WARNING(log, "Begin cancel query: " + std::to_string(query_id));
+        std::stringstream ss;
+        ss << "Remaining task in query " + std::to_string(query_id) + " are: ";
+
         std::vector<std::thread> cancel_workers;
         for (auto task_it = it->second.task_map.rbegin(); task_it != it->second.task_map.rend(); task_it++)
         {
+            ss << task_it->first.toString() << " ";
             std::thread t(&MPPTask::cancel, task_it->second, std::ref(reason));
             cancel_workers.push_back(std::move(t));
         }
+        LOG_WARNING(log, ss.str());
         for (auto & worker : cancel_workers)
         {
             worker.join();
