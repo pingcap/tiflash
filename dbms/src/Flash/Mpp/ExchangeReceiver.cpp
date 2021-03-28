@@ -93,8 +93,8 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
     }
     std::lock_guard<std::mutex> lock(mu);
     live_connections--;
-    if (meet_error && status == NORMAL)
-        status = ERROR;
+    if (meet_error && state == NORMAL)
+        state = ERROR;
     cv.notify_all();
     LOG_DEBUG(log, "read thread end!!! live connections: " << std::to_string(live_connections));
 }

@@ -40,7 +40,7 @@ struct ExchangeReceiverResult
     ExchangeReceiverResult() : ExchangeReceiverResult(nullptr, 0) {}
 };
 
-enum Status
+enum State
 {
     NORMAL,
     ERROR,
@@ -68,7 +68,7 @@ private:
     std::condition_variable cv;
     std::queue<ExchangeReceiverResult> result_buffer;
     Int32 live_connections;
-    Status status;
+    State state;
     Exception err;
     Logger * log;
 
@@ -86,8 +86,8 @@ private:
             ret = false;
         }
         std::unique_lock<std::mutex> lock(mu);
-        cv.wait(lock, [&] { return result_buffer.size() < max_buffer_size || status != NORMAL; });
-        if (status == NORMAL)
+        cv.wait(lock, [&] { return result_buffer.size() < max_buffer_size || state != NORMAL; });
+        if (state == NORMAL)
         {
             if (resp_ptr != nullptr)
                 result_buffer.emplace(resp_ptr, source_index, req_info);
@@ -110,7 +110,7 @@ public:
           task_meta(meta),
           max_buffer_size(max_buffer_size_),
           live_connections(0),
-          status(NORMAL),
+          state(NORMAL),
           log(&Logger::get("exchange_receiver"))
     {
         for (int i = 0; i < exc.field_types_size(); i++)
@@ -126,7 +126,7 @@ public:
     {
         {
             std::unique_lock<std::mutex> lk(mu);
-            status = CLOSED;
+            state = CLOSED;
             cv.notify_all();
         }
         for (auto & worker : workers)
@@ -138,7 +138,7 @@ public:
     void cancel()
     {
         std::unique_lock<std::mutex> lk(mu);
-        status = CANCELED;
+        state = CANCELED;
         cv.notify_all();
     }
 
@@ -147,14 +147,14 @@ public:
     ExchangeReceiverResult nextResult()
     {
         std::unique_lock<std::mutex> lk(mu);
-        cv.wait(lk, [&] { return !result_buffer.empty() || live_connections == 0 || status != NORMAL; });
+        cv.wait(lk, [&] { return !result_buffer.empty() || live_connections == 0 || state != NORMAL; });
         ExchangeReceiverResult result;
-        if (status != NORMAL)
+        if (state != NORMAL)
         {
             String msg;
-            if (status == CANCELED)
+            if (state == CANCELED)
                 msg = "query canceled";
-            else if (status == CLOSED)
+            else if (state == CLOSED)
                 msg = "ExchangeReceiver closed";
             else
                 msg = err.message();
