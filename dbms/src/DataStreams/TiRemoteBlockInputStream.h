@@ -168,6 +168,11 @@ public:
 
     String getName() const override { return name; }
 
+    void cancel(bool kill) override
+    {
+        if (kill)
+            remote_reader->cancel();
+    }
     Block readImpl() override
     {
         if (block_queue.empty())
