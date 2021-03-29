@@ -69,19 +69,6 @@ private:
     std::atomic<RegionException::RegionReadStatus> status{RegionException::RegionReadStatus::NOT_FOUND};
 };
 
-/// Check whether region is invalid or not.
-RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_to_query, const RegionPtr & region_in_mem)
-{
-    if (region_in_mem->peerState() != raft_serverpb::PeerState::Normal)
-        return RegionException::RegionReadStatus::NOT_FOUND;
-
-    const auto & meta_snap = region_in_mem->dumpRegionMetaSnapshot();
-    if (meta_snap.ver != region_to_query.version || meta_snap.conf_ver != region_to_query.conf_version)
-        return RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
-
-    return RegionException::RegionReadStatus::OK;
-}
-
 LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
     const MvccQueryInfo & mvcc_query_info,                      //
     size_t num_streams, TMTContext & tmt, Poco::Logger * log)
