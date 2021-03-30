@@ -101,7 +101,19 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
                     + " with table id: " + DB::toString(table_id) + ", ignored");
             return;
         }
-        storage->flushCache(tmt.getContext(), region);
+
+        try
+        {
+            // Try to get a read lock on `storage` so it won't be dropped during `flushCache`
+            auto storage_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+            storage->flushCache(tmt.getContext(), region);
+        }
+        catch (DB::Exception & e)
+        {
+            // We can ignore if storage is already dropped.
+            if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
+                throw;
+        }
     }
 }
 
