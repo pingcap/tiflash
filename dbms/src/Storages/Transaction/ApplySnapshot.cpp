@@ -136,14 +136,23 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
             {
                 case TiDB::StorageEngine::DT:
                 {
-                    auto & context = tmt.getContext();
-                    // acquire lock so that no other threads can change storage's structure
-                    auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
-                    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                    auto key_range = DM::RowKeyRange::fromRegionRange(
-                        new_region_wrap->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
-                    // Call `deleteRange` to delete data for range
-                    dm_storage->deleteRange(key_range, context.getSettingsRef());
+                    try
+                    {
+                        auto & context = tmt.getContext();
+                        // acquire lock so that no other threads can drop storage
+                        auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+                        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+                        auto key_range = DM::RowKeyRange::fromRegionRange(
+                            new_region_wrap->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
+                        // Call `deleteRange` to delete data for range
+                        dm_storage->deleteRange(key_range, context.getSettingsRef());
+                    }
+                    catch (DB::Exception & e)
+                    {
+                        // We can ignore if storage is dropped.
+                        if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
+                            throw;
+                    }
                     break;
                 }
                 default:
