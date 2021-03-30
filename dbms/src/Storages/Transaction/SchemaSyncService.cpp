@@ -75,9 +75,13 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
 
         String database_name = storage->getDatabaseName();
         String table_name = storage->getTableName();
-        auto db_info = tmt_context.getSchemaSyncer()->getDBInfoByMappedName(database_name);
         const auto & table_info = storage->getTableInfo();
-        auto canonical_name = SchemaNameMapper().debugCanonicalName(*db_info, table_info);
+        auto canonical_name = [&]() {
+            // DB info maintenance is parallel with GC logic so we can't always assume one specific DB info's existence, thus checking its validity.
+            auto db_info = tmt_context.getSchemaSyncer()->getDBInfoByMappedName(database_name);
+            return db_info ? SchemaNameMapper().debugCanonicalName(*db_info, table_info)
+                           : "(" + database_name + ")." + SchemaNameMapper().debugTableName(table_info);
+        }();
         LOG_INFO(log, "Physically dropping table " << canonical_name);
         auto drop_query = std::make_shared<ASTDropQuery>();
         drop_query->database = std::move(database_name);
