@@ -14,8 +14,18 @@ struct CompackTask
 {
     CompackTask() {}
 
-    DeltaPacks        to_compact;
+    DeltaPacks to_compact;
+    size_t     total_rows  = 0;
+    size_t     total_bytes = 0;
+
     DeltaPackPtr result;
+
+    void addPack(const DeltaPackPtr & pack)
+    {
+        total_rows += pack->getRows();
+        total_bytes += pack->getBytes();
+        to_compact.push_back(pack);
+    }
 };
 using CompackTasks = std::vector<CompackTask>;
 
@@ -78,15 +88,16 @@ bool DeltaValueSpace::compact(DMContext & context)
                 if (unlikely(!dp_block->getDataPageId()))
                     throw Exception("Saved DeltaPackBlock does not have data_page_id", ErrorCodes::LOGICAL_ERROR);
 
-                bool small_pack = pack->getRows() < context.delta_small_pack_rows;
+                bool cur_task_full = cur_task.total_rows >= context.delta_limit_rows || cur_task.total_bytes >= context.delta_limit_bytes;
+                bool small_pack    = pack->getRows() < context.delta_small_pack_rows && pack->getBytes() < context.delta_small_pack_bytes;
                 bool schema_ok
                     = cur_task.to_compact.empty() || dp_block->getSchema() == cur_task.to_compact.back()->tryToBlock()->getSchema();
 
-                if (!small_pack || !schema_ok)
+                if (cur_task_full || !small_pack || !schema_ok)
                     packup_cur_task();
 
                 if (small_pack)
-                    cur_task.to_compact.push_back(pack);
+                    cur_task.addPack(pack);
                 else
                     // Then this pack's cache should not exist.
                     dp_block->clearCache();
