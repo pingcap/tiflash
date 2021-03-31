@@ -208,6 +208,7 @@ private:
     std::atomic<size_t> deletes = 0;
 
     std::atomic<size_t> unsaved_rows    = 0;
+    std::atomic<size_t> unsaved_bytes   = 0;
     std::atomic<size_t> unsaved_deletes = 0;
 
     /// This instance has been abandoned. Like after merge delta, split/merge.
@@ -219,9 +220,12 @@ private:
     std::atomic_bool is_updating = false;
 
     std::atomic<size_t> last_try_flush_rows             = 0;
+    std::atomic<size_t> last_try_flush_bytes            = 0;
     std::atomic<size_t> last_try_compact_packs          = 0;
     std::atomic<size_t> last_try_merge_delta_rows       = 0;
+    std::atomic<size_t> last_try_merge_delta_bytes      = 0;
     std::atomic<size_t> last_try_split_rows             = 0;
+    std::atomic<size_t> last_try_split_bytes            = 0;
     std::atomic<size_t> last_try_place_delta_index_rows = 0;
 
     DeltaIndexPtr delta_index;
@@ -245,8 +249,8 @@ public:
     String info() const
     {
         return "{Delta [" + DB::toString(id) + "]: " + DB::toString(packs.size()) + " packs, " + DB::toString(rows.load()) + " rows, "
-            + DB::toString(unsaved_rows.load()) + " unsaved_rows, " + DB::toString(deletes.load()) + " deletes, "
-            + DB::toString(unsaved_deletes.load()) + " unsaved_deletes}";
+            + DB::toString(unsaved_rows.load()) + " unsaved_rows, " + DB::toString(unsaved_bytes.load()) + " unsaved_bytes, "
+            + DB::toString(deletes.load()) + " deletes, " + DB::toString(unsaved_deletes.load()) + " unsaved_deletes}";
     }
 
     bool getLock(Lock & lock) const
@@ -287,10 +291,11 @@ public:
 
     size_t getPackCount() const { return packs.size(); }
     size_t getRows(bool use_unsaved = true) const { return use_unsaved ? rows.load() : rows - unsaved_rows; }
-    size_t getBytes() const { return bytes; }
+    size_t getBytes(bool use_unsaved = true) const { return use_unsaved ? bytes.load() : bytes - unsaved_bytes; }
     size_t getDeletes() const { return deletes; }
 
     size_t getUnsavedRows() const { return unsaved_rows; }
+    size_t getUnsavedBytes() const { return unsaved_bytes; }
     size_t getUnsavedDeletes() const { return unsaved_deletes; }
 
     size_t getTotalCacheRows() const;
@@ -301,9 +306,12 @@ public:
     bool isShouldCompact() const { return shouldCompact; }
 
     std::atomic<size_t> & getLastTryFlushRows() { return last_try_flush_rows; }
+    std::atomic<size_t> & getLastTryFlushBytes() { return last_try_flush_bytes; }
     std::atomic<size_t> & getLastTryCompactPacks() { return last_try_compact_packs; }
     std::atomic<size_t> & getLastTryMergeDeltaRows() { return last_try_merge_delta_rows; }
+    std::atomic<size_t> & getLastTryMergeDeltaBytes() { return last_try_merge_delta_bytes; }
     std::atomic<size_t> & getLastTrySplitRows() { return last_try_split_rows; }
+    std::atomic<size_t> & getLastTrySplitBytes() { return last_try_split_bytes; }
     std::atomic<size_t> & getLastTryPlaceDeltaIndexRows() { return last_try_place_delta_index_rows; }
 
     size_t getDeltaIndexBytes()
