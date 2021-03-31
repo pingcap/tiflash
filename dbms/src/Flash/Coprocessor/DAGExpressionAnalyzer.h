@@ -57,9 +57,14 @@ public:
         {
             chain.settings = settings;
             NamesAndTypesList column_list;
+            std::unordered_set<String> column_name_set;
             for (const auto & col : columns)
             {
-                column_list.emplace_back(col.name, col.type);
+                if (column_name_set.find(col.name) == column_name_set.end())
+                {
+                    column_list.emplace_back(col.name, col.type);
+                    column_name_set.emplace(col.name);
+                }
             }
             chain.steps.emplace_back(std::make_shared<ExpressionActions>(column_list, settings));
         }
