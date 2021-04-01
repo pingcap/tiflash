@@ -116,3 +116,14 @@ mysql> use test;  set @@tidb_allow_mpp=1; select id,avg(value) as av from t grou
 |    3 | 4.5000000 |
 |    5 | 6.7000000 |
 +------+-----------+
+
+mysql> use test;  set @@tidb_allow_mpp=1; select -1.2 from t group by id;
++------+
+| -1.2 |
++------+
+| -1.2 |
+| -1.2 |
+| -1.2 |
+| -1.2 |
+| -1.2 |
++------+
