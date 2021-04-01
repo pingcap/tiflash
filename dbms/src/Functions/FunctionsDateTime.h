@@ -1303,11 +1303,15 @@ public:
             throw Exception("First argument for function " + getName() + " (unit) must be String",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if(!removeNullable(arguments[1])->isDateOrDateTime())
+        if(!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[1]).get()) &&
+           !checkDataType<DataTypeMyDate>(removeNullable(arguments[1]).get()) &&
+           !arguments[1]->onlyNull())
             throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if(!removeNullable(arguments[2])->isDateOrDateTime())
+        if(!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[2]).get()) &&
+           !checkDataType<DataTypeMyDate>(removeNullable(arguments[2]).get()) &&
+           !arguments[2]->onlyNull())
             throw Exception("Third argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -2550,12 +2554,12 @@ public:
 
         // TODO: Support Extract from string, see https://github.com/pingcap/tidb/issues/22700
         // if (!(arguments[1]->isString() || arguments[1]->isDateOrDateTime()))
-        if (!arguments[1]->isDateOrDateTime())
+        if (!arguments[1]->isMyDateOrMyDateTime())
             throw TiFlashException(
                 "Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be DateOrDateTime.",
                 Errors::Coprocessor::BadRequest);
 
-        return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeInt64>());
+        return std::make_shared<DataTypeInt64>();
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -2571,13 +2575,6 @@ public:
         String unit = Poco::toLower(unit_column->getValue<String>());
 
         auto from_column = block.getByPosition(arguments[1]).column;
-
-
-        if (from_column->onlyNull())
-        {
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
-            return;
-        }
 
         size_t rows = block.rows();
         auto col_to = ColumnInt64::create(rows);

@@ -59,6 +59,8 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
+    void cancel() {}
+
     CoprocessorReaderResult nextResult()
     {
         auto && [result, has_next] = resp_iter.next();

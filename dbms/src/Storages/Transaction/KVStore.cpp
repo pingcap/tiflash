@@ -20,9 +20,7 @@ extern const int LOGICAL_ERROR;
 }
 
 KVStore::KVStore(Context & context)
-    : region_persister(context, region_manager),
-      raft_cmd_res(std::make_unique<RaftCommandResult>()),
-      log(&Logger::get("KVStore"))
+    : region_persister(context, region_manager), raft_cmd_res(std::make_unique<RaftCommandResult>()), log(&Logger::get("KVStore"))
 {}
 
 void KVStore::restore(const TiFlashRaftProxyHelper * proxy_helper)
@@ -103,7 +101,19 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
                     + " with table id: " + DB::toString(table_id) + ", ignored");
             return;
         }
-        storage->flushCache(tmt.getContext(), region);
+
+        try
+        {
+            // Try to get a read lock on `storage` so it won't be dropped during `flushCache`
+            auto storage_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+            storage->flushCache(tmt.getContext(), region);
+        }
+        catch (DB::Exception & e)
+        {
+            // We can ignore if storage is already dropped.
+            if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
+                throw;
+        }
     }
 }
 
@@ -219,17 +229,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt
         return EngineStoreApplyRes::NotFound;
     }
 
-    const auto ori_size = region->dataSize();
     auto res = region->handleWriteRaftCmd(cmds, index, term, tmt);
-
-    {
-        tmt.getRegionTable().updateRegion(*region);
-        if (region->dataSize() != ori_size && !tmt.isBgFlushDisabled())
-        {
-            tmt.getBackgroundService().addRegionToDecode(region);
-        }
-    }
-
     return res;
 }
 
@@ -264,17 +264,14 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     const RegionPtr curr_region_ptr = getRegion(curr_region_id);
     if (curr_region_ptr == nullptr)
     {
-        LOG_WARNING(log,
-            __PRETTY_FUNCTION__ << ": [region " << curr_region_id << "] is not found at [term " << term << ", index " << index
-                                << "], might be removed already");
         return EngineStoreApplyRes::NotFound;
     }
 
     auto & curr_region = *curr_region_ptr;
 
-    LOG_INFO(log,
-        curr_region.toString(false) << " handle useless admin command " << raft_cmdpb::AdminCmdType_Name(cmd_type) << " at [term: " << term
-                                    << ", index: " << index << "]");
+    LOG_DEBUG(log,
+        curr_region.toString(false) << " handle ignorable admin command " << raft_cmdpb::AdminCmdType_Name(cmd_type)
+                                    << " at [term: " << term << ", index: " << index << "]");
 
     curr_region.handleWriteRaftCmd({}, index, term, tmt);
 
@@ -300,7 +297,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     if (sync_log)
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
-        persistRegion(curr_region, region_task_lock, "useless raft cmd");
+        persistRegion(curr_region, region_task_lock, "compact raft log");
         return EngineStoreApplyRes::Persist;
     }
     return EngineStoreApplyRes::None;

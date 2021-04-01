@@ -75,6 +75,8 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"equals", tipb::ScalarFuncSig::EQInt},
     {"and", tipb::ScalarFuncSig::LogicalAnd},
     {"or", tipb::ScalarFuncSig::LogicalOr},
+    {"xor", tipb::ScalarFuncSig::LogicalXor},
+    {"not", tipb::ScalarFuncSig::UnaryNotInt},
     {"greater", tipb::ScalarFuncSig::GTInt},
     {"greaterorequals", tipb::ScalarFuncSig::GEInt},
     {"less", tipb::ScalarFuncSig::LTInt},
@@ -138,6 +140,14 @@ std::pair<String, String> splitQualifiedName(String s)
     }
     return ret;
 }
+
+DAGColumnInfo toNullableDAGColumnInfo(DAGColumnInfo & input)
+{
+    DAGColumnInfo output = input;
+    output.second.clearNotNullFlag();
+    return output;
+}
+
 
 enum QueryTaskType
 {
@@ -1303,9 +1313,19 @@ struct Join : Executor
         output_schema.clear();
         /// update output schema
         for (auto & field : children[0]->output_schema)
-            output_schema.push_back(field);
+        {
+            if (join_params.kind == ASTTableJoin::Kind::Right && field.second.hasNotNullFlag())
+                output_schema.push_back(toNullableDAGColumnInfo(field));
+            else
+                output_schema.push_back(field);
+        }
         for (auto & field : children[1]->output_schema)
-            output_schema.push_back(field);
+        {
+            if (join_params.kind == ASTTableJoin::Kind::Left && field.second.hasNotNullFlag())
+                output_schema.push_back(toNullableDAGColumnInfo(field));
+            else
+                output_schema.push_back(field);
+        }
     }
 
     void fillJoinKeyAndFieldType(
@@ -1764,13 +1784,6 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
     auto project = std::make_shared<mock::Project>(executor_index, output_schema, std::move(exprs));
     project->children.push_back(input);
     return project;
-}
-
-DAGColumnInfo toNullableDAGColumnInfo(DAGColumnInfo & input)
-{
-    DAGColumnInfo output = input;
-    output.second.clearNotNullFlag();
-    return output;
 }
 
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params)

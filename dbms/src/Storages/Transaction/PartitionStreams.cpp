@@ -24,16 +24,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-std::tuple<Block, bool> readRegionBlock(const ManageableStoragePtr & storage, RegionDataReadInfoList & data_list, bool force_decode)
-{
-    return readRegionBlock(storage->getTableInfo(),
-        storage->getColumns(),
-        storage->getColumns().getNamesOfPhysical(),
-        data_list,
-        std::numeric_limits<Timestamp>::max(),
-        force_decode,
-        nullptr);
-}
 
 static void writeRegionDataToStorage(Context & context, const RegionPtrWrap & region, RegionDataReadInfoList & data_list_read, Logger * log)
 {
@@ -51,12 +41,24 @@ static void writeRegionDataToStorage(Context & context, const RegionPtrWrap & re
         {
             if (!force_decode) // Need to update.
                 return false;
-            // Table must have just been dropped or truncated.
-            return true;
+            if (storage == nullptr) // Table must have just been GC-ed.
+                return true;
         }
 
         /// Lock throughout decode and write, during which schema must not change.
-        auto lock = storage->lockStructure(true, FUNCTION_NAME);
+        TableStructureReadLockPtr lock;
+        try
+        {
+            lock = storage->lockStructure(true, FUNCTION_NAME);
+        }
+        catch (DB::Exception & e)
+        {
+            // If the storage is physical dropped (but not removed from `ManagedStorages`) when we want to flsuh raft data into it, consider the write done.
+            if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+                return true;
+            else
+                throw;
+        }
 
         Block block;
         bool ok = false, need_decode = true;
@@ -87,7 +89,8 @@ static void writeRegionDataToStorage(Context & context, const RegionPtrWrap & re
 
         if (need_decode)
         {
-            std::tie(block, ok) = readRegionBlock(storage, data_list_read, force_decode);
+            auto reader = RegionBlockReader(storage);
+            std::tie(block, ok) = reader.read(data_list_read, force_decode);
             if (!ok)
                 return false;
             region_decode_cost = watch.elapsedMilliseconds();
@@ -181,7 +184,9 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
                 return RegionException::RegionReadStatus::NOT_FOUND;
 
             const auto & meta_snap = region->dumpRegionMetaSnapshot();
-            if (meta_snap.ver != region_version || meta_snap.conf_ver != conf_version)
+            // No need to check conf_version if its peer state is normal
+            std::ignore = conf_version;
+            if (meta_snap.ver != region_version)
                 return RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
 
             // todo check table id
@@ -316,8 +321,10 @@ RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::Tab
                               Block block;
                               {
                                   bool ok = false;
-                                  std::tie(block, ok) = readRegionBlock(
-                                      table_info, columns, column_names_to_read, data_list_read, start_ts, true, scan_filter);
+                                  auto reader = RegionBlockReader(table_info, columns);
+                                  std::tie(block, ok) = reader.setStartTs(start_ts)
+                                                            .setFilter(scan_filter)
+                                                            .read(column_names_to_read, data_list_read, /*force_decode*/ true);
                                   if (!ok)
                                       // TODO: Enrich exception message.
                                       throw Exception("Read region " + std::to_string(region->id()) + " of table "
@@ -372,10 +379,21 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
 /// pre-decode region data into block cache and remove
 RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Context & context)
 {
-    auto data_list_read = ReadRegionCommitCache(region);
-
-    if (!data_list_read)
-        return nullptr;
+    std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
+    try
+    {
+        data_list_read = ReadRegionCommitCache(region);
+        if (!data_list_read)
+            return nullptr;
+    }
+    catch (const Exception & e)
+    {
+        // br or lighting may write illegal data into tikv, skip pre-decode and ingest sst later.
+        LOG_WARNING(&Logger::get(__PRETTY_FUNCTION__),
+            ". Got error while reading region committed cache: " << e.displayText() << ". Skip pre-decode and keep original cache.");
+        // set data_list_read and let apply snapshot process use empty block
+        data_list_read = RegionDataReadInfoList();
+    }
 
     auto metrics = context.getTiFlashMetrics();
     const auto & tmt = context.getTMTContext();
@@ -388,12 +406,28 @@ RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Co
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr || storage->isTombstone())
         {
-            if (!force_decode)
+            if (!force_decode) // Need to update.
                 return false;
-            return true;
+            if (storage == nullptr) // Table must have just been GC-ed.
+                return true;
         }
-        auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-        auto [block, ok] = readRegionBlock(storage, *data_list_read, force_decode);
+
+        /// Lock throughout decode and write, during which schema must not change.
+        TableStructureReadLockPtr lock;
+        try
+        {
+            lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+        }
+        catch (DB::Exception & e)
+        {
+            // If the storage is physical dropped (but not removed from `ManagedStorages`) when we want to decode snapshot, consider the decode done.
+            if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+                return true;
+            else
+                throw;
+        }
+        auto reader = RegionBlockReader(storage);
+        auto [block, ok] = reader.read(*data_list_read, force_decode);
         if (!ok)
             return false;
         schema_version = storage->getTableInfo().schema_version;

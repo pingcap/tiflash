@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/Transaction/CFDataPreDecode.h>
+#include <Storages/Transaction/TiKVKeyValue.h>
 
 #include <map>
 
@@ -56,15 +56,12 @@ struct RegionCFDataBase
 
     Data & getDataMut();
 
-    CFDataPreDecode<Trait> & getCFDataPreDecode();
-
 private:
     static bool shouldIgnoreRemove(const Value & value);
     RegionDataRes insert(std::pair<Key, Value> && kv_pair);
 
 private:
     Data data;
-    CFDataPreDecode<Trait> pre_decode;
 };
 
 } // namespace DB

@@ -345,6 +345,10 @@ public:
       */
     virtual bool isDateOrDateTime() const { return false; };
 
+    /** MyDate, MyDateTime. Not Nullable.
+      */
+    virtual bool isMyDateOrMyDateTime() const { return false; };
+
     /** Decimal. Not Nullable.
       */
     virtual bool isDecimal() const { return false; };
@@ -368,7 +372,7 @@ public:
 
     virtual bool isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion() const
     {
-        return isValueRepresentedByNumber() || isFixedString();
+        return isValueUnambiguouslyRepresentedInContiguousMemoryRegion() && (isValueRepresentedByNumber() || isFixedString());
     };
 
     virtual bool isString() const { return false; };
