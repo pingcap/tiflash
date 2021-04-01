@@ -361,11 +361,12 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
     {
         String name = getActions(expr, step.actions);
         step.required_output.push_back(name);
-        if (agg_key_set.find(name) == agg_key_set.end())
+        bool duplicated_key = agg_key_set.find(name) != agg_key_set.end();
+        if (!duplicated_key)
         {
-            aggregation_keys.push_back(name);
             /// note this assume that column with the same name has the same collator
             /// need double check this assumption when we support agg with collation
+            aggregation_keys.push_back(name);
             agg_key_set.emplace(name);
         }
         /// when group_by_collation_sensitive is true, TiFlash will do the aggregation with collation
@@ -379,7 +380,8 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
             std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr;
             if (removeNullable(type)->isString())
                 collator = getCollatorFromExpr(expr);
-            collators.push_back(collator);
+            if (!duplicated_key)
+                collators.push_back(collator);
             if (collator != nullptr)
             {
                 /// if the column is a string with collation info, the `sort_key` of the column is used during
