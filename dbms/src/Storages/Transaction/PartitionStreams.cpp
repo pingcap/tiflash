@@ -27,6 +27,7 @@ extern const char pause_before_apply_raft_snapshot[];
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+extern const int ILLFORMAT_RAFT_ROW;
 } // namespace ErrorCodes
 
 
@@ -389,11 +390,16 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     }
     catch (const Exception & e)
     {
-        // br or lighting may write illegal data into tikv, skip pre-decode and ingest sst later.
-        LOG_WARNING(&Logger::get(__PRETTY_FUNCTION__),
-            ". Got error while reading region committed cache: " << e.displayText() << ". Skip pre-decode and keep original cache.");
-        // set data_list_read and let apply snapshot process use empty block
-        data_list_read = RegionDataReadInfoList();
+        if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
+        {
+            // br or lighting may write illegal data into tikv, skip pre-decode and ingest sst later.
+            LOG_WARNING(&Logger::get(__PRETTY_FUNCTION__),
+                "Got error while reading region committed cache: " << e.displayText() << ". Skip pre-decode and keep original cache.");
+            // set data_list_read and let apply snapshot process use empty block
+            data_list_read = RegionDataReadInfoList();
+        }
+        else
+            throw;
     }
 
     auto metrics = context.getTiFlashMetrics();

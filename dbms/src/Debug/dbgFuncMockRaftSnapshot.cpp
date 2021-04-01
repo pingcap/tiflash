@@ -14,6 +14,7 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>
@@ -326,7 +327,8 @@ void GenMockSSTData(const TiDB::TableInfo & table_info,
     const String & store_key,
     UInt64 start_handle,
     UInt64 end_handle,
-    UInt64 num_fields = 1)
+    UInt64 num_fields = 1,
+    const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
 {
     MockSSTReader::Data write_kv_list, default_kv_list;
     size_t num_rows = end_handle - start_handle;
@@ -368,8 +370,13 @@ void GenMockSSTData(const TiDB::TableInfo & table_info,
             default_kv_list.emplace_back(std::make_pair(std::move(prewrite_key), std::move(prewrite_value)));
         }
     }
-    MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Write}] = std::move(write_kv_list);
-    MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Default}] = std::move(default_kv_list);
+
+    MockSSTReader::getMockSSTData().clear();
+
+    if (cfs.count(ColumnFamilyType::Write) > 0)
+        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Write}] = std::move(write_kv_list);
+    if (cfs.count(ColumnFamilyType::Default) > 0)
+        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Default}] = std::move(default_kv_list);
 }
 
 // Simulate a region IngestSST raft command
