@@ -16,6 +16,10 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+extern const int ILLFORMAT_RAFT_ROW;
+} // namespace ErrorCodes
 
 std::tuple<Block, std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> //
 GenRegionBlockDatawithSchema(const RegionPtr & region, TMTContext & tmt);
@@ -84,7 +88,7 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
     GET_METRIC(metrics, tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds());
     LOG_INFO(log,
              "Pre-handle snapshot " << region->toString(false) << " to " << ingest_file_ids.size() << " DTFiles, cost "
-                                    << watch.elapsedMilliseconds() << "ms [rows=" << process_writes << "]");
+                                    << watch.elapsedMilliseconds() << "ms [rows=" << commit_rows << "]");
     // Note that number of keys in different cf will be aggregated into one metrics
     GET_METRIC(metrics, tiflash_raft_process_keys, type_apply_snapshot).Increment(process_keys);
 }
@@ -173,12 +177,33 @@ bool needUpdateSchema(const ColumnDefinesPtr & a, const ColumnDefinesPtr & b)
 
 void SSTFilesToDTFilesOutputStream::saveCommitedData()
 {
+    bool is_already_stopped = write_reader == nullptr && default_reader == nullptr && lock_reader == nullptr;
+    if (is_already_stopped)
+        return;
+
     // Read block from `region`. If the schema has been updated, we need to
     // generate a new DTFile to store blocks with new schema.
     Block                              block;
     std::shared_ptr<StorageDeltaMerge> storage;
     ColumnDefinesPtr                   schema_snap;
-    std::tie(block, storage, schema_snap) = GenRegionBlockDatawithSchema(region, tmt);
+    try
+    {
+        std::tie(block, storage, schema_snap) = GenRegionBlockDatawithSchema(region, tmt);
+    }
+    catch (DB::Exception & e)
+    {
+        if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
+        {
+            // br or lighting may write illegal data into tikv, stop decoding.
+            LOG_WARNING(&Logger::get(__PRETTY_FUNCTION__),
+                        "Got error while reading region committed cache: " << e.displayText()
+                                                                           << ". Stop decoding rows into DTFiles and keep original cache.");
+            stop();
+            return;
+        }
+        else
+            throw;
+    }
 
     if (block.rows() == 0)
         return;
@@ -208,10 +233,7 @@ void SSTFilesToDTFilesOutputStream::saveCommitedData()
         if (parent_path.empty())
         {
             // Can no allocate path and id for storing DTFiles (the store may be dropped),
-            // reset all SSTReaders and return without writting blocks any more.
-            write_reader.reset();
-            default_reader.reset();
-            lock_reader.reset();
+            stop();
             return;
         }
         dt_file = DMFile::create(file_id, parent_path, single_file_mode);
@@ -224,6 +246,16 @@ void SSTFilesToDTFilesOutputStream::saveCommitedData()
 
     // Write block to the output stream
     dt_stream->write(block, /*not_clean_rows=*/1);
+
+    commit_rows += block.rows();
+}
+
+void SSTFilesToDTFilesOutputStream::stop()
+{
+    // reset all SSTReaders and return without writting blocks any more.
+    write_reader.reset();
+    default_reader.reset();
+    lock_reader.reset();
 }
 
 void SSTFilesToDTFilesOutputStream::finishCurrDTFileStream()

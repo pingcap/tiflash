@@ -62,6 +62,9 @@ private:
 
     void finishCurrDTFileStream();
 
+    // Stop the process for decoding committed data into DTFiles
+    void stop();
+
 private:
     RegionPtr                       region;
     const SSTViewVec &              snaps;
@@ -88,6 +91,7 @@ private:
     size_t    schema_sync_trigger_count = 0;
     size_t    process_keys              = 0;
     size_t    process_writes            = 0;
+    size_t    commit_rows               = 0;
     Stopwatch watch;
 };
 

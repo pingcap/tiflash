@@ -474,7 +474,9 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
 std::tuple<Block, std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> //
 GenRegionBlockDatawithSchema(const RegionPtr & region, TMTContext & tmt)
 {
-    auto data_list_read = ReadRegionCommitCache(region);
+    std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
+    // br or lighting may write illegal data into tikv, the caller should handle the exception thrown by this function
+    data_list_read = ReadRegionCommitCache(region);
 
     Block res_block;
     std::shared_ptr<StorageDeltaMerge> dm_storage;

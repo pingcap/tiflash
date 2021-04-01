@@ -528,12 +528,12 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyBlock(Context & context, const A
 /// Mock to pre-decode snapshot to DTFile(s) then apply
 
 // Simulate a region pre-handle snapshot data to DTFiles
-//    ./storage-client.sh "DBGInvoke region_snapshot_pre_handle_file(database_name, table_name, region_id, start, end, schema_string, pk_name[, test-fields])"
+//    ./storage-client.sh "DBGInvoke region_snapshot_pre_handle_file(database_name, table_name, region_id, start, end, schema_string, pk_name[, test-fields=1, cfs="write,default"])"
 void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() < 7 || args.size() > 8)
-        throw Exception(
-            "Args not matched, should be: database_name, table_name, region_id, start, end, schema_string, pk_name[, test-fields]",
+    if (args.size() < 7 || args.size() > 9)
+        throw Exception("Args not matched, should be: database_name, table_name, region_id, start, end, schema_string, pk_name"
+                        " [, test-fields, cfs=\"write,default\"]",
             ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
@@ -548,6 +548,16 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
     UInt64 test_fields = 1;
     if (args.size() > 7)
         test_fields = (UInt64)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[7]).value);
+    std::unordered_set<ColumnFamilyType> cfs;
+    {
+        String cfs_str = "write,default";
+        if (args.size() > 8)
+            cfs_str = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[8]).value);
+        if (cfs_str.find("write") != std::string::npos)
+            cfs.insert(ColumnFamilyType::Write);
+        if (cfs_str.find("default") != std::string::npos)
+            cfs.insert(ColumnFamilyType::Default);
+    }
 
     // Parse a TableInfo from `schema_str` to generate data with this schema
     TiDB::TableInfoPtr mocked_table_info;
@@ -571,7 +581,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
 
     // Mock SST data for handle [start, end)
     const auto region_name = "__snap_snap_" + std::to_string(region_id);
-    GenMockSSTData(*mocked_table_info, table->id(), region_name, start_handle, end_handle, test_fields);
+    GenMockSSTData(*mocked_table_info, table->id(), region_name, start_handle, end_handle, test_fields, cfs);
 
     auto & tmt = context.getTMTContext();
     auto & kvstore = tmt.getKVStore();
@@ -586,14 +596,18 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
     RegionMockTest mock_test(kvstore, new_region);
 
     std::vector<SSTView> sst_views;
-    sst_views.push_back(SSTView{
-        ColumnFamilyType::Write,
-        BaseBuffView{region_name.data(), region_name.length()},
-    });
-    sst_views.push_back(SSTView{
-        ColumnFamilyType::Default,
-        BaseBuffView{region_name.data(), region_name.length()},
-    });
+    {
+        if (cfs.count(ColumnFamilyType::Write) > 0)
+            sst_views.push_back(SSTView{
+                ColumnFamilyType::Write,
+                BaseBuffView{region_name.data(), region_name.length()},
+            });
+        if (cfs.count(ColumnFamilyType::Default) > 0)
+            sst_views.push_back(SSTView{
+                ColumnFamilyType::Default,
+                BaseBuffView{region_name.data(), region_name.length()},
+            });
+    }
 
     // set block size so that we can test for schema-sync while decoding dt files
     FailPointHelper::enableFailPoint(FailPoints::force_set_prehandle_dtfile_block_size);
@@ -609,6 +623,8 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
     }
 }
 
+// Apply snapshot for a region. (apply a pre-handle snapshot)
+//   ./storages-client.sh "DBGInvoke region_snapshot_apply_file(region_id)"
 void MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 1)
