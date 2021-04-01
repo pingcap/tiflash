@@ -18,10 +18,6 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
-namespace FailPoints
-{
-extern const char pause_until_apply_raft_snapshot[];
-} // namespace FailPoints
 
 KVStore::KVStore(Context & context)
     : region_persister(context, region_manager), raft_cmd_res(std::make_unique<RaftCommandResult>()), log(&Logger::get("KVStore"))
