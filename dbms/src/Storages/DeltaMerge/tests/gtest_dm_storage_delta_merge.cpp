@@ -15,6 +15,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
@@ -158,6 +159,142 @@ try
 }
 CATCH
 
+TEST(StorageDeltaMerge_test, Rename)
+try
+{
+    std::cout << "StorageDeltaMerge_test rename start" << std::endl;
+    Context    ctx = DMTestEnv::getContext();
+    std::shared_ptr<StorageDeltaMerge> storage;
+    DataTypes  data_types;
+    Names      column_names;
+    const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
+    const String table_name = "tmp_table";
+    const String db_name = "default";
+    // create table
+    {
+        NamesAndTypesList names_and_types_list {
+            //{"col1", std::make_shared<DataTypeUInt64>()},
+            {"col1", std::make_shared<DataTypeInt64>()},
+            {"col2", std::make_shared<DataTypeString>()},
+        };
+        for (const auto & name_type : names_and_types_list)
+        {
+            data_types.push_back(name_type.type);
+            column_names.push_back(name_type.name);
+        }
+
+        Poco::File   path(path_name);
+        if (path.exists())
+        {
+            path.remove(true);
+        }
+        std::cout << "TemporaryPath " << path_name << std::endl;
+
+        // primary_expr_ast
+        ASTPtr       astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
+        astptr->children.emplace_back(new ASTIdentifier("col1"));
+
+        storage = StorageDeltaMerge::create("TiFlash",
+                                            db_name,
+                                            table_name,
+                                            std::nullopt,
+                                            ColumnsDescription{names_and_types_list},
+                                            astptr,
+                                            0,
+                                            ctx);
+        storage->startup();
+    }
+
+    ASSERT_FALSE(storage->storeInited());
+    ASSERT_EQ(storage->getTableName(), table_name);
+    ASSERT_FALSE(storage->storeInited());
+    ASSERT_EQ(storage->getDatabaseName(), db_name);
+    ASSERT_FALSE(storage->storeInited());
+
+
+    // Rename database name
+    const String new_db_name = "new_" + storage->getDatabaseName();
+    storage->rename(path_name, new_db_name, table_name, table_name);
+    ASSERT_TRUE(storage->storeInited());
+    ASSERT_EQ(storage->getTableName(), table_name);
+    ASSERT_EQ(storage->getDatabaseName(), new_db_name);
+
+    // Rename table name
+    String new_table_name = "new_" + storage->getTableName();
+    storage->rename(path_name, new_db_name, new_table_name, new_table_name);
+    ASSERT_FALSE(storage->storeInited());
+    ASSERT_EQ(storage->getTableName(), new_table_name);
+    ASSERT_EQ(storage->getDatabaseName(), new_db_name);
+
+    std::cout << "StorageDeltaMerge_test rename end" << std::endl;
+}
+CATCH
+
+TEST(StorageDeltaMerge_test, HandleCol)
+try
+{
+    std::cout << "StorageDeltaMerge_test handle col start" << std::endl;
+    Context    ctx = DMTestEnv::getContext();
+    std::shared_ptr<StorageDeltaMerge> storage;
+    DataTypes  data_types;
+    Names      column_names;
+    const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
+    const String table_name = "tmp_table";
+    const String db_name = "default";
+    // create table
+    {
+        NamesAndTypesList names_and_types_list {
+            //{"col1", std::make_shared<DataTypeUInt64>()},
+            {"col1", std::make_shared<DataTypeInt64>()},
+            {"col2", std::make_shared<DataTypeString>()},
+        };
+        for (const auto & name_type : names_and_types_list)
+        {
+            data_types.push_back(name_type.type);
+            column_names.push_back(name_type.name);
+        }
+
+        Poco::File path(path_name);
+        if (path.exists())
+        {
+            path.remove(true);
+        }
+        std::cout << "TemporaryPath " << path_name << std::endl;
+
+        // primary_expr_ast
+        ASTPtr       astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
+        astptr->children.emplace_back(new ASTIdentifier("col1"));
+
+        storage = StorageDeltaMerge::create("TiFlash",
+                                            db_name,
+                                            table_name,
+                                            std::nullopt,
+                                            ColumnsDescription{names_and_types_list},
+                                            astptr,
+                                            0,
+                                            ctx);
+        storage->startup();
+    }
+
+    ASSERT_FALSE(storage->storeInited());
+    auto pk_type = storage->getPKTypeImpl();
+    auto sort_desc = storage->getPrimarySortDescription();
+    ASSERT_FALSE(storage->storeInited());
+
+    auto& store = storage->getStore();
+    ASSERT_TRUE(storage->storeInited());
+    auto pk_type2 = store->getPKDataType();
+    auto sort_desc2 = store->getPrimarySortDescription();
+
+    ASSERT_EQ(pk_type->getTypeId(), pk_type2->getTypeId());
+    ASSERT_EQ(sort_desc.size(), 1u);
+    ASSERT_EQ(sort_desc2.size(), 1u);
+    ASSERT_EQ(sort_desc.front().column_name, sort_desc2.front().column_name);
+    ASSERT_EQ(sort_desc.front().direction, sort_desc2.front().direction);
+    ASSERT_EQ(sort_desc.front().nulls_direction, sort_desc2.front().nulls_direction);
+    std::cout << "StorageDeltaMerge_test handle col end" << std::endl;
+}
+CATCH
 
 TEST(StorageDeltaMerge_internal_test, GetMergedQueryRanges)
 {

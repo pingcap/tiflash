@@ -61,6 +61,9 @@ StorageDeltaMerge::StorageDeltaMerge( //
     Context & global_context_)
     : IManageableStorage{columns_, tombstone},
       data_path_contains_database_name(db_engine != "TiFlash"),
+      db_name(db_name_),
+      table_name(table_name_),
+      store_inited(false),
       max_column_id_used(0),
       global_context(global_context_.getGlobalContext()),
       log(&Logger::get("StorageDeltaMerge"))
@@ -91,8 +94,6 @@ StorageDeltaMerge::StorageDeltaMerge( //
 
     size_t pks_combined_bytes = 0;
     auto all_columns = getColumns().getAllPhysical();
-    ColumnDefines table_column_defines; // column defines used in DeltaMergeStore
-    ColumnDefine handle_column_define;
     /// rowkey_column_defines is the columns used to generate rowkey in TiDB
     /// if is_common_handle = true || pk_is_handle = true, it is the primary keys in TiDB table's definition
     /// otherwise, it is _tidb_rowid
@@ -208,15 +209,12 @@ StorageDeltaMerge::StorageDeltaMerge( //
         rowkey_column_defines.push_back(handle_column_define);
     }
     rowkey_column_size = rowkey_column_defines.size();
-    store = std::make_shared<DeltaMergeStore>(global_context, data_path_contains_database_name, db_name_, table_name_,
-        std::move(table_column_defines), std::move(handle_column_define), is_common_handle, rowkey_column_size,
-        DeltaMergeStore::Settings());
 }
 
 void StorageDeltaMerge::drop()
 {
     shutdown();
-    store->drop();
+    getAndMaybeInitStore()->drop();
 }
 
 Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const Block & old_block)
@@ -234,6 +232,7 @@ Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const 
             block.erase(TAG_COLUMN_NAME);
     }
 
+    auto& store = getAndMaybeInitStore();
     const size_t rows = block.rows();
     if (!block.has(store->getHandle().name))
     {
@@ -367,11 +366,12 @@ BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settin
     auto decorator = [&](const Block & block) { //
         return this->buildInsertBlock(insert_query.is_import, insert_query.is_delete, block);
     };
-    return std::make_shared<DMBlockOutputStream>(store, decorator, global_context, settings);
+    return std::make_shared<DMBlockOutputStream>(getAndMaybeInitStore(), decorator, global_context, settings);
 }
 
 void StorageDeltaMerge::write(Block && block, const Settings & settings)
 {
+    auto& store = getAndMaybeInitStore();
 #ifndef NDEBUG
     {
         // Do some check under DEBUG mode to ensure all block are written with column id properly set.
@@ -495,6 +495,7 @@ BlockInputStreams StorageDeltaMerge::read( //
     size_t max_block_size,
     unsigned num_streams)
 {
+    auto& store = getAndMaybeInitStore();
     // Note that `columns_to_read` should keep the same sequence as ColumnRef
     // in `Coprocessor.TableScan.columns`, or rough set filter could be
     // failed to parsed.
@@ -595,7 +596,7 @@ BlockInputStreams StorageDeltaMerge::read( //
             {
                 /// Query from TiDB / TiSpark
                 auto create_attr_by_column_id = [this](ColumnID column_id) -> Attr {
-                    const ColumnDefines & defines = this->store->getTableColumns();
+                    const ColumnDefines & defines = this->getAndMaybeInitStore()->getTableColumns();
                     auto iter = std::find_if(
                         defines.begin(), defines.end(), [column_id](const ColumnDefine & d) -> bool { return d.id == column_id; });
                     if (iter != defines.end())
@@ -610,7 +611,7 @@ BlockInputStreams StorageDeltaMerge::read( //
             {
                 // Query from ch client
                 auto create_attr_by_column_id = [this](const String & col_name) -> Attr {
-                    const ColumnDefines & defines = this->store->getTableColumns();
+                    const ColumnDefines & defines = this->getAndMaybeInitStore()->getTableColumns();
                     auto iter = std::find_if(
                         defines.begin(), defines.end(), [&col_name](const ColumnDefine & d) -> bool { return d.name == col_name; });
                     if (iter != defines.end())
@@ -639,20 +640,20 @@ BlockInputStreams StorageDeltaMerge::read( //
     }
 }
 
-void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
+void StorageDeltaMerge::checkStatus(const Context & context) { getAndMaybeInitStore()->check(context); }
 
 void StorageDeltaMerge::flushCache(const Context & context, const DM::RowKeyRange & range_to_flush)
 {
-    store->flushCache(context, range_to_flush);
+    getAndMaybeInitStore()->flushCache(context, range_to_flush);
 }
 
-void StorageDeltaMerge::mergeDelta(const Context & context) { store->mergeDeltaAll(context); }
+void StorageDeltaMerge::mergeDelta(const Context & context) { getAndMaybeInitStore()->mergeDeltaAll(context); }
 
 void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings)
 {
     auto metrics = global_context.getTiFlashMetrics();
     GET_METRIC(metrics, tiflash_storage_command_count, type_delete_range).Increment();
-    return store->deleteRange(global_context, settings, range_to_delete);
+    return getAndMaybeInitStore()->deleteRange(global_context, settings, range_to_delete);
 }
 
 size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::RowKeyRange & range)
@@ -702,6 +703,7 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
 
 void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 {
+    auto& store = getAndMaybeInitStore();
     size_t total_rows = getRows(store, context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     delete_rows = std::min(total_rows, delete_rows);
     auto delete_range = getRange(store, context, total_rows, delete_rows);
@@ -841,8 +843,9 @@ try
 
     commands.apply(new_columns); // apply AlterCommands to `new_columns`
     // apply alter to store's table column in DeltaMergeStore
+    auto& store = getAndMaybeInitStore();
     store->applyAlters(commands, table_info, max_column_id_used, context);
-
+    handle_column_define = store->getHandle();
     SortDescription pk_desc = store->getPrimarySortDescription();
     TiDB::TableInfo table_info_from_store;
     table_info_from_store.name = table_name_;
@@ -871,6 +874,7 @@ String StorageDeltaMerge::getName() const { return MutableSupport::delta_tree_st
 void StorageDeltaMerge::rename(
     const String & new_path_to_db, const String & new_database_name, const String & new_table_name, const String & new_display_table_name)
 {
+    auto& store = getAndMaybeInitStore();
     tidb_table_info.name = new_display_table_name; // update name in table info
     // For DatabaseTiFlash, simply update store's database is OK.
     // `store->getTableName() == new_table_name` only keep for mock test.
@@ -878,6 +882,8 @@ void StorageDeltaMerge::rename(
     if (likely(clean_rename))
     {
         store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
+        db_name = new_database_name;
+        table_name = new_table_name;
         return;
     }
 
@@ -891,26 +897,24 @@ void StorageDeltaMerge::rename(
 
     // flush store and then reset store to new path
     store->flushCache(global_context, RowKeyRange::newAll(is_common_handle, rowkey_column_size));
-    ColumnDefines table_column_defines = store->getTableColumns();
-    ColumnDefine handle_column_define = store->getHandle();
+    table_column_defines = store->getTableColumns();
+    handle_column_define = store->getHandle();
     DeltaMergeStore::Settings settings = store->getSettings();
 
     // remove background tasks
     store->shutdown();
     // rename directories for multi disks
     store->rename(new_path, clean_rename, new_database_name, new_table_name);
-
-    store = {}; // reset store object
-
-    // generate a new store
-    store = std::make_shared<DeltaMergeStore>(global_context,                //
-        data_path_contains_database_name, new_database_name, new_table_name, //
-        std::move(table_column_defines), std::move(handle_column_define), is_common_handle, rowkey_column_size, settings);
+    
+    db_name = new_database_name;
+    table_name = new_table_name;
+    _store = {};
+    store_inited.store(false, std::memory_order_release);
 }
 
-String StorageDeltaMerge::getTableName() const { return store->getTableName(); }
+String StorageDeltaMerge::getTableName() const { return table_name; }
 
-String StorageDeltaMerge::getDatabaseName() const { return store->getDatabaseName(); }
+String StorageDeltaMerge::getDatabaseName() const { return db_name; }
 
 void updateDeltaMergeTableCreateStatement(                   //
     const String & database_name, const String & table_name, //
@@ -1003,7 +1007,7 @@ void StorageDeltaMerge::modifyASTStorage(ASTStorage * storage_ast, const TiDB::T
         args->children.at(1) = literal;
     else
         throw Exception(
-            "Wrong arguments num: " + DB::toString(args->children.size()) + " in table: " + store->getTableName() + " in modifyASTStorage",
+            "Wrong arguments num: " + DB::toString(args->children.size()) + " in table: " + getAndMaybeInitStore()->getTableName() + " in modifyASTStorage",
             ErrorCodes::BAD_ARGUMENTS);
 }
 
@@ -1018,7 +1022,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     auto & name_col = columns[0];
     auto & value_col = columns[1];
 
-    DeltaMergeStoreStat stat = store->getStat();
+    DeltaMergeStoreStat stat = getAndMaybeInitStore()->getStat();
 
 #define INSERT_INT(NAME)             \
     name_col->insert(String(#NAME)); \
@@ -1113,7 +1117,7 @@ void StorageDeltaMerge::shutdown()
     if (!shutdown_called.compare_exchange_strong(v, true))
         return;
 
-    store->shutdown();
+    getAndMaybeInitStore()->shutdown();
 }
 
 void StorageDeltaMerge::removeFromTMTContext()
@@ -1126,8 +1130,32 @@ void StorageDeltaMerge::removeFromTMTContext()
 
 StorageDeltaMerge::~StorageDeltaMerge() { shutdown(); }
 
-DataTypePtr StorageDeltaMerge::getPKTypeImpl() const { return store->getPKDataType(); }
+DataTypePtr StorageDeltaMerge::getPKTypeImpl() const 
+{
+    return handle_column_define.type; 
+}
 
-SortDescription StorageDeltaMerge::getPrimarySortDescription() const { return store->getPrimarySortDescription(); }
+SortDescription StorageDeltaMerge::getPrimarySortDescription() const 
+{
+    SortDescription desc;
+    desc.emplace_back(handle_column_define.name, /* direction_= */ 1, /* nulls_direction_= */ 1);
+    return desc;
+}
 
+DeltaMergeStorePtr& StorageDeltaMerge::getAndMaybeInitStore() 
+{
+    if (store_inited.load(std::memory_order_acquire)) 
+    {
+        return _store;
+    }
+    std::lock_guard<std::mutex> lock(store_mutex);
+    if (_store == nullptr) 
+    {
+        _store = std::make_shared<DeltaMergeStore>(global_context, data_path_contains_database_name, db_name, table_name,
+            std::move(table_column_defines), handle_column_define, is_common_handle, rowkey_column_size,
+            DeltaMergeStore::Settings());
+        store_inited.store(true, std::memory_order_release);
+    }
+    return _store;
+}
 } // namespace DB

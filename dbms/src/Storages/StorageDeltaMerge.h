@@ -22,6 +22,11 @@ namespace DM
 {
 class DeltaMergeStore;
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
+namespace tests
+{
+class StorageDeltaMerge_test_HandleCol_Test;
+class StorageDeltaMerge_test_Rename_Test;
+}
 } // namespace DM
 
 class StorageDeltaMerge : public ext::shared_ptr_helper<StorageDeltaMerge>, public IManageableStorage
@@ -105,12 +110,14 @@ public:
     void checkStatus(const Context & context) override;
     void deleteRows(const Context &, size_t rows) override;
 
-    const DM::DeltaMergeStorePtr & getStore() { return store; }
+    const DM::DeltaMergeStorePtr & getStore() 
+    {
+         return getAndMaybeInitStore();
+    }
 
     bool isCommonHandle() const override { return is_common_handle; }
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
-
 
 protected:
     StorageDeltaMerge( //
@@ -134,12 +141,20 @@ private:
 
     DataTypePtr getPKTypeImpl() const override;
 
+    DM::DeltaMergeStorePtr& getAndMaybeInitStore();
+    bool storeInited() const { return store_inited.load(); } // for test
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
 
     const bool data_path_contains_database_name = false;
 
-    DM::DeltaMergeStorePtr store;
+    std::mutex store_mutex;
+    String db_name;
+    String table_name;
+    DM::ColumnDefines table_column_defines; // column defines used in DeltaMergeStore
+    DM::ColumnDefine handle_column_define;
+    std::atomic<bool> store_inited;
+    DM::DeltaMergeStorePtr _store;
 
     Strings pk_column_names; // TODO: remove it. Only use for debug from ch-client.
     bool is_common_handle;
@@ -160,6 +175,9 @@ private:
     Context & global_context;
 
     Logger * log;
+
+    friend class DM::tests::StorageDeltaMerge_test_HandleCol_Test;
+    friend class DM::tests::StorageDeltaMerge_test_Rename_Test;
 };
 
 
