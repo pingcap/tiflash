@@ -720,11 +720,12 @@ UInt64 StorageDeltaMerge::onSyncGc(Int64 limit)
     return 0;
 }
 
-void StorageDeltaMerge::ingestFiles(const DM::RowKeyRange & range, const std::vector<UInt64> & file_ids, const Settings & settings)
+void StorageDeltaMerge::ingestFiles(
+    const DM::RowKeyRange & range, const std::vector<UInt64> & file_ids, bool clear_data_in_range, const Settings & settings)
 {
     auto metrics = global_context.getTiFlashMetrics();
     GET_METRIC(metrics, tiflash_storage_command_count, type_ingest).Increment();
-    return store->ingestFiles(global_context, settings, range, file_ids, true);
+    return store->ingestFiles(global_context, settings, range, file_ids, clear_data_in_range);
 }
 
 size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::RowKeyRange & range)

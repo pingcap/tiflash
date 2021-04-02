@@ -22,8 +22,9 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char force_set_prehandle_dtfile_block_size[];
-}
+extern const char force_set_sst_to_dtfile_block_size[];
+extern const char force_set_sst_decode_rand[];
+} // namespace FailPoints
 
 namespace FailPoints
 {
@@ -161,7 +162,8 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                         if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)
                         {
                             // Call `ingestFiles` to delete data for range and ingest external DTFiles.
-                            dm_storage->ingestFiles(key_range, new_region_wrap.ingest_ids, context.getSettingsRef());
+                            dm_storage->ingestFiles(
+                                key_range, new_region_wrap.ingest_ids, /*clear_data_in_range=*/true, context.getSettingsRef());
                         }
                         else
                         {
@@ -315,7 +317,7 @@ std::vector<UInt64> KVStore::preHandleSnapshotToFiles(
     size_t expected_block_size = DEFAULT_MERGE_BLOCK_SIZE;
 
     // Use failpoint to change the expected_block_size for some test cases
-    fiu_do_on(FailPoints::force_set_prehandle_dtfile_block_size, { expected_block_size = 3; });
+    fiu_do_on(FailPoints::force_set_sst_to_dtfile_block_size, { expected_block_size = 3; });
 
     DM::SSTFilesToDTFilesOutputStream stream(new_region, snaps, index, term, snapshot_apply_method, proxy_helper, tmt, expected_block_size);
 
@@ -397,9 +399,10 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
 
     Stopwatch watch;
-    auto & ctx = tmt.getContext();
-    SCOPE_EXIT(
-        { GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_command_duration_seconds, type_ingest_sst).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({
+        auto & ctx = tmt.getContext();
+        GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_command_duration_seconds, type_ingest_sst).Observe(watch.elapsedSeconds());
+    });
 
     const RegionPtr region = getRegion(region_id);
     if (region == nullptr)
@@ -409,6 +412,26 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
                                 << "], might be removed already");
         return EngineStoreApplyRes::NotFound;
     }
+
+    fiu_do_on(FailPoints::force_set_sst_decode_rand, {
+        static int num_call = 0;
+        switch (num_call++ % 3)
+        {
+            case 0:
+                snapshot_apply_method = TiDB::SnapshotApplyMethod::Block;
+                break;
+            case 1:
+                snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Directory;
+                break;
+            case 2:
+                snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
+                break;
+            default:
+                break;
+        }
+        LOG_INFO(
+            log, __FUNCTION__ << ": " << region->toString(true) << " ingest sst by method " << applyMethodToString(snapshot_apply_method));
+    });
 
     const auto func_try_flush = [&]() {
         if (!region->writeCFCount())
@@ -426,11 +449,22 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
         }
     };
 
-    // try to flush remain data in memory.
-    func_try_flush();
-    // TODO: handle `IngestSST` with `DM::SSTFilesToDTFilesOutputStream`
-    region->handleIngestSST(snaps, index, term, tmt);
-    func_try_flush();
+    if (snapshot_apply_method == TiDB::SnapshotApplyMethod::Block)
+    {
+        // try to flush remain data in memory.
+        func_try_flush();
+        region->handleIngestSST(snaps, index, term, tmt);
+        // after `handleIngestSSTByBlock`, all data are stored in `region`, try to flush committed data into storage
+        func_try_flush();
+    }
+    else
+    {
+        // try to flush remain data in memory.
+        func_try_flush();
+        handleIngestSSTByDTFile(region, snaps, index, term, tmt);
+        // after `handleIngestSSTByDTFile`, there should be only uncommitted data left in `region`,
+        // don't need flush to storage
+    }
 
     if (region->dataSize())
     {
@@ -443,5 +477,49 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
         return EngineStoreApplyRes::Persist;
     }
 }
+
+void KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+{
+    // Decode the KV pairs in ingesting SST into DTFiles
+    PageIds ingest_ids;
+    {
+        size_t expected_block_size = DEFAULT_MERGE_BLOCK_SIZE;
+
+        // Use failpoint to change the expected_block_size for some test cases
+        fiu_do_on(FailPoints::force_set_sst_to_dtfile_block_size, { expected_block_size = 3; });
+
+        // Ingest SST won't clear the data before ingesting files, so we use the `region` to keep the uncommitted data in memory.
+        DM::SSTFilesToDTFilesOutputStream stream(region, snaps, index, term, snapshot_apply_method, proxy_helper, tmt, expected_block_size);
+        stream.writePrefix();
+        stream.write();
+        stream.writeSuffix();
+        ingest_ids = stream.ingestIds();
+    }
+
+    try
+    {
+        auto table_id = region->getMappedTableID();
+        if (auto storage = tmt.getStorages().get(table_id); storage)
+        {
+            // Ingest DTFiles into DeltaMerge storage
+            auto & context = tmt.getContext();
+            // acquire lock so that no other threads can drop storage
+            auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+            auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+            auto key_range
+                = DM::RowKeyRange::fromRegionRange(region->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
+            // Call `ingestFiles` to ingest external DTFiles.
+            // Note that ingest sst won't remove the data in the key range
+            dm_storage->ingestFiles(key_range, ingest_ids, /*clear_data_in_range=*/false, context.getSettingsRef());
+        }
+    }
+    catch (DB::Exception & e)
+    {
+        // We can ignore if storage is dropped.
+        if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
+            throw;
+    }
+}
+
 
 } // namespace DB

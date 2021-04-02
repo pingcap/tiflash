@@ -29,8 +29,9 @@ namespace DB
 
 namespace FailPoints
 {
-extern const char force_set_prehandle_dtfile_block_size[];
-}
+extern const char force_set_sst_to_dtfile_block_size[];
+extern const char force_set_sst_decode_rand[];
+} // namespace FailPoints
 
 namespace ErrorCodes
 {
@@ -402,6 +403,7 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
     auto & kvstore = tmt.getKVStore();
     auto region = kvstore->getRegion(region_id);
 
+    FailPointHelper::enableFailPoint(FailPoints::force_set_sst_decode_rand);
     // Register some mock SST reading methods so that we can decode data in `MockSSTReader::MockSSTData`
     RegionMockTest mock_test(kvstore, region);
 
@@ -610,7 +612,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
     }
 
     // set block size so that we can test for schema-sync while decoding dt files
-    FailPointHelper::enableFailPoint(FailPoints::force_set_prehandle_dtfile_block_size);
+    FailPointHelper::enableFailPoint(FailPoints::force_set_sst_to_dtfile_block_size);
 
     auto ingest_ids = kvstore->preHandleSnapshotToFiles(
         new_region, SSTViewVec{sst_views.data(), sst_views.size()}, index, MockTiKV::instance().getRaftTerm(region_id), tmt);
