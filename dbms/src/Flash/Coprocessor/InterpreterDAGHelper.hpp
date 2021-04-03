@@ -18,8 +18,9 @@ RegionException::RegionReadStatus GetRegionReadStatus(
     if (!current_region)
         return RegionException::RegionReadStatus::NOT_FOUND;
     auto meta_snap = current_region->dumpRegionMetaSnapshot();
-    if (meta_snap.ver != check_info.region_version || meta_snap.conf_ver != check_info.region_conf_version)
+    if (meta_snap.ver != check_info.region_version)
         return RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
+    // No need to check conf_version if its peer state is normal
     if (current_region->peerState() != raft_serverpb::PeerState::Normal)
         return RegionException::RegionReadStatus::NOT_FOUND;
 
