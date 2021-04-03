@@ -365,10 +365,21 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
 /// pre-decode region data into block cache and remove
 RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Context & context)
 {
-    auto data_list_read = ReadRegionCommitCache(region);
-
-    if (!data_list_read)
-        return nullptr;
+    std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
+    try
+    {
+        data_list_read = ReadRegionCommitCache(region);
+        if (!data_list_read)
+            return nullptr;
+    }
+    catch (const Exception & e)
+    {
+        // br or lighting may write illegal data into tikv, skip pre-decode and ingest sst later.
+        LOG_WARNING(&Logger::get(__PRETTY_FUNCTION__),
+            ". Got error while reading region committed cache: " << e.displayText() << ". Skip pre-decode and keep original cache.");
+        // set data_list_read and let apply snapshot process use empty block
+        data_list_read = RegionDataReadInfoList();
+    }
 
     auto metrics = context.getTiFlashMetrics();
     const auto & tmt = context.getTMTContext();
