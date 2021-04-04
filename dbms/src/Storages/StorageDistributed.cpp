@@ -246,7 +246,7 @@ void StorageDistributed::alter(const AlterCommands & params, const String & data
         if (param.type == AlterCommand::MODIFY_PRIMARY_KEY)
             throw Exception("Storage engine " + getName() + " doesn't support primary key.", ErrorCodes::NOT_IMPLEMENTED);
 
-    auto lock = lockStructureForAlter(__PRETTY_FUNCTION__);
+    auto lock = lockForAlter(context.getCurrentQueryId());
 
     ColumnsDescription new_columns = getColumns();
     params.apply(new_columns);

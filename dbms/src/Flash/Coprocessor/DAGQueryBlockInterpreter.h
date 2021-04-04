@@ -18,6 +18,7 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/IInterpreter.h>
 #include <Storages/RegionQueryInfo.h>
+#include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <pingcap/coprocessor/Client.h>
 
@@ -138,7 +139,7 @@ private:
 
     /// Table from where to read data, if not subquery.
     ManageableStoragePtr storage;
-    TableStructureReadLockPtr table_lock;
+    TableLockHolder table_lock;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 

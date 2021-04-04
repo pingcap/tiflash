@@ -867,8 +867,7 @@ try
         }
     }
 
-    auto table_soft_lock = lockDataForAlter(__PRETTY_FUNCTION__);
-    auto table_hard_lock = lockStructureForAlter(__PRETTY_FUNCTION__);
+    auto table_soft_lock = lockForAlter(__PRETTY_FUNCTION__); // FIXME:
 
     // update the metadata in database, so that we can read the new schema using TiFlash's client
     ColumnsDescription new_columns = getColumns();

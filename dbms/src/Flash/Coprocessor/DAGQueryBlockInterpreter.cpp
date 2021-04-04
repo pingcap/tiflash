@@ -175,7 +175,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         {
             throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
         }
-        table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+        table_lock = storage->lockForShare(context.getCurrentQueryId());
     }
     else
     {
@@ -823,7 +823,7 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
     auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
 
     /// Lambda for get storage, then align schema version under the read lock.
-    auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<ManageableStoragePtr, TableStructureReadLockPtr, Int64, bool> {
+    auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<ManageableStoragePtr, TableLockHolder, Int64, bool> {
         /// Get storage in case it's dropped then re-created.
         // If schema synced, call getTable without try, leading to exception on table not existing.
         auto storage_ = context.getTMTContext().getStorages().get(table_id);
@@ -842,8 +842,8 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
                 Errors::Coprocessor::Internal);
         }
 
-        /// Lock storage.
-        auto lock = storage_->lockStructure(false, __PRETTY_FUNCTION__);
+        /// Lock storage not to be dropped during coprocessor reading
+        auto lock = storage_->lockForShare(context.getCurrentQueryId());
 
         /// Check schema version, requiring TiDB/TiSpark and TiFlash both use exactly the same schema.
         // We have three schema versions, two in TiFlash:
@@ -874,7 +874,7 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
 
     /// Try get storage and lock once.
     ManageableStoragePtr storage_;
-    TableStructureReadLockPtr lock;
+    TableLockHolder lock;
     Int64 storage_schema_version;
     auto log_schema_version = [&](const String & result) {
         LOG_DEBUG(log,

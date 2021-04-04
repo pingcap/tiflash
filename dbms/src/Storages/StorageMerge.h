@@ -52,7 +52,7 @@ private:
     OptimizedRegularExpression table_name_regexp;
     const Context & context;
 
-    using StorageListWithLocks = std::list<std::pair<StoragePtr, TableStructureReadLockPtr>>;
+    using StorageListWithLocks = std::list<std::pair<StoragePtr, TableLockHolder>>;
 
     StorageListWithLocks getSelectedTables() const;
 

@@ -405,6 +405,7 @@ namespace ErrorCodes
     extern const int DIVIDED_BY_ZERO = 10011;
     extern const int INVALID_TIME = 10012;
     extern const int DEADLOCK_AVOIDED = 10013;
+    extern const int PTHREAD_ERROR = 10014;
 }
 
 }

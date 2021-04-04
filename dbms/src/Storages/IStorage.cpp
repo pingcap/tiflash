@@ -47,7 +47,7 @@ TableLockHolder IStorage::lockForAlter(const String & query_id, const std::chron
     return result;
 }
 
-TableStructureLockHolder IStorage::lockForDecode(const String & query_id, const std::chrono::milliseconds & acquire_timeout)
+TableStructureLockHolder IStorage::lockStructureForShare(const String & query_id, const std::chrono::milliseconds & acquire_timeout)
 {
     TableStructureLockHolder result;
     result.alter_lock = tryLockTimed(alter_lock, RWLockImpl::Read, query_id, acquire_timeout);

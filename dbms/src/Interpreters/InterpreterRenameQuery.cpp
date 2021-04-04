@@ -120,12 +120,12 @@ BlockIO InterpreterRenameQuery::execute()
         // Don't need any lock on "tidb_display" names, because we don't identify any table by that name in TiFlash
     }
 
-    std::vector<TableFullWriteLock> locks;
+    std::vector<TableExclusiveLockHolder> locks;
     locks.reserve(unique_tables_from.size());
 
     for (const auto & names : unique_tables_from)
         if (auto table = context.tryGetTable(names.database_name, names.table_name))
-            locks.emplace_back(table->lockForAlter(__PRETTY_FUNCTION__));
+            locks.emplace_back(table->lockExclusively(context.getCurrentQueryId()));
 
     /** All tables are locked. If there are more than one rename in chain,
       *  we need to hold global lock while doing all renames. Order matters to avoid deadlocks.

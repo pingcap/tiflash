@@ -16,11 +16,6 @@
 namespace DB
 {
 
-namespace ErrorCodes
-{
-extern const int TABLE_IS_DROPPED;
-}
-
 class Context;
 class IBlockInputStream;
 class IBlockOutputStream;
@@ -90,7 +85,7 @@ public:
     /// Mutiple Raft apply threads may decode data in concurrent, we ensure the structure
     /// won't be changed by this lock.
     /// After decoding done, we can release alter lock but keep drop lock for writing data.
-    TableStructureLockHolder lockForDecode(
+    TableStructureLockHolder lockStructureForShare(
         const String & query_id, const std::chrono::milliseconds & acquire_timeout = std::chrono::milliseconds(0));
 
     /// Lock table exclusively. This lock must be acquired if you want to be
