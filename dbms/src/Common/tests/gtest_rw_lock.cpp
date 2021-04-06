@@ -2,6 +2,7 @@
 #include <Common/RWLock.h>
 #include <Common/Stopwatch.h>
 #include <Core/Types.h>
+#include <IO/WriteHelpers.h>
 #include <common/ThreadPool.h>
 #include <gtest/gtest.h>
 
@@ -31,15 +32,20 @@ TEST(Common, RWLock1)
     static std::atomic<int> readers{0};
     static std::atomic<int> writers{0};
 
+    static std::atomic<int> total_readers{0};
+    static std::atomic<int> total_writers{0};
+
     static auto fifo_lock = RWLockImpl::create();
 
-    static thread_local std::random_device rd;
-    static thread_local pcg64 gen(rd());
-
     auto func = [&](size_t threads, int round) {
+        std::random_device rd;
+        pcg64 gen(rd());
+        std::uniform_int_distribution<> d(0, 9);
+
         for (int i = 0; i < cycles; ++i)
         {
-            auto type = (std::uniform_int_distribution<>(0, 9)(gen) >= round) ? RWLockImpl::Read : RWLockImpl::Write;
+            auto r = d(gen);
+            auto type = (r >= round) ? RWLockImpl::Read : RWLockImpl::Write;
             auto sleep_for = std::chrono::duration<int, std::micro>(std::uniform_int_distribution<>(1, 100)(gen));
 
             auto lock = fifo_lock->getLock(type, RWLockImpl::NO_QUERY);
@@ -53,6 +59,7 @@ TEST(Common, RWLock1)
 
                 std::this_thread::sleep_for(sleep_for);
 
+                ++total_writers;
                 --writers;
             }
             else
@@ -65,6 +72,7 @@ TEST(Common, RWLock1)
 
                 std::this_thread::sleep_for(sleep_for);
 
+                ++total_readers;
                 --readers;
             }
         }
@@ -74,6 +82,8 @@ TEST(Common, RWLock1)
     {
         for (int round = 0; round < 10; ++round)
         {
+            total_readers = 0;
+            total_writers = 0;
             Stopwatch watch(CLOCK_MONOTONIC_COARSE);
 
             std::list<std::thread> threads;
@@ -84,7 +94,8 @@ TEST(Common, RWLock1)
                 thread.join();
 
             auto total_time = watch.elapsedSeconds();
-            std::cout << "Threads " << pool_size << ", round " << round << ", total_time " << std::setprecision(2) << total_time << "\n";
+            std::cout << "Threads " << pool_size << ", round " << round << ", total_time " << DB::toString(total_time, 3)
+                      << ", r:" << std::setw(4) << total_readers << ", w:" << std::setw(4) << total_writers << "\n";
         }
     }
 }
@@ -221,6 +232,28 @@ TEST(Common, RWLockPerfTestReaders)
             for (auto i = 0; i < cycles; ++i)
             {
                 auto lock = fifo_lock->getLock(RWLockImpl::Read, RWLockImpl::NO_QUERY);
+            }
+        };
+
+        std::list<std::thread> threads;
+        for (size_t thread = 0; thread < pool_size; ++thread)
+            threads.emplace_back(func);
+
+        for (auto & thread : threads)
+            thread.join();
+
+        auto total_time = watch.elapsedSeconds();
+        std::cout << "Threads " << pool_size << ", total_time " << std::setprecision(2) << total_time << "\n";
+    }
+
+    for (auto pool_size : pool_sizes)
+    {
+        Stopwatch watch(CLOCK_MONOTONIC_COARSE);
+
+        auto func = [&]() {
+            for (auto i = 0; i < cycles; ++i)
+            {
+                auto lock = fifo_lock->getLock(RWLockImpl::Read, "test_query_id");
             }
         };
 
