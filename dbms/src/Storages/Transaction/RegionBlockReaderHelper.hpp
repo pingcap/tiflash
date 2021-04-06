@@ -9,6 +9,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
+// ColumnID => <ColumnPtr, <name, type>, offset>
 struct ColumnDataInfoMap
 {
     using ColTypeInfo = std::tuple<MutableColumnPtr, NameAndTypePair, size_t>;
