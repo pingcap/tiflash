@@ -110,9 +110,18 @@ void tryOptimizeStorageFinal(Context & context, TableID table_id)
     if (!managed_storage || managed_storage->engineType() != TiDB::StorageEngine::TMT)
         return;
 
-    auto table_lock = managed_storage->lockStructure(true, __PRETTY_FUNCTION__);
-    if (managed_storage->is_dropped)
-        return;
+    try
+    {
+        auto table_lock = managed_storage->lockStructure(true, __PRETTY_FUNCTION__);
+    }
+    catch (DB::Exception & e)
+    {
+        // We can ignore if storage is dropped.
+        if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+            return;
+        else
+            throw;
+    }
 
     std::stringstream ss;
     ss << "OPTIMIZE TABLE `" << storage->getDatabaseName() << "`.`" << storage->getTableName() << "` PARTITION ID '0' FINAL";
