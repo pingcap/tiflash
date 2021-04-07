@@ -134,14 +134,24 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
             {
                 case TiDB::StorageEngine::DT:
                 {
-                    auto & context = tmt.getContext();
-                    // acquire lock so that no other threads can change storage's structure
-                    auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
-                    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                    const auto handle_range = new_region_wrap->getHandleRangeByTable(table_id);
-                    const auto dm_handle_range = toDMHandleRange(handle_range);
-                    // Call `deleteRange` to delete data for range
-                    dm_storage->deleteRange(dm_handle_range, context.getSettingsRef());
+                    try
+                    {
+
+                        auto & context = tmt.getContext();
+                        // acquire lock so that no other threads can drop storage
+                        auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+                        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+                        const auto handle_range = new_region_wrap->getHandleRangeByTable(table_id);
+                        const auto dm_handle_range = toDMHandleRange(handle_range);
+                        // Call `deleteRange` to delete data for range
+                        dm_storage->deleteRange(dm_handle_range, context.getSettingsRef());
+                    }
+                    catch (DB::Exception & e)
+                    {
+                        // We can ignore if storage is dropped.
+                        if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
+                            throw;
+                    }
                     break;
                 }
                 default:
@@ -249,8 +259,6 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, con
             // Note that number of keys in different cf will be aggregated into one metrics
             GET_METRIC(metrics, tiflash_raft_process_keys, type_apply_snapshot).Increment(kv_size);
         }
-        // do not really pre-decode value into Field list.
-        new_region->tryPreDecodeTiKVValue<true>(tmt);
         {
             LOG_INFO(log, "Start to pre-decode " << new_region->toString() << " into block");
             auto block_cache = GenRegionPreDecodeBlockData(new_region, ctx);
@@ -358,7 +366,6 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     // try to flush remain data in memory.
     func_try_flush();
     region->handleIngestSST(snaps, index, term, tmt);
-    region->tryPreDecodeTiKVValue<true>(tmt);
     func_try_flush();
 
     if (region->dataSize())
