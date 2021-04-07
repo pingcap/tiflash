@@ -1,0 +1,77 @@
+mysql> drop table if exists test.t;
+mysql> drop table if exists test.t_nullable;
+
+mysql> create table test.t (col_1 varchar(100) not null, col_2 decimal(40,2) not null, col_3 decimal(30,2) not null, col_4 decimal(10,2) not null, col_5 decimal(5,2) not null);
+mysql> insert into test.t values('test3', 1.11, 1.11, 1.11, 1.11),('test4', -1.11, -1.11, -1.11, -1.11),('test3', 1.11, 1.11, 1.11, 1.11),('test4', -1.11, -1.11, -1.11, -1.11);
+mysql> alter table test.t set tiflash replica 1;
+mysql> create table test.t_nullable (col_1 varchar(100), col_2 decimal(40,2), col_3 decimal(30,2), col_4 decimal(10,2), col_5 decimal(5,2));
+mysql> insert into test.t_nullable values('test3', 1.11, 1.11, 1.11, 1.11),('test4', -1.11, -1.11, -1.11, -1.11),('test3', 1.11, 1.11, 1.11, 1.11),('test4', -1.11, -1.11, -1.11, -1.11),('test5', null, null, null, null),('test5', null, null, null, null);
+mysql> alter table test.t_nullable set tiflash replica 1;
+
+func> wait_table test t
+func> wait_table test t_nullable
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*), col_2 from test.t group by col_2;
++----------+-------+
+| count(*) | col_2 |
++----------+-------+
+|        2 |  1.11 |
+|        2 | -1.11 |
++----------+-------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*), col_3 from test.t group by col_3;
++----------+-------+
+| count(*) | col_3 |
++----------+-------+
+|        2 |  1.11 |
+|        2 | -1.11 |
++----------+-------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*), col_4 from test.t group by col_4;
++----------+-------+
+| count(*) | col_4 |
++----------+-------+
+|        2 |  1.11 |
+|        2 | -1.11 |
++----------+-------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*), col_5 from test.t group by col_5;
++----------+-------+
+| count(*) | col_5 |
++----------+-------+
+|        2 |  1.11 |
+|        2 | -1.11 |
++----------+-------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*), col_2 from test.t_nullable group by col_2;
++----------+-------+
+| count(*) | col_2 |
++----------+-------+
+|        2 | -1.11 |
+|        2 |  1.11 |
+|        2 |  NULL |
++----------+-------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*), col_3 from test.t_nullable group by col_3;
++----------+-------+
+| count(*) | col_3 |
++----------+-------+
+|        2 | -1.11 |
+|        2 |  1.11 |
+|        2 |  NULL |
++----------+-------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*), col_4 from test.t_nullable group by col_4;
++----------+-------+
+| count(*) | col_4 |
++----------+-------+
+|        2 | -1.11 |
+|        2 |  1.11 |
+|        2 |  NULL |
++----------+-------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*), col_5 from test.t_nullable group by col_5;
++----------+-------+
+| count(*) | col_5 |
++----------+-------+
+|        2 | -1.11 |
+|        2 |  1.11 |
+|        2 |  NULL |
++----------+-------+
+
+mysql> drop table if exists test.t;
+mysql> drop table if exists test.t_nullable;
