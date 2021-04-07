@@ -16,6 +16,7 @@
 #include <common/Types.h>
 #include <type_traits>
 #include <Common/Decimal.h>
+#include <Common/Exception.h>
 
 #define ROTL(x, b) static_cast<UInt64>(((x) << (b)) | ((x) >> (64 - (b))))
 
@@ -132,11 +133,36 @@ public:
         }
     }
 
+    template <typename T>
+    std::enable_if_t<DB::IsBoostNumber<T>, void> update(const T & x)
+    {
+        if constexpr (DB::IsCppIntBackend<typename T::backend_type>)
+        {
+            auto backend_value = x.backend();
+            for (unsigned i = 0; i < backend_value.size(); ++i)
+            {
+                update(backend_value.limbs()[i]);
+            }
+            update(backend_value.sign());
+            return;
+        }
+        else
+        {
+            throw DB::Exception("hash value of boost number not based on cpp_int_backend is not supported");
+        }
+    }
     /// NOTE: std::has_unique_object_representations is only available since clang 6. As of Mar 2017 we still use clang 5 sometimes.
     template <typename T>
-    std::enable_if_t<std::/*has_unique_object_representations_v*/is_standard_layout_v<T>, void> update(const T & x)
+    std::enable_if_t<!DB::IsBoostNumber<T> && std::/*has_unique_object_representations_v*/is_standard_layout_v<T>, void> update(const T & x)
     {
-        update(reinterpret_cast<const char *>(&x), sizeof(x));
+        if constexpr (DB::IsDecimal<T>)
+        {
+            return update(x.value);
+        }
+        else
+        {
+            update(reinterpret_cast<const char *>(&x), sizeof(x));
+        }
     }
 
     /// Get the result in some form. This can only be done once!
@@ -183,13 +209,41 @@ inline UInt64 sipHash64(const char * data, const size_t size)
 }
 
 template <typename T>
-std::enable_if_t<std::/*has_unique_object_representations_v*/is_standard_layout_v<T>, UInt64> sipHash64(const T & x)
+std::enable_if_t<DB::IsBoostNumber<T>, UInt64> sipHash64(const T & x)
 {
-    SipHash hash;
-    hash.update(x);
-    return hash.get64();
+    if constexpr (DB::IsCppIntBackend<typename T::backend_type>)
+    {
+        /// the steps of calculating hash is copied from
+        /// https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/misc.hpp#L639
+        SipHash hash;
+        auto backend_value = x.backend();
+        for(unsigned i = 0; i < backend_value.size(); ++i)
+        {
+            hash.update(backend_value.limbs()[i]);
+        }
+        hash.update(backend_value.sign());
+        return hash.get64();
+    }
+    else
+    {
+        throw DB::Exception("hash value of boost number not based on cpp_int_backend is not supported");
+    }
 }
 
+template <typename T>
+std::enable_if_t<!DB::IsBoostNumber<T> && std::/*has_unique_object_representations_v*/is_standard_layout_v<T>, UInt64> sipHash64(const T & x)
+{
+    if constexpr (DB::IsDecimal<T>)
+    {
+        return sipHash64(x.value);
+    }
+    else
+    {
+        SipHash hash;
+        hash.update(x);
+        return hash.get64();
+    }
+}
 
 #include <string>
 
