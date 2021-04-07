@@ -3,6 +3,15 @@
 namespace DB
 {
 
+DecodedFields::const_iterator findByColumnID(Int64 col_id, const DecodedFields & row)
+{
+    const static auto cmp = [](const DecodedField & e, const Int64 cid) -> bool { return e.col_id < cid; };
+    auto it = std::lower_bound(row.cbegin(), row.cend(), col_id, cmp);
+    if (it != row.cend() && it->col_id == col_id)
+        return it;
+    return row.cend();
+}
+
 template <typename T>
 static T decodeUInt(size_t & cursor, const TiKVValue::Base & raw_value)
 {
@@ -250,7 +259,7 @@ TiKVValue::Base encodeNotNullColumn(const Field & field, const ColumnInfo & colu
         case TiDB::TypeJSON:
             return field.safeGet<String>();
         case TiDB::TypeNewDecimal:
-            EncodeDecimal(field, ss);
+            EncodeDecimalForRow(field, ss, column_info);
             break;
         case TiDB::TypeTimestamp:
         case TiDB::TypeDate:
@@ -386,7 +395,7 @@ void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & 
     {
         const TiDB::ColumnInfo & column_info = table_info.columns[i];
         EncodeDatum(Field(column_info.id), TiDB::CodecFlagInt, ss);
-        EncodeDatum(fields[i], column_info.getCodecFlag(), ss);
+        EncodeDatumForRow(fields[i], column_info.getCodecFlag(), ss, column_info);
     }
 }
 

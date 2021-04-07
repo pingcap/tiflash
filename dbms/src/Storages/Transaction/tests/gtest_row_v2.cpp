@@ -125,6 +125,17 @@ using ColumnIDValueNull = ColumnIDValue<T, true>;
 
 using OrderedColumnInfoFields = std::map<ColumnID, std::tuple<ColumnInfo, Field>>;
 
+template <typename DataType>
+constexpr bool IsDecimalFieldType = false;
+template <>
+inline constexpr bool IsDecimalFieldType<DecimalField<Decimal32>> = true;
+template <>
+inline constexpr bool IsDecimalFieldType<DecimalField<Decimal64>> = true;
+template <>
+inline constexpr bool IsDecimalFieldType<DecimalField<Decimal128>> = true;
+template <>
+inline constexpr bool IsDecimalFieldType<DecimalField<Decimal256>> = true;
+
 template <typename Type>
 void getTableInfoFieldsInternal(OrderedColumnInfoFields & column_info_fields, Type && column_id_value)
 {
@@ -135,8 +146,19 @@ void getTableInfoFieldsInternal(OrderedColumnInfoFields & column_info_fields, Ty
     else
     {
         using NearestType = typename NearestFieldType<ValueType>::Type;
-        column_info_fields.emplace(column_id_value.id,
-            std::make_tuple(getColumnInfo<ValueType>(column_id_value.id), static_cast<NearestType>(std::move(column_id_value.value))));
+        if constexpr (IsDecimalFieldType<NearestType>)
+        {
+            ColumnInfo column_info = getColumnInfo<ValueType>(column_id_value.id);
+            auto field = static_cast<NearestType>(std::move(column_id_value.value));
+            column_info.flen = field.getPrec();
+            column_info.decimal = field.getScale();
+            column_info_fields.emplace(column_id_value.id, std::make_tuple(column_info, field));
+        }
+        else
+        {
+            column_info_fields.emplace(column_id_value.id,
+                std::make_tuple(getColumnInfo<ValueType>(column_id_value.id), static_cast<NearestType>(std::move(column_id_value.value))));
+        }
     }
 }
 
