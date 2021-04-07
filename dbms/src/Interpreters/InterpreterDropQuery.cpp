@@ -127,9 +127,10 @@ BlockIO InterpreterDropQuery::execute()
                     ErrorCodes::TABLE_WAS_NOT_DROPPED);
         }
 
-        /// If table was already dropped by anyone, an exception will be thrown
-        // TODO: Add timeout
-        auto table_lock = table.first->lockExclusively(context.getCurrentQueryId());
+        /// If table was already dropped by anyone, an exception will be thrown;
+        /// If can not acquire the drop lock on table within `drop.lock_timeout`,
+        /// an exception will be thrown;
+        auto table_lock = table.first->lockExclusively(context.getCurrentQueryId(), drop.lock_timeout);
 
         table.first->shutdown();
 

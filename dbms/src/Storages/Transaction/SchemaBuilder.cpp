@@ -814,18 +814,31 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & schema_name)
+void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
 {
     GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_drop_db).Increment();
-    LOG_INFO(log, "Dropping database " << schema_name);
-    auto drop_query = std::make_shared<ASTDropQuery>();
-    drop_query->database = schema_name;
-    drop_query->if_exists = true;
-    ASTPtr ast_drop_query = drop_query;
-    // It will drop all tables in this database.
-    InterpreterDropQuery drop_interpreter(ast_drop_query, context);
-    drop_interpreter.execute();
-    LOG_INFO(log, "Dropped database " << schema_name);
+    LOG_INFO(log, "Tombstoning database " << db_name);
+    auto db = context.tryGetDatabase(db_name);
+    if (db == nullptr)
+    {
+        LOG_INFO(log, "Database " << db_name << " does not exists");
+        return;
+    }
+
+    /// In order not to acquire `drop_lock` on storages, we tombstone the database in
+    /// this thread and physically remove data in another thread. So that applying
+    /// drop DDL from TiDB won't block or be blocked by read / write to the storages.
+
+    // Instead of getting a precise time that TiDB drops this database, use a more
+    // relaxing GC strategy:
+    // 1. Use current timestamp, which is after TiDB's drop time, to be the tombstone of this database;
+    // 2. Use the same GC safe point as TiDB.
+    // In such way our database (and its belonging tables) will be GC-ed later than TiDB, which is safe and correct.
+    auto & tmt_context = context.getTMTContext();
+    auto tombstone = tmt_context.getPDClient()->getTS();
+    db->alterTombstone(context, tombstone);
+
+    LOG_INFO(log, "Tombstoned database " << db_name);
 }
 
 String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, const SchemaNameMapper & name_mapper, Logger * log)
