@@ -108,7 +108,9 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
         {
             // Try to get a read lock on `storage` so it won't be dropped during `flushCache`
             auto storage_lock = storage->lockForShare(getThreadName());
-            storage->flushCache(tmt.getContext(), region);
+            auto rowkey_range = DM::RowKeyRange::fromRegionRange(
+                region.getRange(), region.getRange()->getMappedTableID(), storage->isCommonHandle(), storage->getRowKeyColumnSize());
+            storage->flushCache(tmt.getContext(), rowkey_range);
         }
         catch (DB::Exception & e)
         {

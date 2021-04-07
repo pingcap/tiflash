@@ -20,6 +20,11 @@ struct SchemaNameMapper;
 class ASTStorage;
 class Region;
 
+namespace DM
+{
+struct RowKeyRange;
+}
+
 /**
  * An interface for Storages synced from TiDB.
  *
@@ -42,7 +47,7 @@ public:
 
     virtual void flushCache(const Context & /*context*/) {}
 
-    virtual void flushCache(const Context & /*context*/, const Region & /* region */) {}
+    virtual void flushCache(const Context & /*context*/, const DM::RowKeyRange & /*range_to_flush*/) {}
 
     virtual BlockInputStreamPtr status() { return {}; }
 

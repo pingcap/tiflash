@@ -697,6 +697,11 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 void StorageDeltaMerge::checkStatus(const Context & context) { getAndMaybeInitStore()->check(context); }
 
+void StorageDeltaMerge::flushCache(const Context & context)
+{
+    flushCache(context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
+}
+
 void StorageDeltaMerge::flushCache(const Context & context, const DM::RowKeyRange & range_to_flush)
 {
     getAndMaybeInitStore()->flushCache(context, range_to_flush);
