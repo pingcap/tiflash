@@ -29,10 +29,9 @@ void registerStorageNull(StorageFactory & factory)
     });
 }
 
-void StorageNull::alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context)
+void StorageNull::alter(
+    const TableLockHolder &, const AlterCommands & params, const String & database_name, const String & table_name, const Context & context)
 {
-    auto lock = lockForAlter(context.getCurrentQueryId());
-
     ColumnsDescription new_columns = getColumns();
     params.apply(new_columns);
     context.getDatabase(database_name)->alterTable(context, table_name, new_columns, {});

@@ -77,15 +77,20 @@ public:
 
     void modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info) override;
 
-    void alter(const AlterCommands & commands, const String & database_name, const String & table_name, const Context & context) override;
+    void alter(const TableLockHolder &,
+        const AlterCommands & commands,
+        const String & database_name,
+        const String & table_name,
+        const Context & context) override;
 
     ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DT; }
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    void alterFromTiDB(const AlterCommands & commands,
-        const String & database_name,
-        const TiDB::TableInfo & table_info,
-        const SchemaNameMapper & name_mapper,
+    void alterFromTiDB(const TableLockHolder &, //
+        const AlterCommands & commands,         //
+        const String & database_name,           //
+        const TiDB::TableInfo & table_info,     //
+        const SchemaNameMapper & name_mapper,   //
         const Context & context) override;
 
     void setTableInfo(const TiDB::TableInfo & table_info_) override { tidb_table_info = table_info_; }

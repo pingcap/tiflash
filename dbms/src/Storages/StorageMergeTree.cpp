@@ -342,6 +342,7 @@ void StorageMergeTree::rename(
 }
 
 void StorageMergeTree::alter(
+    const TableLockHolder &,
     const AlterCommands & params,
     const String & database_name,
     const String & table_name,
@@ -351,6 +352,7 @@ void StorageMergeTree::alter(
 }
 
 void StorageMergeTree::alterFromTiDB(
+    const TableLockHolder &,
     const AlterCommands & params,
     const String & database_name,
     const TiDB::TableInfo & table_info,
@@ -432,8 +434,6 @@ void StorageMergeTree::alterInternal(
         else if (auto transaction = data.alterDataPart(part, columns_for_parts, new_primary_key_ast, false))
             transactions.push_back(std::move(transaction));
     }
-
-    auto table_hard_lock = lockForAlter(context.getCurrentQueryId());
 
     IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, table_info, tombstone] (IAST & ast)
     {

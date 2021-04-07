@@ -157,8 +157,8 @@ public:
       * This method must fully execute the ALTER query, taking care of the locks itself.
       * To update the table metadata on disk, this method should call InterpreterAlterQuery::updateMetadata.
       */
-    virtual void alter(
-        const AlterCommands & /*params*/, const String & /*database_name*/, const String & /*table_name*/, const Context & /*context*/)
+    virtual void alter(const TableLockHolder &, const AlterCommands & /*params*/, const String & /*database_name*/,
+        const String & /*table_name*/, const Context & /*context*/)
     {
         throw Exception("Method alter is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
