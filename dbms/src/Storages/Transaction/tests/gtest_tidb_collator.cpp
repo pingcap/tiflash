@@ -38,6 +38,8 @@ const typename CollatorCases::CompareCase CollatorCases::cmp_cases[] = {
     {"a\t", "a", {1, 1, 1, 1}},
     {"", "a", {-1, -1, -1, -1}},
     {"a", "", {1, 1, 1, 1}},
+    // Issue https://github.com/pingcap/tics/issues/1660
+    {"謺", "譂", {-1, -1, -1, -1}},
 };
 #define PREVENT_TRUNC(s) \
     {                    \

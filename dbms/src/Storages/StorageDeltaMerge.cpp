@@ -337,26 +337,59 @@ BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settin
 
 void StorageDeltaMerge::write(Block && block, const Settings & settings)
 {
+#ifndef NDEBUG
     {
-        // TODO: remove this code if the column ids in the block are already settled.
+        // Do some check under DEBUG mode to ensure all block are written with column id properly set.
         auto header = store->getHeader();
+        bool ok = true;
+        String name;
+        ColumnID cid = 0;
         for (auto & col : block)
         {
+            name = col.name;
+            cid = col.column_id;
             if (col.name == EXTRA_HANDLE_COLUMN_NAME)
-                col.column_id = EXTRA_HANDLE_COLUMN_ID;
+            {
+                if (col.column_id != EXTRA_HANDLE_COLUMN_ID)
+                {
+                    ok = false;
+                    break;
+                }
+            }
             else if (col.name == VERSION_COLUMN_NAME)
-                col.column_id = VERSION_COLUMN_ID;
+            {
+                if (col.column_id != VERSION_COLUMN_ID)
+                {
+                    ok = false;
+                    break;
+                }
+            }
             else if (col.name == TAG_COLUMN_NAME)
-                col.column_id = TAG_COLUMN_ID;
+            {
+                if (col.column_id != TAG_COLUMN_ID)
+                {
+                    ok = false;
+                    break;
+                }
+            }
             else
             {
                 auto & header_col = header->getByName(col.name);
-                col.column_id = header_col.column_id;
+                if (col.column_id != header_col.column_id)
+                {
+                    ok = false;
+                    break;
+                }
                 // We don't need to set default_value by now
                 // col.default_value = header_col.default_value;
             }
         }
+        if (!ok)
+        {
+            throw Exception("The column-id in written block is not properly set [name=" + name + "] [id=" + DB::toString(cid) + "]");
+        }
     }
+#endif
     store->write(global_context, settings, block);
 }
 
