@@ -47,5 +47,25 @@ std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromFieldType(const tipb::FieldT
 bool hasUnsignedFlag(const tipb::FieldType & tp);
 grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code);
 void assertBlockSchema(const DataTypes & expected_types, const Block & block, const std::string & context_description);
+class UniqueNameGenerator
+{
+private:
+    std::unordered_map<String, Int32> existing_name_map;
+
+public:
+    String toUniqueName(const String & orig_name)
+    {
+        String ret_name = orig_name;
+        auto it = existing_name_map.find(ret_name);
+        while (it != existing_name_map.end())
+        {
+            ret_name.append("_").append(std::to_string(it->second));
+            it->second++;
+            it = existing_name_map.find(ret_name);
+        }
+        existing_name_map.try_emplace(ret_name, 1);
+        return ret_name;
+    }
+};
 
 } // namespace DB
