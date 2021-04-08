@@ -423,14 +423,30 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             }
 
             waitForWrite(dm_context, segment);
+<<<<<<< HEAD
 
             auto range   = segment->getRange();
             auto end_pos = range.end == P_INF_HANDLE ? handle_data.cend()
                                                      : std::lower_bound(handle_data.cbegin() + offset, handle_data.cend(), range.end);
             limit = end_pos - (handle_data.cbegin() + offset);
+=======
+            if (segment->hasAbandoned())
+                continue;
 
-            bool should_cache = limit < dm_context->delta_cache_limit_rows / 4;
-            if (should_cache)
+            auto & rowkey_range = segment->getRowKeyRange();
+
+            auto [cur_offset, cur_limit] = rowkey_range.getPosRange(handle_column, offset, rows - offset);
+            if (unlikely(cur_offset != offset))
+                throw Exception("cur_offset does not equal to offset", ErrorCodes::LOGICAL_ERROR);
+
+            limit      = cur_limit;
+            auto bytes = block.bytes(offset, limit);
+>>>>>>> 6ba24877b... Fix the problem that wait duration for write is too short, and use size as another metric (#1712)
+
+            bool small_pack = limit < dm_context->delta_cache_limit_rows / 4 && bytes < dm_context->delta_cache_limit_bytes / 4;
+            // Small packs are appended to Delta Cache, the flushed later.
+            // While large packs are directly written to PageStorage.
+            if (small_pack)
             {
                 if (segment->writeToCache(*dm_context, block, offset, limit))
                 {
@@ -732,6 +748,11 @@ size_t forceMergeDeltaRows(const DMContextPtr & dm_context)
     return dm_context->db_context.getSettingsRef().dt_segment_force_merge_delta_rows;
 }
 
+size_t forceMergeDeltaBytes(const DMContextPtr & dm_context)
+{
+    return dm_context->db_context.getSettingsRef().dt_segment_force_merge_delta_size;
+}
+
 size_t forceMergeDeltaDeletes(const DMContextPtr & dm_context)
 {
     return dm_context->db_context.getSettingsRef().dt_segment_force_merge_delta_deletes;
@@ -739,21 +760,34 @@ size_t forceMergeDeltaDeletes(const DMContextPtr & dm_context)
 
 void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const SegmentPtr & segment)
 {
-    size_t delta_limit_rows = dm_context->delta_limit_rows;
-    size_t delta_rows       = segment->getDelta()->getRows();
-    if (delta_rows < forceMergeDeltaRows(dm_context))
+    size_t delta_rows  = segment->getDelta()->getRows();
+    size_t delta_bytes = segment->getDelta()->getBytes();
+
+    if (delta_rows < forceMergeDeltaRows(dm_context) && delta_bytes < forceMergeDeltaBytes(dm_context))
         return;
 
     Stopwatch watch;
     SCOPE_EXIT(
         { GET_METRIC(dm_context->metrics, tiflash_storage_write_stall_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
 
-    size_t sleep_step = 1;
-    size_t sleep_ms   = (double)delta_rows / delta_limit_rows * sleep_step;
+    size_t segment_bytes = segment->getEstimatedBytes();
+    // The speed of delta merge in a very bad situation we assume. It should be a very conservative value.
+    size_t _10MB = 10 << 20;
+
+    size_t stop_write_delta_rows = dm_context->db_context.getSettingsRef().dt_segment_stop_write_delta_rows;
+    size_t stop_write_delta_bytes = dm_context->db_context.getSettingsRef().dt_segment_stop_write_delta_size;
+    size_t wait_duration_factor = dm_context->db_context.getSettingsRef().dt_segment_wait_duration_factor;
+
+    size_t sleep_ms;
+    if (delta_rows >= stop_write_delta_rows || delta_bytes >= stop_write_delta_bytes)
+        sleep_ms = std::numeric_limits<size_t>::max();
+    else
+        sleep_ms = (double)segment_bytes / _10MB * 1000 * wait_duration_factor;
 
     // checkSegmentUpdate could do foreground merge delta, so call it before sleep.
     checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 
+    size_t sleep_step = 50;
     // The delta will be merged, only after this segment got abandoned.
     // Because merge delta will replace the segment instance.
     while (!segment->hasAbandoned() && sleep_ms > 0)
@@ -777,41 +811,60 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     auto & delta = segment->getDelta();
 
-    size_t delta_saved_rows = delta->getRows(/* use_unsaved */ false);
-    size_t delta_check_rows = std::max(delta->updatesInDeltaTree(), delta_saved_rows);
+    size_t delta_saved_rows  = delta->getRows(/* use_unsaved */ false);
+    size_t delta_saved_bytes = delta->getBytes(/* use_unsaved */ false);
+    size_t delta_check_rows  = std::max(delta->updatesInDeltaTree(), delta_saved_rows);
+    size_t delta_check_bytes = delta_saved_bytes;
 
     size_t delta_deletes = delta->getDeletes();
 
-    size_t unsaved_rows = delta->getUnsavedRows();
+    size_t unsaved_rows  = delta->getUnsavedRows();
+    size_t unsaved_bytes = delta->getUnsavedBytes();
 
-    size_t delta_rows   = delta_saved_rows + unsaved_rows;
-    size_t segment_rows = segment->getEstimatedRows();
-    size_t pack_count   = delta->getPackCount();
+    size_t delta_rows    = delta_saved_rows + unsaved_rows;
+    size_t delta_bytes   = delta_saved_bytes + unsaved_bytes;
+    size_t segment_rows  = segment->getEstimatedRows();
+    size_t segment_bytes = segment->getEstimatedBytes();
+    size_t pack_count    = delta->getPackCount();
 
     size_t placed_delta_rows = delta->getPlacedDeltaRows();
 
     auto & delta_last_try_flush_rows             = delta->getLastTryFlushRows();
+    auto & delta_last_try_flush_bytes            = delta->getLastTryFlushBytes();
     auto & delta_last_try_compact_packs          = delta->getLastTryCompactPacks();
     auto & delta_last_try_merge_delta_rows       = delta->getLastTryMergeDeltaRows();
+    auto & delta_last_try_merge_delta_bytes      = delta->getLastTryMergeDeltaBytes();
     auto & delta_last_try_split_rows             = delta->getLastTrySplitRows();
+    auto & delta_last_try_split_bytes            = delta->getLastTrySplitBytes();
     auto & delta_last_try_place_delta_index_rows = delta->getLastTryPlaceDeltaIndexRows();
 
-    auto segment_limit_rows     = dm_context->segment_limit_rows;
-    auto delta_limit_rows       = dm_context->delta_limit_rows;
-    auto delta_cache_limit_rows = dm_context->delta_cache_limit_rows;
+    auto segment_limit_rows      = dm_context->segment_limit_rows;
+    auto segment_limit_bytes     = dm_context->segment_limit_bytes;
+    auto delta_limit_rows        = dm_context->delta_limit_rows;
+    auto delta_limit_bytes       = dm_context->delta_limit_bytes;
+    auto delta_cache_limit_rows  = dm_context->delta_cache_limit_rows;
+    auto delta_cache_limit_bytes = dm_context->delta_cache_limit_bytes;
 
-    bool should_background_flush
-        = unsaved_rows >= delta_cache_limit_rows && delta_rows - delta_last_try_flush_rows >= delta_cache_limit_rows;
-    bool should_foreground_flush = unsaved_rows >= delta_cache_limit_rows * 3;
+    bool should_background_flush = (unsaved_rows >= delta_cache_limit_rows || unsaved_bytes >= delta_cache_limit_bytes) //
+        && (delta_rows - delta_last_try_flush_rows >= delta_cache_limit_rows
+            || delta_bytes - delta_last_try_flush_bytes >= delta_cache_limit_bytes);
+    bool should_foreground_flush = unsaved_rows >= delta_cache_limit_rows * 3 || unsaved_bytes >= delta_cache_limit_bytes * 3;
 
-    bool should_background_merge_delta = (delta_check_rows >= delta_limit_rows //
-                                          && delta_rows - delta_last_try_merge_delta_rows >= delta_cache_limit_rows)
+    bool should_background_merge_delta = ((delta_check_rows >= delta_limit_rows || delta_check_bytes >= delta_limit_bytes) //
+                                          && (delta_rows - delta_last_try_merge_delta_rows >= delta_cache_limit_rows
+                                              || delta_bytes - delta_last_try_merge_delta_bytes >= delta_cache_limit_bytes))
         || delta_deletes >= 2;
-    bool should_foreground_merge_delta_by_rows    = delta_check_rows >= forceMergeDeltaRows(dm_context);
+    bool should_foreground_merge_delta_by_rows_or_bytes
+        = delta_check_rows >= forceMergeDeltaRows(dm_context) || delta_check_bytes >= forceMergeDeltaBytes(dm_context);
     bool should_foreground_merge_delta_by_deletes = delta_deletes >= forceMergeDeltaDeletes(dm_context);
 
-    bool should_split = segment_rows >= segment_limit_rows * 2 && delta_rows - delta_last_try_split_rows >= delta_cache_limit_rows;
-    bool should_merge = segment_rows < segment_limit_rows / 3;
+    // Note that, we must use || to combine rows and bytes checks in split check, and use && in merge check.
+    // Otherwise, segments could be split and merged over and over again.
+    bool should_split = (segment_rows >= segment_limit_rows * 2 || segment_bytes >= segment_limit_bytes * 2)
+        && (delta_rows - delta_last_try_split_rows >= delta_cache_limit_rows
+            || delta_bytes - delta_last_try_split_bytes >= delta_cache_limit_bytes);
+
+    bool should_merge = segment_rows < segment_limit_rows / 3 && segment_bytes < segment_limit_bytes / 3;
 
     bool should_compact = std::max((Int64)pack_count - delta_last_try_compact_packs, 0) >= 10;
 
@@ -838,13 +891,15 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     {
         if (should_foreground_flush)
         {
-            delta_last_try_flush_rows = delta_rows;
+            delta_last_try_flush_rows  = delta_rows;
+            delta_last_try_flush_bytes = delta_bytes;
             LOG_DEBUG(log, "Foreground flush cache " << segment->info());
             segment->flushCache(*dm_context);
         }
         else if (should_background_flush)
         {
-            delta_last_try_flush_rows = delta_rows;
+            delta_last_try_flush_rows  = delta_rows;
+            delta_last_try_flush_bytes = delta_bytes;
             try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment, {}});
         }
     }
@@ -885,7 +940,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     SegmentPtr merge_sibling;
 
     auto try_fg_merge_delta = [&]() -> SegmentPtr {
-        if (should_foreground_merge_delta_by_rows || should_foreground_merge_delta_by_deletes)
+        if (should_foreground_merge_delta_by_rows_or_bytes || should_foreground_merge_delta_by_deletes)
         {
             delta_last_try_merge_delta_rows = delta_rows;
 
@@ -893,7 +948,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
             Stopwatch watch;
             SCOPE_EXIT({
-                if (should_foreground_merge_delta_by_rows)
+                if (should_foreground_merge_delta_by_rows_or_bytes)
                     GET_METRIC(dm_context->metrics, tiflash_storage_write_stall_duration_seconds, type_write)
                         .Observe(watch.elapsedSeconds());
                 if (should_foreground_merge_delta_by_deletes)
@@ -917,7 +972,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto try_bg_split = [&](const SegmentPtr & seg) {
         if (should_split)
         {
-            delta_last_try_split_rows = delta_rows;
+            delta_last_try_split_rows  = delta_rows;
+            delta_last_try_split_bytes = delta_bytes;
             try_add_background_task(BackgroundTask{TaskType::Split, dm_context, seg, {}});
             return true;
         }

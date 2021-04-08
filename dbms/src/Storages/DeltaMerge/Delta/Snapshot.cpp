@@ -63,6 +63,7 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_
     if (for_update)
     {
         snap->rows -= unsaved_rows;
+        snap->bytes -= unsaved_bytes;
         snap->deletes -= unsaved_deletes;
     }
 

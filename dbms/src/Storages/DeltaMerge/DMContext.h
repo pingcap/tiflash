@@ -38,14 +38,31 @@ struct DMContext : private boost::noncopyable
 
     const NotCompress & not_compress; // Not used currently.
 
+<<<<<<< HEAD
     // The rows of segment.
+=======
+    bool is_common_handle;
+
+    // The number of columns in primary key if is_common_handle = true, otherwise, should always be 1.
+    size_t rowkey_column_size;
+
+    // The base rows of segment.
+>>>>>>> 6ba24877b... Fix the problem that wait duration for write is too short, and use size as another metric (#1712)
     const size_t segment_limit_rows;
-    // The threshold of delta.
+    // The base bytes of segment.
+    const size_t segment_limit_bytes;
+    // The rows threshold of delta.
     const size_t delta_limit_rows;
+    // The rows threshold of delta.
+    const size_t delta_limit_bytes;
     // The threshold of cache in delta.
     const size_t delta_cache_limit_rows;
-    // Determine whether a pack is small or not.
+    // The size threshold of cache in delta.
+    const size_t delta_cache_limit_bytes;
+    // Determine whether a pack is small or not in rows.
     const size_t delta_small_pack_rows;
+    // Determine whether a pack is small or not in bytes.
+    const size_t delta_small_pack_bytes;
     // The expected stable pack rows.
     const size_t stable_pack_rows;
 
@@ -55,6 +72,7 @@ struct DMContext : private boost::noncopyable
     const bool enable_skippable_place;
 
 public:
+<<<<<<< HEAD
     DMContext(const Context &          db_context_,
               StoragePathPool &        path_pool_,
               StoragePool &            storage_pool_,
@@ -62,6 +80,17 @@ public:
               const DB::Timestamp      min_version_,
               const NotCompress &      not_compress_,
               const DB::Settings &     settings)
+=======
+    DMContext(const Context &      db_context_,
+              StoragePathPool &    path_pool_,
+              StoragePool &        storage_pool_,
+              const UInt64         hash_salt_,
+              const DB::Timestamp  min_version_,
+              const NotCompress &  not_compress_,
+              bool                 is_common_handle_,
+              size_t               rowkey_column_size_,
+              const DB::Settings & settings)
+>>>>>>> 6ba24877b... Fix the problem that wait duration for write is too short, and use size as another metric (#1712)
         : db_context(db_context_),
           metrics(db_context.getTiFlashMetrics()),
           path_pool(path_pool_),
@@ -70,9 +99,13 @@ public:
           min_version(min_version_),
           not_compress(not_compress_),
           segment_limit_rows(settings.dt_segment_limit_rows),
+          segment_limit_bytes(settings.dt_segment_limit_size),
           delta_limit_rows(settings.dt_segment_delta_limit_rows),
+          delta_limit_bytes(settings.dt_segment_delta_limit_size),
           delta_cache_limit_rows(settings.dt_segment_delta_cache_limit_rows),
+          delta_cache_limit_bytes(settings.dt_segment_delta_cache_limit_size),
           delta_small_pack_rows(settings.dt_segment_delta_small_pack_rows),
+          delta_small_pack_bytes(settings.dt_segment_delta_small_pack_size),
           stable_pack_rows(settings.dt_segment_stable_pack_rows),
           enable_logical_split(settings.dt_enable_logical_split),
           read_delta_only(settings.dt_read_delta_only),
