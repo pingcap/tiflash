@@ -496,7 +496,8 @@ GenRegionBlockDatawithSchema(const RegionPtr & region, TMTContext & tmt)
         {
             if (!force_decode)
                 return false;
-            return true;
+            if (storage == nullptr) // Table must have just been GC-ed.
+                return true;
         }
         auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
         auto reader = RegionBlockReader(storage);
