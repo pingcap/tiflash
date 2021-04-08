@@ -15,16 +15,16 @@ struct CompackTask
 {
     CompackTask() {}
 
-    Packs   to_compact;
-    size_t  total_rows  = 0;
-    size_t  total_bytes = 0;
+    Packs  to_compact;
+    size_t total_rows  = 0;
+    size_t total_bytes = 0;
 
     PackPtr result;
 
     void addPack(const PackPtr & pack)
     {
-        total_rows += pack->getRows();
-        total_bytes += pack->getBytes();
+        total_rows += pack->rows;
+        total_bytes += pack->bytes;
         to_compact.push_back(pack);
     }
 };
@@ -69,9 +69,10 @@ bool DeltaValueSpace::compact(DMContext & context)
             if ((unlikely(pack->dataFlushable())))
                 throw Exception("Saved pack is data flushable", ErrorCodes::LOGICAL_ERROR);
 
-            bool cur_task_full = cur_task.total_rows >= context.delta_limit_rows || cur_task.total_bytes >= context.delta_limit_bytes;
-            bool small_pack = !pack->isDeleteRange() && (pack->rows < context.delta_small_pack_rows && pack->getBytes() < context.delta_small_pack_bytes);
-            bool schema_ok  = task.to_compact.empty() || pack->schema == task.to_compact.back()->schema;
+            bool cur_task_full = task.total_rows >= context.delta_limit_rows || task.total_bytes >= context.delta_limit_bytes;
+            bool small_pack
+                = !pack->isDeleteRange() && (pack->rows < context.delta_small_pack_rows && pack->bytes < context.delta_small_pack_bytes);
+            bool schema_ok = task.to_compact.empty() || pack->schema == task.to_compact.back()->schema;
             if (cur_task_full || !small_pack || !schema_ok)
             {
                 if (task.to_compact.size() >= 2)
