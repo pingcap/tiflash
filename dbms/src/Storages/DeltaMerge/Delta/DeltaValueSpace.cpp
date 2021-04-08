@@ -71,6 +71,7 @@ DeltaValueSpace::DeltaValueSpace(PageId id_, const DeltaPacks & packs_)
         if (!pack->isSaved())
         {
             unsaved_rows += pack->getRows();
+            unsaved_bytes += pack->getBytes();
             unsaved_deletes += pack->isDeleteRange();
         }
     }
@@ -254,6 +255,7 @@ void DeltaValueSpace::appendPackInner(const DeltaPackPtr & pack)
     deletes += pack->getDeletes();
 
     unsaved_rows += pack->getRows();
+    unsaved_bytes += pack->getBytes();
     unsaved_deletes += pack->getDeletes();
 }
 
@@ -291,9 +293,10 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
                         throw Exception("Mutable pack's structure of schema and block are different: " + last_pack->toString());
                 }
 
-                auto & cache_block    = p->getCache()->block;
-                bool   is_overflow    = cache_block.rows() >= context.delta_cache_limit_rows;
-                bool   is_same_schema = checkSchema(block, cache_block);
+                auto & cache_block = p->getCache()->block;
+                bool   is_overflow
+                    = cache_block.rows() >= context.delta_cache_limit_rows || cache_block.bytes() >= context.delta_cache_limit_bytes;
+                bool is_same_schema = checkSchema(block, cache_block);
                 if (!is_overflow && is_same_schema)
                 {
                     // The last cache block is available
@@ -322,6 +325,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     rows += limit;
     bytes += append_bytes;
     unsaved_rows += limit;
+    unsaved_bytes += append_bytes;
 
     return true;
 }
