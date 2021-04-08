@@ -263,8 +263,8 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         for (auto & pack : packs)
         {
-            if (auto dp_block = pack->tryToBlock();
-                dp_block && dp_block->getCache() && dp_block->getDataPageId() != 0 && pack->getRows() >= context.delta_small_pack_rows)
+            if (auto dp_block = pack->tryToBlock(); dp_block && dp_block->getCache() && dp_block->getDataPageId() != 0
+                && (pack->getRows() >= context.delta_small_pack_rows || pack->getBytes() >= context.delta_small_pack_bytes))
             {
                 // This pack is too large to use cache.
                 dp_block->clearCache();
@@ -272,6 +272,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         }
 
         unsaved_rows -= flush_rows;
+        unsaved_bytes -= flush_bytes;
         unsaved_deletes -= flush_deletes;
 
         LOG_DEBUG(log,
