@@ -2,7 +2,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <cpp/dtpb/dmfile.pb.h>
+#include <dtpb/dmfile.pb.h>
 #pragma GCC diagnostic pop
 
 #include <Core/Types.h>

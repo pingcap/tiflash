@@ -23,4 +23,4 @@ set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-parameter")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-parameter")
 
 add_library(dtpb ${generated_files})
-target_include_directories(dtpb PUBLIC ..)
+target_include_directories(dtpb PUBLIC ./)
