@@ -1258,7 +1258,6 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
 
 bool DeltaMergeStore::checkSegmentNeedGC()
 {
-    // TODO: remove all hardcode parameter in this func
     auto & global_settings = global_context.getSettingsRef();
     if (gc_check_stop_watch.elapsedSeconds() < global_settings.dt_segment_bg_gc_check_interval)
         return false;
@@ -1269,17 +1268,16 @@ bool DeltaMergeStore::checkSegmentNeedGC()
     {
         UInt64 segment_count = 0;
         std::shared_lock lock(read_write_mutex);
-        while (segment_count < max_segment_to_check)
+        auto segment_it = segments.begin();
+        if (!(next_gc_check_key == RowKeyValue::EMPTY_STRING_KEY))
         {
-            auto segment_it = segments.begin();
-            if (!(next_gc_check_key == RowKeyValue::EMPTY_STRING_KEY))
-            {
-                segment_it = segments.upper_bound(next_gc_check_key.toRowKeyValueRef());
-                if (segment_it == segments.end())
-                {
-                    segment_it = segments.begin();
-                }
-            }
+            segment_it = segments.upper_bound(next_gc_check_key.toRowKeyValueRef());
+        }
+        while (true)
+        {
+            if (segment_it == segments.end())
+                segment_it = segments.begin();
+
             if (!segments_to_check.empty()
                 && (compare(segments_to_check[0]->getRowKeyRange().getStart(),
                             segment_it->second->getRowKeyRange().getStart()) == 0))
@@ -1287,10 +1285,18 @@ bool DeltaMergeStore::checkSegmentNeedGC()
                 // we meet the first segment again, there is no new segment to check, stop here
                 break;
             }
-            next_gc_check_key = segment_it->second->getRowKeyRange().end;
+
             segments_to_check.push_back(segment_it->second);
-            segment_count += 1;
+            segment_count++;
+            segment_it++;
+            if (segment_count >= max_segment_to_check)
+                break;
         }
+        // update `next_gc_check_key`
+        if (segment_it != segments.end())
+            next_gc_check_key = segment_it->second->getRowKeyRange().start;
+        else
+            next_gc_check_key = segments.begin()->second->getRowKeyRange().start;
     }
 
     auto dm_context = newDMContext(global_context, global_context.getSettings());
