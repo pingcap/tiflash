@@ -116,7 +116,7 @@ public:
       */
     TableStructureReadLockPtr lockStructure(bool will_modify_data, const std::string & who)
     {
-        TableStructureReadLockPtr res = std::make_shared<TableStructureReadLock>(shared_from_this(), true, will_modify_data, who);
+        TableStructureReadLockPtr res = std::make_shared<TableStructureReadLock>(shared_from_this(), /*lock_structure=*/true, will_modify_data, who);
         if (is_dropped)
             throw Exception("Table is dropped", ErrorCodes::TABLE_IS_DROPPED);
         return res;
