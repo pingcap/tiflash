@@ -90,11 +90,11 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
     while (true)
     {
         size_t last_effective_num_rows = 0;
-        size_t last_not_clean_rows = 0;
+        size_t last_not_clean_rows     = 0;
         if (mvcc_stream)
         {
             last_effective_num_rows = mvcc_stream->getEffectiveNumRows();
-            last_not_clean_rows = mvcc_stream->getNotCleanRows();
+            last_not_clean_rows     = mvcc_stream->getNotCleanRows();
         }
 
         Block block = input_stream->read();
@@ -104,16 +104,16 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
             continue;
 
         size_t cur_effective_num_rows = 1;
-        size_t cur_not_clean_rows = 1;
+        size_t cur_not_clean_rows     = 1;
         if (mvcc_stream)
         {
             cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
-            cur_not_clean_rows = mvcc_stream->getNotCleanRows();
+            cur_not_clean_rows     = mvcc_stream->getNotCleanRows();
         }
 
         DMFileBlockOutputStream::BlockProperty block_property;
         block_property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
-        block_property.not_clean_rows = cur_not_clean_rows - last_not_clean_rows;
+        block_property.not_clean_rows     = cur_not_clean_rows - last_not_clean_rows;
         output_stream->write(block, block_property);
     }
 
@@ -220,14 +220,16 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 
     switch (version)
     {
-    case SegmentFormat::V1: {
+    case SegmentFormat::V1:
+    {
         HandleRange range;
         readIntBinary(range.start, buf);
         readIntBinary(range.end, buf);
         rowkey_range = RowKeyRange::fromHandleRange(range);
         break;
     }
-    case SegmentFormat::V2: {
+    case SegmentFormat::V2:
+    {
         rowkey_range = RowKeyRange::deserialize(buf);
         break;
     }

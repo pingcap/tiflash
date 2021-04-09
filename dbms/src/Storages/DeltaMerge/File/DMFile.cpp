@@ -221,7 +221,6 @@ std::tuple<size_t, size_t> DMFile::writePackStatToBuffer(WriteBuffer & buffer)
 std::tuple<size_t, size_t> DMFile::writePackPropertyToBuffer(WriteBuffer & buffer)
 {
     size_t offset = buffer.count();
-    // FIXME: avoid this extra copy
     String tmp_buf;
     pack_propertys.SerializeToString(&tmp_buf);
     writeStringBinary(tmp_buf, buffer);
@@ -244,7 +243,7 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const RateLimiterP
 
 void DMFile::writePackProperty(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
 {
-    String property_path = packPropertyPath();
+    String property_path     = packPropertyPath();
     String tmp_property_path = property_path + ".tmp";
     {
         WriteBufferFromFileProvider buf(file_provider, tmp_property_path, encryptionPackPropertyPath(), false, rate_limiter, 4096);
@@ -322,7 +321,7 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
 void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
     String tmp_buf;
-    auto buf = openForRead(file_provider, packPropertyPath(), encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
+    auto   buf = openForRead(file_provider, packPropertyPath(), encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
     buf.seek(meta_pack_info.pack_property_offset);
     readStringBinary(tmp_buf, buf);
     pack_propertys.ParseFromString(tmp_buf);
@@ -330,12 +329,13 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
 
 void DMFile::readMetadata(const FileProviderPtr & file_provider)
 {
-    MetaPackInfo meta_pack_info{.pack_property_offset = 0, .pack_property_size = 0, .meta_offset = 0, .meta_size = 0, .pack_stat_offset = 0, .pack_stat_size = 0};
+    MetaPackInfo meta_pack_info{
+        .pack_property_offset = 0, .pack_property_size = 0, .meta_offset = 0, .meta_size = 0, .pack_stat_offset = 0, .pack_stat_size = 0};
     if (isSingleFileMode())
     {
         Poco::File                 file(path());
         ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
-        DMSingleFileFormatVersion file_format;
+        DMSingleFileFormatVersion  file_format;
         buf.seek(file.getSize() - sizeof(DMSingleFileFormatVersion), SEEK_SET);
         DB::readIntBinary(file_format, buf);
 
@@ -418,10 +418,10 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
 {
     Footer footer;
     std::tie(footer.meta_pack_info.pack_property_offset, footer.meta_pack_info.pack_property_size) = writePackPropertyToBuffer(buffer);
-    std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)           = writeMetaToBuffer(buffer);
-    std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size) = writePackStatToBuffer(buffer);
-    footer.sub_file_stat_offset                                                            = buffer.count();
-    footer.sub_file_num                                                                    = sub_file_stats.size();
+    std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)                   = writeMetaToBuffer(buffer);
+    std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size)         = writePackStatToBuffer(buffer);
+    footer.sub_file_stat_offset                                                                    = buffer.count();
+    footer.sub_file_num                                                                            = sub_file_stats.size();
     footer.file_format_version = DMSingleFileFormatVersion::VERSION_WITH_PROPERTY_SUB_FILE;
     for (auto & iter : sub_file_stats)
     {

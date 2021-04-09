@@ -41,8 +41,8 @@ public:
 
     enum DMSingleFileFormatVersion : int
     {
-        SINGLE_FILE_VERSION_BASE          = 0,
-        VERSION_WITH_PROPERTY_SUB_FILE    = 1,
+        SINGLE_FILE_VERSION_BASE       = 0,
+        VERSION_WITH_PROPERTY_SUB_FILE = 1,
     };
 
     static String statusString(Status status)
@@ -102,7 +102,7 @@ public:
         DMSingleFileFormatVersion file_format_version;
     };
 
-    using PackStats = PaddedPODArray<PackStat>;
+    using PackStats     = PaddedPODArray<PackStat>;
     using PackPropertys = dtpb::PackPropertys;
 
     static DMFilePtr create(UInt64 file_id, const String & parent_path, bool single_file_mode = false);
@@ -155,7 +155,7 @@ public:
 
     size_t            getPacks() const { return pack_stats.size(); }
     const PackStats & getPackStats() const { return pack_stats; }
-    PackPropertys & getPackPropertys() { return pack_propertys; }
+    PackPropertys &   getPackPropertys() { return pack_propertys; }
 
     const ColumnStat & getColumnStat(ColId col_id) const
     {
@@ -240,10 +240,7 @@ private:
 
     void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver);
 
-    void addPack(const PackStat & pack_stat)
-    {
-        pack_stats.push_back(pack_stat);
-    }
+    void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
 
     Status getStatus() const { return status; }
     void   setStatus(Status status_) { status = status_; }
@@ -277,9 +274,9 @@ private:
     UInt64 ref_id; // It is a reference to file_id, could be the same.
     String parent_path;
 
-    PackStats   pack_stats;
+    PackStats     pack_stats;
     PackPropertys pack_propertys;
-    ColumnStats column_stats;
+    ColumnStats   column_stats;
 
     Mode   mode;
     Status status;

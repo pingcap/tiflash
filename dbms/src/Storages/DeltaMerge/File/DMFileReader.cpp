@@ -155,7 +155,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                            size_t                      max_read_buffer_size,
                            const FileProviderPtr &     file_provider_,
                            size_t                      rows_threshold_per_read_,
-                           bool read_one_pack_every_time_)
+                           bool                        read_one_pack_every_time_)
     : dmfile(dmfile_),
       read_columns(read_columns_),
       enable_clean_read(enable_clean_read_),

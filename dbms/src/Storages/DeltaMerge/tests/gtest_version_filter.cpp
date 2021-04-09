@@ -192,8 +192,8 @@ TEST(VersionFilter_test, Compact)
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
 
     {
-        auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 40, false);
-        auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+        auto   in          = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 40, false);
+        auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT(mvcc_stream);
         in->readPrefix();
         while (true)
@@ -209,8 +209,8 @@ TEST(VersionFilter_test, Compact)
         in->readSuffix();
     }
     {
-        auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 30, false);
-        auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+        auto   in          = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 30, false);
+        auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT(mvcc_stream);
         in->readPrefix();
         while (true)
@@ -226,8 +226,8 @@ TEST(VersionFilter_test, Compact)
         in->readSuffix();
     }
     {
-        auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 20, false);
-        auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+        auto   in          = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 20, false);
+        auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT(mvcc_stream);
         in->readPrefix();
         while (true)
@@ -243,8 +243,8 @@ TEST(VersionFilter_test, Compact)
         in->readSuffix();
     }
     {
-        auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 10, false);
-        auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+        auto   in          = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 10, false);
+        auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT(mvcc_stream);
         in->readPrefix();
         while (true)
@@ -283,8 +283,8 @@ TEST(VersionFilter_test, CompactCommonHandle)
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
 
     {
-        auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 40, true);
-        auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+        auto   in          = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 40, true);
+        auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT(mvcc_stream);
         in->readPrefix();
         while (true)
@@ -300,8 +300,8 @@ TEST(VersionFilter_test, CompactCommonHandle)
         in->readSuffix();
     }
     {
-        auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 30, true);
-        auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+        auto   in          = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 30, true);
+        auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT(mvcc_stream);
         in->readPrefix();
         while (true)
@@ -317,8 +317,8 @@ TEST(VersionFilter_test, CompactCommonHandle)
         in->readSuffix();
     }
     {
-        auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 20, true);
-        auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+        auto   in          = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 20, true);
+        auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT(mvcc_stream);
         in->readPrefix();
         while (true)
@@ -334,8 +334,8 @@ TEST(VersionFilter_test, CompactCommonHandle)
         in->readSuffix();
     }
     {
-        auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 10, true);
-        auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+        auto   in          = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 10, true);
+        auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
         ASSERT(mvcc_stream);
         in->readPrefix();
         while (true)

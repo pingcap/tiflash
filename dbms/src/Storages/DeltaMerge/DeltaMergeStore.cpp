@@ -1169,10 +1169,10 @@ bool DeltaMergeStore::updateLatestGCSafePoint()
 {
     if (auto pd_client = global_context.getTMTContext().getPDClient(); !pd_client->isMock())
     {
-        auto safe_point = PDClientHelper::getGCSafePointWithRetry(pd_client,
+        auto safe_point      = PDClientHelper::getGCSafePointWithRetry(pd_client,
                                                                   /* ignore_cache= */ false,
                                                                   global_context.getSettingsRef().safe_point_update_interval_seconds);
-        latest_gc_safe_point         = safe_point;
+        latest_gc_safe_point = safe_point;
         return true;
     }
     return false;
@@ -1207,7 +1207,8 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             segmentMerge(*task.dm_context, task.segment, task.next_segment, false);
             type = ThreadType::BG_Merge;
             break;
-        case MergeDelta: {
+        case MergeDelta:
+        {
             FAIL_POINT_PAUSE(FailPoints::pause_before_dt_background_delta_merge);
             left = segmentMergeDelta(*task.dm_context, task.segment, false);
             type = ThreadType::BG_MergeDelta;
@@ -1262,13 +1263,13 @@ bool DeltaMergeStore::checkSegmentNeedGC()
     if (gc_check_stop_watch.elapsedSeconds() < global_settings.dt_segment_bg_gc_check_interval)
         return false;
 
-    auto max_segment_to_check = global_settings.dt_segment_bg_gc_max_segments_to_check_every_round;
+    auto                    max_segment_to_check = global_settings.dt_segment_bg_gc_max_segments_to_check_every_round;
     std::vector<SegmentPtr> segments_to_check;
 
     {
-        UInt64 segment_count = 0;
+        UInt64           segment_count = 0;
         std::shared_lock lock(read_write_mutex);
-        auto segment_it = segments.begin();
+        auto             segment_it = segments.begin();
         if (!(next_gc_check_key == RowKeyValue::EMPTY_STRING_KEY))
         {
             segment_it = segments.upper_bound(next_gc_check_key.toRowKeyValueRef());
@@ -1279,8 +1280,7 @@ bool DeltaMergeStore::checkSegmentNeedGC()
                 segment_it = segments.begin();
 
             if (!segments_to_check.empty()
-                && (compare(segments_to_check[0]->getRowKeyRange().getStart(),
-                            segment_it->second->getRowKeyRange().getStart()) == 0))
+                && (compare(segments_to_check[0]->getRowKeyRange().getStart(), segment_it->second->getRowKeyRange().getStart()) == 0))
             {
                 // we meet the first segment again, there is no new segment to check, stop here
                 break;

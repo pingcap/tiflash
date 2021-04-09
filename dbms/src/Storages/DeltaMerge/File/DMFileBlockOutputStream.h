@@ -32,7 +32,10 @@ public:
         size_t effective_num_rows;
     };
 
-    void write(const Block & block, const BlockProperty block_property) { writer.write(block, block_property.not_clean_rows, block_property.effective_num_rows); }
+    void write(const Block & block, const BlockProperty block_property)
+    {
+        writer.write(block, block_property.not_clean_rows, block_property.effective_num_rows);
+    }
 
     void writePrefix() {}
 

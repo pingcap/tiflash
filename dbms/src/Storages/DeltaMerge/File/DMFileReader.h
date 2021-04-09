@@ -73,8 +73,8 @@ public:
                  size_t                      aio_threshold,
                  size_t                      max_read_buffer_size,
                  const FileProviderPtr &     file_provider_,
-                 size_t                      rows_threshold_per_read_ = DMFILE_READ_ROWS_THRESHOLD,
-                  bool read_one_pack_every_time_ = false);
+                 size_t                      rows_threshold_per_read_  = DMFILE_READ_ROWS_THRESHOLD,
+                 bool                        read_one_pack_every_time_ = false);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 

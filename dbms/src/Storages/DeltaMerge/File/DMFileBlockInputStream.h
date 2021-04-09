@@ -22,8 +22,8 @@ public:
                            const RSOperatorPtr &  filter,
                            const ColumnCachePtr & column_cache_,
                            const IdSetPtr &       read_packs,
-                           size_t                 expected_size = DMFILE_READ_ROWS_THRESHOLD,
-                           bool read_one_pack_every_time_ = false)
+                           size_t                 expected_size             = DMFILE_READ_ROWS_THRESHOLD,
+                           bool                   read_one_pack_every_time_ = false)
         : reader(dmfile,
                  read_columns,
                  // clean read
