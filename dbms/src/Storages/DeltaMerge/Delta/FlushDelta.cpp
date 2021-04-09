@@ -240,7 +240,7 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         for (auto & pack : packs)
         {
-            if (pack->cache && pack->data_page != 0 && pack->rows >= context.delta_small_pack_rows)
+            if (pack->cache && pack->data_page != 0 && (pack->rows >= context.delta_small_pack_rows || pack->bytes >= context.delta_small_pack_bytes))
             {
                 // This pack is too large to use cache.
                 pack->cache = {};
@@ -248,6 +248,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         }
 
         unsaved_rows -= flush_rows;
+        unsaved_bytes -= flush_bytes;
         unsaved_deletes -= flush_deletes;
 
         LOG_DEBUG(log,
