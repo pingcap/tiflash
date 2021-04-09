@@ -226,6 +226,7 @@ config-preprocessed.xml
 
 # Protobuf
 *.pb.cpp
+*.pb.cc
 *.pb.h
 
 # Mac OS
