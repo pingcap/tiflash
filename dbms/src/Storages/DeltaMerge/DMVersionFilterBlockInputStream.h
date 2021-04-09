@@ -62,6 +62,7 @@ public:
 
     Block read(FilterPtr & res_filter, bool return_filter) override;
 
+    size_t getEffectiveNumRows() const { return effective_num_rows; }
     size_t getNotCleanRows() const { return not_clean_rows; }
 
 private:
@@ -122,6 +123,9 @@ private:
     size_t delete_col_pos;
 
     IColumn::Filter filter{};
+    // TODO: check the following logic is correct
+    // effective = selected & (handle not equals with next)
+    IColumn::Filter effective{};
     // not_clean = selected & (handle equals with next || deleted)
     IColumn::Filter not_clean{};
 
@@ -138,6 +142,7 @@ private:
     size_t complete_passed     = 0;
     size_t complete_not_passed = 0;
     size_t not_clean_rows      = 0;
+    size_t effective_num_rows  = 0;
 
     Logger * log;
 };

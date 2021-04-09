@@ -251,6 +251,9 @@ struct Settings
     M(SettingUInt64, dt_segment_delta_cache_limit_rows, 4000, "Max rows of cache in segment delta in DeltaTree Engine")\
     M(SettingUInt64, dt_segment_delta_small_pack_rows, 512, "Determine whether a pack in delta is small or not")\
     M(SettingUInt64, dt_segment_stable_pack_rows, DEFAULT_MERGE_BLOCK_SIZE, "Expected stable pack rows in DeltaTree Engine")\
+    M(SettingUInt64, dt_segment_bg_gc_check_interval, 600, "Background gc thread check interval, the unit is second.")\
+    M(SettingUInt64, dt_segment_bg_gc_max_segments_to_check_every_round, 30, "Max segments to check in every gc round.")\
+    M(SettingFloat, dt_segment_bg_gc_ratio_threhold_to_trigger_gc, 1.2, "Trigger segment's gc when the ratio of invalid version exceed this threhold")\
     M(SettingUInt64, dt_insert_max_rows, 0, "Max rows of insert blocks when write into DeltaTree Engine. By default 0 means no limit.")\
     M(SettingBool, dt_enable_rough_set_filter, true, "Whether to parse where expression as Rough Set Index filter or not") \
     M(SettingBool, dt_raw_filter_range, true, "Do range filter or not when read data in raw mode in DeltaTree Engine.")\

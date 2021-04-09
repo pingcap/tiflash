@@ -26,7 +26,13 @@ public:
     {
     }
 
-    void write(const Block & block, size_t not_clean_rows) { writer.write(block, not_clean_rows); }
+    struct BlockProperty
+    {
+        size_t not_clean_rows;
+        size_t effective_num_rows;
+    };
+
+    void write(const Block & block, const BlockProperty block_property) { writer.write(block, block_property.not_clean_rows, block_property.effective_num_rows); }
 
     void writePrefix() {}
 

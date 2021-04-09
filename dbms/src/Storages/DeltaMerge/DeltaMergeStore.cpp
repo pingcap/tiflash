@@ -267,6 +267,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 
     gc_handle              = background_pool.addTask([this] { return storage_pool.gc(global_context.getSettingsRef()); });
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(false); });
+    background_gc_handle   = background_pool.addTask([this] { return checkSegmentNeedGC(); }, false);
 
     blockable_background_pool_handle = blockable_background_pool.addTask([this] { return handleBackgroundTask(true); });
 
@@ -928,6 +929,24 @@ void DeltaMergeStore::waitForDeleteRange(const DB::DM::DMContextPtr &, const DB:
     // TODO: maybe we should wait, if there are too many delete ranges?
 }
 
+bool DeltaMergeStore::tryAddBackgroundTask(const BackgroundTask & task, ThreadType thread_type)
+{
+    // Prevent too many tasks.
+    if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3))
+    {
+        if (shutdown_called.load(std::memory_order_relaxed))
+            return false;
+
+        auto heavy = background_tasks.addTask(task, thread_type, log);
+        if (heavy)
+            blockable_background_pool_handle->wake();
+        else
+            background_task_handle->wake();
+        return true;
+    }
+    return false;
+}
+
 void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const SegmentPtr & segment, ThreadType thread_type)
 {
     if (segment->hasAbandoned())
@@ -982,21 +1001,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     fiu_do_on(FailPoints::force_triggle_background_merge_delta, { should_background_merge_delta = true; });
     fiu_do_on(FailPoints::force_triggle_foreground_flush, { should_foreground_flush = true; });
 
-    auto try_add_background_task = [&](const BackgroundTask & task) {
-        // Prevent too many tasks.
-        if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3))
-        {
-            if (shutdown_called.load(std::memory_order_relaxed))
-                return;
-
-            auto heavy = background_tasks.addTask(task, thread_type, log);
-            if (heavy)
-                blockable_background_pool_handle->wake();
-            else
-                background_task_handle->wake();
-        }
-    };
-
     /// Flush is always try first.
     if (thread_type != ThreadType::Read)
     {
@@ -1009,7 +1013,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         else if (should_background_flush)
         {
             delta_last_try_flush_rows = delta_rows;
-            try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment, {}});
+            tryAddBackgroundTask(BackgroundTask{TaskType::Flush, dm_context, segment, {}}, thread_type);
         }
     }
 
@@ -1073,7 +1077,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_background_merge_delta)
         {
             delta_last_try_merge_delta_rows = delta_rows;
-            try_add_background_task(BackgroundTask{TaskType::MergeDelta, dm_context, segment, {}});
+            tryAddBackgroundTask(BackgroundTask{TaskType::MergeDelta, dm_context, segment, {}}, thread_type);
             return true;
         }
         return false;
@@ -1082,7 +1086,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_split)
         {
             delta_last_try_split_rows = delta_rows;
-            try_add_background_task(BackgroundTask{TaskType::Split, dm_context, seg, {}});
+            tryAddBackgroundTask(BackgroundTask{TaskType::Split, dm_context, seg, {}}, thread_type);
             return true;
         }
         return false;
@@ -1102,7 +1106,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto try_bg_merge = [&]() {
         if (should_merge && (merge_sibling = getMergeSibling()))
         {
-            try_add_background_task(BackgroundTask{TaskType::Merge, dm_context, segment, merge_sibling});
+            tryAddBackgroundTask(BackgroundTask{TaskType::Merge, dm_context, segment, merge_sibling}, thread_type);
             return true;
         }
         return false;
@@ -1111,7 +1115,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_compact)
         {
             delta_last_try_compact_packs = pack_count;
-            try_add_background_task(BackgroundTask{TaskType::Compact, dm_context, segment, {}});
+            tryAddBackgroundTask(BackgroundTask{TaskType::Compact, dm_context, segment, {}}, thread_type);
             return true;
         }
         return false;
@@ -1120,7 +1124,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_place_delta_index)
         {
             delta_last_try_place_delta_index_rows = delta_rows;
-            try_add_background_task(BackgroundTask{TaskType::PlaceIndex, dm_context, segment, {}});
+            tryAddBackgroundTask(BackgroundTask{TaskType::PlaceIndex, dm_context, segment, {}}, thread_type);
             return true;
         }
         return false;
@@ -1161,6 +1165,19 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         try_place_delta_index();
 }
 
+bool DeltaMergeStore::updateLatestGCSafePoint()
+{
+    if (auto pd_client = global_context.getTMTContext().getPDClient(); !pd_client->isMock())
+    {
+        auto safe_point = PDClientHelper::getGCSafePointWithRetry(pd_client,
+                                                                  /* ignore_cache= */ false,
+                                                                  global_context.getSettingsRef().safe_point_update_interval_seconds);
+        latest_gc_safe_point         = safe_point;
+        return true;
+    }
+    return false;
+}
+
 bool DeltaMergeStore::handleBackgroundTask(bool heavy)
 {
     auto task = background_tasks.nextTask(heavy, log);
@@ -1168,18 +1185,12 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         return false;
 
     // Update GC safe point before background task
-    /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
-    if (auto pd_client = global_context.getTMTContext().getPDClient(); !pd_client->isMock())
+    // Foreground task don't get GC safe point from remote, but we better make it as up to date as possible.
+    if (updateLatestGCSafePoint())
     {
-        auto safe_point = PDClientHelper::getGCSafePointWithRetry(pd_client,
-                                                                  /* ignore_cache= */ false,
-                                                                  global_context.getSettingsRef().safe_point_update_interval_seconds);
-
-        LOG_DEBUG(log, "Task" << toString(task.type) << " GC safe point: " << safe_point);
-
-        // Foreground task don't get GC safe point from remote, but we better make it as up to date as possible.
-        latest_gc_safe_point         = safe_point;
-        task.dm_context->min_version = safe_point;
+        /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
+        task.dm_context->min_version = latest_gc_safe_point;
+        LOG_DEBUG(log, "Task" << toString(task.type) << " GC safe point: " << task.dm_context->min_version);
     }
 
     SegmentPtr left, right;
@@ -1243,6 +1254,61 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         checkSegmentUpdate(task.dm_context, right, type);
 
     return true;
+}
+
+bool DeltaMergeStore::checkSegmentNeedGC()
+{
+    // TODO: remove all hardcode parameter in this func
+    auto & global_settings = global_context.getSettingsRef();
+    if (gc_check_stop_watch.elapsedSeconds() < global_settings.dt_segment_bg_gc_check_interval)
+        return false;
+
+    auto max_segment_to_check = global_settings.dt_segment_bg_gc_max_segments_to_check_every_round;
+    std::vector<SegmentPtr> segments_to_check;
+
+    {
+        UInt64 segment_count = 0;
+        std::shared_lock lock(read_write_mutex);
+        while (segment_count < max_segment_to_check)
+        {
+            auto segment_it = segments.begin();
+            if (!(next_gc_check_key == RowKeyValue::EMPTY_STRING_KEY))
+            {
+                segment_it = segments.upper_bound(next_gc_check_key.toRowKeyValueRef());
+                if (segment_it == segments.end())
+                {
+                    segment_it = segments.begin();
+                }
+            }
+            if (!segments_to_check.empty()
+                && (compare(segments_to_check[0]->getRowKeyRange().getStart(),
+                            segment_it->second->getRowKeyRange().getStart()) == 0))
+            {
+                // we meet the first segment again, there is no new segment to check, stop here
+                break;
+            }
+            next_gc_check_key = segment_it->second->getRowKeyRange().end;
+            segments_to_check.push_back(segment_it->second);
+            segment_count += 1;
+        }
+    }
+
+    auto dm_context = newDMContext(global_context, global_context.getSettings());
+    updateLatestGCSafePoint();
+    for (auto & it : segments_to_check)
+    {
+        if (it->hasAbandoned())
+            continue;
+
+        if (it->needGC(*dm_context, latest_gc_safe_point, global_settings.dt_segment_bg_gc_ratio_threhold_to_trigger_gc))
+        {
+            if (!tryAddBackgroundTask(BackgroundTask{TaskType::MergeDelta, dm_context, it, {}}, ThreadType::BG_GC_Check))
+                break;
+        }
+    }
+
+    gc_check_stop_watch.restart();
+    return false;
 }
 
 SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground)

@@ -89,9 +89,13 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
     output_stream->writePrefix();
     while (true)
     {
+        size_t last_effective_num_rows = 0;
         size_t last_not_clean_rows = 0;
         if (mvcc_stream)
+        {
+            last_effective_num_rows = mvcc_stream->getEffectiveNumRows();
             last_not_clean_rows = mvcc_stream->getNotCleanRows();
+        }
 
         Block block = input_stream->read();
         if (!block)
@@ -99,11 +103,18 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
         if (!block.rows())
             continue;
 
+        size_t cur_effective_num_rows = 1;
         size_t cur_not_clean_rows = 1;
         if (mvcc_stream)
+        {
+            cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
             cur_not_clean_rows = mvcc_stream->getNotCleanRows();
+        }
 
-        output_stream->write(block, cur_not_clean_rows - last_not_clean_rows);
+        DMFileBlockOutputStream::BlockProperty block_property;
+        block_property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
+        block_property.not_clean_rows = cur_not_clean_rows - last_not_clean_rows;
+        output_stream->write(block, block_property);
     }
 
     input_stream->readSuffix();
@@ -1117,6 +1128,28 @@ SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
 }
 
 void Segment::check(DMContext &, const String &) const {}
+
+bool Segment::needGC(DMContext & dm_context, DB::Timestamp gc_safepoint, double ratio_threshold) const
+{
+    // Always GC.
+    if (ratio_threshold < 1.0)
+        return true;
+
+    if (!stable->isDMFilePropertyCached())
+        stable->calculateDMFileProperty(dm_context, getRowKeyRange(), is_common_handle);
+
+    auto & property = stable->getDMFileProperty();
+    // No data older than safe_point to GC.
+    if (property.min_ts > gc_safepoint)
+        return false;
+    // A lot of MVCC versions to GC.
+    if (property.num_versions > property.num_rows * ratio_threshold)
+        return true;
+    // A lot of non-effective MVCC versions to GC.
+    if (property.num_versions > property.num_puts * ratio_threshold)
+        return true;
+    return false;
+}
 
 bool Segment::flushCache(DMContext & dm_context)
 {

@@ -211,6 +211,10 @@ public:
 
     void check(DMContext & dm_context, const String & when) const;
 
+    // Returns true if it needs gc.
+    // This is for optimization purpose, does not mean to be accurate.
+    bool needGC(DMContext & dm_context, DB::Timestamp gc_safepoint, double ratio_threshold) const;
+
     const RowKeyRange & getRowKeyRange() const { return rowkey_range; }
 
     const DeltaValueSpacePtr &  getDelta() const { return delta; }

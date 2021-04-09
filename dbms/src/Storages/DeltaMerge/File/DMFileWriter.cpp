@@ -88,7 +88,7 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 }
 
 
-void DMFileWriter::write(const Block & block, size_t not_clean_rows)
+void DMFileWriter::write(const Block & block, size_t not_clean_rows, size_t effective_num_rows)
 {
     DMFile::PackStat stat;
     stat.rows      = block.rows();
@@ -116,6 +116,10 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
     }
 
     dmfile->addPack(stat);
+
+    auto & propertys = dmfile->getPackPropertys();
+    auto * property = propertys.add_property();
+    property->set_num_rows(effective_num_rows);
 }
 
 void DMFileWriter::finalize()

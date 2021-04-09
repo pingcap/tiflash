@@ -151,6 +151,7 @@ public:
         BG_MergeDelta,
         BG_Compact,
         BG_Flush,
+        BG_GC_Check,
     };
 
     enum TaskType
@@ -350,13 +351,18 @@ private:
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
+    bool tryAddBackgroundTask(const BackgroundTask & task, ThreadType thread_type);
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
     SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
 
+    bool updateLatestGCSafePoint();
+
     bool handleBackgroundTask(bool heavy);
+
+    bool checkSegmentNeedGC();
 
     bool isSegmentValid(const SegmentPtr & segment);
 
@@ -393,6 +399,7 @@ private:
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
+    BackgroundProcessingPool::TaskHandle background_gc_handle;
 
     BackgroundProcessingPool &           blockable_background_pool;
     BackgroundProcessingPool::TaskHandle blockable_background_pool_handle;
@@ -405,6 +412,9 @@ private:
     MergeDeltaTaskPool background_tasks;
 
     DB::Timestamp latest_gc_safe_point = 0;
+
+    RowKeyValue next_gc_check_key = RowKeyValue::EMPTY_STRING_KEY;
+    AtomicStopwatch gc_check_stop_watch;
 
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
