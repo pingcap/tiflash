@@ -48,7 +48,8 @@ public:
                   "Total rows: " << total_rows << ", pass: " << DB::toString((Float64)passed_rows * 100 / total_rows, 2)
                                  << "%, complete pass: " << DB::toString((Float64)complete_passed * 100 / total_blocks, 2)
                                  << "%, complete not pass: " << DB::toString((Float64)complete_not_passed * 100 / total_blocks, 2)
-                                 << "%, not clean: " << DB::toString((Float64)not_clean_rows * 100 / passed_rows, 2) << "%");
+                                 << "%, not clean: " << DB::toString((Float64)not_clean_rows * 100 / passed_rows, 2)
+                                 << "%, effective: " << DB::toString((Float64)effective_num_rows * 100 / passed_rows, 2) << "%");
     }
 
     String getName() const override { return "DeltaMergeVersionFilter"; }
@@ -123,8 +124,7 @@ private:
     size_t delete_col_pos;
 
     IColumn::Filter filter{};
-    // TODO: check the following logic is correct
-    // effective = selected & (handle not equals with next)
+    // effective = selected & handle not equals with next
     IColumn::Filter effective{};
     // not_clean = selected & (handle equals with next || deleted)
     IColumn::Filter not_clean{};

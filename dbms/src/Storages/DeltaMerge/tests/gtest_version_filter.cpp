@@ -172,8 +172,93 @@ TEST(VersionFilter_test, MVCCCommonHandle)
 
 TEST(VersionFilter_test, Compact)
 {
+    // TODO: currently it just test data statistics, add test for data correctness
     BlocksList blocks;
-    // TODO fill this test
+
+    {
+        Int64 pk_value = 4;
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash", false, 1));
+        Int64 pk_value2 = 5;
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value2, 10, 0, str_col_name, "hello", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value2, 20, 0, str_col_name, "world", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value2, 30, 1, str_col_name, "", false, 1));
+        Int64 pk_value3 = 6;
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value3, 10, 1, str_col_name, "hello", false, 1));
+    }
+
+    ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
+
+    {
+        auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 40, false);
+        auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+        ASSERT(mvcc_stream);
+        in->readPrefix();
+        while (true)
+        {
+            Block block = in->read();
+            if (!block)
+                break;
+            if (!block.rows())
+                continue;
+        }
+        ASSERT_EQ(mvcc_stream->getEffectiveNumRows(), (size_t)1);
+        ASSERT_EQ(mvcc_stream->getNotCleanRows(), (size_t)0);
+        in->readSuffix();
+    }
+    {
+        auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 30, false);
+        auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+        ASSERT(mvcc_stream);
+        in->readPrefix();
+        while (true)
+        {
+            Block block = in->read();
+            if (!block)
+                break;
+            if (!block.rows())
+                continue;
+        }
+        ASSERT_EQ(mvcc_stream->getEffectiveNumRows(), (size_t)2);
+        ASSERT_EQ(mvcc_stream->getNotCleanRows(), (size_t)2);
+        in->readSuffix();
+    }
+    {
+        auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 20, false);
+        auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+        ASSERT(mvcc_stream);
+        in->readPrefix();
+        while (true)
+        {
+            Block block = in->read();
+            if (!block)
+                break;
+            if (!block.rows())
+                continue;
+        }
+        ASSERT_EQ(mvcc_stream->getEffectiveNumRows(), (size_t)2);
+        ASSERT_EQ(mvcc_stream->getNotCleanRows(), (size_t)4);
+        in->readSuffix();
+    }
+    {
+        auto in = genInputStream<DM_VERSION_FILTER_MODE_COMPACT>(blocks, columns, 10, false);
+        auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(in.get());
+        ASSERT(mvcc_stream);
+        in->readPrefix();
+        while (true)
+        {
+            Block block = in->read();
+            if (!block)
+                break;
+            if (!block.rows())
+                continue;
+        }
+        ASSERT_EQ(mvcc_stream->getEffectiveNumRows(), (size_t)3);
+        ASSERT_EQ(mvcc_stream->getNotCleanRows(), (size_t)7);
+        in->readSuffix();
+    }
 }
 
 } // namespace tests
