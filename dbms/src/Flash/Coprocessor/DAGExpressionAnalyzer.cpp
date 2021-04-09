@@ -219,25 +219,25 @@ static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Ex
     return buildCastFunctionInternal(analyzer, {name, type_expr_name}, false, expr.field_type(), actions);
 }
 
-static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+template <typename Impl>
+static String buildDateAddOrSubFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
-
-    static const std::unordered_map<String, String> unit_to_func_name_map({{"DAY", "addDays"}, {"WEEK", "addWeeks"}, {"MONTH", "addMonths"},
-        {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}});
     if (expr.children_size() != 3)
     {
-        throw TiFlashException("date add function requires three arguments", Errors::Coprocessor::BadRequest);
+        throw TiFlashException(std::string() + Impl::name + " function requires three arguments", Errors::Coprocessor::BadRequest);
     }
     String date_column = analyzer->getActions(expr.children(0), actions);
     String delta_column = analyzer->getActions(expr.children(1), actions);
     if (expr.children(2).tp() != tipb::ExprType::String)
     {
-        throw TiFlashException("3rd argument of date add function must be string literal", Errors::Coprocessor::BadRequest);
+        throw TiFlashException(
+            std::string() + "3rd argument of " + Impl::name + " function must be string literal", Errors::Coprocessor::BadRequest);
     }
     String unit = expr.children(2).val();
-    if (unit_to_func_name_map.find(unit) == unit_to_func_name_map.end())
-        throw TiFlashException("date_add does not support unit " + unit + " yet.", Errors::Coprocessor::Unimplemented);
-    String func_name = unit_to_func_name_map.find(unit)->second;
+    if (Impl::unit_to_func_name_map.find(unit) == Impl::unit_to_func_name_map.end())
+        throw TiFlashException(
+            std::string() + Impl::name + " function does not support unit " + unit + " yet.", Errors::Coprocessor::Unimplemented);
+    String func_name = Impl::unit_to_func_name_map.find(unit)->second;
     const auto & date_column_type = removeNullable(actions->getSampleBlock().getByName(date_column).type);
     if (!date_column_type->isDateOrDateTime())
     {
@@ -272,6 +272,22 @@ static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr &
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
+struct DateAdd
+{
+    static constexpr auto name = "date_add";
+    static const std::unordered_map<String, String> unit_to_func_name_map;
+};
+const std::unordered_map<String, String> DateAdd::unit_to_func_name_map = {{"DAY", "addDays"}, {"WEEK", "addWeeks"}, {"MONTH", "addMonths"},
+    {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}};
+struct DateSub
+{
+    static constexpr auto name = "date_sub";
+    static const std::unordered_map<String, String> unit_to_func_name_map;
+};
+const std::unordered_map<String, String> DateSub::unit_to_func_name_map
+    = {{"DAY", "subtractDays"}, {"WEEK", "subtractWeeks"}, {"MONTH", "subtractMonths"}, {"YEAR", "subtractYears"},
+        {"HOUR", "subtractHours"}, {"MINUTE", "subtractMinutes"}, {"SECOND", "subtractSeconds"}};
+
 static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>>
     function_builder_map({
         {"in", buildInFunction},
@@ -283,11 +299,12 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"ifNull", buildIfNullFunction},
         {"multiIf", buildMultiIfFunction},
         {"tidb_cast", buildCastFunction},
-        {"date_add", buildDateAddFunction},
         {"and", buildLogicalFunction},
         {"or", buildLogicalFunction},
         {"xor", buildLogicalFunction},
         {"not", buildLogicalFunction},
+        {"date_add", buildDateAddOrSubFunction<DateAdd>},
+        {"date_sub", buildDateAddOrSubFunction<DateSub>},
     });
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
