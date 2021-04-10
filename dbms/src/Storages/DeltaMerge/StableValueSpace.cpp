@@ -241,7 +241,7 @@ void StableValueSpace::calculateDMFileProperty(const DMContext & context, const 
             }
         }
     }
-    is_property_cached.store(true, std::__1::memory_order_release);
+    is_property_cached.store(true, std::memory_order_release);
 }
 
 
