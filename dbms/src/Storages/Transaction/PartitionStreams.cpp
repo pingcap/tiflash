@@ -46,7 +46,19 @@ static void writeRegionDataToStorage(Context & context, const RegionPtrWrap & re
         }
 
         /// Lock throughout decode and write, during which schema must not change.
-        auto lock = storage->lockStructure(true, FUNCTION_NAME);
+        TableStructureReadLockPtr lock;
+        try
+        {
+            lock = storage->lockStructure(true, FUNCTION_NAME);
+        }
+        catch (DB::Exception & e)
+        {
+            // If the storage is physical dropped (but not removed from `ManagedStorages`) when we want to flsuh raft data into it, consider the write done.
+            if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+                return true;
+            else
+                throw;
+        }
 
         Block block;
         bool ok = false, need_decode = true;
@@ -367,10 +379,21 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
 /// pre-decode region data into block cache and remove
 RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Context & context)
 {
-    auto data_list_read = ReadRegionCommitCache(region);
-
-    if (!data_list_read)
-        return nullptr;
+    std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
+    try
+    {
+        data_list_read = ReadRegionCommitCache(region);
+        if (!data_list_read)
+            return nullptr;
+    }
+    catch (const Exception & e)
+    {
+        // br or lighting may write illegal data into tikv, skip pre-decode and ingest sst later.
+        LOG_WARNING(&Logger::get(__PRETTY_FUNCTION__),
+            ". Got error while reading region committed cache: " << e.displayText() << ". Skip pre-decode and keep original cache.");
+        // set data_list_read and let apply snapshot process use empty block
+        data_list_read = RegionDataReadInfoList();
+    }
 
     auto metrics = context.getTiFlashMetrics();
     const auto & tmt = context.getTMTContext();
@@ -388,7 +411,21 @@ RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Co
             if (storage == nullptr) // Table must have just been GC-ed.
                 return true;
         }
-        auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+
+        /// Lock throughout decode and write, during which schema must not change.
+        TableStructureReadLockPtr lock;
+        try
+        {
+            lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+        }
+        catch (DB::Exception & e)
+        {
+            // If the storage is physical dropped (but not removed from `ManagedStorages`) when we want to decode snapshot, consider the decode done.
+            if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+                return true;
+            else
+                throw;
+        }
         auto reader = RegionBlockReader(storage);
         auto [block, ok] = reader.read(*data_list_read, force_decode);
         if (!ok)
