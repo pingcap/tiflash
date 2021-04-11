@@ -337,6 +337,9 @@ void DeltaMergeStore::shutdown()
     background_pool.removeTask(gc_handle);
     gc_handle = nullptr;
 
+    background_pool.removeTask(background_gc_handle);
+    background_gc_handle = nullptr;
+
     background_pool.removeTask(background_task_handle);
     blockable_background_pool.removeTask(blockable_background_pool_handle);
     background_task_handle           = nullptr;
