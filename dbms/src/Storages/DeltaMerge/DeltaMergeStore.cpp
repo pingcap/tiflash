@@ -1132,7 +1132,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         {
             delta_last_try_split_rows  = delta_rows;
             delta_last_try_split_bytes = delta_bytes;
-            tryAddBackgroundTask(BackgroundTask{TaskType::Split, dm_context, seg, {}});
+            tryAddBackgroundTask(BackgroundTask{TaskType::Split, dm_context, seg, {}}, thread_type);
             return true;
         }
         return false;
