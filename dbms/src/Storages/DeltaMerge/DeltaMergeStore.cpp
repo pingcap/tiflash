@@ -1058,7 +1058,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         {
             delta_last_try_flush_rows  = delta_rows;
             delta_last_try_flush_bytes = delta_bytes;
-            tryAddBackgroundTask(BackgroundTask{TaskType::Flush, dm_context, segment, {}});
+            tryAddBackgroundTask(BackgroundTask{TaskType::Flush, dm_context, segment, {}}, thread_type);
         }
     }
 
