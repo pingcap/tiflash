@@ -292,8 +292,55 @@ void UpdateMallocConfig([[maybe_unused]] Logger * log)
 }
 
 extern "C" {
-void run_raftstore_proxy_ffi(int argc, const char ** argv, const EngineStoreServerHelper *);
+void run_raftstore_proxy_ffi(int argc, const char * const * argv, const EngineStoreServerHelper *);
 }
+
+struct RaftStoreProxyRunner : boost::noncopyable
+{
+    struct RunRaftStoreProxyParms
+    {
+        const EngineStoreServerHelper * helper;
+        const TiFlashProxyConfig & conf;
+
+        /// set big enough stack size to avoid runtime error like stack-overflow.
+        size_t stack_size = 1024 * 1024 * 20;
+    };
+
+    RaftStoreProxyRunner(RunRaftStoreProxyParms && parms_, Logger * log_) : parms(std::move(parms_)), log(log_) {}
+
+    void join()
+    {
+        if (!parms.conf.is_proxy_runnable)
+            return;
+        pthread_join(thread, nullptr);
+    }
+
+    void run()
+    {
+        if (!parms.conf.is_proxy_runnable)
+            return;
+        pthread_attr_t attribute;
+        pthread_attr_init(&attribute);
+        pthread_attr_setstacksize(&attribute, parms.stack_size);
+        LOG_INFO(log, "start raft store proxy");
+        pthread_create(&thread, &attribute, RunRaftStoreProxyFFI, &parms);
+        pthread_attr_destroy(&attribute);
+    }
+
+private:
+    static void * RunRaftStoreProxyFFI(void * pv)
+    {
+        setThreadName("RaftStoreProxy");
+        auto & parms = *static_cast<const RunRaftStoreProxyParms *>(pv);
+        run_raftstore_proxy_ffi((int)parms.conf.args.size(), parms.conf.args.data(), parms.helper);
+        return nullptr;
+    }
+
+private:
+    RunRaftStoreProxyParms parms;
+    pthread_t thread;
+    Logger * log;
+};
 
 int Server::main(const std::vector<std::string> & /*args*/)
 {
@@ -340,13 +387,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
     };
 
-    auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
-        if (!proxy_conf.is_proxy_runnable)
-            return;
-        setThreadName("RaftStoreProxy");
-        LOG_INFO(log, "Start raft store proxy");
-        run_raftstore_proxy_ffi((int)proxy_conf.args.size(), proxy_conf.args.data(), &helper);
-    });
+    RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
+
+    proxy_runner.run();
 
     if (proxy_conf.is_proxy_runnable)
     {
