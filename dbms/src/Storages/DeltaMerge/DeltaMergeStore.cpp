@@ -1312,7 +1312,8 @@ bool DeltaMergeStore::checkSegmentNeedGC()
     auto & global_settings = global_context.getSettingsRef();
     if (gc_check_stop_watch.elapsedSeconds() < global_settings.dt_segment_bg_gc_check_interval)
         return false;
-
+    if (!updateLatestGCSafePoint())
+        return false;
     if (prev_gc_safe_point.load(std::memory_order_relaxed) == latest_gc_safe_point.load(std::memory_order_relaxed))
         return false;
 
