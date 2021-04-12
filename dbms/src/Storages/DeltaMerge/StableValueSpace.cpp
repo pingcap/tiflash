@@ -228,7 +228,7 @@ void StableValueSpace::calculateDMFileProperty(const DMContext & context, const 
             {
                 if (unlikely((size_t)new_pack_propertys.property_size() <= new_pack_propertys_index))
                 {
-                    throw Exception("new_pack_propertys size " + toString(new_pack_propertys.property_size())
+                    throw Exception("new_pack_propertys size " + std::to_string(new_pack_propertys.property_size())
                                         + " doesn't contain all info for packs",
                                     ErrorCodes::LOGICAL_ERROR);
                 }
