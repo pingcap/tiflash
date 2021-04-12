@@ -75,7 +75,7 @@ public:
         }
         if (v > std::numeric_limits<U>::max() || v < std::numeric_limits<U>::min())
         {
-            throw TiFlashException("Decimal value overflow", Errors::Decimal::Overflow);
+            throw TiFlashException("Decimal value overflow", Errors::Types::Overflow);
         }
         return static_cast<U>(v);
     }

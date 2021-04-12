@@ -2,6 +2,7 @@
 #include <Columns/ColumnString.h>
 #include <Common/Exception.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/FunctionHelpers.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -694,6 +695,195 @@ try
                 }
             }
         }
+    }
+}
+CATCH
+
+TEST_F(TestBinaryArithmeticFunctions, PlusInteger)
+try
+{
+    DataTypePtr int8_type = std::make_shared<DataTypeInt8>();
+    DataTypePtr int16_type = std::make_shared<DataTypeInt16>();
+    DataTypePtr int32_type = std::make_shared<DataTypeInt32>();
+    DataTypePtr int64_type = std::make_shared<DataTypeInt64>();
+    DataTypePtr uint8_type = std::make_shared<DataTypeUInt8>();
+    DataTypePtr uint16_type = std::make_shared<DataTypeUInt16>();
+    DataTypePtr uint32_type = std::make_shared<DataTypeUInt32>();
+    DataTypePtr uint64_type = std::make_shared<DataTypeUInt64>();
+    DataTypePtr nullable_int8_type = makeNullable(int8_type);
+    DataTypePtr nullable_int16_type = makeNullable(int16_type);
+    DataTypePtr nullable_int32_type = makeNullable(int32_type);
+    DataTypePtr nullable_int64_type = makeNullable(int64_type);
+    DataTypePtr nullable_uint8_type = makeNullable(uint8_type);
+    DataTypePtr nullable_uint16_type = makeNullable(uint16_type);
+    DataTypePtr nullable_uint32_type = makeNullable(uint32_type);
+    DataTypePtr nullable_uint64_type = makeNullable(uint64_type);
+    DataTypePtr null_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
+
+    {
+        // Int64(1) + Int64(2) = Int64(3)
+        auto lhs = int64_type->createColumnConst(1, toField(1));
+        auto rhs = int64_type->createColumnConst(1, toField(2));
+        Block block;
+        auto ctn_lhs = ColumnWithTypeAndName(std::move(lhs), int64_type, "lhs");
+        auto ctn_rhs = ColumnWithTypeAndName(std::move(rhs), int64_type, "rhs");
+        executeFunction(block, ctn_lhs, ctn_rhs, "plus");
+        Field result;
+        block.getByPosition(2).column->get(0, result);
+        Int64 expect = 3;
+        Int64 actual = get<Int64>(result);
+        EXPECT_EQ(expect, actual);
+    }
+
+    {
+        // Int8(127) + Int64(123) = Int64(250)
+        auto lhs = int8_type->createColumnConst(1, toField(127));
+        auto rhs = int64_type->createColumnConst(1, toField(123));
+        Block block;
+        auto ctn_lhs = ColumnWithTypeAndName(std::move(lhs), int8_type, "lhs");
+        auto ctn_rhs = ColumnWithTypeAndName(std::move(rhs), int64_type, "rhs");
+        executeFunction(block, ctn_lhs, ctn_rhs, "plus");
+        Field result;
+        block.getByPosition(2).column->get(0, result);
+        Int64 expect = 250;
+        Int64 actual = get<Int64>(result);
+        EXPECT_EQ(expect, actual);
+    }
+
+    {
+        // UInt64(max) + Int64(-1) = UInt64(max-1)
+        auto lhs = uint64_type->createColumnConst(1, toField(std::numeric_limits<uint64_t>::max()));
+        auto rhs = int64_type->createColumnConst(1, toField(-1));
+        Block block;
+        auto ctn_lhs = ColumnWithTypeAndName(std::move(lhs), uint64_type, "lhs");
+        auto ctn_rhs = ColumnWithTypeAndName(std::move(rhs), int64_type, "rhs");
+        executeFunction(block, ctn_lhs, ctn_rhs, "plus");
+        Field result;
+        block.getByPosition(2).column->get(0, result);
+        UInt64 expect = std::numeric_limits<uint64_t>::max() - 1;
+        UInt64 actual = get<Int64>(result);
+        EXPECT_EQ(expect, actual);
+    }
+
+    {
+        // Int64(-1) + UInt64(max) = UInt64(max-1)
+        auto lhs = int64_type->createColumnConst(1, toField(-1));
+        auto rhs = uint64_type->createColumnConst(1, toField(std::numeric_limits<uint64_t>::max()));
+        Block block;
+        auto ctn_lhs = ColumnWithTypeAndName(std::move(lhs), int64_type, "lhs");
+        auto ctn_rhs = ColumnWithTypeAndName(std::move(rhs), uint64_type, "rhs");
+        executeFunction(block, ctn_lhs, ctn_rhs, "plus");
+        Field result;
+        block.getByPosition(2).column->get(0, result);
+        UInt64 expect = std::numeric_limits<uint64_t>::max() - 1;
+        UInt64 actual = get<Int64>(result);
+        EXPECT_EQ(expect, actual);
+    }
+
+    {
+        // Int64(Max) + Int64(1)
+        // Expect throw overflow error
+        auto lhs = int64_type->createColumnConst(1, toField(std::numeric_limits<int64_t>::max()));
+        auto rhs = int64_type->createColumnConst(1, toField(1));
+        Block block;
+        auto ctn_lhs = ColumnWithTypeAndName(std::move(lhs), int64_type, "lhs");
+        auto ctn_rhs = ColumnWithTypeAndName(std::move(rhs), int64_type, "rhs");
+        EXPECT_THROW({ executeFunction(block, ctn_lhs, ctn_rhs, "plus"); }, TiFlashException);
+    }
+
+    {
+        // Int64(1) + Int64(Max)
+        // Expect throw overflow error
+        auto lhs = int64_type->createColumnConst(1, toField(1));
+        auto rhs = int64_type->createColumnConst(1, toField(std::numeric_limits<int64_t>::max()));
+        Block block;
+        auto ctn_lhs = ColumnWithTypeAndName(std::move(lhs), int64_type, "lhs");
+        auto ctn_rhs = ColumnWithTypeAndName(std::move(rhs), int64_type, "rhs");
+        EXPECT_THROW({ executeFunction(block, ctn_lhs, ctn_rhs, "plus"); }, TiFlashException);
+    }
+
+    {
+        // UInt64(Max) + UInt64(1)
+        // Expect throw overflow error
+        auto lhs = uint64_type->createColumnConst(1, toField(std::numeric_limits<uint64_t>::max()));
+        auto rhs = uint64_type->createColumnConst(1, toField(1));
+        Block block;
+        auto ctn_lhs = ColumnWithTypeAndName(std::move(lhs), uint64_type, "lhs");
+        auto ctn_rhs = ColumnWithTypeAndName(std::move(rhs), uint64_type, "rhs");
+        EXPECT_THROW({ executeFunction(block, ctn_lhs, ctn_rhs, "plus"); }, TiFlashException);
+    }
+
+    {
+        // Int64(1) + UInt64(Max)
+        // Expect throw overflow error
+        auto lhs = int64_type->createColumnConst(1, toField(1));
+        auto rhs = uint64_type->createColumnConst(1, toField(std::numeric_limits<uint64_t>::max()));
+        Block block;
+        auto ctn_lhs = ColumnWithTypeAndName(std::move(lhs), int64_type, "lhs");
+        auto ctn_rhs = ColumnWithTypeAndName(std::move(rhs), uint64_type, "rhs");
+        EXPECT_THROW({ executeFunction(block, ctn_lhs, ctn_rhs, "plus"); }, TiFlashException);
+    }
+
+    {
+        // Int64(Min) + Int64(-1)
+        // Expect throw overflow error
+        auto lhs = int64_type->createColumnConst(1, toField(std::numeric_limits<int64_t>::min()));
+        auto rhs = int64_type->createColumnConst(1, toField(-1));
+        Block block;
+        auto ctn_lhs = ColumnWithTypeAndName(std::move(lhs), int64_type, "lhs");
+        auto ctn_rhs = ColumnWithTypeAndName(std::move(rhs), int64_type, "rhs");
+        EXPECT_THROW({ executeFunction(block, ctn_lhs, ctn_rhs, "plus"); }, TiFlashException);
+    }
+
+    {
+        // Nullable
+        auto lhs = nullable_int64_type->createColumn();
+        auto rhs = nullable_uint64_type->createColumn();
+
+        lhs->insert(Null());
+        rhs->insert(toField(1));
+
+        lhs->insert(toField(1));
+        rhs->insert(Null());
+
+        lhs->insert(Null());
+        rhs->insert(Null());
+
+        Block block;
+        auto ctn_lhs = ColumnWithTypeAndName(std::move(lhs), nullable_int64_type, "lhs");
+        auto ctn_rhs = ColumnWithTypeAndName(std::move(rhs), nullable_uint64_type, "rhs");
+        executeFunction(block, ctn_lhs, ctn_rhs, "plus");
+        checkNullConstantResult(block, 3);
+    }
+
+    {
+        // Nulls
+        auto lhs = nullable_int64_type->createColumn();
+        auto rhs = null_type->createColumn();
+
+        lhs->insert(toField(1));
+        rhs->insert(Null());
+
+        Block block;
+        auto ctn_lhs = ColumnWithTypeAndName(std::move(lhs), nullable_int64_type, "lhs");
+        auto ctn_rhs = ColumnWithTypeAndName(std::move(rhs), null_type, "rhs");
+        executeFunction(block, ctn_lhs, ctn_rhs, "plus");
+        checkNullConstantResult(block, 1);
+    }
+
+    {
+        // Nulls
+        auto lhs = nullable_int64_type->createColumn();
+        auto rhs = null_type->createColumn();
+
+        lhs->insert(toField(1));
+        rhs->insert(Null());
+
+        Block block;
+        auto ctn_lhs = ColumnWithTypeAndName(std::move(rhs), null_type, "lhs");
+        auto ctn_rhs = ColumnWithTypeAndName(std::move(lhs), nullable_int64_type, "rhs");
+        executeFunction(block, ctn_lhs, ctn_rhs, "plus");
+        checkNullConstantResult(block, 1);
     }
 }
 CATCH

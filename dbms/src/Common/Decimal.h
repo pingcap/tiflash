@@ -228,7 +228,7 @@ template<typename T>
 inline void checkDecimalOverflow(Decimal<T> v, PrecType prec) {
     auto maxValue = DecimalMaxValue::Get(prec);
     if (v.value > maxValue || v.value < -maxValue) {
-        throw TiFlashException("Decimal value overflow", Errors::Decimal::Overflow);
+        throw TiFlashException("Decimal value overflow", Errors::Types::Overflow);
     }
 }
 
@@ -265,7 +265,7 @@ std::enable_if_t<std::is_floating_point_v<T>, U> ToDecimal(T value, ScaleType sc
     }
     if (std::abs(value) > static_cast<T>(DecimalMaxValue::Get(decimal_max_prec)))
     {
-        throw TiFlashException("Decimal value overflow", Errors::Decimal::Overflow);
+        throw TiFlashException("Decimal value overflow", Errors::Types::Overflow);
     }
     // rounding
     T tenTimesValue = value * 10;

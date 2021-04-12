@@ -199,9 +199,52 @@ struct PlusImpl<A,B,false>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
+        if constexpr (std::is_unsigned_v<A> && std::is_unsigned_v<B>)
+        {
+            if (unlikely(static_cast<UInt64>(a) > std::numeric_limits<UInt64>::max() - static_cast<UInt64>(b)))
+            {
+                throw TiFlashException("BIGINT UNSIGNED value is out of range in '(" /*+ toString(a) +*/ " + " /*+ toString(b) +*/ ")'",
+                    Errors::Types::Overflow);
+            }
+        }
+        else if constexpr (std::is_unsigned_v<A> && !std::is_unsigned_v<B>)
+        {
+            if (unlikely(b < 0 && static_cast<UInt64>(-b) > static_cast<UInt64>(a)))
+            {
+                throw TiFlashException("BIGINT UNSIGNED value is out of range in '(" /*+ toString(a) +*/ " + " /*+ toString(b) +*/ ")'",
+                    Errors::Types::Overflow);
+            }
+            if (unlikely(b > 0 && static_cast<UInt64>(a) > std::numeric_limits<UInt64>::max() - static_cast<UInt64>(b)))
+            {
+                throw TiFlashException("BIGINT UNSIGNED value is out of range in '(" /*+ toString(a) +*/ " + " /*+ toString(b) +*/ ")'",
+                    Errors::Types::Overflow);
+            }
+        }
+        else if constexpr (!std::is_unsigned_v<A> && std::is_unsigned_v<B>)
+        {
+            if (unlikely(a < 0 && static_cast<UInt64>(-a) > static_cast<UInt64>(b)))
+            {
+                throw TiFlashException("BIGINT UNSIGNED value is out of range in '(" /*+ toString(a) +*/ " + " /*+ toString(b) +*/ ")'",
+                    Errors::Types::Overflow);
+            }
+            if (unlikely(a > 0 && static_cast<UInt64>(b) > std::numeric_limits<UInt64>::max() - static_cast<UInt64>(a)))
+            {
+                throw TiFlashException("BIGINT UNSIGNED value is out of range in '(" /*+ toString(a) +*/ " + " /*+ toString(b) +*/ ")'",
+                    Errors::Types::Overflow);
+            }
+        }
+        else if constexpr (!std::is_unsigned_v<A> && !std::is_unsigned_v<B>)
+        {
+            if (unlikely((a > 0 && b > std::numeric_limits<Int64>::max() - a) || (a < 0 && b < std::numeric_limits<Int64>::min() - a)))
+            {
+                throw TiFlashException(
+                    "BIGINT value is out of range in '(" /*+ toString(a) +*/ " + " /*+ toString(b) +*/ ")'", Errors::Types::Overflow);
+            }
+        }
         /// Next everywhere, static_cast - so that there is no wrong result in expressions of the form Int64 c = UInt32(a) * Int32(-1).
         return static_cast<Result>(a) + b;
     }
+
     template <typename Result = ResultType>
     static inline Result apply(A , B , UInt8 &)
     {
