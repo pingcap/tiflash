@@ -655,6 +655,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     NamesWithAliases project_cols;
     for (auto & c : join_output_columns)
     {
+        /// do not need to care about duplicated column names because
+        /// because it is guaranteed by its children query block
         project_cols.emplace_back(c.name, c.name);
     }
     executeProject(pipeline, project_cols);
@@ -1234,13 +1236,15 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
         ExpressionActionsChain::Step & last_step = chain.steps.back();
         std::vector<NameAndTypePair> output_columns;
         NamesWithAliases project_cols;
+        UniqueNameGenerator unique_name_generator;
         for (auto & expr : query_block.source->projection().exprs())
         {
             auto expr_name = dag_analyzer.getActions(expr, last_step.actions);
             last_step.required_output.emplace_back(expr_name);
             auto & col = last_step.actions->getSampleBlock().getByName(expr_name);
-            output_columns.emplace_back(col.name, col.type);
-            project_cols.emplace_back(col.name, col.name);
+            String alias = unique_name_generator.toUniqueName(col.name);
+            output_columns.emplace_back(alias, col.type);
+            project_cols.emplace_back(col.name, alias);
         }
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
         executeProject(pipeline, project_cols);
