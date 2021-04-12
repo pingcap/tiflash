@@ -1314,8 +1314,10 @@ bool DeltaMergeStore::checkSegmentNeedGC()
         return false;
     if (!updateLatestGCSafePoint())
         return false;
-    if (prev_gc_safe_point.load(std::memory_order_relaxed) == latest_gc_safe_point.load(std::memory_order_relaxed))
-        return false;
+
+    bool gc_safe_point_updated = false;
+    if (prev_gc_safe_point.load(std::memory_order_relaxed) != latest_gc_safe_point.load(std::memory_order_relaxed))
+        gc_safe_point_updated = true;
 
     auto                    max_segment_to_check = global_settings.dt_segment_bg_gc_max_segments_to_check_every_round;
     std::vector<SegmentPtr> segments_to_check;
@@ -1323,28 +1325,32 @@ bool DeltaMergeStore::checkSegmentNeedGC()
     {
         UInt64           segment_count = 0;
         std::shared_lock lock(read_write_mutex);
-        auto             segment_it = segments.begin();
+        if (gc_safe_point_updated)
+            gc_checked_segments.clear();
+
+        auto segment_it = segments.begin();
         if (!(next_gc_check_key == RowKeyValue::EMPTY_STRING_KEY))
         {
             segment_it = segments.upper_bound(next_gc_check_key.toRowKeyValueRef());
         }
+        auto first_segment_id = segment_it->second->segmentId();
         while (true)
         {
             if (segment_it == segments.end())
                 segment_it = segments.begin();
 
-            if (!segments_to_check.empty()
-                && (compare(segments_to_check[0]->getRowKeyRange().getStart(), segment_it->second->getRowKeyRange().getStart()) == 0))
+            // if we meet the first segment again, then there is no new segment to check, stop here
+            if (first_segment_id == segment_it->second->segmentId())
+                break;
+            if (!gc_checked_segments.count(segment_it->second->segmentId()))
             {
-                // we meet the first segment again, there is no new segment to check, stop here
-                break;
+                gc_checked_segments.insert(segment_it->second->segmentId());
+                segments_to_check.push_back(segment_it->second);
+                segment_count++;
+                if (segment_count >= max_segment_to_check)
+                    break;
             }
-
-            segments_to_check.push_back(segment_it->second);
-            segment_count++;
             segment_it++;
-            if (segment_count >= max_segment_to_check)
-                break;
         }
         // update `next_gc_check_key`
         if (segment_it != segments.end())
