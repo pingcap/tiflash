@@ -312,6 +312,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
     }
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
+    std::unordered_set<String> agg_key_set;
 
     for (const tipb::Expr & expr : agg.agg_func())
     {
@@ -360,7 +361,14 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
     {
         String name = getActions(expr, step.actions);
         step.required_output.push_back(name);
-        aggregation_keys.push_back(name);
+        bool duplicated_key = agg_key_set.find(name) != agg_key_set.end();
+        if (!duplicated_key)
+        {
+            /// note this assume that column with the same name has the same collator
+            /// need double check this assumption when we support agg with collation
+            aggregation_keys.push_back(name);
+            agg_key_set.emplace(name);
+        }
         /// when group_by_collation_sensitive is true, TiFlash will do the aggregation with collation
         /// info, since the aggregation in TiFlash is actually the partial stage, and TiDB always do
         /// the final stage of the aggregation, even if TiFlash do the aggregation without collation
@@ -372,7 +380,8 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
             std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr;
             if (removeNullable(type)->isString())
                 collator = getCollatorFromExpr(expr);
-            collators.push_back(collator);
+            if (!duplicated_key)
+                collators.push_back(collator);
             if (collator != nullptr)
             {
                 /// if the column is a string with collation info, the `sort_key` of the column is used during
@@ -625,7 +634,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(ExpressionActionsChain &
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
-    std::unordered_map<String, Int32> key_names_map;
+    UniqueNameGenerator unique_name_generator;
 
     for (int i = 0; i < keys.size(); i++)
     {
@@ -652,32 +661,18 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(ExpressionActionsChain &
             /// In TiDB, it returns t1_id,t1_value,t2_id,t2_value
             /// So in order to make the join compatible with TiDB, if the join key is a columnRef, for inner/left
             /// join, add a new key as right join key, for right join, add a new key as left join key
-            String updated_key_name = (left ? "_l_k_" : "_r_k_") + key_name;
-            auto it = key_names_map.find(updated_key_name);
-            while (it != key_names_map.end())
-            {
-                /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
-                /// key names, so just copy a key with new name
-                updated_key_name.append("_").append(std::to_string(it->second));
-                it->second++;
-                it = key_names_map.find(updated_key_name);
-            }
+            String updated_key_name = unique_name_generator.toUniqueName((left ? "_l_k_" : "_r_k_") + key_name);
+            /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
+            /// key names, so just copy a key with new name
             actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
             key_name = updated_key_name;
             has_actions = true;
         }
         else
         {
-            String updated_key_name = key_name;
-            auto it = key_names_map.find(updated_key_name);
-            while (it != key_names_map.end())
-            {
-                /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
-                /// key names, so just copy a key with new name
-                updated_key_name.append("_").append(std::to_string(it->second));
-                it->second++;
-                it = key_names_map.find(updated_key_name);
-            }
+            String updated_key_name = unique_name_generator.toUniqueName(key_name);
+            /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
+            /// key names, so just copy a key with new name
             if (key_name != updated_key_name)
             {
                 actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
@@ -686,7 +681,6 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(ExpressionActionsChain &
             }
         }
         key_names.push_back(key_name);
-        key_names_map.try_emplace(key_name, 1);
         ret |= has_actions;
     }
 
@@ -795,6 +789,7 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
         throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
     auto & current_columns = getCurrentInputColumns();
+    UniqueNameGenerator unique_name_generator;
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
     /// TiDB can not guarantee that the field type in DAG request is accurate, so in order to make things work,
     /// TiFlash will append extra type cast if needed.
@@ -823,12 +818,17 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
         if (!output_offsets.empty())
         {
             for (auto i : output_offsets)
-                final_project.emplace_back(current_columns[i].name, column_prefix + current_columns[i].name);
+            {
+                final_project.emplace_back(
+                    current_columns[i].name, unique_name_generator.toUniqueName(column_prefix + current_columns[i].name));
+            }
         }
         else
         {
             for (const auto & element : current_columns)
-                final_project.emplace_back(element.name, column_prefix + element.name);
+            {
+                final_project.emplace_back(element.name, unique_name_generator.toUniqueName(column_prefix + element.name));
+            }
         }
     }
     else
@@ -866,17 +866,18 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
                     {
                         updated_name = appendCast(getDataTypeByFieldType(schema[i]), step.actions, updated_name);
                     }
-                    final_project.emplace_back(updated_name, column_prefix + updated_name);
+                    final_project.emplace_back(updated_name, unique_name_generator.toUniqueName(column_prefix + updated_name));
                     casted_name_map[current_columns[i].name] = updated_name;
                 }
                 else
                 {
-                    final_project.emplace_back(it->second, column_prefix + it->second);
+                    final_project.emplace_back(it->second, unique_name_generator.toUniqueName(column_prefix + it->second));
                 }
             }
             else
             {
-                final_project.emplace_back(current_columns[i].name, column_prefix + current_columns[i].name);
+                final_project.emplace_back(
+                    current_columns[i].name, unique_name_generator.toUniqueName(column_prefix + current_columns[i].name));
             }
         }
     }
