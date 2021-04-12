@@ -57,6 +57,13 @@ public:
         // number of rows having at least one version(include delete)
         UInt64 num_rows;
     };
+
+    static std::string toString(const DMFileProperty & property)
+    {
+        return "DMFileProperty: min_ts [" + std::to_string(property.min_ts) + "] num_versions [" + std::to_string(property.num_versions)
+            + "] num_puts[" + std::to_string(property.num_puts) + "] num_rows[" + std::to_string(property.num_rows);
+    }
+
     const DMFileProperty & getDMFileProperty() const { return property; }
     void                   calculateDMFileProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle);
 

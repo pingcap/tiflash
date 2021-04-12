@@ -1141,6 +1141,7 @@ bool Segment::needGC(DMContext & dm_context, DB::Timestamp gc_safepoint, double 
         stable->calculateDMFileProperty(dm_context, getRowKeyRange(), is_common_handle);
 
     auto & property = stable->getDMFileProperty();
+    LOG_TRACE(log, "Segment [" << segmentId() << "] " << StableValueSpace::toString(property));
     // No data older than safe_point to GC.
     if (property.min_ts > gc_safepoint)
         return false;
