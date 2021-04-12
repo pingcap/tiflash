@@ -1315,7 +1315,10 @@ bool DeltaMergeStore::checkSegmentNeedGC()
     if (!updateLatestGCSafePoint())
         return false;
     if (prev_gc_safe_point.load(std::memory_order_relaxed) == latest_gc_safe_point.load(std::memory_order_relaxed))
+    {
+        LOG_TRACE(log, "GC delayed because gc safe point: " << std::to_string(latest_gc_safe_point.load(std::memory_order_relaxed)) << " doesn't change.");
         return false;
+    }
 
     auto                    max_segment_to_check = global_settings.dt_segment_bg_gc_max_segments_to_check_every_round;
     std::vector<SegmentPtr> segments_to_check;
