@@ -6,17 +6,15 @@ mysql> insert into test.t values('2006-01')
 
 func> wait_table test t
 
-mysql> set @@tidb_isolation_read_engines='tiflash'
-
 # Issue https://github.com/pingcap/tics/issues/1469
 
-mysql> select * from test.t where cast(a as signed) = -123
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where cast(a as signed) = -123
 +------+
 | a    |
 +------+
 | -123 |
 +------+
-mysql> select * from test.t where cast(a as signed) = 2006
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where cast(a as signed) = 2006
 +---------+
 | a       |
 +---------+
