@@ -83,6 +83,7 @@ private:
             filter[i]
                 = cur_version >= version_limit || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
             not_clean[i] = filter[i] && (compare(cur_handle, next_handle) == 0 || deleted);
+            effective[i] = filter[i] && (compare(cur_handle, next_handle) != 0);
         }
         else
         {

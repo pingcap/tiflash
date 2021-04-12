@@ -148,7 +148,7 @@ private:
     DMFiles files;
 
     DMFileProperty    property;
-    std::atomic<bool> is_property_cached;
+    std::atomic<bool> is_property_cached = false;
 
     Logger * log;
 };
