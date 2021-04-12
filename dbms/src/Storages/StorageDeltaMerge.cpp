@@ -214,7 +214,10 @@ StorageDeltaMerge::StorageDeltaMerge( //
 void StorageDeltaMerge::drop()
 {
     shutdown();
-    getAndMaybeInitStore()->drop();
+    if (store_inited.load(std::memory_order_acquire))
+    {
+        _store->drop();
+    }
 }
 
 Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const Block & old_block)
@@ -1021,8 +1024,12 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     auto columns = block.mutateColumns();
     auto & name_col = columns[0];
     auto & value_col = columns[1];
-
-    DeltaMergeStoreStat stat = getAndMaybeInitStore()->getStat();
+    
+    DeltaMergeStoreStat stat;
+    if (store_inited.load(std::memory_order_acquire))
+    {
+        stat = _store->getStat();
+    }
 
 #define INSERT_INT(NAME)             \
     name_col->insert(String(#NAME)); \
@@ -1116,8 +1123,10 @@ void StorageDeltaMerge::shutdown()
     bool v = false;
     if (!shutdown_called.compare_exchange_strong(v, true))
         return;
-
-    getAndMaybeInitStore()->shutdown();
+    if (store_inited.load(std::memory_order_acquire))
+    { 
+        _store->shutdown();
+    }
 }
 
 void StorageDeltaMerge::removeFromTMTContext()
