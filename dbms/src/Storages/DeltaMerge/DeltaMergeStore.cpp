@@ -358,7 +358,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                path_pool,
                                storage_pool,
                                hash_salt,
-                               latest_gc_safe_point,
+                               latest_gc_safe_point.load(std::memory_order_relaxed),
                                settings.not_compress_columns,
                                is_common_handle,
                                rowkey_column_size,
@@ -926,9 +926,9 @@ void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const Segmen
     // The speed of delta merge in a very bad situation we assume. It should be a very conservative value.
     size_t _10MB = 10 << 20;
 
-    size_t stop_write_delta_rows = dm_context->db_context.getSettingsRef().dt_segment_stop_write_delta_rows;
+    size_t stop_write_delta_rows  = dm_context->db_context.getSettingsRef().dt_segment_stop_write_delta_rows;
     size_t stop_write_delta_bytes = dm_context->db_context.getSettingsRef().dt_segment_stop_write_delta_size;
-    size_t wait_duration_factor = dm_context->db_context.getSettingsRef().dt_segment_wait_duration_factor;
+    size_t wait_duration_factor   = dm_context->db_context.getSettingsRef().dt_segment_wait_duration_factor;
 
     size_t sleep_ms;
     if (delta_rows >= stop_write_delta_rows || delta_bytes >= stop_write_delta_bytes)
@@ -1218,10 +1218,11 @@ bool DeltaMergeStore::updateLatestGCSafePoint()
 {
     if (auto pd_client = global_context.getTMTContext().getPDClient(); !pd_client->isMock())
     {
-        auto safe_point      = PDClientHelper::getGCSafePointWithRetry(pd_client,
+        auto safe_point = PDClientHelper::getGCSafePointWithRetry(pd_client,
                                                                   /* ignore_cache= */ false,
                                                                   global_context.getSettingsRef().safe_point_update_interval_seconds);
-        latest_gc_safe_point = safe_point;
+        prev_gc_safe_point.store(latest_gc_safe_point.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        latest_gc_safe_point.store(safe_point, std::memory_order_relaxed);
         return true;
     }
     return false;
@@ -1238,7 +1239,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     if (updateLatestGCSafePoint())
     {
         /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
-        task.dm_context->min_version = latest_gc_safe_point;
+        task.dm_context->min_version = latest_gc_safe_point.load(std::memory_order_relaxed);
         LOG_DEBUG(log, "Task" << toString(task.type) << " GC safe point: " << task.dm_context->min_version);
     }
 
@@ -1312,6 +1313,9 @@ bool DeltaMergeStore::checkSegmentNeedGC()
     if (gc_check_stop_watch.elapsedSeconds() < global_settings.dt_segment_bg_gc_check_interval)
         return false;
 
+    if (prev_gc_safe_point.load(std::memory_order_relaxed) == latest_gc_safe_point.load(std::memory_order_relaxed))
+        return false;
+
     auto                    max_segment_to_check = global_settings.dt_segment_bg_gc_max_segments_to_check_every_round;
     std::vector<SegmentPtr> segments_to_check;
 
@@ -1355,7 +1359,9 @@ bool DeltaMergeStore::checkSegmentNeedGC()
         if (it->hasAbandoned())
             continue;
 
-        if (it->needGC(*dm_context, latest_gc_safe_point, global_settings.dt_segment_bg_gc_ratio_threhold_to_trigger_gc))
+        if (it->needGC(*dm_context,
+                       latest_gc_safe_point.load(std::memory_order_relaxed),
+                       global_settings.dt_segment_bg_gc_ratio_threhold_to_trigger_gc))
         {
             if (!tryAddBackgroundTask(BackgroundTask{TaskType::MergeDelta, dm_context, it, {}}, ThreadType::BG_GC_Check))
                 break;
