@@ -405,7 +405,12 @@ struct TiDBConvertToInteger
                 context.getDAGContext()->handleTruncateError("cast str as int");
             return static_cast<T>(0);
         }
-        if constexpr (to_unsigned)
+        bool is_negative = false;
+        if (int_string.data[0] == '-')
+        {
+            is_negative = true;
+        }
+        if (!is_negative)
         {
             auto [value, err] = toUInt<T>(int_string);
             if (err == OVERFLOW_ERR)
@@ -414,6 +419,7 @@ struct TiDBConvertToInteger
         }
         else
         {
+            /// TODO: append warning CastAsSignedOverflow if try to cast negative value to unsigned
             auto [value, err] = toInt<T>(int_string);
             if (err == OVERFLOW_ERR)
                 context.getDAGContext()->handleOverflowError("cast str as int");
