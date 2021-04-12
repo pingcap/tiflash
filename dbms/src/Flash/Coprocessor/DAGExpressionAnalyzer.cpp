@@ -260,6 +260,22 @@ static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
 }
 
+static String buildBitwiseFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionPtr & actions)
+{
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    // We should convert arguments to Int64.
+    // See https://github.com/pingcap/tics/issues/1756
+    DataTypePtr int64_type = std::make_shared<DataTypeInt64>();
+    for (auto & child : expr.children())
+    {
+        String name = analyzer->getActions(child, actions);
+        String cast_name = analyzer->appendCast(int64_type, actions, name);
+        argument_names.push_back(cast_name);
+    }
+    return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
+}
+
 static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
@@ -288,6 +304,10 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"or", buildLogicalFunction},
         {"xor", buildLogicalFunction},
         {"not", buildLogicalFunction},
+        {"bitAnd", buildBitwiseFunction},
+        {"bitOr", buildBitwiseFunction},
+        {"bitXor", buildBitwiseFunction},
+        {"bitNot", buildBitwiseFunction},
     });
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
