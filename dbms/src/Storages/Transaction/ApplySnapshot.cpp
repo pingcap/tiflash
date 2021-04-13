@@ -2,6 +2,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
@@ -312,14 +313,17 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
 /// `preHandleSnapshotToFiles` read data from SSTFiles and generate DTFile(s) for commited data
 /// return the path of DTFile(s), the uncommited data will be inserted to `new_region`
 std::vector<UInt64> KVStore::preHandleSnapshotToFiles(
-    RegionPtr new_region, const SSTViewVec snaps, uint64_t index, uint64_t term, TMTContext & tmt)
+    RegionPtr new_region, const SSTViewVec snaps, uint64_t /*index*/, uint64_t /*term*/, TMTContext & tmt)
 {
     size_t expected_block_size = DEFAULT_MERGE_BLOCK_SIZE;
 
     // Use failpoint to change the expected_block_size for some test cases
     fiu_do_on(FailPoints::force_set_sst_to_dtfile_block_size, { expected_block_size = 3; });
 
-    DM::SSTFilesToDTFilesOutputStream stream(new_region, snaps, index, term, snapshot_apply_method, proxy_helper, tmt, expected_block_size);
+    auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
+        std::make_shared<DM::SSTFilesToBlockInputStream>(new_region, snaps, proxy_helper, tmt, expected_block_size),
+        ::DB::MutableSupport::tidb_pk_column_name);
+    DM::SSTFilesToDTFilesOutputStream stream(bounded_stream, snapshot_apply_method, tmt);
 
     stream.writePrefix();
     stream.write();
@@ -478,7 +482,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     }
 }
 
-void KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+void KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec snaps, UInt64 /*index*/, UInt64 /*term*/, TMTContext & tmt)
 {
     // Decode the KV pairs in ingesting SST into DTFiles
     PageIds ingest_ids;
@@ -489,7 +493,10 @@ void KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec
         fiu_do_on(FailPoints::force_set_sst_to_dtfile_block_size, { expected_block_size = 3; });
 
         // Ingest SST won't clear the data before ingesting files, so we use the `region` to keep the uncommitted data in memory.
-        DM::SSTFilesToDTFilesOutputStream stream(region, snaps, index, term, snapshot_apply_method, proxy_helper, tmt, expected_block_size);
+        auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
+            std::make_shared<DM::SSTFilesToBlockInputStream>(region, snaps, proxy_helper, tmt, expected_block_size),
+            ::DB::MutableSupport::tidb_pk_column_name);
+        DM::SSTFilesToDTFilesOutputStream stream(bounded_stream, snapshot_apply_method, tmt);
         stream.writePrefix();
         stream.write();
         stream.writeSuffix();

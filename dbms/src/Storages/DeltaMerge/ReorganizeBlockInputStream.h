@@ -2,6 +2,7 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 
 namespace DB
 {
@@ -10,7 +11,7 @@ namespace DM
 
 /// Reorganize the boundary of blocks.
 /// Note that child must be a sorted input stream with increasing pk column.
-class ReorganizeBlockInputStream final : public IBlockInputStream
+class ReorganizeBlockInputStream : public IBlockInputStream
 {
 public:
     ReorganizeBlockInputStream(BlockInputStreamPtr child, String pk_column_name_)
@@ -18,6 +19,8 @@ public:
     {
         assert(sorted_input_stream != nullptr);
         cur_block = {};
+        children.push_back(child);
+
         if constexpr (DM_RUN_CHECK)
         {
             // Sanity check for existence of pk column
@@ -32,6 +35,22 @@ public:
 
     String getName() const override { return "ReorganizeBlockBoundary"; }
     Block  getHeader() const override { return sorted_input_stream->getHeader(); }
+
+    void readPrefix() override
+    {
+        forEachChild([](IBlockInputStream & child) {
+            child.readPrefix();
+            return false;
+        });
+    }
+
+    void readSuffix() override
+    {
+        forEachChild([](IBlockInputStream & child) {
+            child.readSuffix();
+            return false;
+        });
+    }
 
     Block read() override
     {

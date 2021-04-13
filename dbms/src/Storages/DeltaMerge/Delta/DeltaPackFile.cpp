@@ -161,11 +161,12 @@ size_t DPFileReader::readRowsOnce(MutableColumns &    output_cols, //
         {
             if (unlikely(!read_next_block()))
                 throw Exception("Not enough delta data to read [offset=" + DB::toString(rows_offset)
-                                    + "] [read_offset=" + DB::toString(read_offset) + "] [limit=" + DB::toString(rows_limit) + "]",
+                                    + "] [limit=" + DB::toString(rows_limit) + "] [read_offset=" + DB::toString(read_offset) + "]",
                                 ErrorCodes::LOGICAL_ERROR);
         }
         if (unlikely(read_offset < rows_before_cur_block + cur_block_offset))
-            throw Exception("read_offset is too small [read_offset=" + DB::toString(read_offset)
+            throw Exception("read_offset is too small [offset=" + DB::toString(rows_offset) + "] [limit=" + DB::toString(rows_limit)
+                                + "] [read_offset=" + DB::toString(read_offset)
                                 + "] [min_offset=" + DB::toString(rows_before_cur_block + cur_block_offset) + "]",
                             ErrorCodes::LOGICAL_ERROR);
 
@@ -190,10 +191,18 @@ size_t DPFileReader::readRows(MutableColumns & output_cols, size_t rows_offset, 
 {
     initStream();
 
-    if (pk_ver_only)
-        return readRowsRepeatedly(output_cols, rows_offset, rows_limit, range);
-    else
-        return readRowsOnce(output_cols, rows_offset, rows_limit, range);
+    try
+    {
+        if (pk_ver_only)
+            return readRowsRepeatedly(output_cols, rows_offset, rows_limit, range);
+        else
+            return readRowsOnce(output_cols, rows_offset, rows_limit, range);
+    }
+    catch (DB::Exception & e)
+    {
+        e.addMessage(" while reading DTFile " + pack.getFile()->path());
+        throw;
+    }
 }
 
 Block DPFileReader::readNextBlock()
