@@ -969,8 +969,13 @@ MyDateTime numberToDateTime(Int64 number)
     // check YYMMDD: 2000-2069
     if (number <= 69 * 10000 + 1231)
     {
-        number = (number + 200000000) * 1000000;
+        number = (number + 20000000) * 1000000;
         return get_datetime(number);
+    }
+
+    if (number < 70 * 10000 + 101)
+    {
+        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
     }
 
     // check YYMMDD
@@ -980,20 +985,14 @@ MyDateTime numberToDateTime(Int64 number)
         return get_datetime(number);
     }
 
-    // check YYYYMMDD
-    if (number <= 10000101)
-    {
-        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
-    }
-
-    // check hhmmss
+    // check hour/min/second
     if (number <= 99991231)
     {
-        number = number * 1000000;
+        number *= 1000000;
         return get_datetime(number);
     }
 
-    // check MMDDhhmmss
+    // check MMDDHHMMSS
     if (number < 101000000)
     {
         throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
@@ -1006,12 +1005,13 @@ MyDateTime numberToDateTime(Int64 number)
         return get_datetime(number);
     }
 
-    // check YYMMDDhhmmss
+    // check YYYYMMDDhhmmss
     if (number < 70 * 10000000000 + 101000000)
     {
         throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
     }
 
+    // check YYMMDDHHMMSS
     if (number <= 991231235959)
     {
         number += 19000000000000;
