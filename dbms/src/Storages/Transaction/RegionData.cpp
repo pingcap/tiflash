@@ -7,7 +7,23 @@
 namespace DB
 {
 
+<<<<<<< HEAD
 void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
+=======
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+extern const int ILLFORMAT_RAFT_ROW;
+} // namespace ErrorCodes
+
+HandleID RawTiDBPK::getHandleID() const
+{
+    auto & pk = *this;
+    return RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(pk->data()));
+}
+
+void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value)
+>>>>>>> 256c9b197... Remove useless StorageDebugging & move mock applying snapshot functions together (#1666)
 {
     switch (cf)
     {
@@ -105,7 +121,7 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
         else
             throw Exception("Handle: " + Redact::handleToDebugString(handle) + ", Prewrite ts: " + std::to_string(prewrite_ts)
                     + " can not found in default cf for key: " + key->toDebugString(),
-                ErrorCodes::LOGICAL_ERROR);
+                ErrorCodes::ILLFORMAT_RAFT_ROW);
     }
 
     return std::make_tuple(handle, write_type, ts, short_value);

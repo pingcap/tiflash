@@ -3,16 +3,14 @@
 #include <Debug/MockTiKV.h>
 #include <Debug/dbgFuncRegion.h>
 #include <Debug/dbgTools.h>
-#include <Interpreters/executeQuery.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
-#include <Storages/Transaction/tests/region_helper.h>
 
 namespace DB
 {
@@ -23,57 +21,31 @@ extern const int BAD_ARGUMENTS;
 extern const int UNKNOWN_TABLE;
 } // namespace ErrorCodes
 
-TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name, const std::string & partition_id)
-{
-    try
-    {
-        using TablePtr = MockTiDB::TablePtr;
-        TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
-
-        if (table->isPartitionTable())
-            return std::atoi(partition_id.c_str());
-
-        return table->id();
-    }
-    catch (Exception & e)
-    {
-        if (e.code() != ErrorCodes::UNKNOWN_TABLE)
-            throw;
-    }
-
-    auto storage = context.getTable(database_name, table_name);
-    auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
-    auto table_info = managed_storage->getTableInfo();
-    return table_info.id;
-}
-
-const TiDB::TableInfo getTableInfo(Context & context, const String & database_name, const String table_name)
-{
-    try
-    {
-        using TablePtr = MockTiDB::TablePtr;
-        TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
-
-        return table->table_info;
-    }
-    catch (Exception & e)
-    {
-        if (e.code() != ErrorCodes::UNKNOWN_TABLE)
-            throw;
-    }
-
-    auto storage = context.getTable(database_name, table_name);
-    auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
-    return managed_storage->getTableInfo();
-}
-
 // Inject a region and optionally map it to a table.
-// put_region(region_id, start, end, database_name, table_name)
+// put_region(region_id, start, end, database_name, table_name[, partition-name])
 void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
+<<<<<<< HEAD
     if (args.size() < 5 || args.size() > 6)
     {
         throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]",
+=======
+    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    bool has_partition_id = false;
+    size_t args_size = args.size();
+    if (dynamic_cast<ASTLiteral *>(args[args_size - 1].get()) != nullptr)
+        has_partition_id = true;
+    const String & partition_id
+        = has_partition_id ? std::to_string(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[args_size - 1]).value)) : "";
+    size_t offset = has_partition_id ? 1 : 0;
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[args_size - 2 - offset]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[args_size - 1 - offset]).name;
+    TableID table_id = RegionBench::getTableID(context, database_name, table_name, partition_id);
+    const auto & table_info = RegionBench::getTableInfo(context, database_name, table_name);
+    size_t handle_column_size = table_info.is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
+    if (args_size < 3 + 2 * handle_column_size || args_size > 3 + 2 * handle_column_size + 1)
+        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-id]",
+>>>>>>> 256c9b197... Remove useless StorageDebugging & move mock applying snapshot functions together (#1666)
             ErrorCodes::BAD_ARGUMENTS);
     }
 
@@ -123,6 +95,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     output(ss.str());
 }
 
+<<<<<<< HEAD
 // DBGInvoke region_snapshot_data(database_name, table_name, region_id, start, end, handle_id1, tso1, del1, r1_c1, r1_c2, ..., handle_id2, tso2, del2, r2_c1, r2_c2, ... )
 RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
 {
@@ -238,6 +211,8 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     output(ss.str());
 }
 
+=======
+>>>>>>> 256c9b197... Remove useless StorageDebugging & move mock applying snapshot functions together (#1666)
 void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none, bool dump_status, DBGInvoker::Printer & output)
 {
     size_t size = 0;
@@ -307,6 +282,7 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
     output(ss.str());
 }
 
+<<<<<<< HEAD
 /// Some helper structure / functions for IngestSST
 
 struct MockSSTReader
@@ -470,4 +446,6 @@ void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer)
     }
 }
 
+=======
+>>>>>>> 256c9b197... Remove useless StorageDebugging & move mock applying snapshot functions together (#1666)
 } // namespace DB

@@ -1,14 +1,17 @@
 #include <Common/typeid_cast.h>
+#include <Debug/MockTiDB.h>
 #include <Debug/MockTiKV.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/ColumnFamily.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVRange.h>
 
 #include <random>
@@ -19,7 +22,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-}
+extern const int UNKNOWN_TABLE;
+} // namespace ErrorCodes
 
 namespace RegionBench
 {
@@ -27,7 +31,7 @@ namespace RegionBench
 using TiDB::ColumnInfo;
 using TiDB::TableInfo;
 
-RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & start, const HandleID & end)
+RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & start, const HandleID & end, std::optional<uint64_t> index_)
 {
     metapb::Region region;
     metapb::Peer peer;
@@ -40,7 +44,10 @@ RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & st
     region.set_end_key(end_key.getStr());
 
     RegionMeta region_meta(std::move(peer), std::move(region), initialApplyState());
-    region_meta.setApplied(MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM);
+    uint64_t index = MockTiKV::instance().getRaftIndex(region_id);
+    if (index_)
+        index = *index_;
+    region_meta.setApplied(index, RAFT_INIT_LOG_TERM);
     return std::make_shared<Region>(std::move(region_meta));
 }
 
@@ -228,8 +235,10 @@ Field convertField(const ColumnInfo & column_info, const Field & field)
 
 void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, std::stringstream & ss)
 {
-    if (table_info.columns.size() != fields.size() + table_info.pk_is_handle)
-        throw Exception("Encoding row has different sizes between columns and values", ErrorCodes::LOGICAL_ERROR);
+    if (table_info.columns.size() < fields.size() + table_info.pk_is_handle)
+        throw Exception("Encoding row has less columns than encode values [num_columns=" + DB::toString(table_info.columns.size())
+                + "] [num_fields=" + DB::toString(fields.size()) + "] . ",
+            ErrorCodes::LOGICAL_ERROR);
 
     std::vector<Field> flatten_fields;
     for (size_t i = 0; i < fields.size(); i++)
@@ -245,21 +254,22 @@ void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fi
     (row_format_flip = !row_format_flip) ? encodeRowV1(table_info, flatten_fields, ss) : encodeRowV2(table_info, flatten_fields, ss);
 }
 
-void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin,
-    ASTs::const_iterator end, Context & context, const std::optional<std::tuple<Timestamp, UInt8>> & tso_del)
+void insert(                                                                    //
+    const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, //
+    ASTs::const_iterator values_begin, ASTs::const_iterator values_end,         //
+    Context & context, const std::optional<std::tuple<Timestamp, UInt8>> & tso_del)
 {
+    // Parse the fields in the inserted row
     std::vector<Field> fields;
-    ASTs::const_iterator it;
-    int idx = 0;
-    while ((it = begin++) != end)
     {
-        auto field = typeid_cast<const ASTLiteral *>((*it).get())->value;
-        fields.emplace_back(field);
-        idx++;
+        for (ASTs::const_iterator it = values_begin; it != values_end; ++it)
+        {
+            auto field = typeid_cast<const ASTLiteral *>((*it).get())->value;
+            fields.emplace_back(field);
+        }
+        if (fields.size() + table_info.pk_is_handle != table_info.columns.size())
+            throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
     }
-    if (fields.size() + table_info.pk_is_handle != table_info.columns.size())
-        throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
-
     TMTContext & tmt = context.getTMTContext();
     pingcap::pd::ClientPtr pd_client = tmt.getPDClient();
     RegionPtr region = tmt.getKVStore()->getRegion(region_id);
@@ -494,6 +504,50 @@ Int64 concurrentRangeOperate(
         thread.join();
     }
     return tol;
+}
+
+TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name, const std::string & partition_id)
+{
+    try
+    {
+        using TablePtr = MockTiDB::TablePtr;
+        TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+
+        if (table->isPartitionTable())
+            return std::atoi(partition_id.c_str());
+
+        return table->id();
+    }
+    catch (Exception & e)
+    {
+        if (e.code() != ErrorCodes::UNKNOWN_TABLE)
+            throw;
+    }
+
+    auto storage = context.getTable(database_name, table_name);
+    auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
+    auto table_info = managed_storage->getTableInfo();
+    return table_info.id;
+}
+
+const TiDB::TableInfo & getTableInfo(Context & context, const String & database_name, const String & table_name)
+{
+    try
+    {
+        using TablePtr = MockTiDB::TablePtr;
+        TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+
+        return table->table_info;
+    }
+    catch (Exception & e)
+    {
+        if (e.code() != ErrorCodes::UNKNOWN_TABLE)
+            throw;
+    }
+
+    auto storage = context.getTable(database_name, table_name);
+    auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
+    return managed_storage->getTableInfo();
 }
 
 

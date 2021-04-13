@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -36,6 +37,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_during_write_to_storage[];
+} // namespace FailPoints
+
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
@@ -390,6 +396,9 @@ void StorageDeltaMerge::write(Block && block, const Settings & settings)
         }
     }
 #endif
+
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_write_to_storage);
+
     store->write(global_context, settings, block);
 }
 

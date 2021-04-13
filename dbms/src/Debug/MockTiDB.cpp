@@ -21,6 +21,9 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
+extern const int LOGICAL_ERROR;
+extern const int TABLE_ALREADY_EXISTS;
+extern const int UNKNOWN_TABLE;
 } // namespace ErrorCodes
 
 using ColumnInfo = TiDB::ColumnInfo;
@@ -143,8 +146,86 @@ DatabaseID MockTiDB::newDataBase(const String & database_name)
     return schema_id;
 }
 
+TiDB::TableInfoPtr MockTiDB::parseColumns(
+    const String & tbl_name, const ColumnsDescription & columns, const String & handle_pk_name, String engine_type)
+{
+    TableInfo table_info;
+    table_info.name = tbl_name;
+    table_info.pk_is_handle = false;
+
+    int i = 1;
+    for (auto & column : columns.getAllPhysical())
+    {
+        Field default_value;
+        auto it = columns.defaults.find(column.name);
+        if (it != columns.defaults.end())
+            default_value = getDefaultValue(it->second.expression);
+        table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, default_value, true));
+        if (handle_pk_name == column.name)
+        {
+<<<<<<< HEAD
+            if (!column.type->isInteger() && !column.type->isUnsignedInteger())
+                throw Exception("MockTiDB pk column must be integer or unsigned integer type", ErrorCodes::LOGICAL_ERROR);
+            table_info.columns.back().setPriKeyFlag();
+=======
+            // todo support prefix index
+            if (*sit == column.name)
+            {
+                has_pk = true;
+                if (!column.type->isInteger() && !column.type->isUnsignedInteger())
+                    has_non_int_pk = true;
+                table_info.columns.back().setPriKeyFlag();
+                pk_column_pos_map[*sit] = i - 2;
+                break;
+            }
+        }
+    }
+
+    if (has_pk)
+    {
+        if (string_tokens.count() > 1 || has_non_int_pk)
+        {
+            table_info.is_common_handle = true;
+            // construct IndexInfo
+            table_info.index_infos.resize(1);
+            TiDB::IndexInfo & index_info = table_info.index_infos[0];
+            index_info.id = 1;
+            index_info.is_primary = true;
+            index_info.idx_name = "PRIMARY";
+            index_info.tbl_name = tbl_name;
+            index_info.is_unique = true;
+            index_info.index_type = 1;
+            index_info.idx_cols.resize(string_tokens.count());
+            for (size_t index = 0; index < string_tokens.count(); index++)
+            {
+                String & name = string_tokens[index];
+                index_info.idx_cols[index].name = name;
+                index_info.idx_cols[index].offset = pk_column_pos_map[name];
+                index_info.idx_cols[index].length = -1;
+            }
+        }
+        else
+>>>>>>> 256c9b197... Remove useless StorageDebugging & move mock applying snapshot functions together (#1666)
+            table_info.pk_is_handle = true;
+        }
+    }
+
+    table_info.comment = "Mocked.";
+
+    // set storage engine type
+    std::transform(engine_type.begin(), engine_type.end(), engine_type.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (engine_type == "tmt")
+        table_info.engine_type = TiDB::StorageEngine::TMT;
+    else if (engine_type == "dt")
+        table_info.engine_type = TiDB::StorageEngine::DT;
+    else
+        throw Exception("Unknown engine type : " + engine_type + ", must be 'tmt' or 'dt'", ErrorCodes::BAD_ARGUMENTS);
+
+    return std::make_shared<TiDB::TableInfo>(std::move(table_info));
+}
+
 TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso,
-    const String & handle_pk_name, String engine_type)
+    const String & handle_pk_name, const String & engine_type)
 {
     std::lock_guard lock(tables_mutex);
 
@@ -159,43 +240,11 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);
     }
 
-    TableInfo table_info;
-    table_info.id = table_id_allocator++;
-    table_info.name = table_name;
-    table_info.pk_is_handle = false;
+    auto table_info = parseColumns(table_name, columns, handle_pk_name, engine_type);
+    table_info->id = table_id_allocator++;
+    table_info->update_timestamp = tso;
 
-    int i = 1;
-    for (auto & column : columns.getAllPhysical())
-    {
-        Field default_value;
-        auto it = columns.defaults.find(column.name);
-        if (it != columns.defaults.end())
-            default_value = getDefaultValue(it->second.expression);
-        table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, default_value, true));
-        if (handle_pk_name == column.name)
-        {
-            if (!column.type->isInteger() && !column.type->isUnsignedInteger())
-                throw Exception("MockTiDB pk column must be integer or unsigned integer type", ErrorCodes::LOGICAL_ERROR);
-            table_info.columns.back().setPriKeyFlag();
-            table_info.pk_is_handle = true;
-        }
-    }
-
-    table_info.comment = "Mocked.";
-    table_info.update_timestamp = tso;
-
-    // set storage engine type
-    std::transform(engine_type.begin(), engine_type.end(), engine_type.begin(), [](unsigned char c) { return std::tolower(c); });
-    if (engine_type == "tmt")
-        table_info.engine_type = TiDB::StorageEngine::TMT;
-    else if (engine_type == "dt")
-        table_info.engine_type = TiDB::StorageEngine::DT;
-    else if (engine_type == "buggy")
-        table_info.engine_type = TiDB::StorageEngine::DEBUGGING_MEMORY;
-    else
-        throw Exception("Unknown engine type : " + engine_type + ", must be 'tmt' or 'dt'", ErrorCodes::BAD_ARGUMENTS);
-
-    auto table = std::make_shared<Table>(database_name, databases[database_name], table_name, std::move(table_info));
+    auto table = std::make_shared<Table>(database_name, databases[database_name], table_name, std::move(*table_info));
     tables_by_id.emplace(table->table_info.id, table);
     tables_by_name.emplace(qualified_name, table);
 
