@@ -930,25 +930,38 @@ size_t maxFormattedDateTimeStringLength(const String & format)
     return std::max<size_t>(result, 1);
 }
 
+MyDateTime checkedDateTime(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
+    const UInt64 & second, const UInt64 & microsecond)
+{
+    if (year >= (1 << MyTimeBase::YEAR_BIT_FIELD_WIDTH) || month >= (1 << MyTimeBase::MONTH_BIT_FIELD_WIDTH)
+        || day >= (1 << MyTimeBase::DAY_BIT_FIELD_WIDTH) || hour >= (1 << MyTimeBase::HOUR_BIT_FIELD_WIDTH)
+        || minute >= (1 << MyTimeBase::MINUTE_BIT_FIELD_WIDTH) || second >= (1 << MyTimeBase::SECOND_BIT_FIELD_WIDTH)
+        || microsecond >= (1 << MyTimeBase::MICROSECOND_BIT_FIELD_WIDTH))
+    {
+        throw TiFlashException("Date time value overflow", Errors::Types::WrongValue);
+    }
+    return MyDateTime(year, month, day, hour, minute, second, microsecond);
+}
+
 MyDateTime numberToDateTime(Int64 number)
 {
     MyDateTime datetime(0);
 
     auto get_datetime = [](const Int64 & num) {
-        auto ymd = num / 1000000;
-        auto hms = num - ymd * 1000000;
+        UInt64 ymd = num / 1000000;
+        UInt64 hms = num - ymd * 1000000;
 
-        UInt16 year = ymd / 10000;
+        UInt64 year = ymd / 10000;
         ymd %= 10000;
-        UInt8 month = ymd / 100;
-        UInt8 day = ymd % 100;
+        UInt64 month = ymd / 100;
+        UInt64 day = ymd % 100;
 
-        UInt16 hour = hms / 10000;
+        UInt64 hour = hms / 10000;
         hms %= 10000;
-        UInt8 minute = hms / 100;
-        UInt8 second = hms % 100;
+        UInt64 minute = hms / 100;
+        UInt64 second = hms % 100;
 
-        return MyDateTime(year, month, day, hour, minute, second, 0);
+        return checkedDateTime(year, month, day, hour, minute, second, 0);
     };
 
     if (number == 0)

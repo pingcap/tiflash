@@ -36,7 +36,7 @@ public:
         }
     }
 
-    static void checkParseMyDateTime(const std::string & str, MyDateTime & expected, const DataTypeMyDateTime & type)
+    static void checkParseMyDateTime(const std::string & str, const MyDateTime & expected, const DataTypeMyDateTime & type)
     {
         try
         {
@@ -53,6 +53,32 @@ public:
         catch (...)
         {
             std::cerr << "Error occurs when parsing: \"" << str << "\"" << std::endl;
+            throw;
+        }
+    }
+
+    static void checkNumberToMyDateTime(const Int64 & input, const MyDateTime & expected, bool expect_error)
+    {
+        if (expect_error)
+        {
+            EXPECT_THROW({ numberToDateTime(input); }, TiFlashException) << "Original time number: " << input;
+            return;
+        }
+
+        try
+        {
+            MyDateTime source = numberToDateTime(input);
+            EXPECT_EQ(source.year, expected.year) << "Original time number: " << input;
+            EXPECT_EQ(source.month, expected.month) << "Original time number: " << input;
+            EXPECT_EQ(source.day, expected.day) << "Original time number: " << input;
+            EXPECT_EQ(source.hour, expected.hour) << "Original time number: " << input;
+            EXPECT_EQ(source.minute, expected.minute) << "Original time number: " << input;
+            EXPECT_EQ(source.second, expected.second) << "Original time number: " << input;
+            EXPECT_EQ(source.micro_second, expected.micro_second) << "Original time number: " << input;
+        }
+        catch (...)
+        {
+            std::cerr << "Error occurs when parsing: \"" << input << "\"" << std::endl;
             throw;
         }
     }
@@ -145,6 +171,44 @@ try
     for (auto & [str, expected] : cases)
     {
         checkParseMyDateTime(str, expected, type);
+    }
+}
+catch (Exception & e)
+{
+    std::cerr << e.displayText() << std::endl;
+    GTEST_FAIL();
+}
+
+TEST_F(TestMyTime, NumberToDateTime)
+try
+{
+    std::vector<std::tuple<Int64, bool /* ExpectError */, MyDateTime>> cases{
+        {20101010111111, false, MyDateTime(2010, 10, 10, 11, 11, 11, 0)},
+        {2010101011111, false, MyDateTime(201, 1, 1, 1, 11, 11, 0)},
+        {201010101111, false, MyDateTime(2020, 10, 10, 10, 11, 11, 0)},
+        {20101010111, false, MyDateTime(2002, 1, 1, 1, 1, 11, 0)},
+        {2010101011, true, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
+        {201010101, false, MyDateTime(2000, 2, 1, 1, 1, 1, 0)},
+        {20101010, false, MyDateTime(2010, 10, 10, 0, 0, 0, 0)},
+        {2010101, false, MyDateTime(201, 1, 1, 0, 0, 0, 0)},
+        {201010, false, MyDateTime(2020, 10, 10, 0, 0, 0, 0)},
+        {20101, false, MyDateTime(2002, 1, 1, 0, 0, 0, 0)},
+        {2010, true, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
+        {201, false, MyDateTime(2000, 2, 1, 0, 0, 0, 0)},
+        {20, true, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
+        {2, true, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
+        // {0, true, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
+        {-1, true, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
+        {99999999999999, true, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
+        {100000000000000, true, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
+        // {10000102000000, false, MyDateTime(1000, 1, 2, 0, 0, 0, 0)},
+        // {19690101000000, false, MyDateTime(1969, 1, 1, 0, 0, 0, 0)},
+        {991231235959, false, MyDateTime(1999, 12, 31, 23, 59, 59, 0)},
+        {370119031407, false, MyDateTime(2037, 1, 19, 3, 14, 7, 0)},
+    };
+    for (auto & [input, expect_error, expected] : cases)
+    {
+        checkNumberToMyDateTime(input, expected, expect_error);
     }
 }
 catch (Exception & e)
