@@ -505,7 +505,7 @@ public:
 
     void cancelMPPQuery(UInt64 query_id, const String & reason)
     {
-        MPPQueryTaskSet canceled_task_set;
+        MPPQueryTaskSet task_set;
         {
             /// cancel task may take a long time, so first
             /// set a flag, so we can cancel task one by
@@ -515,14 +515,14 @@ public:
             if (it == mpp_query_map.end() || it->second.to_be_cancelled)
                 return;
             it->second.to_be_cancelled = true;
-            canceled_task_set = it->second;
+            task_set = it->second;
         }
         LOG_WARNING(log, "Begin cancel query: " + std::to_string(query_id));
         std::stringstream ss;
         ss << "Remaining task in query " + std::to_string(query_id) + " are: ";
 
         std::vector<std::thread> cancel_workers;
-        for (auto task_it = canceled_task_set.task_map.rbegin(); task_it != canceled_task_set.task_map.rend(); task_it++)
+        for (auto task_it = task_set.task_map.rbegin(); task_it != task_set.task_map.rend(); task_it++)
         {
             ss << task_it->first.toString() << " ";
             std::thread t(&MPPTask::cancel, task_it->second, std::ref(reason));
@@ -533,6 +533,7 @@ public:
         {
             worker.join();
         }
+        MPPQueryTaskSet canceled_task_set;
         {
             std::lock_guard<std::mutex> lock(mu);
             /// just to double check the query still exists
