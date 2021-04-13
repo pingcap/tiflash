@@ -181,7 +181,7 @@ void StableValueSpace::calculateDMFileProperty(const DMContext & context, const 
                                                                                        nullptr,
                                                                                        nullptr,
                                                                                        IdSetPtr{},
-                                                                                       DMFILE_READ_ROWS_THRESHOLD,
+                                                                                       UINT64_MAX, // because we just read one pack at a time
                                                                                        true);
             data_stream                     = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, rowkey_range, 0);
             auto mvcc_stream                = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
