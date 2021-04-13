@@ -225,8 +225,8 @@ nbproject/*
 config-preprocessed.xml
 
 # Protobuf
-*.pb.cpp
 *.pb.cc
+*.pb.cpp
 *.pb.h
 
 # Mac OS
