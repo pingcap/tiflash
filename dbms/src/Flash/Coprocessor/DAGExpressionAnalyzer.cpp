@@ -266,13 +266,34 @@ static String buildBitwiseFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     Names argument_names;
     // We should convert arguments to Int64.
     // See https://github.com/pingcap/tics/issues/1756
-    DataTypePtr arg_type = makeNullable(std::make_shared<DataTypeInt64>());
+    DataTypePtr arg_type = std::make_shared<DataTypeUInt64>();
     for (auto & child : expr.children())
     {
         String name = analyzer->getActions(child, actions);
-        String cast_name = analyzer->appendCast(arg_type, actions, name);
-        argument_names.push_back(cast_name);
+        argument_names.push_back(name);
     }
+
+    const Block & sample_block = actions->getSampleBlock();
+    bool is_nullable = false;
+    for (auto & name : argument_names)
+    {
+        if (sample_block.getByName(name).type->isNullable())
+        {
+            is_nullable = true;
+            break;
+        }
+    }
+
+    if (is_nullable)
+    {
+        arg_type = makeNullable(arg_type);
+        for (size_t i = 0; i < argument_names.size(); i++)
+        {
+            String name = analyzer->appendCast(arg_type, actions, argument_names[i]);
+            argument_names[i] = name;
+        }
+    }
+
     return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
 }
 
