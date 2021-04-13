@@ -34,4 +34,15 @@ void DbgFailPointFunc::dbgDisableFailPoint(Context &, const ASTs & args, DBGInvo
     FailPointHelper::disableFailPoint(fail_name);
 }
 
+void DbgFailPointFunc::dbgWaitFailPoint(Context &, const ASTs & args, DBGInvoker::Printer)
+{
+    if (args.size() != 1)
+        throw Exception("Args not matched, should be: name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String fail_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    // Wait for the failpoint till it is disabled.
+    // Return if it is already disabled.
+    FAIL_POINT_PAUSE(fail_name.c_str());
+}
+
 } // namespace DB

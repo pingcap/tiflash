@@ -7,6 +7,12 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+extern const int ILLFORMAT_RAFT_ROW;
+} // namespace ErrorCodes
+
 HandleID RawTiDBPK::getHandleID() const
 {
     auto & pk = *this;
@@ -116,7 +122,7 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
         else
             throw Exception("Raw TiDB PK: " + (pk.toDebugString()) + ", Prewrite ts: " + std::to_string(decoded_val.prewrite_ts)
                     + " can not found in default cf for key: " + key->toDebugString(),
-                ErrorCodes::LOGICAL_ERROR);
+                ErrorCodes::ILLFORMAT_RAFT_ROW);
     }
 
     return std::make_tuple(pk, decoded_val.write_type, ts, decoded_val.short_value);

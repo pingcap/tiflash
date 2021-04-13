@@ -215,12 +215,12 @@ BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpc
 struct PreHandledSnapshot
 {
     ~PreHandledSnapshot() { CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply); }
-    PreHandledSnapshot(const RegionPtr & region_, RegionPtrWrap::CachePtr && cache_) : region(region_), cache(std::move(cache_))
+    PreHandledSnapshot(const RegionPtr & region_, RegionPtrWithBlock::CachePtr && cache_) : region(region_), cache(std::move(cache_))
     {
         CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
     }
     RegionPtr region;
-    RegionPtrWrap::CachePtr cache;
+    RegionPtrWithBlock::CachePtr cache;
 };
 
 RawCppPtr PreHandleSnapshot(
@@ -249,7 +249,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot 
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        kvstore->handlePreApplySnapshot(RegionPtrWrap{snap->region, std::move(snap->cache)}, *server->tmt);
+        kvstore->handlePreApplySnapshot(RegionPtrWithBlock{snap->region, std::move(snap->cache)}, *server->tmt);
     }
     catch (...)
     {

@@ -21,6 +21,10 @@ struct DbgFailPointFunc
     //   ./stoage-client.sh "DBGInvoke disable_fail_point(name)"
     //     name == "*" means disable all fail point
     static void dbgDisableFailPoint(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+    // Wait till the fail point is disabled.
+    //    DBGInvoke wait_fail_point(name)
+    static void dbgWaitFailPoint(Context & context, const ASTs & args, DBGInvoker::Printer output);
 };
 
 } // namespace DB
