@@ -94,10 +94,7 @@ private:
 class BoundedSSTFilesToBlockInputStream final : public ReorganizeBlockInputStream
 {
 public:
-    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child, String pk_column_name)
-        : ReorganizeBlockInputStream(std::move(child), std::move(pk_column_name))
-    {
-    }
+    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child, ColId pk_column_id);
 
     String getName() const override { return "BoundedSSTFilesToBlockInputStream"; }
 

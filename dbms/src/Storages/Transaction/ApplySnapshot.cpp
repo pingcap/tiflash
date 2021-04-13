@@ -320,16 +320,29 @@ std::vector<UInt64> KVStore::preHandleSnapshotToFiles(
     // Use failpoint to change the expected_block_size for some test cases
     fiu_do_on(FailPoints::force_set_sst_to_dtfile_block_size, { expected_block_size = 3; });
 
-    auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
-        std::make_shared<DM::SSTFilesToBlockInputStream>(new_region, snaps, proxy_helper, tmt, expected_block_size),
-        ::DB::MutableSupport::tidb_pk_column_name);
-    DM::SSTFilesToDTFilesOutputStream stream(bounded_stream, snapshot_apply_method, tmt);
+    PageIds ids;
+    try
+    {
+        auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
+            std::make_shared<DM::SSTFilesToBlockInputStream>(new_region, snaps, proxy_helper, tmt, expected_block_size),
+            ::DB::TiDBPkColumnID);
+        DM::SSTFilesToDTFilesOutputStream stream(bounded_stream, snapshot_apply_method, tmt);
 
-    stream.writePrefix();
-    stream.write();
-    stream.writeSuffix();
+        stream.writePrefix();
+        stream.write();
+        stream.writeSuffix();
+        ids = stream.ingestIds();
+    }
+    catch (DB::Exception & e)
+    {
+        // We can ignore if storage is dropped.
+        if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+            LOG_INFO(log, "Pre-handle snapshot to DTFiles ignored because the table is dropped.");
+        else
+            throw;
+    }
 
-    return stream.ingestIds();
+    return ids;
 }
 
 template <typename RegionPtrWrap>
@@ -494,8 +507,7 @@ void KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec
 
         // Ingest SST won't clear the data before ingesting files, so we use the `region` to keep the uncommitted data in memory.
         auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
-            std::make_shared<DM::SSTFilesToBlockInputStream>(region, snaps, proxy_helper, tmt, expected_block_size),
-            ::DB::MutableSupport::tidb_pk_column_name);
+            std::make_shared<DM::SSTFilesToBlockInputStream>(region, snaps, proxy_helper, tmt, expected_block_size), ::DB::TiDBPkColumnID);
         DM::SSTFilesToDTFilesOutputStream stream(bounded_stream, snapshot_apply_method, tmt);
         stream.writePrefix();
         stream.write();

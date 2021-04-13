@@ -134,6 +134,16 @@ void SSTFilesToDTFilesOutputStream::write()
             ingest_file_ids.emplace_back(file_id);
         }
 
+        {
+            // Check whether rows are sorted by handle & version in ascending order.
+            SortDescription sort;
+            sort.emplace_back(MutableSupport::tidb_pk_column_name, 1, 0);
+            sort.emplace_back(MutableSupport::version_column_name, 1, 0);
+            if (block.rows() > 1 && !isAlreadySorted(block, sort))
+                throw Exception("The block decoded from SSTFile is not sorted by primary key and version [region="
+                                + child->getRegion()->toString(true) + "]");
+        }
+
         // Write block to the output stream
         dt_stream->write(block, /*not_clean_rows=*/1);
 

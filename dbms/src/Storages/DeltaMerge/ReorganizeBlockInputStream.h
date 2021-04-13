@@ -14,23 +14,12 @@ namespace DM
 class ReorganizeBlockInputStream : public IBlockInputStream
 {
 public:
-    ReorganizeBlockInputStream(BlockInputStreamPtr child, String pk_column_name_)
-        : sorted_input_stream(std::move(child)), pk_column_name(std::move(pk_column_name_))
+    ReorganizeBlockInputStream(BlockInputStreamPtr child, ColId pk_column_id_, bool is_common_handle_)
+        : sorted_input_stream(child), pk_column_id(pk_column_id_), is_common_handle(is_common_handle_)
     {
         assert(sorted_input_stream != nullptr);
         cur_block = {};
         children.push_back(child);
-
-        if constexpr (DM_RUN_CHECK)
-        {
-            // Sanity check for existence of pk column
-            Block header = sorted_input_stream->getHeader();
-            if (!header.has(pk_column_name))
-            {
-                throw Exception("Try to write block to Pack without pk column", ErrorCodes::LOGICAL_ERROR);
-            }
-            is_common_handle = !header.getByName(pk_column_name).type->isInteger();
-        }
     }
 
     String getName() const override { return "ReorganizeBlockBoundary"; }
@@ -68,7 +57,15 @@ public:
         {
             next_block = DB::DM::readNextBlock(sorted_input_stream);
 
-            const size_t cut_offset = findCutOffsetInNextBlock(cur_block, next_block, pk_column_name, is_common_handle);
+#ifndef NDEBUG
+            if (!isSameSchema(cur_block, next_block))
+            {
+                throw Exception("schema not match! [cur_block=" + cur_block.dumpStructure() + "] [next_block=" + next_block.dumpStructure()
+                                + "]");
+            }
+#endif
+
+            const size_t cut_offset = findCutOffsetInNextBlock(cur_block, next_block, pk_column_id, is_common_handle);
             if (unlikely(cut_offset == 0))
                 // There is no pk overlap between `cur_block` and `next_block`, or `next_block` is empty, just return `cur_block`.
                 return cur_block;
@@ -105,16 +102,16 @@ public:
 
 private:
     static size_t
-    findCutOffsetInNextBlock(const Block & cur_block, const Block & next_block, const String & pk_column_name, bool is_common_handle)
+    findCutOffsetInNextBlock(const Block & cur_block, const Block & next_block, const ColId pk_column_id, bool is_common_handle)
     {
         assert(cur_block);
         if (!next_block)
             return 0;
 
-        auto                  cur_col = cur_block.getByName(pk_column_name).column;
+        auto                  cur_col = getByColumnId(cur_block, pk_column_id).column;
         RowKeyColumnContainer cur_rowkey_column(cur_col, is_common_handle);
         const auto            last_curr_pk = cur_rowkey_column.getRowKeyValue(cur_col->size() - 1);
-        auto                  next_col     = next_block.getByName(pk_column_name).column;
+        auto                  next_col     = getByColumnId(next_block, pk_column_id).column;
         RowKeyColumnContainer next_rowkey_column(next_col, is_common_handle);
         size_t                cut_offset = 0;
         for (/* */; cut_offset < next_col->size(); ++cut_offset)
@@ -137,13 +134,15 @@ private:
 
 private:
     BlockInputStreamPtr sorted_input_stream;
-    const String        pk_column_name;
-    bool                is_common_handle;
+    const ColId         pk_column_id;
 
     Block cur_block;
     Block next_block;
 
     bool first_read = true;
+
+protected:
+    bool is_common_handle;
 };
 
 } // namespace DM

@@ -181,6 +181,18 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
     return block;
 }
 
+BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child, ColId pk_column_id)
+    : ReorganizeBlockInputStream(child, pk_column_id, false)
+{
+    auto table_id = child->region->getMappedTableID();
+    auto storage  = child->tmt.getStorages().get(table_id);
+    if (unlikely(storage == nullptr))
+        throw Exception("Can not get valid storage [table_id=" + DB::toString(table_id) + "]", ErrorCodes::TABLE_IS_DROPPED);
+
+    auto lock        = storage->lockStructure(false, __PRETTY_FUNCTION__);
+    is_common_handle = storage->isCommonHandle();
+}
+
 const SSTFilesToBlockInputStream * BoundedSSTFilesToBlockInputStream::getChildStream() const
 {
     SSTFilesToBlockInputStream * stream = nullptr;
