@@ -415,7 +415,7 @@ struct TiDBConvertToInteger
             auto [value, err] = toUInt<T>(int_string);
             if (err == OVERFLOW_ERR)
                 context.getDAGContext()->handleOverflowError("cast str as int");
-            return value;
+            return static_cast<T>(value);
         }
         else
         {
@@ -423,7 +423,7 @@ struct TiDBConvertToInteger
             auto [value, err] = toInt<T>(int_string);
             if (err == OVERFLOW_ERR)
                 context.getDAGContext()->handleOverflowError("cast str as int");
-            return value;
+            return static_cast<T>(value);
         }
     }
 
