@@ -1496,7 +1496,7 @@ try
         ASSERT_EQ(stable->getRows(), num_rows_write);
         // caculate DMFileProperty
         ASSERT_EQ(stable->isDMFilePropertyCached(), false);
-        stable->calculateDMFileProperty(dmContext(), RowKeyRange::newAll(false, 1), false);
+        stable->calculateDMFileProperty(dmContext(), segment->getRowKeyRange(), false);
         ASSERT_EQ(stable->isDMFilePropertyCached(), true);
         auto & property = stable->getDMFileProperty();
         ASSERT_EQ(property.min_ts, tso);
@@ -1532,7 +1532,7 @@ try
         ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
         // caculate DMFileProperty
         ASSERT_EQ(stable->isDMFilePropertyCached(), false);
-        stable->calculateDMFileProperty(dmContext(), RowKeyRange::newAll(false, 1), false);
+        stable->calculateDMFileProperty(dmContext(), segment->getRowKeyRange(), false);
         ASSERT_EQ(stable->isDMFilePropertyCached(), true);
         auto & property = stable->getDMFileProperty();
         ASSERT_EQ(property.min_ts, tso);
