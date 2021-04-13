@@ -14,6 +14,12 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where c
 +------+
 | -123 |
 +------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where cast(a as unsigned) = cast(-123 as unsigned)
++------+
+| a    |
++------+
+| -123 |
++------+
 mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where cast(a as signed) = 2006
 +---------+
 | a       |
