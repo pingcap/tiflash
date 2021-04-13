@@ -23,9 +23,9 @@
 
 >> create table logical_op_test (id Int64, c1 Nullable(Decimal(5,2)), c2 Nullable(Decimal(10,2)), c3 Decimal(30,2), c4 Decimal(40,2), c5 MyDate) engine = Log
 
->> insert into logical_op_test(id,c1,c2,c3,c4) values(1,1,1,1,'2020-01-01'),(1,0,1,0,'0000-00-00'),(1,null,1,0,'0000-00-00'),(0,1,0,1,'2020-01-01'),(0,0,0,0,'0000-00-00'),(0,null,0,0,'0000-00-00'),(null,1,0,1,'2020-01-01'),(null,0,0,0,'0000-00-00'),(null,null,0,0,'0000-00-00')
+>> insert into logical_op_test(id,c1,c2,c3,c4,c5) values(1,1,1,1,1,'2020-01-01'),(2,1,0,1,0,'0000-00-00'),(3,1,null,1,0,'0000-00-00'),(4,0,1,0,1,'2020-01-01'),(5,0,0,0,0,'0000-00-00'),(6,0,null,0,0,'0000-00-00'),(7,null,1,0,1,'2020-01-01'),(8,null,0,0,0,'0000-00-00'),(9,null,null,0,0,'0000-00-00')
 
->> select and(c1,c2), and(c3,c5), and(c2,c4), or(c1,c2), or(c3,c5), or(c2,c4), xor(c1,c2), xor(c3,c5), xor(c2,c4), not(c1), not(c2), not(c3), not(c4), not(c5) from logical_op_test
+>> select and(c1 != 0,c2 != 0), and(c3 != 0,c5 != '0000-00-00'), and(c2 != 0,c4 != 0), or(c1 != 0,c2 != 0), or(c3 != 0,c5 != '0000-00-00'), or(c2 != 0,c4 != 0), xor(c1 != 0,c2 != 0), xor(c3 != 0,c5 != '0000-00-00'), xor(c2 != 0,c4 != 0), not(c1 != 0), not(c2 != 0), not(c3 != 0), not(c4 != 0), not(c5 != '0000-00-00') from logical_op_test
 ┌─and(c1, c2)─┬─and(c3, c5)─┬─and(c2, c4)─┬─or(c1, c2)─┬─or(c3, c5)─┬─or(c2, c4)─┬─xor(c1, c2)─┬─xor(c3, c5)─┬─xor(c2, c4)─┬─not(c1)─┬─not(c2)─┬─not(c3)─┬─not(c4)─┬─not(c5)─┐
 │           1 │           1 │           1 │          1 │          1 │          1 │           0 │           0 │           0 │       0 │       0 │       0 │       0 │       0 │
 │           0 │           0 │           0 │          1 │          1 │          0 │           1 │           1 │           0 │       0 │       1 │       0 │       1 │       1 │
