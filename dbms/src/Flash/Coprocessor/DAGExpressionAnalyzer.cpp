@@ -264,7 +264,7 @@ static String buildBitwiseFunction(DAGExpressionAnalyzer * analyzer, const tipb:
 {
     const String & func_name = getFunctionName(expr);
     Names argument_names;
-    // We should convert arguments to Int64.
+    // We should convert arguments to UInt64.
     // See https://github.com/pingcap/tics/issues/1756
     DataTypePtr arg_type = std::make_shared<DataTypeUInt64>();
     for (auto & child : expr.children())
