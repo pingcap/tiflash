@@ -283,15 +283,15 @@ static String buildBitwiseFunction(DAGExpressionAnalyzer * analyzer, const tipb:
             break;
         }
     }
-
     if (is_nullable)
     {
         arg_type = makeNullable(arg_type);
-        for (size_t i = 0; i < argument_names.size(); i++)
-        {
-            String name = analyzer->appendCast(arg_type, actions, argument_names[i]);
-            argument_names[i] = name;
-        }
+    }
+
+    for (size_t i = 0; i < argument_names.size(); i++)
+    {
+        String name = analyzer->appendCast(arg_type, actions, argument_names[i]);
+        argument_names[i] = name;
     }
 
     return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
