@@ -57,8 +57,14 @@ public:
             }
             else
             {
-                throw TiFlashException("Found overlap ranges: " + prev.toDebugString() + ", " + current.toDebugString(),
-                                       Errors::Coprocessor::BadRequest);
+                /// since prev.end.value is excluded and current.start.value is included
+                /// it is ok if prev.end.value == prefixNext of current.start.value
+                /// refer to https://github.com/pingcap/tidb/blob/v5.0.0/kv/key.go#L38 to see the details of prefix next
+                if ((*prev.end.value) == *current.start.toPrefixNext().value)
+                    ++count;
+                else
+                    throw TiFlashException("Found overlap ranges: " + prev.toDebugString() + ", " + current.toDebugString(),
+                                        Errors::Coprocessor::BadRequest);
             }
         }
         merged_stats.emplace_back(offset, count);
