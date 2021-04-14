@@ -24,9 +24,6 @@ void registerStorageJoin(StorageFactory & factory);
 void registerStorageView(StorageFactory & factory);
 void registerStorageMaterializedView(StorageFactory & factory);
 
-// A buggy table just for test
-void registerStorageDebugging(StorageFactory & factory);
-
 #if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
 void registerStorageODBC(StorageFactory & factory);
 #endif
@@ -54,7 +51,6 @@ void registerStorages()
     registerStorageBuffer(factory);
     registerStorageDistributed(factory);
     registerStorageMemory(factory);
-    registerStorageDebugging(factory);
     registerStorageFile(factory);
     registerStorageDictionary(factory);
     registerStorageSet(factory);
