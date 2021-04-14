@@ -1,0 +1,22 @@
+mysql> drop table if exists test.t;
+mysql> create table test.t (a smallint unsigned);
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> insert into test.t values(65535);
+mysql> select /*+ read_from_storage(tiflash[t]) */ a from test.t where ~a;
+a
+65535
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ a from test.t where ~a & 65536;
+a
+65535
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ a from test.t where ~a | 65535;
+a
+65535
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ a from test.t where a ^ 65534 = 1;
+a
+65535
