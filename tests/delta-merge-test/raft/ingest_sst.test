@@ -2,16 +2,16 @@
 
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
 => DBGInvoke __region_snapshot(4, 0, 1000, default, test)
-=> DBGInvoke __region_mock_ingest_sst(default, test, 4, 3, 6)
+=> DBGInvoke __region_ingest_sst(default, test, 4, 3, 6)
 => select * from default.test
 ┌─col_1─┬─_tidb_rowid─┐
 │    -3 │           3 │
 │    -4 │           4 │
 │    -5 │           5 │
 └───────┴─────────────┘
-=> DBGInvoke __region_mock_ingest_sst(default, test, 4, 7, 9)
+=> DBGInvoke __region_ingest_sst(default, test, 4, 7, 9)
 => select * from default.test
 ┌─col_1─┬─_tidb_rowid─┐
 │    -3 │           3 │
