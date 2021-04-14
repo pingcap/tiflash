@@ -41,7 +41,7 @@ struct WriteCmdsView;
 enum class EngineStoreApplyRes : uint32_t;
 
 struct TiFlashRaftProxyHelper;
-struct RegionPtrWrap;
+struct RegionPtrWithBlock;
 struct RegionPreDecodeBlockData;
 using RegionPreDecodeBlockDataPtr = std::unique_ptr<RegionPreDecodeBlockData>;
 
@@ -79,7 +79,7 @@ public:
 
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
     RegionPreDecodeBlockDataPtr preHandleSnapshot(RegionPtr new_region, const SSTViewVec, TMTContext & tmt);
-    void handlePreApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void handlePreApplySnapshot(const RegionPtrWithBlock &, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogPeriod(UInt64);
@@ -91,14 +91,15 @@ private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
     friend struct MockRaftCommand;
+    friend class RegionMockTest;
     friend void RegionBench::concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
     using DBGInvokerPrinter = std::function<void(const std::string &)>;
     friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
     friend void dbgFuncRegionSnapshotWithData(Context &, const ASTs &, DBGInvokerPrinter);
     friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
 
-    void checkAndApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
-    void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
+    void checkAndApplySnapshot(const RegionPtrWithBlock &, TMTContext & tmt);
+    void onSnapshot(const RegionPtrWithBlock &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
 
     // Remove region from this TiFlash node.
     // If region is destroy or moved to another node(change peer),
