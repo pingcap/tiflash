@@ -222,7 +222,7 @@ std::tuple<size_t, size_t> DMFile::writePackPropertyToBuffer(WriteBuffer & buffe
 {
     size_t offset = buffer.count();
     String tmp_buf;
-    pack_propertys.SerializeToString(&tmp_buf);
+    pack_properties.SerializeToString(&tmp_buf);
     writeStringBinary(tmp_buf, buffer);
     size_t size = buffer.count() - offset;
     return std::make_tuple(offset, size);
@@ -324,7 +324,7 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
     auto   buf = openForRead(file_provider, packPropertyPath(), encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
     buf.seek(meta_pack_info.pack_property_offset);
     readStringBinary(tmp_buf, buf);
-    pack_propertys.ParseFromString(tmp_buf);
+    pack_properties.ParseFromString(tmp_buf);
 }
 
 void DMFile::readMetadata(const FileProviderPtr & file_provider)

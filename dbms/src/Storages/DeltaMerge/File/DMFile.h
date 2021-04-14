@@ -155,7 +155,7 @@ public:
 
     size_t            getPacks() const { return pack_stats.size(); }
     const PackStats & getPackStats() const { return pack_stats; }
-    PackProperties &  getPackProperties() { return pack_propertys; }
+    PackProperties &  getPackProperties() { return pack_properties; }
 
     const ColumnStat & getColumnStat(ColId col_id) const
     {
@@ -275,7 +275,7 @@ private:
     String parent_path;
 
     PackStats      pack_stats;
-    PackProperties pack_propertys;
+    PackProperties pack_properties;
     ColumnStats    column_stats;
 
     Mode   mode;
