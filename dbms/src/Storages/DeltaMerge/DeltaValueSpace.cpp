@@ -47,6 +47,7 @@ void DeltaValueSpace::setUp()
         if (!pack->isSaved())
         {
             unsaved_rows += pack->rows;
+            unsaved_bytes += pack->bytes;
             unsaved_deletes += pack->isDeleteRange();
         }
     }
@@ -267,6 +268,7 @@ bool DeltaValueSpace::appendToDisk(DMContext & /*context*/, const PackPtr & pack
     rows += pack->rows;
     bytes += pack->bytes;
     unsaved_rows += pack->rows;
+    unsaved_bytes += pack->bytes;
 
     ProfileEvents::increment(ProfileEvents::DMWriteBytes, pack->bytes);
 
@@ -295,7 +297,8 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
                     throw Exception("Mutable pack's structure of schema and block are different: " + last_pack->toString());
             }
 
-            bool is_overflow    = last_pack->cache->block.rows() >= context.delta_cache_limit_rows;
+            bool is_overflow = last_pack->cache->block.rows() >= context.delta_cache_limit_rows
+                || last_pack->cache->block.bytes() >= context.delta_cache_limit_bytes;
             bool is_same_schema = checkSchema(block, last_pack->cache->block);
             if (!is_overflow && is_same_schema)
             {
@@ -352,6 +355,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     rows += limit;
     bytes += append_bytes;
     unsaved_rows += limit;
+    unsaved_bytes += append_bytes;
 
     return true;
 }

@@ -1,11 +1,14 @@
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/FieldToDataType.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
 
@@ -275,10 +278,13 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
 // for some historical or unknown reasons, TiDB might set a invalid
 // field type. This function checks if the expr has a valid field type
 // so far the known invalid field types are:
-// 1. decimal type with scale -1
+// 1. decimal type with scale == -1
+// 2. decimal type with precision == 0
 bool exprHasValidFieldType(const tipb::Expr & expr)
 {
-    return expr.has_field_type() && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().decimal() == -1);
+    return expr.has_field_type()
+        && !((expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().decimal() == -1)
+            || (expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().flen() == 0));
 }
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)
@@ -297,6 +303,56 @@ bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::E
             return true;
     }
     return false;
+}
+
+DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
+{
+    Field value = decodeLiteral(expr);
+    DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
+    /// need to extract target_type from expr.field_type() because the flash_type derived from
+    /// value is just a `memory type`, which does not have enough information, for example:
+    /// for date literal, the flash_type is `UInt64`
+    DataTypePtr target_type{};
+    if (expr.tp() == tipb::ExprType::Null)
+    {
+        // todo We should use DataTypeNothing as NULL literal's TiFlash Type, because TiFlash has a lot of
+        //  optimization for DataTypeNothing, but there are still some bugs when using DataTypeNothing: when
+        //  TiFlash try to return data to TiDB or exchange data between TiFlash node, since codec only recognize
+        //  TiDB type, use DataTypeNothing will meet error in the codec, so do not use DataTypeNothing until
+        //  we fix the codec issue.
+        if (exprHasValidFieldType(expr))
+        {
+            target_type = getDataTypeByFieldType(expr.field_type());
+        }
+        else
+        {
+            if (expr.has_field_type() && expr.field_type().tp() == TiDB::TP::TypeNewDecimal)
+                target_type = createDecimal(1, 0);
+            else
+                target_type = flash_type;
+        }
+        target_type = makeNullable(target_type);
+    }
+    else
+    {
+        if (expr.tp() == tipb::ExprType::MysqlDecimal)
+        {
+            /// to fix https://github.com/pingcap/tics/issues/1425, when TiDB push down
+            /// a decimal literal, it contains two types: one is the type that encoded
+            /// in Decimal value itself(i.e. expr.val()), the other is the type that in
+            /// expr.field_type(). According to TiDB and Mysql behavior, the computing
+            /// layer should use the type in expr.val(), which means we should ignore
+            /// the type in expr.field_type()
+            target_type = flash_type;
+        }
+        else
+        {
+            target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
+        }
+        // We should remove nullable for constant value since TiDB may not set NOT_NULL flag for literal expression.
+        target_type = removeNullable(target_type);
+    }
+    return target_type;
 }
 
 UInt8 getFieldLengthForArrowEncode(Int32 tp)
