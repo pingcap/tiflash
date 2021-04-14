@@ -112,6 +112,35 @@ struct RowKeyValue
         return is_common_handle == v.is_common_handle && (*value) == (*v.value) && int_value == v.int_value;
     }
 
+    RowKeyValue toPrefixNext()
+    {
+        std::vector<UInt8> keys(value->begin(), value->end());
+        int index = keys.size() - 1;
+        for (; index >= 0; index--)
+        {
+            if (keys[index] == std::numeric_limits<UInt8>::max())
+                keys[index] = 0;
+            else
+            {
+                keys[index] = keys[index] + 1;
+                break;
+            }
+        }
+        if (index == -1)
+        {
+            keys.clear();
+            keys.insert(keys.end(), value->begin(), value->end());
+            keys.push_back(0);
+        }
+        HandleValuePtr prefix_value = std::make_shared<String>(keys.begin(), keys.end());
+        Int64 prefix_int_value = int_value;
+        if (!is_common_handle && prefix_int_value != std::numeric_limits<Int64>::max())
+        {
+            prefix_int_value++;
+        }
+        return RowKeyValue(is_common_handle, prefix_value, prefix_int_value);
+    }
+
     bool is_common_handle;
     /// In case of non common handle, the value field is redundant in most cases, except that int_value == Int64::max_value,
     /// because RowKeyValue is an end point of RowKeyRange, assuming that RowKeyRange = [start_value, end_value), since the
@@ -309,6 +338,7 @@ struct RowKeyRange
     // todo use template to refine is_common_handle
     bool is_common_handle;
     /// start and end in RowKeyRange are always meaningful
+    /// it is assumed that start value is included and end value is excluded.
     RowKeyValue start;
     RowKeyValue end;
     size_t      rowkey_column_size;
