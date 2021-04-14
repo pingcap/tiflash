@@ -163,49 +163,9 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
         table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, default_value, true));
         if (handle_pk_name == column.name)
         {
-<<<<<<< HEAD
             if (!column.type->isInteger() && !column.type->isUnsignedInteger())
                 throw Exception("MockTiDB pk column must be integer or unsigned integer type", ErrorCodes::LOGICAL_ERROR);
             table_info.columns.back().setPriKeyFlag();
-=======
-            // todo support prefix index
-            if (*sit == column.name)
-            {
-                has_pk = true;
-                if (!column.type->isInteger() && !column.type->isUnsignedInteger())
-                    has_non_int_pk = true;
-                table_info.columns.back().setPriKeyFlag();
-                pk_column_pos_map[*sit] = i - 2;
-                break;
-            }
-        }
-    }
-
-    if (has_pk)
-    {
-        if (string_tokens.count() > 1 || has_non_int_pk)
-        {
-            table_info.is_common_handle = true;
-            // construct IndexInfo
-            table_info.index_infos.resize(1);
-            TiDB::IndexInfo & index_info = table_info.index_infos[0];
-            index_info.id = 1;
-            index_info.is_primary = true;
-            index_info.idx_name = "PRIMARY";
-            index_info.tbl_name = tbl_name;
-            index_info.is_unique = true;
-            index_info.index_type = 1;
-            index_info.idx_cols.resize(string_tokens.count());
-            for (size_t index = 0; index < string_tokens.count(); index++)
-            {
-                String & name = string_tokens[index];
-                index_info.idx_cols[index].name = name;
-                index_info.idx_cols[index].offset = pk_column_pos_map[name];
-                index_info.idx_cols[index].length = -1;
-            }
-        }
-        else
->>>>>>> 256c9b197... Remove useless StorageDebugging & move mock applying snapshot functions together (#1666)
             table_info.pk_is_handle = true;
         }
     }

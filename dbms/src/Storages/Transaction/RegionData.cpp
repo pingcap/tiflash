@@ -7,23 +7,13 @@
 namespace DB
 {
 
-<<<<<<< HEAD
-void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
-=======
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 extern const int ILLFORMAT_RAFT_ROW;
 } // namespace ErrorCodes
 
-HandleID RawTiDBPK::getHandleID() const
-{
-    auto & pk = *this;
-    return RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(pk->data()));
-}
-
-void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value)
->>>>>>> 256c9b197... Remove useless StorageDebugging & move mock applying snapshot functions together (#1666)
+void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
 {
     switch (cf)
     {
