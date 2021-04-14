@@ -2104,7 +2104,8 @@
             "rightSide": false,
             "show": true,
             "total": false,
-            "values": false
+            "values": false,
+            "hideZero": false
           },
           "lines": true,
           "linewidth": 1,
@@ -2114,7 +2115,12 @@
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "/^applying/",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
@@ -2146,6 +2152,13 @@
               "intervalFactor": 1,
               "legendFormat": "80",
               "refId": "D"
+            },
+            {
+              "refId": "E",
+              "expr": "sum(tiflash_schema_applying{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "intervalFactor": 1,
+              "format": "time_series",
+              "legendFormat": "applying-{{instance}}"
             }
           ],
           "thresholds": [],
@@ -2179,8 +2192,8 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
+              "max": "2",
+              "min": "0",
               "show": true
             }
           ],
