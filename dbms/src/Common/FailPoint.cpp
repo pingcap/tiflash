@@ -36,13 +36,17 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_before_mpp_register_root_mpp_task)                \
     M(exception_before_mpp_register_tunnel_for_root_mpp_task)     \
     M(exception_before_mpp_root_task_run)                         \
-    M(exception_during_mpp_root_task_run)
+    M(exception_during_mpp_root_task_run)                         \
+    M(exception_during_write_to_storage)
 
 #define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)  \
     M(pause_after_learner_read)               \
     M(hang_in_execution)                      \
     M(pause_before_dt_background_delta_merge) \
-    M(pause_until_dt_background_delta_merge)
+    M(pause_until_dt_background_delta_merge)  \
+    M(pause_before_apply_raft_cmd)            \
+    M(pause_before_apply_raft_snapshot)       \
+    M(pause_until_apply_raft_snapshot)
 
 namespace FailPoints
 {
