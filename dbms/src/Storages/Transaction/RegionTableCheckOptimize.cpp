@@ -97,7 +97,18 @@ bool shouldOptimizeTable(const TableID table_id, TMTContext & tmt, Logger * log,
     const auto storage = tmt.getStorages().get(table_id);
     if (!storage)
         return false;
-    auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+    try
+    {
+        auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+    }
+    catch (DB::Exception & e)
+    {
+        // We can ignore if storage is dropped.
+        if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+            return false;
+        else
+            throw;
+    }
 
     if (storage->engineType() != TiDB::StorageEngine::TMT)
         return false;
