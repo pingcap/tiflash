@@ -102,8 +102,8 @@ public:
         DMSingleFileFormatVersion file_format_version;
     };
 
-    using PackStats     = PaddedPODArray<PackStat>;
-    using PackPropertys = dtpb::PackPropertys;
+    using PackStats      = PaddedPODArray<PackStat>;
+    using PackProperties = dtpb::PackPropertys;
 
     static DMFilePtr create(UInt64 file_id, const String & parent_path, bool single_file_mode = false);
 
@@ -155,7 +155,7 @@ public:
 
     size_t            getPacks() const { return pack_stats.size(); }
     const PackStats & getPackStats() const { return pack_stats; }
-    PackPropertys &   getPackPropertys() { return pack_propertys; }
+    PackProperties &  getPackProperties() { return pack_propertys; }
 
     const ColumnStat & getColumnStat(ColId col_id) const
     {
@@ -274,9 +274,9 @@ private:
     UInt64 ref_id; // It is a reference to file_id, could be the same.
     String parent_path;
 
-    PackStats     pack_stats;
-    PackPropertys pack_propertys;
-    ColumnStats   column_stats;
+    PackStats      pack_stats;
+    PackProperties pack_propertys;
+    ColumnStats    column_stats;
 
     Mode   mode;
     Status status;
