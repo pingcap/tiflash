@@ -384,7 +384,7 @@ struct GlobalRegionMap
         {
             auto ret = std::move(it->second);
             regions_block.erase(it);
-            return std::move(ret);
+            return ret;
         }
     }
 
@@ -402,7 +402,7 @@ struct GlobalRegionMap
         {
             auto ret = std::move(it->second);
             regions_snap_files.erase(it);
-            return std::move(ret);
+            return ret;
         }
     }
 };
