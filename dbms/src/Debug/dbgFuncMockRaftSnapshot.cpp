@@ -93,7 +93,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
 
 // Mock to apply snapshot for region with some rows
 // DBGInvoke region_snapshot_data(database_name, table_name, region_id, start, end, handle_id1, tso1, del1, r1_c1, r1_c2, ..., handle_id2, tso2, del2, r2_c1, r2_c2, ... )
-void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void MockRaftCommand::dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     auto region = GenDbgRegionSnapshotWithData(context, args);
     auto & rawkeys = region->getRange()->rawKeys();
@@ -114,7 +114,7 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
 
 // Mock to apply an empty snapshot for region
 // DBGInvoke region_snapshot(region-id, start-key, end-key, database-name, table-name[, partition-id])
-void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 5 || args.size() > 6)
     {
