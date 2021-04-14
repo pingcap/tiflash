@@ -266,34 +266,27 @@ static String buildBitwiseFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     Names argument_names;
     // We should convert arguments to UInt64.
     // See https://github.com/pingcap/tics/issues/1756
-    DataTypePtr arg_type = std::make_shared<DataTypeUInt64>();
+    DataTypePtr uint64_type = std::make_shared<DataTypeUInt64>();
+    const Block & sample_block = actions->getSampleBlock();
     for (auto & child : expr.children())
     {
         String name = analyzer->getActions(child, actions);
+        DataTypePtr orig_type = sample_block.getByName(name).type;
+
+        // Bump argument type
+        if (!removeNullable(orig_type)->equals(*uint64_type))
+        {
+            if (orig_type->isNullable())
+            {
+                name = analyzer->appendCast(makeNullable(uint64_type), actions, name);
+            }
+            else
+            {
+                name = analyzer->appendCast(uint64_type, actions, name);
+            }
+        }
         argument_names.push_back(name);
     }
-
-    const Block & sample_block = actions->getSampleBlock();
-    bool is_nullable = false;
-    for (auto & name : argument_names)
-    {
-        if (sample_block.getByName(name).type->isNullable())
-        {
-            is_nullable = true;
-            break;
-        }
-    }
-    if (is_nullable)
-    {
-        arg_type = makeNullable(arg_type);
-    }
-
-    for (size_t i = 0; i < argument_names.size(); i++)
-    {
-        String name = analyzer->appendCast(arg_type, actions, argument_names[i]);
-        argument_names[i] = name;
-    }
-
     return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
 }
 
