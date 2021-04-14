@@ -19,10 +19,13 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int ILLFORMAT_RAFT_ROW;
+extern const int REGION_DATA_SCHEMA_UPDATED;
 } // namespace ErrorCodes
 
 std::tuple<Block, std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> //
 GenRegionBlockDatawithSchema(const RegionPtr & region, TMTContext & tmt);
+
+bool atomicGetStorageIsCommonHandle(const RegionPtr & region, TMTContext & tmt);
 
 namespace DM
 {
@@ -141,6 +144,31 @@ void SSTFilesToBlockInputStream::scanCF(ColumnFamilyType cf, const std::string_v
     }
 }
 
+bool SSTFilesToBlockInputStream::needUpdateSchema(const ColumnDefinesPtr & a, const ColumnDefinesPtr & b)
+{
+    // Note that we consider `a` is not `b` if both of them are `nullptr`
+    if (a == nullptr || b == nullptr)
+        return true;
+
+    // If the two schema is not the same, then it need to be updated.
+    if (a->size() != b->size())
+        return true;
+    for (size_t i = 0; i < a->size(); ++i)
+    {
+        const auto & ca = (*a)[i];
+        const auto & cb = (*b)[i];
+
+        bool col_ok = ca.id == cb.id;
+        // bool name_ok = ca.name == cb.name;
+        bool type_ok = ca.type->equals(*cb.type);
+
+        if (!col_ok || !type_ok)
+            return true;
+    }
+    return false;
+}
+
+
 Block SSTFilesToBlockInputStream::readCommitedBlock()
 {
     if (is_decode_cancelled)
@@ -161,8 +189,8 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
         {
             // br or lighting may write illegal data into tikv, stop decoding.
             LOG_WARNING(log,
-                        "Got error while reading region committed cache: " << e.displayText()
-                                                                           << ". Stop decoding rows into DTFiles and keep original cache.");
+                        "Got error while reading region committed cache: "
+                            << e.displayText() << ". Stop decoding rows into DTFiles and keep uncommitted data in region.");
             // Cancel the decoding process.
             // Note that we still need to scan data from CFs and keep them in `region`
             is_decode_cancelled = true;
@@ -176,21 +204,27 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
     if (block.rows() == 0)
         return {};
 
+    if (cur_schema && needUpdateSchema(cur_schema, schema_snap))
+        throw Exception("", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
+
     ingest_storage = storage;
     cur_schema     = schema_snap;
     return block;
 }
 
+/// Methods for BoundedSSTFilesToBlockInputStream
+
 BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child, ColId pk_column_id)
     : ReorganizeBlockInputStream(child, pk_column_id, false)
 {
-    auto table_id = child->region->getMappedTableID();
-    auto storage  = child->tmt.getStorages().get(table_id);
-    if (unlikely(storage == nullptr))
-        throw Exception("Can not get valid storage [table_id=" + DB::toString(table_id) + "]", ErrorCodes::TABLE_IS_DROPPED);
+}
 
-    auto lock        = storage->lockStructure(false, __PRETTY_FUNCTION__);
-    is_common_handle = storage->isCommonHandle();
+void BoundedSSTFilesToBlockInputStream::readPrefix()
+{
+    // Need to update `is_common_handle`
+    auto * stream    = getChildStream();
+    is_common_handle = atomicGetStorageIsCommonHandle(stream->region, stream->tmt);
+    ReorganizeBlockInputStream::readPrefix();
 }
 
 const SSTFilesToBlockInputStream * BoundedSSTFilesToBlockInputStream::getChildStream() const

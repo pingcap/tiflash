@@ -464,6 +464,39 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     return std::make_unique<RegionPreDecodeBlockData>(std::move(res_block), schema_version, std::move(*data_list_read));
 }
 
+bool atomicGetStorageIsCommonHandle(const RegionPtr & region, TMTContext & tmt)
+{
+    bool is_common_handle = false;
+
+    auto table_id = region->getMappedTableID();
+    auto context = tmt.getContext();
+    auto metrics = context.getTiFlashMetrics();
+    const auto atomicGet = [&](bool force_decode) -> bool {
+        auto storage = tmt.getStorages().get(table_id);
+        if (storage == nullptr)
+        {
+            if (!force_decode)
+                return false;
+            if (storage == nullptr) // Table must have just been GC-ed
+                return true;
+        }
+        auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+        is_common_handle = storage->isCommonHandle();
+        return true;
+    };
+
+    if (!atomicGet(false))
+    {
+        GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
+        tmt.getSchemaSyncer()->syncSchemas(context);
+
+        if (!atomicGet(true))
+            throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",
+                ErrorCodes::LOGICAL_ERROR);
+    }
+    return is_common_handle;
+}
+
 /// Decode region data into block and belonging schema snapshot, remove committed data from `region`
 /// The return value is a tuple that:
 ///  .0 -- The committed data scanned and removed from `region`

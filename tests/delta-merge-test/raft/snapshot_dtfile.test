@@ -45,9 +45,9 @@
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_2 String')
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_3 UInt64')
 => DBGInvoke region_snapshot_pre_handle_file(default, test, 4, 3, 12, 'col_1 Int64, col_2 String, col_3 UInt64', '', 3)
-┌─region_snapshot_pre_handle_file(default, test, 4, 3, 12)────────┐
-│ Generate 2 files for [region_id=4]                              │
-└─────────────────────────────────────────────────────────────────┘
+┌─region_snapshot_pre_handle_file(default, test, 4, 3, 12, "col_1 Int64, col_2 String, col_3 UInt64", "", 3)─┐
+│ Generate 1 files for [region_id=4]                                                                         │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 => DBGInvoke region_snapshot_apply_file(4)
 ┌─__region_snapshot_apply_file(4)──────┐
 │ success apply region 4 with dt files │
@@ -76,9 +76,9 @@
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_2 String')
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_3 UInt64')
 => DBGInvoke region_snapshot_pre_handle_file(default, test, 4, 3, 12, 'col_1 Int64, col_2 String, col_3 UInt64', '', 3)
-┌─region_snapshot_pre_handle_file(default, test, 4, 3, 6)────────┐
-│ Generate 2 files for [region_id=4]                             │
-└────────────────────────────────────────────────────────────────┘
+┌─region_snapshot_pre_handle_file(default, test, 4, 3, 12, "col_1 Int64, col_2 String, col_3 UInt64", "", 3)─┐
+│ Generate 1 files for [region_id=4]                                                                         │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_4 Nullable(UInt64)')
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_5 Nullable(String)')
 => DBGInvoke __refresh_schemas()

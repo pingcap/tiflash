@@ -58,33 +58,10 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
     auto   metrics = ctx.getTiFlashMetrics();
     GET_METRIC(metrics, tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds());
     LOG_INFO(log,
-             "Pre-handle snapshot " << child->getRegion()->toString(true) << " to " << ingest_file_ids.size() << " DTFiles, cost "
+             "Pre-handle snapshot " << child->getRegion()->toString(true) << " to " << ingest_files.size() << " DTFiles, cost "
                                     << watch.elapsedMilliseconds() << "ms [rows=" << commit_rows << "]");
     // Note that number of keys in different cf will be aggregated into one metrics
     GET_METRIC(metrics, tiflash_raft_process_keys, type_apply_snapshot).Increment(child->getProcessKeys());
-}
-
-bool needUpdateSchema(const ColumnDefinesPtr & a, const ColumnDefinesPtr & b)
-{
-    // Note that we consider `a` is not `b` if both of them are `nullptr`
-    if (a == nullptr || b == nullptr)
-        return false;
-
-    if (a->size() != b->size())
-        return false;
-    for (size_t i = 0; i < a->size(); ++i)
-    {
-        const auto & ca = (*a)[i];
-        const auto & cb = (*b)[i];
-
-        bool col_ok = ca.id == cb.id;
-        // bool name_ok = ca.name == cb.name;
-        bool type_ok = ca.type->equals(*cb.type);
-
-        if (!col_ok || !type_ok)
-            return false;
-    }
-    return true;
 }
 
 void SSTFilesToDTFilesOutputStream::write()
@@ -100,7 +77,7 @@ void SSTFilesToDTFilesOutputStream::write()
         auto [storage, schema_snap] = child->ingestingInfo();
         ingest_storage              = storage;
 
-        if (dt_file == nullptr || !needUpdateSchema(cur_schema, schema_snap))
+        if (dt_file == nullptr || SSTFilesToBlockInputStream::needUpdateSchema(cur_schema, schema_snap))
         {
             // Close previous DTFile and output stream before creating new DTFile for new schema
             finishCurrDTFileStream();
@@ -131,7 +108,7 @@ void SSTFilesToDTFilesOutputStream::write()
             cur_schema = schema_snap;
             dt_stream  = std::make_unique<DMFileBlockOutputStream>(tmt.getContext(), dt_file, *cur_schema, /*need_rate_limit=*/false);
             dt_stream->writePrefix();
-            ingest_file_ids.emplace_back(file_id);
+            ingest_files.emplace_back(dt_file);
         }
 
         {
@@ -168,6 +145,30 @@ void SSTFilesToDTFilesOutputStream::finishCurrDTFileStream()
     dt_file.reset();
 }
 
+PageIds SSTFilesToDTFilesOutputStream::ingestIds() const
+{
+    PageIds ids;
+    for (const auto & file : ingest_files)
+    {
+        ids.emplace_back(file->fileId());
+    }
+    return ids;
+}
+
+void SSTFilesToDTFilesOutputStream::cancel()
+{
+    for (auto & file : ingest_files)
+    {
+        try
+        {
+            file->enableGC();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "ignore exception while canceling SST files to DeltaTree files stream [file=" + file->path() + "]");
+        }
+    }
+}
 
 } // namespace DM
 } // namespace DB

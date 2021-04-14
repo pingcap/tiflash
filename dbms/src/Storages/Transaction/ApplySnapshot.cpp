@@ -25,17 +25,14 @@ namespace FailPoints
 {
 extern const char force_set_sst_to_dtfile_block_size[];
 extern const char force_set_sst_decode_rand[];
-} // namespace FailPoints
-
-namespace FailPoints
-{
 extern const char pause_until_apply_raft_snapshot[];
 } // namespace FailPoints
 
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-}
+extern const int REGION_DATA_SCHEMA_UPDATED;
+} // namespace ErrorCodes
 
 template <typename RegionPtrWrap>
 void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
@@ -321,25 +318,50 @@ std::vector<UInt64> KVStore::preHandleSnapshotToFiles(
     fiu_do_on(FailPoints::force_set_sst_to_dtfile_block_size, { expected_block_size = 3; });
 
     PageIds ids;
-    try
+    while (true)
     {
-        auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
-            std::make_shared<DM::SSTFilesToBlockInputStream>(new_region, snaps, proxy_helper, tmt, expected_block_size),
-            ::DB::TiDBPkColumnID);
-        DM::SSTFilesToDTFilesOutputStream stream(bounded_stream, snapshot_apply_method, tmt);
+        std::shared_ptr<DM::SSTFilesToDTFilesOutputStream> stream;
+        try
+        {
+            auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
+                std::make_shared<DM::SSTFilesToBlockInputStream>(new_region, snaps, proxy_helper, tmt, expected_block_size),
+                ::DB::TiDBPkColumnID);
+            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(bounded_stream, snapshot_apply_method, tmt);
 
-        stream.writePrefix();
-        stream.write();
-        stream.writeSuffix();
-        ids = stream.ingestIds();
-    }
-    catch (DB::Exception & e)
-    {
-        // We can ignore if storage is dropped.
-        if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
-            LOG_INFO(log, "Pre-handle snapshot to DTFiles ignored because the table is dropped.");
-        else
-            throw;
+            stream->writePrefix();
+            stream->write();
+            stream->writeSuffix();
+            ids = stream->ingestIds();
+            break;
+        }
+        catch (DB::Exception & e)
+        {
+            auto try_clean_up = [&stream]() -> void {
+                if (stream != nullptr)
+                    stream->cancel();
+            };
+            if (e.code() == ErrorCodes::REGION_DATA_SCHEMA_UPDATED)
+            {
+                // The schema of decoding region data has been updated, need to clear and recreate another stream for writing DTFile(s)
+                new_region->clearAllData();
+                try_clean_up();
+                continue;
+            }
+            else if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+            {
+                // We can ignore if storage is dropped.
+                LOG_INFO(log,
+                    "Pre-handle snapshot to DTFiles is ignored because the table is dropped. [region=" << new_region->toString(true)
+                                                                                                       << "]");
+                try_clean_up();
+                break;
+            }
+            else
+            {
+                // Other unrecoverable error, throw
+                throw;
+            }
+        }
     }
 
     return ids;
@@ -470,17 +492,18 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     {
         // try to flush remain data in memory.
         func_try_flush();
-        region->handleIngestSST(snaps, index, term, tmt);
-        // after `handleIngestSSTByBlock`, all data are stored in `region`, try to flush committed data into storage
+        region->handleIngestSSTInMemory(snaps, index, term, tmt);
+        // after `handleIngestSSTInMemory`, all data are stored in `region`, try to flush committed data into storage
         func_try_flush();
     }
     else
     {
         // try to flush remain data in memory.
         func_try_flush();
-        handleIngestSSTByDTFile(region, snaps, index, term, tmt);
-        // after `handleIngestSSTByDTFile`, there should be only uncommitted data left in `region`,
-        // don't need flush to storage
+        auto tmp_region = handleIngestSSTByDTFile(region, snaps, index, term, tmt);
+        region->finishIngestSSTByDTFile(std::move(tmp_region), index, term);
+        // after `finishIngestSSTByDTFile`, try to flush committed data into storage
+        func_try_flush();
     }
 
     if (region->dataSize())
@@ -495,49 +518,55 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     }
 }
 
-void KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec snaps, UInt64 /*index*/, UInt64 /*term*/, TMTContext & tmt)
+RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
-    // Decode the KV pairs in ingesting SST into DTFiles
-    PageIds ingest_ids;
+    if (index <= region->appliedIndex())
+        return nullptr;
+
+    // Create a tmp region to store uncommitted data
+    RegionPtr tmp_region;
     {
-        size_t expected_block_size = DEFAULT_MERGE_BLOCK_SIZE;
-
-        // Use failpoint to change the expected_block_size for some test cases
-        fiu_do_on(FailPoints::force_set_sst_to_dtfile_block_size, { expected_block_size = 3; });
-
-        // Ingest SST won't clear the data before ingesting files, so we use the `region` to keep the uncommitted data in memory.
-        auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
-            std::make_shared<DM::SSTFilesToBlockInputStream>(region, snaps, proxy_helper, tmt, expected_block_size), ::DB::TiDBPkColumnID);
-        DM::SSTFilesToDTFilesOutputStream stream(bounded_stream, snapshot_apply_method, tmt);
-        stream.writePrefix();
-        stream.write();
-        stream.writeSuffix();
-        ingest_ids = stream.ingestIds();
+        auto meta_region = region->getMetaRegion();
+        auto meta_snap = region->dumpRegionMetaSnapshot();
+        auto peer_id = meta_snap.peer.id();
+        tmp_region = genRegionPtr(std::move(meta_region), peer_id, index, term);
     }
 
-    try
+    // Decode the KV pairs in ingesting SST into DTFiles
+    PageIds ingest_ids = preHandleSnapshotToFiles(tmp_region, snaps, index, term, tmt);
+
+    // If `ingest_ids` is empty, ingest SST won't write delete_range for ingest region, it is safe to
+    // ignore the step of calling `ingestFiles`
+    if (!ingest_ids.empty())
     {
         auto table_id = region->getMappedTableID();
         if (auto storage = tmt.getStorages().get(table_id); storage)
         {
             // Ingest DTFiles into DeltaMerge storage
             auto & context = tmt.getContext();
-            // acquire lock so that no other threads can drop storage
-            auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-            auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-            auto key_range
-                = DM::RowKeyRange::fromRegionRange(region->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
-            // Call `ingestFiles` to ingest external DTFiles.
-            // Note that ingest sst won't remove the data in the key range
-            dm_storage->ingestFiles(key_range, ingest_ids, /*clear_data_in_range=*/false, context.getSettingsRef());
+            try
+            {
+                // acquire lock so that no other threads can drop storage
+                auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+                auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+                auto key_range = DM::RowKeyRange::fromRegionRange(
+                    region->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
+                // Call `ingestFiles` to ingest external DTFiles.
+                // Note that ingest sst won't remove the data in the key range
+                dm_storage->ingestFiles(key_range, ingest_ids, /*clear_data_in_range=*/false, context.getSettingsRef());
+            }
+            catch (DB::Exception & e)
+            {
+                // We can ignore if storage is dropped.
+                if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+                    return nullptr;
+                else
+                    throw;
+            }
         }
     }
-    catch (DB::Exception & e)
-    {
-        // We can ignore if storage is dropped.
-        if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
-            throw;
-    }
+
+    return tmp_region;
 }
 
 

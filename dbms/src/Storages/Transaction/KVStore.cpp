@@ -18,10 +18,6 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
-namespace FailPoints
-{
-extern const char pause_until_apply_raft_snapshot[];
-} // namespace FailPoints
 
 KVStore::KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_)
     : region_persister(context, region_manager),

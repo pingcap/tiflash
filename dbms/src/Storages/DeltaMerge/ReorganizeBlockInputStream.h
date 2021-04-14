@@ -58,7 +58,7 @@ public:
             next_block = DB::DM::readNextBlock(sorted_input_stream);
 
 #ifndef NDEBUG
-            if (!isSameSchema(cur_block, next_block))
+            if (next_block && !isSameSchema(cur_block, next_block))
             {
                 throw Exception("schema not match! [cur_block=" + cur_block.dumpStructure() + "] [next_block=" + next_block.dumpStructure()
                                 + "]");

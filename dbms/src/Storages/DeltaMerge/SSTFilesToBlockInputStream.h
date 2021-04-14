@@ -61,6 +61,8 @@ public:
     void  readSuffix();
     Block read() override;
 
+    static bool needUpdateSchema(const ColumnDefinesPtr & a, const ColumnDefinesPtr & b);
+
 private:
     void scanCF(ColumnFamilyType cf, const std::string_view until = std::string_view{});
 
@@ -99,6 +101,8 @@ public:
     String getName() const override { return "BoundedSSTFilesToBlockInputStream"; }
 
     Block getHeader() const override;
+
+    void readPrefix() override;
 
     std::tuple<std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> ingestingInfo() const;
 

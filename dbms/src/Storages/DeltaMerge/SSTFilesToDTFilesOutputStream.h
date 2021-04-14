@@ -47,7 +47,10 @@ public:
     void writeSuffix();
     void write();
 
-    PageIds ingestIds() const { return ingest_file_ids; }
+    PageIds ingestIds() const;
+
+    // Try to cleanup the files in `ingest_files` quickly.
+    void cancel();
 
 private:
     void finishCurrDTFileStream();
@@ -66,7 +69,7 @@ private:
     DMFilePtr                                dt_file;
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;
 
-    PageIds ingest_file_ids;
+    std::vector<DMFilePtr> ingest_files;
 
     size_t    schema_sync_trigger_count = 0;
     size_t    commit_rows               = 0;
