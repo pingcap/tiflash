@@ -488,19 +488,26 @@ public:
     {
         MPPTaskId id{meta.start_ts(), meta.task_id()};
         std::map<MPPTaskId, MPPTaskPtr>::iterator it;
+        bool to_be_cancelled = false;
         std::unique_lock<std::mutex> lock(mu);
         auto ret = cv.wait_for(lock, timeout, [&] {
             auto query_it = mpp_query_map.find(id.start_ts);
-            if (query_it == mpp_query_map.end() || query_it->second.to_be_cancelled)
+            // TODO: how about the query has been cancelled?
+            if (query_it == mpp_query_map.end())
             {
-                /// if the query is cancelled, return false to make the finder fail quickly
-                LOG_WARNING(log, "Query " + std::to_string(id.start_ts) + " is cancelled, all its tasks are invalid.");
                 return false;
+            }
+            else if (query_it->second.to_be_cancelled)
+            {
+                /// if the query is cancelled, return true to stop waiting timeout.
+                LOG_WARNING(log, "Query " + std::to_string(id.start_ts) + " is cancelled, all its tasks are invalid.");
+                to_be_cancelled = true;
+                return true;
             }
             it = query_it->second.task_map.find(id);
             return it != query_it->second.task_map.end();
         });
-        return ret ? it->second : nullptr;
+        return ret && !to_be_cancelled ? it->second : nullptr;
     }
 
     void cancelMPPQuery(UInt64 query_id, const String & reason)
@@ -515,6 +522,7 @@ public:
             if (it == mpp_query_map.end() || it->second.to_be_cancelled)
                 return;
             it->second.to_be_cancelled = true;
+            cv.notify_all();
             task_set = it->second;
         }
         LOG_WARNING(log, "Begin cancel query: " + std::to_string(query_id));
