@@ -505,23 +505,24 @@ public:
 
     void cancelMPPQuery(UInt64 query_id, const String & reason)
     {
-        MPPQueryMap::iterator it;
+        MPPQueryTaskSet task_set;
         {
             /// cancel task may take a long time, so first
             /// set a flag, so we can cancel task one by
             /// one without holding the lock
             std::lock_guard<std::mutex> lock(mu);
-            it = mpp_query_map.find(query_id);
-            if (it == mpp_query_map.end())
+            auto it = mpp_query_map.find(query_id);
+            if (it == mpp_query_map.end() || it->second.to_be_cancelled)
                 return;
             it->second.to_be_cancelled = true;
+            task_set = it->second;
         }
         LOG_WARNING(log, "Begin cancel query: " + std::to_string(query_id));
         std::stringstream ss;
         ss << "Remaining task in query " + std::to_string(query_id) + " are: ";
 
         std::vector<std::thread> cancel_workers;
-        for (auto task_it = it->second.task_map.rbegin(); task_it != it->second.task_map.rend(); task_it++)
+        for (auto task_it = task_set.task_map.rbegin(); task_it != task_set.task_map.rend(); task_it++)
         {
             ss << task_it->first.toString() << " ";
             std::thread t(&MPPTask::cancel, task_it->second, std::ref(reason));
@@ -536,7 +537,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(mu);
             /// just to double check the query still exists
-            it = mpp_query_map.find(query_id);
+            auto it = mpp_query_map.find(query_id);
             if (it != mpp_query_map.end())
             {
                 /// hold the canceled task set, so the mpp task will not be deconstruct when holding the
