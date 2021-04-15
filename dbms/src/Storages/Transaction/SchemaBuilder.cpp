@@ -438,23 +438,25 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         {    
             throw TiFlashException("miss table in TiKV : " + std::to_string(diff.table_id), Errors::DDL::MissingTable);
         }
-        if (table_info->replica_info.count <= 0)
+        
+        auto storage = tmt_context.getStorages().get(diff.table_id);
+
+        if (table_info->replica_info.count <= 0 && storage == nullptr)
         {
             LOG_INFO(log, name_mapper.debugCanonicalName(*db_info, *table_info) << " replica count is "
-                << table_info->replica_info.count << ", drop it.");
-            applyDropTable(db_info, diff.table_id);
+                << table_info->replica_info.count << " and storage is not exist, ignore it.");
             return;
         }
-    
-        auto storage = tmt_context.getStorages().get(diff.table_id);
-        // Here, TiFlash replica count is greater than 0.
-        if (storage == nullptr)
+        
+        if (table_info->replica_info.count > 0 && storage == nullptr) 
         {
-            LOG_INFO(log, name_mapper.debugCanonicalName(*db_info, *table_info) << " TiFlash replica count is "
-                << table_info->replica_info.count << " and storage object is not exist, we need to create it");
+            LOG_INFO(log, name_mapper.debugCanonicalName(*db_info, *table_info) << " replica count is "
+                << table_info->replica_info.count << " and storage is not exist, create it.");
             applyCreateTable(db_info, diff.table_id);
             return;
-        }    
+        }
+        
+        // Here, storage != nullptr  
     }
     
     TableID old_table_id = 0, new_table_id = 0;
@@ -1170,12 +1172,13 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         for (auto & table : tables)
         {
             LOG_DEBUG(log, "Table " << name_mapper.debugCanonicalName(*db, *table) << " syncing during sync all schemas");
+            
+            auto storage = tmt_context.getStorages().get(table->id);
 
-            if (table->replica_info.count <= 0)
+            if (table->replica_info.count <= 0 && storage == nullptr)
             {
                 LOG_INFO(log, "Table " << name_mapper.debugCanonicalName(*db, *table) << " replica_info.count is "
-                    << table->replica_info.count << ", drop it.");
-                applyDropTable(db, table->id);
+                    << table->replica_info.count << ", ignore it.");
                 continue;
             }
 
@@ -1195,7 +1198,6 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                 });
             }
 
-            auto storage = tmt_context.getStorages().get(table->id);
             if (storage == nullptr)
             {
                 /// Create if not exists.
