@@ -6,25 +6,24 @@ func> wait_table test t
 
 mysql> insert into test.t values(1, -80, -1, 1);
 mysql> insert into test.t values(3, -90, -3, 0);
-mysql> set session tidb_isolation_read_engines='tiflash'
 
 # issue https://github.com/pingcap/tics/issues/1483
-mysql> select a from test.t where a in (1.0, 2);
+mysql> set session tidb_isolation_read_engines='tiflash'; select a from test.t where a in (1.0, 2);
 +------+
 | a    |
 +------+
 | 1.00 |
 +------+
 
-mysql> select b from test.t where b in (-302764853, 12498864);
+mysql> set session tidb_isolation_read_engines='tiflash'; select b from test.t where b in (-302764853, 12498864);
 # Expected to be Empty
 
 # issue https://github.com/pingcap/tidb/issues/23198
-mysql> select c from test.t where c in (1, 18446744073709551616);
+mysql> set session tidb_isolation_read_engines='tiflash'; select c from test.t where c in (1, 18446744073709551616);
 # Expected to be Empty
 
 # issue https://github.com/pingcap/tics/issues/1543
-mysql> select * from test.t where d in (1, 1);
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where d in (1, 1);
 +------+------+------+------------------------+
 | a    | b    | c    | d                      |
 +------+------+------+------------------------+
