@@ -36,11 +36,20 @@ class DMFile;
 using DMFilePtr = std::shared_ptr<DMFile>;
 class DMFileBlockOutputStream;
 
+enum class FileConvertJobType
+{
+    ApplySnapshot,
+    IngestSST,
+};
+
 
 class SSTFilesToDTFilesOutputStream : private boost::noncopyable
 {
 public:
-    SSTFilesToDTFilesOutputStream(BoundedSSTFilesToBlockInputStreamPtr child_, TiDB::SnapshotApplyMethod method_, TMTContext & tmt_);
+    SSTFilesToDTFilesOutputStream(BoundedSSTFilesToBlockInputStreamPtr child_,
+                                  TiDB::SnapshotApplyMethod            method_,
+                                  FileConvertJobType                   job_type_,
+                                  TMTContext &                         tmt_);
     ~SSTFilesToDTFilesOutputStream();
 
     void writePrefix();
@@ -61,6 +70,7 @@ private:
 private:
     BoundedSSTFilesToBlockInputStreamPtr child;
     const TiDB::SnapshotApplyMethod      method;
+    const FileConvertJobType             job_type;
     TMTContext &                         tmt;
     Poco::Logger *                       log;
 

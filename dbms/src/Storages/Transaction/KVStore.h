@@ -12,6 +12,10 @@ namespace RegionBench
 {
 extern void concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
 }
+namespace DM
+{
+enum class FileConvertJobType;
+}
 
 // TODO move to Settings.h
 static const Seconds REGION_CACHE_GC_PERIOD(60 * 5);
@@ -103,6 +107,9 @@ private:
     friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
     friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
 
+
+    std::vector<UInt64> preHandleSSTsToDTFiles(
+        RegionPtr new_region, const SSTViewVec, uint64_t index, uint64_t term, DM::FileConvertJobType, TMTContext & tmt);
 
     template <typename RegionPtrWrap>
     void checkAndApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
