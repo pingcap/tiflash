@@ -289,14 +289,7 @@ try
         size_t rows = 0;
         while (Block block = in->read())
         {
-            for (auto & iter : block)
-            {
-                auto c = iter.column;
-                if (iter.name == DMTestEnv::pk_name)
-                {
-                    rows += c->size();
-                }
-            }
+            rows += block.rows();
         }
         in->readSuffix();
 
