@@ -68,7 +68,6 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         else
             res.engine = DEFAULT_ENGINE;
     }
-    LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(res.engine));
 
     /// "tmt" engine ONLY support disable_bg_flush = false.
     /// "dt" engine ONLY support disable_bg_flush = true.
@@ -130,6 +129,10 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         default:
             break;
     }
+
+    LOG_INFO(log,
+        "Default storage engine [type=" << static_cast<Int64>(res.engine)
+                                        << "] [snapshot.method=" << applyMethodToString(res.snapshot_apply_method) << "]");
 
     return res;
 }

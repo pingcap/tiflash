@@ -662,6 +662,13 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
             if (segment->ingestPacks(*dm_context, range.shrink(segment_range), packs, clear_data_in_range))
             {
                 updated_segments.push_back(segment);
+                // Enable gc for DTFile once it has been committed.
+                for (size_t index = 0; index < my_file_used.size(); ++index)
+                {
+                    auto & file = files[index];
+                    if (my_file_used[index])
+                        file->enableGC();
+                }
                 file_used.swap(my_file_used);
                 break;
             }
