@@ -56,6 +56,7 @@ namespace DB
         F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.0005, 2, 30}))                                                \
     M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter)                                                        \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                          \
+    M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                             \
     M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                         \
         F(type_full, {"type", "full"}), F(type_failed, {"type", "failed"}))                                                               \
     M(tiflash_schema_trigger_count, "Total number of each kinds of schema sync trigger", Counter, /**/                                    \
