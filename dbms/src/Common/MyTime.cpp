@@ -930,6 +930,40 @@ size_t maxFormattedDateTimeStringLength(const String & format)
     return std::max<size_t>(result, 1);
 }
 
+void checkDate(const UInt64 & year, const UInt64 & month, const UInt64 & day)
+{
+    if (year == 0 && month == 0 && day == 0)
+    {
+        return;
+    }
+
+    if (month == 0 || day == 0)
+    {
+        throw TiFlashException("Invalid Datetime value", Errors::Types::WrongValue);
+    }
+
+    if (year >= 9999 || month > 12)
+    {
+        throw TiFlashException("Invalid Datetime value", Errors::Types::WrongValue);
+    }
+
+    {
+        constexpr static UInt8 max_days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        UInt8 max_day = max_days_in_month[month - 1];
+        static auto is_leap_year = [](UInt16 year) { return ((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0); };
+        if (month == 2 && is_leap_year(year))
+        {
+            max_day = 29;
+        }
+
+        if (day > max_day)
+        {
+            throw TiFlashException("Invalid Datetime value", Errors::Types::WrongValue);
+        }
+    }
+    return;
+}
+
 MyDateTime checkedDateTime(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
     const UInt64 & second, const UInt64 & microsecond)
 {
@@ -938,7 +972,12 @@ MyDateTime checkedDateTime(const UInt64 & year, const UInt64 & month, const UInt
         || minute >= (1 << MyTimeBase::MINUTE_BIT_FIELD_WIDTH) || second >= (1 << MyTimeBase::SECOND_BIT_FIELD_WIDTH)
         || microsecond >= (1 << MyTimeBase::MICROSECOND_BIT_FIELD_WIDTH))
     {
-        throw TiFlashException("Date time value overflow", Errors::Types::WrongValue);
+        throw TiFlashException("Datetime value overflow", Errors::Types::WrongValue);
+    }
+    checkDate(year, month, day);
+    if (hour >= 24 || minute >= 60 || second >= 60)
+    {
+        throw TiFlashException("Invalid Datetime value", Errors::Types::WrongValue);
     }
     return MyDateTime(year, month, day, hour, minute, second, microsecond);
 }

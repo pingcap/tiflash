@@ -1305,7 +1305,7 @@ struct TiDBConvertToTime
                         vec_to[i] = datetime.toPackedUInt();
                     }
                 }
-                catch (const Exception &)
+                catch (const TiFlashException & e)
                 {
                     // Cannot cast, fill with NULL
                     (*vec_null_map_to)[i] = 1;
