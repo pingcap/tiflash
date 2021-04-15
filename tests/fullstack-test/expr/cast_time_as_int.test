@@ -1,0 +1,14 @@
+mysql> drop table if exists test.t
+mysql> create table test.t(col_datetime datetime, col_date date)
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values('2021/04/13 00:34:00.123456', '2021/04/13')
+
+func> wait_table test t
+
+# Issue https://github.com/pingcap/tics/issues/1469
+
+mysql> select count(*) from test.t where cast(col_datetime as signed) = 20210413003400 and cast(col_date as signed) = 20210413
+count(*)
+1
+
+mysql> drop table if exists test.t
