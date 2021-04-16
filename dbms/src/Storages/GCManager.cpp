@@ -1,0 +1,64 @@
+#include <Storages/GCManager.h>
+#include <Storages/Transaction/TMTContext.h>
+
+namespace DB
+{
+
+bool GCManager::work()
+{
+    auto & global_settings = global_context.getSettingsRef();
+    // TODO: remove this when `BackgroundProcessingPool` supports specify task running interval
+    if (gc_check_stop_watch.elapsedSeconds() < global_settings.dt_segment_bg_gc_check_interval)
+        return false;
+
+    // Get a storage snapshot with weak_ptrs first
+    std::map<TableID, std::weak_ptr<IManageableStorage>> storages;
+    for (const auto & [table_id, storage] : global_context.getTMTContext().getStorages().getAllStorage())
+        storages.emplace(table_id, storage);
+    auto iter = storages.begin();
+    if (next_table_id != InvalidTableID)
+        iter = storages.upper_bound(next_table_id);
+
+    Int64 gc_segments_limit = global_settings.dt_segment_bg_gc_max_segments_to_check_every_round;
+    UInt64 checked_storage_num = 0;
+    while (true)
+    {
+        // The TiFlash process receive a signal to terminate.
+        if (global_context.getTMTContext().getTerminated())
+            break;
+        // All storages have been checked, stop here
+        if (checked_storage_num >= storages.size())
+            break;
+        if (iter == storages.end())
+            iter = storages.begin();
+        checked_storage_num++;
+        auto storage = iter->second.lock();
+        // The storage has been free or dropped.
+        if (!storage || storage->is_dropped)
+            continue;
+        try
+        {
+            // Block this thread and do GC on the storage
+            // It is OK if any schema changes is apply to the storage while doing GC, so we
+            // do not acquire structure lock on the storage.
+            auto gc_segments_num = storage->onSyncGc(gc_segments_limit);
+            gc_segments_limit = gc_segments_limit - gc_segments_num;
+            // Reach the limit on the number of segments to be gc, stop here
+            if (gc_segments_limit <= 0)
+                break;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+        iter++;
+    }
+    if (iter == storages.end())
+        iter = storages.begin();
+    next_table_id = iter->first;
+    gc_check_stop_watch.restart();
+    // Always return false
+    return false;
+}
+
+} // namespace DB

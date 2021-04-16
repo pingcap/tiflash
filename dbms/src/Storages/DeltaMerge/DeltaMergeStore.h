@@ -333,6 +333,8 @@ public:
     bool                isCommonHandle() const { return is_common_handle; }
     size_t              getRowKeyColumnSize() const { return rowkey_column_size; }
 
+    UInt64 onSyncGc(Int64 limit);
+
 public:
     /// Methods mainly used by region split.
 
@@ -353,7 +355,6 @@ private:
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
-    bool tryAddBackgroundTask(const BackgroundTask & task, ThreadType thread_type);
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
@@ -363,8 +364,6 @@ private:
     bool updateLatestGCSafePoint();
 
     bool handleBackgroundTask(bool heavy);
-
-    bool checkSegmentNeedGC();
 
     bool isSegmentValid(const SegmentPtr & segment);
 
@@ -401,7 +400,6 @@ private:
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
-    BackgroundProcessingPool::TaskHandle background_gc_handle;
 
     BackgroundProcessingPool &           blockable_background_pool;
     BackgroundProcessingPool::TaskHandle blockable_background_pool_handle;
@@ -419,8 +417,7 @@ private:
     // the segments checked after `latest_gc_safe_point`
     SegmentIdSet gc_checked_segments;
 
-    RowKeyValue     next_gc_check_key = RowKeyValue::EMPTY_STRING_KEY;
-    AtomicStopwatch gc_check_stop_watch;
+    RowKeyValue next_gc_check_key = RowKeyValue::EMPTY_STRING_KEY;
 
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;

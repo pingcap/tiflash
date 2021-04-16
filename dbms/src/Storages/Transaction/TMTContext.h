@@ -5,6 +5,7 @@
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTStorages.h>
+#include <Storages/GCManager.h>
 
 namespace DB
 {
@@ -23,6 +24,9 @@ using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
 class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 
+class GCManager;
+using GCManagerPtr = std::shared_ptr<GCManager>;
+
 struct TiFlashRaftConfig;
 
 class TMTContext : private boost::noncopyable
@@ -39,6 +43,8 @@ public:
 
     const BackgroundService & getBackgroundService() const;
     BackgroundService & getBackgroundService();
+
+    GCManager & getGCManager();
 
     Context & getContext();
     bool isInitialized() const;
@@ -77,6 +83,7 @@ private:
     ManagedStorages storages;
     RegionTable region_table;
     BackGroundServicePtr background_service;
+    GCManager gc_manager;
 
 private:
     KVClusterPtr cluster;

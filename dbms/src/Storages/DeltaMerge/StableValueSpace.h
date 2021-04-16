@@ -85,6 +85,8 @@ public:
 
         ColumnCachePtrs column_caches;
 
+        StableValueSpace::DMFileProperty property;
+
         Snapshot() : log(&Logger::get("StableValueSpace::Snapshot")) {}
 
         SnapshotPtr clone()
