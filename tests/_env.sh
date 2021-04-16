@@ -5,7 +5,7 @@
 if [ `uname` == "Darwin" ]; then
     export build_dir="../../build_clang"
 else
-    export build_dir="../../build"
+    export build_dir="../build"
 fi
 # export build_dir="../cmake-build-debug"
 
@@ -15,7 +15,7 @@ export storage_bin="$build_dir/dbms/src/Server/tiflash"
 export storage_server="127.0.0.1"
 
 # Server port for connecting
-export storage_port="9000"
+export storage_port="5067"
 
 # Default database for scripts
 export storage_db="default"
@@ -24,10 +24,10 @@ export storage_db="default"
 export tidb_server="127.0.0.1"
 
 # TiDB port
-export tidb_port="4000"
+export tidb_port="8067"
 
 # TiDB status port
-export tidb_status_port="10080"
+export tidb_status_port="8567"
 
 # TiDB default database
 export tidb_db="test"
@@ -36,8 +36,8 @@ export tidb_db="test"
 export tidb_table="t"
 
 # Whether run scripts with verbose output
-export verbose="false"
-# export verbose="true"
+# export verbose="false"
+export verbose="true"
 
 # Setup running env vars
 #source ../../_vars.sh

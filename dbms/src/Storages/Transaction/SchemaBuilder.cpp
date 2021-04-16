@@ -408,57 +408,6 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     if (db_info == nullptr)
         throw TiFlashException("miss database: " + std::to_string(diff.schema_id), Errors::DDL::MissingTable);
 
-    auto& tmt_context = context.getTMTContext();    
-    if (diff.type == SchemaActionType::ExchangeTablePartition) 
-    {
-        if (diff.affected_opts.empty())
-        {
-            throw Exception("Incorrect schema diff, no affected_opts for alter table exchange partition schema diff", ErrorCodes::DDL_ERROR);
-        }
-        // Before ExchangeTablePartition, it must set TiFlash replica count greater than 0, so both npt and pt must already exist.
-        auto npt_table_id = diff.old_table_id;
-        auto pt_table_id = diff.affected_opts[0].table_id;
-        auto npt_storage = tmt_context.getStorages().get(npt_table_id);
-        if (npt_storage == nullptr)
-        {
-            LOG_INFO(log, "No Partition Table is not exist, cannnot exchange");
-            return;
-        }
-        auto pt_storage = tmt_context.getStorages().get(pt_table_id);
-        if (pt_storage == nullptr)
-        {
-            LOG_INFO(log, "Partition Table is not exist, cannot exchange");
-            return;
-        }
-    }
-    else if (diff.type != SchemaActionType::DropTable && diff.type != SchemaActionType::DropView)
-    {
-        auto table_info = getter.getTableInfo(db_info->id, diff.table_id);
-        if (table_info == nullptr)
-        {    
-            throw TiFlashException("miss table in TiKV : " + std::to_string(diff.table_id), Errors::DDL::MissingTable);
-        }
-        
-        auto storage = tmt_context.getStorages().get(diff.table_id);
-
-        if (table_info->replica_info.count <= 0 && storage == nullptr)
-        {
-            LOG_INFO(log, name_mapper.debugCanonicalName(*db_info, *table_info) << " replica count is "
-                << table_info->replica_info.count << " and storage is not exist, ignore it.");
-            return;
-        }
-        
-        if (table_info->replica_info.count > 0 && storage == nullptr) 
-        {
-            LOG_INFO(log, name_mapper.debugCanonicalName(*db_info, *table_info) << " replica count is "
-                << table_info->replica_info.count << " and storage is not exist, create it.");
-            applyCreateTable(db_info, diff.table_id);
-            return;
-        }
-        
-        // Here, storage != nullptr  
-    }
-    
     TableID old_table_id = 0, new_table_id = 0;
 
     switch (diff.type)
@@ -1172,15 +1121,6 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         for (auto & table : tables)
         {
             LOG_DEBUG(log, "Table " << name_mapper.debugCanonicalName(*db, *table) << " syncing during sync all schemas");
-            
-            auto storage = tmt_context.getStorages().get(table->id);
-
-            if (table->replica_info.count <= 0 && storage == nullptr)
-            {
-                LOG_INFO(log, "Table " << name_mapper.debugCanonicalName(*db, *table) << " replica_info.count is "
-                    << table->replica_info.count << ", ignore it.");
-                continue;
-            }
 
             /// Ignore view and sequence.
             if (table->is_view || table->is_sequence)
@@ -1198,6 +1138,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                 });
             }
 
+            auto storage = tmt_context.getStorages().get(table->id);
             if (storage == nullptr)
             {
                 /// Create if not exists.

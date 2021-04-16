@@ -222,7 +222,6 @@ try
     // Rename table name
     String new_table_name = "new_" + storage->getTableName();
     storage->rename(path_name, new_db_name, new_table_name, new_table_name);
-    ASSERT_FALSE(storage->storeInited());
     ASSERT_EQ(storage->getTableName(), new_table_name);
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
 

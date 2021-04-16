@@ -299,6 +299,15 @@ if (ENABLE_TESTS)
     target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions)
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas)
     add_check(gtests_dbms)
+
+    add_executable(gtest_database EXCLUDE_FROM_ALL
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Databases/test/gtest_database.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/gtests_dbms_main.cpp
+    )
+    target_include_directories(gtest_database BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
+    target_link_libraries(gtest_database gtest_main dbms clickhouse_functions)
+    target_compile_options(gtest_database PRIVATE -Wno-unknown-pragmas)
+    add_check(gtest_database)
 endif ()
 
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")

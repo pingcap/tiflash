@@ -61,8 +61,6 @@ StorageDeltaMerge::StorageDeltaMerge( //
     Context & global_context_)
     : IManageableStorage{columns_, tombstone},
       data_path_contains_database_name(db_engine != "TiFlash"),
-      db_name(db_name_),
-      table_name(table_name_),
       store_inited(false),
       max_column_id_used(0),
       global_context(global_context_.getGlobalContext()),
@@ -81,82 +79,142 @@ StorageDeltaMerge::StorageDeltaMerge( //
         pk_is_handle = tidb_table_info.pk_is_handle;
     }
 
+    table_column_info.db_name = db_name_;
+    table_column_info.table_name = table_name_;
+    table_column_info.pk_expr_ast = primary_expr_ast_;
+
+    applyTableColumnInfo();
+}
+
+void StorageDeltaMerge::applyTableColumnInfo()
+{   
+    // Input: ColumnsDescription + pk_expr_ast + tidb_table_info + is_common_handle + pk_is_handle
+    // Output: handle_column_define + table_column_defines
+    const ColumnsDescription& columns = getColumns();
+    
+    LOG_INFO(log, __FILE__ << " " << __func__ << " TableName " << getTableName() 
+        << " ordinary " << columns.ordinary.toString()
+        << " materialized " << columns.materialized.toString());
+
+    auto& pk_expr_ast = table_column_info.pk_expr_ast;
+
+    auto& handle_column_define = table_column_info.handle_column_define;
+    auto& table_column_defines = table_column_info.table_column_defines;
+    handle_column_define.name.clear();
+    table_column_defines.clear();
+    pk_column_names.clear();
 
     std::unordered_set<String> pks;
-    for (size_t i = 0; i < primary_expr_ast_->children.size(); ++i)
+    if (!tidb_table_info.columns.empty())
     {
-        auto col_name = primary_expr_ast_->children[i]->getColumnName();
-        pks.emplace(col_name);
-        pk_column_names.emplace_back(col_name);
+        if (pk_is_handle)
+        {
+            for (const auto& col : tidb_table_info.columns)
+            {
+                if (col.hasPriKeyFlag())
+                {
+                    pks.emplace(col.name);
+                    pk_column_names.emplace_back(col.name);
+                }
+            }
+        }
+        else
+        {
+            pks.emplace(EXTRA_HANDLE_COLUMN_NAME);
+            pk_column_names.emplace_back(EXTRA_HANDLE_COLUMN_NAME);
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < pk_expr_ast->children.size(); ++i)
+        {
+            auto col_name = pk_expr_ast->children[i]->getColumnName();
+            pks.emplace(col_name);
+            pk_column_names.emplace_back(col_name);
+        }
     }
 
-    ColumnsDescription new_columns(columns_.ordinary, columns_.materialized, columns_.materialized, columns_.defaults);
-
+    ColumnsDescription new_columns(columns.ordinary, columns.materialized, columns.materialized, columns.defaults);
     size_t pks_combined_bytes = 0;
-    auto all_columns = getColumns().getAllPhysical();
+    auto all_columns = columns.getAllPhysical();
+
     /// rowkey_column_defines is the columns used to generate rowkey in TiDB
     /// if is_common_handle = true || pk_is_handle = true, it is the primary keys in TiDB table's definition
     /// otherwise, it is _tidb_rowid
     ColumnDefines rowkey_column_defines;
-    for (const auto & col : all_columns)
+    for (const auto& col : all_columns)
     {
-        ColumnDefine column_define(0, col.name, col.type);
-        if (table_info_)
+        ColumnDefine col_def(0, col.name, col.type);
+        if (!tidb_table_info.columns.empty())
         {
             /// If TableInfo from TiDB is not empty, we get column id and default value from TiDB
-            auto & columns = table_info_->get().columns;
-            column_define.id = table_info_->get().getColumnID(column_define.name);
-            auto column
-                = std::find_if(columns.begin(), columns.end(), [&](const ColumnInfo & v) -> bool { return v.id == column_define.id; });
-
-            if (column != columns.end())
-                column_define.default_value = column->defaultValueToField();
-            if (column_define.id != TiDBPkColumnID && table_info_->get().getColumnInfo(column_define.id).hasPriKeyFlag())
+            auto& columns = tidb_table_info.columns;
+            col_def.id = tidb_table_info.getColumnID(col_def.name);
+            auto itr = std::find_if(columns.begin(), columns.end(), [&](const ColumnInfo & v) { return v.id == col_def.id; });
+            if (itr != columns.end())
             {
-                rowkey_column_defines.push_back(column_define);
+                col_def.default_value = itr->defaultValueToField();
+            }
+
+            if (col_def.id != TiDBPkColumnID && col_def.id != VersionColumnID && 
+                col_def.id != DelMarkColumnID && tidb_table_info.getColumnInfo(col_def.id).hasPriKeyFlag())
+            {
+                rowkey_column_defines.push_back(col_def);
             }
         }
         else
         {
             // in test cases, we allocate column_id here
-            column_define.id = max_column_id_used++;
+            col_def.id = max_column_id_used++;
         }
-
 
         if (pks.count(col.name))
         {
             if (!is_common_handle)
             {
                 if (!col.type->isValueRepresentedByInteger())
+                {
                     throw Exception("pk column " + col.name + " is not representable by integer");
-
+                }
                 pks_combined_bytes += col.type->getSizeOfValueInMemory();
                 if (pks_combined_bytes > sizeof(Handle))
+                {
                     throw Exception("pk columns exceeds size limit :" + DB::toString(sizeof(Handle)));
+                }
             }
-
             if (pks.size() == 1)
-                handle_column_define = column_define;
+            {
+                handle_column_define = col_def;
+            }
         }
-
-        table_column_defines.push_back(column_define);
+        table_column_defines.push_back(col_def);
     }
 
-    hidden_columns.emplace_back(VERSION_COLUMN_NAME);
-    hidden_columns.emplace_back(TAG_COLUMN_NAME);
-    new_columns.materialized.emplace_back(VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE);
-    new_columns.materialized.emplace_back(TAG_COLUMN_NAME, TAG_COLUMN_TYPE);
+    if (!new_columns.materialized.contains(VERSION_COLUMN_NAME))
+    {
+        hidden_columns.emplace_back(VERSION_COLUMN_NAME);
+        new_columns.materialized.emplace_back(VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE);
+    }
+    if (!new_columns.materialized.contains(TAG_COLUMN_NAME))
+    {
+        hidden_columns.emplace_back(TAG_COLUMN_NAME);
+        new_columns.materialized.emplace_back(TAG_COLUMN_NAME, TAG_COLUMN_TYPE);
+    }
 
     if (pks.size() > 1)
     {
         if (unlikely(is_common_handle))
+        {
             throw Exception("Should not reach here: common handle with pk size > 1", ErrorCodes::LOGICAL_ERROR);
+        }
         handle_column_define.id = EXTRA_HANDLE_COLUMN_ID;
         handle_column_define.name = EXTRA_HANDLE_COLUMN_NAME;
         handle_column_define.type = EXTRA_HANDLE_COLUMN_INT_TYPE;
-
-        hidden_columns.emplace_back(EXTRA_HANDLE_COLUMN_NAME);
-        new_columns.materialized.emplace_back(EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_INT_TYPE);
+        if (!new_columns.materialized.contains(EXTRA_HANDLE_COLUMN_NAME)) 
+        {
+            hidden_columns.emplace_back(EXTRA_HANDLE_COLUMN_NAME);
+            new_columns.materialized.emplace_back(EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_INT_TYPE);
+        }
     }
 
     setColumns(new_columns);
@@ -170,10 +228,10 @@ StorageDeltaMerge::StorageDeltaMerge( //
         // create table statement.
         // Here we throw a PrimaryKeyNotMatchException, caller (`DatabaseLoading::loadTable`) is responsible for correcting
         // the statement and retry.
-        if (pks.size() == 1 && table_info_ && !is_common_handle)
+        if (pks.size() == 1 && !tidb_table_info.columns.empty() && !is_common_handle)
         {
             std::vector<String> actual_pri_keys;
-            for (const auto & col : table_info_->get().columns)
+            for (const auto& col : tidb_table_info.columns)
             {
                 if (col.hasPriKeyFlag())
                 {
@@ -186,7 +244,6 @@ StorageDeltaMerge::StorageDeltaMerge( //
             }
             // fallover
         }
-
         // Unknown bug, throw an exception.
         std::stringstream ss;
         ss << "[";
@@ -811,7 +868,6 @@ try
 
     // update the metadata in database, so that we can read the new schema using TiFlash's client
     ColumnsDescription new_columns = getColumns();
-
     for (const auto & command : commands)
     {
         if (command.type == AlterCommand::MODIFY_COLUMN)
@@ -845,20 +901,29 @@ try
     }
 
     commands.apply(new_columns); // apply AlterCommands to `new_columns`
-    // apply alter to store's table column in DeltaMergeStore
-    auto& store = getAndMaybeInitStore();
-    store->applyAlters(commands, table_info, max_column_id_used, context);
-    handle_column_define = store->getHandle();
-    SortDescription pk_desc = store->getPrimarySortDescription();
+    setColumns(std::move(new_columns));
+
+    if (store_inited.load(std::memory_order_acquire))
+    {
+        _store->applyAlters(commands, table_info, max_column_id_used, context);
+    }
+    if (table_info)
+    {
+        tidb_table_info = table_info.value();
+    }
+
+    // Update table column info
+    applyTableColumnInfo();
+
+    SortDescription pk_desc = getPrimarySortDescription();
+    ColumnDefines store_columns = getStoreColumnDefines();
+
     TiDB::TableInfo table_info_from_store;
     table_info_from_store.name = table_name_;
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
-    updateDeltaMergeTableCreateStatement(database_name, table_name_, pk_desc, new_columns, hidden_columns,
-        getTableInfoForCreateStatement(table_info, table_info_from_store, store->getTableColumns(), hidden_columns), tombstone, context);
-    setColumns(std::move(new_columns));
-    if (table_info)
-        tidb_table_info = table_info.value();
+    updateDeltaMergeTableCreateStatement(database_name, table_name_, pk_desc, getColumns(), hidden_columns,
+        getTableInfoForCreateStatement(table_info, table_info_from_store, store_columns, hidden_columns), tombstone, context);
     setTombstone(tombstone);
 }
 catch (Exception & e)
@@ -872,11 +937,32 @@ catch (Exception & e)
     throw;
 }
 
+ColumnDefines StorageDeltaMerge::getStoreColumnDefines() const 
+{
+    if (store_inited.load(std::memory_order_acquire))
+    {
+        return _store->getTableColumns();
+    }
+    ColumnDefines cols;
+    cols.emplace_back(table_column_info.handle_column_define);
+    cols.emplace_back(getVersionColumnDefine());
+    cols.emplace_back(getTagColumnDefine());
+    for (const auto& col : table_column_info.table_column_defines)
+    {
+        if (col.id != table_column_info.handle_column_define.id && col.id != VERSION_COLUMN_ID && col.id != TAG_COLUMN_ID)
+        {
+            cols.emplace_back(col);
+        }
+    }
+    return cols;
+}
+
 String StorageDeltaMerge::getName() const { return MutableSupport::delta_tree_storage_name; }
 
 void StorageDeltaMerge::rename(
     const String & new_path_to_db, const String & new_database_name, const String & new_table_name, const String & new_display_table_name)
 {
+    // @todo Check if path exist first
     auto& store = getAndMaybeInitStore();
     tidb_table_info.name = new_display_table_name; // update name in table info
     // For DatabaseTiFlash, simply update store's database is OK.
@@ -885,8 +971,8 @@ void StorageDeltaMerge::rename(
     if (likely(clean_rename))
     {
         store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
-        db_name = new_database_name;
-        table_name = new_table_name;
+        table_column_info.db_name = new_database_name;
+        table_column_info.table_name = new_table_name;
         return;
     }
 
@@ -900,24 +986,40 @@ void StorageDeltaMerge::rename(
 
     // flush store and then reset store to new path
     store->flushCache(global_context, RowKeyRange::newAll(is_common_handle, rowkey_column_size));
-    table_column_defines = store->getTableColumns();
-    handle_column_define = store->getHandle();
+    table_column_info.table_column_defines = store->getTableColumns();
+    table_column_info.handle_column_define = store->getHandle();
+    table_column_info.db_name = new_database_name;
+    table_column_info.table_name = new_table_name;
     DeltaMergeStore::Settings settings = store->getSettings();
 
     // remove background tasks
     store->shutdown();
     // rename directories for multi disks
     store->rename(new_path, clean_rename, new_database_name, new_table_name);
-    
-    db_name = new_database_name;
-    table_name = new_table_name;
-    _store = {};
-    store_inited.store(false, std::memory_order_release);
+    // generate a new store
+    store = std::make_shared<DeltaMergeStore>(global_context,                //
+        data_path_contains_database_name, new_database_name, new_table_name, //
+        std::move(table_column_info.table_column_defines), std::move(table_column_info.handle_column_define),
+        is_common_handle, rowkey_column_size, settings);
 }
 
-String StorageDeltaMerge::getTableName() const { return table_name; }
+String StorageDeltaMerge::getTableName() const 
+{
+    if (store_inited.load(std::memory_order_acquire)) 
+    {
+        return _store->getTableName();  
+    }
+    return table_column_info.table_name;
+}
 
-String StorageDeltaMerge::getDatabaseName() const { return db_name; }
+String StorageDeltaMerge::getDatabaseName() const 
+{
+    if (store_inited.load(std::memory_order_acquire))
+    {
+        return _store->getDatabaseName();
+    } 
+    return table_column_info.db_name;
+}
 
 void updateDeltaMergeTableCreateStatement(                   //
     const String & database_name, const String & table_name, //
@@ -1141,13 +1243,22 @@ StorageDeltaMerge::~StorageDeltaMerge() { shutdown(); }
 
 DataTypePtr StorageDeltaMerge::getPKTypeImpl() const 
 {
-    return handle_column_define.type; 
+    if (store_inited.load(std::memory_order_acquire))
+    {
+        return _store->getPKDataType();
+    }
+    return table_column_info.handle_column_define.type; 
 }
 
 SortDescription StorageDeltaMerge::getPrimarySortDescription() const 
 {
+    if (store_inited.load(std::memory_order_acquire))
+    {
+        return _store->getPrimarySortDescription();
+    }
+
     SortDescription desc;
-    desc.emplace_back(handle_column_define.name, /* direction_= */ 1, /* nulls_direction_= */ 1);
+    desc.emplace_back(table_column_info.handle_column_define.name, /* direction_= */ 1, /* nulls_direction_= */ 1);
     return desc;
 }
 
@@ -1160,8 +1271,8 @@ DeltaMergeStorePtr& StorageDeltaMerge::getAndMaybeInitStore()
     std::lock_guard<std::mutex> lock(store_mutex);
     if (_store == nullptr) 
     {
-        _store = std::make_shared<DeltaMergeStore>(global_context, data_path_contains_database_name, db_name, table_name,
-            std::move(table_column_defines), handle_column_define, is_common_handle, rowkey_column_size,
+        _store = std::make_shared<DeltaMergeStore>(global_context, data_path_contains_database_name, table_column_info.db_name, table_column_info.table_name,
+            std::move(table_column_info.table_column_defines), std::move(table_column_info.handle_column_define), is_common_handle, rowkey_column_size,
             DeltaMergeStore::Settings());
         store_inited.store(true, std::memory_order_release);
     }

@@ -142,17 +142,24 @@ private:
     DataTypePtr getPKTypeImpl() const override;
 
     DM::DeltaMergeStorePtr& getAndMaybeInitStore();
-    bool storeInited() const { return store_inited.load(); } // for test
+    bool storeInited() const { return store_inited.load(); }
+    void applyTableColumnInfo();
+    DM::ColumnDefines getStoreColumnDefines() const;
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
-
+    struct TableColumnInfo 
+    {
+        String db_name;
+        String table_name;
+        ASTPtr pk_expr_ast;
+        DM::ColumnDefines table_column_defines;
+        DM::ColumnDefine handle_column_define;
+    };
     const bool data_path_contains_database_name = false;
 
     std::mutex store_mutex;
-    String db_name;
-    String table_name;
-    DM::ColumnDefines table_column_defines; // column defines used in DeltaMergeStore
-    DM::ColumnDefine handle_column_define;
+    
+    TableColumnInfo table_column_info;  // After create DeltaMergeStore object, it is deprecated.
     std::atomic<bool> store_inited;
     DM::DeltaMergeStorePtr _store;
 
