@@ -7,6 +7,6 @@ message PackProperty {
     required int64 num_rows = 1;
 }
 
-message PackPropertys {
+message PackProperties {
     repeated PackProperty property = 1;
 }

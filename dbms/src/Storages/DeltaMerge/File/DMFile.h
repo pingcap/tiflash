@@ -103,7 +103,7 @@ public:
     };
 
     using PackStats      = PaddedPODArray<PackStat>;
-    using PackProperties = dtpb::PackPropertys;
+    using PackProperties = dtpb::PackProperties;
 
     static DMFilePtr create(UInt64 file_id, const String & parent_path, bool single_file_mode = false);
 

@@ -55,16 +55,16 @@ struct TableStruct_dmfile_2eproto {
 };
 extern const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_dmfile_2eproto;
 namespace dtpb {
+class PackProperties;
+class PackPropertiesDefaultTypeInternal;
+extern PackPropertiesDefaultTypeInternal _PackProperties_default_instance_;
 class PackProperty;
 class PackPropertyDefaultTypeInternal;
 extern PackPropertyDefaultTypeInternal _PackProperty_default_instance_;
-class PackPropertys;
-class PackPropertysDefaultTypeInternal;
-extern PackPropertysDefaultTypeInternal _PackPropertys_default_instance_;
 }  // namespace dtpb
 PROTOBUF_NAMESPACE_OPEN
+template<> ::dtpb::PackProperties* Arena::CreateMaybeMessage<::dtpb::PackProperties>(Arena*);
 template<> ::dtpb::PackProperty* Arena::CreateMaybeMessage<::dtpb::PackProperty>(Arena*);
-template<> ::dtpb::PackPropertys* Arena::CreateMaybeMessage<::dtpb::PackPropertys>(Arena*);
 PROTOBUF_NAMESPACE_CLOSE
 namespace dtpb {
 
@@ -205,23 +205,23 @@ class PackProperty :
 };
 // -------------------------------------------------------------------
 
-class PackPropertys :
-    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:dtpb.PackPropertys) */ {
+class PackProperties :
+    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:dtpb.PackProperties) */ {
  public:
-  PackPropertys();
-  virtual ~PackPropertys();
+  PackProperties();
+  virtual ~PackProperties();
 
-  PackPropertys(const PackPropertys& from);
-  PackPropertys(PackPropertys&& from) noexcept
-    : PackPropertys() {
+  PackProperties(const PackProperties& from);
+  PackProperties(PackProperties&& from) noexcept
+    : PackProperties() {
     *this = ::std::move(from);
   }
 
-  inline PackPropertys& operator=(const PackPropertys& from) {
+  inline PackProperties& operator=(const PackProperties& from) {
     CopyFrom(from);
     return *this;
   }
-  inline PackPropertys& operator=(PackPropertys&& from) noexcept {
+  inline PackProperties& operator=(PackProperties&& from) noexcept {
     if (GetArenaNoVirtual() == from.GetArenaNoVirtual()) {
       if (this != &from) InternalSwap(&from);
     } else {
@@ -246,34 +246,34 @@ class PackPropertys :
   static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
     return GetMetadataStatic().reflection;
   }
-  static const PackPropertys& default_instance();
+  static const PackProperties& default_instance();
 
   static void InitAsDefaultInstance();  // FOR INTERNAL USE ONLY
-  static inline const PackPropertys* internal_default_instance() {
-    return reinterpret_cast<const PackPropertys*>(
-               &_PackPropertys_default_instance_);
+  static inline const PackProperties* internal_default_instance() {
+    return reinterpret_cast<const PackProperties*>(
+               &_PackProperties_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
     1;
 
-  void Swap(PackPropertys* other);
-  friend void swap(PackPropertys& a, PackPropertys& b) {
+  void Swap(PackProperties* other);
+  friend void swap(PackProperties& a, PackProperties& b) {
     a.Swap(&b);
   }
 
   // implements Message ----------------------------------------------
 
-  inline PackPropertys* New() const final {
-    return CreateMaybeMessage<PackPropertys>(nullptr);
+  inline PackProperties* New() const final {
+    return CreateMaybeMessage<PackProperties>(nullptr);
   }
 
-  PackPropertys* New(::PROTOBUF_NAMESPACE_ID::Arena* arena) const final {
-    return CreateMaybeMessage<PackPropertys>(arena);
+  PackProperties* New(::PROTOBUF_NAMESPACE_ID::Arena* arena) const final {
+    return CreateMaybeMessage<PackProperties>(arena);
   }
   void CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) final;
   void MergeFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) final;
-  void CopyFrom(const PackPropertys& from);
-  void MergeFrom(const PackPropertys& from);
+  void CopyFrom(const PackProperties& from);
+  void MergeFrom(const PackProperties& from);
   PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
   bool IsInitialized() const final;
 
@@ -294,10 +294,10 @@ class PackPropertys :
   inline void SharedCtor();
   inline void SharedDtor();
   void SetCachedSize(int size) const final;
-  void InternalSwap(PackPropertys* other);
+  void InternalSwap(PackProperties* other);
   friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
   static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dtpb.PackPropertys";
+    return "dtpb.PackProperties";
   }
   private:
   inline ::PROTOBUF_NAMESPACE_ID::Arena* GetArenaNoVirtual() const {
@@ -333,7 +333,7 @@ class PackPropertys :
   const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dtpb::PackProperty >&
       property() const;
 
-  // @@protoc_insertion_point(class_scope:dtpb.PackPropertys)
+  // @@protoc_insertion_point(class_scope:dtpb.PackProperties)
  private:
   class HasBitSetters;
 
@@ -374,35 +374,35 @@ inline void PackProperty::set_num_rows(::PROTOBUF_NAMESPACE_ID::int64 value) {
 
 // -------------------------------------------------------------------
 
-// PackPropertys
+// PackProperties
 
 // repeated .dtpb.PackProperty property = 1;
-inline int PackPropertys::property_size() const {
+inline int PackProperties::property_size() const {
   return property_.size();
 }
-inline void PackPropertys::clear_property() {
+inline void PackProperties::clear_property() {
   property_.Clear();
 }
-inline ::dtpb::PackProperty* PackPropertys::mutable_property(int index) {
-  // @@protoc_insertion_point(field_mutable:dtpb.PackPropertys.property)
+inline ::dtpb::PackProperty* PackProperties::mutable_property(int index) {
+  // @@protoc_insertion_point(field_mutable:dtpb.PackProperties.property)
   return property_.Mutable(index);
 }
 inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dtpb::PackProperty >*
-PackPropertys::mutable_property() {
-  // @@protoc_insertion_point(field_mutable_list:dtpb.PackPropertys.property)
+PackProperties::mutable_property() {
+  // @@protoc_insertion_point(field_mutable_list:dtpb.PackProperties.property)
   return &property_;
 }
-inline const ::dtpb::PackProperty& PackPropertys::property(int index) const {
-  // @@protoc_insertion_point(field_get:dtpb.PackPropertys.property)
+inline const ::dtpb::PackProperty& PackProperties::property(int index) const {
+  // @@protoc_insertion_point(field_get:dtpb.PackProperties.property)
   return property_.Get(index);
 }
-inline ::dtpb::PackProperty* PackPropertys::add_property() {
-  // @@protoc_insertion_point(field_add:dtpb.PackPropertys.property)
+inline ::dtpb::PackProperty* PackProperties::add_property() {
+  // @@protoc_insertion_point(field_add:dtpb.PackProperties.property)
   return property_.Add();
 }
 inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dtpb::PackProperty >&
-PackPropertys::property() const {
-  // @@protoc_insertion_point(field_list:dtpb.PackPropertys.property)
+PackProperties::property() const {
+  // @@protoc_insertion_point(field_list:dtpb.PackProperties.property)
   return property_;
 }
 

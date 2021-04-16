@@ -21,11 +21,26 @@ class PackPropertyDefaultTypeInternal {
  public:
   ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<PackProperty> _instance;
 } _PackProperty_default_instance_;
-class PackPropertysDefaultTypeInternal {
+class PackPropertiesDefaultTypeInternal {
  public:
-  ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<PackPropertys> _instance;
-} _PackPropertys_default_instance_;
+  ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<PackProperties> _instance;
+} _PackProperties_default_instance_;
 }  // namespace dtpb
+static void InitDefaultsscc_info_PackProperties_dmfile_2eproto() {
+  GOOGLE_PROTOBUF_VERIFY_VERSION;
+
+  {
+    void* ptr = &::dtpb::_PackProperties_default_instance_;
+    new (ptr) ::dtpb::PackProperties();
+    ::PROTOBUF_NAMESPACE_ID::internal::OnShutdownDestroyMessage(ptr);
+  }
+  ::dtpb::PackProperties::InitAsDefaultInstance();
+}
+
+::PROTOBUF_NAMESPACE_ID::internal::SCCInfo<1> scc_info_PackProperties_dmfile_2eproto =
+    {{ATOMIC_VAR_INIT(::PROTOBUF_NAMESPACE_ID::internal::SCCInfoBase::kUninitialized), 1, InitDefaultsscc_info_PackProperties_dmfile_2eproto}, {
+      &scc_info_PackProperty_dmfile_2eproto.base,}};
+
 static void InitDefaultsscc_info_PackProperty_dmfile_2eproto() {
   GOOGLE_PROTOBUF_VERIFY_VERSION;
 
@@ -40,21 +55,6 @@ static void InitDefaultsscc_info_PackProperty_dmfile_2eproto() {
 ::PROTOBUF_NAMESPACE_ID::internal::SCCInfo<0> scc_info_PackProperty_dmfile_2eproto =
     {{ATOMIC_VAR_INIT(::PROTOBUF_NAMESPACE_ID::internal::SCCInfoBase::kUninitialized), 0, InitDefaultsscc_info_PackProperty_dmfile_2eproto}, {}};
 
-static void InitDefaultsscc_info_PackPropertys_dmfile_2eproto() {
-  GOOGLE_PROTOBUF_VERIFY_VERSION;
-
-  {
-    void* ptr = &::dtpb::_PackPropertys_default_instance_;
-    new (ptr) ::dtpb::PackPropertys();
-    ::PROTOBUF_NAMESPACE_ID::internal::OnShutdownDestroyMessage(ptr);
-  }
-  ::dtpb::PackPropertys::InitAsDefaultInstance();
-}
-
-::PROTOBUF_NAMESPACE_ID::internal::SCCInfo<1> scc_info_PackPropertys_dmfile_2eproto =
-    {{ATOMIC_VAR_INIT(::PROTOBUF_NAMESPACE_ID::internal::SCCInfoBase::kUninitialized), 1, InitDefaultsscc_info_PackPropertys_dmfile_2eproto}, {
-      &scc_info_PackProperty_dmfile_2eproto.base,}};
-
 static ::PROTOBUF_NAMESPACE_ID::Metadata file_level_metadata_dmfile_2eproto[2];
 static constexpr ::PROTOBUF_NAMESPACE_ID::EnumDescriptor const** file_level_enum_descriptors_dmfile_2eproto = nullptr;
 static constexpr ::PROTOBUF_NAMESPACE_ID::ServiceDescriptor const** file_level_service_descriptors_dmfile_2eproto = nullptr;
@@ -67,39 +67,39 @@ const ::PROTOBUF_NAMESPACE_ID::uint32 TableStruct_dmfile_2eproto::offsets[] PROT
   ~0u,  // no _weak_field_map_
   PROTOBUF_FIELD_OFFSET(::dtpb::PackProperty, num_rows_),
   0,
-  PROTOBUF_FIELD_OFFSET(::dtpb::PackPropertys, _has_bits_),
-  PROTOBUF_FIELD_OFFSET(::dtpb::PackPropertys, _internal_metadata_),
+  PROTOBUF_FIELD_OFFSET(::dtpb::PackProperties, _has_bits_),
+  PROTOBUF_FIELD_OFFSET(::dtpb::PackProperties, _internal_metadata_),
   ~0u,  // no _extensions_
   ~0u,  // no _oneof_case_
   ~0u,  // no _weak_field_map_
-  PROTOBUF_FIELD_OFFSET(::dtpb::PackPropertys, property_),
+  PROTOBUF_FIELD_OFFSET(::dtpb::PackProperties, property_),
   ~0u,
 };
 static const ::PROTOBUF_NAMESPACE_ID::internal::MigrationSchema schemas[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
   { 0, 6, sizeof(::dtpb::PackProperty)},
-  { 7, 13, sizeof(::dtpb::PackPropertys)},
+  { 7, 13, sizeof(::dtpb::PackProperties)},
 };
 
 static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] = {
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::dtpb::_PackProperty_default_instance_),
-  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::dtpb::_PackPropertys_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::dtpb::_PackProperties_default_instance_),
 };
 
 const char descriptor_table_protodef_dmfile_2eproto[] =
   "\n\014dmfile.proto\022\004dtpb\" \n\014PackProperty\022\020\n\010"
-  "num_rows\030\001 \002(\003\"5\n\rPackPropertys\022$\n\010prope"
-  "rty\030\001 \003(\0132\022.dtpb.PackProperty"
+  "num_rows\030\001 \002(\003\"6\n\016PackProperties\022$\n\010prop"
+  "erty\030\001 \003(\0132\022.dtpb.PackProperty"
   ;
 static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_dmfile_2eproto_deps[1] = {
 };
 static ::PROTOBUF_NAMESPACE_ID::internal::SCCInfoBase*const descriptor_table_dmfile_2eproto_sccs[2] = {
+  &scc_info_PackProperties_dmfile_2eproto.base,
   &scc_info_PackProperty_dmfile_2eproto.base,
-  &scc_info_PackPropertys_dmfile_2eproto.base,
 };
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_dmfile_2eproto_once;
 static bool descriptor_table_dmfile_2eproto_initialized = false;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_dmfile_2eproto = {
-  &descriptor_table_dmfile_2eproto_initialized, descriptor_table_protodef_dmfile_2eproto, "dmfile.proto", 109,
+  &descriptor_table_dmfile_2eproto_initialized, descriptor_table_protodef_dmfile_2eproto, "dmfile.proto", 110,
   &descriptor_table_dmfile_2eproto_once, descriptor_table_dmfile_2eproto_sccs, descriptor_table_dmfile_2eproto_deps, 2, 0,
   schemas, file_default_instances, TableStruct_dmfile_2eproto::offsets,
   file_level_metadata_dmfile_2eproto, 2, file_level_enum_descriptors_dmfile_2eproto, file_level_service_descriptors_dmfile_2eproto,
@@ -380,54 +380,54 @@ void PackProperty::InternalSwap(PackProperty* other) {
 
 // ===================================================================
 
-void PackPropertys::InitAsDefaultInstance() {
+void PackProperties::InitAsDefaultInstance() {
 }
-class PackPropertys::HasBitSetters {
+class PackProperties::HasBitSetters {
  public:
-  using HasBits = decltype(std::declval<PackPropertys>()._has_bits_);
+  using HasBits = decltype(std::declval<PackProperties>()._has_bits_);
 };
 
 #if !defined(_MSC_VER) || _MSC_VER >= 1900
-const int PackPropertys::kPropertyFieldNumber;
+const int PackProperties::kPropertyFieldNumber;
 #endif  // !defined(_MSC_VER) || _MSC_VER >= 1900
 
-PackPropertys::PackPropertys()
+PackProperties::PackProperties()
   : ::PROTOBUF_NAMESPACE_ID::Message(), _internal_metadata_(nullptr) {
   SharedCtor();
-  // @@protoc_insertion_point(constructor:dtpb.PackPropertys)
+  // @@protoc_insertion_point(constructor:dtpb.PackProperties)
 }
-PackPropertys::PackPropertys(const PackPropertys& from)
+PackProperties::PackProperties(const PackProperties& from)
   : ::PROTOBUF_NAMESPACE_ID::Message(),
       _internal_metadata_(nullptr),
       _has_bits_(from._has_bits_),
       property_(from.property_) {
   _internal_metadata_.MergeFrom(from._internal_metadata_);
-  // @@protoc_insertion_point(copy_constructor:dtpb.PackPropertys)
+  // @@protoc_insertion_point(copy_constructor:dtpb.PackProperties)
 }
 
-void PackPropertys::SharedCtor() {
-  ::PROTOBUF_NAMESPACE_ID::internal::InitSCC(&scc_info_PackPropertys_dmfile_2eproto.base);
+void PackProperties::SharedCtor() {
+  ::PROTOBUF_NAMESPACE_ID::internal::InitSCC(&scc_info_PackProperties_dmfile_2eproto.base);
 }
 
-PackPropertys::~PackPropertys() {
-  // @@protoc_insertion_point(destructor:dtpb.PackPropertys)
+PackProperties::~PackProperties() {
+  // @@protoc_insertion_point(destructor:dtpb.PackProperties)
   SharedDtor();
 }
 
-void PackPropertys::SharedDtor() {
+void PackProperties::SharedDtor() {
 }
 
-void PackPropertys::SetCachedSize(int size) const {
+void PackProperties::SetCachedSize(int size) const {
   _cached_size_.Set(size);
 }
-const PackPropertys& PackPropertys::default_instance() {
-  ::PROTOBUF_NAMESPACE_ID::internal::InitSCC(&::scc_info_PackPropertys_dmfile_2eproto.base);
+const PackProperties& PackProperties::default_instance() {
+  ::PROTOBUF_NAMESPACE_ID::internal::InitSCC(&::scc_info_PackProperties_dmfile_2eproto.base);
   return *internal_default_instance();
 }
 
 
-void PackPropertys::Clear() {
-// @@protoc_insertion_point(message_clear_start:dtpb.PackPropertys)
+void PackProperties::Clear() {
+// @@protoc_insertion_point(message_clear_start:dtpb.PackProperties)
   ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
@@ -438,7 +438,7 @@ void PackPropertys::Clear() {
 }
 
 #if GOOGLE_PROTOBUF_ENABLE_EXPERIMENTAL_PARSER
-const char* PackPropertys::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+const char* PackProperties::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
 #define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
   while (!ctx->Done(&ptr)) {
     ::PROTOBUF_NAMESPACE_ID::uint32 tag;
@@ -477,11 +477,11 @@ failure:
 #undef CHK_
 }
 #else  // GOOGLE_PROTOBUF_ENABLE_EXPERIMENTAL_PARSER
-bool PackPropertys::MergePartialFromCodedStream(
+bool PackProperties::MergePartialFromCodedStream(
     ::PROTOBUF_NAMESPACE_ID::io::CodedInputStream* input) {
 #define DO_(EXPRESSION) if (!PROTOBUF_PREDICT_TRUE(EXPRESSION)) goto failure
   ::PROTOBUF_NAMESPACE_ID::uint32 tag;
-  // @@protoc_insertion_point(parse_start:dtpb.PackPropertys)
+  // @@protoc_insertion_point(parse_start:dtpb.PackProperties)
   for (;;) {
     ::std::pair<::PROTOBUF_NAMESPACE_ID::uint32, bool> p = input->ReadTagWithCutoffNoLastTag(127u);
     tag = p.first;
@@ -510,18 +510,18 @@ bool PackPropertys::MergePartialFromCodedStream(
     }
   }
 success:
-  // @@protoc_insertion_point(parse_success:dtpb.PackPropertys)
+  // @@protoc_insertion_point(parse_success:dtpb.PackProperties)
   return true;
 failure:
-  // @@protoc_insertion_point(parse_failure:dtpb.PackPropertys)
+  // @@protoc_insertion_point(parse_failure:dtpb.PackProperties)
   return false;
 #undef DO_
 }
 #endif  // GOOGLE_PROTOBUF_ENABLE_EXPERIMENTAL_PARSER
 
-void PackPropertys::SerializeWithCachedSizes(
+void PackProperties::SerializeWithCachedSizes(
     ::PROTOBUF_NAMESPACE_ID::io::CodedOutputStream* output) const {
-  // @@protoc_insertion_point(serialize_start:dtpb.PackPropertys)
+  // @@protoc_insertion_point(serialize_start:dtpb.PackProperties)
   ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
   (void) cached_has_bits;
 
@@ -538,12 +538,12 @@ void PackPropertys::SerializeWithCachedSizes(
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::SerializeUnknownFields(
         _internal_metadata_.unknown_fields(), output);
   }
-  // @@protoc_insertion_point(serialize_end:dtpb.PackPropertys)
+  // @@protoc_insertion_point(serialize_end:dtpb.PackProperties)
 }
 
-::PROTOBUF_NAMESPACE_ID::uint8* PackPropertys::InternalSerializeWithCachedSizesToArray(
+::PROTOBUF_NAMESPACE_ID::uint8* PackProperties::InternalSerializeWithCachedSizesToArray(
     ::PROTOBUF_NAMESPACE_ID::uint8* target) const {
-  // @@protoc_insertion_point(serialize_to_array_start:dtpb.PackPropertys)
+  // @@protoc_insertion_point(serialize_to_array_start:dtpb.PackProperties)
   ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
   (void) cached_has_bits;
 
@@ -559,12 +559,12 @@ void PackPropertys::SerializeWithCachedSizes(
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::SerializeUnknownFieldsToArray(
         _internal_metadata_.unknown_fields(), target);
   }
-  // @@protoc_insertion_point(serialize_to_array_end:dtpb.PackPropertys)
+  // @@protoc_insertion_point(serialize_to_array_end:dtpb.PackProperties)
   return target;
 }
 
-size_t PackPropertys::ByteSizeLong() const {
-// @@protoc_insertion_point(message_byte_size_start:dtpb.PackPropertys)
+size_t PackProperties::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dtpb.PackProperties)
   size_t total_size = 0;
 
   if (_internal_metadata_.have_unknown_fields()) {
@@ -592,23 +592,23 @@ size_t PackPropertys::ByteSizeLong() const {
   return total_size;
 }
 
-void PackPropertys::MergeFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) {
-// @@protoc_insertion_point(generalized_merge_from_start:dtpb.PackPropertys)
+void PackProperties::MergeFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+// @@protoc_insertion_point(generalized_merge_from_start:dtpb.PackProperties)
   GOOGLE_DCHECK_NE(&from, this);
-  const PackPropertys* source =
-      ::PROTOBUF_NAMESPACE_ID::DynamicCastToGenerated<PackPropertys>(
+  const PackProperties* source =
+      ::PROTOBUF_NAMESPACE_ID::DynamicCastToGenerated<PackProperties>(
           &from);
   if (source == nullptr) {
-  // @@protoc_insertion_point(generalized_merge_from_cast_fail:dtpb.PackPropertys)
+  // @@protoc_insertion_point(generalized_merge_from_cast_fail:dtpb.PackProperties)
     ::PROTOBUF_NAMESPACE_ID::internal::ReflectionOps::Merge(from, this);
   } else {
-  // @@protoc_insertion_point(generalized_merge_from_cast_success:dtpb.PackPropertys)
+  // @@protoc_insertion_point(generalized_merge_from_cast_success:dtpb.PackProperties)
     MergeFrom(*source);
   }
 }
 
-void PackPropertys::MergeFrom(const PackPropertys& from) {
-// @@protoc_insertion_point(class_specific_merge_from_start:dtpb.PackPropertys)
+void PackProperties::MergeFrom(const PackProperties& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:dtpb.PackProperties)
   GOOGLE_DCHECK_NE(&from, this);
   _internal_metadata_.MergeFrom(from._internal_metadata_);
   ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
@@ -617,37 +617,37 @@ void PackPropertys::MergeFrom(const PackPropertys& from) {
   property_.MergeFrom(from.property_);
 }
 
-void PackPropertys::CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) {
-// @@protoc_insertion_point(generalized_copy_from_start:dtpb.PackPropertys)
+void PackProperties::CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+// @@protoc_insertion_point(generalized_copy_from_start:dtpb.PackProperties)
   if (&from == this) return;
   Clear();
   MergeFrom(from);
 }
 
-void PackPropertys::CopyFrom(const PackPropertys& from) {
-// @@protoc_insertion_point(class_specific_copy_from_start:dtpb.PackPropertys)
+void PackProperties::CopyFrom(const PackProperties& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dtpb.PackProperties)
   if (&from == this) return;
   Clear();
   MergeFrom(from);
 }
 
-bool PackPropertys::IsInitialized() const {
+bool PackProperties::IsInitialized() const {
   if (!::PROTOBUF_NAMESPACE_ID::internal::AllAreInitialized(this->property())) return false;
   return true;
 }
 
-void PackPropertys::Swap(PackPropertys* other) {
+void PackProperties::Swap(PackProperties* other) {
   if (other == this) return;
   InternalSwap(other);
 }
-void PackPropertys::InternalSwap(PackPropertys* other) {
+void PackProperties::InternalSwap(PackProperties* other) {
   using std::swap;
   _internal_metadata_.Swap(&other->_internal_metadata_);
   swap(_has_bits_[0], other->_has_bits_[0]);
   CastToBase(&property_)->InternalSwap(CastToBase(&other->property_));
 }
 
-::PROTOBUF_NAMESPACE_ID::Metadata PackPropertys::GetMetadata() const {
+::PROTOBUF_NAMESPACE_ID::Metadata PackProperties::GetMetadata() const {
   return GetMetadataStatic();
 }
 
@@ -658,8 +658,8 @@ PROTOBUF_NAMESPACE_OPEN
 template<> PROTOBUF_NOINLINE ::dtpb::PackProperty* Arena::CreateMaybeMessage< ::dtpb::PackProperty >(Arena* arena) {
   return Arena::CreateInternal< ::dtpb::PackProperty >(arena);
 }
-template<> PROTOBUF_NOINLINE ::dtpb::PackPropertys* Arena::CreateMaybeMessage< ::dtpb::PackPropertys >(Arena* arena) {
-  return Arena::CreateInternal< ::dtpb::PackPropertys >(arena);
+template<> PROTOBUF_NOINLINE ::dtpb::PackProperties* Arena::CreateMaybeMessage< ::dtpb::PackProperties >(Arena* arena) {
+  return Arena::CreateInternal< ::dtpb::PackProperties >(arena);
 }
 PROTOBUF_NAMESPACE_CLOSE
 
