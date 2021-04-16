@@ -1177,12 +1177,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext &         dm
     auto my_delta_index = delta_snap->shared_delta_index->tryClone(delta_snap->rows, delta_snap->deletes);
     auto my_delta_tree  = my_delta_index->getDeltaTree();
 
-<<<<<<< HEAD
-    HandleRange relevant_range = mergeRanges(read_ranges);
-=======
-    RowKeyRange relevant_range = dm_context.enable_relevant_place ? mergeRanges(read_ranges, is_common_handle, rowkey_column_size)
-                                                                  : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
->>>>>>> c72c33172... Delete range can not remove expected data (#1783)
+    HandleRange relevant_range = dm_context.enable_relevant_place ? mergeRanges(read_ranges) : HandleRange::newAll();
 
     auto [my_placed_rows, my_placed_deletes] = my_delta_index->getPlacedStatus();
 
@@ -1310,11 +1305,7 @@ bool Segment::placeDelete(const DMContext &         dm_context,
             compacted_index->end(),
             dm_context.stable_pack_rows);
 
-<<<<<<< HEAD
-        delete_stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(delete_stream, delete_range.shrink(relevant_range), 0);
-=======
-        delete_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(delete_stream, delete_range, 0);
->>>>>>> c72c33172... Delete range can not remove expected data (#1783)
+        delete_stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(delete_stream, delete_range, 0);
 
         // Try to merge into big block. 128 MB should be enough.
         SquashingBlockInputStream squashed_delete_stream(delete_stream, 0, 128 * (1UL << 20));

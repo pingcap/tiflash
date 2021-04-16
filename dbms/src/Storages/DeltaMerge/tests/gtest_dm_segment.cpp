@@ -194,68 +194,6 @@ try
 }
 CATCH
 
-<<<<<<< HEAD
-=======
-
-TEST_F(Segment_test, ReadWithMoreAdvacedDeltaIndex)
-try
-{
-    // Test the case that reading rows with an advance DeltaIndex
-    //  1. Thread A creates a delta snapshot with 100 rows.
-    //  2. Thread B inserts 100 rows into the delta
-    //  3. Thread B reads and place 200 rows to a new DeltaTree, and update the `shared_delta_index` to 200
-    //  4. Thread A read with an DeltaTree that only placed 100 rows but `placed_rows` in `shared_delta_index` with 200
-    //  5. Thread A use the DeltaIndex with placed_rows = 200 to do the merge in DeltaMergeBlockInputStream
-    size_t offset     = 0;
-    auto   write_rows = [&](size_t rows) {
-        Block block = DMTestEnv::prepareSimpleWriteBlock(offset, offset + rows, false);
-        offset += rows;
-        // write to segment
-        segment->write(dmContext(), block);
-    };
-
-    auto check_rows = [&](size_t expected_rows) {
-        auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, expected_rows);
-    };
-
-    {
-        // check segment
-        segment->check(dmContext(), "test");
-    }
-
-    // Thread A
-    write_rows(100);
-    check_rows(100);
-    auto snap = segment->createSnapshot(dmContext());
-
-    // Thread B
-    write_rows(100);
-    check_rows(200);
-
-    // Thread A
-    {
-        auto in = segment->getInputStream(
-            dmContext(), *tableColumns(), snap, {RowKeyRange::newAll(false, 1)}, {}, MAX_UINT64, DEFAULT_BLOCK_SIZE);
-        int num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, 100);
-    }
-}
-CATCH
-
 class SegmentDeletionRelevantPlace_test : public Segment_test, //
                                           public testing::WithParamInterface<bool>
 {
@@ -283,7 +221,7 @@ try
         segment->write(dmContext(), std::move(block));
     }
 
-    auto get_rows = [&](const RowKeyRange & range) {
+    auto get_rows = [&](const HandleRange & range) {
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {range});
         in->readPrefix();
         size_t rows = 0;
@@ -297,16 +235,15 @@ try
     };
 
     // First place the block packs, so that we can only place DeleteRange below.
-    get_rows(RowKeyRange::fromHandleRange(HandleRange::newAll()));
+    get_rows(HandleRange::newAll());
 
     {
-        HandleRange remove(100, 200);
-        segment->write(dmContext(), {RowKeyRange::fromHandleRange(remove)});
+        segment->write(dmContext(), {HandleRange(100, 200)});
     }
 
     // The first call of get_rows below will place the DeleteRange into delta index.
-    auto rows1 = get_rows(RowKeyRange::fromHandleRange(HandleRange(0, 150)));
-    auto rows2 = get_rows(RowKeyRange::fromHandleRange(HandleRange(150, 300)));
+    auto rows1 = get_rows(HandleRange(0, 150));
+    auto rows2 = get_rows(HandleRange(150, 300));
 
     ASSERT_EQ(rows1, (size_t)100);
     ASSERT_EQ(rows2, (size_t)100);
@@ -315,7 +252,7 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(WhetherEnableRelevantPlace, SegmentDeletionRelevantPlace_test, testing::Values(true, false));
 
->>>>>>> c72c33172... Delete range can not remove expected data (#1783)
+
 class SegmentDeletion_test : public Segment_test, //
                              public testing::WithParamInterface<std::tuple<bool, bool>>
 {
