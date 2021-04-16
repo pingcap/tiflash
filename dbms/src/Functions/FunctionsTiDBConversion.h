@@ -474,8 +474,8 @@ struct TiDBConvertToInteger
                 else
                 {
                     MyDateTime date_time(vec_from[i]);
-                    vec_to[i] = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                        + date_time.hour * 1000 + date_time.minute * 100 + date_time.second;
+                    vec_to[i] = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000
+                        + date_time.hour * 10000 + date_time.minute * 100 + date_time.second;
                 }
             }
         }
