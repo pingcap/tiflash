@@ -35,7 +35,8 @@ extern DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64                      file_id,
                                     const String &              parent_path,
-                                    bool                        need_rate_limit);
+                                    bool                        need_rate_limit,
+                                    bool                        single_file_mode);
 
 namespace tests
 {
@@ -122,8 +123,14 @@ public:
     {
         auto input_stream          = std::make_shared<OneBlockInputStream>(block);
         auto [store_path, file_id] = store->preAllocateIngestFile();
-        auto dmfile                = writeIntoNewDMFile(
-            context, std::make_shared<ColumnDefines>(store->getTableColumns()), input_stream, file_id, store_path, false);
+        auto dmfile                = writeIntoNewDMFile(context,
+                                         std::make_shared<ColumnDefines>(store->getTableColumns()),
+                                         input_stream,
+                                         file_id,
+                                         store_path,
+                                         /*need_rate_limit*/ false,
+                                         /*single_file_mode*/ DMTestEnv::getPseudoRandomNumber() % 2);
+
 
         store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
 
@@ -880,7 +887,7 @@ try
         // verify that ingest_range must not less than range1.merge(range2)
         ASSERT_ROWKEY_RANGE_EQ(ingest_range, range1.merge(range2).merge(ingest_range));
 
-        store->ingestFiles(dm_context, ingest_range, file_ids, true);
+        store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
     }
 
 

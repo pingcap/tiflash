@@ -79,9 +79,10 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
                              const BlockInputStreamPtr & input_stream,
                              UInt64                      file_id,
                              const String &              parent_path,
-                             bool                        need_rate_limit)
+                             bool                        need_rate_limit,
+                             bool                        single_file_mode)
 {
-    auto   dmfile        = DMFile::create(file_id, parent_path, dm_context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
+    auto   dmfile        = DMFile::create(file_id, parent_path, single_file_mode);
     auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, need_rate_limit);
     auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
@@ -137,9 +138,11 @@ StableValueSpacePtr createNewStable(DMContext &                 context,
     auto delegate   = context.path_pool.getStableDiskDelegator();
     auto store_path = delegate.choosePath();
 
-    PageId dmfile_id = context.storage_pool.newDataPageId();
-    auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path, need_rate_limit);
-    auto   stable    = std::make_shared<StableValueSpace>(stable_id);
+    PageId dmfile_id     = context.storage_pool.newDataPageId();
+    auto   dmfile_single = context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile;
+    auto   dmfile        = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path, need_rate_limit, dmfile_single);
+
+    auto stable = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dmfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
     stable->saveMeta(wbs.meta);
     wbs.data.putExternal(dmfile_id, 0);

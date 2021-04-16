@@ -18,7 +18,8 @@ extern DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64                      file_id,
                                     const String &              parent_path,
-                                    bool                        need_rate_limit);
+                                    bool                        need_rate_limit,
+                                    bool                        single_file_mode);
 
 namespace tests
 {
@@ -1041,8 +1042,13 @@ public:
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto delegate     = context.path_pool.getStableDiskDelegator();
         auto store_path   = delegate.choosePath();
-        auto dmfile
-            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, false);
+        auto dmfile       = writeIntoNewDMFile(context,
+                                         std::make_shared<ColumnDefines>(*tableColumns()),
+                                         input_stream,
+                                         file_id,
+                                         store_path,
+                                         /*need_rate_limit*/ false,
+                                         /*single_file_mode*/ DMTestEnv::getPseudoRandomNumber() % 2);
 
         delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
