@@ -134,7 +134,7 @@ void StorageDeltaMerge::applyTableColumnInfo()
         }
     }
 
-    ColumnsDescription new_columns(columns.ordinary, columns.materialized, columns.materialized, columns.defaults);
+    ColumnsDescription new_columns(columns.ordinary, columns.materialized, columns.aliases, columns.defaults);
     size_t pks_combined_bytes = 0;
     auto all_columns = columns.getAllPhysical();
 
