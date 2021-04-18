@@ -1361,16 +1361,19 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             const auto & seg = iter->second;
             // ignore segments that is already checked for the current gc_safe_point
             if (!gc_checked_segments.count(seg->segmentId()))
-                segments_to_check.emplace_back(seg->getRowKeyRange(), seg);
+                segments_to_check.emplace_back(std::make_pair(seg->getRowKeyRange(), seg));
             checked_num++;
         }
     }
+
+    if (segments_to_check.empty())
+        return 0;
 
     // We get a separate snapshot for each segment. Even the GC-routine for one segment takes a long time,
     // we won't block other threads from reading / writing / applying DDL for a long time.
     Int64 gc_segments_num = 0;
     auto  iter            = segments_to_check.begin();
-    while (gc_segments_num < limit)
+    while (iter != segments_to_check.end() && gc_segments_num < limit)
     {
         // If the store is shut down, give up running GC on it.
         if (shutdown_called.load(std::memory_order_relaxed))
@@ -1426,6 +1429,9 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             e.rethrow();
         }
     }
+    if (iter == segments_to_check.end())
+        iter = segments_to_check.begin();
+    next_gc_check_key = iter->first.start;
     return gc_segments_num;
 }
 
