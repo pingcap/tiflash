@@ -1304,13 +1304,14 @@ namespace GC
 {
 // Returns true if it needs gc.
 // This is for optimization purpose, does not mean to be accurate.
-bool shouldCompactWithStable(const SegmentSnapshotPtr & snap, DB::Timestamp gc_safepoint, double ratio_threshold)
+bool shouldCompactWithStable(const SegmentSnapshotPtr & snap, DB::Timestamp gc_safepoint, double ratio_threshold, Logger *log)
 {
     // Always GC.
     if (ratio_threshold < 1.0)
         return true;
 
     auto & property = snap->stable->property;
+    LOG_DEBUG(log, "got property " << toString(property));
     // No data older than safe_point to GC.
     if (property.min_ts > gc_safepoint)
         return false;
@@ -1365,7 +1366,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             checked_num++;
         }
     }
-    LOG_DEBUG(log, "[DeltaMergeStore::onSyncGc] begin to gc with next_gc_check_key "
+    LOG_DEBUG(log, "Begin to gc start with key "
                   << next_gc_check_key.toDebugString()
                   << " gc_safe_point_updated "
                   << gc_safe_point_updated
@@ -1417,7 +1418,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             const bool should_compact
                 = GC::shouldCompactWithStable(segment_snap,
                                               latest_gc_safe_point.load(std::memory_order_relaxed),
-                                              global_context.getSettingsRef().dt_segment_bg_gc_ratio_threhold_to_trigger_gc);
+                                              global_context.getSettingsRef().dt_segment_bg_gc_ratio_threhold_to_trigger_gc, log);
             if (should_compact)
             {
                 ThreadType type = ThreadType::BG_MergeDelta;
