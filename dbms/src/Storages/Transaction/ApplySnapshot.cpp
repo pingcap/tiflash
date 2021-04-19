@@ -41,8 +41,6 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
     auto old_region = getRegion(region_id);
     UInt64 old_applied_index = 0;
 
-    Stopwatch watch;
-
     /**
      * When applying snapshot of a region, its range must not be overlapped with any other(different id) region's.
      */
@@ -90,9 +88,6 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
         });
     }
 
-    auto elapse_prepare = watch.elapsedMilliseconds();
-    watch.restart();
-
     {
         auto table_id = new_region->getMappedTableID();
         if (auto storage = tmt.getStorages().get(table_id); storage)
@@ -138,22 +133,13 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
         }
     }
 
-    auto elapse_complete = watch.elapsedMilliseconds();
-    watch.restart();
-
     onSnapshot(new_region, old_region, old_applied_index, tmt);
-    auto elapse_on_snapshot = watch.elapsedMilliseconds();
-    LOG_WARNING(log,
-        "elapse_prepare: " << elapse_prepare << "ms, elapse_complete: " << elapse_complete
-                           << "ms, elapse_on_snapshot: " << elapse_on_snapshot << "ms");
 }
 
 template <typename RegionPtrWrap>
 void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
 {
     RegionID region_id = new_region_wrap->id();
-
-    Stopwatch watch;
 
     {
         auto table_id = new_region_wrap->getMappedTableID();
@@ -187,9 +173,6 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
         }
     }
 
-    auto elapse_ingest = watch.elapsedMilliseconds();
-    watch.restart();
-
     {
         const auto range = new_region_wrap->getRange();
         auto & region_table = tmt.getRegionTable();
@@ -214,9 +197,6 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
         }
         // For `RegionPtrWithSnapshotFiles`, don't need to flush cache.
     }
-
-    auto elapse_flush = watch.elapsedMilliseconds();
-    watch.restart();
 
     RegionPtr new_region = new_region_wrap.base;
     {
@@ -248,10 +228,6 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
-    auto elapse_swap = watch.elapsedMilliseconds();
-
-    LOG_WARNING(
-        log, "elapse_ingest: " << elapse_ingest << "ms, elapse_flush: " << elapse_flush << "ms, elapse_swap: " << elapse_swap << "ms");
 }
 
 extern RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr &, Context &);
