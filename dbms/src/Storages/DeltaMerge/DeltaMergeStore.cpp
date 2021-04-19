@@ -1427,9 +1427,12 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                 ThreadType type = ThreadType::BG_MergeDelta;
                 segment         = segmentMergeDelta(*dm_context, segment, /*is_foreground*/ false);
                 // Continue to check whether we need to apply more tasks on this segment
-                checkSegmentUpdate(dm_context, segment, type);
-                gc_segments_num++;
-                LOG_INFO(log, "GC-merge-delta done [range=" << key_range.toDebugString() << "] [table=" << table_name << "]");
+                if (segment)
+                {
+                    checkSegmentUpdate(dm_context, segment, type);
+                    gc_segments_num++;
+                    LOG_INFO(log, "GC-merge-delta done [range=" << key_range.toDebugString() << "] [table=" << table_name << "]");
+                }
             }
         }
         catch (Exception & e)
