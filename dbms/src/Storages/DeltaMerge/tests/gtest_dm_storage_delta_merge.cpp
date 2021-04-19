@@ -211,14 +211,55 @@ try
     ASSERT_EQ(storage->getDatabaseName(), db_name);
     ASSERT_FALSE(storage->storeInited());
 
-
-    // Rename database name
+    // Rename database name before store object is created.
     const String new_db_name = "new_" + storage->getDatabaseName();
     storage->rename(path_name, new_db_name, table_name, table_name);
-    ASSERT_TRUE(storage->storeInited());
+    ASSERT_FALSE(storage->storeInited());
     ASSERT_EQ(storage->getTableName(), table_name);
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
 
+    // prepare block data
+    Block sample;
+    {
+        ColumnWithTypeAndName col1;
+        col1.name = "col1";
+        col1.type = std::make_shared<DataTypeInt64>();
+        {
+            IColumn::MutablePtr m_col = col1.type->createColumn();
+            // insert form large to small
+            for (int i = 0; i < 100; i++)
+            {
+                Field field = Int64(99 - i);
+                m_col->insert(field);
+            }
+            col1.column = std::move(m_col);
+        }
+        sample.insert(col1);
+
+        ColumnWithTypeAndName col2;
+        col2.name = "col2";
+        col2.type = std::make_shared<DataTypeString>();
+        {
+            IColumn::MutablePtr m_col2 = col2.type->createColumn();
+            for (int i = 0; i < 100; i++)
+            {
+                Field field("a", 1);
+                m_col2->insert(field);
+            }
+            col2.column = std::move(m_col2);
+        }
+        sample.insert(col2);
+    }
+    // Writing will create store object.
+    {
+        ASTPtr               insertptr(new ASTInsertQuery());
+        BlockOutputStreamPtr output = storage->write(insertptr, ctx.getSettingsRef());
+        output->writePrefix();
+        output->write(sample);
+        output->writeSuffix();
+        ASSERT_TRUE(storage->storeInited());
+    }
+    
     // Rename table name
     String new_table_name = "new_" + storage->getTableName();
     storage->rename(path_name, new_db_name, new_table_name, new_table_name);
