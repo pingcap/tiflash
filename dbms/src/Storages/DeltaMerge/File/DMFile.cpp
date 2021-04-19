@@ -264,6 +264,9 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
     MetaPackInfo meta_pack_info{.meta_offset = 0, .meta_size = 0, .pack_stat_offset = 0, .pack_stat_size = 0};
     if (isSingleFileMode())
     {
+        // Read the `Footer` part from disk.
+        /// Note that we only init `Footer.MetaPackInfo` here. `sub_file_stat` is loaded in `initializeSubFileStatIfNeeded`.
+        /// TODO: Redesign the file format for single file mode (https://github.com/pingcap/tics/issues/1798)
         Poco::File                 file(path());
         ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
         buf.seek(file.getSize() - sizeof(Footer), SEEK_SET);

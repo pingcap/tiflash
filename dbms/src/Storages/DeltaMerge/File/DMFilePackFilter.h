@@ -24,6 +24,65 @@ using IdSetPtr = std::shared_ptr<IdSet>;
 class DMFilePackFilter
 {
 public:
+    static DMFilePackFilter loadFrom(const DMFilePtr &           dmfile,
+                                     const MinMaxIndexCachePtr & index_cache,
+                                     UInt64                      hash_salt,
+                                     const RowKeyRange &         rowkey_range,
+                                     const RSOperatorPtr &       filter,
+                                     const IdSetPtr &            read_packs,
+                                     const FileProviderPtr &     file_provider)
+    {
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, hash_salt, rowkey_range, filter, read_packs, file_provider);
+        pack_filter.init();
+        return pack_filter;
+    }
+
+
+    const std::vector<RSResult> & getHandleRes() { return handle_res; }
+    const std::vector<UInt8> &    getUsePacks() { return use_packs; }
+
+    Handle getMinHandle(size_t pack_id)
+    {
+        if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
+            tryLoadIndex(EXTRA_HANDLE_COLUMN_ID);
+        auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
+        return minmax_index->getIntMinMax(pack_id).first;
+    }
+
+    StringRef getMinStringHandle(size_t pack_id)
+    {
+        if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
+            tryLoadIndex(EXTRA_HANDLE_COLUMN_ID);
+        auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
+        return minmax_index->getStringMinMax(pack_id).first;
+    }
+
+    UInt64 getMaxVersion(size_t pack_id)
+    {
+        if (!param.indexes.count(VERSION_COLUMN_ID))
+            tryLoadIndex(VERSION_COLUMN_ID);
+        auto & minmax_index = param.indexes.find(VERSION_COLUMN_ID)->second.minmax;
+        return minmax_index->getUInt64MinMax(pack_id).second;
+    }
+
+    // Get valid rows and bytes after filter invalid packs by handle_range and filter
+    std::pair<size_t, size_t> validRowsAndBytes()
+    {
+        size_t rows       = 0;
+        size_t bytes      = 0;
+        auto & pack_stats = dmfile->getPackStats();
+        for (size_t i = 0; i < pack_stats.size(); ++i)
+        {
+            if (use_packs[i])
+            {
+                rows += pack_stats[i].rows;
+                bytes += pack_stats[i].bytes;
+            }
+        }
+        return {rows, bytes};
+    }
+
+private:
     DMFilePackFilter(const DMFilePtr &           dmfile_,
                      const MinMaxIndexCachePtr & index_cache_,
                      UInt64                      hash_salt_,
@@ -42,6 +101,11 @@ public:
           use_packs(dmfile->getPacks()),
           log(&Logger::get("DMFilePackFilter"))
     {
+    }
+
+    void init()
+    {
+        dmfile->initializeSubFileStatIfNeeded(file_provider);
 
         size_t pack_count = dmfile->getPacks();
         if (!rowkey_range.all())
@@ -116,49 +180,7 @@ public:
             LOG_DEBUG(log, "RSFilter exclude rate: " << DB::toString(filter_rate, 2));
     }
 
-    const std::vector<RSResult> & getHandleRes() { return handle_res; }
-    const std::vector<UInt8> &    getUsePacks() { return use_packs; }
-
-    Handle getMinHandle(size_t pack_id)
-    {
-        if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
-            tryLoadIndex(EXTRA_HANDLE_COLUMN_ID);
-        auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
-        return minmax_index->getIntMinMax(pack_id).first;
-    }
-
-    StringRef getMinStringHandle(size_t pack_id)
-    {
-        if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
-            tryLoadIndex(EXTRA_HANDLE_COLUMN_ID);
-        auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
-        return minmax_index->getStringMinMax(pack_id).first;
-    }
-
-    UInt64 getMaxVersion(size_t pack_id)
-    {
-        if (!param.indexes.count(VERSION_COLUMN_ID))
-            tryLoadIndex(VERSION_COLUMN_ID);
-        auto & minmax_index = param.indexes.find(VERSION_COLUMN_ID)->second.minmax;
-        return minmax_index->getUInt64MinMax(pack_id).second;
-    }
-
-    // Get valid rows and bytes after filter invalid packs by handle_range and filter
-    std::pair<size_t, size_t> validRowsAndBytes()
-    {
-        size_t rows       = 0;
-        size_t bytes      = 0;
-        auto & pack_stats = dmfile->getPackStats();
-        for (size_t i = 0; i < pack_stats.size(); ++i)
-        {
-            if (use_packs[i])
-            {
-                rows += pack_stats[i].rows;
-                bytes += pack_stats[i].bytes;
-            }
-        }
-        return {rows, bytes};
-    }
+    friend class DMFileReader;
 
 private:
     static void loadIndex(ColumnIndexes &             indexes,
