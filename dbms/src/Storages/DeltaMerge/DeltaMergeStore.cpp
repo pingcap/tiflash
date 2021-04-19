@@ -1398,6 +1398,8 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         }
 
         auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
+        if (!segment->getStable()->isDMFilePropertyCached())
+            segment->getStable()->calculateDMFileProperty(*dm_context, segment->getRowKeyRange(), isCommonHandle());
         // Check whether we should apply gc on this segment
         SegmentSnapshotPtr segment_snap;
         {
