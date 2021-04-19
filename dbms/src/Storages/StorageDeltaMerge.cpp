@@ -962,20 +962,22 @@ String StorageDeltaMerge::getName() const { return MutableSupport::delta_tree_st
 void StorageDeltaMerge::rename(
     const String & new_path_to_db, const String & new_database_name, const String & new_table_name, const String & new_display_table_name)
 {
-    // @todo Check if path exist first
-    auto& store = getAndMaybeInitStore();
     tidb_table_info.name = new_display_table_name; // update name in table info
     // For DatabaseTiFlash, simply update store's database is OK.
     // `store->getTableName() == new_table_name` only keep for mock test.
-    bool clean_rename = !data_path_contains_database_name && store->getTableName() == new_table_name;
+    bool clean_rename = !data_path_contains_database_name && getTableName() == new_table_name;
     if (likely(clean_rename))
     {
-        store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
+        if (store_inited.load(std::memory_order_acquire))
+        {
+            _store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
+        }
         table_column_info.db_name = new_database_name;
         table_column_info.table_name = new_table_name;
         return;
     }
 
+    auto& store = getAndMaybeInitStore();
     // For DatabaseOrdinary, we need to rename data path, then recreate a new store.
     const String new_path = new_path_to_db + "/" + new_table_name;
 
