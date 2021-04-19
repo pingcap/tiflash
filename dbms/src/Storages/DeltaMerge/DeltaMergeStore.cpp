@@ -1311,7 +1311,8 @@ bool shouldCompactWithStable(const SegmentSnapshotPtr & snap, DB::Timestamp gc_s
         return true;
 
     auto & property = snap->stable->property;
-    LOG_DEBUG(log, "got property " << toString(property));
+    LOG_DEBUG(log, "got property min_ts " << property.min_ts << " num_versions " << property.num_versions
+              << " num_rows " << property.num_rows << " num_puts " << property.num_puts);
     // No data older than safe_point to GC.
     if (property.min_ts > gc_safepoint)
         return false;
