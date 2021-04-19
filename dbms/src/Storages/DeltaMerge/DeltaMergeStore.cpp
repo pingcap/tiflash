@@ -1304,15 +1304,16 @@ namespace GC
 {
 // Returns true if it needs gc.
 // This is for optimization purpose, does not mean to be accurate.
-bool shouldCompactWithStable(const SegmentSnapshotPtr & snap, DB::Timestamp gc_safepoint, double ratio_threshold, Logger *log)
+bool shouldCompactWithStable(const SegmentSnapshotPtr & snap, DB::Timestamp gc_safepoint, double ratio_threshold, Logger * log)
 {
     // Always GC.
     if (ratio_threshold < 1.0)
         return true;
 
     auto & property = snap->stable->property;
-    LOG_DEBUG(log, "got property min_ts " << property.min_ts << " num_versions " << property.num_versions
-              << " num_rows " << property.num_rows << " num_puts " << property.num_puts);
+    LOG_DEBUG(log,
+              "got property min_ts " << property.min_ts << " num_versions " << property.num_versions << " num_rows " << property.num_rows
+                                     << " num_puts " << property.num_puts);
     // No data older than safe_point to GC.
     if (property.min_ts > gc_safepoint)
         return false;
@@ -1367,11 +1368,9 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             checked_num++;
         }
     }
-    LOG_DEBUG(log, "Begin to gc start with key "
-                  << next_gc_check_key.toDebugString()
-                  << " gc_safe_point_updated "
-                  << gc_safe_point_updated
-                  << " got " << segments_to_check.size() << " to check");
+    LOG_DEBUG(log,
+              "Begin to gc start with key " << next_gc_check_key.toDebugString() << " gc_safe_point_updated " << gc_safe_point_updated
+                                            << " got " << segments_to_check.size() << " to check");
 
     if (segments_to_check.empty())
         return 0;
@@ -1421,7 +1420,8 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             const bool should_compact
                 = GC::shouldCompactWithStable(segment_snap,
                                               latest_gc_safe_point.load(std::memory_order_relaxed),
-                                              global_context.getSettingsRef().dt_segment_bg_gc_ratio_threhold_to_trigger_gc, log);
+                                              global_context.getSettingsRef().dt_segment_bg_gc_ratio_threhold_to_trigger_gc,
+                                              log);
             if (should_compact)
             {
                 ThreadType type = ThreadType::BG_MergeDelta;
