@@ -22,11 +22,6 @@ namespace DM
 {
 class DeltaMergeStore;
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
-namespace tests
-{
-class StorageDeltaMerge_test_HandleCol_Test;
-class StorageDeltaMerge_test_Rename_Test;
-}
 } // namespace DM
 
 class StorageDeltaMerge : public ext::shared_ptr_helper<StorageDeltaMerge>, public IManageableStorage
@@ -143,7 +138,7 @@ private:
 
     DM::DeltaMergeStorePtr& getAndMaybeInitStore();
     bool storeInited() const { return store_inited.load(); }
-    void applyTableColumnInfo();
+    void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
@@ -182,9 +177,6 @@ private:
     Context & global_context;
 
     Logger * log;
-
-    friend class DM::tests::StorageDeltaMerge_test_HandleCol_Test;
-    friend class DM::tests::StorageDeltaMerge_test_Rename_Test;
 };
 
 

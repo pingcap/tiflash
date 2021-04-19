@@ -83,10 +83,10 @@ StorageDeltaMerge::StorageDeltaMerge( //
     table_column_info.table_name = table_name_;
     table_column_info.pk_expr_ast = primary_expr_ast_;
 
-    applyTableColumnInfo();
+    updateTableColumnInfo();
 }
 
-void StorageDeltaMerge::applyTableColumnInfo()
+void StorageDeltaMerge::updateTableColumnInfo()
 {   
     // Input: ColumnsDescription + pk_expr_ast + tidb_table_info + is_common_handle + pk_is_handle
     // Output: handle_column_define + table_column_defines
@@ -912,8 +912,7 @@ try
         tidb_table_info = table_info.value();
     }
 
-    // Update table column info
-    applyTableColumnInfo();
+    updateTableColumnInfo();
 
     SortDescription pk_desc = getPrimarySortDescription();
     ColumnDefines store_columns = getStoreColumnDefines();
