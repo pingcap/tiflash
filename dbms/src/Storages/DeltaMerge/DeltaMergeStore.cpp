@@ -1365,6 +1365,11 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             checked_num++;
         }
     }
+    LOG_DEBUG(log, "[DeltaMergeStore::onSyncGc] begin to gc with next_gc_check_key "
+                  << next_gc_check_key.toDebugString()
+                  << " gc_safe_point_updated "
+                  << gc_safe_point_updated
+                  << " got " << segments_to_check.size() << " to check");
 
     if (segments_to_check.empty())
         return 0;

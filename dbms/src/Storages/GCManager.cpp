@@ -10,7 +10,7 @@ bool GCManager::work()
     // TODO: remove this when `BackgroundProcessingPool` supports specify task running interval
     if (gc_check_stop_watch.elapsedSeconds() < global_settings.dt_segment_bg_gc_check_interval)
         return false;
-
+    LOG_DEBUG(log, "GCManager start to work, next table to gc is " << next_table_id);
     // Get a storage snapshot with weak_ptrs first
     std::map<TableID, std::weak_ptr<IManageableStorage>> storages;
     for (const auto & [table_id, storage] : global_context.getTMTContext().getStorages().getAllStorage())
@@ -43,6 +43,7 @@ bool GCManager::work()
             // do not acquire structure lock on the storage.
             auto gc_segments_num = storage->onSyncGc(gc_segments_limit);
             gc_segments_limit = gc_segments_limit - gc_segments_num;
+            LOG_DEBUG(log, "GCManager gc " << gc_segments_num << " segments of table " << storage->getTableInfo().id);
             // Reach the limit on the number of segments to be gc, stop here
             if (gc_segments_limit <= 0)
                 break;
