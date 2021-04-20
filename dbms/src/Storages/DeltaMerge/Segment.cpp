@@ -1131,29 +1131,6 @@ SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
 
 void Segment::check(DMContext &, const String &) const {}
 
-bool Segment::needGC(DMContext & dm_context, DB::Timestamp gc_safepoint, double ratio_threshold) const
-{
-    // Always GC.
-    if (ratio_threshold < 1.0)
-        return true;
-
-    if (!stable->isDMFilePropertyCached())
-        stable->calculateDMFileProperty(dm_context, getRowKeyRange(), is_common_handle);
-
-    auto & property = stable->getDMFileProperty();
-    LOG_TRACE(log, "Segment [" << segmentId() << "] " << StableValueSpace::toString(property));
-    // No data older than safe_point to GC.
-    if (property.min_ts > gc_safepoint)
-        return false;
-    // A lot of MVCC versions to GC.
-    if (property.num_versions > property.num_rows * ratio_threshold)
-        return true;
-    // A lot of non-effective MVCC versions to GC.
-    if (property.num_versions > property.num_puts * ratio_threshold)
-        return true;
-    return false;
-}
-
 bool Segment::flushCache(DMContext & dm_context)
 {
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_DeltaFlush};
