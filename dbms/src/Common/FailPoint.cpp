@@ -27,13 +27,17 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_enable_region_persister_compatible_mode)        \
     M(force_disable_region_persister_compatible_mode)       \
     M(force_triggle_background_merge_delta)                 \
-    M(force_triggle_foreground_flush)
+    M(force_triggle_foreground_flush)                       \
+    M(exception_during_write_to_storage)
 
 #define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)  \
     M(pause_after_learner_read)               \
     M(hang_in_execution)                      \
     M(pause_before_dt_background_delta_merge) \
-    M(pause_until_dt_background_delta_merge)
+    M(pause_until_dt_background_delta_merge)  \
+    M(pause_before_apply_raft_cmd)            \
+    M(pause_before_apply_raft_snapshot)       \
+    M(pause_until_apply_raft_snapshot)
 
 namespace FailPoints
 {
