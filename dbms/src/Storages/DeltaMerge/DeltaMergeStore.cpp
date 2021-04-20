@@ -1304,13 +1304,13 @@ namespace GC
 {
 // Returns true if it needs gc.
 // This is for optimization purpose, does not mean to be accurate.
-bool shouldCompactWithStable(const SegmentSnapshotPtr & snap, DB::Timestamp gc_safepoint, double ratio_threshold, Logger * log)
+bool shouldCompactWithStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ratio_threshold, Logger * log)
 {
     // Always GC.
     if (ratio_threshold < 1.0)
         return true;
 
-    auto & property = snap->stable->property;
+    auto & property = seg->getStable()->getDMFileProperty();
     LOG_DEBUG(log, property.toDebugString());
     // No data older than safe_point to GC.
     if (property.min_ts > gc_safepoint)
@@ -1397,26 +1397,14 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         }
 
         auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
+        // calculate DMFileProperty if needed
         if (!segment->getStable()->isDMFilePropertyCached())
             segment->getStable()->calculateDMFileProperty(*dm_context, segment->getRowKeyRange(), isCommonHandle());
-        // Check whether we should apply gc on this segment
-        SegmentSnapshotPtr segment_snap;
-        {
-            std::shared_lock lock(read_write_mutex);
-            if (isSegmentValid(segment))
-                segment_snap = segment->createSnapshot(*dm_context, /* for_update */ true);
-
-            if (!segment_snap)
-            {
-                LOG_DEBUG(log, "GC is skipped [range=" << key_range.toDebugString() << "] [table=" << table_name << "]");
-                continue;
-            }
-        }
-
         try
         {
+            // Check whether we should apply gc on this segment
             const bool should_compact
-                = GC::shouldCompactWithStable(segment_snap,
+                = GC::shouldCompactWithStable(segment,
                                               latest_gc_safe_point.load(std::memory_order_relaxed),
                                               global_context.getSettingsRef().dt_segment_bg_gc_ratio_threhold_to_trigger_gc,
                                               log);
@@ -1428,9 +1416,13 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                 {
                     // Continue to check whether we need to apply more tasks on this segment
                     checkSegmentUpdate(dm_context, segment, type);
+                    gc_segments_num++;
                     LOG_INFO(log, "GC-merge-delta done [range=" << key_range.toDebugString() << "] [table=" << table_name << "]");
                 }
-                gc_segments_num++;
+                else
+                {
+                    LOG_DEBUG(log, "GC is skipped [range=" << key_range.toDebugString() << "] [table=" << table_name << "]");
+                }
             }
         }
         catch (Exception & e)
