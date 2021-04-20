@@ -5,14 +5,13 @@ mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 
 func> wait_table test t
 
 mysql> set time_zone = 'UTC'; insert into test.t values(1,'2020-01-01 00:00:00')
-mysql> set @@tidb_isolation_read_engines='tiflash'
-mysql> set time_zone = '+9:00'; select * from test.t where value = (select max(value) from test.t);
+mysql> set @@tidb_isolation_read_engines='tiflash'; set time_zone = '+9:00'; select * from test.t where value = (select max(value) from test.t);
 +------+---------------------+
 | id   | value               |
 +------+---------------------+
 |    1 | 2020-01-01 09:00:00 |
 +------+---------------------+
-mysql> set time_zone = 'Asia/Shanghai'; select * from test.t where value = (select max(value) from test.t);
+mysql> set @@tidb_isolation_read_engines='tiflash'; set time_zone = 'Asia/Shanghai'; select * from test.t where value = (select max(value) from test.t);
 +------+---------------------+
 | id   | value               |
 +------+---------------------+
