@@ -11,13 +11,6 @@
 namespace DB
 {
 
-namespace ErrorCodes
-{
-extern const int LOGICAL_ERROR;
-extern const int TABLE_ALREADY_EXISTS;
-extern const int UNKNOWN_TABLE;
-} // namespace ErrorCodes
-
 class MockTiDB : public ext::singleton<MockTiDB>
 {
     friend class ext::singleton<MockTiDB>;
@@ -58,7 +51,10 @@ public:
 
 public:
     TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso,
-        const String & handle_pk_name, String engine_type);
+        const String & handle_pk_name, const String & engine_type);
+
+    static TiDB::TableInfoPtr parseColumns(
+        const String & tbl_name, const ColumnsDescription & columns, const String & handle_pk_name, String engine_type);
 
     DatabaseID newDataBase(const String & database_name);
 
