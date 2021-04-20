@@ -260,7 +260,6 @@ SnapshotPtr StableValueSpace::createSnapshot()
     snap->valid_rows  = valid_rows;
     snap->valid_bytes = valid_bytes;
     snap->stable      = this->shared_from_this();
-    snap->property    = snap->stable->getDMFileProperty();
 
     for (size_t i = 0; i < files.size(); i++)
     {

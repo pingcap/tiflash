@@ -1351,6 +1351,13 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         if (gc_safe_point_updated)
             gc_checked_segments.clear();
         auto iter = segments.begin();
+        if (segments.size() == 1)
+        {
+            // avoid gc on empty tables
+            const auto & seg = iter->second;
+            if (seg->getStable()->getRows() == 0)
+                return 0;
+        }
         // If `next_gc_check_key` is not empty, put the segment cover `next_gc_check_key`
         if (!(next_gc_check_key == RowKeyValue::EMPTY_STRING_KEY))
             iter = segments.upper_bound(next_gc_check_key.toRowKeyValueRef());
@@ -1359,6 +1366,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             if (iter == segments.end())
                 iter = segments.begin();
             const auto & seg = iter->second;
+            iter++;
             // ignore segments that is already checked for the current gc_safe_point
             if (!gc_checked_segments.count(seg->segmentId()))
             {
@@ -1371,11 +1379,10 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     if (segments_to_check.empty())
         return 0;
 
-    LOG_DEBUG(
-        log,
-        "GC start key: " << ((next_gc_check_key == RowKeyValue::EMPTY_STRING_KEY) ? " [empty key]" : next_gc_check_key.toDebugString())
-                         << ", gc_safe_point: " << latest_gc_safe_point.load(std::memory_order_relaxed) << ", got "
-                         << segments_to_check.size() << " segments to check");
+    LOG_DEBUG(log,
+              "GC start key: " << ((next_gc_check_key == RowKeyValue::EMPTY_STRING_KEY) ? "[empty key]" : next_gc_check_key.toDebugString())
+                               << ", gc_safe_point: " << latest_gc_safe_point.load(std::memory_order_relaxed) << ", got "
+                               << segments_to_check.size() << " segments to check");
 
     // We get a separate snapshot for each segment. Even the GC-routine for one segment takes a long time,
     // we won't block other threads from reading / writing / applying DDL for a long time.
