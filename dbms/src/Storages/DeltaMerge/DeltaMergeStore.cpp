@@ -1311,9 +1311,7 @@ bool shouldCompactWithStable(const SegmentSnapshotPtr & snap, DB::Timestamp gc_s
         return true;
 
     auto & property = snap->stable->property;
-    LOG_DEBUG(log,
-              "got property min_ts " << property.min_ts << " num_versions " << property.num_versions << " num_rows " << property.num_rows
-                                     << " num_puts " << property.num_puts);
+    LOG_DEBUG(log, property.toDebugString());
     // No data older than safe_point to GC.
     if (property.min_ts > gc_safepoint)
         return false;
@@ -1356,38 +1354,40 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         // If `next_gc_check_key` is not empty, put the segment cover `next_gc_check_key`
         if (!(next_gc_check_key == RowKeyValue::EMPTY_STRING_KEY))
             iter = segments.upper_bound(next_gc_check_key.toRowKeyValueRef());
-        UInt64 checked_num = 0;
-        while (checked_num < segments.size())
+        for (UInt64 checked_num = 0; checked_num < segments.size(); checked_num++)
         {
             if (iter == segments.end())
                 iter = segments.begin();
             const auto & seg = iter->second;
             // ignore segments that is already checked for the current gc_safe_point
             if (!gc_checked_segments.count(seg->segmentId()))
+            {
+                // avoid recheck this segment before `latest_gc_safe_point` updated
+                gc_checked_segments.insert(seg->segmentId());
                 segments_to_check.emplace_back(std::make_pair(seg->getRowKeyRange(), seg));
-            checked_num++;
+            }
         }
     }
-    LOG_DEBUG(log,
-              "Begin to gc start with key " << next_gc_check_key.toDebugString() << " gc_safe_point_updated " << gc_safe_point_updated
-                                            << " got " << segments_to_check.size() << " to check");
-
     if (segments_to_check.empty())
         return 0;
+
+    LOG_DEBUG(
+        log,
+        "GC start key: " << ((next_gc_check_key == RowKeyValue::EMPTY_STRING_KEY) ? " [empty key]" : next_gc_check_key.toDebugString())
+                         << ", gc_safe_point: " << latest_gc_safe_point.load(std::memory_order_relaxed) << ", got "
+                         << segments_to_check.size() << " segments to check");
 
     // We get a separate snapshot for each segment. Even the GC-routine for one segment takes a long time,
     // we won't block other threads from reading / writing / applying DDL for a long time.
     Int64 gc_segments_num = 0;
     auto  iter            = segments_to_check.begin();
-    while (iter != segments_to_check.end() && gc_segments_num < limit)
+    for (; iter != segments_to_check.end() && gc_segments_num < limit; iter++)
     {
         // If the store is shut down, give up running GC on it.
         if (shutdown_called.load(std::memory_order_relaxed))
             break;
-
         auto & key_range = iter->first;
         auto   segment   = iter->second.lock();
-        iter++;
         // If the segment is invalid, or its delta is updating by another thread,
         // give up running GC on it.
         if (!segment || segment->getDelta()->isUpdating())
@@ -1411,8 +1411,6 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                 LOG_DEBUG(log, "GC is skipped [range=" << key_range.toDebugString() << "] [table=" << table_name << "]");
                 continue;
             }
-            // avoid recheck this segment before `latest_gc_safe_point` updated
-            gc_checked_segments.insert(segment->segmentId());
         }
 
         try
@@ -1426,13 +1424,13 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             {
                 ThreadType type = ThreadType::BG_MergeDelta;
                 segment         = segmentMergeDelta(*dm_context, segment, /*is_foreground*/ false);
-                // Continue to check whether we need to apply more tasks on this segment
                 if (segment)
                 {
+                    // Continue to check whether we need to apply more tasks on this segment
                     checkSegmentUpdate(dm_context, segment, type);
-                    gc_segments_num++;
                     LOG_INFO(log, "GC-merge-delta done [range=" << key_range.toDebugString() << "] [table=" << table_name << "]");
                 }
+                gc_segments_num++;
             }
         }
         catch (Exception & e)
@@ -1441,6 +1439,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             e.rethrow();
         }
     }
+    // update `next_gc_check_key`
     if (iter == segments_to_check.end())
         iter = segments_to_check.begin();
     next_gc_check_key = iter->first.start;

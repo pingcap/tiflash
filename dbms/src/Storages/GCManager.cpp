@@ -12,6 +12,7 @@ bool GCManager::work()
         return false;
     LOG_DEBUG(log, "GCManager start to work, next table to gc is " << next_table_id);
     // Get a storage snapshot with weak_ptrs first
+    // TODO: avoid gc on storage which have no data?
     std::map<TableID, std::weak_ptr<IManageableStorage>> storages;
     for (const auto & [table_id, storage] : global_context.getTMTContext().getStorages().getAllStorage())
         storages.emplace(table_id, storage);
