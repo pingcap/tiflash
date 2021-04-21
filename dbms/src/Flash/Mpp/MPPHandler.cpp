@@ -9,6 +9,7 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <DataStreams/SquashingBlockInputStream.h>
 
 namespace DB
 {
@@ -180,6 +181,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     }
     // read index , this may take a long time.
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
+    io.in = std::make_shared<SquashingBlockInputStream>(io.in, 4096, 512);
 
     // get partition column ids
     auto part_keys = exchangeSender.partition_keys();
