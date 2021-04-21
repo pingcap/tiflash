@@ -37,7 +37,6 @@ public:
         return pack_filter;
     }
 
-
     const std::vector<RSResult> & getHandleRes() { return handle_res; }
     const std::vector<UInt8> &    getUsePacks() { return use_packs; }
 
@@ -105,8 +104,6 @@ private:
 
     void init()
     {
-        dmfile->initializeSubFileStatIfNeeded(file_provider);
-
         size_t pack_count = dmfile->getPacks();
         if (!rowkey_range.all())
         {

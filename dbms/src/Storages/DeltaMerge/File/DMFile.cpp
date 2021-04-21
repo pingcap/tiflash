@@ -261,7 +261,7 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileForm
 
 void DMFile::readMeta(const FileProviderPtr & file_provider)
 {
-    MetaPackInfo meta_pack_info{.meta_offset = 0, .meta_size = 0, .pack_stat_offset = 0, .pack_stat_size = 0};
+    Footer footer;
     if (isSingleFileMode())
     {
         // Read the `Footer` part from disk.
@@ -270,55 +270,11 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
         Poco::File                 file(path());
         ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
         buf.seek(file.getSize() - sizeof(Footer), SEEK_SET);
-        DB::readIntBinary(meta_pack_info.meta_offset, buf);
-        DB::readIntBinary(meta_pack_info.meta_size, buf);
-        DB::readIntBinary(meta_pack_info.pack_stat_offset, buf);
-        DB::readIntBinary(meta_pack_info.pack_stat_size, buf);
-    }
-    else
-    {
-        meta_pack_info.meta_size      = Poco::File(metaPath()).getSize();
-        meta_pack_info.pack_stat_size = Poco::File(packStatPath()).getSize();
-    }
+        DB::readIntBinary(footer.meta_pack_info.meta_offset, buf);
+        DB::readIntBinary(footer.meta_pack_info.meta_size, buf);
+        DB::readIntBinary(footer.meta_pack_info.pack_stat_offset, buf);
+        DB::readIntBinary(footer.meta_pack_info.pack_stat_size, buf);
 
-    {
-        auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.meta_size);
-        buf.seek(meta_pack_info.meta_offset);
-
-        DMFileFormat::Version ver; // Binary version
-        assertString("DTFile format: ", buf);
-        DB::readText(ver, buf);
-        assertString("\n", buf);
-        readText(column_stats, ver, buf);
-        // No need to upgrade meta when mode is Mode::SINGLE_FILE
-        if (mode == Mode::FOLDER)
-        {
-            upgradeMetaIfNeed(file_provider, ver);
-        }
-    }
-
-    {
-        size_t packs = meta_pack_info.pack_stat_size / sizeof(PackStat);
-        pack_stats.resize(packs);
-        auto buf = openForRead(file_provider, packStatPath(), encryptionPackStatPath(), meta_pack_info.pack_stat_size);
-        buf.seek(meta_pack_info.pack_stat_offset);
-        buf.readStrict((char *)pack_stats.data(), sizeof(PackStat) * packs);
-    }
-}
-
-void DMFile::initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider)
-{
-    std::unique_lock lock(mutex);
-    if (!isSingleFileMode() || !sub_file_stats.empty())
-        return;
-
-    Poco::File file(path());
-    if (status == Status::READABLE)
-    {
-        Footer                     footer;
-        ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
-        buf.seek(file.getSize() - sizeof(Footer) + sizeof(MetaPackInfo), SEEK_SET);
-        // ignore footer.file_format_version
         DB::readIntBinary(footer.sub_file_stat_offset, buf);
         DB::readIntBinary(footer.sub_file_num, buf);
 
@@ -333,6 +289,35 @@ void DMFile::initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider
             DB::readIntBinary(sub_file_stat.size, buf);
             sub_file_stats.emplace(name, sub_file_stat);
         }
+    }
+    else
+    {
+        footer.meta_pack_info.meta_size      = Poco::File(metaPath()).getSize();
+        footer.meta_pack_info.pack_stat_size = Poco::File(packStatPath()).getSize();
+    }
+
+    {
+        auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath(), footer.meta_pack_info.meta_size);
+        buf.seek(footer.meta_pack_info.meta_offset);
+
+        DMFileFormat::Version ver; // Binary version
+        assertString("DTFile format: ", buf);
+        DB::readText(ver, buf);
+        assertString("\n", buf);
+        readText(column_stats, ver, buf);
+        // No need to upgrade meta when mode is Mode::SINGLE_FILE
+        if (mode == Mode::FOLDER)
+        {
+            upgradeMetaIfNeed(file_provider, ver);
+        }
+    }
+
+    {
+        size_t packs = footer.meta_pack_info.pack_stat_size / sizeof(PackStat);
+        pack_stats.resize(packs);
+        auto buf = openForRead(file_provider, packStatPath(), encryptionPackStatPath(), footer.meta_pack_info.pack_stat_size);
+        buf.seek(footer.meta_pack_info.pack_stat_offset);
+        buf.readStrict((char *)pack_stats.data(), sizeof(PackStat) * packs);
     }
 }
 
