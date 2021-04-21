@@ -177,14 +177,15 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
         throw Exception("DMFile [" + DB::toString(dmfile->fileId())
                         + "] is expected to be in READABLE status, but: " + DMFile::statusString(dmfile->getStatus()));
 
-    dmfile->initializeSubFileStatIfNeeded(file_provider);
+    pack_filter.init();
 
     for (const auto & cd : read_columns)
     {
-        // New inserted column, fill them with default value later
+        // New inserted column, will be filled with default value later
         if (!dmfile->isColumnExist(cd.id))
             continue;
 
+        // Load stream for existing columns according to DataType in disk
         auto callback = [&](const IDataType::SubstreamPath & substream) {
             const auto stream_name = DMFile::getFileNameBase(cd.id, substream);
             auto       stream      = std::make_unique<Stream>( //
@@ -196,8 +197,6 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                 log);
             column_streams.emplace(stream_name, std::move(stream));
         };
-
-        // Load stream according to DataType in disk
         const auto data_type = dmfile->getColumnStat(cd.id).type;
         data_type->enumerateStreams(callback, {});
     }
