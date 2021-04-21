@@ -1270,6 +1270,9 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext &           
     auto my_delta_index = delta_snap->getSharedDeltaIndex()->tryClone(delta_snap->getRows(), delta_snap->getDeletes());
     auto my_delta_tree  = my_delta_index->getDeltaTree();
 
+    // Note that, when enable_relevant_place is false , we cannot use the range of this segment.
+    // Because some block / delete ranges could contain some data / range that are not belong to current segment.
+    // If we use the range of this segment as relevant_range, fully_indexed will always be false in those cases.
     RowKeyRange relevant_range = dm_context.enable_relevant_place ? mergeRanges(read_ranges, is_common_handle, rowkey_column_size)
                                                                   : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
