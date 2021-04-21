@@ -144,6 +144,8 @@ private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
     struct TableColumnInfo 
     {
+        TableColumnInfo(const String& db, const String& table, const ASTPtr& pk)
+            : db_name(db), table_name(table), pk_expr_ast(pk) {}
         String db_name;
         String table_name;
         ASTPtr pk_expr_ast;
@@ -154,7 +156,7 @@ private:
 
     std::mutex store_mutex;
     
-    TableColumnInfo table_column_info;  // After create DeltaMergeStore object, it is deprecated.
+    std::unique_ptr<TableColumnInfo> table_column_info;  // After create DeltaMergeStore object, it is deprecated.
     std::atomic<bool> store_inited;
     DM::DeltaMergeStorePtr _store;
 
