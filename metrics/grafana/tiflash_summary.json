@@ -2099,13 +2099,13 @@
             "alignAsTable": false,
             "avg": false,
             "current": false,
+            "hideZero": false,
             "max": false,
             "min": false,
             "rightSide": false,
             "show": true,
             "total": false,
-            "values": false,
-            "hideZero": false
+            "values": false
           },
           "lines": true,
           "linewidth": 1,
@@ -2154,11 +2154,11 @@
               "refId": "D"
             },
             {
-              "refId": "E",
               "expr": "sum(tiflash_schema_applying{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "intervalFactor": 1,
               "format": "time_series",
-              "legendFormat": "applying-{{instance}}"
+              "intervalFactor": 1,
+              "legendFormat": "applying-{{instance}}",
+              "refId": "E"
             }
           ],
           "thresholds": [],
@@ -4981,7 +4981,7 @@
           "heatmap": {},
           "hideZeroBuckets": true,
           "highlightCards": true,
-          "id": 77,
+          "id": 87,
           "legend": {
             "show": true
           },
@@ -5036,25 +5036,22 @@
     "list": [
       {
         "allValue": null,
-        "current": {
-        },
+        "current": {},
         "datasource": "${DS_TEST-CLUSTER}",
+        "definition": "",
         "hide": 2,
         "includeAll": false,
         "label": "tidb_cluster",
         "multi": false,
         "name": "tidb_cluster",
-        "options": [
-
-        ],
+        "options": [],
         "query": "label_values(tiflash_system_profile_event_Query, tidb_cluster)",
         "refresh": 2,
         "regex": "",
+        "skipUrlSync": false,
         "sort": 1,
         "tagValuesQuery": "",
-        "tags": [
-
-        ],
+        "tags": [],
         "tagsQuery": "",
         "type": "query",
         "useTags": false
@@ -5073,7 +5070,6 @@
         "query": "label_values(tiflash_system_profile_event_Query{tidb_cluster=\"$tidb_cluster\"}, instance)",
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
         "sort": 1,
         "tagValuesQuery": "",
         "tags": [],
