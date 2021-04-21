@@ -1555,11 +1555,11 @@ try
     {
         auto & stable = segment->getStable();
         ASSERT_EQ(stable->getRows(), num_rows_write);
-        // caculate DMFileProperty
-        ASSERT_EQ(stable->isDMFilePropertyCached(), false);
-        stable->calculateDMFileProperty(dmContext(), segment->getRowKeyRange(), false);
-        ASSERT_EQ(stable->isDMFilePropertyCached(), true);
-        auto & property = stable->getDMFileProperty();
+        // caculate StableProperty
+        ASSERT_EQ(stable->isStablePropertyCached(), false);
+        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false);
+        ASSERT_EQ(stable->isStablePropertyCached(), true);
+        auto & property = stable->getStableProperty();
         ASSERT_EQ(property.min_ts, tso);
         ASSERT_EQ(property.num_versions, num_rows_write);
         ASSERT_EQ(property.num_puts, num_rows_write);
@@ -1591,11 +1591,11 @@ try
         ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
         Poco::File(file_path + "/property").remove();
         ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
-        // caculate DMFileProperty
-        ASSERT_EQ(stable->isDMFilePropertyCached(), false);
-        stable->calculateDMFileProperty(dmContext(), segment->getRowKeyRange(), false);
-        ASSERT_EQ(stable->isDMFilePropertyCached(), true);
-        auto & property = stable->getDMFileProperty();
+        // caculate StableProperty
+        ASSERT_EQ(stable->isStablePropertyCached(), false);
+        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false);
+        ASSERT_EQ(stable->isStablePropertyCached(), true);
+        auto & property = stable->getStableProperty();
         ASSERT_EQ(property.min_ts, tso);
         ASSERT_EQ(property.num_versions, num_rows_write);
         ASSERT_EQ(property.num_puts, num_rows_write);
