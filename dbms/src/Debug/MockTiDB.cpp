@@ -243,7 +243,6 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     auto table_info = parseColumns(table_name, columns, handle_pk_name, engine_type);
     table_info->id = table_id_allocator++;
     table_info->update_timestamp = tso;
-    table_info->replica_info.count = 1;
 
     auto table = std::make_shared<Table>(database_name, databases[database_name], table_name, std::move(*table_info));
     tables_by_id.emplace(table->table_info.id, table);
