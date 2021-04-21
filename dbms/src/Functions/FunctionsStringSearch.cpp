@@ -317,6 +317,48 @@ struct PositionImpl
     }
 };
 
+static String getRE2ModeModifiers(const std::string & match_type, const bool & force_case_sensitive, re2_st::RE2::Options & options)
+{
+    if (!match_type.empty())
+    {
+        for (size_t i = 0; i < match_type.size(); i++)
+        {
+            switch (match_type[i])
+            {
+                case 'i':
+                    if (!force_case_sensitive)
+                        options.set_case_sensitive(false);
+                    break;
+                case 'c':
+                    options.set_case_sensitive(true);
+                    break;
+                case 'n':
+                    options.set_dot_nl(true);
+                    break;
+                case 'm':
+                    options.set_one_line(false);
+                    break;
+                default:
+                    /// throw error or do nothing?
+                    break;
+            }
+        }
+    }
+    if (!options.one_line() || options.dot_nl() || !options.case_sensitive())
+    {
+        String mode_modifiers("(?");
+        if (!options.one_line())
+            mode_modifiers += "m";
+        if (!options.case_sensitive())
+            mode_modifiers += "i";
+        if (options.dot_nl())
+            mode_modifiers += "s";
+        mode_modifiers += ")";
+        return mode_modifiers;
+    }
+    else
+        return "";
+}
 
 /// Is the LIKE expression reduced to finding a substring in a string?
 inline bool likePatternIsStrstr(const String & pattern, String & res)
@@ -414,32 +456,6 @@ struct MatchImpl
 {
     using ResultType = UInt8;
 
-    static void setOptionsFromMatchType(const String & match_type, bool force_case_sensitive, int & flag)
-    {
-        if (!match_type.empty())
-        {
-            for (size_t i = 0; i < match_type.size(); i++)
-            {
-                switch (match_type[i])
-                {
-                    case 'i':
-                        if (!force_case_sensitive)
-                            flag |= OptimizedRegularExpression::RE_CASELESS;
-                        break;
-                    case 'c':
-                        flag &= ~OptimizedRegularExpression::RE_CASELESS;
-                        break;
-                    case 'n':
-                        flag |= OptimizedRegularExpression::RE_DOT_NL;
-                        break;
-                    default:
-                        /// throw error or do nothing?
-                        break;
-                }
-            }
-        }
-    }
-
     static void vector_constant(const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
         const std::string & orig_pattern,
@@ -514,11 +530,17 @@ struct MatchImpl
                 flags |= OptimizedRegularExpression::RE_DOT_NL;
 
             /// for regexp only ci/cs is supported
+            re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
             if (collator != nullptr && collator->isCI())
-                flags |= OptimizedRegularExpression::RE_CASELESS;
+                options.set_case_sensitive(false);
 
             /// match_type can overwrite collator
-            setOptionsFromMatchType(match_type, collator != nullptr && collator->isBinary(), flags);
+            if (!match_type.empty() || !options.case_sensitive())
+            {
+                String mode_modifiers = getRE2ModeModifiers(match_type, collator != nullptr && collator->isBinary(), options);
+                if (!mode_modifiers.empty())
+                    pattern = mode_modifiers + pattern;
+            }
             const auto & regexp = Regexps::get<like, true>(pattern, flags);
 
             std::string required_substring;
@@ -638,11 +660,17 @@ struct MatchImpl
                 flags |= OptimizedRegularExpression::RE_DOT_NL;
 
             /// for regexp only ci/cs is supported
+            re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
             if (collator != nullptr && collator->isCI())
-                flags |= OptimizedRegularExpression::RE_CASELESS;
+                options.set_case_sensitive(false);
 
             /// match_type can overwrite collator
-            setOptionsFromMatchType(match_type, collator != nullptr && collator->isBinary(), flags);
+            if (!match_type.empty() || !options.case_sensitive())
+            {
+                String mode_modifiers = getRE2ModeModifiers(match_type, collator != nullptr && collator->isBinary(), options);
+                if (!mode_modifiers.empty())
+                    pattern = mode_modifiers + pattern;
+            }
             const auto & regexp = Regexps::get<like, true>(pattern, flags);
             res = revert ^ regexp->match(data);
         }
@@ -846,34 +874,6 @@ struct ReplaceRegexpImpl
         ++res_offset;
     }
 
-    static re2_st::RE2::Options getRE2Options(const std::string & match_type, const bool & force_case_sensitive)
-    {
-        re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
-        if (!match_type.empty())
-        {
-            for (size_t i = 0; i < match_type.size(); i++)
-            {
-                switch (match_type[i])
-                {
-                    case 'i':
-                        if (!force_case_sensitive)
-                            options.set_case_sensitive(false);
-                        break;
-                    case 'c':
-                        options.set_case_sensitive(true);
-                        break;
-                    case 'n':
-                        options.set_dot_nl(true);
-                        break;
-                    default:
-                        /// throw error or do nothing?
-                        break;
-                }
-            }
-        }
-        return options;
-    }
-
     static void vector(const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
         const std::string & needle,
@@ -881,7 +881,7 @@ struct ReplaceRegexpImpl
         const Int64 & pos,
         const Int64 & occ,
         const std::string & match_type,
-        const bool & force_case_sensitive,
+        std::shared_ptr<TiDB::ITiDBCollator> collator,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -890,8 +890,17 @@ struct ReplaceRegexpImpl
         size_t size = offsets.size();
         res_offsets.resize(size);
 
-
-        re2_st::RE2 searcher(needle, getRE2Options(match_type, force_case_sensitive));
+        String updated_needle = needle;
+        re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
+        if (collator != nullptr && collator->isCI())
+            options.set_case_sensitive(false);
+        if (!match_type.empty() || !options.case_sensitive())
+        {
+            String mode_modifiers = getRE2ModeModifiers(match_type, collator != nullptr && collator->isBinary(), options);
+            if (!mode_modifiers.empty())
+                updated_needle = mode_modifiers + updated_needle;
+        }
+        re2_st::RE2 searcher(updated_needle);
         int num_captures = std::min(searcher.NumberOfCapturingGroups() + 1, static_cast<int>(max_captures));
 
         Instructions instructions = createInstructions(replacement, num_captures);
@@ -914,7 +923,7 @@ struct ReplaceRegexpImpl
         const Int64 & pos,
         const Int64 & occ,
         const std::string & match_type,
-        const bool & force_case_sensitive,
+        std::shared_ptr<TiDB::ITiDBCollator> collator,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -923,7 +932,17 @@ struct ReplaceRegexpImpl
         res_data.reserve(data.size());
         res_offsets.resize(size);
 
-        re2_st::RE2 searcher(needle, getRE2Options(match_type, force_case_sensitive));
+        String updated_needle = needle;
+        re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
+        if (collator != nullptr && collator->isCI())
+            options.set_case_sensitive(false);
+        if (!match_type.empty() || !options.case_sensitive())
+        {
+            String mode_modifiers = getRE2ModeModifiers(match_type, collator != nullptr && collator->isBinary(), options);
+            if (!mode_modifiers.empty())
+                updated_needle = mode_modifiers + updated_needle;
+        }
+        re2_st::RE2 searcher(updated_needle);
         int num_captures = std::min(searcher.NumberOfCapturingGroups() + 1, static_cast<int>(max_captures));
 
         Instructions instructions = createInstructions(replacement, num_captures);
@@ -952,7 +971,7 @@ struct ReplaceStringImpl
         const Int64 & /* pos */,
         const Int64 & /* occ */,
         const std::string & /* match_type */,
-        const bool & /* force_case_sensitive */,
+        std::shared_ptr<TiDB::ITiDBCollator> /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1031,7 +1050,7 @@ struct ReplaceStringImpl
         const Int64 & /* pos */,
         const Int64 & /* occ */,
         const std::string & /* match_type */,
-        const bool & /* force_case_sensitive */,
+        std::shared_ptr<TiDB::ITiDBCollator> /* collator */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1113,7 +1132,7 @@ struct ReplaceStringImpl
                          const Int64 & /* pos */,
                          const Int64 & /* occ */,
                          const std::string & /* match_type */,
-                         const bool & /* force_case_sensitive */,
+                         std::shared_ptr<TiDB::ITiDBCollator> /* collator */,
                          std::string & res_data)
     {
         res_data = "";
@@ -1217,7 +1236,6 @@ public:
         Int64 pos = column_pos == nullptr ? 1 : typeid_cast<const ColumnConst *>(column_pos.get())->getValue<Int64>();
         Int64 occ = column_occ == nullptr ? 0 : typeid_cast<const ColumnConst *>(column_occ.get())->getValue<Int64>();
         String match_type = column_match_type == nullptr ? "" : typeid_cast<const ColumnConst *>(column_match_type.get())->getValue<String>();
-        bool force_case_sensitive = collator != nullptr && collator->isBinary();
 
         if (needle.size() == 0)
             throw Exception("Length of the second argument of function replace must be greater than 0.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
@@ -1225,14 +1243,14 @@ public:
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
         {
             auto col_res = ColumnString::create();
-            Impl::vector(col->getChars(), col->getOffsets(), needle, replacement, pos, occ, match_type, force_case_sensitive,
+            Impl::vector(col->getChars(), col->getOffsets(), needle, replacement, pos, occ, match_type, collator,
                 col_res->getChars(), col_res->getOffsets());
             block.getByPosition(result).column = std::move(col_res);
         }
         else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
         {
             auto col_res = ColumnString::create();
-            Impl::vector_fixed(col->getChars(), col->getN(), needle, replacement, pos, occ, match_type, force_case_sensitive, col_res->getChars(), col_res->getOffsets());
+            Impl::vector_fixed(col->getChars(), col->getN(), needle, replacement, pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
             block.getByPosition(result).column = std::move(col_res);
         }
         else
