@@ -8,7 +8,7 @@ bool GCManager::work()
 {
     auto & global_settings = global_context.getSettingsRef();
     // TODO: remove this when `BackgroundProcessingPool` supports specify task running interval
-    if (gc_check_stop_watch.elapsedSeconds() < global_settings.dt_segment_bg_gc_check_interval)
+    if (gc_check_stop_watch.elapsedSeconds() < global_settings.dt_bg_gc_check_interval)
         return false;
     LOG_DEBUG(log, "Start GC with table id: " << next_table_id);
     // Get a storage snapshot with weak_ptrs first
@@ -20,7 +20,7 @@ bool GCManager::work()
     if (next_table_id != InvalidTableID)
         iter = storages.lower_bound(next_table_id);
 
-    Int64 gc_segments_limit = global_settings.dt_segment_bg_gc_max_segments_to_check_every_round;
+    Int64 gc_segments_limit = global_settings.dt_bg_gc_max_segments_to_check_every_round;
     UInt64 checked_storage_num = 0;
     while (true)
     {

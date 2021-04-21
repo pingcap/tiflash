@@ -71,9 +71,6 @@ public:
         UInt8  first_tag;
     };
 
-    // `PackProperty` is similar to `PackStat` except it uses protobuf to serialize it
-    using PackProperty = dtpb::PackProperty;
-
     struct SubFileStat
     {
         SubFileStat() = default;
@@ -102,7 +99,8 @@ public:
         DMSingleFileFormatVersion file_format_version;
     };
 
-    using PackStats      = PaddedPODArray<PackStat>;
+    using PackStats = PaddedPODArray<PackStat>;
+    // `PackProperties` is similar to `PackStats` except it uses protobuf to do serialization
     using PackProperties = dtpb::PackProperties;
 
     static DMFilePtr create(UInt64 file_id, const String & parent_path, bool single_file_mode = false);
@@ -265,9 +263,6 @@ private:
     {
         return isSingleFileMode() ? getSubFileStat(file_name).size : Poco::File(subFilePath(file_name)).getSize();
     }
-
-    // When dtfile is SingleFileMode, always return true because we don't try to reconstruct old dtfile in single file mode
-    bool isPropertyExists() { return Poco::File(packPropertyPath()).exists(); }
 
 private:
     UInt64 file_id;

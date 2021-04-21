@@ -1207,7 +1207,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         try_place_delta_index();
 }
 
-bool DeltaMergeStore::updateLatestGCSafePoint()
+bool DeltaMergeStore::updateGCSafePoint()
 {
     if (auto pd_client = global_context.getTMTContext().getPDClient(); !pd_client->isMock())
     {
@@ -1229,7 +1229,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
 
     // Update GC safe point before background task
     // Foreground task don't get GC safe point from remote, but we better make it as up to date as possible.
-    if (updateLatestGCSafePoint())
+    if (updateGCSafePoint())
     {
         /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
         task.dm_context->min_version = latest_gc_safe_point.load(std::memory_order_relaxed);
@@ -1304,13 +1304,13 @@ namespace GC
 {
 // Returns true if it needs gc.
 // This is for optimization purpose, does not mean to be accurate.
-bool shouldCompactWithStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ratio_threshold, Logger * log)
+bool shouldCompact(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ratio_threshold, Logger * log)
 {
     // Always GC.
     if (ratio_threshold < 1.0)
         return true;
 
-    auto & property = seg->getStable()->getDMFileProperty();
+    auto & property = seg->getStable()->getStableProperty();
     LOG_DEBUG(log, property.toDebugString());
     // No data older than safe_point to GC.
     if (property.min_ts > gc_safepoint)
@@ -1333,7 +1333,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     if (shutdown_called.load(std::memory_order_relaxed))
         return 0;
 
-    if (!updateLatestGCSafePoint())
+    if (!updateGCSafePoint())
         return 0;
 
     bool gc_safe_point_updated = false;
@@ -1405,16 +1405,15 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
 
         auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
         // calculate DMFileProperty if needed
-        if (!segment->getStable()->isDMFilePropertyCached())
-            segment->getStable()->calculateDMFileProperty(*dm_context, segment->getRowKeyRange(), isCommonHandle());
+        if (!segment->getStable()->isStablePropertyCached())
+            segment->getStable()->calculateStableProperty(*dm_context, segment->getRowKeyRange(), isCommonHandle());
         try
         {
             // Check whether we should apply gc on this segment
-            const bool should_compact
-                = GC::shouldCompactWithStable(segment,
-                                              latest_gc_safe_point.load(std::memory_order_relaxed),
-                                              global_context.getSettingsRef().dt_segment_bg_gc_ratio_threhold_to_trigger_gc,
-                                              log);
+            const bool should_compact = GC::shouldCompact(segment,
+                                                          latest_gc_safe_point.load(std::memory_order_relaxed),
+                                                          global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc,
+                                                          log);
             if (should_compact)
             {
                 ThreadType type = ThreadType::BG_MergeDelta;

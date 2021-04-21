@@ -45,9 +45,9 @@ public:
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
 
-    bool isDMFilePropertyCached() const { return is_property_cached.load(std::memory_order_acquire); }
+    bool isStablePropertyCached() const { return is_property_cached.load(std::memory_order_acquire); }
 
-    struct DMFileProperty
+    struct StableProperty
     {
         UInt64 min_ts;
         // number of rows including all puts and deletes
@@ -64,8 +64,8 @@ public:
         }
     };
 
-    const DMFileProperty & getDMFileProperty() const { return property; }
-    void                   calculateDMFileProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle);
+    const StableProperty & getStableProperty() const { return property; }
+    void                   calculateStableProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle);
 
     struct Snapshot;
     using SnapshotPtr = std::shared_ptr<Snapshot>;
@@ -147,7 +147,7 @@ private:
     UInt64  valid_bytes;
     DMFiles files;
 
-    DMFileProperty    property;
+    StableProperty    property;
     std::atomic<bool> is_property_cached = false;
 
     Logger * log;

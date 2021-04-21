@@ -117,8 +117,8 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows, size_t effe
 
     dmfile->addPack(stat);
 
-    auto & propertys = dmfile->getPackProperties();
-    auto * property  = propertys.add_property();
+    auto & properties = dmfile->getPackProperties();
+    auto * property   = properties.add_property();
     property->set_num_rows(effective_num_rows);
 }
 

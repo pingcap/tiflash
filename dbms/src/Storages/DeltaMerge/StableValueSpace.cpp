@@ -150,7 +150,7 @@ void StableValueSpace::recordRemovePacksPages(WriteBatches & wbs) const
     }
 }
 
-void StableValueSpace::calculateDMFileProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle)
+void StableValueSpace::calculateStableProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle)
 {
     property.min_ts       = std::numeric_limits<UInt64>::max();
     property.num_versions = 0;

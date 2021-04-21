@@ -361,7 +361,7 @@ private:
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
     SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
 
-    bool updateLatestGCSafePoint();
+    bool updateGCSafePoint();
 
     bool handleBackgroundTask(bool heavy);
 

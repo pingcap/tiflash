@@ -245,7 +245,7 @@ Block DMFileReader::read()
     size_t start_pack_id = next_pack_id;
     // When single_file_mode is true, or read_one_pack_every_time is true, we can just read one pack every time.
     // 0 means no limit
-    size_t read_pack_limit = single_file_mode || read_one_pack_every_time ? 1 : 0;
+    size_t read_pack_limit = (single_file_mode || read_one_pack_every_time) ? 1 : 0;
 
     auto & pack_stats     = dmfile->getPackStats();
     size_t read_rows      = 0;

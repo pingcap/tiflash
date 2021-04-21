@@ -192,7 +192,6 @@ try
             auto & property = propertys.property(i);
             ASSERT_EQ((size_t)property.num_rows(), (size_t)block_propertys[i].effective_num_rows);
         }
-        std::cout << propertys.property_size() << std::endl;
     }
     {
         // Test read after restore
