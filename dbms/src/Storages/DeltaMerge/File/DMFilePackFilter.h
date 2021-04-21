@@ -37,10 +37,6 @@ public:
         return pack_filter;
     }
 
-<<<<<<< HEAD
-=======
-
->>>>>>> init SubFileStat for DTFile in DMFilePackFilter
     const std::vector<RSResult> & getHandleRes() { return handle_res; }
     const std::vector<UInt8> &    getUsePacks() { return use_packs; }
 
