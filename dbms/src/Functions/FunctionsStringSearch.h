@@ -40,12 +40,11 @@ namespace DB
 
 static const UInt8 CH_ESCAPE_CHAR = '\\';
 
-template <typename Impl, typename Name, size_t num_args = 2>
+template <typename Impl, typename Name, bool customize_escape_char = false>
 class FunctionsStringSearch : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    static constexpr auto has_3_args = (num_args == 3);
     static FunctionPtr create(const Context &)
     {
         return std::make_shared<FunctionsStringSearch>();
@@ -60,8 +59,10 @@ public:
 
     size_t getNumberOfArguments() const override
     {
-        return num_args;
+        return 0;
     }
+    bool isVariadic() const override { return true; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {2, 3}; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -72,9 +73,13 @@ public:
         if (!arguments[1]->isString())
             throw Exception(
                 "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        if (has_3_args && !arguments[2]->isInteger())
+        if (customize_escape_char && !arguments[2]->isInteger())
             throw Exception(
                     "Illegal type " + arguments[2]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        size_t match_type_pos = customize_escape_char ? 3 : 2;
+        if (arguments.size() > match_type_pos && !arguments[match_type_pos]->isString())
+            throw Exception(
+                "Illegal type " + arguments[match_type_pos]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
     }
@@ -90,7 +95,7 @@ public:
         const ColumnConst * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
 
         UInt8 escape_char = CH_ESCAPE_CHAR;
-        if (has_3_args)
+        if (customize_escape_char)
         {
             auto * col_escape_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
             bool valid_args = true;
@@ -117,12 +122,21 @@ public:
                       "be constants, and the 3rd argument must between 0 and 255.");
             }
         }
+        size_t match_type_pos = customize_escape_char ? 3 : 2;
+        String match_type = "";
+        if (arguments.size() > match_type_pos)
+        {
+            auto * col_match_type_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
+            if (col_match_type_const == nullptr)
+                throw Exception("Match type argument of function " + getName() + " must be constant");
+            match_type = col_match_type_const->getValue<String>();
+        }
 
         if (col_haystack_const && col_needle_const)
         {
             ResultType res{};
             String needle_string = col_needle_const->getValue<String>();
-            Impl::constant_constant(col_haystack_const->getValue<String>(), needle_string, escape_char, collator, res);
+            Impl::constant_constant(col_haystack_const->getValue<String>(), needle_string, escape_char, match_type, collator, res);
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
             return;
         }
@@ -141,17 +155,18 @@ public:
                 col_needle_vector->getChars(),
                 col_needle_vector->getOffsets(),
                 escape_char,
+                match_type,
                 collator,
                 vec_res);
         else if (col_haystack_vector && col_needle_const)
         {
             String needle_string = col_needle_const->getValue<String>();
             Impl::vector_constant(col_haystack_vector->getChars(), col_haystack_vector->getOffsets(),
-                                  needle_string, escape_char, collator, vec_res);
+                                  needle_string, escape_char, match_type, collator, vec_res);
         }
         else if (col_haystack_const && col_needle_vector)
             Impl::constant_vector(col_haystack_const->getValue<String>(), col_needle_vector->getChars(),
-                    col_needle_vector->getOffsets(), escape_char, collator, vec_res);
+                    col_needle_vector->getOffsets(), escape_char, match_type, collator, vec_res);
         else
             throw Exception("Illegal columns " + block.getByPosition(arguments[0]).column->getName() + " and "
                     + block.getByPosition(arguments[1]).column->getName()

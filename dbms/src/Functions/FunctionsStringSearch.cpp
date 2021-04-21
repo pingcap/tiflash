@@ -158,11 +158,12 @@ struct PositionImpl
         const ColumnString::Offsets & offsets,
         const std::string & needle,
         const UInt8 escape_char,
+        const std::string & match_type,
         std::shared_ptr<TiDB::ITiDBCollator> collator,
         PaddedPODArray<UInt64> & res)
     {
-        if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
-            throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
+        if (escape_char != CH_ESCAPE_CHAR || !match_type.empty() || collator != nullptr)
+            throw Exception("PositionImpl don't support customized escape char/match_type argument/tidb collator", ErrorCodes::NOT_IMPLEMENTED);
         const UInt8 * begin = &data[0];
         const UInt8 * pos = begin;
         const UInt8 * end = pos + data.size();
@@ -201,11 +202,12 @@ struct PositionImpl
     /// Search for substring in string.
     static void constant_constant(std::string data, std::string needle,
             const UInt8 escape_char,
+            const std::string & match_type,
             std::shared_ptr<TiDB::ITiDBCollator> collator,
             UInt64 & res)
     {
-        if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
-            throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
+        if (escape_char != CH_ESCAPE_CHAR || !match_type.empty() || collator != nullptr)
+            throw Exception("PositionImpl don't support customized escape char/match_type argument/tidb collator", ErrorCodes::NOT_IMPLEMENTED);
         Impl::toLowerIfNeed(data);
         Impl::toLowerIfNeed(needle);
 
@@ -222,11 +224,12 @@ struct PositionImpl
         const ColumnString::Chars_t & needle_data,
         const ColumnString::Offsets & needle_offsets,
         const UInt8 escape_char,
+        const std::string & match_type,
         std::shared_ptr<TiDB::ITiDBCollator> collator,
         PaddedPODArray<UInt64> & res)
     {
-        if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
-            throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
+        if (escape_char != CH_ESCAPE_CHAR || !match_type.empty() || collator != nullptr)
+            throw Exception("PositionImpl don't support customized escape char/match_type argument/tidb collator", ErrorCodes::NOT_IMPLEMENTED);
         ColumnString::Offset prev_haystack_offset = 0;
         ColumnString::Offset prev_needle_offset = 0;
 
@@ -272,11 +275,12 @@ struct PositionImpl
         const ColumnString::Chars_t & needle_data,
         const ColumnString::Offsets & needle_offsets,
         const UInt8 escape_char,
+        const std::string & match_type,
         std::shared_ptr<TiDB::ITiDBCollator> collator,
         PaddedPODArray<UInt64> & res)
     {
-        if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
-            throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
+        if (escape_char != CH_ESCAPE_CHAR || !match_type.empty() || collator != nullptr)
+            throw Exception("PositionImpl don't support customized escape char/match_type argument/tidb collator", ErrorCodes::NOT_IMPLEMENTED);
         // NOTE You could use haystack indexing. But this is a rare case.
 
         ColumnString::Offset prev_needle_offset = 0;
@@ -410,10 +414,37 @@ struct MatchImpl
 {
     using ResultType = UInt8;
 
+    static void setOptionsFromMatchType(const String & match_type, bool force_case_sensitive, int & flag)
+    {
+        if (!match_type.empty())
+        {
+            for (size_t i = 0; i < match_type.size(); i++)
+            {
+                switch (match_type[i])
+                {
+                    case 'i':
+                        if (!force_case_sensitive)
+                            flag |= OptimizedRegularExpression::RE_CASELESS;
+                        break;
+                    case 'c':
+                        flag &= ~OptimizedRegularExpression::RE_CASELESS;
+                        break;
+                    case 'n':
+                        flag |= OptimizedRegularExpression::RE_DOT_NL;
+                        break;
+                    default:
+                        /// throw error or do nothing?
+                        break;
+                }
+            }
+        }
+    }
+
     static void vector_constant(const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
         const std::string & orig_pattern,
         const UInt8 escape_char,
+        const std::string & match_type,
         std::shared_ptr<TiDB::ITiDBCollator> collator,
         PaddedPODArray<UInt8> & res)
     {
@@ -485,6 +516,9 @@ struct MatchImpl
             /// for regexp only ci/cs is supported
             if (collator != nullptr && collator->isCI())
                 flags |= OptimizedRegularExpression::RE_CASELESS;
+
+            /// match_type can overwrite collator
+            setOptionsFromMatchType(match_type, collator != nullptr && collator->isBinary(), flags);
             const auto & regexp = Regexps::get<like, true>(pattern, flags);
 
             std::string required_substring;
@@ -584,9 +618,9 @@ struct MatchImpl
     }
 
     static void constant_constant(const std::string & data, const std::string & orig_pattern, const UInt8 escape_char,
-                                  std::shared_ptr<TiDB::ITiDBCollator> collator, UInt8 & res)
+                                  const std::string & match_type, std::shared_ptr<TiDB::ITiDBCollator> collator, UInt8 & res)
     {
-        if (collator != nullptr)
+        if (like && collator != nullptr)
         {
             auto matcher = collator->pattern();
             matcher->compile(orig_pattern, escape_char);
@@ -597,7 +631,18 @@ struct MatchImpl
             String pattern = orig_pattern;
             if (escape_char != CH_ESCAPE_CHAR)
                 pattern = replaceEscapeChar(pattern, escape_char);
-            int flags = OptimizedRegularExpression::RE_DOT_NL;
+            int flags = 0;
+            if constexpr (for_tidb)
+                flags |= OptimizedRegularExpression::RE_NO_OPTIMIZE;
+            else
+                flags |= OptimizedRegularExpression::RE_DOT_NL;
+
+            /// for regexp only ci/cs is supported
+            if (collator != nullptr && collator->isCI())
+                flags |= OptimizedRegularExpression::RE_CASELESS;
+
+            /// match_type can overwrite collator
+            setOptionsFromMatchType(match_type, collator != nullptr && collator->isBinary(), flags);
             const auto & regexp = Regexps::get<like, true>(pattern, flags);
             res = revert ^ regexp->match(data);
         }
@@ -1267,7 +1312,7 @@ using FunctionPositionCaseInsensitiveUTF8
 using FunctionMatch = FunctionsStringSearch<MatchImpl<false>, NameMatch>;
 using FunctionTiDBMatch = FunctionsStringSearch<MatchImpl<false, false, true>, NameTiDBMatch>;
 using FunctionLike = FunctionsStringSearch<MatchImpl<true>, NameLike>;
-using FunctionLike3Args = FunctionsStringSearch<MatchImpl<true, false, true>, NameLike3Args, 3>;
+using FunctionLike3Args = FunctionsStringSearch<MatchImpl<true, false, true>, NameLike3Args, true>;
 using FunctionNotLike = FunctionsStringSearch<MatchImpl<true, true>, NameNotLike>;
 using FunctionExtract = FunctionsStringSearchToString<ExtractImpl, NameExtract>;
 using FunctionReplaceOne = FunctionStringReplace<ReplaceStringImpl<true>, NameReplaceOne>;

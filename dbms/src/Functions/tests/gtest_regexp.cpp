@@ -43,7 +43,7 @@ TEST_F(Regexp, regexp_Test)
 
     auto & factory = FunctionFactory::instance();
 
-    std::vector<String> strs{"hello   ", "   h e llo", "hello    ", "     ", "hello, world"};
+    std::vector<String> strs{"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"};
 
     MutableColumnPtr csp = ColumnString::create();
     for (const auto & str : strs)
