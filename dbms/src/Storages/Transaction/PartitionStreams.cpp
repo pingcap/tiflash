@@ -549,7 +549,7 @@ GenRegionBlockDatawithSchema(const RegionPtr & region, TMTContext & tmt)
         {
             auto store = dm_storage->getStore();
             schema_snap = store->getStoreColumns();
-            // For StorageDeltaMerge, we always store an extra column with column_id = -1
+            // For DeltaMergeStore, we always store an extra column with column_id = -1
             res_block = store->addExtraColumnIfNeed(context, std::move(block));
         }
 

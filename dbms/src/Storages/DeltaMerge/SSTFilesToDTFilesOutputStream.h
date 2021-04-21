@@ -76,7 +76,6 @@ private:
 
     std::shared_ptr<StorageDeltaMerge>       ingest_storage;
     DM::ColumnDefinesPtr                     cur_schema;
-    DMFilePtr                                dt_file;
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;
 
     std::vector<DMFilePtr> ingest_files;
