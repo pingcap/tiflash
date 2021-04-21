@@ -147,6 +147,9 @@ RWLockImpl::LockHolder RWLockImpl::getLock(
     }
     else if (readers_queue.empty() || (rdlock_owner == readers_queue.begin() && readers_queue.size() == 1 && !writers_queue.empty()))
     {
+        // 1. If there are no readers, create a new read group
+        // 2. If now this lock is acquired by a reader thread, and there is waiting writer(s), and no existing reader group except the `rdlock_owner`, create a new reader group for waiting
+        // 3. Otherwise, join the previous reader group for waiting (so that reader won't be blocked by another reader)
         readers_queue.emplace_back(type); /// SM1: may throw (nothing to roll back)
     }
     GroupsContainer::iterator it_group = (type == Type::Write) ? std::prev(writers_queue.end()) : std::prev(readers_queue.end());
