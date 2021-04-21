@@ -405,7 +405,7 @@ String replaceEscapeChar(String & orig_string, UInt8 escape_char)
   * NOTE: We want to run regexp search for whole block by one call (as implemented in function 'position')
   *  but for that, regexp engine must support \0 bytes and their interpretation as string boundaries.
   */
-template <bool like, bool revert = false>
+template <bool like, bool revert = false, bool for_tidb = false>
 struct MatchImpl
 {
     using ResultType = UInt8;
@@ -417,7 +417,9 @@ struct MatchImpl
         std::shared_ptr<TiDB::ITiDBCollator> collator,
         PaddedPODArray<UInt8> & res)
     {
-        if (collator != nullptr)
+        /// collation only take affect for like, for regexp collation is not
+        /// fully supported.(Only case sensitive/insensitive is supported)
+        if (like && collator != nullptr)
         {
             auto matcher = collator->pattern();
             matcher->compile(orig_pattern, escape_char);
@@ -474,7 +476,16 @@ struct MatchImpl
         {
             size_t size = offsets.size();
 
-            const auto & regexp = Regexps::get<like, true>(pattern);
+            int flags = 0;
+            if constexpr (for_tidb)
+                flags |= OptimizedRegularExpression::RE_NO_OPTIMIZE;
+            else
+                flags |= OptimizedRegularExpression::RE_DOT_NL;
+
+            /// for regexp only ci/cs is supported
+            if (collator != nullptr && collator->isCI())
+                flags |= OptimizedRegularExpression::RE_CASELESS;
+            const auto & regexp = Regexps::get<like, true>(pattern, flags);
 
             std::string required_substring;
             bool is_trivial;
@@ -586,7 +597,8 @@ struct MatchImpl
             String pattern = orig_pattern;
             if (escape_char != CH_ESCAPE_CHAR)
                 pattern = replaceEscapeChar(pattern, escape_char);
-            const auto & regexp = Regexps::get<like, true>(pattern);
+            int flags = OptimizedRegularExpression::RE_DOT_NL;
+            const auto & regexp = Regexps::get<like, true>(pattern, flags);
             res = revert ^ regexp->match(data);
         }
     }
@@ -615,7 +627,8 @@ struct ExtractImpl
         res_data.reserve(data.size() / 5);
         res_offsets.resize(offsets.size());
 
-        const auto & regexp = Regexps::get<false, false>(pattern);
+        int flags = OptimizedRegularExpression::RE_DOT_NL;
+        const auto & regexp = Regexps::get<false, false>(pattern, flags);
 
         unsigned capture = regexp->getNumberOfSubpatterns() > 0 ? 1 : 0;
         OptimizedRegularExpression::MatchVec matches;
@@ -712,13 +725,16 @@ struct ReplaceRegexpImpl
     static void processString(const re2_st::StringPiece & input,
         ColumnString::Chars_t & res_data,
         ColumnString::Offset & res_offset,
+        const Int64 & pos,
+        const Int64 & occ,
         re2_st::RE2 & searcher,
         int num_captures,
         const Instructions & instructions)
     {
         re2_st::StringPiece matches[max_captures];
 
-        size_t start_pos = 0;
+        size_t start_pos = pos - 1;
+        Int64 match_occ = 0;
         while (start_pos < static_cast<size_t>(input.length()))
         {
             /// If no more replacements possible for current string
@@ -726,34 +742,46 @@ struct ReplaceRegexpImpl
 
             if (searcher.Match(input, start_pos, input.length(), re2_st::RE2::Anchor::UNANCHORED, matches, num_captures))
             {
-                const auto & match = matches[0];
-                size_t bytes_to_copy = (match.data() - input.data()) - start_pos;
-
-                /// Copy prefix before matched regexp without modification
-                res_data.resize(res_data.size() + bytes_to_copy);
-                memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], input.data() + start_pos, bytes_to_copy);
-                res_offset += bytes_to_copy;
-                start_pos += bytes_to_copy + match.length();
-
-                /// Do substitution instructions
-                for (const auto & it : instructions)
+                match_occ++;
+                /// if occ > 0, it will replace all the match expr, otherwise it only replace the occ-th match
+                if (occ == 0 || match_occ == occ)
                 {
-                    if (it.first >= 0)
-                    {
-                        res_data.resize(res_data.size() + matches[it.first].length());
-                        memcpy(&res_data[res_offset], matches[it.first].data(), matches[it.first].length());
-                        res_offset += matches[it.first].length();
-                    }
-                    else
-                    {
-                        res_data.resize(res_data.size() + it.second.size());
-                        memcpy(&res_data[res_offset], it.second.data(), it.second.size());
-                        res_offset += it.second.size();
-                    }
-                }
+                    const auto & match = matches[0];
+                    size_t bytes_to_copy = (match.data() - input.data()) - start_pos;
 
-                if (replace_one || match.length() == 0) /// Stop after match of zero length, to avoid infinite loop.
-                    can_finish_current_string = true;
+                    /// Copy prefix before matched regexp without modification
+                    res_data.resize(res_data.size() + bytes_to_copy);
+                    memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], input.data() + start_pos, bytes_to_copy);
+                    res_offset += bytes_to_copy;
+                    start_pos += bytes_to_copy + match.length();
+
+                    /// Do substitution instructions
+                    for (const auto & it : instructions)
+                    {
+                        if (it.first >= 0)
+                        {
+                            res_data.resize(res_data.size() + matches[it.first].length());
+                            memcpy(&res_data[res_offset], matches[it.first].data(), matches[it.first].length());
+                            res_offset += matches[it.first].length();
+                        }
+                        else
+                        {
+                            res_data.resize(res_data.size() + it.second.size());
+                            memcpy(&res_data[res_offset], it.second.data(), it.second.size());
+                            res_offset += it.second.size();
+                        }
+                    }
+
+                    if (replace_one || occ != 0 || match.length() == 0) /// Stop after match of zero length, to avoid infinite loop.
+                        can_finish_current_string = true;
+                }
+                else
+                {
+                    const auto & match = matches[0];
+                    start_pos = match.data() - input.data() + match.length();
+                    if (match.length() == 0)
+                        can_finish_current_string = true;
+                }
             }
             else
                 can_finish_current_string = true;
@@ -773,11 +801,42 @@ struct ReplaceRegexpImpl
         ++res_offset;
     }
 
+    static re2_st::RE2::Options getRE2Options(const std::string & match_type, const bool & force_case_sensitive)
+    {
+        re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
+        if (!match_type.empty())
+        {
+            for (size_t i = 0; i < match_type.size(); i++)
+            {
+                switch (match_type[i])
+                {
+                    case 'i':
+                        if (!force_case_sensitive)
+                            options.set_case_sensitive(false);
+                        break;
+                    case 'c':
+                        options.set_case_sensitive(true);
+                        break;
+                    case 'n':
+                        options.set_dot_nl(true);
+                        break;
+                    default:
+                        /// throw error or do nothing?
+                        break;
+                }
+            }
+        }
+        return options;
+    }
 
     static void vector(const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
         const std::string & needle,
         const std::string & replacement,
+        const Int64 & pos,
+        const Int64 & occ,
+        const std::string & match_type,
+        const bool & force_case_sensitive,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -786,7 +845,8 @@ struct ReplaceRegexpImpl
         size_t size = offsets.size();
         res_offsets.resize(size);
 
-        re2_st::RE2 searcher(needle);
+
+        re2_st::RE2 searcher(needle, getRE2Options(match_type, force_case_sensitive));
         int num_captures = std::min(searcher.NumberOfCapturingGroups() + 1, static_cast<int>(max_captures));
 
         Instructions instructions = createInstructions(replacement, num_captures);
@@ -797,7 +857,7 @@ struct ReplaceRegexpImpl
             int from = i > 0 ? offsets[i - 1] : 0;
             re2_st::StringPiece input(reinterpret_cast<const char *>(&data[0] + from), offsets[i] - from - 1);
 
-            processString(input, res_data, res_offset, searcher, num_captures, instructions);
+            processString(input, res_data, res_offset, pos, occ, searcher, num_captures, instructions);
             res_offsets[i] = res_offset;
         }
     }
@@ -806,6 +866,10 @@ struct ReplaceRegexpImpl
         size_t n,
         const std::string & needle,
         const std::string & replacement,
+        const Int64 & pos,
+        const Int64 & occ,
+        const std::string & match_type,
+        const bool & force_case_sensitive,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -814,7 +878,7 @@ struct ReplaceRegexpImpl
         res_data.reserve(data.size());
         res_offsets.resize(size);
 
-        re2_st::RE2 searcher(needle);
+        re2_st::RE2 searcher(needle, getRE2Options(match_type, force_case_sensitive));
         int num_captures = std::min(searcher.NumberOfCapturingGroups() + 1, static_cast<int>(max_captures));
 
         Instructions instructions = createInstructions(replacement, num_captures);
@@ -824,7 +888,7 @@ struct ReplaceRegexpImpl
             int from = i * n;
             re2_st::StringPiece input(reinterpret_cast<const char *>(&data[0] + from), n);
 
-            processString(input, res_data, res_offset, searcher, num_captures, instructions);
+            processString(input, res_data, res_offset, pos, occ, searcher, num_captures, instructions);
             res_offsets[i] = res_offset;
         }
     }
@@ -840,6 +904,10 @@ struct ReplaceStringImpl
         const ColumnString::Offsets & offsets,
         const std::string & needle,
         const std::string & replacement,
+        const Int64 & /* pos */,
+        const Int64 & /* occ */,
+        const std::string & /* match_type */,
+        const bool & /* force_case_sensitive */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -915,6 +983,10 @@ struct ReplaceStringImpl
         size_t n,
         const std::string & needle,
         const std::string & replacement,
+        const Int64 & /* pos */,
+        const Int64 & /* occ */,
+        const std::string & /* match_type */,
+        const bool & /* force_case_sensitive */,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -992,7 +1064,12 @@ struct ReplaceStringImpl
         }
     }
 
-    static void constant(const std::string & data, const std::string & needle, const std::string & replacement, std::string & res_data)
+    static void constant(const std::string & data, const std::string & needle, const std::string & replacement,
+                         const Int64 & /* pos */,
+                         const Int64 & /* occ */,
+                         const std::string & /* match_type */,
+                         const bool & /* force_case_sensitive */,
+                         std::string & res_data)
     {
         res_data = "";
         int replace_cnt = 0;
@@ -1034,11 +1111,13 @@ public:
 
     size_t getNumberOfArguments() const override
     {
-        return 3;
+        return 0;
     }
 
+    bool isVariadic() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2}; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2, 3, 4, 5}; }
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_) override { collator = collator_; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1054,6 +1133,18 @@ public:
             throw Exception("Illegal type " + arguments[2]->getName() + " of third argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
+        if (arguments.size() > 3 && !arguments[3]->isInteger())
+            throw Exception("Illegal type " + arguments[2]->getName() + " of forth argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if (arguments.size() > 4 && !arguments[4]->isInteger())
+            throw Exception("Illegal type " + arguments[2]->getName() + " of fifth argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if (arguments.size() > 5 && !arguments[5]->isStringOrFixedString())
+            throw Exception("Illegal type " + arguments[2]->getName() + " of sixth argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
         return std::make_shared<DataTypeString>();
     }
 
@@ -1062,9 +1153,15 @@ public:
         const ColumnPtr column_src = block.getByPosition(arguments[0]).column;
         const ColumnPtr column_needle = block.getByPosition(arguments[1]).column;
         const ColumnPtr column_replacement = block.getByPosition(arguments[2]).column;
+        const ColumnPtr column_pos = arguments.size() > 3 ? block.getByPosition(arguments[3]).column : nullptr;
+        const ColumnPtr column_occ = arguments.size() > 4 ? block.getByPosition(arguments[4]).column : nullptr;
+        const ColumnPtr column_match_type = arguments.size() > 5 ? block.getByPosition(arguments[5]).column : nullptr;
 
-        if (!column_needle->isColumnConst() || !column_replacement->isColumnConst())
-            throw Exception("2nd and 3rd arguments of function " + getName() + " must be constants.");
+        if (!column_needle->isColumnConst() || !column_replacement->isColumnConst()
+            || (column_pos != nullptr && !column_pos->isColumnConst())
+            || (column_occ != nullptr && !column_occ->isColumnConst())
+            || (column_match_type != nullptr && !column_match_type->isColumnConst()))
+            throw Exception("2nd, 3rd, 4th, 5th, 6th arguments of function " + getName() + " must be constants.");
 
         const IColumn * c1 = block.getByPosition(arguments[1]).column.get();
         const IColumn * c2 = block.getByPosition(arguments[2]).column.get();
@@ -1072,6 +1169,10 @@ public:
         const ColumnConst * c2_const = typeid_cast<const ColumnConst *>(c2);
         String needle = c1_const->getValue<String>();
         String replacement = c2_const->getValue<String>();
+        Int64 pos = column_pos == nullptr ? 1 : typeid_cast<const ColumnConst *>(column_pos.get())->getValue<Int64>();
+        Int64 occ = column_occ == nullptr ? 0 : typeid_cast<const ColumnConst *>(column_occ.get())->getValue<Int64>();
+        String match_type = column_match_type == nullptr ? "" : typeid_cast<const ColumnConst *>(column_match_type.get())->getValue<String>();
+        bool force_case_sensitive = collator != nullptr && collator->isBinary();
 
         if (needle.size() == 0)
             throw Exception("Length of the second argument of function replace must be greater than 0.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
@@ -1079,13 +1180,14 @@ public:
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
         {
             auto col_res = ColumnString::create();
-            Impl::vector(col->getChars(), col->getOffsets(), needle, replacement, col_res->getChars(), col_res->getOffsets());
+            Impl::vector(col->getChars(), col->getOffsets(), needle, replacement, pos, occ, match_type, force_case_sensitive,
+                col_res->getChars(), col_res->getOffsets());
             block.getByPosition(result).column = std::move(col_res);
         }
         else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
         {
             auto col_res = ColumnString::create();
-            Impl::vector_fixed(col->getChars(), col->getN(), needle, replacement, col_res->getChars(), col_res->getOffsets());
+            Impl::vector_fixed(col->getChars(), col->getN(), needle, replacement, pos, occ, match_type, force_case_sensitive, col_res->getChars(), col_res->getOffsets());
             block.getByPosition(result).column = std::move(col_res);
         }
         else
@@ -1093,6 +1195,9 @@ public:
                 "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
+
+private:
+    std::shared_ptr<TiDB::ITiDBCollator> collator;
 };
 
 
@@ -1115,6 +1220,10 @@ struct NamePositionCaseInsensitiveUTF8
 struct NameMatch
 {
     static constexpr auto name = "match";
+};
+struct NameTiDBMatch
+{
+    static constexpr auto name = "regexp";
 };
 struct NameLike
 {
@@ -1156,8 +1265,9 @@ using FunctionPositionCaseInsensitiveUTF8
     = FunctionsStringSearch<PositionImpl<PositionCaseInsensitiveUTF8>, NamePositionCaseInsensitiveUTF8>;
 
 using FunctionMatch = FunctionsStringSearch<MatchImpl<false>, NameMatch>;
+using FunctionTiDBMatch = FunctionsStringSearch<MatchImpl<false, false, true>, NameTiDBMatch>;
 using FunctionLike = FunctionsStringSearch<MatchImpl<true>, NameLike>;
-using FunctionLike3Args = FunctionsStringSearch<MatchImpl<true>, NameLike3Args, 3>;
+using FunctionLike3Args = FunctionsStringSearch<MatchImpl<true, false, true>, NameLike3Args, 3>;
 using FunctionNotLike = FunctionsStringSearch<MatchImpl<true, true>, NameNotLike>;
 using FunctionExtract = FunctionsStringSearchToString<ExtractImpl, NameExtract>;
 using FunctionReplaceOne = FunctionStringReplace<ReplaceStringImpl<true>, NameReplaceOne>;
@@ -1177,6 +1287,7 @@ void registerFunctionsStringSearch(FunctionFactory & factory)
     factory.registerFunction<FunctionPositionCaseInsensitive>();
     factory.registerFunction<FunctionPositionCaseInsensitiveUTF8>();
     factory.registerFunction<FunctionMatch>();
+    factory.registerFunction<FunctionTiDBMatch>();
     factory.registerFunction<FunctionLike>();
     factory.registerFunction<FunctionLike3Args>();
     factory.registerFunction<FunctionNotLike>();
