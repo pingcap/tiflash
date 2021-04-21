@@ -37,12 +37,12 @@ extern const int LOGICAL_ERROR;
   *   1. Create an instance (allocating all the needed memory)
   *   2. Associate the instance with the lock (attach to the lock and locking request group)
   */
-class RWLockImpl::LockHolderImpl
+class RWLock::LockHolderImpl
 {
     bool bound{false};
     String query_id;
     CurrentMetrics::Increment active_client_increment;
-    RWLock parent;
+    RWLockPtr parent;
     GroupsContainer::iterator it_group;
 
 public:
@@ -66,7 +66,7 @@ public:
 private:
     /// A separate method which binds the lock holder to the owned lock
     /// N.B. It is very important that this method produces no allocations
-    bool bindWith(RWLock && parent_, GroupsContainer::iterator it_group_) noexcept
+    bool bindWith(RWLockPtr && parent_, GroupsContainer::iterator it_group_) noexcept
     {
         if (bound || parent_ == nullptr)
             return false;
@@ -77,7 +77,7 @@ private:
         return true;
     }
 
-    friend class RWLockImpl;
+    friend class RWLock;
 };
 
 
@@ -94,8 +94,8 @@ private:
   *
   * Note: "SM" in the commentaries below stands for STATE MODIFICATION
   */
-RWLockImpl::LockHolder RWLockImpl::getLock(
-    RWLockImpl::Type type, const String & query_id, const std::chrono::milliseconds & lock_timeout_ms)
+RWLock::LockHolder RWLock::getLock(
+    RWLock::Type type, const String & query_id, const std::chrono::milliseconds & lock_timeout_ms)
 {
     const auto lock_deadline_tp = (lock_timeout_ms == std::chrono::milliseconds(0))
         ? std::chrono::time_point<std::chrono::steady_clock>::max()
@@ -125,12 +125,12 @@ RWLockImpl::LockHolder RWLockImpl::getLock(
         if (const auto owner_query_it = owner_queries.find(query_id); owner_query_it != owner_queries.end())
         {
             if (wrlock_owner != writers_queue.end())
-                throw Exception("RWLockImpl::getLock(): RWLock is already locked in exclusive mode", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("RWLock::getLock(): RWLock is already locked in exclusive mode", ErrorCodes::LOGICAL_ERROR);
 
             /// Lock upgrading is not supported
             if (type == Write)
                 throw Exception(
-                    "RWLockImpl::getLock(): Cannot acquire exclusive lock while RWLock is already locked", ErrorCodes::LOGICAL_ERROR);
+                    "RWLock::getLock(): Cannot acquire exclusive lock while RWLock is already locked", ErrorCodes::LOGICAL_ERROR);
 
             /// N.B. Type is Read here, query_id is not empty and owner_query_it is a valid iterator
             ++owner_query_it->second;                                /// SM1: nothrow
@@ -226,7 +226,7 @@ RWLockImpl::LockHolder RWLockImpl::getLock(
   *
   * We do not employ try-catch: if something bad happens, there is nothing we can do =(
   */
-void RWLockImpl::unlock(GroupsContainer::iterator group_it, const String & query_id) noexcept
+void RWLock::unlock(GroupsContainer::iterator group_it, const String & query_id) noexcept
 {
     std::lock_guard state_lock(internal_state_mtx);
 
@@ -255,7 +255,7 @@ void RWLockImpl::unlock(GroupsContainer::iterator group_it, const String & query
 }
 
 
-void RWLockImpl::dropOwnerGroupAndPassOwnership(GroupsContainer::iterator group_it) noexcept
+void RWLock::dropOwnerGroupAndPassOwnership(GroupsContainer::iterator group_it) noexcept
 {
     rdlock_owner = readers_queue.end();
     wrlock_owner = writers_queue.end();

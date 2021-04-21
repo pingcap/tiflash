@@ -113,7 +113,7 @@ void tryOptimizeStorageFinal(Context & context, TableID table_id)
 
     try
     {
-        auto table_lock = managed_storage->lockStructureForShare(RWLockImpl::NO_QUERY);
+        auto table_lock = managed_storage->lockStructureForShare(RWLock::NO_QUERY);
     }
     catch (DB::Exception & e)
     {

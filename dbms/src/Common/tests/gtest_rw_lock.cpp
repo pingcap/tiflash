@@ -35,7 +35,7 @@ TEST(Common, RWLock1)
     static std::atomic<int> total_readers{0};
     static std::atomic<int> total_writers{0};
 
-    static auto fifo_lock = RWLockImpl::create();
+    static auto fifo_lock = RWLock::create();
 
     auto func = [&](size_t threads, int round) {
         std::random_device rd;
@@ -45,12 +45,12 @@ TEST(Common, RWLock1)
         for (int i = 0; i < cycles; ++i)
         {
             auto r = d(gen);
-            auto type = (r >= round) ? RWLockImpl::Read : RWLockImpl::Write;
+            auto type = (r >= round) ? RWLock::Read : RWLock::Write;
             auto sleep_for = std::chrono::duration<int, std::micro>(std::uniform_int_distribution<>(1, 100)(gen));
 
-            auto lock = fifo_lock->getLock(type, RWLockImpl::NO_QUERY);
+            auto lock = fifo_lock->getLock(type, RWLock::NO_QUERY);
 
-            if (type == RWLockImpl::Write)
+            if (type == RWLock::Write)
             {
                 ++writers;
 
@@ -104,7 +104,7 @@ TEST(Common, RWLockRecursive)
 {
     constexpr auto cycles = 10000;
 
-    static auto fifo_lock = RWLockImpl::create();
+    static auto fifo_lock = RWLock::create();
 
     static thread_local std::random_device rd;
     static thread_local pcg64 gen(rd());
@@ -112,7 +112,7 @@ TEST(Common, RWLockRecursive)
     std::thread t1([&]() {
         for (int i = 0; i < 2 * cycles; ++i)
         {
-            auto lock = fifo_lock->getLock(RWLockImpl::Write, "q1");
+            auto lock = fifo_lock->getLock(RWLock::Write, "q1");
 
             auto sleep_for = std::chrono::duration<int, std::micro>(std::uniform_int_distribution<>(1, 100)(gen));
             std::this_thread::sleep_for(sleep_for);
@@ -122,20 +122,20 @@ TEST(Common, RWLockRecursive)
     std::thread t2([&]() {
         for (int i = 0; i < cycles; ++i)
         {
-            auto lock1 = fifo_lock->getLock(RWLockImpl::Read, "q2");
+            auto lock1 = fifo_lock->getLock(RWLock::Read, "q2");
 
             auto sleep_for = std::chrono::duration<int, std::micro>(std::uniform_int_distribution<>(1, 100)(gen));
             std::this_thread::sleep_for(sleep_for);
 
-            auto lock2 = fifo_lock->getLock(RWLockImpl::Read, "q2");
+            auto lock2 = fifo_lock->getLock(RWLock::Read, "q2");
 
 #ifndef ABORT_ON_LOGICAL_ERROR
             /// It throws LOGICAL_ERROR
-            EXPECT_ANY_THROW({ fifo_lock->getLock(RWLockImpl::Write, "q2"); });
+            EXPECT_ANY_THROW({ fifo_lock->getLock(RWLock::Write, "q2"); });
 #endif
         }
 
-        fifo_lock->getLock(RWLockImpl::Write, "q2");
+        fifo_lock->getLock(RWLock::Write, "q2");
     });
 
     t1.join();
@@ -145,8 +145,8 @@ TEST(Common, RWLockRecursive)
 
 TEST(Common, RWLockDeadlock)
 {
-    static auto lock1 = RWLockImpl::create();
-    static auto lock2 = RWLockImpl::create();
+    static auto lock1 = RWLock::create();
+    static auto lock2 = RWLock::create();
 
     /**
       * q1: r1          r2
@@ -156,14 +156,14 @@ TEST(Common, RWLockDeadlock)
       */
 
     std::thread t1([&]() {
-        auto holder1 = lock1->getLock(RWLockImpl::Read, "q1");
+        auto holder1 = lock1->getLock(RWLock::Read, "q1");
         usleep(100000);
         usleep(100000);
         usleep(100000);
         usleep(100000);
         try
         {
-            auto holder2 = lock2->getLock(RWLockImpl::Read, "q1", std::chrono::milliseconds(100));
+            auto holder2 = lock2->getLock(RWLock::Read, "q1", std::chrono::milliseconds(100));
             if (!holder2)
             {
                 throw Exception("Locking attempt timed out! Possible deadlock avoided. Client should retry.", ErrorCodes::DEADLOCK_AVOIDED);
@@ -178,19 +178,19 @@ TEST(Common, RWLockDeadlock)
 
     std::thread t2([&]() {
         usleep(100000);
-        auto holder1 = lock1->getLock(RWLockImpl::Write, "q2");
+        auto holder1 = lock1->getLock(RWLock::Write, "q2");
     });
 
     std::thread t3([&]() {
         usleep(100000);
         usleep(100000);
-        auto holder2 = lock2->getLock(RWLockImpl::Read, "q3");
+        auto holder2 = lock2->getLock(RWLock::Read, "q3");
         usleep(100000);
         usleep(100000);
         usleep(100000);
         try
         {
-            auto holder1 = lock1->getLock(RWLockImpl::Read, "q3", std::chrono::milliseconds(100));
+            auto holder1 = lock1->getLock(RWLock::Read, "q3", std::chrono::milliseconds(100));
             if (!holder1)
             {
                 throw Exception("Locking attempt timed out! Possible deadlock avoided. Client should retry.", ErrorCodes::DEADLOCK_AVOIDED);
@@ -207,7 +207,7 @@ TEST(Common, RWLockDeadlock)
         usleep(100000);
         usleep(100000);
         usleep(100000);
-        auto holder2 = lock2->getLock(RWLockImpl::Write, "q4");
+        auto holder2 = lock2->getLock(RWLock::Write, "q4");
     });
 
     t1.join();
@@ -222,7 +222,7 @@ TEST(Common, RWLockPerfTestReaders)
     constexpr int cycles = 100000; // 100k
     const std::vector<size_t> pool_sizes{1, 2, 4, 8};
 
-    static auto fifo_lock = RWLockImpl::create();
+    static auto fifo_lock = RWLock::create();
 
     for (auto pool_size : pool_sizes)
     {
@@ -231,7 +231,7 @@ TEST(Common, RWLockPerfTestReaders)
         auto func = [&]() {
             for (auto i = 0; i < cycles; ++i)
             {
-                auto lock = fifo_lock->getLock(RWLockImpl::Read, RWLockImpl::NO_QUERY);
+                auto lock = fifo_lock->getLock(RWLock::Read, RWLock::NO_QUERY);
             }
         };
 
@@ -253,7 +253,7 @@ TEST(Common, RWLockPerfTestReaders)
         auto func = [&]() {
             for (auto i = 0; i < cycles; ++i)
             {
-                auto lock = fifo_lock->getLock(RWLockImpl::Read, "test_query_id");
+                auto lock = fifo_lock->getLock(RWLock::Read, "test_query_id");
             }
         };
 

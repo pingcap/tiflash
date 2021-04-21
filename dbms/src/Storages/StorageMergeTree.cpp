@@ -696,7 +696,7 @@ void StorageMergeTree::clearColumnInPartition(const ASTPtr & partition, const Fi
     auto merge_blocker = merger.merges_blocker.cancel();
 
     /// We don't change table structure, only data in some parts, parts are locked inside alterDataPart() function
-    auto lock_read_structure = lockStructureForShare(RWLockImpl::NO_QUERY);
+    auto lock_read_structure = lockStructureForShare(RWLock::NO_QUERY);
 
     String partition_id = data.getPartitionIDFromQuery(partition, context);
     MergeTreeData::DataParts parts = data.getDataParts();

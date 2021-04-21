@@ -7,7 +7,7 @@
 namespace DB
 {
 
-using TableLockHolder = RWLockImpl::LockHolder;
+using TableLockHolder = RWLock::LockHolder;
 using TableLockHolders = std::vector<TableLockHolder>;
 
 /// Table exclusive lock, holds both alter and drop locks. Useful for DROP-like

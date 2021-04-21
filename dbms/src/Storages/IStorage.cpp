@@ -11,13 +11,13 @@ extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
 
-RWLockImpl::LockHolder IStorage::tryLockTimed(
-    const RWLock & rwlock, RWLockImpl::Type type, const String & query_id, const std::chrono::milliseconds & acquire_timeout) const
+RWLock::LockHolder IStorage::tryLockTimed(
+    const RWLockPtr & rwlock, RWLock::Type type, const String & query_id, const std::chrono::milliseconds & acquire_timeout) const
 {
     auto lock_holder = rwlock->getLock(type, query_id, acquire_timeout);
     if (!lock_holder)
     {
-        const String type_str = type == RWLockImpl::Type::Read ? "READ" : "WRITE";
+        const String type_str = type == RWLock::Type::Read ? "READ" : "WRITE";
         throw Exception(type_str + " locking attempt on \"" + getTableName() + "\" has timed out! ("
                 + std::to_string(acquire_timeout.count())
                 + "ms) "
@@ -29,7 +29,7 @@ RWLockImpl::LockHolder IStorage::tryLockTimed(
 
 TableLockHolder IStorage::lockForShare(const String & query_id, const std::chrono::milliseconds & acquire_timeout)
 {
-    TableLockHolder result = tryLockTimed(drop_lock, RWLockImpl::Read, query_id, acquire_timeout);
+    TableLockHolder result = tryLockTimed(drop_lock, RWLock::Read, query_id, acquire_timeout);
 
     if (is_dropped)
         throw Exception("Table is dropped", ErrorCodes::TABLE_IS_DROPPED);
@@ -39,7 +39,7 @@ TableLockHolder IStorage::lockForShare(const String & query_id, const std::chron
 
 TableLockHolder IStorage::lockForAlter(const String & query_id, const std::chrono::milliseconds & acquire_timeout)
 {
-    TableLockHolder result = tryLockTimed(alter_lock, RWLockImpl::Write, query_id, acquire_timeout);
+    TableLockHolder result = tryLockTimed(alter_lock, RWLock::Write, query_id, acquire_timeout);
 
     if (is_dropped)
         throw Exception("Table is dropped", ErrorCodes::TABLE_IS_DROPPED);
@@ -50,12 +50,12 @@ TableLockHolder IStorage::lockForAlter(const String & query_id, const std::chron
 TableStructureLockHolder IStorage::lockStructureForShare(const String & query_id, const std::chrono::milliseconds & acquire_timeout)
 {
     TableStructureLockHolder result;
-    result.alter_lock = tryLockTimed(alter_lock, RWLockImpl::Read, query_id, acquire_timeout);
+    result.alter_lock = tryLockTimed(alter_lock, RWLock::Read, query_id, acquire_timeout);
 
     if (is_dropped)
         throw Exception("Table is dropped", ErrorCodes::TABLE_IS_DROPPED);
 
-    result.drop_lock = tryLockTimed(drop_lock, RWLockImpl::Read, query_id, acquire_timeout);
+    result.drop_lock = tryLockTimed(drop_lock, RWLock::Read, query_id, acquire_timeout);
 
     return result;
 }
@@ -63,12 +63,12 @@ TableStructureLockHolder IStorage::lockStructureForShare(const String & query_id
 TableExclusiveLockHolder IStorage::lockExclusively(const String & query_id, const std::chrono::milliseconds & acquire_timeout)
 {
     TableExclusiveLockHolder result;
-    result.alter_lock = tryLockTimed(alter_lock, RWLockImpl::Write, query_id, acquire_timeout);
+    result.alter_lock = tryLockTimed(alter_lock, RWLock::Write, query_id, acquire_timeout);
 
     if (is_dropped)
         throw Exception("Table is dropped", ErrorCodes::TABLE_IS_DROPPED);
 
-    result.drop_lock = tryLockTimed(drop_lock, RWLockImpl::Write, query_id, acquire_timeout);
+    result.drop_lock = tryLockTimed(drop_lock, RWLock::Write, query_id, acquire_timeout);
 
     return result;
 }

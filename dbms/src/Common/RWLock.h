@@ -15,8 +15,8 @@
 namespace DB
 {
 
-class RWLockImpl;
-using RWLock = std::shared_ptr<RWLockImpl>;
+class RWLock;
+using RWLockPtr = std::shared_ptr<RWLock>;
 
 
 /// Implements Readers-Writers locking algorithm that serves requests in "Phase Fair" order.
@@ -34,7 +34,7 @@ using RWLock = std::shared_ptr<RWLockImpl>;
 /// - SELECT thread 1 locks in the Read mode
 /// - ALTER tries to lock in the Write mode (waits for SELECT thread 1)
 /// - SELECT thread 2 tries to lock in the Read mode (waits for ALTER)
-class RWLockImpl : public std::enable_shared_from_this<RWLockImpl>
+class RWLock : public std::enable_shared_from_this<RWLock>
 {
 public:
     enum Type
@@ -43,7 +43,7 @@ public:
         Write,
     };
 
-    static RWLock create() { return RWLock(new RWLockImpl); }
+    static RWLockPtr create() { return RWLockPtr(new RWLock()); }
 
     /// Just use LockHolder::reset() to release the lock
     class LockHolderImpl;
@@ -86,7 +86,7 @@ private:
     OwnerQueryIds owner_queries;
 
 private:
-    RWLockImpl() = default;
+    RWLock() = default;
     void unlock(GroupsContainer::iterator group_it, const String & query_id) noexcept;
     void dropOwnerGroupAndPassOwnership(GroupsContainer::iterator group_it) noexcept;
 };

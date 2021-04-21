@@ -257,21 +257,21 @@ protected:
     using std::enable_shared_from_this<IStorage>::shared_from_this;
 
 private:
-    RWLockImpl::LockHolder tryLockTimed(
-        const RWLock & rwlock, RWLockImpl::Type type, const String & query_id, const std::chrono::milliseconds & acquire_timeout) const;
+    RWLock::LockHolder tryLockTimed(
+        const RWLockPtr & rwlock, RWLock::Type type, const String & query_id, const std::chrono::milliseconds & acquire_timeout) const;
 
     /// You always need to take the next two locks in this order.
 
     /// Lock required for alter queries (lockForAlter). Allows to execute only
     /// one simultaneous alter query. Also it should be taken by DROP-like
     /// queries, to be sure, that all alters are finished.
-    mutable RWLock alter_lock = RWLockImpl::create();
+    mutable RWLockPtr alter_lock = RWLock::create();
 
     /// Lock required for drop queries. Every thread that want to ensure, that
     /// table is not dropped have to table this lock for read (lockForShare).
     /// DROP-like queries take this lock for write (lockExclusively), to be sure
     /// that all table threads finished.
-    mutable RWLock drop_lock = RWLockImpl::create();
+    mutable RWLockPtr drop_lock = RWLock::create();
 };
 
 /// table name -> table
