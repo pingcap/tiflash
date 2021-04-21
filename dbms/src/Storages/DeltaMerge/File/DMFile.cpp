@@ -196,7 +196,7 @@ const EncryptionPath DMFile::encryptionPackPropertyPath() const
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packPropertyFileName());
 }
 
-std::tuple<size_t, size_t> DMFile::writeMetaToBuffer(WriteBuffer & buffer)
+DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer)
 {
     size_t meta_offset = buffer.count();
     writeString("DTFile format: ", buffer);
@@ -207,7 +207,7 @@ std::tuple<size_t, size_t> DMFile::writeMetaToBuffer(WriteBuffer & buffer)
     return std::make_tuple(meta_offset, meta_size);
 }
 
-std::tuple<size_t, size_t> DMFile::writePackStatToBuffer(WriteBuffer & buffer)
+DMFile::OffsetAndSize DMFile::writePackStatToBuffer(WriteBuffer & buffer)
 {
     size_t pack_offset = buffer.count();
     for (auto & stat : pack_stats)
@@ -218,7 +218,7 @@ std::tuple<size_t, size_t> DMFile::writePackStatToBuffer(WriteBuffer & buffer)
     return std::make_tuple(pack_offset, pack_size);
 }
 
-std::tuple<size_t, size_t> DMFile::writePackPropertyToBuffer(WriteBuffer & buffer)
+DMFile::OffsetAndSize DMFile::writePackPropertyToBuffer(WriteBuffer & buffer)
 {
     size_t offset = buffer.count();
     String tmp_buf;

@@ -223,9 +223,10 @@ private:
     static String colIndexFileName(const FileNameBase & file_name_base) { return file_name_base + ".idx"; }
     static String colMarkFileName(const FileNameBase & file_name_base) { return file_name_base + ".mrk"; }
 
-    std::tuple<size_t, size_t> writeMetaToBuffer(WriteBuffer & buffer);
-    std::tuple<size_t, size_t> writePackStatToBuffer(WriteBuffer & buffer);
-    std::tuple<size_t, size_t> writePackPropertyToBuffer(WriteBuffer & buffer);
+    using OffsetAndSize = std::tuple<size_t, size_t>;
+    OffsetAndSize writeMetaToBuffer(WriteBuffer & buffer);
+    OffsetAndSize writePackStatToBuffer(WriteBuffer & buffer);
+    OffsetAndSize writePackPropertyToBuffer(WriteBuffer & buffer);
 
     void writeMeta(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
     void writePackProperty(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);

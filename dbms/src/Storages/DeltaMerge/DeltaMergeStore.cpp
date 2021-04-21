@@ -1348,8 +1348,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         // Apply GC for segment backward so that we can apply merging between segments
         // to reclaim more disk space.
         std::shared_lock lock(read_write_mutex);
-        if (gc_safe_point_updated)
-            gc_checked_segments.clear();
+
         auto iter = segments.begin();
         if (segments.size() == 1)
         {
@@ -1358,6 +1357,8 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             if (seg->getStable()->getRows() == 0)
                 return 0;
         }
+        if (gc_safe_point_updated)
+            gc_checked_segments.clear();
         // If `next_gc_check_key` is not empty, put the segment cover `next_gc_check_key`
         if (!(next_gc_check_key == RowKeyValue::EMPTY_STRING_KEY))
             iter = segments.upper_bound(next_gc_check_key.toRowKeyValueRef());
@@ -1404,7 +1405,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         }
 
         auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
-        // calculate DMFileProperty if needed
+        // calculate StableProperty if needed
         if (!segment->getStable()->isStablePropertyCached())
             segment->getStable()->calculateStableProperty(*dm_context, segment->getRowKeyRange(), isCommonHandle());
         try
