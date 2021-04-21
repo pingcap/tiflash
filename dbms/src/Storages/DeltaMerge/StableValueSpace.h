@@ -60,7 +60,7 @@ public:
         const String toDebugString() const
         {
             return "StableProperty: min_ts [" + std::to_string(this->min_ts) + "] num_versions [" + std::to_string(this->num_versions)
-                + "] num_puts[" + std::to_string(this->num_puts) + "] num_rows[" + std::to_string(this->num_rows);
+                + "] num_puts[" + std::to_string(this->num_puts) + "] num_rows[" + std::to_string(this->num_rows) + "]";
         }
     };
 

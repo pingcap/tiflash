@@ -103,7 +103,8 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
         if (!block.rows())
             continue;
 
-        size_t cur_effective_num_rows = 1;
+        // When the input_stream is not mvcc, we assume the rows in this input_stream is most valid and make it not tend to be gc.
+        size_t cur_effective_num_rows = block.rows();
         size_t cur_not_clean_rows     = 1;
         if (mvcc_stream)
         {
