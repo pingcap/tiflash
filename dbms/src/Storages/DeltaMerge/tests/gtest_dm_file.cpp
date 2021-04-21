@@ -48,9 +48,7 @@ class DMFile_Test : public ::testing::Test, //
 public:
     DMFile_Test() : parent_path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "/dm_file_tests"), dm_file(nullptr) {}
 
-    static void SetUpTestCase()
-    {
-    }
+    static void SetUpTestCase() {}
 
     void SetUp() override
     {
@@ -82,7 +80,8 @@ public:
     // Update dm_context.
     void reload(const ColumnDefinesPtr & cols = DMTestEnv::getDefaultColumns())
     {
-        *table_columns_ = *cols;
+        if (table_columns_ != cols)
+            *table_columns_ = *cols;
 
         auto ctx   = DMTestEnv::getContext();
         *path_pool = ctx.getPathPool().withTable("test", "t1", false);
@@ -96,6 +95,15 @@ public:
             false,
             1,
             db_context->getSettingsRef());
+    }
+
+    DMFilePtr restoreDMFile()
+    {
+        auto file_id       = dm_file->fileId();
+        auto ref_id        = dm_file->refId();
+        auto parent_path   = dm_file->parentPath();
+        auto file_provider = dbContext().getFileProvider();
+        return DMFile::restore(file_provider, file_id, ref_id, parent_path, /*read_meta=*/true);
     }
 
 
@@ -439,8 +447,7 @@ try
     ranges.emplace_back(HandleRange::newNone());         // none
     ranges.emplace_back(HandleRange{0, num_rows_write}); // full range
     ranges.emplace_back(HandleRange::newAll());          // full range
-    for (const auto & range : ranges)
-    {
+    auto test_read_range = [&](const HandleRange & range) {
         // Test read
         auto stream = std::make_shared<DMFileBlockInputStream>( //
             dbContext(),
@@ -477,6 +484,20 @@ try
         ASSERT_EQ(num_rows_read, expect_last_pk - expect_first_pk) //
             << "range: " << range.toDebugString()                  //
             << ", first: " << expect_first_pk << ", last: " << expect_last_pk;
+    };
+
+    for (const auto & range : ranges)
+    {
+        SCOPED_TRACE("Test reading with range:" + range.toDebugString());
+        test_read_range(range);
+    }
+
+    // Restore file from disk and read again
+    dm_file = restoreDMFile();
+    for (const auto & range : ranges)
+    {
+        SCOPED_TRACE("Test reading with range:" + range.toDebugString() + " after restoring DTFile");
+        test_read_range(range);
     }
 }
 CATCH
@@ -537,8 +558,9 @@ try
     ranges.emplace_back(HandleRange::newNone());         // none
     ranges.emplace_back(HandleRange{0, num_rows_write}); // full range
     ranges.emplace_back(HandleRange::newAll());          // full range
-    for (const auto & range : ranges)
-    {
+    auto test_read_filter = [&](const HandleRange & range) {
+        // Filtered by rough set filter
+        auto filter = toRSFilter(i64_cd, range);
         // Test read
         auto stream = std::make_shared<DMFileBlockInputStream>( //
             dbContext(),
@@ -548,7 +570,7 @@ try
             dm_file,
             *cols,
             RowKeyRange::newAll(false, 1),
-            toRSFilter(i64_cd, range), // Filtered by rough set filter
+            filter, // Filtered by rough set filter
             column_cache_,
             IdSetPtr{});
 
@@ -575,6 +597,20 @@ try
         ASSERT_EQ(num_rows_read, expect_last_pk - expect_first_pk) //
             << "range: " << range.toDebugString()                  //
             << ", first: " << expect_first_pk << ", last: " << expect_last_pk;
+    };
+
+    for (const auto & range : ranges)
+    {
+        SCOPED_TRACE("Test reading with filter range:" + range.toDebugString());
+        test_read_filter(range);
+    }
+
+    // Restore file from disk and read again
+    dm_file = restoreDMFile();
+    for (const auto & range : ranges)
+    {
+        SCOPED_TRACE("Test reading with filter range:" + range.toDebugString() + " after restoring DTFile");
+        test_read_filter(range);
     }
 }
 CATCH
@@ -628,10 +664,7 @@ try
     // <filter, num_rows_should_read>
     // (first range) Or (Unsupported) -> should NOT filter any chunk
     filters.emplace_back(createOr({one_part_filter, createUnsupported("test", "test", false)}), num_rows_write);
-    for (size_t i = 0; i < filters.size(); i++)
-    {
-        const auto & filter               = filters[i].first;
-        const auto   num_rows_should_read = filters[i].second;
+    auto test_read_filter = [&](const DM::RSOperatorPtr & filter, const size_t num_rows_should_read) {
         // Test read
         auto stream = std::make_shared<DMFileBlockInputStream>( //
             dbContext(),
@@ -663,7 +696,25 @@ try
         }
         stream->readSuffix();
         ASSERT_EQ(num_rows_read, expect_last_pk - expect_first_pk) //
-            << "i: " << i << ", first: " << expect_first_pk << ", last: " << expect_last_pk;
+            << "first: " << expect_first_pk << ", last: " << expect_last_pk;
+    };
+
+    for (size_t i = 0; i < filters.size(); ++i)
+    {
+        const auto & filter               = filters[i].first;
+        const auto   num_rows_should_read = filters[i].second;
+        SCOPED_TRACE("Test reading with idx: " + DB::toString(i) + ", filter range:" + filter->toDebugString());
+        test_read_filter(filter, num_rows_should_read);
+    }
+
+    // Restore file from disk and read again
+    dm_file = restoreDMFile();
+    for (size_t i = 0; i < filters.size(); ++i)
+    {
+        const auto & filter               = filters[i].first;
+        const auto   num_rows_should_read = filters[i].second;
+        SCOPED_TRACE("Test reading with idx: " + DB::toString(i) + ", filter range:" + filter->toDebugString() + " after restoring DTFile");
+        test_read_filter(filter, num_rows_should_read);
     }
 }
 CATCH
@@ -698,8 +749,7 @@ try
     test_sets.emplace_back(IdSet{nparts - 2, nparts - 1});
     test_sets.emplace_back(IdSet{1, 2});
     test_sets.emplace_back(IdSet{}); // filter all packs
-    for (size_t test_index = 0; test_index <= test_sets.size(); test_index++)
-    {
+    auto test_with_case_index = [&](const size_t test_index) {
         IdSetPtr id_set_ptr = nullptr; // Keep for not filter test
         if (test_index < test_sets.size())
             id_set_ptr = std::make_shared<IdSet>(test_sets[test_index]);
@@ -749,6 +799,19 @@ try
         stream->readSuffix();
         ASSERT_EQ(num_rows_read, expect_last_pk - expect_first_pk) //
             << "test index: " << test_index << ", first: " << expect_first_pk << ", last: " << expect_last_pk;
+    };
+    for (size_t test_index = 0; test_index <= test_sets.size(); test_index++)
+    {
+        SCOPED_TRACE("Test reading with index:" + DB::toString(test_index));
+        test_with_case_index(test_index);
+    }
+
+    // Restore file from disk and read again
+    dm_file = restoreDMFile();
+    for (size_t test_index = 0; test_index <= test_sets.size(); test_index++)
+    {
+        SCOPED_TRACE("Test reading with index:" + DB::toString(test_index) + " after restoring DTFile");
+        test_with_case_index(test_index);
     }
 }
 CATCH
