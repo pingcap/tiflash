@@ -44,7 +44,7 @@ bool GCManager::work()
             // do not acquire structure lock on the storage.
             auto gc_segments_num = storage->onSyncGc(gc_segments_limit);
             gc_segments_limit = gc_segments_limit - gc_segments_num;
-            LOG_DEBUG(log, "GCManager gc " << gc_segments_num << " segments of table " << storage->getTableInfo().id);
+            LOG_TRACE(log, "GCManager gc " << gc_segments_num << " segments of table " << storage->getTableInfo().id);
             // Reach the limit on the number of segments to be gc, stop here
             if (gc_segments_limit <= 0)
                 break;
