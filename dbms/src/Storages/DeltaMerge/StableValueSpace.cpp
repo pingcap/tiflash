@@ -167,7 +167,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         // but to keep dmfile immutable, we just cache the result in memory.
         if (pack_properties.property_size() == 0)
         {
-            LOG_DEBUG(log, "Try to calculate StableProperty from column data");
+            LOG_DEBUG(log, "Try to calculate StableProperty from column data for stable " << id);
             ColumnDefines read_columns;
             read_columns.emplace_back(getExtraHandleColumnDefine(is_common_handle));
             read_columns.emplace_back(getVersionColumnDefine());
