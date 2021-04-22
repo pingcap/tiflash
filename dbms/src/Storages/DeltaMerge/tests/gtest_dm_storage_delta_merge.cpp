@@ -268,7 +268,6 @@ try
     ASSERT_EQ(storage->getTableName(), new_table_name);
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
 
-    std::cout << "StorageDeltaMerge_test rename end" << std::endl;
 }
 CATCH
 
