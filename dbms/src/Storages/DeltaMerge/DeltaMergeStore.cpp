@@ -158,6 +158,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       original_table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
       blockable_background_pool(db_context.getBlockableBackgroundPool()),
+      next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY),
       hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
@@ -1214,7 +1215,6 @@ bool DeltaMergeStore::updateGCSafePoint()
         auto safe_point = PDClientHelper::getGCSafePointWithRetry(pd_client,
                                                                   /* ignore_cache= */ false,
                                                                   global_context.getSettingsRef().safe_point_update_interval_seconds);
-        prev_gc_safe_point.store(latest_gc_safe_point.load(std::memory_order_relaxed), std::memory_order_relaxed);
         latest_gc_safe_point.store(safe_point, std::memory_order_relaxed);
         return true;
     }
@@ -1327,87 +1327,72 @@ bool shouldCompact(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ra
 
 UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
 {
-    using SegmentWeakPtr  = std::weak_ptr<Segment>;
-    using SegmentWeakPtrs = std::vector<std::pair<RowKeyRange, SegmentWeakPtr>>;
-
     if (shutdown_called.load(std::memory_order_relaxed))
         return 0;
 
     if (!updateGCSafePoint())
         return 0;
 
-    bool gc_safe_point_updated = false;
-    if (prev_gc_safe_point.load(std::memory_order_relaxed) != latest_gc_safe_point.load(std::memory_order_relaxed))
-        gc_safe_point_updated = true;
-
-    // get the segments queue to check whether need gc
-    SegmentWeakPtrs segments_to_check;
     {
-        // Get a snapshot of the segment list. Only keep a weak_ptr on Segment so that
-        // stale segment ptrs will be free as soon as possible.
-        // Apply GC for segment backward so that we can apply merging between segments
-        // to reclaim more disk space.
         std::shared_lock lock(read_write_mutex);
-
-        auto iter = segments.begin();
+        // avoid gc on empty tables
         if (segments.size() == 1)
         {
-            // avoid gc on empty tables
-            const auto & seg = iter->second;
+            const auto & seg = segments.begin()->second;
             if (seg->getStable()->getRows() == 0)
                 return 0;
         }
-        if (gc_safe_point_updated)
-            gc_checked_segments.clear();
-        // If `next_gc_check_key` is not empty, put the segment cover `next_gc_check_key`
-        if (!(next_gc_check_key == RowKeyValue::EMPTY_STRING_KEY))
-            iter = segments.upper_bound(next_gc_check_key.toRowKeyValueRef());
-        for (UInt64 checked_num = 0; checked_num < segments.size(); checked_num++)
-        {
-            if (iter == segments.end())
-                iter = segments.begin();
-            const auto & seg = iter->second;
-            iter++;
-            // ignore segments that is already checked for the current gc_safe_point
-            if (!gc_checked_segments.count(seg->segmentId()))
-            {
-                // avoid recheck this segment before `latest_gc_safe_point` updated
-                gc_checked_segments.insert(seg->segmentId());
-                segments_to_check.emplace_back(std::make_pair(seg->getRowKeyRange(), seg));
-            }
-        }
     }
-    if (segments_to_check.empty())
-        return 0;
 
     LOG_DEBUG(log,
-              "GC start key: " << ((next_gc_check_key == RowKeyValue::EMPTY_STRING_KEY) ? "[empty key]" : next_gc_check_key.toDebugString())
-                               << ", gc_safe_point: " << latest_gc_safe_point.load(std::memory_order_relaxed) << ", got "
-                               << segments_to_check.size() << " segments to check");
+              "GC on table " << table_name << " start with key: " << next_gc_check_key.toDebugString()
+                             << ", gc_safe_point: " << latest_gc_safe_point.load(std::memory_order_relaxed));
 
-    // We get a separate snapshot for each segment. Even the GC-routine for one segment takes a long time,
-    // we won't block other threads from reading / writing / applying DDL for a long time.
-    Int64 gc_segments_num = 0;
-    auto  iter            = segments_to_check.begin();
-    for (; iter != segments_to_check.end() && gc_segments_num < limit; iter++)
+    UInt64 check_segments_num = 0;
+    Int64  gc_segments_num    = 0;
+    while (gc_segments_num < limit)
     {
+        SegmentPtr  segment;
+        RowKeyRange segment_range;
         // If the store is shut down, give up running GC on it.
         if (shutdown_called.load(std::memory_order_relaxed))
             break;
-        auto & key_range = iter->first;
-        auto   segment   = iter->second.lock();
-        // If the segment is invalid, or its delta is updating by another thread,
-        // give up running GC on it.
-        if (!segment || segment->getDelta()->isUpdating())
         {
-            LOG_DEBUG(log, "GC is skipped [range=" << key_range.toDebugString() << "] [table=" << table_name << "]");
+            std::shared_lock lock(read_write_mutex);
+
+            auto segment_it = segments.upper_bound(next_gc_check_key.toRowKeyValueRef());
+            if (segment_it == segments.end())
+                segment_it = segments.begin();
+
+            // we have check all segments, stop here
+            if (check_segments_num >= segments.size())
+                break;
+            check_segments_num++;
+
+            segment           = segment_it->second;
+            segment_range     = segment->getRowKeyRange();
+            next_gc_check_key = segment_range.end;
+        }
+
+        if (segment->hasAbandoned())
+            continue;
+
+        if (segment->getLastCheckGCSafePoint() >= latest_gc_safe_point.load(std::memory_order_relaxed))
+            continue;
+
+        if (segment->getDelta()->isUpdating())
+        {
+            LOG_DEBUG(log, "GC is skipped [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
             continue;
         }
+
+        segment->setLastCheckGCSafePoint(latest_gc_safe_point.load(std::memory_order_relaxed));
 
         auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
         // calculate StableProperty if needed
         if (!segment->getStable()->isStablePropertyCached())
-            segment->getStable()->calculateStableProperty(*dm_context, segment->getRowKeyRange(), isCommonHandle());
+            segment->getStable()->calculateStableProperty(*dm_context, segment_range, isCommonHandle());
+
         try
         {
             // Check whether we should apply gc on this segment
@@ -1424,24 +1409,21 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     // Continue to check whether we need to apply more tasks on this segment
                     checkSegmentUpdate(dm_context, segment, type);
                     gc_segments_num++;
-                    LOG_INFO(log, "GC-merge-delta done [range=" << key_range.toDebugString() << "] [table=" << table_name << "]");
+                    LOG_INFO(log, "GC-merge-delta done [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
                 }
                 else
                 {
-                    LOG_DEBUG(log, "GC is skipped [range=" << key_range.toDebugString() << "] [table=" << table_name << "]");
+                    LOG_DEBUG(log, "GC is skipped [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
                 }
             }
         }
         catch (Exception & e)
         {
-            e.addMessage("while apply gc [range=" + key_range.toDebugString() + "] [table=" + table_name + "]");
+            e.addMessage("while apply gc [range=" + segment_range.toDebugString() + "] [table=" + table_name + "]");
             e.rethrow();
         }
     }
-    // update `next_gc_check_key`
-    if (iter == segments_to_check.end())
-        iter = segments_to_check.begin();
-    next_gc_check_key = iter->first.start;
+    LOG_DEBUG(log, "Finish GC on " << gc_segments_num << " segments [table=" + table_name + "]");
     return gc_segments_num;
 }
 

@@ -408,13 +408,9 @@ private:
 
     MergeDeltaTaskPool background_tasks;
 
-    std::atomic<DB::Timestamp> prev_gc_safe_point   = 0;
     std::atomic<DB::Timestamp> latest_gc_safe_point = 0;
 
-    // the segments checked after `latest_gc_safe_point`
-    SegmentIdSet gc_checked_segments;
-
-    RowKeyValue next_gc_check_key = RowKeyValue::EMPTY_STRING_KEY;
+    RowKeyValue next_gc_check_key;
 
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
