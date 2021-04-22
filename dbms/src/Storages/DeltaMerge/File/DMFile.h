@@ -89,7 +89,10 @@ public:
         UInt64 pack_stat_offset;
         UInt64 pack_stat_size;
 
-        MetaPackInfo() : meta_offset(0), meta_size(0), pack_stat_offset(0), pack_stat_size(0) {}
+        MetaPackInfo()
+            : pack_property_offset(0), pack_property_size(0), meta_offset(0), meta_size(0), pack_stat_offset(0), pack_stat_size(0)
+        {
+        }
     };
 
     struct Footer
