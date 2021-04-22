@@ -329,10 +329,11 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
 
 void DMFile::readMetadata(const FileProviderPtr & file_provider)
 {
-    MetaPackInfo meta_pack_info{
-        .pack_property_offset = 0, .pack_property_size = 0, .meta_offset = 0, .meta_size = 0, .pack_stat_offset = 0, .pack_stat_size = 0};
+    Footer footer;
     if (isSingleFileMode())
     {
+        // Read the `Footer` part from disk and init `sub_file_stat`
+        /// TODO: Redesign the file format for single file mode (https://github.com/pingcap/tics/issues/1798)
         Poco::File                 file(path());
         ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
         DMSingleFileFormatVersion  file_format;
@@ -342,48 +343,19 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
         if (file_format >= DMSingleFileFormatVersion::VERSION_WITH_PROPERTY_SUB_FILE)
         {
             buf.seek(file.getSize() - sizeof(Footer), SEEK_SET);
-            DB::readIntBinary(meta_pack_info.pack_property_offset, buf);
-            DB::readIntBinary(meta_pack_info.pack_property_size, buf);
+            DB::readIntBinary(footer.meta_pack_info.pack_property_offset, buf);
+            DB::readIntBinary(footer.meta_pack_info.pack_property_size, buf);
         }
         else
         {
             buf.seek(file.getSize() - sizeof(Footer) + 2 * sizeof(UInt64), SEEK_SET);
         }
-        DB::readIntBinary(meta_pack_info.meta_offset, buf);
-        DB::readIntBinary(meta_pack_info.meta_size, buf);
-        DB::readIntBinary(meta_pack_info.pack_stat_offset, buf);
-        DB::readIntBinary(meta_pack_info.pack_stat_size, buf);
-    }
-    else
-    {
-        if (auto file = Poco::File(packPropertyPath()); file.exists())
-            meta_pack_info.pack_property_size = file.getSize();
-        meta_pack_info.meta_size      = Poco::File(metaPath()).getSize();
-        meta_pack_info.pack_stat_size = Poco::File(packStatPath()).getSize();
-    }
-
-    readMeta(file_provider, meta_pack_info);
-    readPackStat(file_provider, meta_pack_info);
-    if (meta_pack_info.pack_property_size != 0)
-        readPackProperty(file_provider, meta_pack_info);
-}
-
-void DMFile::initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider)
-{
-    std::unique_lock lock(mutex);
-    if (!isSingleFileMode() || !sub_file_stats.empty())
-        return;
-
-    Poco::File file(path());
-    if (status == Status::READABLE)
-    {
-        Footer                     footer;
-        ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
-        buf.seek(file.getSize() - sizeof(Footer) + sizeof(MetaPackInfo), SEEK_SET);
-        // ignore footer.file_format_version
+        DB::readIntBinary(footer.meta_pack_info.meta_offset, buf);
+        DB::readIntBinary(footer.meta_pack_info.meta_size, buf);
+        DB::readIntBinary(footer.meta_pack_info.pack_stat_offset, buf);
+        DB::readIntBinary(footer.meta_pack_info.pack_stat_size, buf);
         DB::readIntBinary(footer.sub_file_stat_offset, buf);
         DB::readIntBinary(footer.sub_file_num, buf);
-
         // initialize sub file state
         buf.seek(footer.sub_file_stat_offset, SEEK_SET);
         SubFileStat sub_file_stat;
@@ -396,6 +368,19 @@ void DMFile::initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider
             sub_file_stats.emplace(name, sub_file_stat);
         }
     }
+    else
+    {
+        if (auto file = Poco::File(packPropertyPath()); file.exists())
+            footer.meta_pack_info.pack_property_size = file.getSize();
+        footer.meta_pack_info.meta_size      = Poco::File(metaPath()).getSize();
+        footer.meta_pack_info.pack_stat_size = Poco::File(packStatPath()).getSize();
+    }
+
+
+    readMeta(file_provider, footer.meta_pack_info);
+    readPackStat(file_provider, footer.meta_pack_info);
+    if (footer.meta_pack_info.pack_property_size != 0)
+        readPackProperty(file_provider, footer.meta_pack_info);
 }
 
 void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)

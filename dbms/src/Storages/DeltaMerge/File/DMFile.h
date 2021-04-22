@@ -88,6 +88,8 @@ public:
         UInt64 meta_size;
         UInt64 pack_stat_offset;
         UInt64 pack_stat_size;
+
+        MetaPackInfo() : meta_offset(0), meta_size(0), pack_stat_offset(0), pack_stat_size(0) {}
     };
 
     struct Footer
@@ -97,6 +99,14 @@ public:
         UInt32       sub_file_num;
 
         DMSingleFileFormatVersion file_format_version;
+
+        Footer()
+            : meta_pack_info(),
+              sub_file_stat_offset(0),
+              sub_file_num(0),
+              file_format_version(DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE)
+        {
+        }
     };
 
     using PackStats = PaddedPODArray<PackStat>;
@@ -243,9 +253,6 @@ private:
 
     Status getStatus() const { return status; }
     void   setStatus(Status status_) { status = status_; }
-
-    // initialize `sub_file_stats` which stores the mapping from subfile name to its' offset and size
-    void initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider);
 
     void finalizeForFolderMode(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
     void finalizeForSingleFileMode(WriteBuffer & buffer);
