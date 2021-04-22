@@ -1215,7 +1215,7 @@ bool DeltaMergeStore::updateGCSafePoint()
         auto safe_point = PDClientHelper::getGCSafePointWithRetry(pd_client,
                                                                   /* ignore_cache= */ false,
                                                                   global_context.getSettingsRef().safe_point_update_interval_seconds);
-        latest_gc_safe_point.store(safe_point, std::memory_order_relaxed);
+        latest_gc_safe_point.store(safe_point, std::memory_order_release);
         return true;
     }
     return false;
@@ -1346,7 +1346,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
 
     LOG_DEBUG(log,
               "GC on table " << table_name << " start with key: " << next_gc_check_key.toDebugString()
-                             << ", gc_safe_point: " << latest_gc_safe_point.load(std::memory_order_relaxed));
+                             << ", gc_safe_point: " << latest_gc_safe_point.load(std::memory_order_acquire));
 
     UInt64 check_segments_num = 0;
     Int64  gc_segments_num    = 0;
@@ -1375,7 +1375,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         if (segment->hasAbandoned())
             continue;
 
-        if (segment->getLastCheckGCSafePoint() >= latest_gc_safe_point.load(std::memory_order_relaxed))
+        if (segment->getLastCheckGCSafePoint() >= latest_gc_safe_point.load(std::memory_order_acquire))
             continue;
 
         auto & segment_range = segment->getRowKeyRange();
@@ -1385,7 +1385,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             continue;
         }
 
-        segment->setLastCheckGCSafePoint(latest_gc_safe_point.load(std::memory_order_relaxed));
+        segment->setLastCheckGCSafePoint(latest_gc_safe_point.load(std::memory_order_acquire));
 
         auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
         // calculate StableProperty if needed
