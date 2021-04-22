@@ -57,8 +57,8 @@ public:
             return {};
     }
 
-    void  readPrefix();
-    void  readSuffix();
+    void  readPrefix() override;
+    void  readSuffix() override;
     Block read() override;
 
     static bool needUpdateSchema(const ColumnDefinesPtr & a, const ColumnDefinesPtr & b);
