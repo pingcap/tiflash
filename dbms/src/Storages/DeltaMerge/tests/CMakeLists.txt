@@ -12,7 +12,7 @@ target_link_libraries(gtests_dm gtest_main dbms clickhouse_functions)
 add_check(gtests_dm)
 
 # add unit test manually
-add_executable(dm_test_storage_delta_merge EXCLUDE_FROM_ALL gtest_dm_storage_delta_merge.cpp ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/gtests_dbms_main.cpp)
+add_executable(dm_test_storage_delta_merge EXCLUDE_FROM_ALL gtest_dm_storage_delta_merge.cpp)
 target_include_directories(dm_test_storage_delta_merge BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 target_link_libraries(dm_test_storage_delta_merge
         dbms
