@@ -1,6 +1,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
+#include <Storages/Transaction/Collator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <Functions/FunctionsStringSearch.cpp>
@@ -35,19 +36,45 @@ protected:
     }
 };
 
-TEST_F(Regexp, TiDB_Match_Single_Test)
+TEST_F(Regexp, TiDB_Match_Type_Test)
 {
     UInt8 res = false;
+    std::shared_ptr<TiDB::ITiDBCollator> binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
     DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "(?m)(?i)^b", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("a\nb\n", "^b", '\\', "m", nullptr, res);
+    DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "mi", nullptr, res);
+    ASSERT_TRUE(res == 1);
+    DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "mi", binary_collator, res);
+    ASSERT_TRUE(res == 0);
+    DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "i", nullptr, res);
+    ASSERT_TRUE(res == 1);
+    DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "m", nullptr, res);
+    ASSERT_TRUE(res == 0);
+    DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*b", '\\', "", nullptr, res);
+    ASSERT_TRUE(res == 0);
+    DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*B", '\\', "n", nullptr, res);
+    ASSERT_TRUE(res == 1);
+    DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*b", '\\', "in", nullptr, res);
     ASSERT_TRUE(res == 1);
 }
-TEST_F(Regexp, TiDB_Match_Failed_Test)
+TEST_F(Regexp, TiDB_Mysql_Failed_Test)
 {
     UInt8 res = false;
+    /// result different from mysql 8.x
     DB::MatchImpl<false, false, true>::constant_constant("aa", "((((((((((a))))))))))\\10", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 0);
+    DB::MatchImpl<false, false, true>::constant_constant("AA", "(?i)((((((((((a))))))))))\\10", '\\', "", nullptr, res);
+    ASSERT_TRUE(res == 0);
+    DB::MatchImpl<false, false, true>::constant_constant("b\nabb\n", "abb$", '\\', "", nullptr, res);
+    ASSERT_TRUE(res == 0);
+    DB::MatchImpl<false, false, true>::constant_constant("b\na\n", "a$", '\\', "", nullptr, res);
+    ASSERT_TRUE(res == 0);
+    DB::MatchImpl<false, false, true>::constant_constant("b\naa\n", "aa$", '\\', "", nullptr, res);
+    ASSERT_TRUE(res == 0);
+    DB::MatchImpl<false, false, true>::constant_constant("b\nab\n", "ab$", '\\', "", nullptr, res);
+    ASSERT_TRUE(res == 0);
+    DB::MatchImpl<false, false, true>::constant_constant("a\nb\n", "(?m)b\\s^", '\\', "", nullptr, res);
+    ASSERT_TRUE(res == 1);
     /// back reference not supported in RE2
     // DB::MatchImpl<false, false, true>::constant_constant("abcabc", "(abc)\\1", '\\', "", nullptr, res);
     // ASSERT_TRUE(res == 1);
@@ -57,12 +84,6 @@ TEST_F(Regexp, TiDB_Match_Failed_Test)
     // ASSERT_TRUE(res == 1);
     // DB::MatchImpl<false, false, true>::constant_constant("x", "(a)|\\1", '\\', "", nullptr, res);
     // ASSERT_TRUE(res == 0);
-    // error ER_REGEXP_INVALID_BACK_REF
-    // DB::MatchImpl<false,false,true>::constant_constant("-","\\1",'\\',"",nullptr,res); /* Result: c */;
-    // error ER_REGEXP_INVALID_BACK_REF
-    // DB::MatchImpl<false,false,true>::constant_constant("-","\\2",'\\',"",nullptr,res); /* Result: c */;
-    // error ER_REGEXP_INVALID_BACK_REF
-    // DB::MatchImpl<false,false,true>::constant_constant("-","(a)|\\2",'\\',"",nullptr,res); /* Result: c */;
     // DB::MatchImpl<false, false, true>::constant_constant("ababbbcbc", "(([a-c])b*?\\2)*", '\\', "", nullptr, res);
     // ASSERT_TRUE(res == 1);
     // DB::MatchImpl<false, false, true>::constant_constant("ababbbcbc", "(([a-c])b*?\\2){3}", '\\', "", nullptr, res);
@@ -73,284 +94,312 @@ TEST_F(Regexp, TiDB_Match_Failed_Test)
     // ASSERT_TRUE(res == 1);
     // DB::MatchImpl<false, false, true>::constant_constant("bbaababbabaaaaabbaaaabba", "((\\3|b)\\2(a)){2,}", '\\', "", nullptr, res);
     // ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("AA", "(?i)((((((((((a))))))))))\\10", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("ABCABC", "(?i)(abc)\\1", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("ABCABC", "(?i)([a-c]*)\\1", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abad", "a(?!b).", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abad", "a(?=d).", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abad", "a(?=c|d).", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("aaaaaaaaaa", "^(a\\1?){4}$", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("aaaaaaaaa", "^(a\\1?){4}$", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("aaaaaaaaaaa", "^(a\\1?){4}$", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("abc", "^(?:b|a(?=(.)))*\\1", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("Ab4ab", "(?i)(ab)\\d\\1", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("ab4Ab", "(?i)(ab)\\d\\1", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("aaaaaa", "^(a\\1?)(a\\1?)(a\\2?)(a\\3?)$", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("aaaaaa", "^(a\\1?){4}$", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("Oo", "(?i)^(o)(?!.*\\1)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("abc12bc", "(.*)\\d+\\1", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("ab", "(?<=a)b", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("cb", "(?<=a)b", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b", "(?<=a)b", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("ab", "(?<!c)b", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("cb", "(?<!c)b", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b", "(?<!c)b", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("aaac", "^a(?#xxx){3}c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("aaac", "(?x)^a (?#xxx) (?#yyy) {3}c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("dbcb", "(?<![cd])b", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("dbaacb", "(?<![cd])[ab]", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("dbcb", "(?<!(c|d))b", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("dbaacb", "(?<!(c|d))[ab]", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("cdaccb", "(?<!cd)[ab]", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("a\nb\nc\n", "((?s).)c(?!.)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("a\nb\nc\n", "((?s)b.)c(?!.)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("aaab", "(?=(a+?))(\\1ab)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("aaab", "^(?=(a+?))\\1ab", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("a", "$(?<=^(a))", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("aaab", "(?>a+)b", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("aaab", "((?>a+)b)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("aaab", "(?>(a+))b", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("((abc(ade)ufh()()x", "((?>[^()]+)|\\([^()]*\\))+", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("a\nb\n", "\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("b\na\n", "\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("b\na", "\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("a\nb\n", "(?m)\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("b\na\n", "(?m)\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("b\na", "(?m)\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("a\nb\n", "a\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\na\n", "a\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("b\na", "a\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("a\nb\n", "(?m)a\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\na\n", "(?m)a\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("b\na", "(?m)a\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("aa\nb\n", "aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\naa\n", "aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("b\naa", "aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("aa\nb\n", "(?m)aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\naa\n", "(?m)aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("b\naa", "(?m)aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("ac\nb\n", "aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nac", "aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("ac\nb\n", "(?m)aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "(?m)aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nac", "(?m)aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("ca\nb\n", "aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nca\n", "aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nca", "aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("ca\nb\n", "(?m)aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nca\n", "(?m)aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nca", "(?m)aa\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("ab\nb\n", "ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nab\n", "ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nab", "ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("ab\nb\n", "(?m)ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nab\n", "(?m)ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nab", "(?m)ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("ac\nb\n", "ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("ac\nb\n", "(?m)ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "(?m)ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nac", "(?m)ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("ca\nb\n", "ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nca\n", "ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nca", "ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("ca\nb\n", "(?m)ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nca\n", "(?m)ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nca", "(?m)ab\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("abb\nb\n", "abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nabb\n", "abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nabb", "abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abb\nb\n", "(?m)abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nabb\n", "(?m)abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nabb", "(?m)abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("ac\nb\n", "abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nac", "abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("ac\nb\n", "(?m)abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "(?m)abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nac", "(?m)abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("ca\nb\n", "abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nca\n", "abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nca", "abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("ca\nb\n", "(?m)abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nca\n", "(?m)abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nca", "(?m)abb\\Z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=c)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=c)c", '\\', "", nullptr, res); /* Result: yB */
-    ;
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=b|c)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=b|c)c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=c|b)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=c|b)c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=[bc])", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=[bc])c", '\\', "", nullptr, res); /* Result: yB */
-    ;
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=b)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=b)c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=b|c)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=b|c)c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=c|b)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=c|b)c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=[bc])", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=[bc])c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=c)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=c)c", '\\', "", nullptr, res); /* Result: yB */
-    ;
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=b|c)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=b|c)c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=c|b)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=c|b)c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=[bc])", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=[bc])c", '\\', "", nullptr, res); /* Result: yB */
-    ;
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=b)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=b)c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=b|c)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=b|c)c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=c|b)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=c|b)c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=[bc])", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=[bc])c", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("2", "2(]*)?$\\1", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("ABCABC", "(?i)(abc)\\1", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("ABCABC", "(?i)([a-c]*)\\1", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("aaaaaaaaaa", "^(a\\1?){4}$", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("aaaaaaaaa", "^(a\\1?){4}$", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("aaaaaaaaaaa", "^(a\\1?){4}$", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("Ab4ab", "(?i)(ab)\\d\\1", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("ab4Ab", "(?i)(ab)\\d\\1", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("aaaaaa", "^(a\\1?)(a\\1?)(a\\2?)(a\\3?)$", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("aaaaaa", "^(a\\1?){4}$", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abc", "^(?:b|a(?=(.)))*\\1", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("Oo", "(?i)^(o)(?!.*\\1)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("abc12bc", "(.*)\\d+\\1", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("aaab", "(?=(a+?))(\\1ab)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("aaab", "^(?=(a+?))\\1ab", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("2", "2(]*)?$\\1", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcab", "(\\w)?(abc)\\1b", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    /// invalid or unsupported Perl syntax: `(?!`
+    // DB::MatchImpl<false, false, true>::constant_constant("abad", "a(?!b).", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    /// invalid or unsupported Perl syntax: `(?=`
+    // DB::MatchImpl<false, false, true>::constant_constant("abad", "a(?=c|d).", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abad", "a(?=d).", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=c)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=c)c", '\\', "", nullptr, res); /* Result: yB */
+    // ;
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=b|c)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=b|c)c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=c|b)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=c|b)c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=[bc])", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?=[bc])c", '\\', "", nullptr, res); /* Result: yB */
+    // ;
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=c)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=c)c", '\\', "", nullptr, res); /* Result: yB */
+    // ;
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=b|c)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=b|c)c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=c|b)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=c|b)c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=[bc])", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?=[bc])c", '\\', "", nullptr, res); /* Result: yB */
+    // ;
+    /// invalid or unsupported Perl syntax: `(?<`
+    // DB::MatchImpl<false, false, true>::constant_constant("ab", "(?<=a)b", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("cb", "(?<=a)b", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b", "(?<=a)b", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("ab", "(?<!c)b", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("cb", "(?<!c)b", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b", "(?<!c)b", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("dbcb", "(?<![cd])b", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("dbaacb", "(?<![cd])[ab]", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("dbcb", "(?<!(c|d))b", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("dbaacb", "(?<!(c|d))[ab]", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("cdaccb", "(?<!cd)[ab]", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("a", "$(?<=^(a))", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=b)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=b)c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=b|c)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=b|c)c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=c|b)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=c|b)c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=[bc])", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*)(?<=[bc])c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=b)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=b)c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=b|c)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=b|c)c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=c|b)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=c|b)c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=[bc])", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abcd", "(.*?)(?<=[bc])c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    /// invalid or unsupported Perl syntax: `(?#`
+    // DB::MatchImpl<false, false, true>::constant_constant("aaac", "^a(?#xxx){3}c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("aaac", "(?x)^a (?#xxx) (?#yyy) {3}c", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    /// invalid or unsupported Perl syntax: `(?s`
+    // DB::MatchImpl<false, false, true>::constant_constant("a\nb\nc\n", "((?s).)c(?!.)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("a\nb\nc\n", "((?s)b.)c(?!.)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    /// invalid or unsupported Perl syntax: `(?>`
+    // DB::MatchImpl<false, false, true>::constant_constant("aaab", "(?>a+)b", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("aaab", "((?>a+)b)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("aaab", "(?>(a+))b", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("((abc(ade)ufh()()x", "((?>[^()]+)|\\([^()]*\\))+", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("_I(round(xs * sz),1)", "round\\(((?>[^()]+))\\)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    /// invalid escape sequence: `\Z`
+    // DB::MatchImpl<false, false, true>::constant_constant("a\nb\n", "\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\na\n", "\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\na", "\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("a\nb\n", "(?m)\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\na\n", "(?m)\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\na", "(?m)\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("a\nb\n", "a\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\na\n", "a\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\na", "a\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("a\nb\n", "(?m)a\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\na\n", "(?m)a\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\na", "(?m)a\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("aa\nb\n", "aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\naa\n", "aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\naa", "aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("aa\nb\n", "(?m)aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\naa\n", "(?m)aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\naa", "(?m)aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("ac\nb\n", "aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nac", "aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("ac\nb\n", "(?m)aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "(?m)aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nac", "(?m)aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("ca\nb\n", "aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nca\n", "aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nca", "aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("ca\nb\n", "(?m)aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nca\n", "(?m)aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nca", "(?m)aa\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("ab\nb\n", "ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nab\n", "ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nab", "ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("ab\nb\n", "(?m)ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nab\n", "(?m)ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nab", "(?m)ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("ac\nb\n", "ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("ac\nb\n", "(?m)ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "(?m)ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nac", "(?m)ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("ca\nb\n", "ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nca\n", "ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nca", "ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("ca\nb\n", "(?m)ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nca\n", "(?m)ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nca", "(?m)ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("abb\nb\n", "abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nabb\n", "abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nabb", "abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("abb\nb\n", "(?m)abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nabb\n", "(?m)abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nabb", "(?m)abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("ac\nb\n", "abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nac", "abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("ac\nb\n", "(?m)abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "(?m)abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nac", "(?m)abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("ca\nb\n", "abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nca\n", "abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nca", "abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("ca\nb\n", "(?m)abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nca\n", "(?m)abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nca", "(?m)abb\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    // DB::MatchImpl<false, false, true>::constant_constant("b\nac", "ab\\Z", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    /// invalid or unsupported Perl syntax: `(?x`
+    // DB::MatchImpl<false, false, true>::constant_constant("x ", "(?x)((?x:.) )", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    // DB::MatchImpl<false, false, true>::constant_constant("x ", "(?x)((?-x:.) )", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    /// invalid or unsupported Perl syntax: `(?!`
+    // DB::MatchImpl<false, false, true>::constant_constant("a\nxb\n", "(?m)(?!\\A)x", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    /// invalid character class range: `a-[`
+    // DB::MatchImpl<false, false, true>::constant_constant("za-9z", "([a-[:digit:]]+)", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
+    /// invalid escape sequence: `\G`
+    // DB::MatchImpl<false, false, true>::constant_constant("aaaXbX", "\\GX.*X", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 0);
+    /// invalid escape sequence: `\R`
+    // DB::MatchImpl<false, false, true>::constant_constant("abc\n123\n456\nxyz\n", "(?m)^\\d+\\R\\d+$", '\\', "", nullptr, res);
+    // ASSERT_TRUE(res == 1);
 }
 
-TEST_F(Regexp, TiDB_Match_Test)
+TEST_F(Regexp, TiDB_Mysql_Test)
 {
     UInt8 res = false;
-    // Test based on extra/icu/tests/testdata/re_test.txt
+    // Test based on https://github.com/mysql/mysql-server/blob/mysql-cluster-8.0.17/mysql-test/t/regular_expressions_func.test
     DB::MatchImpl<false, false, true>::constant_constant("abc", "abc", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("xbc", "abc", '\\', "", nullptr, res);
@@ -451,6 +500,12 @@ TEST_F(Regexp, TiDB_Match_Test)
     // DB::MatchImpl<false,false,true>::constant_constant("-","a[]b",'\\',"",nullptr,res); /* Result: ci */;
     // error ER_REGEXP_MISSING_CLOSE_BRACKET
     // DB::MatchImpl<false,false,true>::constant_constant("-","a[",'\\',"",nullptr,res); /* Result: c */;
+    // error ER_REGEXP_INVALID_BACK_REF
+    // DB::MatchImpl<false,false,true>::constant_constant("-","\\1",'\\',"",nullptr,res); /* Result: c */;
+    // error ER_REGEXP_INVALID_BACK_REF
+    // DB::MatchImpl<false,false,true>::constant_constant("-","\\2",'\\',"",nullptr,res); /* Result: c */;
+    // error ER_REGEXP_INVALID_BACK_REF
+    // DB::MatchImpl<false,false,true>::constant_constant("-","(a)|\\2",'\\',"",nullptr,res); /* Result: c */;
     DB::MatchImpl<false, false, true>::constant_constant("a]", "a]", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("a]b", "a[]]b", '\\', "", nullptr, res);
@@ -1262,9 +1317,6 @@ TEST_F(Regexp, TiDB_Match_Test)
     ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constant_constant("b\na\n", "a\\z", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 0);
-    /// different from mysql
-    DB::MatchImpl<false, false, true>::constant_constant("b\na\n", "a$", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constant_constant("b\na", "a\\z", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("b\na", "a$", '\\', "", nullptr, res);
@@ -1286,9 +1338,6 @@ TEST_F(Regexp, TiDB_Match_Test)
     DB::MatchImpl<false, false, true>::constant_constant("aa\nb\n", "aa$", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constant_constant("b\naa\n", "aa\\z", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    /// different from mysql
-    DB::MatchImpl<false, false, true>::constant_constant("b\naa\n", "aa$", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constant_constant("b\naa", "aa\\z", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
@@ -1360,9 +1409,6 @@ TEST_F(Regexp, TiDB_Match_Test)
     ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constant_constant("b\nab\n", "ab\\z", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 0);
-    /// different from mysql
-    DB::MatchImpl<false, false, true>::constant_constant("b\nab\n", "ab$", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constant_constant("b\nab", "ab\\z", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("b\nab", "ab$", '\\', "", nullptr, res);
@@ -1386,8 +1432,6 @@ TEST_F(Regexp, TiDB_Match_Test)
     DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "ab\\z", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constant_constant("b\nac\n", "ab$", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nac", "ab\\Z", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constant_constant("b\nac", "ab\\z", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 0);
@@ -1435,8 +1479,6 @@ TEST_F(Regexp, TiDB_Match_Test)
     ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constant_constant("b\nabb\n", "abb\\z", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("b\nabb\n", "abb$", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("b\nabb", "abb\\z", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("b\nabb", "abb$", '\\', "", nullptr, res);
@@ -1508,12 +1550,6 @@ TEST_F(Regexp, TiDB_Match_Test)
     // # Not implemented
     // --error ER_REGEXP_UNIMPLEMENTED
     // DB::MatchImpl<false,false,true>::constant_constant("yabz","a(?{$a=2;$b=3;($b)=$a})b",'\\',"",nullptr,res); ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("_I(round(xs * sz),1)", "round\\(((?>[^()]+))\\)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("x ", "(?x)((?x:.) )", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("x ", "(?x)((?-x:.) )", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("foo.bart", "foo.bart", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("abcd\ndxxx", "(?m)^d[x][x][x]", '\\', "", nullptr, res);
@@ -1526,14 +1562,10 @@ TEST_F(Regexp, TiDB_Match_Test)
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("a0- z", "([\\d-\\s]+)", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("za-9z", "([a-[:digit:]]+)", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("=0-z=", "([[:digit:]-z]+)", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("=0-z=", "([[:digit:]-[:alpha:]]+)", '\\', "", nullptr, res); /* Result: iy */
     ;
-    DB::MatchImpl<false, false, true>::constant_constant("aaaXbX", "\\GX.*X", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constant_constant("3.1415926", "(\\d+\\.\\d+)", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("have a web browser", "(\\ba.{0,10}br)", '\\', "", nullptr, res);
@@ -1552,8 +1584,6 @@ TEST_F(Regexp, TiDB_Match_Test)
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("abac", "^([ab]*?)(b)?(c)$", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("abcab", "(\\w)?(abc)\\1b", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constant_constant("a,b,c", "^(?:.,){2}c", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("a,b,c", "^(.,){2}c", '\\', "", nullptr, res);
@@ -1588,10 +1618,8 @@ TEST_F(Regexp, TiDB_Match_Test)
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("", "(?i)", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("a\nxb\n", "(?m)(?!\\A)x", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("aba", "^(a(b)?)+$", '\\', "", nullptr, res); /* Result: yi */
-    ;
+    ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("123\nabcabcabcabc\n", "(?m)^.{9}abc.*\n", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("a", "^(a)?a$", '\\', "", nullptr, res);
@@ -1620,8 +1648,6 @@ TEST_F(Regexp, TiDB_Match_Test)
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("abc", "(abc)?(abc)+", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("a\nb\n", "(?m)b\\s^", '\\', "", nullptr, res);
-    ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constant_constant("a", "\\ba", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
     // # ?? Not supported
@@ -1652,6 +1678,22 @@ TEST_F(Regexp, TiDB_Match_Test)
     // # ?? not supported
     // --error ER_REGEXP_RULE_SYNTAX
     // DB::MatchImpl<false,false,true>::constant_constant("x","(??{})",'\\',"",nullptr,res); /* Result: yi */;
+    DB::MatchImpl<false, false, true>::constant_constant("abc", "a", '\\', "m", nullptr, res);
+    ASSERT_TRUE(res == 1);
+    DB::MatchImpl<false, false, true>::constant_constant("abc", "b", '\\', "m", nullptr, res);
+    ASSERT_TRUE(res == 1);
+    DB::MatchImpl<false, false, true>::constant_constant("abc", "c", '\\', "m", nullptr, res);
+    ASSERT_TRUE(res == 1);
+    DB::MatchImpl<false, false, true>::constant_constant("abc", "d", '\\', "m", nullptr, res);
+    ASSERT_TRUE(res == 0);
+    DB::MatchImpl<false, false, true>::constant_constant("a", "a.*", '\\', "m", nullptr, res);
+    ASSERT_TRUE(res == 1);
+    DB::MatchImpl<false, false, true>::constant_constant("ab", "a.*", '\\', "m", nullptr, res);
+    ASSERT_TRUE(res == 1);
+    DB::MatchImpl<false, false, true>::constant_constant("abc", "A", '\\', "i", nullptr, res);
+    ASSERT_TRUE(res == 1);
+    DB::MatchImpl<false, false, true>::constant_constant("abc", "A", '\\', "", nullptr, res);
+    ASSERT_TRUE(res == 0);
 }
 
 

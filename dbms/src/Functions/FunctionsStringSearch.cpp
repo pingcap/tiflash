@@ -326,6 +326,10 @@ static String getRE2ModeModifiers(const std::string & match_type, const bool & f
             switch (match_type[i])
             {
                 case 'i':
+                    /// according to MySQL doc, if either argument is a binary string, the arguments are handled in
+                    /// case-sensitive fashion as binary strings, even if match_type contains the i character.
+                    /// but I test in MySQL 8.0.20, i flag still take affect even if the collation is binary, so maybe
+                    /// we do not need check the collation
                     if (!force_case_sensitive)
                         options.set_case_sensitive(false);
                     break;
