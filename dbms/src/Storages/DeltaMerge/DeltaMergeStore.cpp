@@ -1352,8 +1352,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     Int64  gc_segments_num    = 0;
     while (gc_segments_num < limit)
     {
-        SegmentPtr  segment;
-        RowKeyRange segment_range;
+        SegmentPtr segment;
         // If the store is shut down, give up running GC on it.
         if (shutdown_called.load(std::memory_order_relaxed))
             break;
@@ -1370,8 +1369,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             check_segments_num++;
 
             segment           = segment_it->second;
-            segment_range     = segment->getRowKeyRange();
-            next_gc_check_key = segment_range.end;
+            next_gc_check_key = segment_it->first.toRowKeyValue();
         }
 
         if (segment->hasAbandoned())
@@ -1380,6 +1378,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         if (segment->getLastCheckGCSafePoint() >= latest_gc_safe_point.load(std::memory_order_relaxed))
             continue;
 
+        auto & segment_range = segment->getRowKeyRange();
         if (segment->getDelta()->isUpdating())
         {
             LOG_DEBUG(log, "GC is skipped [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
@@ -1396,26 +1395,26 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         try
         {
             // Check whether we should apply gc on this segment
-            const bool should_compact = GC::shouldCompact(segment,
+            const bool should_compact       = GC::shouldCompact(segment,
                                                           latest_gc_safe_point.load(std::memory_order_relaxed),
                                                           global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc,
                                                           log);
+            bool       finish_gc_on_segment = false;
             if (should_compact)
             {
-                ThreadType type = ThreadType::BG_MergeDelta;
+                ThreadType type = ThreadType::BG_GC;
                 segment         = segmentMergeDelta(*dm_context, segment, /*is_foreground*/ false);
                 if (segment)
                 {
                     // Continue to check whether we need to apply more tasks on this segment
                     checkSegmentUpdate(dm_context, segment, type);
                     gc_segments_num++;
+                    finish_gc_on_segment = true;
                     LOG_INFO(log, "GC-merge-delta done [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
                 }
-                else
-                {
-                    LOG_DEBUG(log, "GC is skipped [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
-                }
             }
+            if (!finish_gc_on_segment)
+                LOG_DEBUG(log, "GC is skipped [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
         }
         catch (Exception & e)
         {
@@ -1423,6 +1422,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             e.rethrow();
         }
     }
+
     LOG_DEBUG(log, "Finish GC on " << gc_segments_num << " segments [table=" + table_name + "]");
     return gc_segments_num;
 }

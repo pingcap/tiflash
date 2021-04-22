@@ -151,6 +151,7 @@ public:
         BG_MergeDelta,
         BG_Compact,
         BG_Flush,
+        BG_GC,
     };
 
     enum TaskType
@@ -183,6 +184,8 @@ public:
             return "BG_Compact";
         case BG_Flush:
             return "BG_Flush";
+        case BG_GC:
+            return "BG_GC";
         default:
             return "Unknown";
         }
