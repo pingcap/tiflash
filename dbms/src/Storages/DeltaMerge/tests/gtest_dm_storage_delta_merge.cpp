@@ -164,7 +164,6 @@ CATCH
 TEST(StorageDeltaMerge_test, Rename)
 try
 {
-    std::cout << "StorageDeltaMerge_test rename start" << std::endl;
     Context    ctx = DMTestEnv::getContext();
     std::shared_ptr<StorageDeltaMerge> storage;
     DataTypes  data_types;
