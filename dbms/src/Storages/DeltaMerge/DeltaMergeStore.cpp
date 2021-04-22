@@ -682,6 +682,9 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
         cur_range.setEnd(range.end);
     }
 
+    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_bytes, type_ingest).Increment(bytes);
+    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_rows, type_ingest).Increment(rows);
+
     flushCache(dm_context, range);
 
     for (auto & segment : updated_segments)
