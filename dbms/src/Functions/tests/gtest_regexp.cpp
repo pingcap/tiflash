@@ -57,7 +57,7 @@ TEST_F(Regexp, regexp_TiDB_Match_Type_Test)
     DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*b", '\\', "in", nullptr, res);
     ASSERT_TRUE(res == 1);
 }
-TEST_F(Regexp, regexp_TiDB_Mysql_Failed_Test)
+TEST_F(Regexp, regexp_TiDB_MySQL_Failed_Test)
 {
     UInt8 res = false;
     /// result different from mysql 8.x
@@ -396,7 +396,7 @@ TEST_F(Regexp, regexp_TiDB_Mysql_Failed_Test)
     // ASSERT_TRUE(res == 1);
 }
 
-TEST_F(Regexp, regexp_TiDB_Mysql_Test)
+TEST_F(Regexp, regexp_TiDB_MySQL_Test)
 {
     UInt8 res = false;
     // Test based on https://github.com/mysql/mysql-server/blob/mysql-cluster-8.0.17/mysql-test/t/regular_expressions_func.test
@@ -1987,8 +1987,10 @@ TEST_F(Regexp, regexp_replace_TiDB_Match_Type_Test)
 {
     String res;
     std::shared_ptr<TiDB::ITiDBCollator> binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
-    DB::ReplaceRegexpImpl<false>::constant("a\nB\n", "(?m)(?i)^b", "xxx", 1, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "a\nxxx\n");
+    DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "mi", nullptr, res);
+    ASSERT_TRUE(res == "a\nxxx\nc");
+    DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "mi", binary_collator, res);
+    ASSERT_TRUE(res == "a\nB\nc");
     // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "mi", nullptr, res);
     // ASSERT_TRUE(res == 1);
     // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "mi", binary_collator, res);
@@ -2007,24 +2009,44 @@ TEST_F(Regexp, regexp_replace_TiDB_Match_Type_Test)
 
 TEST_F(Regexp, regexp_replace_TiDB_MySQL_Test)
 {
+    // Test based on https://github.com/mysql/mysql-server/blob/mysql-cluster-8.0.17/mysql-test/t/regular_expressions_utf-8.test
     String res;
-    std::shared_ptr<TiDB::ITiDBCollator> binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
-    DB::ReplaceRegexpImpl<false>::constant("a\nB\n", "(?m)(?i)^b", "xxx", 1, 0, "", nullptr, res);
-    ASSERT_TRUE(res == "a\nxxx\n");
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "mi", nullptr, res);
-    // ASSERT_TRUE(res == 1);
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "mi", binary_collator, res);
-    // ASSERT_TRUE(res == 0);
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "i", nullptr, res);
-    // ASSERT_TRUE(res == 1);
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "m", nullptr, res);
-    // ASSERT_TRUE(res == 0);
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*b", '\\', "", nullptr, res);
-    // ASSERT_TRUE(res == 0);
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*B", '\\', "n", nullptr, res);
-    // ASSERT_TRUE(res == 1);
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*b", '\\', "in", nullptr, res);
-    // ASSERT_TRUE(res == 1);
+    DB::ReplaceRegexpImpl<false>::constant("aaa", "a", "X", 1, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "XXX");
+    DB::ReplaceRegexpImpl<false>::constant("abc", "b", "X", 1, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "aXc");
+    DB::ReplaceRegexpImpl<false>::constant("aaabbccbbddaa", "b+", "X", 1, 1, "", nullptr, res);
+    ASSERT_TRUE(res == "aaaXccbbddaa");
+    DB::ReplaceRegexpImpl<false>::constant("aaabbccbbddaa", "b+", "X", 1, 2, "", nullptr, res);
+    ASSERT_TRUE(res == "aaabbccXddaa");
+    DB::ReplaceRegexpImpl<false>::constant("aaabbccbbddaa", "(b+)", "<\\1>", 1, 2, "", nullptr, res);
+    ASSERT_TRUE(res == "aaabbcc<bb>ddaa");
+    DB::ReplaceRegexpImpl<false>::constant("aaabbccbbddaa", "x+", "x", 1, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "aaabbccbbddaa");
+    DB::ReplaceRegexpImpl<false>::constant("aaabbccbbddaa", "b+", "x", 1, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "aaaxccxddaa");
+    DB::ReplaceRegexpImpl<false>::constant("aaab", "b", "x", 1, 2, "", nullptr, res);
+    ASSERT_TRUE(res == "aaab");
+    DB::ReplaceRegexpImpl<false>::constant("aaabccc", "b", "x", 1, 2, "", nullptr, res);
+    ASSERT_TRUE(res == "aaabccc");
+    DB::ReplaceRegexpImpl<false>::constant("abcbdb", "b", "X", 1, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "aXcXdX");
+    DB::ReplaceRegexpImpl<false>::constant("aaabcbdb", "b", "X", 1, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "aaaXcXdX");
+    DB::ReplaceRegexpImpl<false>::constant("aaabcbdb", "b", "X", 2, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "aaaXcXdX");
+    DB::ReplaceRegexpImpl<false>::constant("aaabcbdb", "b", "X", 3, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "aaaXcXdX");
+    DB::ReplaceRegexpImpl<false>::constant("aaa", "a", "X", 2, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "aXX");
+    DB::ReplaceRegexpImpl<false>::constant("aaa", "a", "XX", 2, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "aXXXX");
+    DB::ReplaceRegexpImpl<false>::constant("c b b", "^([[:alpha:]]+)[[:space:]].*$", "\\1", 1, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "c");
+    DB::ReplaceRegexpImpl<false>::constant("\U0001F450\U0001F450\U0001F450", ".", "a", 2, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "\U0001F450aa");
+    DB::ReplaceRegexpImpl<false>::constant("\U0001F450\U0001F450\U0001F450", ".", "a", 2, 2, "", nullptr, res);
+    ASSERT_TRUE(res == "\U0001F450\U0001F450a");
 }
 
 TEST_F(Regexp, func_regexp_replace_Test)

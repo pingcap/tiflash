@@ -812,6 +812,15 @@ struct ReplaceRegexpImpl
 
         size_t start_pos = pos - 1;
         Int64 match_occ = 0;
+        if (start_pos >= static_cast<size_t>(input.length()))
+            throw Exception("Index out of bounds in regular expression search");
+        if (start_pos > 0)
+        {
+            /// Copy prefix
+            res_data.resize(res_data.size() + start_pos);
+            memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], input.data(), start_pos);
+            res_offset += start_pos;
+        }
         while (start_pos < static_cast<size_t>(input.length()))
         {
             /// If no more replacements possible for current string
@@ -855,7 +864,13 @@ struct ReplaceRegexpImpl
                 else
                 {
                     const auto & match = matches[0];
-                    start_pos = match.data() - input.data() + match.length();
+                    size_t bytes_to_copy = (match.data() - input.data()) - start_pos + match.length();
+
+                    /// Copy the matched string without modification
+                    res_data.resize(res_data.size() + bytes_to_copy);
+                    memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], input.data() + start_pos, bytes_to_copy);
+                    res_offset += bytes_to_copy;
+                    start_pos += bytes_to_copy;
                     if (match.length() == 0)
                         can_finish_current_string = true;
                 }
