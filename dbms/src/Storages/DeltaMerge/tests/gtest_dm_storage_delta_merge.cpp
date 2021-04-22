@@ -334,7 +334,6 @@ try
     ASSERT_EQ(sort_desc.front().column_name, sort_desc2.front().column_name);
     ASSERT_EQ(sort_desc.front().direction, sort_desc2.front().direction);
     ASSERT_EQ(sort_desc.front().nulls_direction, sort_desc2.front().nulls_direction);
-    std::cout << "StorageDeltaMerge_test handle col end" << std::endl;
 }
 CATCH
 
