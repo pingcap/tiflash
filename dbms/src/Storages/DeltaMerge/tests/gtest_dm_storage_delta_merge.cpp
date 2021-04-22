@@ -272,7 +272,6 @@ CATCH
 TEST(StorageDeltaMerge_test, HandleCol)
 try
 {
-    std::cout << "StorageDeltaMerge_test handle col start" << std::endl;
     Context    ctx = DMTestEnv::getContext();
     std::shared_ptr<StorageDeltaMerge> storage;
     DataTypes  data_types;
