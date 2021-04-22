@@ -106,15 +106,18 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
         // When the input_stream is not mvcc, we assume the rows in this input_stream is most valid and make it not tend to be gc.
         size_t cur_effective_num_rows = block.rows();
         size_t cur_not_clean_rows     = 1;
+        size_t gc_hint_version        = UINT64_MAX;
         if (mvcc_stream)
         {
             cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
             cur_not_clean_rows     = mvcc_stream->getNotCleanRows();
+            gc_hint_version        = mvcc_stream->getGCHintVersion();
         }
 
         DMFileBlockOutputStream::BlockProperty block_property;
         block_property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
         block_property.not_clean_rows     = cur_not_clean_rows - last_not_clean_rows;
+        block_property.gc_hint_version    = gc_hint_version;
         output_stream->write(block, block_property);
     }
 

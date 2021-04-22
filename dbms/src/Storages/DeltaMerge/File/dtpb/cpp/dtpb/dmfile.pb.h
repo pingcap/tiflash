@@ -186,21 +186,32 @@ class PackProperty :
 
   // accessors -------------------------------------------------------
 
-  // required int64 num_rows = 1;
+  // required uint64 num_rows = 1;
   bool has_num_rows() const;
   void clear_num_rows();
   static const int kNumRowsFieldNumber = 1;
-  ::PROTOBUF_NAMESPACE_ID::int64 num_rows() const;
-  void set_num_rows(::PROTOBUF_NAMESPACE_ID::int64 value);
+  ::PROTOBUF_NAMESPACE_ID::uint64 num_rows() const;
+  void set_num_rows(::PROTOBUF_NAMESPACE_ID::uint64 value);
+
+  // required uint64 gc_hint_version = 2;
+  bool has_gc_hint_version() const;
+  void clear_gc_hint_version();
+  static const int kGcHintVersionFieldNumber = 2;
+  ::PROTOBUF_NAMESPACE_ID::uint64 gc_hint_version() const;
+  void set_gc_hint_version(::PROTOBUF_NAMESPACE_ID::uint64 value);
 
   // @@protoc_insertion_point(class_scope:dtpb.PackProperty)
  private:
   class HasBitSetters;
 
+  // helper for ByteSizeLong()
+  size_t RequiredFieldsByteSizeFallback() const;
+
   ::PROTOBUF_NAMESPACE_ID::internal::InternalMetadataWithArena _internal_metadata_;
   ::PROTOBUF_NAMESPACE_ID::internal::HasBits<1> _has_bits_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  ::PROTOBUF_NAMESPACE_ID::int64 num_rows_;
+  ::PROTOBUF_NAMESPACE_ID::uint64 num_rows_;
+  ::PROTOBUF_NAMESPACE_ID::uint64 gc_hint_version_;
   friend struct ::TableStruct_dmfile_2eproto;
 };
 // -------------------------------------------------------------------
@@ -354,22 +365,40 @@ class PackProperties :
 #endif  // __GNUC__
 // PackProperty
 
-// required int64 num_rows = 1;
+// required uint64 num_rows = 1;
 inline bool PackProperty::has_num_rows() const {
   return (_has_bits_[0] & 0x00000001u) != 0;
 }
 inline void PackProperty::clear_num_rows() {
-  num_rows_ = PROTOBUF_LONGLONG(0);
+  num_rows_ = PROTOBUF_ULONGLONG(0);
   _has_bits_[0] &= ~0x00000001u;
 }
-inline ::PROTOBUF_NAMESPACE_ID::int64 PackProperty::num_rows() const {
+inline ::PROTOBUF_NAMESPACE_ID::uint64 PackProperty::num_rows() const {
   // @@protoc_insertion_point(field_get:dtpb.PackProperty.num_rows)
   return num_rows_;
 }
-inline void PackProperty::set_num_rows(::PROTOBUF_NAMESPACE_ID::int64 value) {
+inline void PackProperty::set_num_rows(::PROTOBUF_NAMESPACE_ID::uint64 value) {
   _has_bits_[0] |= 0x00000001u;
   num_rows_ = value;
   // @@protoc_insertion_point(field_set:dtpb.PackProperty.num_rows)
+}
+
+// required uint64 gc_hint_version = 2;
+inline bool PackProperty::has_gc_hint_version() const {
+  return (_has_bits_[0] & 0x00000002u) != 0;
+}
+inline void PackProperty::clear_gc_hint_version() {
+  gc_hint_version_ = PROTOBUF_ULONGLONG(0);
+  _has_bits_[0] &= ~0x00000002u;
+}
+inline ::PROTOBUF_NAMESPACE_ID::uint64 PackProperty::gc_hint_version() const {
+  // @@protoc_insertion_point(field_get:dtpb.PackProperty.gc_hint_version)
+  return gc_hint_version_;
+}
+inline void PackProperty::set_gc_hint_version(::PROTOBUF_NAMESPACE_ID::uint64 value) {
+  _has_bits_[0] |= 0x00000002u;
+  gc_hint_version_ = value;
+  // @@protoc_insertion_point(field_set:dtpb.PackProperty.gc_hint_version)
 }
 
 // -------------------------------------------------------------------

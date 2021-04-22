@@ -49,7 +49,7 @@ public:
 
     struct StableProperty
     {
-        UInt64 min_ts;
+        UInt64 gc_hint_version;
         // number of rows including all puts and deletes
         UInt64 num_versions;
         // number of visible rows using the latest timestamp
@@ -59,8 +59,9 @@ public:
 
         const String toDebugString() const
         {
-            return "StableProperty: min_ts [" + std::to_string(this->min_ts) + "] num_versions [" + std::to_string(this->num_versions)
-                + "] num_puts[" + std::to_string(this->num_puts) + "] num_rows[" + std::to_string(this->num_rows) + "]";
+            return "StableProperty: gc_hint_version [" + std::to_string(this->gc_hint_version) + "] num_versions ["
+                + std::to_string(this->num_versions) + "] num_puts[" + std::to_string(this->num_puts) + "] num_rows["
+                + std::to_string(this->num_rows) + "]";
         }
     };
 

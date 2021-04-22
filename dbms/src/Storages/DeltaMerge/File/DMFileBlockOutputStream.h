@@ -26,16 +26,8 @@ public:
     {
     }
 
-    struct BlockProperty
-    {
-        size_t not_clean_rows;
-        size_t effective_num_rows;
-    };
-
-    void write(const Block & block, const BlockProperty & block_property)
-    {
-        writer.write(block, block_property.not_clean_rows, block_property.effective_num_rows);
-    }
+    using BlockProperty = DMFileWriter::BlockProperty;
+    void write(const Block & block, const BlockProperty & block_property) { writer.write(block, block_property); }
 
     void writePrefix() {}
 

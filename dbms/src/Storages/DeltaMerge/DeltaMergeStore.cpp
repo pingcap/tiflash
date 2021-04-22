@@ -1313,7 +1313,7 @@ bool shouldCompact(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ra
     auto & property = seg->getStable()->getStableProperty();
     LOG_DEBUG(log, property.toDebugString());
     // No data older than safe_point to GC.
-    if (property.min_ts > gc_safepoint)
+    if (property.gc_hint_version > gc_safepoint)
         return false;
     // A lot of MVCC versions to GC.
     if (property.num_versions > property.num_rows * ratio_threshold)

@@ -66,7 +66,9 @@ const ::PROTOBUF_NAMESPACE_ID::uint32 TableStruct_dmfile_2eproto::offsets[] PROT
   ~0u,  // no _oneof_case_
   ~0u,  // no _weak_field_map_
   PROTOBUF_FIELD_OFFSET(::dtpb::PackProperty, num_rows_),
+  PROTOBUF_FIELD_OFFSET(::dtpb::PackProperty, gc_hint_version_),
   0,
+  1,
   PROTOBUF_FIELD_OFFSET(::dtpb::PackProperties, _has_bits_),
   PROTOBUF_FIELD_OFFSET(::dtpb::PackProperties, _internal_metadata_),
   ~0u,  // no _extensions_
@@ -76,8 +78,8 @@ const ::PROTOBUF_NAMESPACE_ID::uint32 TableStruct_dmfile_2eproto::offsets[] PROT
   ~0u,
 };
 static const ::PROTOBUF_NAMESPACE_ID::internal::MigrationSchema schemas[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
-  { 0, 6, sizeof(::dtpb::PackProperty)},
-  { 7, 13, sizeof(::dtpb::PackProperties)},
+  { 0, 7, sizeof(::dtpb::PackProperty)},
+  { 9, 15, sizeof(::dtpb::PackProperties)},
 };
 
 static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] = {
@@ -86,9 +88,10 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
 };
 
 const char descriptor_table_protodef_dmfile_2eproto[] =
-  "\n\014dmfile.proto\022\004dtpb\" \n\014PackProperty\022\020\n\010"
-  "num_rows\030\001 \002(\003\"6\n\016PackProperties\022$\n\010prop"
-  "erty\030\001 \003(\0132\022.dtpb.PackProperty"
+  "\n\014dmfile.proto\022\004dtpb\"9\n\014PackProperty\022\020\n\010"
+  "num_rows\030\001 \002(\004\022\027\n\017gc_hint_version\030\002 \002(\004\""
+  "6\n\016PackProperties\022$\n\010property\030\001 \003(\0132\022.dt"
+  "pb.PackProperty"
   ;
 static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_dmfile_2eproto_deps[1] = {
 };
@@ -99,7 +102,7 @@ static ::PROTOBUF_NAMESPACE_ID::internal::SCCInfoBase*const descriptor_table_dmf
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_dmfile_2eproto_once;
 static bool descriptor_table_dmfile_2eproto_initialized = false;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_dmfile_2eproto = {
-  &descriptor_table_dmfile_2eproto_initialized, descriptor_table_protodef_dmfile_2eproto, "dmfile.proto", 110,
+  &descriptor_table_dmfile_2eproto_initialized, descriptor_table_protodef_dmfile_2eproto, "dmfile.proto", 135,
   &descriptor_table_dmfile_2eproto_once, descriptor_table_dmfile_2eproto_sccs, descriptor_table_dmfile_2eproto_deps, 2, 0,
   schemas, file_default_instances, TableStruct_dmfile_2eproto::offsets,
   file_level_metadata_dmfile_2eproto, 2, file_level_enum_descriptors_dmfile_2eproto, file_level_service_descriptors_dmfile_2eproto,
@@ -119,10 +122,14 @@ class PackProperty::HasBitSetters {
   static void set_has_num_rows(HasBits* has_bits) {
     (*has_bits)[0] |= 1u;
   }
+  static void set_has_gc_hint_version(HasBits* has_bits) {
+    (*has_bits)[0] |= 2u;
+  }
 };
 
 #if !defined(_MSC_VER) || _MSC_VER >= 1900
 const int PackProperty::kNumRowsFieldNumber;
+const int PackProperty::kGcHintVersionFieldNumber;
 #endif  // !defined(_MSC_VER) || _MSC_VER >= 1900
 
 PackProperty::PackProperty()
@@ -135,12 +142,16 @@ PackProperty::PackProperty(const PackProperty& from)
       _internal_metadata_(nullptr),
       _has_bits_(from._has_bits_) {
   _internal_metadata_.MergeFrom(from._internal_metadata_);
-  num_rows_ = from.num_rows_;
+  ::memcpy(&num_rows_, &from.num_rows_,
+    static_cast<size_t>(reinterpret_cast<char*>(&gc_hint_version_) -
+    reinterpret_cast<char*>(&num_rows_)) + sizeof(gc_hint_version_));
   // @@protoc_insertion_point(copy_constructor:dtpb.PackProperty)
 }
 
 void PackProperty::SharedCtor() {
-  num_rows_ = PROTOBUF_LONGLONG(0);
+  ::memset(&num_rows_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&gc_hint_version_) -
+      reinterpret_cast<char*>(&num_rows_)) + sizeof(gc_hint_version_));
 }
 
 PackProperty::~PackProperty() {
@@ -166,7 +177,12 @@ void PackProperty::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  num_rows_ = PROTOBUF_LONGLONG(0);
+  cached_has_bits = _has_bits_[0];
+  if (cached_has_bits & 0x00000003u) {
+    ::memset(&num_rows_, 0, static_cast<size_t>(
+        reinterpret_cast<char*>(&gc_hint_version_) -
+        reinterpret_cast<char*>(&num_rows_)) + sizeof(gc_hint_version_));
+  }
   _has_bits_.Clear();
   _internal_metadata_.Clear();
 }
@@ -180,11 +196,19 @@ const char* PackProperty::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_I
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     CHK_(ptr);
     switch (tag >> 3) {
-      // required int64 num_rows = 1;
+      // required uint64 num_rows = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 8)) {
           HasBitSetters::set_has_num_rows(&has_bits);
           num_rows_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint(&ptr);
+          CHK_(ptr);
+        } else goto handle_unusual;
+        continue;
+      // required uint64 gc_hint_version = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 16)) {
+          HasBitSetters::set_has_gc_hint_version(&has_bits);
+          gc_hint_version_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint(&ptr);
           CHK_(ptr);
         } else goto handle_unusual;
         continue;
@@ -219,13 +243,26 @@ bool PackProperty::MergePartialFromCodedStream(
     tag = p.first;
     if (!p.second) goto handle_unusual;
     switch (::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::GetTagFieldNumber(tag)) {
-      // required int64 num_rows = 1;
+      // required uint64 num_rows = 1;
       case 1: {
         if (static_cast< ::PROTOBUF_NAMESPACE_ID::uint8>(tag) == (8 & 0xFF)) {
           HasBitSetters::set_has_num_rows(&_has_bits_);
           DO_((::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::ReadPrimitive<
-                   ::PROTOBUF_NAMESPACE_ID::int64, ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::TYPE_INT64>(
+                   ::PROTOBUF_NAMESPACE_ID::uint64, ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::TYPE_UINT64>(
                  input, &num_rows_)));
+        } else {
+          goto handle_unusual;
+        }
+        break;
+      }
+
+      // required uint64 gc_hint_version = 2;
+      case 2: {
+        if (static_cast< ::PROTOBUF_NAMESPACE_ID::uint8>(tag) == (16 & 0xFF)) {
+          HasBitSetters::set_has_gc_hint_version(&_has_bits_);
+          DO_((::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::ReadPrimitive<
+                   ::PROTOBUF_NAMESPACE_ID::uint64, ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::TYPE_UINT64>(
+                 input, &gc_hint_version_)));
         } else {
           goto handle_unusual;
         }
@@ -260,9 +297,14 @@ void PackProperty::SerializeWithCachedSizes(
   (void) cached_has_bits;
 
   cached_has_bits = _has_bits_[0];
-  // required int64 num_rows = 1;
+  // required uint64 num_rows = 1;
   if (cached_has_bits & 0x00000001u) {
-    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64(1, this->num_rows(), output);
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64(1, this->num_rows(), output);
+  }
+
+  // required uint64 gc_hint_version = 2;
+  if (cached_has_bits & 0x00000002u) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64(2, this->gc_hint_version(), output);
   }
 
   if (_internal_metadata_.have_unknown_fields()) {
@@ -279,9 +321,14 @@ void PackProperty::SerializeWithCachedSizes(
   (void) cached_has_bits;
 
   cached_has_bits = _has_bits_[0];
-  // required int64 num_rows = 1;
+  // required uint64 num_rows = 1;
   if (cached_has_bits & 0x00000001u) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(1, this->num_rows(), target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(1, this->num_rows(), target);
+  }
+
+  // required uint64 gc_hint_version = 2;
+  if (cached_has_bits & 0x00000002u) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(2, this->gc_hint_version(), target);
   }
 
   if (_internal_metadata_.have_unknown_fields()) {
@@ -292,6 +339,26 @@ void PackProperty::SerializeWithCachedSizes(
   return target;
 }
 
+size_t PackProperty::RequiredFieldsByteSizeFallback() const {
+// @@protoc_insertion_point(required_fields_byte_size_fallback_start:dtpb.PackProperty)
+  size_t total_size = 0;
+
+  if (has_num_rows()) {
+    // required uint64 num_rows = 1;
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
+        this->num_rows());
+  }
+
+  if (has_gc_hint_version()) {
+    // required uint64 gc_hint_version = 2;
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
+        this->gc_hint_version());
+  }
+
+  return total_size;
+}
 size_t PackProperty::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:dtpb.PackProperty)
   size_t total_size = 0;
@@ -301,11 +368,19 @@ size_t PackProperty::ByteSizeLong() const {
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::ComputeUnknownFieldsSize(
         _internal_metadata_.unknown_fields());
   }
-  // required int64 num_rows = 1;
-  if (has_num_rows()) {
+  if (((_has_bits_[0] & 0x00000003) ^ 0x00000003) == 0) {  // All required fields are present.
+    // required uint64 num_rows = 1;
     total_size += 1 +
-      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64Size(
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
         this->num_rows());
+
+    // required uint64 gc_hint_version = 2;
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
+        this->gc_hint_version());
+
+  } else {
+    total_size += RequiredFieldsByteSizeFallback();
   }
   ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
@@ -338,8 +413,15 @@ void PackProperty::MergeFrom(const PackProperty& from) {
   ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
   (void) cached_has_bits;
 
-  if (from.has_num_rows()) {
-    set_num_rows(from.num_rows());
+  cached_has_bits = from._has_bits_[0];
+  if (cached_has_bits & 0x00000003u) {
+    if (cached_has_bits & 0x00000001u) {
+      num_rows_ = from.num_rows_;
+    }
+    if (cached_has_bits & 0x00000002u) {
+      gc_hint_version_ = from.gc_hint_version_;
+    }
+    _has_bits_[0] |= cached_has_bits;
   }
 }
 
@@ -358,7 +440,7 @@ void PackProperty::CopyFrom(const PackProperty& from) {
 }
 
 bool PackProperty::IsInitialized() const {
-  if ((_has_bits_[0] & 0x00000001) != 0x00000001) return false;
+  if ((_has_bits_[0] & 0x00000003) != 0x00000003) return false;
   return true;
 }
 
@@ -371,6 +453,7 @@ void PackProperty::InternalSwap(PackProperty* other) {
   _internal_metadata_.Swap(&other->_internal_metadata_);
   swap(_has_bits_[0], other->_has_bits_[0]);
   swap(num_rows_, other->num_rows_);
+  swap(gc_hint_version_, other->gc_hint_version_);
 }
 
 ::PROTOBUF_NAMESPACE_ID::Metadata PackProperty::GetMetadata() const {

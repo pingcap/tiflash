@@ -153,10 +153,10 @@ void StableValueSpace::recordRemovePacksPages(WriteBatches & wbs) const
 
 void StableValueSpace::calculateStableProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle)
 {
-    property.min_ts       = std::numeric_limits<UInt64>::max();
-    property.num_versions = 0;
-    property.num_puts     = 0;
-    property.num_rows     = 0;
+    property.gc_hint_version = std::numeric_limits<UInt64>::max();
+    property.num_versions    = 0;
+    property.num_puts        = 0;
+    property.num_rows        = 0;
     for (size_t i = 0; i < files.size(); i++)
     {
         auto &                 file            = files[i];
@@ -206,20 +206,20 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             }
             mvcc_stream->readSuffix();
         }
-        auto pack_filter
-            = DMFilePackFilter::loadFrom(file, context.db_context.getGlobalContext().getMinMaxIndexCache(), context.hash_salt, rowkey_range, EMPTY_FILTER, {}, context.db_context.getFileProvider());
-        auto &           use_packs                 = pack_filter.getUsePacks();
-        size_t           new_pack_properties_index = 0;
-        bool             use_new_pack_properties   = pack_properties.property_size() == 0;
+        auto   pack_filter               = DMFilePackFilter::loadFrom(file,
+                                                      context.db_context.getGlobalContext().getMinMaxIndexCache(),
+                                                      context.hash_salt,
+                                                      rowkey_range,
+                                                      EMPTY_FILTER,
+                                                      {},
+                                                      context.db_context.getFileProvider());
+        auto & use_packs                 = pack_filter.getUsePacks();
+        size_t new_pack_properties_index = 0;
+        bool   use_new_pack_properties   = pack_properties.property_size() == 0;
         for (size_t pack_id = 0; pack_id < use_packs.size(); pack_id++)
         {
             if (!use_packs[pack_id])
                 continue;
-            auto pack_min_ts = pack_filter.getMinVersion(pack_id);
-            if (pack_min_ts < property.min_ts)
-            {
-                property.min_ts = pack_min_ts;
-            }
             property.num_versions += pack_stats[pack_id].rows;
             property.num_puts += pack_stats[pack_id].rows - pack_stats[pack_id].not_clean;
             if (use_new_pack_properties)
@@ -230,12 +230,16 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                                         + " doesn't contain all info for packs",
                                     ErrorCodes::LOGICAL_ERROR);
                 }
-                property.num_rows += new_pack_properties.property(new_pack_properties_index).num_rows();
+                auto & pack_property = new_pack_properties.property(new_pack_properties_index);
+                property.num_rows += pack_property.num_rows();
+                property.gc_hint_version = std::min(property.gc_hint_version, pack_property.gc_hint_version());
                 new_pack_properties_index += 1;
             }
             else
             {
-                property.num_rows += pack_properties.property(pack_id).num_rows();
+                auto & pack_property = pack_properties.property(pack_id);
+                property.num_rows += pack_property.num_rows();
+                property.gc_hint_version = std::min(property.gc_hint_version, pack_property.gc_hint_version());
             }
         }
     }

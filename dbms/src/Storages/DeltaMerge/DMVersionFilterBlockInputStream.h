@@ -65,6 +65,7 @@ public:
 
     size_t getEffectiveNumRows() const { return effective_num_rows; }
     size_t getNotCleanRows() const { return not_clean_rows; }
+    UInt64 getGCHintVersion() const { return gc_hint_version; }
 
 private:
     inline void checkWithNextIndex(size_t i)
@@ -84,6 +85,8 @@ private:
                 = cur_version >= version_limit || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
             not_clean[i] = filter[i] && (compare(cur_handle, next_handle) == 0 || deleted);
             effective[i] = filter[i] && (compare(cur_handle, next_handle) != 0);
+            if (filter[i] && useAsGcHintVersion(cur_handle, deleted))
+                gc_hint_version = std::min(gc_hint_version, cur_version);
         }
         else
         {
@@ -116,6 +119,24 @@ private:
     }
 
 private:
+    inline bool useAsGcHintVersion(const RowKeyValueRef & cur_handle, bool deleted)
+    {
+        if (is_first_row || compare(cur_handle, prev_row_pk_value.toRowKeyValueRef()) != 0)
+        {
+            is_first_row                = false;
+            use_prev_version_as_gc_hint = deleted;
+            prev_row_pk_value           = cur_handle.toRowKeyValue();
+            return use_prev_version_as_gc_hint;
+        }
+        else if (!use_prev_version_as_gc_hint)
+        {
+            use_prev_version_as_gc_hint = true;
+            return true;
+        }
+        return false;
+    }
+
+private:
     UInt64 version_limit;
     bool   is_common_handle;
     Block  header;
@@ -129,6 +150,19 @@ private:
     IColumn::Filter effective{};
     // not_clean = selected & (handle equals with next || deleted)
     IColumn::Filter not_clean{};
+
+    // Calculate per block, when gc_safe_point exceed this version, there must be some data obsolete in this block
+    // First calculate the gc_hint_version of every pk according to the following rules,
+    //     1. If the oldest version is delete, then the result is the oldest version.
+    //     2. Otherwise, if the pk has just a single version, the result is UInt64_MAX(means just ignore this kind of pk).
+    //     3. Otherwise, the result is the second oldest version.
+    // Then the block's gc_hint_version is the minimum value of all pk's gc_hint_version
+    UInt64 gc_hint_version;
+
+    // just help to calculate gc_hint_version
+    bool        is_first_row = true;
+    RowKeyValue prev_row_pk_value;
+    bool        use_prev_version_as_gc_hint = false;
 
     Block raw_block;
 

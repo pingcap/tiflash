@@ -228,6 +228,25 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                     ++filter_pos;
                 }
             }
+
+            // Let's calculate gc_hint_version
+            gc_hint_version = UINT64_MAX;
+            {
+                UInt8 * filter_pos  = filter.data();
+                size_t  handle_pos  = 0;
+                auto *  version_pos = const_cast<UInt64 *>(version_col_data->data());
+                auto *  delete_pos  = const_cast<UInt8 *>(delete_col_data->data());
+                for (size_t i = 0; i < batch_rows; ++i)
+                {
+                    if (*filter_pos && useAsGcHintVersion(rowkey_column->getRowKeyValue(handle_pos), *delete_pos))
+                        gc_hint_version = std::min(gc_hint_version, *version_pos);
+
+                    ++filter_pos;
+                    ++handle_pos;
+                    ++version_pos;
+                    ++delete_pos;
+                }
+            }
         }
         else
         {
@@ -254,6 +273,8 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                     filter[rows - 1]    = cur_version >= version_limit || !deleted;
                     not_clean[rows - 1] = filter[rows - 1] && deleted;
                     effective[rows - 1] = filter[rows - 1];
+                    if (filter[rows - 1] && useAsGcHintVersion(cur_handle, deleted))
+                        gc_hint_version = std::min(gc_hint_version, cur_version);
                 }
                 else
                 {
@@ -275,6 +296,8 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                         || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
                     not_clean[rows - 1] = filter[rows - 1] && (compare(cur_handle, next_handle) == 0 || deleted);
                     effective[rows - 1] = filter[rows - 1] && (compare(cur_handle, next_handle) != 0);
+                    if (filter[rows - 1] && useAsGcHintVersion(cur_handle, deleted))
+                        gc_hint_version = std::min(gc_hint_version, cur_version);
                 }
                 else
                 {

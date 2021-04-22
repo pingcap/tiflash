@@ -1560,7 +1560,7 @@ try
         stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false);
         ASSERT_EQ(stable->isStablePropertyCached(), true);
         auto & property = stable->getStableProperty();
-        ASSERT_EQ(property.min_ts, tso);
+        ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
         ASSERT_EQ(property.num_versions, num_rows_write);
         ASSERT_EQ(property.num_puts, num_rows_write);
         ASSERT_EQ(property.num_rows, num_rows_write);
@@ -1596,7 +1596,7 @@ try
         stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false);
         ASSERT_EQ(stable->isStablePropertyCached(), true);
         auto & property = stable->getStableProperty();
-        ASSERT_EQ(property.min_ts, tso);
+        ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
         ASSERT_EQ(property.num_versions, num_rows_write);
         ASSERT_EQ(property.num_puts, num_rows_write);
         ASSERT_EQ(property.num_rows, num_rows_write);
