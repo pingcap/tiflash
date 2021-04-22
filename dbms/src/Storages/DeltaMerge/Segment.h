@@ -66,11 +66,20 @@ public:
 
     struct SplitInfo
     {
+        bool ok;
+
         bool   is_logical;
         Handle split_point;
 
         StableValueSpacePtr my_stable;
         StableValueSpacePtr other_stable;
+
+        SplitInfo() : ok(false) {}
+
+        SplitInfo(bool is_logical_, Handle split_point_, StableValueSpacePtr my_stable_, StableValueSpacePtr other_stable_)
+            : ok(true), is_logical(is_logical_), split_point(split_point_), my_stable(my_stable_), other_stable(other_stable_)
+        {
+        }
     };
 
     Segment(const Segment &) = delete;
@@ -235,9 +244,10 @@ private:
                                                         UInt64                    max_version = MAX_UINT64);
 
     /// Merge delta & stable, and then take the middle one.
-    Handle getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const;
+    std::optional<Handle>
+    getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const;
     /// Only look up in the stable vs.
-    Handle getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
+    std::optional<Handle> getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
 
     SplitInfo prepareSplitLogical(DMContext &                dm_context, //
                                   const ColumnDefinesPtr &   schema_snap,

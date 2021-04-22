@@ -1164,6 +1164,11 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     WriteBatches wbs(storage_pool);
     auto         range      = segment->getRange();
     auto         split_info = segment->prepareSplit(dm_context, schema_snap, segment_snap, wbs);
+    if (!split_info.ok)
+    {
+        LOG_WARNING(log, "Give up segment [" << segment->segmentId() << "] split because of prepare split failed");
+        return {};
+    }
 
     wbs.writeLogAndData();
     split_info.my_stable->enableDMFilesGC();
