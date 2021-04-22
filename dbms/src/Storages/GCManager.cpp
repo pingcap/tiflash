@@ -12,7 +12,10 @@ bool GCManager::work()
         return false;
     Int64 gc_segments_limit = global_settings.dt_bg_gc_max_segments_to_check_every_round;
     if (gc_segments_limit <= 0)
+    {
+        gc_check_stop_watch.restart();
         return false;
+    }
     LOG_DEBUG(log, "Start GC with table id: " << next_table_id);
     // Get a storage snapshot with weak_ptrs first
     // TODO: avoid gc on storage which have no data?
