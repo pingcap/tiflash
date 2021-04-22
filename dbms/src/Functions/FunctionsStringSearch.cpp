@@ -960,6 +960,20 @@ struct ReplaceRegexpImpl
             res_offsets[i] = res_offset;
         }
     }
+
+    /// added for test
+    static void constant(const String & input, const String & needle, const String & replacement, const Int64 & pos, const Int64 & occ,
+        const String & match_type, std::shared_ptr<TiDB::ITiDBCollator> collator, String & output)
+    {
+        ColumnString::Chars_t input_data;
+        input_data.insert(input_data.end(), input.begin(), input.end());
+        ColumnString::Offsets input_offsets;
+        input_offsets.push_back(input_data.size() + 1);
+        ColumnString::Chars_t output_data;
+        ColumnString::Offsets output_offsets;
+        vector(input_data, input_offsets, needle, replacement, pos, occ, match_type, collator, output_data, output_offsets);
+        output = String(reinterpret_cast<const char *>(&output_data[0]), output_offsets[0] - 1);
+    }
 };
 
 
