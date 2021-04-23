@@ -593,6 +593,8 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
                                             new_delta,
                                             new_stable);
 
+    new_me->setLastCheckGCSafePoint(context.min_version);
+
     // Store new meta data
     new_me->serialize(wbs.meta);
 

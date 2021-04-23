@@ -1388,7 +1388,8 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
 
         segment->setLastCheckGCSafePoint(gc_safe_point);
 
-        auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
+        auto dm_context         = newDMContext(global_context, global_context.getSettingsRef());
+        dm_context->min_version = gc_safe_point;
         // calculate StableProperty if needed
         if (!segment->getStable()->isStablePropertyCached())
             segment->getStable()->calculateStableProperty(*dm_context, segment_range, isCommonHandle());
