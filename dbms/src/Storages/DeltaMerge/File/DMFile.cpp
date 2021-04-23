@@ -340,16 +340,9 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
         buf.seek(file.getSize() - sizeof(DMSingleFileFormatVersion), SEEK_SET);
         DB::readIntBinary(file_format, buf);
 
-        if (file_format >= DMSingleFileFormatVersion::VERSION_WITH_PROPERTY_SUB_FILE)
-        {
-            buf.seek(file.getSize() - sizeof(Footer), SEEK_SET);
-            DB::readIntBinary(footer.meta_pack_info.pack_property_offset, buf);
-            DB::readIntBinary(footer.meta_pack_info.pack_property_size, buf);
-        }
-        else
-        {
-            buf.seek(file.getSize() - sizeof(Footer) + 2 * sizeof(UInt64), SEEK_SET);
-        }
+        buf.seek(file.getSize() - sizeof(Footer), SEEK_SET);
+        DB::readIntBinary(footer.meta_pack_info.pack_property_offset, buf);
+        DB::readIntBinary(footer.meta_pack_info.pack_property_size, buf);
         DB::readIntBinary(footer.meta_pack_info.meta_offset, buf);
         DB::readIntBinary(footer.meta_pack_info.meta_size, buf);
         DB::readIntBinary(footer.meta_pack_info.pack_stat_offset, buf);
@@ -407,7 +400,6 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
     std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size)         = writePackStatToBuffer(buffer);
     footer.sub_file_stat_offset                                                                    = buffer.count();
     footer.sub_file_num                                                                            = sub_file_stats.size();
-    footer.file_format_version = DMSingleFileFormatVersion::VERSION_WITH_PROPERTY_SUB_FILE;
     for (auto & iter : sub_file_stats)
     {
         writeStringBinary(iter.first, buffer);
