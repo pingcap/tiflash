@@ -67,7 +67,9 @@ public:
     };
 
     const StableProperty & getStableProperty() const { return property; }
-    void                   calculateStableProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle);
+
+    void
+    calculateStableProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle, size_t rowkey_column_size);
 
     struct Snapshot;
     using SnapshotPtr = std::shared_ptr<Snapshot>;
