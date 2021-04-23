@@ -122,11 +122,10 @@ private:
     inline bool
     useAsGcHintVersion(const RowKeyValueRef & cur_handle, const RowKeyValueRef & next_handle, bool next_handle_valid, bool deleted)
     {
-        // First calculate the gc_hint_version of every pk according to the following rules,
+        // The rules to calculate gc_hint_version of every pk,
         //     1. If the oldest version is delete, then the result is the oldest version.
         //     2. Otherwise, if the pk has just a single version, the result is UInt64_MAX(means just ignore this kind of pk).
         //     3. Otherwise, the result is the second oldest version.
-        // Then the block's gc_hint_version is the minimum value of all pk's gc_hint_version
         bool result = false;
         if (is_first_oldest_version && deleted)
         {
@@ -179,7 +178,9 @@ private:
     IColumn::Filter not_clean{};
 
     // Calculate per block, when gc_safe_point exceed this version, there must be some data obsolete in this block
-    // see the comments in `useAsGcHintVersion` to see how to calculate it
+    // First calculate the gc_hint_version of every pk according to the following rules,
+    //     see the comments in `useAsGcHintVersion` to see how to calculate it for every pk
+    // Then the block's gc_hint_version is the minimum value of all pk's gc_hint_version
     UInt64 gc_hint_version;
 
     // auxiliary variable for the calculation of gc_hint_version
