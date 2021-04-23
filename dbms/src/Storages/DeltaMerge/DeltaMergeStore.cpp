@@ -1683,6 +1683,8 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
         metric_type = CurrentMetrics::DT_DeltaMerge_FG;
     case Thread_BG_GC:
         metric_type = CurrentMetrics::DT_DeltaMerge_BG_GC;
+    default:
+        metric_type = CurrentMetrics::DT_DeltaMerge;
     }
     CurrentMetrics::Increment cur_dm_segments{metric_type};
     switch (run_thread)
@@ -1693,6 +1695,8 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
         metric_type = CurrentMetrics::DT_DeltaMergeTotalBytes_FG;
     case Thread_BG_GC:
         metric_type = CurrentMetrics::DT_DeltaMergeTotalBytes_BG_GC;
+    default:
+        metric_type = CurrentMetrics::DT_DeltaMergeTotalBytes;
     }
     CurrentMetrics::Increment cur_dm_total_bytes{CurrentMetrics::DT_DeltaMergeTotalBytes, (Int64)segment_snap->getBytes()};
     switch (run_thread)
@@ -1703,6 +1707,8 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
         metric_type = CurrentMetrics::DT_DeltaMergeTotalRows_FG;
     case Thread_BG_GC:
         metric_type = CurrentMetrics::DT_DeltaMergeTotalRows_BG_GC;
+    default:
+        metric_type = CurrentMetrics::DT_DeltaMergeTotalRows;
     }
     CurrentMetrics::Increment cur_dm_total_rows{CurrentMetrics::DT_DeltaMergeTotalRows, (Int64)segment_snap->getRows()};
 
