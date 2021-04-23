@@ -1557,7 +1557,7 @@ try
         ASSERT_EQ(stable->getRows(), num_rows_write);
         // caculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);
-        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false);
+        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false, 1);
         ASSERT_EQ(stable->isStablePropertyCached(), true);
         auto & property = stable->getStableProperty();
         ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
@@ -1593,7 +1593,7 @@ try
         ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
         // caculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);
-        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false);
+        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false, 1);
         ASSERT_EQ(stable->isStablePropertyCached(), true);
         auto & property = stable->getStableProperty();
         ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
