@@ -317,8 +317,14 @@ struct PositionImpl
     }
 };
 
-static String getRE2ModeModifiers(const std::string & match_type, const bool & force_case_sensitive, re2_st::RE2::Options & options)
+static String getRE2ModeModifiers(const std::string & match_type, std::shared_ptr<TiDB::ITiDBCollator> collator)
 {
+    /// for regexp only ci/cs is supported
+    re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
+    if (collator != nullptr && collator->isCI())
+        options.set_case_sensitive(false);
+
+    /// match_type can overwrite collator
     if (!match_type.empty())
     {
         for (size_t i = 0; i < match_type.size(); i++)
@@ -330,7 +336,7 @@ static String getRE2ModeModifiers(const std::string & match_type, const bool & f
                     /// case-sensitive fashion as binary strings, even if match_type contains the i character.
                     /// However, test in MySQL 8.0.20 shows that i flag still take affect even if the collation is binary,
                     /// so maybe we do not need check the collation
-                    if (!force_case_sensitive)
+                    if (collator == nullptr || !collator->isBinary())
                         options.set_case_sensitive(false);
                     break;
                 case 'c':
@@ -533,15 +539,9 @@ struct MatchImpl
             else
                 flags |= OptimizedRegularExpression::RE_DOT_NL;
 
-            /// for regexp only ci/cs is supported
-            re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
-            if (collator != nullptr && collator->isCI())
-                options.set_case_sensitive(false);
-
-            /// match_type can overwrite collator
-            if (!match_type.empty() || !options.case_sensitive())
+            if (!match_type.empty() || collator != nullptr)
             {
-                String mode_modifiers = getRE2ModeModifiers(match_type, collator != nullptr && collator->isBinary(), options);
+                String mode_modifiers = getRE2ModeModifiers(match_type, collator);
                 if (!mode_modifiers.empty())
                     pattern = mode_modifiers + pattern;
             }
@@ -663,15 +663,9 @@ struct MatchImpl
             else
                 flags |= OptimizedRegularExpression::RE_DOT_NL;
 
-            /// for regexp only ci/cs is supported
-            re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
-            if (collator != nullptr && collator->isCI())
-                options.set_case_sensitive(false);
-
-            /// match_type can overwrite collator
-            if (!match_type.empty() || !options.case_sensitive())
+            if (!match_type.empty() || collator != nullptr)
             {
-                String mode_modifiers = getRE2ModeModifiers(match_type, collator != nullptr && collator->isBinary(), options);
+                String mode_modifiers = getRE2ModeModifiers(match_type, collator);
                 if (!mode_modifiers.empty())
                     pattern = mode_modifiers + pattern;
             }
@@ -910,12 +904,9 @@ struct ReplaceRegexpImpl
         res_offsets.resize(size);
 
         String updated_needle = needle;
-        re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
-        if (collator != nullptr && collator->isCI())
-            options.set_case_sensitive(false);
-        if (!match_type.empty() || !options.case_sensitive())
+        if (!match_type.empty() || collator != nullptr)
         {
-            String mode_modifiers = getRE2ModeModifiers(match_type, collator != nullptr && collator->isBinary(), options);
+            String mode_modifiers = getRE2ModeModifiers(match_type, collator);
             if (!mode_modifiers.empty())
                 updated_needle = mode_modifiers + updated_needle;
         }
@@ -952,12 +943,9 @@ struct ReplaceRegexpImpl
         res_offsets.resize(size);
 
         String updated_needle = needle;
-        re2_st::RE2::Options options(re2_st::RE2::CannedOptions::DefaultOptions);
-        if (collator != nullptr && collator->isCI())
-            options.set_case_sensitive(false);
-        if (!match_type.empty() || !options.case_sensitive())
+        if (!match_type.empty() || collator != nullptr)
         {
-            String mode_modifiers = getRE2ModeModifiers(match_type, collator != nullptr && collator->isBinary(), options);
+            String mode_modifiers = getRE2ModeModifiers(match_type, collator);
             if (!mode_modifiers.empty())
                 updated_needle = mode_modifiers + updated_needle;
         }

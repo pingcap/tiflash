@@ -40,9 +40,12 @@ TEST_F(Regexp, regexp_TiDB_Match_Type_Test)
 {
     UInt8 res = false;
     std::shared_ptr<TiDB::ITiDBCollator> binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    std::shared_ptr<TiDB::ITiDBCollator> ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
     DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "(?m)(?i)^b", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "mi", nullptr, res);
+    ASSERT_TRUE(res == 1);
+    DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "m", ci_collator, res);
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "mi", binary_collator, res);
     ASSERT_TRUE(res == 0);
@@ -1988,9 +1991,12 @@ TEST_F(Regexp, regexp_replace_TiDB_Match_Type_Test)
 {
     String res;
     std::shared_ptr<TiDB::ITiDBCollator> binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    std::shared_ptr<TiDB::ITiDBCollator> ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
     DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "(?m)(?i)^b", "xxx", 1, 0, "", nullptr, res);
     ASSERT_TRUE(res == "a\nxxx\nc");
     DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "mi", nullptr, res);
+    ASSERT_TRUE(res == "a\nxxx\nc");
+    DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "m", ci_collator, res);
     ASSERT_TRUE(res == "a\nxxx\nc");
     DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "mi", binary_collator, res);
     ASSERT_TRUE(res == "a\nB\nc");
