@@ -361,7 +361,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                path_pool,
                                storage_pool,
                                hash_salt,
-                               latest_gc_safe_point.load(std::memory_order_relaxed),
+                               latest_gc_safe_point.load(std::memory_order_acquire),
                                settings.not_compress_columns,
                                is_common_handle,
                                rowkey_column_size,
@@ -1350,9 +1350,10 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         }
     }
 
+    DB::Timestamp gc_safe_point = latest_gc_safe_point.load(std::memory_order_acquire);
     LOG_DEBUG(log,
               "GC on table " << table_name << " start with key: " << next_gc_check_key.toDebugString()
-                             << ", gc_safe_point: " << latest_gc_safe_point.load(std::memory_order_acquire));
+                             << ", gc_safe_point: " << gc_safe_point);
 
     UInt64 check_segments_num = 0;
     Int64  gc_segments_num    = 0;
@@ -1381,7 +1382,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         if (segment->hasAbandoned())
             continue;
 
-        if (segment->getLastCheckGCSafePoint() >= latest_gc_safe_point.load(std::memory_order_acquire))
+        if (segment->getLastCheckGCSafePoint() >= gc_safe_point)
             continue;
 
         auto & segment_range = segment->getRowKeyRange();
@@ -1391,7 +1392,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             continue;
         }
 
-        segment->setLastCheckGCSafePoint(latest_gc_safe_point.load(std::memory_order_acquire));
+        segment->setLastCheckGCSafePoint(gc_safe_point);
 
         auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
         // calculate StableProperty if needed
@@ -1401,11 +1402,9 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         try
         {
             // Check whether we should apply gc on this segment
-            const bool should_compact       = GC::shouldCompact(segment,
-                                                          latest_gc_safe_point.load(std::memory_order_relaxed),
-                                                          global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc,
-                                                          log);
-            bool       finish_gc_on_segment = false;
+            const bool should_compact
+                = GC::shouldCompact(segment, gc_safe_point, global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc, log);
+            bool finish_gc_on_segment = false;
             if (should_compact)
             {
                 ThreadType type = ThreadType::BG_GC;

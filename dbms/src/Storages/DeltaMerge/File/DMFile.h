@@ -41,7 +41,7 @@ public:
 
     enum DMSingleFileFormatVersion : int
     {
-        SINGLE_FILE_VERSION_BASE       = 0,
+        SINGLE_FILE_VERSION_BASE = 0,
     };
 
     static String statusString(Status status)

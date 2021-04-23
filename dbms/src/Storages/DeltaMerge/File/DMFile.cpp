@@ -255,8 +255,8 @@ void DMFile::writePackProperty(const FileProviderPtr & file_provider, const Rate
 
 void DMFile::writeMetadata(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
 {
-    writeMeta(file_provider, rate_limiter);
     writePackProperty(file_provider, rate_limiter);
+    writeMeta(file_provider, rate_limiter);
 }
 
 void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver)
@@ -365,15 +365,16 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
     {
         if (auto file = Poco::File(packPropertyPath()); file.exists())
             footer.meta_pack_info.pack_property_size = file.getSize();
+
         footer.meta_pack_info.meta_size      = Poco::File(metaPath()).getSize();
         footer.meta_pack_info.pack_stat_size = Poco::File(packStatPath()).getSize();
     }
 
+    if (footer.meta_pack_info.pack_property_size != 0)
+        readPackProperty(file_provider, footer.meta_pack_info);
 
     readMeta(file_provider, footer.meta_pack_info);
     readPackStat(file_provider, footer.meta_pack_info);
-    if (footer.meta_pack_info.pack_property_size != 0)
-        readPackProperty(file_provider, footer.meta_pack_info);
 }
 
 void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
@@ -398,8 +399,9 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
     std::tie(footer.meta_pack_info.pack_property_offset, footer.meta_pack_info.pack_property_size) = writePackPropertyToBuffer(buffer);
     std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)                   = writeMetaToBuffer(buffer);
     std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size)         = writePackStatToBuffer(buffer);
-    footer.sub_file_stat_offset                                                                    = buffer.count();
-    footer.sub_file_num                                                                            = sub_file_stats.size();
+
+    footer.sub_file_stat_offset = buffer.count();
+    footer.sub_file_num         = sub_file_stats.size();
     for (auto & iter : sub_file_stats)
     {
         writeStringBinary(iter.first, buffer);
