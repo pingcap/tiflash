@@ -593,6 +593,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
                                             new_delta,
                                             new_stable);
 
+    // avoid recheck whether to do DeltaMerge using the same gc_safe_point
     new_me->setLastCheckGCSafePoint(context.min_version);
 
     // Store new meta data
