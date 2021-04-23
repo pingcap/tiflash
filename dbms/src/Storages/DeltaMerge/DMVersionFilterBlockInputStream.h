@@ -87,7 +87,7 @@ private:
             effective[i] = filter[i] && (compare(cur_handle, next_handle) != 0);
             if (filter[i])
                 gc_hint_version
-                    = std::min(gc_hint_version, calculateRowGcHintVersion(cur_handle, cur_version, next_handle, false, deleted));
+                    = std::min(gc_hint_version, calculateRowGcHintVersion(cur_handle, cur_version, next_handle, true, deleted));
         }
         else
         {
