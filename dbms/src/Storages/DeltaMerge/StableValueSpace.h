@@ -49,6 +49,7 @@ public:
 
     struct StableProperty
     {
+        // when gc_safe_point exceed this version, there must be some data obsolete
         UInt64 gc_hint_version;
         // number of rows including all puts and deletes
         UInt64 num_versions;
