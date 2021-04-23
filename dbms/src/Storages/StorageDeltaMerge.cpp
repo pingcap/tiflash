@@ -725,7 +725,7 @@ void StorageDeltaMerge::ingestFiles(
 {
     auto metrics = global_context.getTiFlashMetrics();
     GET_METRIC(metrics, tiflash_storage_command_count, type_ingest).Increment();
-    return store->ingestFiles(global_context, settings, range, file_ids, clear_data_in_range);
+    return getAndMaybeInitStore()->ingestFiles(global_context, settings, range, file_ids, clear_data_in_range);
 }
 
 size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::RowKeyRange & range)
