@@ -46,19 +46,13 @@
     M(StoreSizeAvailable) \
     M(StoreSizeUsed) \
     M(DT_DeltaMerge) \
-    M(DT_DeltaMerge_FG) \
-    M(DT_DeltaMerge_BG_GC) \
     M(DT_DeltaCompact) \
     M(DT_DeltaFlush) \
     M(DT_SegmentSplit) \
     M(DT_SegmentMerge) \
     M(DT_PlaceIndexUpdate) \
     M(DT_DeltaMergeTotalBytes) \
-    M(DT_DeltaMergeTotalBytes_FG) \
-    M(DT_DeltaMergeTotalBytes_BG_GC) \
     M(DT_DeltaMergeTotalRows) \
-    M(DT_DeltaMergeTotalRows_FG) \
-    M(DT_DeltaMergeTotalRows_BG_GC) \
     M(DT_DeltaIndexCacheSize) \
     M(RaftNumSnapshotsPendingApply) \
     M(RateLimiterPendingWriteRequest) \

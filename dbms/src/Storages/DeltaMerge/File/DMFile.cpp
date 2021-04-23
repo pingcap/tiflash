@@ -336,9 +336,6 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
         /// TODO: Redesign the file format for single file mode (https://github.com/pingcap/tics/issues/1798)
         Poco::File                 file(path());
         ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
-        DMSingleFileFormatVersion  file_format;
-        buf.seek(file.getSize() - sizeof(DMSingleFileFormatVersion), SEEK_SET);
-        DB::readIntBinary(file_format, buf);
 
         buf.seek(file.getSize() - sizeof(Footer), SEEK_SET);
         DB::readIntBinary(footer.meta_pack_info.pack_property_offset, buf);

@@ -85,8 +85,9 @@ private:
                 = cur_version >= version_limit || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
             not_clean[i] = filter[i] && (compare(cur_handle, next_handle) == 0 || deleted);
             effective[i] = filter[i] && (compare(cur_handle, next_handle) != 0);
-            if (filter[i] && useAsGcHintVersion(cur_handle, next_handle, false, deleted))
-                gc_hint_version = std::min(gc_hint_version, cur_version);
+            if (filter[i])
+                gc_hint_version
+                    = std::min(gc_hint_version, calculateRowGcHintVersion(cur_handle, cur_version, next_handle, false, deleted));
         }
         else
         {
@@ -119,25 +120,25 @@ private:
     }
 
 private:
-    inline bool
-    useAsGcHintVersion(const RowKeyValueRef & cur_handle, const RowKeyValueRef & next_handle, bool next_handle_valid, bool deleted)
+    inline UInt64 calculateRowGcHintVersion(
+        const RowKeyValueRef & cur_handle, UInt64 cur_version, const RowKeyValueRef & next_handle, bool next_handle_valid, bool deleted)
     {
         // The rules to calculate gc_hint_version of every pk,
         //     1. If the oldest version is delete, then the result is the oldest version.
         //     2. Otherwise, if the pk has just a single version, the result is UInt64_MAX(means just ignore this kind of pk).
         //     3. Otherwise, the result is the second oldest version.
-        bool result = false;
+        bool matched = false;
         if (is_first_oldest_version && deleted)
         {
             // rule 1
-            result = true;
+            matched = true;
         }
         else if (is_second_oldest_version && gc_hint_version_pending)
         {
             // rule 3
-            result = true;
+            matched = true;
         }
-        gc_hint_version_pending = !result;
+        gc_hint_version_pending = !matched;
 
         // update status variable for next row if need
         if (next_handle_valid)
@@ -159,7 +160,7 @@ private:
             }
         }
 
-        return result;
+        return matched ? cur_version : UINT64_MAX;
     }
 
 private:
@@ -179,7 +180,7 @@ private:
 
     // Calculate per block, when gc_safe_point exceed this version, there must be some data obsolete in this block
     // First calculate the gc_hint_version of every pk according to the following rules,
-    //     see the comments in `useAsGcHintVersion` to see how to calculate it for every pk
+    //     see the comments in `calculateRowGcHintVersion` to see how to calculate it for every pk
     // Then the block's gc_hint_version is the minimum value of all pk's gc_hint_version
     UInt64 gc_hint_version;
 

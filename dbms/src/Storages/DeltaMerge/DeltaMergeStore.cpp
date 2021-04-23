@@ -43,16 +43,10 @@ extern const Event DMAppendDeltaCleanUpNS;
 namespace CurrentMetrics
 {
 extern const Metric DT_DeltaMerge;
-extern const Metric DT_DeltaMerge_FG;
-extern const Metric DT_DeltaMerge_BG_GC;
 extern const Metric DT_SegmentSplit;
 extern const Metric DT_SegmentMerge;
 extern const Metric DT_DeltaMergeTotalBytes;
-extern const Metric DT_DeltaMergeTotalBytes_FG;
-extern const Metric DT_DeltaMergeTotalBytes_BG_GC;
 extern const Metric DT_DeltaMergeTotalRows;
-extern const Metric DT_DeltaMergeTotalRows_FG;
-extern const Metric DT_DeltaMergeTotalRows_BG_GC;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -1671,54 +1665,8 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
     auto delta_bytes = (Int64)segment_snap->delta->getBytes();
     auto delta_rows  = (Int64)segment_snap->delta->getRows();
 
-    CurrentMetrics::Metric metric_type;
-    switch (run_thread)
-    {
-    case Thread_BG_Thread_Pool:
-        metric_type = CurrentMetrics::DT_DeltaMerge;
-        break;
-    case Thread_FG:
-        metric_type = CurrentMetrics::DT_DeltaMerge_FG;
-        break;
-    case Thread_BG_GC:
-        metric_type = CurrentMetrics::DT_DeltaMerge_BG_GC;
-        break;
-    default:
-        metric_type = CurrentMetrics::DT_DeltaMerge;
-        break;
-    }
-    CurrentMetrics::Increment cur_dm_segments{metric_type};
-    switch (run_thread)
-    {
-    case Thread_BG_Thread_Pool:
-        metric_type = CurrentMetrics::DT_DeltaMergeTotalBytes;
-        break;
-    case Thread_FG:
-        metric_type = CurrentMetrics::DT_DeltaMergeTotalBytes_FG;
-        break;
-    case Thread_BG_GC:
-        metric_type = CurrentMetrics::DT_DeltaMergeTotalBytes_BG_GC;
-        break;
-    default:
-        metric_type = CurrentMetrics::DT_DeltaMergeTotalBytes;
-        break;
-    }
+
     CurrentMetrics::Increment cur_dm_total_bytes{CurrentMetrics::DT_DeltaMergeTotalBytes, (Int64)segment_snap->getBytes()};
-    switch (run_thread)
-    {
-    case Thread_BG_Thread_Pool:
-        metric_type = CurrentMetrics::DT_DeltaMergeTotalRows;
-        break;
-    case Thread_FG:
-        metric_type = CurrentMetrics::DT_DeltaMergeTotalRows_FG;
-        break;
-    case Thread_BG_GC:
-        metric_type = CurrentMetrics::DT_DeltaMergeTotalRows_BG_GC;
-        break;
-    default:
-        metric_type = CurrentMetrics::DT_DeltaMergeTotalRows;
-        break;
-    }
     CurrentMetrics::Increment cur_dm_total_rows{CurrentMetrics::DT_DeltaMergeTotalRows, (Int64)segment_snap->getRows()};
 
     Stopwatch watch_delta_merge;
@@ -1740,10 +1688,10 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
         }
     });
 
-    bool         is_foreground = (run_thread == TaskRunThread::Thread_FG);
-    WriteBatches wbs(storage_pool, is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
+    bool         need_rate_limit = (run_thread != TaskRunThread::Thread_FG);
+    WriteBatches wbs(storage_pool, need_rate_limit ? dm_context.db_context.getRateLimiter() : nullptr);
 
-    auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs, !is_foreground);
+    auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs, need_rate_limit);
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
 
@@ -1787,21 +1735,8 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 
     wbs.writeRemoves();
 
-    switch (run_thread)
-    {
-    case Thread_BG_Thread_Pool:
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge).Increment(delta_bytes);
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);
-        break;
-    case Thread_FG:
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge_fg).Increment(delta_bytes);
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge_fg).Increment(delta_rows);
-        break;
-    case Thread_BG_GC:
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge_bg_gc).Increment(delta_bytes);
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge_bg_gc).Increment(delta_rows);
-        break;
-    }
+    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge).Increment(delta_bytes);
+    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);
