@@ -541,9 +541,11 @@ SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & sche
     if (!segment_snap)
         return {};
 
-    auto split_info = prepareSplit(dm_context, schema_snap, segment_snap, wbs);
-    if (!split_info.ok)
+    auto split_info_opt = prepareSplit(dm_context, schema_snap, segment_snap, wbs);
+    if (!split_info_opt.has_value())
         return {};
+
+    auto & split_info = split_info_opt.value();
 
     wbs.writeLogAndData();
     split_info.my_stable->enableDMFilesGC();
@@ -699,10 +701,10 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
     return {split_handle};
 }
 
-Segment::SplitInfo Segment::prepareSplit(DMContext &                dm_context,
-                                         const ColumnDefinesPtr &   schema_snap,
-                                         const SegmentSnapshotPtr & segment_snap,
-                                         WriteBatches &             wbs) const
+std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext &                dm_context,
+                                                        const ColumnDefinesPtr &   schema_snap,
+                                                        const SegmentSnapshotPtr & segment_snap,
+                                                        WriteBatches &             wbs) const
 {
     if (!dm_context.enable_logical_split         //
         || segment_snap->stable->getPacks() <= 3 //
@@ -712,25 +714,27 @@ Segment::SplitInfo Segment::prepareSplit(DMContext &                dm_context,
     }
     else
     {
-        auto split_point     = getSplitPointFast(dm_context, segment_snap->stable);
-        bool bad_split_point = !split_point.has_value() || !range.check(split_point.value()) || split_point == range.start;
+        auto split_point_opt = getSplitPointFast(dm_context, segment_snap->stable);
+        bool bad_split_point
+            = !split_point_opt.has_value() || !range.check(split_point_opt.value()) || split_point_opt.value() == range.start;
         if (bad_split_point)
         {
-            LOG_INFO(log,
-                     "Got bad split point [" << (split_point.has_value() ? Redact::handleToDebugString(split_point.value()) : "no value")
-                                             << "] for segment " << info() << ", fall back to split physical.");
+            LOG_INFO(
+                log,
+                "Got bad split point [" << (split_point_opt.has_value() ? Redact::handleToDebugString(split_point_opt.value()) : "no value")
+                                        << "] for segment " << info() << ", fall back to split physical.");
             return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
         }
         else
-            return prepareSplitLogical(dm_context, schema_snap, segment_snap, split_point.value(), wbs);
+            return prepareSplitLogical(dm_context, schema_snap, segment_snap, split_point_opt.value(), wbs);
     }
 }
 
-Segment::SplitInfo Segment::prepareSplitLogical(DMContext & dm_context,
-                                                const ColumnDefinesPtr & /*schema_snap*/,
-                                                const SegmentSnapshotPtr & segment_snap,
-                                                Handle                     split_point,
-                                                WriteBatches &             wbs) const
+std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_context,
+                                                               const ColumnDefinesPtr & /*schema_snap*/,
+                                                               const SegmentSnapshotPtr & segment_snap,
+                                                               Handle                     split_point,
+                                                               WriteBatches &             wbs) const
 {
     LOG_INFO(log, "Segment [" << segment_id << "] prepare split logical start");
 
@@ -782,13 +786,13 @@ Segment::SplitInfo Segment::prepareSplitLogical(DMContext & dm_context,
 
     LOG_INFO(log, "Segment [" << segment_id << "] prepare split logical done");
 
-    return SplitInfo(true, split_point, my_stable, other_stable);
+    return {SplitInfo{true, split_point, my_stable, other_stable}};
 }
 
-Segment::SplitInfo Segment::prepareSplitPhysical(DMContext &                dm_context,
-                                                 const ColumnDefinesPtr &   schema_snap,
-                                                 const SegmentSnapshotPtr & segment_snap,
-                                                 WriteBatches &             wbs) const
+std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &                dm_context,
+                                                                const ColumnDefinesPtr &   schema_snap,
+                                                                const SegmentSnapshotPtr & segment_snap,
+                                                                WriteBatches &             wbs) const
 {
     LOG_INFO(log, "Segment [" << segment_id << "] prepare split physical start");
 
@@ -797,7 +801,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext &                dm_c
     auto read_info       = getReadInfo(dm_context, *schema_snap, segment_snap);
     auto split_point_opt = getSplitPointSlow(dm_context, read_info, segment_snap);
     if (!split_point_opt.has_value())
-        return SplitInfo();
+        return {};
 
     auto split_point = split_point_opt.value();
 
@@ -869,7 +873,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext &                dm_c
 
     LOG_INFO(log, "Segment [" << segment_id << "] prepare split physical done");
 
-    return SplitInfo(false, split_point, my_new_stable, other_stable);
+    return {SplitInfo{false, split_point, my_new_stable, other_stable}};
 }
 
 SegmentPair Segment::applySplit(DMContext &                dm_context, //

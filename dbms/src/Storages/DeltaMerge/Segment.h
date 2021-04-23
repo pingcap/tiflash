@@ -66,20 +66,11 @@ public:
 
     struct SplitInfo
     {
-        bool ok;
-
         bool   is_logical;
         Handle split_point;
 
         StableValueSpacePtr my_stable;
         StableValueSpacePtr other_stable;
-
-        SplitInfo() : ok(false) {}
-
-        SplitInfo(bool is_logical_, Handle split_point_, StableValueSpacePtr my_stable_, StableValueSpacePtr other_stable_)
-            : ok(true), is_logical(is_logical_), split_point(split_point_), my_stable(my_stable_), other_stable(other_stable_)
-        {
-        }
     };
 
     Segment(const Segment &) = delete;
@@ -143,11 +134,11 @@ public:
     /// For those split, merge and mergeDelta methods, we should use prepareXXX/applyXXX combo in real production.
     /// split(), merge() and mergeDelta() are only used in test cases.
 
-    SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
-    SplitInfo   prepareSplit(DMContext &                dm_context,
-                             const ColumnDefinesPtr &   schema_snap,
-                             const SegmentSnapshotPtr & segment_snap,
-                             WriteBatches &             wbs) const;
+    SegmentPair              split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    std::optional<SplitInfo> prepareSplit(DMContext &                dm_context,
+                                          const ColumnDefinesPtr &   schema_snap,
+                                          const SegmentSnapshotPtr & segment_snap,
+                                          WriteBatches &             wbs) const;
     SegmentPair
     applySplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, SplitInfo & split_info) const;
 
@@ -249,15 +240,15 @@ private:
     /// Only look up in the stable vs.
     std::optional<Handle> getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
 
-    SplitInfo prepareSplitLogical(DMContext &                dm_context, //
-                                  const ColumnDefinesPtr &   schema_snap,
-                                  const SegmentSnapshotPtr & segment_snap,
-                                  Handle                     split_point,
-                                  WriteBatches &             wbs) const;
-    SplitInfo prepareSplitPhysical(DMContext &                dm_context,
-                                   const ColumnDefinesPtr &   schema_snap,
-                                   const SegmentSnapshotPtr & segment_snap,
-                                   WriteBatches &             wbs) const;
+    std::optional<SplitInfo> prepareSplitLogical(DMContext &                dm_context, //
+                                                 const ColumnDefinesPtr &   schema_snap,
+                                                 const SegmentSnapshotPtr & segment_snap,
+                                                 Handle                     split_point,
+                                                 WriteBatches &             wbs) const;
+    std::optional<SplitInfo> prepareSplitPhysical(DMContext &                dm_context,
+                                                  const ColumnDefinesPtr &   schema_snap,
+                                                  const SegmentSnapshotPtr & segment_snap,
+                                                  WriteBatches &             wbs) const;
 
 
     /// Make sure that all delta packs have been placed.
