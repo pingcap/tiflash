@@ -326,10 +326,10 @@ static String getRE2ModeModifiers(const std::string & match_type, const bool & f
             switch (match_type[i])
             {
                 case 'i':
-                    /// according to MySQL doc, if either argument is a binary string, the arguments are handled in
+                    /// according to MySQL doc: if either argument is a binary string, the arguments are handled in
                     /// case-sensitive fashion as binary strings, even if match_type contains the i character.
-                    /// but I test in MySQL 8.0.20, i flag still take affect even if the collation is binary, so maybe
-                    /// we do not need check the collation
+                    /// However, test in MySQL 8.0.20 shows that i flag still take affect even if the collation is binary,
+                    /// so maybe we do not need check the collation
                     if (!force_case_sensitive)
                         options.set_case_sensitive(false);
                     break;
@@ -1266,8 +1266,8 @@ public:
         const ColumnConst * c2_const = typeid_cast<const ColumnConst *>(c2);
         String needle = c1_const->getValue<String>();
         String replacement = c2_const->getValue<String>();
-        Int64 pos = column_pos == nullptr ? 1 : typeid_cast<const ColumnConst *>(column_pos.get())->getValue<Int64>();
-        Int64 occ = column_occ == nullptr ? 0 : typeid_cast<const ColumnConst *>(column_occ.get())->getValue<Int64>();
+        Int64 pos = column_pos == nullptr ? 1 : typeid_cast<const ColumnConst *>(column_pos.get())->getInt(0);
+        Int64 occ = column_occ == nullptr ? 0 : typeid_cast<const ColumnConst *>(column_occ.get())->getInt(0);
         String match_type = column_match_type == nullptr ? "" : typeid_cast<const ColumnConst *>(column_match_type.get())->getValue<String>();
 
         if (needle.size() == 0)

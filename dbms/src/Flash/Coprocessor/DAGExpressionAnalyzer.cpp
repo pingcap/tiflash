@@ -290,6 +290,29 @@ static String buildBitwiseFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
 }
 
+static String buildRegexpFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    for (auto & child : expr.children())
+    {
+        String name = analyzer->getActions(child, actions);
+        argument_names.push_back(name);
+    }
+    std::shared_ptr<TiDB::ITiDBCollator> collator = getCollatorFromExpr(expr);
+    if (expr.sig() == tipb::ScalarFuncSig::RegexpSubstrSig || expr.sig() == tipb::ScalarFuncSig::RegexpReplaceSig
+        || expr.sig() == tipb::ScalarFuncSig::RegexpSig || expr.sig() == tipb::ScalarFuncSig::RegexpInStrSig
+        || expr.sig() == tipb::ScalarFuncSig::RegexpLikeSig)
+    {
+        /// according to https://github.com/pingcap/tidb/blob/v5.0.0/expression/builtin_like.go#L126,
+        /// For binary collation, it will use RegexpXXXSig, otherwise it will use RegexpXXXUTF8Sig
+        /// Need to set the collator explicitly because `getCollatorFromExpr` will return nullptr
+        /// if new collation is not enabled.
+        collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    }
+    return analyzer->applyFunction(func_name, argument_names, actions, collator);
+}
+
 static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
@@ -322,6 +345,8 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"bitOr", buildBitwiseFunction},
         {"bitXor", buildBitwiseFunction},
         {"bitNot", buildBitwiseFunction},
+        {"regexp", buildRegexpFunction},
+        {"replaceRegexpAll", buildRegexpFunction},
     });
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)

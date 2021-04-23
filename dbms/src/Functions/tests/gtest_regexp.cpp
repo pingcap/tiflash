@@ -57,6 +57,7 @@ TEST_F(Regexp, regexp_TiDB_Match_Type_Test)
     DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*b", '\\', "in", nullptr, res);
     ASSERT_TRUE(res == 1);
 }
+
 TEST_F(Regexp, regexp_TiDB_MySQL_Failed_Test)
 {
     UInt8 res = false;
@@ -1987,24 +1988,22 @@ TEST_F(Regexp, regexp_replace_TiDB_Match_Type_Test)
 {
     String res;
     std::shared_ptr<TiDB::ITiDBCollator> binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "(?m)(?i)^b", "xxx", 1, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "a\nxxx\nc");
     DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "mi", nullptr, res);
     ASSERT_TRUE(res == "a\nxxx\nc");
     DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "mi", binary_collator, res);
     ASSERT_TRUE(res == "a\nB\nc");
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "mi", nullptr, res);
-    // ASSERT_TRUE(res == 1);
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "mi", binary_collator, res);
-    // ASSERT_TRUE(res == 0);
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "i", nullptr, res);
-    // ASSERT_TRUE(res == 1);
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^b", '\\', "m", nullptr, res);
-    // ASSERT_TRUE(res == 0);
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*b", '\\', "", nullptr, res);
-    // ASSERT_TRUE(res == 0);
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*B", '\\', "n", nullptr, res);
-    // ASSERT_TRUE(res == 1);
-    // DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*b", '\\', "in", nullptr, res);
-    // ASSERT_TRUE(res == 1);
+    DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "i", nullptr, res);
+    ASSERT_TRUE(res == "a\nxxx\nc");
+    DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "m", nullptr, res);
+    ASSERT_TRUE(res == "a\nB\nc");
+    DB::ReplaceRegexpImpl<false>::constant("a\nB\n", "^a.*b", "xxx", 1, 0, "", nullptr, res);
+    ASSERT_TRUE(res == "a\nB\n");
+    DB::ReplaceRegexpImpl<false>::constant("a\nB\n", "^a.*B", "xxx", 1, 0, "n", nullptr, res);
+    ASSERT_TRUE(res == "xxx\n");
+    DB::ReplaceRegexpImpl<false>::constant("a\nB\n", "^a.*b", "xxx", 1, 0, "in", nullptr, res);
+    ASSERT_TRUE(res == "xxx\n");
 }
 
 TEST_F(Regexp, regexp_replace_TiDB_MySQL_Test)
@@ -2053,88 +2052,507 @@ TEST_F(Regexp, func_regexp_replace_Test)
 {
     const Context context = TiFlashTestEnv::getContext();
     auto & factory = FunctionFactory::instance();
-    MutableColumnPtr cp = ColumnString::create();
-    cp->insert(Field("  hello   ", 10));
-    MutableColumnPtr excp = ColumnString::create();
-    excp->insert(Field(" hoe", 10));
 
-    ColumnPtr csp = ColumnConst::create(cp->getPtr(), 5);
-    ColumnPtr excsp = ColumnConst::create(excp->getPtr(), 5);
-    Block testBlock;
+    std::shared_ptr<TiDB::ITiDBCollator> binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    auto string_type = std::make_shared<DataTypeString>();
+    auto nullable_string_type = makeNullable(string_type);
+    auto uint8_type = std::make_shared<DataTypeUInt8>();
+    auto nullable_uint8_type = makeNullable(uint8_type);
 
-    ColumnWithTypeAndName ctn = ColumnWithTypeAndName(csp, std::make_shared<DataTypeString>(), "test_trim_const");
-    ColumnWithTypeAndName exctn = ColumnWithTypeAndName(excsp, std::make_shared<DataTypeString>(), "test_ex_trim_const");
+    std::vector<String> input_strings{"abb\nabbabb", "abbcabbabb", "abbabbabb", "ABBABBABB", "ABB\nABBABB"};
+    std::vector<UInt8> input_string_nulls{0, 1, 0, 0, 0};
 
-    ColumnsWithTypeAndName ctns{ctn, exctn};
-    testBlock.insert(ctn);
-    testBlock.insert(exctn);
-    // for result from trim, ltrim and rtrim
-    testBlock.insert({});
-    testBlock.insert({});
-    testBlock.insert({});
-    ColumnNumbers cns{0, 1};
+    std::vector<String> patterns{"^a.*", "bb", "abc", "abb", "abb.abb"};
+    std::vector<UInt8> pattern_nulls{0, 0, 1, 0, 0};
 
-    // test trim
-    auto bp = factory.tryGet("trim", context);
-    ASSERT_TRUE(bp != nullptr);
-    ASSERT_TRUE(bp->isVariadic());
+    std::vector<String> replacements{"xxx", "xxx", "xxx", "xxx", "xxx"};
+    std::vector<UInt8> replacement_nulls{0, 0, 1, 0, 0};
 
-    bp->build(ctns)->execute(testBlock, cns, 2);
+    std::vector<UInt8> pos{1, 3, 2, 2, 1};
+    std::vector<UInt8> pos_nulls{0, 0, 0, 1, 0};
 
-    const IColumn * res = testBlock.getByPosition(2).column.get();
-    const ColumnString * c0_string = checkAndGetColumn<ColumnString>(res);
+    std::vector<UInt8> occ{0, 2, 0, 0, 0};
+    std::vector<UInt8> occ_nulls{1, 0, 0, 0, 0};
 
+    std::vector<String> match_types{"in", "", "", "i", "inm"};
+    std::vector<UInt8> match_type_nulls{1, 0, 0, 0, 0};
 
-    Field resField;
+    std::vector<String> results{"xxx\nabbabb", "axxxcaxxxaxxx", "abbabbabb", "ABBABBABB", "ABB\nABBABB"};
+    std::vector<String> results_with_pos{"xxx\nabbabb", "abbcaxxxaxxx", "abbabbabb", "ABBABBABB", "ABB\nABBABB"};
+    std::vector<String> results_with_pos_occ{"xxx\nabbabb", "abbcabbaxxx", "abbabbabb", "ABBABBABB", "ABB\nABBABB"};
+    std::vector<String> results_with_pos_occ_match_type{"xxx", "abbcabbaxxx", "abbabbabb", "ABBxxxxxx", "xxxABB"};
+    std::vector<String> results_with_pos_occ_match_type_binary{"xxx", "abbcabbaxxx", "abbabbabb", "ABBABBABB", "ABB\nABBABB"};
 
-    std::vector<String> results{"ll", "ll", "ll", "ll", "ll"};
-    for (size_t t = 0; t < results.size(); t++)
+    std::vector<String> vec_results{"xxx\nabbabb", "xxx", "xxx", "ABBABBABB", "ABB\nABBABB"};
+    std::vector<String> vec_results_with_pos{"xxx\nabbabb", "xxx", "xxx", "ABBABBABB", "ABB\nABBABB"};
+    std::vector<String> vec_results_with_pos_occ{"xxx\nabbabb", "xxx", "xxx", "ABBABBABB", "ABB\nABBABB"};
+    std::vector<String> vec_results_with_pos_occ_match_type{"xxx", "xxx", "xxx", "xxx", "xxx"};
+    std::vector<String> vec_results_with_pos_occ_match_type_binary{"xxx", "xxx", "xxx", "ABBABBABB", "ABB\nABBABB"};
+
+    size_t row_size = input_strings.size();
+
+    /// case 1. regexp_replace(const, const, const [, const, const ,const])
+    for (size_t i = 0; i < match_types.size(); i++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
-        EXPECT_EQ(results[t], s);
+        MutableColumnPtr string_cp = ColumnString::create();
+        string_cp->insert(Field(input_strings[i].data(), input_strings[i].size()));
+        ColumnPtr string_csp = ColumnConst::create(string_cp->getPtr(), 10);
+
+        MutableColumnPtr pattern_cp = ColumnString::create();
+        pattern_cp->insert(Field(patterns[i].data(), patterns[i].size()));
+        ColumnPtr pattern_csp = ColumnConst::create(pattern_cp->getPtr(), 10);
+
+        MutableColumnPtr replacement_cp = ColumnString::create();
+        replacement_cp->insert(Field(replacements[i].data(), replacements[i].size()));
+        ColumnPtr replacement_csp = ColumnConst::create(replacement_cp->getPtr(), 10);
+
+        MutableColumnPtr pos_cp = ColumnUInt8::create();
+        pos_cp->insert(Field((UInt64)pos[i]));
+        ColumnPtr pos_csp = ColumnConst::create(pos_cp->getPtr(), 10);
+
+        MutableColumnPtr occ_cp = ColumnUInt8::create();
+        occ_cp->insert(Field((UInt64)occ[i]));
+        ColumnPtr occ_csp = ColumnConst::create(occ_cp->getPtr(), 10);
+
+        MutableColumnPtr match_type_cp = ColumnString::create();
+        match_type_cp->insert(Field(match_types[i].data(), match_types[i].size()));
+        ColumnPtr match_type_csp = ColumnConst::create(match_type_cp->getPtr(), 10);
+
+        Block test_block;
+        ColumnWithTypeAndName string_ctn = ColumnWithTypeAndName(string_csp, string_type, "string_const");
+        ColumnWithTypeAndName pattern_ctn = ColumnWithTypeAndName(pattern_csp, string_type, "pattern_const");
+        ColumnWithTypeAndName replacement_ctn = ColumnWithTypeAndName(replacement_csp, string_type, "replacement_const");
+        ColumnWithTypeAndName pos_ctn = ColumnWithTypeAndName(pos_csp, uint8_type, "pos_const");
+        ColumnWithTypeAndName occ_ctn = ColumnWithTypeAndName(occ_csp, uint8_type, "occ_const");
+        ColumnWithTypeAndName match_type_ctn = ColumnWithTypeAndName(match_type_csp, string_type, "match_type_const");
+
+        test_block.insert(string_ctn);
+        test_block.insert(pattern_ctn);
+        test_block.insert(replacement_ctn);
+        test_block.insert(pos_ctn);
+        test_block.insert(occ_ctn);
+        test_block.insert(match_type_ctn);
+        /// for result regexp_replace(str, pattern, replacement)
+        test_block.insert({nullptr, string_type, "res1"});
+        /// for result regexp_replace(str, pattern, replacement, pos)
+        test_block.insert({nullptr, string_type, "res2"});
+        /// for result regexp_replace(str, pattern, replacement, pos, occ)
+        test_block.insert({nullptr, string_type, "res3"});
+        /// for result regexp_replace(str, pattern, replacement, pos, occ, match_type)
+        test_block.insert({nullptr, string_type, "res4"});
+        /// for result regexp_replace(str, pattern, replacement, pos, occ, match_type) with binary collator
+        test_block.insert({nullptr, string_type, "res5"});
+
+        /// test regexp_replace(str, pattern, replacement)
+        ColumnsWithTypeAndName ctns{string_ctn, pattern_ctn, replacement_ctn};
+        ColumnNumbers cns{0, 1, 2};
+        auto bp = factory.tryGet("replaceRegexpAll", context);
+        ASSERT_TRUE(bp != nullptr);
+        ASSERT_TRUE(bp->isVariadic());
+        bp->build(ctns)->execute(test_block, cns, 6);
+        const IColumn * res = test_block.getByPosition(6).column.get();
+        const ColumnConst * res_col = checkAndGetColumn<ColumnConst>(res);
+        ASSERT_TRUE(res_col->getValue<String>() == results[i]);
+
+        /// test regexp_replace(str, pattern, replacement, pos)
+        ctns.push_back(pos_ctn);
+        cns.push_back(3);
+        bp->build(ctns)->execute(test_block, cns, 7);
+        res = test_block.getByPosition(7).column.get();
+        res_col = checkAndGetColumn<ColumnConst>(res);
+        ASSERT_TRUE(res_col->getValue<String>() == results_with_pos[i]);
+
+        /// test regexp_replace(str, pattern, replacement, pos, occ)
+        ctns.push_back(occ_ctn);
+        cns.push_back(4);
+        bp->build(ctns)->execute(test_block, cns, 8);
+        res = test_block.getByPosition(8).column.get();
+        res_col = checkAndGetColumn<ColumnConst>(res);
+        ASSERT_TRUE(res_col->getValue<String>() == results_with_pos_occ[i]);
+
+        /// test regexp_replace(str, pattern, replacement, pos, occ, match_type)
+        ctns.push_back(match_type_ctn);
+        cns.push_back(5);
+        bp->build(ctns)->execute(test_block, cns, 9);
+        res = test_block.getByPosition(9).column.get();
+        res_col = checkAndGetColumn<ColumnConst>(res);
+        ASSERT_TRUE(res_col->getValue<String>() == results_with_pos_occ_match_type[i]);
+
+        /// test regexp_replace(str, pattern, replacement, pos, occ, match_type) with binary collator
+        bp->build(ctns, binary_collator)->execute(test_block, cns, 10);
+        res = test_block.getByPosition(10).column.get();
+        res_col = checkAndGetColumn<ColumnConst>(res);
+        ASSERT_TRUE(res_col->getValue<String>() == results_with_pos_occ_match_type_binary[i]);
     }
 
-    // test ltrim
-    bp = factory.tryGet("ltrim", context);
-    ASSERT_TRUE(bp != nullptr);
-    ASSERT_TRUE(bp->isVariadic());
-
-    bp->build(ctns)->execute(testBlock, cns, 2);
-    res = testBlock.getByPosition(2).column.get();
-    c0_string = checkAndGetColumn<ColumnString>(res);
-
-    results = {"llo   ", "llo   ", "llo   ", "llo   ", "llo   "};
-    for (size_t t = 0; t < results.size(); t++)
+    /// case 2. regexp_replace(const, const, const [, const, const ,const]) with null value
+    for (size_t i = 0; i < match_types.size(); i++)
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
-        EXPECT_EQ(results[t], s);
+        MutableColumnPtr string_cp = ColumnString::create();
+        string_cp->insert(Field(input_strings[i].data(), input_strings[i].size()));
+        MutableColumnPtr string_null_map_cp = ColumnUInt8::create();
+        string_null_map_cp->insert(Field((UInt64)input_string_nulls[i]));
+        ColumnPtr string_csp = ColumnConst::create(ColumnNullable::create(string_cp->getPtr(), string_null_map_cp->getPtr()), 10);
+
+        MutableColumnPtr pattern_cp = ColumnString::create();
+        pattern_cp->insert(Field(patterns[i].data(), patterns[i].size()));
+        MutableColumnPtr pattern_null_map_cp = ColumnUInt8::create();
+        pattern_null_map_cp->insert(Field((UInt64)pattern_nulls[i]));
+        ColumnPtr pattern_csp = ColumnConst::create(ColumnNullable::create(pattern_cp->getPtr(), pattern_null_map_cp->getPtr()), 10);
+
+        MutableColumnPtr replacement_cp = ColumnString::create();
+        replacement_cp->insert(Field(replacements[i].data(), replacements[i].size()));
+        MutableColumnPtr replacement_null_map_cp = ColumnUInt8::create();
+        replacement_null_map_cp->insert(Field((UInt64)replacement_nulls[i]));
+        ColumnPtr replacement_csp
+            = ColumnConst::create(ColumnNullable::create(replacement_cp->getPtr(), replacement_null_map_cp->getPtr()), 10);
+
+        MutableColumnPtr pos_cp = ColumnUInt8::create();
+        pos_cp->insert(Field((UInt64)pos[i]));
+        MutableColumnPtr pos_null_map_cp = ColumnUInt8::create();
+        pos_null_map_cp->insert(Field((UInt64)pos_nulls[i]));
+        ColumnPtr pos_csp = ColumnConst::create(ColumnNullable::create(pos_cp->getPtr(), pos_null_map_cp->getPtr()), 10);
+
+        MutableColumnPtr occ_cp = ColumnUInt8::create();
+        occ_cp->insert(Field((UInt64)occ[i]));
+        MutableColumnPtr occ_null_map_cp = ColumnUInt8::create();
+        occ_null_map_cp->insert(Field((UInt64)occ_nulls[i]));
+        ColumnPtr occ_csp = ColumnConst::create(ColumnNullable::create(occ_cp->getPtr(), occ_null_map_cp->getPtr()), 10);
+
+        MutableColumnPtr match_type_cp = ColumnString::create();
+        match_type_cp->insert(Field(match_types[i].data(), match_types[i].size()));
+        MutableColumnPtr match_type_null_map_cp = ColumnUInt8::create();
+        match_type_null_map_cp->insert(Field((UInt64)match_type_nulls[i]));
+        ColumnPtr match_type_csp
+            = ColumnConst::create(ColumnNullable::create(match_type_cp->getPtr(), match_type_null_map_cp->getPtr()), 10);
+
+        Block test_block;
+        ColumnWithTypeAndName string_ctn = ColumnWithTypeAndName(string_csp, nullable_string_type, "string_const");
+        ColumnWithTypeAndName pattern_ctn = ColumnWithTypeAndName(pattern_csp, nullable_string_type, "pattern_const");
+        ColumnWithTypeAndName replacement_ctn = ColumnWithTypeAndName(replacement_csp, nullable_string_type, "replacement_const");
+        ColumnWithTypeAndName pos_ctn = ColumnWithTypeAndName(pos_csp, nullable_uint8_type, "pos_const");
+        ColumnWithTypeAndName occ_ctn = ColumnWithTypeAndName(occ_csp, nullable_uint8_type, "occ_const");
+        ColumnWithTypeAndName match_type_ctn = ColumnWithTypeAndName(match_type_csp, nullable_string_type, "match_type_const");
+
+        test_block.insert(string_ctn);
+        test_block.insert(pattern_ctn);
+        test_block.insert(replacement_ctn);
+        test_block.insert(pos_ctn);
+        test_block.insert(occ_ctn);
+        test_block.insert(match_type_ctn);
+        /// for result regexp_replace(str, pattern, replacement)
+        test_block.insert({nullptr, nullable_string_type, "res1"});
+        /// for result regexp_replace(str, pattern, replacement, pos)
+        test_block.insert({nullptr, nullable_string_type, "res2"});
+        /// for result regexp_replace(str, pattern, replacement, pos, occ)
+        test_block.insert({nullptr, nullable_string_type, "res3"});
+        /// for result regexp_replace(str, pattern, replacement, pos, occ, match_type)
+        test_block.insert({nullptr, nullable_string_type, "res4"});
+        /// for result regexp_replace(str, pattern, replacement, pos, occ, match_type) with binary collator
+        test_block.insert({nullptr, nullable_string_type, "res5"});
+
+        /// test regexp_replace(str, pattern, replacement)
+        ColumnsWithTypeAndName ctns{string_ctn, pattern_ctn, replacement_ctn};
+        ColumnNumbers cns{0, 1, 2};
+        auto bp = factory.tryGet("replaceRegexpAll", context);
+        ASSERT_TRUE(bp != nullptr);
+        ASSERT_TRUE(bp->isVariadic());
+        bp->build(ctns)->execute(test_block, cns, 6);
+        const IColumn * res = test_block.getByPosition(6).column.get();
+        const ColumnConst * res_col = checkAndGetColumn<ColumnConst>(res);
+        if (input_string_nulls[i] || pattern_nulls[i] || replacement_nulls[i])
+            ASSERT_TRUE(res_col->isNullAt(0));
+        else
+            ASSERT_TRUE(res_col->getValue<String>() == results[i]);
+
+        /// test regexp_replace(str, pattern, replacement, pos)
+        ctns.push_back(pos_ctn);
+        cns.push_back(3);
+        bp->build(ctns)->execute(test_block, cns, 7);
+        res = test_block.getByPosition(7).column.get();
+        res_col = checkAndGetColumn<ColumnConst>(res);
+        if (input_string_nulls[i] || pattern_nulls[i] || replacement_nulls[i] || pos_nulls[i])
+            ASSERT_TRUE(res_col->isNullAt(0));
+        else
+            ASSERT_TRUE(res_col->getValue<String>() == results_with_pos[i]);
+
+        /// test regexp_replace(str, pattern, replacement, pos, occ)
+        ctns.push_back(occ_ctn);
+        cns.push_back(4);
+        bp->build(ctns)->execute(test_block, cns, 8);
+        res = test_block.getByPosition(8).column.get();
+        res_col = checkAndGetColumn<ColumnConst>(res);
+        if (input_string_nulls[i] || pattern_nulls[i] || replacement_nulls[i] || pos_nulls[i] || occ_nulls[i])
+            ASSERT_TRUE(res_col->isNullAt(0));
+        else
+            ASSERT_TRUE(res_col->getValue<String>() == results_with_pos_occ[i]);
+
+        /// test regexp_replace(str, pattern, replacement, pos, occ, match_type)
+        ctns.push_back(match_type_ctn);
+        cns.push_back(5);
+        bp->build(ctns)->execute(test_block, cns, 9);
+        res = test_block.getByPosition(9).column.get();
+        res_col = checkAndGetColumn<ColumnConst>(res);
+        if (input_string_nulls[i] || pattern_nulls[i] || replacement_nulls[i] || pos_nulls[i] || occ_nulls[i] || match_type_nulls[i])
+            ASSERT_TRUE(res_col->isNullAt(0));
+        else
+            ASSERT_TRUE(res_col->getValue<String>() == results_with_pos_occ_match_type[i]);
+
+        /// test regexp_replace(str, pattern, replacement, pos, occ, match_type) with binary collator
+        bp->build(ctns, binary_collator)->execute(test_block, cns, 10);
+        res = test_block.getByPosition(10).column.get();
+        res_col = checkAndGetColumn<ColumnConst>(res);
+        if (input_string_nulls[i] || pattern_nulls[i] || replacement_nulls[i] || pos_nulls[i] || occ_nulls[i] || match_type_nulls[i])
+            ASSERT_TRUE(res_col->isNullAt(0));
+        else
+            ASSERT_TRUE(res_col->getValue<String>() == results_with_pos_occ_match_type_binary[i]);
     }
 
-    // test rtrim
-    bp = factory.tryGet("rtrim", context);
-    ASSERT_TRUE(bp != nullptr);
-    ASSERT_TRUE(bp->isVariadic());
-
-    bp->build(ctns)->execute(testBlock, cns, 3);
-    res = testBlock.getByPosition(3).column.get();
-    c0_string = checkAndGetColumn<ColumnString>(res);
-
-    results = {
-        "  hell",
-        "  hell",
-        "  hell",
-        "  hell",
-        "  hell",
-    };
-    for (size_t t = 0; t < results.size(); t++)
+    /// case 3 regexp_replace(vector, const, const[, const, const, const])
     {
-        c0_string->get(t, resField);
-        String s = resField.get<String>();
-        EXPECT_EQ(results[t], s);
+        MutableColumnPtr string_cp = ColumnString::create();
+        for (size_t i = 0; i < row_size; i++)
+            string_cp->insert(Field(input_strings[i].data(), input_strings[i].size()));
+
+        MutableColumnPtr pattern_cp = ColumnString::create();
+        pattern_cp->insert(Field(patterns[0].data(), patterns[0].size()));
+        ColumnPtr pattern_csp = ColumnConst::create(pattern_cp->getPtr(), 10);
+
+        MutableColumnPtr replacement_cp = ColumnString::create();
+        replacement_cp->insert(Field(replacements[0].data(), replacements[0].size()));
+        ColumnPtr replacement_csp = ColumnConst::create(replacement_cp->getPtr(), 10);
+
+        MutableColumnPtr pos_cp = ColumnUInt8::create();
+        pos_cp->insert(Field((UInt64)pos[0]));
+        ColumnPtr pos_csp = ColumnConst::create(pos_cp->getPtr(), 10);
+
+        MutableColumnPtr occ_cp = ColumnUInt8::create();
+        occ_cp->insert(Field((UInt64)occ[0]));
+        ColumnPtr occ_csp = ColumnConst::create(occ_cp->getPtr(), 10);
+
+        MutableColumnPtr match_type_cp = ColumnString::create();
+        match_type_cp->insert(Field(match_types[0].data(), match_types[0].size()));
+        ColumnPtr match_type_csp = ColumnConst::create(match_type_cp->getPtr(), 10);
+
+        Block test_block;
+        ColumnWithTypeAndName string_ctn = ColumnWithTypeAndName(string_cp->getPtr(), string_type, "string_const");
+        ColumnWithTypeAndName pattern_ctn = ColumnWithTypeAndName(pattern_csp, string_type, "pattern_const");
+        ColumnWithTypeAndName replacement_ctn = ColumnWithTypeAndName(replacement_csp, string_type, "replacement_const");
+        ColumnWithTypeAndName pos_ctn = ColumnWithTypeAndName(pos_csp, uint8_type, "pos_const");
+        ColumnWithTypeAndName occ_ctn = ColumnWithTypeAndName(occ_csp, uint8_type, "occ_const");
+        ColumnWithTypeAndName match_type_ctn = ColumnWithTypeAndName(match_type_csp, string_type, "match_type_const");
+
+        test_block.insert(string_ctn);
+        test_block.insert(pattern_ctn);
+        test_block.insert(replacement_ctn);
+        test_block.insert(pos_ctn);
+        test_block.insert(occ_ctn);
+        test_block.insert(match_type_ctn);
+        /// for result regexp_replace(str, pattern, replacement)
+        test_block.insert({nullptr, string_type, "res1"});
+        /// for result regexp_replace(str, pattern, replacement, pos)
+        test_block.insert({nullptr, string_type, "res2"});
+        /// for result regexp_replace(str, pattern, replacement, pos, occ)
+        test_block.insert({nullptr, string_type, "res3"});
+        /// for result regexp_replace(str, pattern, replacement, pos, occ, match_type)
+        test_block.insert({nullptr, string_type, "res4"});
+        /// for result regexp_replace(str, pattern, replacement, pos, occ, match_type) with binary collator
+        test_block.insert({nullptr, string_type, "res5"});
+
+        /// test regexp_replace(str, pattern, replacement)
+        ColumnsWithTypeAndName ctns{string_ctn, pattern_ctn, replacement_ctn};
+        ColumnNumbers cns{0, 1, 2};
+        auto bp = factory.tryGet("replaceRegexpAll", context);
+        ASSERT_TRUE(bp != nullptr);
+        ASSERT_TRUE(bp->isVariadic());
+        bp->build(ctns)->execute(test_block, cns, 6);
+        const IColumn * res = test_block.getByPosition(6).column.get();
+        for (size_t i = 0; i < row_size; i++)
+        {
+            Field res_field;
+            res->get(i, res_field);
+            ASSERT_TRUE(res_field.get<String>() == vec_results[i]);
+        }
+
+        /// test regexp_replace(str, pattern, replacement, pos)
+        ctns.push_back(pos_ctn);
+        cns.push_back(3);
+        bp->build(ctns)->execute(test_block, cns, 7);
+        res = test_block.getByPosition(7).column.get();
+        for (size_t i = 0; i < row_size; i++)
+        {
+            Field res_field;
+            res->get(i, res_field);
+            ASSERT_TRUE(res_field.get<String>() == vec_results_with_pos[i]);
+        }
+
+        /// test regexp_replace(str, pattern, replacement, pos, occ)
+        ctns.push_back(occ_ctn);
+        cns.push_back(4);
+        bp->build(ctns)->execute(test_block, cns, 8);
+        res = test_block.getByPosition(8).column.get();
+        for (size_t i = 0; i < row_size; i++)
+        {
+            Field res_field;
+            res->get(i, res_field);
+            ASSERT_TRUE(res_field.get<String>() == vec_results_with_pos_occ[i]);
+        }
+
+        /// test regexp_replace(str, pattern, replacement, pos, occ, match_type)
+        ctns.push_back(match_type_ctn);
+        cns.push_back(5);
+        bp->build(ctns)->execute(test_block, cns, 9);
+        res = test_block.getByPosition(9).column.get();
+        for (size_t i = 0; i < row_size; i++)
+        {
+            Field res_field;
+            res->get(i, res_field);
+            ASSERT_TRUE(res_field.get<String>() == vec_results_with_pos_occ_match_type[i]);
+        }
+
+        /// test regexp_replace(str, pattern, replacement, pos, occ, match_type) with binary collator
+        bp->build(ctns, binary_collator)->execute(test_block, cns, 10);
+        res = test_block.getByPosition(10).column.get();
+        for (size_t i = 0; i < row_size; i++)
+        {
+            Field res_field;
+            res->get(i, res_field);
+            ASSERT_TRUE(res_field.get<String>() == vec_results_with_pos_occ_match_type_binary[i]);
+        }
+    }
+
+    /// case 4 regexp_replace(vector, const, const[, const, const, const]) with null value
+    {
+        MutableColumnPtr string_cp = ColumnString::create();
+        MutableColumnPtr string_null_map_cp = ColumnUInt8::create();
+        for (size_t i = 0; i < row_size; i++)
+        {
+            string_cp->insert(Field(input_strings[i].data(), input_strings[i].size()));
+            string_null_map_cp->insert(Field((UInt64)input_string_nulls[i]));
+        }
+        ColumnPtr string_csp = ColumnNullable::create(string_cp->getPtr(), string_null_map_cp->getPtr());
+
+        MutableColumnPtr pattern_cp = ColumnString::create();
+        pattern_cp->insert(Field(patterns[0].data(), patterns[0].size()));
+        ColumnPtr pattern_csp = ColumnConst::create(pattern_cp->getPtr(), 10);
+
+        MutableColumnPtr replacement_cp = ColumnString::create();
+        replacement_cp->insert(Field(replacements[0].data(), replacements[0].size()));
+        ColumnPtr replacement_csp = ColumnConst::create(replacement_cp->getPtr(), 10);
+
+        MutableColumnPtr pos_cp = ColumnUInt8::create();
+        pos_cp->insert(Field((UInt64)pos[0]));
+        ColumnPtr pos_csp = ColumnConst::create(pos_cp->getPtr(), 10);
+
+        MutableColumnPtr occ_cp = ColumnUInt8::create();
+        occ_cp->insert(Field((UInt64)occ[0]));
+        ColumnPtr occ_csp = ColumnConst::create(occ_cp->getPtr(), 10);
+
+        MutableColumnPtr match_type_cp = ColumnString::create();
+        match_type_cp->insert(Field(match_types[0].data(), match_types[0].size()));
+        ColumnPtr match_type_csp = ColumnConst::create(match_type_cp->getPtr(), 10);
+
+        Block test_block;
+        ColumnWithTypeAndName string_ctn = ColumnWithTypeAndName(string_csp, nullable_string_type, "string_const");
+        ColumnWithTypeAndName pattern_ctn = ColumnWithTypeAndName(pattern_csp, string_type, "pattern_const");
+        ColumnWithTypeAndName replacement_ctn = ColumnWithTypeAndName(replacement_csp, string_type, "replacement_const");
+        ColumnWithTypeAndName pos_ctn = ColumnWithTypeAndName(pos_csp, uint8_type, "pos_const");
+        ColumnWithTypeAndName occ_ctn = ColumnWithTypeAndName(occ_csp, uint8_type, "occ_const");
+        ColumnWithTypeAndName match_type_ctn = ColumnWithTypeAndName(match_type_csp, string_type, "match_type_const");
+
+        test_block.insert(string_ctn);
+        test_block.insert(pattern_ctn);
+        test_block.insert(replacement_ctn);
+        test_block.insert(pos_ctn);
+        test_block.insert(occ_ctn);
+        test_block.insert(match_type_ctn);
+        /// for result regexp_replace(str, pattern, replacement)
+        test_block.insert({nullptr, nullable_string_type, "res1"});
+        /// for result regexp_replace(str, pattern, replacement, pos)
+        test_block.insert({nullptr, nullable_string_type, "res2"});
+        /// for result regexp_replace(str, pattern, replacement, pos, occ)
+        test_block.insert({nullptr, nullable_string_type, "res3"});
+        /// for result regexp_replace(str, pattern, replacement, pos, occ, match_type)
+        test_block.insert({nullptr, nullable_string_type, "res4"});
+        /// for result regexp_replace(str, pattern, replacement, pos, occ, match_type) with binary collator
+        test_block.insert({nullptr, nullable_string_type, "res5"});
+
+        /// test regexp_replace(str, pattern, replacement)
+        ColumnsWithTypeAndName ctns{string_ctn, pattern_ctn, replacement_ctn};
+        ColumnNumbers cns{0, 1, 2};
+        auto bp = factory.tryGet("replaceRegexpAll", context);
+        ASSERT_TRUE(bp != nullptr);
+        ASSERT_TRUE(bp->isVariadic());
+        bp->build(ctns)->execute(test_block, cns, 6);
+        const IColumn * res = test_block.getByPosition(6).column.get();
+        for (size_t i = 0; i < row_size; i++)
+        {
+            Field res_field;
+            res->get(i, res_field);
+            if (input_string_nulls[i])
+                ASSERT_TRUE(res_field.isNull());
+            else
+                ASSERT_TRUE(res_field.get<String>() == vec_results[i]);
+        }
+
+        /// test regexp_replace(str, pattern, replacement, pos)
+        ctns.push_back(pos_ctn);
+        cns.push_back(3);
+        bp->build(ctns)->execute(test_block, cns, 7);
+        res = test_block.getByPosition(7).column.get();
+        for (size_t i = 0; i < row_size; i++)
+        {
+            Field res_field;
+            res->get(i, res_field);
+            if (input_string_nulls[i])
+                ASSERT_TRUE(res_field.isNull());
+            else
+                ASSERT_TRUE(res_field.get<String>() == vec_results_with_pos[i]);
+        }
+
+        /// test regexp_replace(str, pattern, replacement, pos, occ)
+        ctns.push_back(occ_ctn);
+        cns.push_back(4);
+        bp->build(ctns)->execute(test_block, cns, 8);
+        res = test_block.getByPosition(8).column.get();
+        for (size_t i = 0; i < row_size; i++)
+        {
+            Field res_field;
+            res->get(i, res_field);
+            if (input_string_nulls[i])
+                ASSERT_TRUE(res_field.isNull());
+            else
+                ASSERT_TRUE(res_field.get<String>() == vec_results_with_pos_occ[i]);
+        }
+
+        /// test regexp_replace(str, pattern, replacement, pos, occ, match_type)
+        ctns.push_back(match_type_ctn);
+        cns.push_back(5);
+        bp->build(ctns)->execute(test_block, cns, 9);
+        res = test_block.getByPosition(9).column.get();
+        for (size_t i = 0; i < row_size; i++)
+        {
+            Field res_field;
+            res->get(i, res_field);
+            if (input_string_nulls[i])
+                ASSERT_TRUE(res_field.isNull());
+            else
+                ASSERT_TRUE(res_field.get<String>() == vec_results_with_pos_occ_match_type[i]);
+        }
+
+        /// test regexp_replace(str, pattern, replacement, pos, occ, match_type) with binary collator
+        bp->build(ctns, binary_collator)->execute(test_block, cns, 10);
+        res = test_block.getByPosition(10).column.get();
+        for (size_t i = 0; i < row_size; i++)
+        {
+            Field res_field;
+            res->get(i, res_field);
+            if (input_string_nulls[i])
+                ASSERT_TRUE(res_field.isNull());
+            else
+                ASSERT_TRUE(res_field.get<String>() == vec_results_with_pos_occ_match_type_binary[i]);
+        }
     }
 }
-
 } // namespace tests
 } // namespace DB

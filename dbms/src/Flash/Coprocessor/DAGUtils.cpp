@@ -767,9 +767,13 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::IsIPv6, "cast"},
     //{tipb::ScalarFuncSig::UUID, "cast"},
 
-    {tipb::ScalarFuncSig::LikeSig, "like3Args"},
-    {tipb::ScalarFuncSig::RegexpSig, "regexp"},
-    {tipb::ScalarFuncSig::RegexpUTF8Sig, "regexp"},
+    {tipb::ScalarFuncSig::LikeSig, "like3Args"}, {tipb::ScalarFuncSig::RegexpSig, "regexp"}, {tipb::ScalarFuncSig::RegexpUTF8Sig, "regexp"},
+    {tipb::ScalarFuncSig::RegexpLikeSig, "regexp"}, {tipb::ScalarFuncSig::RegexpLikeUTF8Sig, "regexp"},
+    //{tipb::ScalarFuncSig::RegexpInStrSig, "regexp"},
+    //{tipb::ScalarFuncSig::RegexpInStrUTF8Sig, "regexp"},
+    {tipb::ScalarFuncSig::RegexpReplaceSig, "replaceRegexpAll"}, {tipb::ScalarFuncSig::RegexpReplaceUTF8Sig, "replaceRegexpAll"},
+    //{tipb::ScalarFuncSig::RegexpSubstrSig, "regexp"},
+    //{tipb::ScalarFuncSig::RegexpSubstrUTF8Sig, "regexp"},
 
     //{tipb::ScalarFuncSig::JsonExtractSig, "cast"},
     //{tipb::ScalarFuncSig::JsonUnquoteSig, "cast"},
