@@ -713,7 +713,11 @@ void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, con
 
 UInt64 StorageDeltaMerge::onSyncGc(Int64 limit)
 {
-    return store->onSyncGc(limit);
+    if (store_inited.load(std::memory_order_acquire))
+    {
+        return _store->onSyncGc(limit);
+    }
+    return 0;
 }
 
 size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::RowKeyRange & range)
