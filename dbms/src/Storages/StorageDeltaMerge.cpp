@@ -657,7 +657,6 @@ void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, con
 
 UInt64 StorageDeltaMerge::onSyncGc(Int64 limit)
 {
-    // TODO: Add metrics
     return store->onSyncGc(limit);
 }
 

@@ -164,6 +164,13 @@ public:
         PlaceIndex,
     };
 
+    enum TaskRunThread
+    {
+        Thread_BG_Thread_Pool,
+        Thread_FG,
+        Thread_BG_GC,
+    };
+
     static std::string toString(ThreadType type)
     {
         switch (type)
@@ -186,6 +193,21 @@ public:
             return "BG_Flush";
         case BG_GC:
             return "BG_GC";
+        default:
+            return "Unknown";
+        }
+    }
+
+    static std::string toString(TaskRunThread type)
+    {
+        switch (type)
+        {
+        case Thread_BG_Thread_Pool:
+            return "BackgroundThreadPool";
+        case Thread_FG:
+            return "Foreground";
+        case Thread_BG_GC:
+            return "BackgroundGCThread";
         default:
             return "Unknown";
         }
@@ -359,7 +381,7 @@ private:
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
-    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, const TaskRunThread thread);
 
     bool updateGCSafePoint();
 

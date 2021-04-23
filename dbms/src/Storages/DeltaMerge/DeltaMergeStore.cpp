@@ -43,10 +43,16 @@ extern const Event DMAppendDeltaCleanUpNS;
 namespace CurrentMetrics
 {
 extern const Metric DT_DeltaMerge;
+extern const Metric DT_DeltaMerge_FG;
+extern const Metric DT_DeltaMerge_BG_GC;
 extern const Metric DT_SegmentSplit;
 extern const Metric DT_SegmentMerge;
 extern const Metric DT_DeltaMergeTotalBytes;
+extern const Metric DT_DeltaMergeTotalBytes_FG;
+extern const Metric DT_DeltaMergeTotalBytes_BG_GC;
 extern const Metric DT_DeltaMergeTotalRows;
+extern const Metric DT_DeltaMergeTotalRows_FG;
+extern const Metric DT_DeltaMergeTotalRows_BG_GC;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -755,7 +761,7 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
 
     for (auto & segment : all_segments)
     {
-        segmentMergeDelta(*dm_context, segment, true);
+        segmentMergeDelta(*dm_context, segment, TaskRunThread::Thread_FG);
     }
 }
 
@@ -1111,7 +1117,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                         .Observe(watch.elapsedSeconds());
             });
 
-            return segmentMergeDelta(*dm_context, segment, true);
+            return segmentMergeDelta(*dm_context, segment, TaskRunThread::Thread_FG);
         }
         return {};
     };
@@ -1253,7 +1259,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         case MergeDelta:
         {
             FAIL_POINT_PAUSE(FailPoints::pause_before_dt_background_delta_merge);
-            left = segmentMergeDelta(*task.dm_context, task.segment, false);
+            left = segmentMergeDelta(*task.dm_context, task.segment, TaskRunThread::Thread_BG_Thread_Pool);
             type = ThreadType::BG_MergeDelta;
             // Wake up all waiting threads if failpoint is enabled
             FailPointHelper::disableFailPoint(FailPoints::pause_until_dt_background_delta_merge);
@@ -1403,7 +1409,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             if (should_compact)
             {
                 ThreadType type = ThreadType::BG_GC;
-                segment         = segmentMergeDelta(*dm_context, segment, /*is_foreground*/ false);
+                segment         = segmentMergeDelta(*dm_context, segment, TaskRunThread::Thread_BG_GC);
                 if (segment)
                 {
                     // Continue to check whether we need to apply more tasks on this segment
@@ -1638,10 +1644,10 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         check(dm_context.db_context);
 }
 
-SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground)
+SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, const TaskRunThread run_thread)
 {
     LOG_DEBUG(log,
-              (is_foreground ? "Foreground" : "Background")
+              toString(run_thread)
                   << " merge delta, segment [" << segment->segmentId() << "], safe point:" << dm_context.min_version);
 
     SegmentSnapshotPtr segment_snap;
@@ -1668,17 +1674,55 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
     auto delta_bytes = (Int64)segment_snap->delta->getBytes();
     auto delta_rows  = (Int64)segment_snap->delta->getRows();
 
-    CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_DeltaMerge};
+    CurrentMetrics::Metric metric_type;
+    switch (run_thread)
+    {
+    case Thread_BG_Thread_Pool:
+        metric_type = CurrentMetrics::DT_DeltaMerge;
+    case Thread_FG:
+        metric_type = CurrentMetrics::DT_DeltaMerge_FG;
+    case Thread_BG_GC:
+        metric_type = CurrentMetrics::DT_DeltaMerge_BG_GC;
+    }
+    CurrentMetrics::Increment cur_dm_segments{metric_type};
+    switch (run_thread)
+    {
+    case Thread_BG_Thread_Pool:
+        metric_type = CurrentMetrics::DT_DeltaMergeTotalBytes;
+    case Thread_FG:
+        metric_type = CurrentMetrics::DT_DeltaMergeTotalBytes_FG;
+    case Thread_BG_GC:
+        metric_type = CurrentMetrics::DT_DeltaMergeTotalBytes_BG_GC;
+    }
     CurrentMetrics::Increment cur_dm_total_bytes{CurrentMetrics::DT_DeltaMergeTotalBytes, (Int64)segment_snap->getBytes()};
+    switch (run_thread)
+    {
+    case Thread_BG_Thread_Pool:
+        metric_type = CurrentMetrics::DT_DeltaMergeTotalRows;
+    case Thread_FG:
+        metric_type = CurrentMetrics::DT_DeltaMergeTotalRows_FG;
+    case Thread_BG_GC:
+        metric_type = CurrentMetrics::DT_DeltaMergeTotalRows_BG_GC;
+    }
     CurrentMetrics::Increment cur_dm_total_rows{CurrentMetrics::DT_DeltaMergeTotalRows, (Int64)segment_snap->getRows()};
-
 
     Stopwatch watch_delta_merge;
     SCOPE_EXIT({
-        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge)
-            .Observe(watch_delta_merge.elapsedSeconds());
+        switch (run_thread)
+        {
+        case Thread_BG_Thread_Pool:
+            GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge)
+                .Observe(watch_delta_merge.elapsedSeconds());
+        case Thread_FG:
+            GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge_fg)
+                .Observe(watch_delta_merge.elapsedSeconds());
+        case Thread_BG_GC:
+            GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge_bg_gc)
+                .Observe(watch_delta_merge.elapsedSeconds());
+        }
     });
 
+    bool is_foreground = (run_thread == TaskRunThread::Thread_FG);
     WriteBatches wbs(storage_pool, is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
 
     auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs, !is_foreground);
@@ -1725,8 +1769,18 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 
     wbs.writeRemoves();
 
-    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge).Increment(delta_bytes);
-    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);
+    switch (run_thread)
+    {
+    case Thread_BG_Thread_Pool:
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge).Increment(delta_bytes);
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);
+    case Thread_FG:
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge_fg).Increment(delta_bytes);
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge_fg).Increment(delta_rows);
+    case Thread_BG_GC:
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge_bg_gc).Increment(delta_bytes);
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge_bg_gc).Increment(delta_rows);
+    }
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);
