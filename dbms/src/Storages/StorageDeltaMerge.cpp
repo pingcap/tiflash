@@ -1128,7 +1128,7 @@ void StorageDeltaMerge::modifyASTStorage(ASTStorage * storage_ast, const TiDB::T
         args->children.at(1) = literal;
     else
         throw Exception("Wrong arguments num: " + DB::toString(args->children.size())
-                + " in table: " + getAndMaybeInitStore()->getTableName() + " in modifyASTStorage",
+                + " in table: " + this->getTableName() + " in modifyASTStorage",
             ErrorCodes::BAD_ARGUMENTS);
 }
 
