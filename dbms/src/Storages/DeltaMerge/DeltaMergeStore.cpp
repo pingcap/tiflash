@@ -1386,6 +1386,11 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             continue;
         }
 
+        // Avoid recheck this segment when gc_safe_point doesn't change regardless whether we trigger this segment's DeltaMerge or not.
+        // Because after we calculate StableProperty and compare it with this gc_safe_point,
+        // there is no need to recheck it again using the same gc_safe_point.
+        // On the other hand, if it should do DeltaMerge using this gc_safe_point, and the DeltaMerge is interruptted by other process,
+        // it's still worth to wait another gc_safe_point to check this segment again.
         segment->setLastCheckGCSafePoint(gc_safe_point);
 
         auto dm_context         = newDMContext(global_context, global_context.getSettingsRef());
@@ -1666,7 +1671,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
     auto delta_bytes = (Int64)segment_snap->delta->getBytes();
     auto delta_rows  = (Int64)segment_snap->delta->getRows();
 
-
+    CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_DeltaMerge};
     CurrentMetrics::Increment cur_dm_total_bytes{CurrentMetrics::DT_DeltaMergeTotalBytes, (Int64)segment_snap->getBytes()};
     CurrentMetrics::Increment cur_dm_total_rows{CurrentMetrics::DT_DeltaMergeTotalRows, (Int64)segment_snap->getRows()};
 
