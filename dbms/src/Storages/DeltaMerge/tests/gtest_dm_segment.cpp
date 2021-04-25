@@ -724,6 +724,26 @@ try
 }
 CATCH
 
+TEST_F(Segment_test, SplitFail)
+try
+{
+    const size_t num_rows_write = 100;
+    {
+        // write to segment
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        segment->write(dmContext(), std::move(block));
+    }
+
+    // Remove all data
+    segment->write(dmContext(), HandleRange(0, 100));
+    segment->flushCache(dmContext());
+
+    auto [a, b] = segment->split(dmContext(), tableColumns());
+    EXPECT_EQ(a, SegmentPtr{});
+    EXPECT_EQ(b, SegmentPtr{});
+}
+CATCH
+
 TEST_F(Segment_test, Restore)
 try
 {
