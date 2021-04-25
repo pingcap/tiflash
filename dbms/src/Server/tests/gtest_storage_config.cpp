@@ -15,6 +15,16 @@ namespace DB
 namespace tests
 {
 
+static auto loadConfigFromString(const String & s)
+{
+    std::istringstream ss(s);
+    cpptoml::parser p(ss);
+    auto table = p.parse();
+    Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration();
+    config->add(new DB::TOMLConfiguration(table), /*shared=*/false); // Take ownership of TOMLConfig
+    return config;
+}
+
 class StorageConfig_test : public ::testing::Test
 {
 public:
@@ -48,12 +58,7 @@ dir=["/data0/tiflash"]
     for (size_t i = 0; i < tests.size(); ++i)
     {
         const auto & test_case = tests[i];
-        std::istringstream ss(test_case);
-        cpptoml::parser p(ss);
-        auto table = p.parse();
-        std::shared_ptr<Poco::Util::AbstractConfiguration> configuration(new DB::TOMLConfiguration(table));
-        Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration();
-        config->add(configuration.get());
+        auto config = loadConfigFromString(test_case);
 
         LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
@@ -101,12 +106,7 @@ dir=["/ssd0/tiflash"]
     for (size_t i = 0; i < tests.size(); ++i)
     {
         const auto & test_case = tests[i];
-        std::istringstream ss(test_case);
-        cpptoml::parser p(ss);
-        auto table = p.parse();
-        std::shared_ptr<Poco::Util::AbstractConfiguration> configuration(new DB::TOMLConfiguration(table));
-        Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration();
-        config->add(configuration.get());
+        auto config = loadConfigFromString(test_case);
 
         LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
@@ -181,12 +181,7 @@ capacity = [ 10737418240 ]
     for (size_t i = 0; i < tests.size(); ++i)
     {
         const auto & test_case = tests[i];
-        std::istringstream ss(test_case);
-        cpptoml::parser p(ss);
-        auto table = p.parse();
-        std::shared_ptr<Poco::Util::AbstractConfiguration> configuration(new DB::TOMLConfiguration(table));
-        Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration();
-        config->add(configuration.get());
+        auto config = loadConfigFromString(test_case);
 
         LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
@@ -237,12 +232,7 @@ capacity=[ 1024 ]
     for (size_t i = 0; i < tests.size(); ++i)
     {
         const auto & test_case = tests[i];
-        std::istringstream ss(test_case);
-        cpptoml::parser p(ss);
-        auto table = p.parse();
-        std::shared_ptr<Poco::Util::AbstractConfiguration> configuration(new DB::TOMLConfiguration(table));
-        Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration();
-        config->add(configuration.get());
+        auto config = loadConfigFromString(test_case);
 
         LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
@@ -359,12 +349,7 @@ dt_enable_rough_set_filter = false
     for (size_t i = 0; i < tests.size(); ++i)
     {
         const auto & test_case = tests[i];
-        std::istringstream ss(test_case);
-        cpptoml::parser p(ss);
-        auto table = p.parse();
-        std::shared_ptr<Poco::Util::AbstractConfiguration> configuration(new DB::TOMLConfiguration(table));
-        Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration();
-        config->add(configuration.get());
+        auto config = loadConfigFromString(test_case);
 
         LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
