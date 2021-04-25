@@ -7,7 +7,6 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Databases/IDatabase.h>
 #include <Parsers/queryToString.h>
@@ -88,8 +87,7 @@ public:
                         StoragePtr storage = iterator->table();
                         String engine_name = storage->getName();
 
-                        if (!dynamic_cast<StorageMergeTree *>(&*storage) &&
-                            !dynamic_cast<StorageReplicatedMergeTree *>(&*storage))
+                        if (!dynamic_cast<StorageMergeTree *>(&*storage))
                             continue;
 
                         storages[std::make_pair(database_name, iterator->name())] = storage;
@@ -184,10 +182,6 @@ public:
             if (auto merge_tree = dynamic_cast<StorageMergeTree *>(&*info.storage))
             {
                 info.data = &merge_tree->getData();
-            }
-            else if (auto replicated_merge_tree = dynamic_cast<StorageReplicatedMergeTree *>(&*info.storage))
-            {
-                info.data = &replicated_merge_tree->getData();
             }
             else
             {

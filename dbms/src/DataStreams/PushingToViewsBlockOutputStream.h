@@ -10,8 +10,6 @@
 namespace DB
 {
 
-class ReplicatedMergeTreeBlockOutputStream;
-
 
 /** Writes data to the specified table and to all dependent materialized views.
   */
@@ -55,7 +53,6 @@ public:
 private:
     StoragePtr storage;
     BlockOutputStreamPtr output;
-    ReplicatedMergeTreeBlockOutputStream * replicated_output = nullptr;
 
     const Context & context;
     ASTPtr query_ptr;

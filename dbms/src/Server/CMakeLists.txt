@@ -21,7 +21,6 @@ add_library (clickhouse-server-lib
     MetricsPrometheus.cpp
     NotFoundHandler.cpp
     PingRequestHandler.cpp
-    ReplicasStatusHandler.cpp
     RootRequestHandler.cpp
     Server.cpp
     StatusFile.cpp
