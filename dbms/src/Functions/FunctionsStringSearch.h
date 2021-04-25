@@ -73,13 +73,18 @@ public:
         if (!arguments[1]->isString())
             throw Exception(
                 "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        if (customize_escape_char && !arguments[2]->isInteger())
-            throw Exception(
+        if constexpr (customize_escape_char)
+        {
+            if (!arguments[2]->isInteger())
+                throw Exception(
                     "Illegal type " + arguments[2]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        size_t match_type_pos = customize_escape_char ? 3 : 2;
-        if (arguments.size() > match_type_pos && !arguments[match_type_pos]->isString())
-            throw Exception(
-                "Illegal type " + arguments[match_type_pos]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+        else
+        {
+            if (arguments.size() > 2 && !arguments[2]->isString())
+                throw Exception(
+                    "Illegal type " + arguments[2]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
 
         return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
     }
@@ -95,7 +100,8 @@ public:
         const ColumnConst * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
 
         UInt8 escape_char = CH_ESCAPE_CHAR;
-        if (customize_escape_char)
+        String match_type = "";
+        if constexpr (customize_escape_char)
         {
             auto * col_escape_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
             bool valid_args = true;
@@ -122,14 +128,15 @@ public:
                       "be constants, and the 3rd argument must between 0 and 255.");
             }
         }
-        size_t match_type_pos = customize_escape_char ? 3 : 2;
-        String match_type = "";
-        if (arguments.size() > match_type_pos)
+        else
         {
-            auto * col_match_type_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
-            if (col_match_type_const == nullptr)
-                throw Exception("Match type argument of function " + getName() + " must be constant");
-            match_type = col_match_type_const->getValue<String>();
+            if (arguments.size() > 2)
+            {
+                auto * col_match_type_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
+                if (col_match_type_const == nullptr)
+                    throw Exception("Match type argument of function " + getName() + " must be constant");
+                match_type = col_match_type_const->getValue<String>();
+            }
         }
 
         if (col_haystack_const && col_needle_const)
