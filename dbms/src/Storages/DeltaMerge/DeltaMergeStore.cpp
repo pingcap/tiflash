@@ -1678,7 +1678,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
     switch (run_thread)
     {
     case TaskRunThread::Thread_BG_Thread_Pool:
-        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_merge).Increment();
+        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge).Increment();
         break;
     case TaskRunThread::Thread_FG:
         GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge_fg).Increment();
