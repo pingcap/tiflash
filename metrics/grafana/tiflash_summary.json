@@ -2251,13 +2251,18 @@
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "/delete_range|ingest/",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_command_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(increase(tiflash_storage_command_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{type}}",
@@ -2300,11 +2305,11 @@
               "show": true
             },
             {
-              "format": "none",
+              "format": "opm",
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             }
           ],
@@ -2689,17 +2694,29 @@
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "/seg_/",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"seg_merge|seg_split\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
               "refId": "A"
+            },
+            {
+              "expr": "sum(increase(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"seg_merge|seg_split\"}[1m])) by (type)",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "{{type}}",
+              "refId": "B"
             }
           ],
           "thresholds": [],
@@ -2731,11 +2748,11 @@
               "show": true
             },
             {
-              "format": "none",
+              "format": "opm",
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             }
           ],
