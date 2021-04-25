@@ -36,6 +36,7 @@ public:
         auto new_pack           = new DeltaPackFile(*this);
         new_pack->file          = new_file;
         new_pack->segment_range = new_segment_range;
+        // update `valid_rows` and `valid_bytes` by `new_segment_range`
         new_pack->calculateStat(context);
         return std::shared_ptr<DeltaPackFile>(new_pack);
     }

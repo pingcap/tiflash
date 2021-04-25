@@ -30,7 +30,8 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
         auto hash_salt   = dm_context->hash_salt;
         for (auto & file : files_)
         {
-            DMFilePackFilter pack_filter(file, index_cache, hash_salt, range, EMPTY_FILTER, {}, dm_context->db_context.getFileProvider());
+            auto pack_filter = DMFilePackFilter::loadFrom(
+                file, index_cache, hash_salt, range, EMPTY_FILTER, {}, dm_context->db_context.getFileProvider());
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;
@@ -213,15 +214,15 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     size_t total_match_bytes = 0;
     for (auto & f : stable->files)
     {
-        DMFilePackFilter filter(f,
-                                context.db_context.getGlobalContext().getMinMaxIndexCache(),
-                                context.hash_salt,
-                                range,
-                                RSOperatorPtr{},
-                                IdSetPtr{},
-                                context.db_context.getFileProvider());
-        auto &           pack_stats = f->getPackStats();
-        auto &           use_packs  = filter.getUsePacks();
+        auto   filter     = DMFilePackFilter::loadFrom(f,
+                                                 context.db_context.getGlobalContext().getMinMaxIndexCache(),
+                                                 context.hash_salt,
+                                                 range,
+                                                 RSOperatorPtr{},
+                                                 IdSetPtr{},
+                                                 context.db_context.getFileProvider());
+        auto & pack_stats = f->getPackStats();
+        auto & use_packs  = filter.getUsePacks();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
             if (use_packs[i])

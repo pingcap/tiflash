@@ -22,7 +22,8 @@ void DeltaPackFile::calculateStat(const DMContext & context)
     auto index_cache = context.db_context.getGlobalContext().getMinMaxIndexCache();
     auto hash_salt   = context.hash_salt;
 
-    DMFilePackFilter pack_filter(file, index_cache, hash_salt, segment_range, EMPTY_FILTER, {}, context.db_context.getFileProvider());
+    auto pack_filter
+        = DMFilePackFilter::loadFrom(file, index_cache, hash_salt, segment_range, EMPTY_FILTER, {}, context.db_context.getFileProvider());
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
