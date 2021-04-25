@@ -86,6 +86,7 @@ namespace DB
     M(tiflash_storage_command_count, "Total number of storage's command, such as delete range / shutdown /startup", Counter,              \
         F(type_delete_range, {"type", "delete_range"}))                                                                                   \
     M(tiflash_storage_subtask_count, "Total number of storage's sub task", Counter, F(type_delta_merge, {"type", "delta_merge"}),         \
+        F(type_delta_merge_fg, {"type", "delta_merge_fg"}), F(type_delta_merge_bg_gc, {"type", "delta_merge_bg_gc"}),                     \
         F(type_delta_compact, {"type", "delta_compact"}), F(type_delta_flush, {"type", "delta_flush"}),                                   \
         F(type_seg_split, {"type", "seg_split"}), F(type_seg_merge, {"type", "seg_merge"}),                                               \
         F(type_place_index_update, {"type", "place_index_update"}))                                                                       \

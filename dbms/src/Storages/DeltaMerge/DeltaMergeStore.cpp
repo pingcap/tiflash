@@ -1675,6 +1675,21 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
     CurrentMetrics::Increment cur_dm_total_bytes{CurrentMetrics::DT_DeltaMergeTotalBytes, (Int64)segment_snap->getBytes()};
     CurrentMetrics::Increment cur_dm_total_rows{CurrentMetrics::DT_DeltaMergeTotalRows, (Int64)segment_snap->getRows()};
 
+    switch (run_thread)
+    {
+    case TaskRunThread::Thread_BG_Thread_Pool:
+        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_merge).Increment();
+        break;
+    case TaskRunThread::Thread_FG:
+        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge_fg).Increment();
+        break;
+    case TaskRunThread::Thread_BG_GC:
+        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge_bg_gc).Increment();
+        break;
+    default:
+        break;
+    }
+
     Stopwatch watch_delta_merge;
     SCOPE_EXIT({
         switch (run_thread)
