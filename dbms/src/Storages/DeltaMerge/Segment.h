@@ -157,12 +157,13 @@ public:
     /// For those split, merge and mergeDelta methods, we should use prepareXXX/applyXXX combo in real production.
     /// split(), merge() and mergeDelta() are only used in test cases.
 
-    SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
-    SplitInfo   prepareSplit(DMContext &                dm_context,
-                             const ColumnDefinesPtr &   schema_snap,
-                             const SegmentSnapshotPtr & segment_snap,
-                             WriteBatches &             wbs,
-                             bool                       need_rate_limit) const;
+    SegmentPair              split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    std::optional<SplitInfo> prepareSplit(DMContext &                dm_context,
+                                          const ColumnDefinesPtr &   schema_snap,
+                                          const SegmentSnapshotPtr & segment_snap,
+                                          WriteBatches &             wbs,
+                                          bool                       need_rate_limit) const;
+
     SegmentPair
     applySplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, SplitInfo & split_info) const;
 
@@ -269,20 +270,21 @@ private:
                                                         UInt64                      max_version = MAX_UINT64);
 
     /// Merge delta & stable, and then take the middle one.
-    RowKeyValue getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const;
+    std::optional<RowKeyValue>
+    getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const;
     /// Only look up in the stable vs.
-    RowKeyValue getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
+    std::optional<RowKeyValue> getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
 
-    SplitInfo prepareSplitLogical(DMContext &                dm_context, //
-                                  const ColumnDefinesPtr &   schema_snap,
-                                  const SegmentSnapshotPtr & segment_snap,
-                                  RowKeyValue &              split_point,
-                                  WriteBatches &             wbs) const;
-    SplitInfo prepareSplitPhysical(DMContext &                dm_context,
-                                   const ColumnDefinesPtr &   schema_snap,
-                                   const SegmentSnapshotPtr & segment_snap,
-                                   WriteBatches &             wbs,
-                                   bool                       need_rate_limit) const;
+    std::optional<SplitInfo> prepareSplitLogical(DMContext &                dm_context, //
+                                                 const ColumnDefinesPtr &   schema_snap,
+                                                 const SegmentSnapshotPtr & segment_snap,
+                                                 RowKeyValue &              split_point,
+                                                 WriteBatches &             wbs) const;
+    std::optional<SplitInfo> prepareSplitPhysical(DMContext &                dm_context,
+                                                  const ColumnDefinesPtr &   schema_snap,
+                                                  const SegmentSnapshotPtr & segment_snap,
+                                                  WriteBatches &             wbs,
+                                                  bool                       need_rate_limit) const;
 
 
     /// Make sure that all delta packs have been placed.

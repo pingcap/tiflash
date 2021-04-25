@@ -1474,8 +1474,17 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     });
 
     WriteBatches wbs(storage_pool, is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
-    auto         range      = segment->getRowKeyRange();
-    auto         split_info = segment->prepareSplit(dm_context, schema_snap, segment_snap, wbs, !is_foreground);
+
+    auto range          = segment->getRowKeyRange();
+    auto split_info_opt = segment->prepareSplit(dm_context, schema_snap, segment_snap, wbs, !is_foreground);
+
+    if (!split_info_opt.has_value())
+    {
+        LOG_WARNING(log, "Give up segment [" << segment->segmentId() << "] split because of prepare split failed");
+        return {};
+    }
+
+    auto & split_info = split_info_opt.value();
 
     wbs.writeLogAndData();
     split_info.my_stable->enableDMFilesGC();
