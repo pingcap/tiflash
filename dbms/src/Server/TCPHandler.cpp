@@ -25,7 +25,6 @@
 #include <Interpreters/TablesStatus.h>
 
 #include <Storages/StorageMemory.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 
 #include <Common/ExternalTable.h>
 
@@ -487,13 +486,7 @@ void TCPHandler::processTablesStatusRequest()
             continue;
 
         TableStatus status;
-        if (auto * replicated_table = dynamic_cast<StorageReplicatedMergeTree *>(table.get()))
-        {
-            status.is_replicated = true;
-            status.absolute_delay = replicated_table->getAbsoluteDelay();
-        }
-        else
-            status.is_replicated = false;
+        status.is_replicated = false;
 
         response.table_states_by_id.emplace(table_name, std::move(status));
     }
