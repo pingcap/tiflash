@@ -787,6 +787,26 @@ try
 }
 CATCH
 
+TEST_F(Segment_test, SplitFail)
+try
+{
+    const size_t num_rows_write = 100;
+    {
+        // write to segment
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        segment->write(dmContext(), std::move(block));
+    }
+
+    // Remove all data
+    segment->write(dmContext(), RowKeyRange::fromHandleRange(HandleRange(0, 100)));
+    segment->flushCache(dmContext());
+
+    auto [a, b] = segment->split(dmContext(), tableColumns());
+    EXPECT_EQ(a, SegmentPtr{});
+    EXPECT_EQ(b, SegmentPtr{});
+}
+CATCH
+
 TEST_F(Segment_test, Restore)
 try
 {
@@ -1097,11 +1117,11 @@ try
         auto split_info = segment->prepareSplit(dmContext(), tableColumns(), segment_snap, wbs, false);
 
         wbs.writeLogAndData();
-        split_info.my_stable->enableDMFilesGC();
-        split_info.other_stable->enableDMFilesGC();
+        split_info->my_stable->enableDMFilesGC();
+        split_info->other_stable->enableDMFilesGC();
 
         auto lock                        = segment->mustGetUpdateLock();
-        std::tie(segment, other_segment) = segment->applySplit(dmContext(), segment_snap, wbs, split_info);
+        std::tie(segment, other_segment) = segment->applySplit(dmContext(), segment_snap, wbs, split_info.value());
 
         wbs.writeAll();
     }
