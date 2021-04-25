@@ -1,6 +1,5 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/MutableSupport.h>
 
 #include <Common/typeid_cast.h>
@@ -767,19 +766,11 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                 ErrorCodes::BAD_ARGUMENTS);
     }
 
-    if (replicated)
-        return StorageReplicatedMergeTree::create(
-            zookeeper_path, replica_name, args.attach, args.data_path, args.database_name, args.table_name,
-            columns,
-            args.context, primary_expr_list, secondary_sorting_expr_list, date_column_name, partition_expr_list,
-            sampling_expression, merging_params, storage_settings,
-            args.has_force_restore_data_flag);
-    else
-        return StorageMergeTree::create(
-            args.data_path, args.database_engine, args.database_name, args.table_name, columns, args.attach,
-            args.context, table_info, primary_expr_list, secondary_sorting_expr_list, date_column_name, partition_expr_list,
-            sampling_expression, merging_params, storage_settings,
-            args.has_force_restore_data_flag, tombstone);
+    return StorageMergeTree::create(
+        args.data_path, args.database_engine, args.database_name, args.table_name, columns, args.attach,
+        args.context, table_info, primary_expr_list, secondary_sorting_expr_list, date_column_name, partition_expr_list,
+        sampling_expression, merging_params, storage_settings,
+        args.has_force_restore_data_flag, tombstone);
 }
 
 
@@ -794,15 +785,6 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("SummingMergeTree", create);
     factory.registerStorage("GraphiteMergeTree", create);
     factory.registerStorage("VersionedCollapsingMergeTree", create);
-
-    factory.registerStorage("ReplicatedMergeTree", create);
-    factory.registerStorage("ReplicatedCollapsingMergeTree", create);
-    factory.registerStorage("ReplicatedReplacingMergeTree", create);
-    // factory.registerStorage("Replicated" + MutableSupport::storage_name, create);
-    factory.registerStorage("ReplicatedAggregatingMergeTree", create);
-    factory.registerStorage("ReplicatedSummingMergeTree", create);
-    factory.registerStorage("ReplicatedGraphiteMergeTree", create);
-    factory.registerStorage("ReplicatedVersionedCollapsingMergeTree", create);
 }
 
 }

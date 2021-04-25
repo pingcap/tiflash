@@ -7,7 +7,6 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/System/StorageSystemParts.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Databases/IDatabase.h>
 
