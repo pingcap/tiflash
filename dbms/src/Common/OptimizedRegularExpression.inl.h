@@ -252,7 +252,7 @@ OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(cons
 {
     if (options & RE_NO_OPTIMIZE)
     {
-        /// query from TiDB, currently, since analyze does not handle all the cases, so skip the optimization
+        /// query from TiDB, currently, since analyze does not handle all the cases, skip the optimization
         /// to avoid im-compatible issues
         is_trivial = false;
         required_substring.clear();

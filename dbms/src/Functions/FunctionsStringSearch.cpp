@@ -852,6 +852,7 @@ struct ReplaceRegexpImpl
                         }
                     }
 
+                    /// when occ > 0, just replace the occ-th match even if replace_one is false
                     if (replace_one || occ != 0 || match.length() == 0) /// Stop after match of zero length, to avoid infinite loop.
                         can_finish_current_string = true;
                 }
