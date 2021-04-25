@@ -1694,17 +1694,19 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
     SCOPE_EXIT({
         switch (run_thread)
         {
-        case Thread_BG_Thread_Pool:
+        case TaskRunThread::Thread_BG_Thread_Pool:
             GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge)
                 .Observe(watch_delta_merge.elapsedSeconds());
             break;
-        case Thread_FG:
+        case TaskRunThread::Thread_FG:
             GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge_fg)
                 .Observe(watch_delta_merge.elapsedSeconds());
             break;
-        case Thread_BG_GC:
+        case TaskRunThread::Thread_BG_GC:
             GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge_bg_gc)
                 .Observe(watch_delta_merge.elapsedSeconds());
+            break;
+        default:
             break;
         }
     });
