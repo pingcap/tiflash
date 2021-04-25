@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Columns/ColumnsCommon.h>
+#include <Common/Stopwatch.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -54,6 +55,10 @@ public:
     String getName() const override { return "DeltaMergeVersionFilter"; }
     Block  getHeader() const override { return header; }
 
+
+    void readPrefix() override;
+    void readSuffix() override;
+    
     Block read() override
     {
         FilterPtr f;
@@ -116,6 +121,7 @@ private:
     UInt64 version_limit;
     bool   is_common_handle;
     Block  header;
+    Stopwatch timer;
 
     size_t handle_col_pos;
     size_t version_col_pos;

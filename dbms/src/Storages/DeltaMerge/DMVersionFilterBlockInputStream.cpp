@@ -14,6 +14,25 @@ namespace DM
 static constexpr size_t UNROLL_BATCH = 64;
 
 template <int MODE>
+void DMVersionFilterBlockInputStream<MODE>::readPrefix()
+{
+    if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
+    {
+        timer.start();
+    }
+}
+
+template <int MODE>
+void DMVersionFilterBlockInputStream<MODE>::readSuffix()
+{
+    if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
+    {
+        UInt64 elapsed_ms = timer.elapsedMilliseconds();
+        GET_METRIC(metrics, tiflash_coprocessor_read_duration_seconds, type_scan).Observe(total_rows/elapsed_ms));
+    }
+}
+
+template <int MODE>
 Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool return_filter)
 {
     while (true)
