@@ -115,7 +115,8 @@ public:
       * num_streams - a recommendation, how many streams to return,
       *  if the storage can return a different number of streams.
       *
-      * It is guaranteed that the structure of the table will not change over the lifetime of the returned streams (that is, there will not be ALTER, RENAME and DROP).
+      * The Storage schema can be changed during lifetime of the returned input streams, but the data read
+      * is guaranteed to be immutable once the input streams are returned.
       */
     virtual BlockInputStreams read(const Names & /*column_names*/,
         const SelectQueryInfo & /*query_info*/,
