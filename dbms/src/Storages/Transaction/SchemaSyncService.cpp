@@ -75,7 +75,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
     LOG_DEBUG(log, "Performing GC using safe point " << gc_safe_point);
 
     // The storages that are ready for gc
-    std::unordered_set<ManageableStoragePtr> storages_to_gc;
+    std::vector<std::weak_ptr<IManageableStorage>> storages_to_gc;
     // Get a snapshot of database
     auto dbs = context.getDatabases();
     for (const auto & iter : dbs)
@@ -88,15 +88,23 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
             if (!managed_storage)
                 continue;
 
-            bool need_gc = isSafeForGC(db, gc_safe_point) || isSafeForGC(managed_storage, gc_safe_point);
-            if (need_gc)
-                storages_to_gc.insert(managed_storage);
+            if (isSafeForGC(db, gc_safe_point) || isSafeForGC(managed_storage, gc_safe_point))
+            {
+                // Only keep a weak_ptr on storage so that the memory can be free as soon as
+                // it is dropped.
+                storages_to_gc.emplace_back(std::weak_ptr<IManageableStorage>(managed_storage));
+            }
         }
     }
 
     // Physically drop tables
-    for (auto & storage : storages_to_gc)
+    for (auto & storage_ : storages_to_gc)
     {
+        // Get a shared_ptr from weak_ptr, it should always success.
+        auto storage = storage_.lock();
+        if (unlikely(!storage))
+            continue;
+
         String database_name = storage->getDatabaseName();
         String table_name = storage->getTableName();
         const auto & table_info = storage->getTableInfo();
@@ -121,10 +129,12 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
         }
         catch (DB::Exception & e)
         {
+            // Maybe a read lock of a table is held for a long time, just ignore it this round.
             auto err_msg = getCurrentExceptionMessage(true);
             LOG_INFO(log, "Physically drop table " << canonical_name << " is skipped, reason: " << err_msg);
         }
     }
+    storages_to_gc.clear();
 
     // Physically drop database
     for (const auto & iter : dbs)
@@ -139,6 +149,8 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
             ++num_tables;
         if (num_tables > 0)
         {
+            // There should be something wrong, maybe a read lock of a table is held for a long time.
+            // Just ignore and try to collect this database next time.
             LOG_INFO(log, "Physically drop database " << db_name << " is skipped, reason: " << num_tables << " tables left");
             continue;
         }
