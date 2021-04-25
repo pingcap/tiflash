@@ -866,7 +866,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
     if (!split_point_opt.has_value())
         return {};
 
-    auto split_point = split_point_opt.value();
+    const auto & split_point = split_point_opt.value();
 
     RowKeyRange my_range(rowkey_range.start, split_point, is_common_handle, rowkey_column_size);
     RowKeyRange other_range(split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
