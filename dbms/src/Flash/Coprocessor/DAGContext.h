@@ -72,9 +72,6 @@ public:
         return 0;
     }
 
-    bool allowZeroInDate() const;
-    bool allowInvalidDate() const;
-
     BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
 
     size_t final_concurrency;

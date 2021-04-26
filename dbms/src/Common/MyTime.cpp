@@ -930,69 +930,147 @@ size_t maxFormattedDateTimeStringLength(const String & format)
     return std::max<size_t>(result, 1);
 }
 
-void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
+void checkDate(const UInt64 & year, const UInt64 & month, const UInt64 & day)
 {
-    if (!(year == 0 && month == 0 && day == 0))
+    if (year == 0 && month == 0 && day == 0)
     {
-        if (!allow_zero_in_date && (month == 0 || day == 0))
-        {
-            char buff[] = "0000-00-00";
-            std::sprintf(buff, "%04d-%02d-%02d", year, month, day);
-            throw TiFlashException("Incorrect datetime value: " + String(buff), Errors::Types::WrongValue);
-        }
+        return;
+    }
+
+    if (month == 0 || day == 0)
+    {
+        throw TiFlashException("Invalid Datetime value", Errors::Types::WrongValue);
     }
 
     if (year >= 9999 || month > 12)
     {
-        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+        throw TiFlashException("Invalid Datetime value", Errors::Types::WrongValue);
     }
 
-    UInt8 max_day = 31;
-    if (!allow_invalid_date)
     {
         constexpr static UInt8 max_days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-        static auto is_leap_year = [](UInt16 _year) { return ((_year % 4 == 0) && (_year % 100 != 0)) || (_year % 400 == 0); };
-        max_day = max_days_in_month[month - 1];
+        UInt8 max_day = max_days_in_month[month - 1];
+        static auto is_leap_year = [](UInt16 year) { return ((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0); };
         if (month == 2 && is_leap_year(year))
         {
             max_day = 29;
         }
-    }
-    if (day > max_day)
-    {
-        char buff[] = "0000-00-00";
-        std::sprintf(buff, "%04d-%02d-%02d", year, month, day);
-        throw TiFlashException("Incorrect datetime value: " + String(buff), Errors::Types::WrongValue);
-    }
 
-    if (hour < 0 || hour >= 24)
-    {
-        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
-    }
-    if (minute >= 60)
-    {
-        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
-    }
-    if (second >= 60)
-    {
-        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
+        if (day > max_day)
+        {
+            throw TiFlashException("Invalid Datetime value", Errors::Types::WrongValue);
+        }
     }
     return;
 }
 
-bool checkedDateTime(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
-    const UInt64 & second, const UInt64 & microsecond, MyDateTime & result)
+MyDateTime checkedDateTime(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
+    const UInt64 & second, const UInt64 & microsecond)
 {
     if (year >= (1 << MyTimeBase::YEAR_BIT_FIELD_WIDTH) || month >= (1 << MyTimeBase::MONTH_BIT_FIELD_WIDTH)
         || day >= (1 << MyTimeBase::DAY_BIT_FIELD_WIDTH) || hour >= (1 << MyTimeBase::HOUR_BIT_FIELD_WIDTH)
         || minute >= (1 << MyTimeBase::MINUTE_BIT_FIELD_WIDTH) || second >= (1 << MyTimeBase::SECOND_BIT_FIELD_WIDTH)
         || microsecond >= (1 << MyTimeBase::MICROSECOND_BIT_FIELD_WIDTH))
     {
-        result = MyDateTime(0, 0, 0, 0, 0, 0, 0);
-        return true;
+        throw TiFlashException("Datetime value overflow", Errors::Types::WrongValue);
     }
-    result = MyDateTime(year, month, day, hour, minute, second, microsecond);
-    return false;
+    checkDate(year, month, day);
+    if (hour >= 24 || minute >= 60 || second >= 60)
+    {
+        throw TiFlashException("Invalid Datetime value", Errors::Types::WrongValue);
+    }
+    return MyDateTime(year, month, day, hour, minute, second, microsecond);
+}
+
+MyDateTime numberToDateTime(Int64 number)
+{
+    MyDateTime datetime(0);
+
+    auto get_datetime = [](const Int64 & num) {
+        UInt64 ymd = num / 1000000;
+        UInt64 hms = num - ymd * 1000000;
+
+        UInt64 year = ymd / 10000;
+        ymd %= 10000;
+        UInt64 month = ymd / 100;
+        UInt64 day = ymd % 100;
+
+        UInt64 hour = hms / 10000;
+        hms %= 10000;
+        UInt64 minute = hms / 100;
+        UInt64 second = hms % 100;
+
+        return checkedDateTime(year, month, day, hour, minute, second, 0);
+    };
+
+    if (number == 0)
+        return datetime;
+
+    // datetime type
+    if (number >= 10000101000000)
+    {
+        return get_datetime(number);
+    }
+
+    // check MMDD
+    if (number < 101)
+    {
+        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDD: 2000-2069
+    if (number <= 69 * 10000 + 1231)
+    {
+        number = (number + 20000000) * 1000000;
+        return get_datetime(number);
+    }
+
+    if (number < 70 * 10000 + 101)
+    {
+        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDD
+    if (number <= 991231)
+    {
+        number = (number + 19000000) * 1000000;
+        return get_datetime(number);
+    }
+
+    // check hour/min/second
+    if (number <= 99991231)
+    {
+        number *= 1000000;
+        return get_datetime(number);
+    }
+
+    // check MMDDHHMMSS
+    if (number < 101000000)
+    {
+        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDDhhmmss: 2000-2069
+    if (number <= 69 * 10000000000 + 1231235959)
+    {
+        number += 20000000000000;
+        return get_datetime(number);
+    }
+
+    // check YYYYMMDDhhmmss
+    if (number < 70 * 10000000000 + 101000000)
+    {
+        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDDHHMMSS
+    if (number <= 991231235959)
+    {
+        number += 19000000000000;
+        return get_datetime(number);
+    }
+
+    return get_datetime(number);
 }
 
 MyDateTimeFormatter::MyDateTimeFormatter(const String & layout)
