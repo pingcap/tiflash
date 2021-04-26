@@ -711,15 +711,6 @@ void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, con
     return getAndMaybeInitStore()->deleteRange(global_context, settings, range_to_delete);
 }
 
-UInt64 StorageDeltaMerge::onSyncGc(Int64 limit)
-{
-    if (store_inited.load(std::memory_order_acquire))
-    {
-        return _store->onSyncGc(limit);
-    }
-    return 0;
-}
-
 void StorageDeltaMerge::ingestFiles(
     const DM::RowKeyRange & range, const std::vector<UInt64> & file_ids, bool clear_data_in_range, const Settings & settings)
 {
