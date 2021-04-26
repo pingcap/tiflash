@@ -132,7 +132,11 @@ void SSTFilesToDTFilesOutputStream::write()
         }
 
         // Write block to the output stream
-        dt_stream->write(block, /*not_clean_rows=*/1);
+        // FIXME: the block properties are ignored since we only insert DTFile into delta layer
+        // now, the block properties are useless.
+        DMFileBlockOutputStream::BlockProperty property;
+        property.not_clean_rows = 1;
+        dt_stream->write(block, property);
 
         commit_rows += block.rows();
     }

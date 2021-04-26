@@ -95,16 +95,16 @@ Block SSTFilesToBlockInputStream::read()
         auto value = write_reader->value();
         region->insert(ColumnFamilyType::Write, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
         ++process_keys;
-
-        auto key_view = std::string_view{key.data, key.len};
-        scanCF(ColumnFamilyType::Default, /*until*/ key_view);
-        scanCF(ColumnFamilyType::Lock, /*until*/ key_view);
-
         ++process_writes;
         write_reader->next();
 
         if (process_writes % expected_size == 0)
         {
+            auto key_view = std::string_view{key.data, key.len};
+            // Batch the scan from other CFs until we need to decode data
+            scanCF(ColumnFamilyType::Default, /*until*/ key_view);
+            scanCF(ColumnFamilyType::Lock, /*until*/ key_view);
+
             auto block = readCommitedBlock();
             if (block.rows() != 0)
                 return block;
@@ -132,7 +132,7 @@ void SSTFilesToBlockInputStream::scanCF(ColumnFamilyType cf, const std::string_v
     while (reader && reader->remained())
     {
         auto key = reader->key();
-        if (until.data() == nullptr || memcmp(until.data(), key.data, std::min(until.size(), key.len)) <= 0)
+        if (until.data() == nullptr || memcmp(until.data(), key.data, std::min(until.size(), key.len)) >= 0)
         {
             auto value = reader->value();
             region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
