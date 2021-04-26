@@ -1,6 +1,7 @@
 #include <Common/Exception.h>
 #include <Common/MyTime.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <Functions/FunctionsTiDBConversion.h>
 #include <gtest/gtest.h>
 
 #include <iostream>
@@ -57,17 +58,19 @@ public:
         }
     }
 
-    static void checkNumberToMyDateTime(const Int64 & input, const MyDateTime & expected, bool expect_error)
+    static void checkNumberToMyDateTime(const Int64 & input, const MyDateTime & expected, bool expect_error, DAGContext * ctx)
     {
         if (expect_error)
         {
-            EXPECT_THROW({ numberToDateTime(input); }, TiFlashException) << "Original time number: " << input;
+            MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
+            EXPECT_THROW({ numberToDateTime(input, datetime, ctx); }, TiFlashException) << "Original time number: " << input;
             return;
         }
 
         try
         {
-            MyDateTime source = numberToDateTime(input);
+            MyDateTime source(0, 0, 0, 0, 0, 0, 0);
+            numberToDateTime(input, source, ctx);
             EXPECT_EQ(source.year, expected.year) << "Original time number: " << input;
             EXPECT_EQ(source.month, expected.month) << "Original time number: " << input;
             EXPECT_EQ(source.day, expected.day) << "Original time number: " << input;
@@ -197,17 +200,21 @@ try
         {201, false, MyDateTime(2000, 2, 1, 0, 0, 0, 0)},
         {20, true, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
         {2, true, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
+        {0, false, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
         {-1, true, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
         {99999999999999, true, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
         {100000000000000, true, MyDateTime(0, 0, 0, 0, 0, 0, 0)},
         {10000102000000, false, MyDateTime(1000, 1, 2, 0, 0, 0, 0)},
         {19690101000000, false, MyDateTime(1969, 1, 1, 0, 0, 0, 0)},
         {991231235959, false, MyDateTime(1999, 12, 31, 23, 59, 59, 0)},
+        {691231235959, false, MyDateTime(2069, 12, 31, 23, 59, 59, 0)},
         {370119031407, false, MyDateTime(2037, 1, 19, 3, 14, 7, 0)},
+        {380120031407, false, MyDateTime(2038, 1, 20, 3, 14, 7, 0)},
+        {11111111111, false, MyDateTime(2001, 11, 11, 11, 11, 11, 0)},
     };
     for (auto & [input, expect_error, expected] : cases)
     {
-        checkNumberToMyDateTime(input, expected, expect_error);
+        checkNumberToMyDateTime(input, expected, expect_error, nullptr);
     }
 }
 catch (Exception & e)
@@ -217,5 +224,4 @@ catch (Exception & e)
 }
 
 } // namespace tests
-
 } // namespace DB
