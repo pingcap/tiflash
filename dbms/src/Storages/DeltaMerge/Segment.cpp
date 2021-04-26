@@ -81,8 +81,11 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
                              const String &              parent_path,
                              bool                        need_rate_limit)
 {
+    DMFileBlockOutputStream::Flags flags;
+    flags.setRateLimit(need_rate_limit);
+
     auto   dmfile        = DMFile::create(file_id, parent_path, dm_context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
-    auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, need_rate_limit);
+    auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, flags);
     auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
     input_stream->readPrefix();
@@ -224,16 +227,14 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 
     switch (version)
     {
-    case SegmentFormat::V1:
-    {
+    case SegmentFormat::V1: {
         HandleRange range;
         readIntBinary(range.start, buf);
         readIntBinary(range.end, buf);
         rowkey_range = RowKeyRange::fromHandleRange(range);
         break;
     }
-    case SegmentFormat::V2:
-    {
+    case SegmentFormat::V2: {
         rowkey_range = RowKeyRange::deserialize(buf);
         break;
     }
@@ -1456,7 +1457,7 @@ bool Segment::placeDelete(const DMContext &           dm_context,
     {
         RowKeyValueRef first_rowkey       = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle).getRowKeyValue(0);
         auto           place_handle_range = skippable_place ? RowKeyRange::startFrom(first_rowkey, is_common_handle, rowkey_column_size)
-                                                  : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
+                                                            : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
         auto compacted_index = update_delta_tree.getCompactedEntries();
 
