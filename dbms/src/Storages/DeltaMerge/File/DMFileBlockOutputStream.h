@@ -26,7 +26,8 @@ public:
     {
     }
 
-    void write(const Block & block, size_t not_clean_rows) { writer.write(block, not_clean_rows); }
+    using BlockProperty = DMFileWriter::BlockProperty;
+    void write(const Block & block, const BlockProperty & block_property) { writer.write(block, block_property); }
 
     void writePrefix() {}
 
