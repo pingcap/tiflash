@@ -89,6 +89,10 @@ struct MyTimeBase
     int week(UInt32 mode) const;
 
     std::tuple<int, int> calcWeek(UInt32 mode) const;
+
+    // Check validity of time under specified SQL_MODE.
+    // May throw exception.
+    void check(bool allow_zero_in_date, bool allow_invalid_date) const;
 };
 
 struct MyDateTime : public MyTimeBase
@@ -139,11 +143,14 @@ int calcDayNum(int year, int month, int day);
 
 size_t maxFormattedDateTimeStringLength(const String & format);
 
-MyDateTime numberToDateTime(Int64 number);
+
 
 bool isPunctuation(char c);
 
 bool isValidSeperator(char c, int previous_parts);
 
+// Build MyDateTime value with checking overflow of internal fields, return true if input is invalid.
+bool checkedDateTime(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
+                     const UInt64 & second, const UInt64 & microsecond, MyDateTime & result);
 
 } // namespace DB
