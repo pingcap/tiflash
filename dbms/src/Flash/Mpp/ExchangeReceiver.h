@@ -40,6 +40,14 @@ struct ExchangeReceiverResult
     ExchangeReceiverResult() : ExchangeReceiverResult(nullptr, 0) {}
 };
 
+enum State
+{
+    NORMAL,
+    ERROR,
+    CANCELED,
+    CLOSED,
+};
+
 class ExchangeReceiver
 {
 public:
@@ -60,7 +68,7 @@ private:
     std::condition_variable cv;
     std::queue<ExchangeReceiverResult> result_buffer;
     Int32 live_connections;
-    bool meet_error;
+    State state;
     Exception err;
     Logger * log;
 
@@ -68,20 +76,30 @@ private:
 
     void ReadLoop(const String & meta_raw, size_t source_index);
 
-    void decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info)
+    bool decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info)
     {
+        bool ret = true;
         std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
         if (!resp_ptr->ParseFromString(p.data()))
         {
             resp_ptr = nullptr;
+            ret = false;
         }
         std::unique_lock<std::mutex> lock(mu);
-        cv.wait(lock, [&] { return result_buffer.size() < max_buffer_size || meet_error; });
-        if (resp_ptr != nullptr)
-            result_buffer.emplace(resp_ptr, source_index, req_info);
+        cv.wait(lock, [&] { return result_buffer.size() < max_buffer_size || state != NORMAL; });
+        if (state == NORMAL)
+        {
+            if (resp_ptr != nullptr)
+                result_buffer.emplace(resp_ptr, source_index, req_info);
+            else
+                result_buffer.emplace(resp_ptr, source_index, req_info, true, "Error while decoding MPPDataPacket");
+        }
         else
-            result_buffer.emplace(resp_ptr, source_index, req_info, true, "Error while decoding MPPDataPacket");
+        {
+            ret = false;
+        }
         cv.notify_all();
+        return ret;
     }
 
 public:
@@ -92,13 +110,13 @@ public:
           task_meta(meta),
           max_buffer_size(max_buffer_size_),
           live_connections(0),
-          meet_error(false),
+          state(NORMAL),
           log(&Logger::get("exchange_receiver"))
     {
         for (int i = 0; i < exc.field_types_size(); i++)
         {
             String name = "exchange_receiver_" + std::to_string(i);
-            ColumnInfo info = fieldTypeToColumnInfo(exc.field_types(i));
+            ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
             schema.push_back(std::make_pair(name, info));
         }
         setUpConnection();
@@ -106,10 +124,22 @@ public:
 
     ~ExchangeReceiver()
     {
+        {
+            std::unique_lock<std::mutex> lk(mu);
+            state = CLOSED;
+            cv.notify_all();
+        }
         for (auto & worker : workers)
         {
             worker.join();
         }
+    }
+
+    void cancel()
+    {
+        std::unique_lock<std::mutex> lk(mu);
+        state = CANCELED;
+        cv.notify_all();
     }
 
     const DAGSchema & getOutputSchema() const { return schema; }
@@ -117,11 +147,18 @@ public:
     ExchangeReceiverResult nextResult()
     {
         std::unique_lock<std::mutex> lk(mu);
-        cv.wait(lk, [&] { return !result_buffer.empty() || live_connections == 0 || meet_error; });
+        cv.wait(lk, [&] { return !result_buffer.empty() || live_connections == 0 || state != NORMAL; });
         ExchangeReceiverResult result;
-        if (meet_error)
+        if (state != NORMAL)
         {
-            result = {nullptr, 0, "ExchangeReceiver", true, err.message(), false};
+            String msg;
+            if (state == CANCELED)
+                msg = "query canceled";
+            else if (state == CLOSED)
+                msg = "ExchangeReceiver closed";
+            else
+                msg = err.message();
+            result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
         }
         else if (result_buffer.empty())
         {

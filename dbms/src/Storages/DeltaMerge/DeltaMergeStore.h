@@ -30,7 +30,7 @@ using DMContextPtr = std::shared_ptr<DMContext>;
 using NotCompress  = std::unordered_set<ColId>;
 using SegmentIdSet = std::unordered_set<UInt64>;
 
-static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
+inline static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct SegmentStat
 {
@@ -151,6 +151,7 @@ public:
         BG_MergeDelta,
         BG_Compact,
         BG_Flush,
+        BG_GC,
     };
 
     enum TaskType
@@ -161,6 +162,13 @@ public:
         Compact,
         Flush,
         PlaceIndex,
+    };
+
+    enum TaskRunThread
+    {
+        Thread_BG_Thread_Pool,
+        Thread_FG,
+        Thread_BG_GC,
     };
 
     static std::string toString(ThreadType type)
@@ -183,6 +191,23 @@ public:
             return "BG_Compact";
         case BG_Flush:
             return "BG_Flush";
+        case BG_GC:
+            return "BG_GC";
+        default:
+            return "Unknown";
+        }
+    }
+
+    static std::string toString(TaskRunThread type)
+    {
+        switch (type)
+        {
+        case Thread_BG_Thread_Pool:
+            return "BackgroundThreadPool";
+        case Thread_FG:
+            return "Foreground";
+        case Thread_BG_GC:
+            return "BackgroundGCThread";
         default:
             return "Unknown";
         }
@@ -262,7 +287,21 @@ public:
 
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
-    // Deprated
+    void writeRegionSnapshot(const DMContextPtr & dm_context, //
+                             const RowKeyRange &  range,
+                             std::vector<PageId>  file_ids,
+                             bool                 clear_data_in_range);
+
+    void writeRegionSnapshot(const Context &      db_context, //
+                             const DB::Settings & db_settings,
+                             const RowKeyRange &  range,
+                             std::vector<PageId>  file_ids,
+                             bool                 clear_data_in_range)
+    {
+        auto dm_context = newDMContext(db_context, db_settings);
+        return writeRegionSnapshot(dm_context, range, file_ids, clear_data_in_range);
+    }
+
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
 
     BlockInputStreams readRaw(const Context &       db_context,
@@ -316,6 +355,8 @@ public:
     bool                isCommonHandle() const { return is_common_handle; }
     size_t              getRowKeyColumnSize() const { return rowkey_column_size; }
 
+    UInt64 onSyncGc(Int64 limit);
+
 public:
     /// Methods mainly used by region split.
 
@@ -328,9 +369,9 @@ public:
 
     RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
-private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
 
+private:
     bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
@@ -340,7 +381,9 @@ private:
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
-    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, const TaskRunThread thread);
+
+    bool updateGCSafePoint();
 
     bool handleBackgroundTask(bool heavy);
 
@@ -390,7 +433,9 @@ private:
 
     MergeDeltaTaskPool background_tasks;
 
-    DB::Timestamp latest_gc_safe_point = 0;
+    std::atomic<DB::Timestamp> latest_gc_safe_point = 0;
+
+    RowKeyValue next_gc_check_key;
 
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;

@@ -60,8 +60,15 @@ struct MPPTunnel
 
     ~MPPTunnel()
     {
-        if (!finished)
-            writeDone();
+        try
+        {
+            if (!finished)
+                writeDone();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
+        }
     }
 
     // write a single packet to the tunnel, it will block if tunnel is not ready.
@@ -100,9 +107,40 @@ struct MPPTunnel
     // finish the writing.
     void writeDone()
     {
-        std::lock_guard<std::mutex> lk(mu);
+        std::unique_lock<std::mutex> lk(mu);
         if (finished)
             throw Exception("has finished");
+        /// make sure to finish the tunnel after it is connected
+        if (timeout.count() > 0)
+        {
+            if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
+            {
+                throw Exception(tunnel_id + " is timeout");
+            }
+        }
+        else
+        {
+            cv_for_connected.wait(lk, [&]() { return connected; });
+        }
+        finished = true;
+        cv_for_finished.notify_all();
+    }
+
+    /// close() finishes the tunnel, if the tunnel is connected already, it will
+    /// write the error message to the tunnel, otherwise it just close the tunnel
+    void close(const String & reason)
+    {
+        std::unique_lock<std::mutex> lk(mu);
+        if (finished)
+            return;
+        if (connected)
+        {
+            mpp::MPPDataPacket data;
+            auto err = new mpp::Error();
+            err->set_msg(reason);
+            data.set_allocated_error(err);
+            writer->Write(data);
+        }
         finished = true;
         cv_for_finished.notify_all();
     }
@@ -237,7 +275,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
     // which targeted task we should send data by which tunnel.
     std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
 
-    MPPTaskManager * manager;
+    MPPTaskManager * manager = nullptr;
 
     Logger * log;
 
@@ -258,8 +296,24 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     bool isTaskHanging();
 
-    void cancel();
+    void cancel(const String & reason);
 
+    /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
+    /// without waiting the tunnel to be connected
+    void closeAllTunnel(const String & reason)
+    {
+        try
+        {
+            for (auto & it : tunnel_map)
+            {
+                it.second->close(reason);
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Failed to close all tunnels");
+        }
+    }
     void writeErrToAllTunnel(const String & e)
     {
         try
@@ -275,7 +329,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         }
         catch (...)
         {
-            LOG_WARNING(log, "Failed to write error " + e + " to all tunnel");
+            tryLogCurrentException(log, "Failed to write error " + e + " to all tunnels");
         }
     }
 
@@ -377,6 +431,7 @@ public:
         }
         return ret;
     }
+
     std::vector<MPPTaskPtr> getCurrentTasksForQuery(UInt64 query_id)
     {
         std::vector<MPPTaskPtr> ret;
@@ -389,91 +444,13 @@ public:
         return ret;
     }
 
-    bool registerTask(MPPTaskPtr task)
-    {
-        std::unique_lock<std::mutex> lock(mu);
-        const auto & it = mpp_query_map.find(task->id.start_ts);
-        if (it != mpp_query_map.end() && it->second.to_be_cancelled)
-        {
-            LOG_WARNING(log, "Do not register task: " + task->id.toString() + " because the query is to be cancelled.");
-            cv.notify_all();
-            return false;
-        }
-        if (it != mpp_query_map.end() && it->second.task_map.find(task->id) != it->second.task_map.end())
-        {
-            throw Exception("The task " + task->id.toString() + " has been registered");
-        }
-        mpp_query_map[task->id.start_ts].task_map.emplace(task->id, task);
-        task->manager = this;
-        cv.notify_all();
-        return true;
-    }
+    bool registerTask(MPPTaskPtr task);
 
-    void unregisterTask(MPPTask * task)
-    {
-        std::unique_lock<std::mutex> lock(mu);
-        auto it = mpp_query_map.find(task->id.start_ts);
-        if (it != mpp_query_map.end())
-        {
-            if (it->second.to_be_cancelled)
-                return;
-            auto task_it = it->second.task_map.find(task->id);
-            if (task_it != it->second.task_map.end())
-            {
-                it->second.task_map.erase(task_it);
-                if (it->second.task_map.empty())
-                    /// remove query task map if the task is the last one
-                    mpp_query_map.erase(it);
-                return;
-            }
-        }
-        LOG_ERROR(log, "The task " + task->id.toString() + " cannot be found and fail to unregister");
-    }
+    void unregisterTask(MPPTask * task);
 
-    MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout)
-    {
-        MPPTaskId id{meta.start_ts(), meta.task_id()};
-        std::map<MPPTaskId, MPPTaskPtr>::iterator it;
-        std::unique_lock<std::mutex> lock(mu);
-        auto ret = cv.wait_for(lock, timeout, [&] {
-            auto query_it = mpp_query_map.find(id.start_ts);
-            if (query_it == mpp_query_map.end() || query_it->second.to_be_cancelled)
-            {
-                /// if the query is cancelled, return false to make the finder fail quickly
-                LOG_WARNING(log, "Query " + std::to_string(id.start_ts) + " is cancelled, all its tasks are invalid.");
-                return false;
-            }
-            it = query_it->second.task_map.find(id);
-            return it != query_it->second.task_map.end();
-        });
-        return ret ? it->second : nullptr;
-    }
+    MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg);
 
-    void cancelMPPQuery(UInt64 query_id)
-    {
-        MPPQueryMap::iterator it;
-        {
-            /// cancel task may take a long time, so first
-            /// set a flag, so we can cancel task one by
-            /// one without holding the lock
-            std::lock_guard<std::mutex> lock(mu);
-            it = mpp_query_map.find(query_id);
-            if (it == mpp_query_map.end())
-                return;
-            it->second.to_be_cancelled = true;
-            LOG_WARNING(log, "Begin cancel query: " + std::to_string(query_id));
-        }
-        for (auto & task_id : it->second.task_map)
-            task_id.second->cancel();
-        {
-            std::lock_guard<std::mutex> lock(mu);
-            /// just to double check the query still exists
-            it = mpp_query_map.find(query_id);
-            if (it != mpp_query_map.end())
-                mpp_query_map.erase(it);
-        }
-        LOG_WARNING(log, "Finish cancel query: " + std::to_string(query_id));
-    }
+    void cancelMPPQuery(UInt64 query_id, const String & reason);
 
     String toString()
     {
@@ -497,6 +474,7 @@ class MPPHandler
 public:
     MPPHandler(const mpp::DispatchTaskRequest & task_request_) : task_request(task_request_), log(&Logger::get("MPPHandler")) {}
     grpc::Status execute(Context & context, mpp::DispatchTaskResponse * response);
+    void handleError(MPPTaskPtr task, String error);
 };
 
 } // namespace DB

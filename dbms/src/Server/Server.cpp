@@ -36,15 +36,17 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
+#include <RaftStoreProxyFFI/VersionCheck.h>
+#include <Server/RaftConfigParser.h>
 #include <Server/StorageConfigParser.h>
-#include <Storages/MutableSupport.h>
+#include <Server/UserConfigParser.h>
+#include <Storages/FormatVersion.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/System/attachSystemTables.h>
+#include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFIType.h>
-#include <Storages/Transaction/RaftStoreProxyFFI/VersionCheck.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
@@ -61,7 +63,6 @@
 
 #include "ClusterManagerService.h"
 #include "HTTPHandlerFactory.h"
-#include "ImmutableConfigReloader.h"
 #include "MetricsPrometheus.h"
 #include "MetricsTransmitter.h"
 #include "StatusFile.h"
@@ -133,6 +134,12 @@ struct TiFlashProxyConfig
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
 
+    const char * ENGINE_STORE_VERSION = "engine-version";
+    const char * ENGINE_STORE_GIT_HASH = "engine-git-hash";
+    const char * ENGINE_STORE_ADDRESS = "engine-addr";
+    const char * ENGINE_STORE_ADVERTISE_ADDRESS = "advertise-engine-addr";
+    const char * PD_ENDPOINTS = "pd-endpoints";
+
     TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
         if (!config.has(config_prefix))
@@ -140,20 +147,26 @@ struct TiFlashProxyConfig
 
         Poco::Util::AbstractConfiguration::Keys keys;
         config.keys(config_prefix, keys);
-        for (const auto & key : keys)
         {
-            const auto k = config_prefix + "." + key;
-            val_map["--" + key] = config.getString(k);
+            std::unordered_map<std::string, std::string> args_map;
+            for (const auto & key : keys)
+            {
+                const auto k = config_prefix + "." + key;
+                args_map[key] = config.getString(k);
+            }
+            args_map[PD_ENDPOINTS] = config.getString("raft.pd_addr");
+            args_map[ENGINE_STORE_VERSION] = TiFlashBuildInfo::getReleaseVersion();
+            args_map[ENGINE_STORE_GIT_HASH] = TiFlashBuildInfo::getGitHash();
+            if (!args_map.count(ENGINE_STORE_ADDRESS))
+                args_map[ENGINE_STORE_ADDRESS] = config.getString("flash.service_addr");
+            else
+                args_map[ENGINE_STORE_ADVERTISE_ADDRESS] = args_map[ENGINE_STORE_ADDRESS];
+
+            for (auto && [k, v] : args_map)
+            {
+                val_map.emplace("--" + k, std::move(v));
+            }
         }
-
-        val_map["--pd-endpoints"] = config.getString("raft.pd_addr");
-        val_map["--tiflash-version"] = TiFlashBuildInfo::getReleaseVersion();
-        val_map["--tiflash-git-hash"] = TiFlashBuildInfo::getGitHash();
-
-        if (!val_map.count("--engine-addr"))
-            val_map["--engine-addr"] = config.getString("flash.service_addr");
-        else
-            val_map["--advertise-engine-addr"] = val_map["--engine-addr"];
 
         args.push_back("TiFlash Proxy");
         for (const auto & v : val_map)
@@ -166,106 +179,6 @@ struct TiFlashProxyConfig
 };
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
-
-struct TiFlashRaftConfig
-{
-    const std::string engine_key = "engine";
-    const std::string engine_value = "tiflash";
-    Strings pd_addrs;
-    std::unordered_set<std::string> ignore_databases{"system"};
-    // Actually it is "flash.service_addr"
-    std::string flash_server_addr;
-    bool enable_compatible_mode = true;
-
-    static const TiDB::StorageEngine DEFAULT_ENGINE = TiDB::StorageEngine::DT;
-    bool disable_bg_flush = false;
-    TiDB::StorageEngine engine = DEFAULT_ENGINE;
-
-public:
-    TiFlashRaftConfig(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
-};
-
-/// Load raft related configs.
-TiFlashRaftConfig::TiFlashRaftConfig(Poco::Util::LayeredConfiguration & config, Poco::Logger * log) : ignore_databases{"system"}
-{
-    flash_server_addr = config.getString("flash.service_addr", "0.0.0.0:3930");
-
-    if (config.has("raft"))
-    {
-        if (config.has("raft.pd_addr"))
-        {
-            String pd_service_addrs = config.getString("raft.pd_addr");
-            Poco::StringTokenizer string_tokens(pd_service_addrs, ",");
-            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
-            {
-                pd_addrs.push_back(*it);
-            }
-            LOG_INFO(log, "Found pd addrs: " << pd_service_addrs);
-        }
-        else
-        {
-            LOG_INFO(log, "Not found pd addrs.");
-        }
-
-        if (config.has("raft.ignore_databases"))
-        {
-            String ignore_dbs = config.getString("raft.ignore_databases");
-            Poco::StringTokenizer string_tokens(ignore_dbs, ",");
-            std::stringstream ss;
-            bool first = true;
-            for (auto string_token : string_tokens)
-            {
-                string_token = Poco::trimInPlace(string_token);
-                ignore_databases.emplace(string_token);
-                if (first)
-                    first = false;
-                else
-                    ss << ", ";
-                ss << string_token;
-            }
-            LOG_INFO(log, "Found ignore databases:" << ss.str());
-        }
-
-        if (config.has("raft.storage_engine"))
-        {
-            String s_engine = config.getString("raft.storage_engine");
-            std::transform(s_engine.begin(), s_engine.end(), s_engine.begin(), [](char ch) { return std::tolower(ch); });
-            if (s_engine == "tmt")
-                engine = ::TiDB::StorageEngine::TMT;
-            else if (s_engine == "dt")
-                engine = ::TiDB::StorageEngine::DT;
-            else
-                engine = DEFAULT_ENGINE;
-        }
-
-        /// "tmt" engine ONLY support disable_bg_flush = false.
-        /// "dt" engine ONLY support disable_bg_flush = true.
-
-        String disable_bg_flush_conf = "raft.disable_bg_flush";
-        if (engine == ::TiDB::StorageEngine::TMT)
-        {
-            if (config.has(disable_bg_flush_conf) && config.getBool(disable_bg_flush_conf))
-                throw Exception("Illegal arguments: disable background flush while using engine " + MutableSupport::txn_storage_name,
-                    ErrorCodes::INVALID_CONFIG_PARAMETER);
-            disable_bg_flush = false;
-        }
-        else if (engine == ::TiDB::StorageEngine::DT)
-        {
-            /// If background flush is enabled, read will not triggle schema sync.
-            /// Which means that we may get the wrong result with outdated schema.
-            if (config.has(disable_bg_flush_conf) && !config.getBool(disable_bg_flush_conf))
-                throw Exception("Illegal arguments: enable background flush while using engine " + MutableSupport::delta_tree_storage_name,
-                    ErrorCodes::INVALID_CONFIG_PARAMETER);
-            disable_bg_flush = true;
-        }
-
-        // just for test
-        if (config.has("raft.enable_compatible_mode"))
-        {
-            enable_compatible_mode = config.getBool("raft.enable_compatible_mode");
-        }
-    }
-}
 
 pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config)
 {
@@ -379,6 +292,57 @@ void UpdateMallocConfig([[maybe_unused]] Logger * log)
 #undef RUN_FAIL_RETURN
 }
 
+extern "C" {
+void run_raftstore_proxy_ffi(int argc, const char * const * argv, const EngineStoreServerHelper *);
+}
+
+struct RaftStoreProxyRunner : boost::noncopyable
+{
+    struct RunRaftStoreProxyParms
+    {
+        const EngineStoreServerHelper * helper;
+        const TiFlashProxyConfig & conf;
+
+        /// set big enough stack size to avoid runtime error like stack-overflow.
+        size_t stack_size = 1024 * 1024 * 20;
+    };
+
+    RaftStoreProxyRunner(RunRaftStoreProxyParms && parms_, Logger * log_) : parms(std::move(parms_)), log(log_) {}
+
+    void join()
+    {
+        if (!parms.conf.is_proxy_runnable)
+            return;
+        pthread_join(thread, nullptr);
+    }
+
+    void run()
+    {
+        if (!parms.conf.is_proxy_runnable)
+            return;
+        pthread_attr_t attribute;
+        pthread_attr_init(&attribute);
+        pthread_attr_setstacksize(&attribute, parms.stack_size);
+        LOG_INFO(log, "start raft store proxy");
+        pthread_create(&thread, &attribute, RunRaftStoreProxyFFI, &parms);
+        pthread_attr_destroy(&attribute);
+    }
+
+private:
+    static void * RunRaftStoreProxyFFI(void * pv)
+    {
+        setThreadName("RaftStoreProxy");
+        auto & parms = *static_cast<const RunRaftStoreProxyParms *>(pv);
+        run_raftstore_proxy_ffi((int)parms.conf.args.size(), parms.conf.args.data(), parms.helper);
+        return nullptr;
+    }
+
+private:
+    RunRaftStoreProxyParms parms;
+    pthread_t thread;
+    Logger * log;
+};
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
@@ -400,7 +364,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
     TiFlashProxyConfig proxy_conf(config());
-    TiFlashServer tiflash_instance_wrap{};
+    EngineStoreServerWrap tiflash_instance_wrap{};
     EngineStoreServerHelper helper{
         // a special number, also defined in proxy
         .magic_number = RAFT_STORE_PROXY_MAGIC_NUMBER,
@@ -414,22 +378,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_handle_ingest_sst = HandleIngestSST,
         .fn_handle_check_terminated = HandleCheckTerminated,
         .fn_handle_compute_store_stats = HandleComputeStoreStats,
-        .fn_handle_get_tiflash_status = HandleGetTiFlashStatus,
+        .fn_handle_get_engine_store_server_status = HandleGetTiFlashStatus,
         .fn_pre_handle_snapshot = PreHandleSnapshot,
         .fn_apply_pre_handled_snapshot = ApplyPreHandledSnapshot,
-        .fn_handle_get_table_sync_status = HandleGetTableSyncStatus,
+        .fn_handle_http_request = HandleHttpRequest,
+        .fn_check_http_uri_available = CheckHttpUriAvailable,
         .fn_gc_raw_cpp_ptr = GcRawCppPtr,
         .fn_gen_batch_read_index_res = GenBatchReadIndexRes,
         .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
     };
 
-    auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
-        if (!proxy_conf.is_proxy_runnable)
-            return;
-        setThreadName("RaftStoreProxy");
-        LOG_INFO(log, "Start raft store proxy");
-        run_tiflash_proxy_ffi((int)proxy_conf.args.size(), proxy_conf.args.data(), &helper);
-    });
+    RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
+
+    proxy_runner.run();
 
     if (proxy_conf.is_proxy_runnable)
     {
@@ -453,7 +414,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             return;
         }
         LOG_INFO(log, "let tiflash proxy shutdown");
-        tiflash_instance_wrap.status = TiFlashStatus::Stopped;
+        tiflash_instance_wrap.status = EngineStoreServerStatus::Stopped;
         tiflash_instance_wrap.tmt = nullptr;
         LOG_INFO(log, "wait for tiflash proxy thread to join");
         proxy_runner.join();
@@ -523,11 +484,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashStorageConfig storage_config;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
 
+    if (storage_config.format_version)
+        setStorageFormat(storage_config.format_version);
+
     global_context->initializePathCapacityMetric(                           //
         global_capacity_quota,                                              //
         storage_config.main_data_paths, storage_config.main_capacity_quota, //
         storage_config.latest_data_paths, storage_config.latest_capacity_quota);
-    TiFlashRaftConfig raft_config(config(), log);
+    TiFlashRaftConfig raft_config = TiFlashRaftConfig::parseSettings(config(), log);
     global_context->setPathPool(            //
         storage_config.main_data_paths,     //
         storage_config.latest_data_paths,   //
@@ -535,7 +499,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         raft_config.enable_compatible_mode, //
         global_context->getPathCapacity(), global_context->getFileProvider());
 
-    // Use pd address to define which default_database we use by defauly.
+    // Use pd address to define which default_database we use by default.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
     std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
     Strings all_normal_path = storage_config.getAllNormalPaths();
@@ -670,53 +634,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /* already_loaded = */ true);
 
     /// Initialize users config reloader.
-    std::string users_config_path = config().getString("users_config", String(1, '\0'));
-    bool use_default_users_config = true;
-    // if `users_config` is set empty, use default immutable users config.
-    if (users_config_path.empty())
-        use_default_users_config = true;
-    else
-    {
-        if (0 == users_config_path[0])
-        {
-            // if `profiles` exits in config file, use it as user config file.
-            if (config().has("profiles"))
-            {
-                use_default_users_config = false;
-                users_config_path = config_path;
-            }
-            else
-                use_default_users_config = true;
-        }
-        else
-        {
-            use_default_users_config = false;
-        }
-    }
-    if (!use_default_users_config)
-        LOG_INFO(log, "Set users config file to: " << users_config_path);
-    else
-        LOG_INFO(log, "Use default users config");
-
-    /// If path to users' config isn't absolute, try guess its root (current) dir.
-    /// At first, try to find it in dir of main config, after will use current dir.
-    if (!use_default_users_config)
-    {
-        if (users_config_path[0] != '/')
-        {
-            std::string config_dir = Poco::Path(config_path).parent().toString();
-            if (Poco::File(config_dir + users_config_path).exists())
-                users_config_path = config_dir + users_config_path;
-        }
-    }
-    auto users_config_reloader = !use_default_users_config
-        ? std::make_unique<ConfigReloader>(
-            users_config_path,
-            [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
-            /* already_loaded = */ false,
-            "UserCfgReloader")
-        : std::make_unique<ImmutableConfigReloader>(
-            [&](ConfigurationPtr config) { global_context->setUsersConfig(config); }, "UserCfgReloader");
+    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]() {
@@ -785,11 +703,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     attachSystemTablesServer(*global_context->getDatabase("system"), false);
 
     {
-        LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(raft_config.engine));
         /// create TMTContext
         auto cluster_config = getClusterConfig(security_config, raft_config);
-        global_context->createTMTContext(
-            raft_config.pd_addrs, raft_config.ignore_databases, raft_config.engine, raft_config.disable_bg_flush, cluster_config);
+        global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
     }
 
@@ -1218,7 +1134,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             tiflash_instance_wrap.tmt = &global_context->getTMTContext();
             LOG_INFO(log, "let tiflash proxy start all services");
-            tiflash_instance_wrap.status = TiFlashStatus::Running;
+            tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
             LOG_INFO(log, "proxy is ready to serve, try to wake up all region leader by sending read index request");

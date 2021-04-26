@@ -57,9 +57,14 @@ public:
         {
             chain.settings = settings;
             NamesAndTypesList column_list;
+            std::unordered_set<String> column_name_set;
             for (const auto & col : columns)
             {
-                column_list.emplace_back(col.name, col.type);
+                if (column_name_set.find(col.name) == column_name_set.end())
+                {
+                    column_list.emplace_back(col.name, col.type);
+                    column_name_set.emplace(col.name);
+                }
             }
             chain.steps.emplace_back(std::make_shared<ExpressionActions>(column_list, settings));
         }
@@ -69,7 +74,6 @@ public:
     String getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions, bool output_as_uint8_type = false);
     const std::vector<NameAndTypePair> & getCurrentInputColumns();
     void makeExplicitSet(const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name);
-    void makeExplicitSetForIndex(const tipb::Expr & expr, const ManageableStoragePtr & storage);
     String applyFunction(
         const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, std::shared_ptr<TiDB::ITiDBCollator> collator);
     Int32 getImplicitCastCount() { return implicit_cast_count; };

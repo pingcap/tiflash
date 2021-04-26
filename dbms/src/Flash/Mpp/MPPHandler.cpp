@@ -16,6 +16,15 @@ namespace DB
 namespace FailPoints
 {
 extern const char hang_in_execution[];
+extern const char exception_before_mpp_register_non_root_mpp_task[];
+extern const char exception_before_mpp_register_root_mpp_task[];
+extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
+extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
+extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
+extern const char exception_before_mpp_non_root_task_run[];
+extern const char exception_before_mpp_root_task_run[];
+extern const char exception_during_mpp_non_root_task_run[];
+extern const char exception_during_mpp_root_task_run[];
 } // namespace FailPoints
 
 bool MPPTaskProgress::isTaskHanging(const Context & context)
@@ -70,8 +79,20 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_req = std::make_unique<tipb::DAGRequest>();
     if (!dag_req->ParseFromString(task_request.encoded_plan()))
     {
-        throw TiFlashException(
-            std::string(__PRETTY_FUNCTION__) + ": Invalid encoded plan: " + task_request.encoded_plan(), Errors::Coprocessor::BadRequest);
+        /// ParseFromString will use the default recursion limit, which is 100 to decode the plan, if the plan tree is too deep,
+        /// it may exceed this limit, so just try again by double the recursion limit
+        ::google::protobuf::io::CodedInputStream coded_input_stream(
+            reinterpret_cast<const UInt8 *>(task_request.encoded_plan().data()), task_request.encoded_plan().size());
+        coded_input_stream.SetRecursionLimit(::google::protobuf::io::CodedInputStream::GetDefaultRecursionLimit() * 2);
+        if (!dag_req->ParseFromCodedStream(&coded_input_stream))
+        {
+            /// just return error if decode failed this time, because it's really a corner case, and even if we can decode the plan
+            /// successfully by using a very large value of the recursion limit, it is kinds of meaningless because the runtime
+            /// performance of this task may be very bad if the plan tree is too deep
+            throw TiFlashException(
+                std::string(__PRETTY_FUNCTION__) + ": Invalid encoded plan, the most likely is that the plan tree is too deep",
+                Errors::Coprocessor::BadRequest);
+        }
     }
     std::unordered_map<RegionID, RegionInfo> regions;
     for (auto & r : task_request.regions())
@@ -89,31 +110,56 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 
     context.setSetting("read_tso", start_ts);
     context.setSetting("schema_version", schema_ver);
-    context.setSetting("mpp_task_timeout", task_request.timeout());
-    if (task_request.timeout() > 0)
+    if (unlikely(task_request.timeout() < 0))
     {
-        /// in the implementation, mpp_task_timeout is actually the task writing tunnel timeout
-        /// so make the mpp_task_running_timeout a little bigger than mpp_task_timeout
-        context.setSetting("mpp_task_running_timeout", task_request.timeout() + 30);
+        /// this is only for test
+        context.setSetting("mpp_task_timeout", (Int64)5);
+        context.setSetting("mpp_task_running_timeout", (Int64)10);
+    }
+    else
+    {
+        context.setSetting("mpp_task_timeout", task_request.timeout());
+        if (task_request.timeout() > 0)
+        {
+            /// in the implementation, mpp_task_timeout is actually the task writing tunnel timeout
+            /// so make the mpp_task_running_timeout a little bigger than mpp_task_timeout
+            context.setSetting("mpp_task_running_timeout", task_request.timeout() + 30);
+        }
     }
     context.getTimezoneInfo().resetByDAGRequest(*dag_req);
     context.setProgressCallback([this](const Progress & progress) { this->updateProgress(progress); });
+
+    dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
+    context.setDAGContext(dag_context.get());
 
     // register task.
     TMTContext & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     LOG_DEBUG(log, "begin to register the task " << id.toString());
+
+    if (dag_context->isRootMPPTask())
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_root_mpp_task);
+    }
+    else
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_non_root_mpp_task);
+    }
     if (!task_manager->registerTask(shared_from_this()))
     {
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
 
-
-    dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
-    context.setDAGContext(dag_context.get());
-
     DAGQuerySource dag(context, regions, *dag_req, true);
 
+    if (dag_context->isRootMPPTask())
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_root_mpp_task);
+    }
+    else
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_non_root_mpp_task);
+    }
     // register tunnels
     MPPTunnelSetPtr tunnel_set = std::make_shared<MPPTunnelSet>();
     const auto & exchangeSender = dag_req->root_executor().exchange_sender();
@@ -127,6 +173,10 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->tunnel_id);
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->tunnels.emplace_back(tunnel);
+        if (!dag_context->isRootMPPTask())
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
+        }
     }
     // read index , this may take a long time.
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
@@ -193,6 +243,14 @@ void MPPTask::runImpl()
             count += block.rows();
             to->write(block);
             FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
+            if (dag_context->isRootMPPTask())
+            {
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
+            }
+            else
+            {
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
+            }
         }
 
         /// For outputting additional information in some formats.
@@ -242,7 +300,7 @@ bool MPPTask::isTaskHanging()
     return false;
 }
 
-void MPPTask::cancel()
+void MPPTask::cancel(const String & reason)
 {
     auto current_status = status.load();
     if (current_status == FINISHED || current_status == CANCELLED)
@@ -264,43 +322,70 @@ void MPPTask::cancel()
             }
         }
     }
-    /// step 2. write Error msg to tunnels
-    writeErrToAllTunnel("MPP Task canceled because it seems hangs");
+    /// step 2. write Error msg and close the tunnel.
+    /// Here we use `closeAllTunnel` because currently, `cancel` is a query level cancel, which
+    /// means if this mpp task is cancelled, all the mpp tasks belonging to the same query are
+    /// cancelled at the same time, so there is no guarantee that the tunnel can be connected.
+    closeAllTunnel(reason);
     LOG_WARNING(log, "Finish cancel task: " + id.toString());
 }
 
-// execute is responsible for making plan , register tasks and tunnels and start the running thread.
-grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * response)
+void MPPHandler::handleError(MPPTaskPtr task, String error)
 {
     try
     {
+        if (task != nullptr)
+        {
+            task->closeAllTunnel(error);
+            task->unregisterTask();
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, "Fail to handle error and clean task");
+    }
+}
+// execute is responsible for making plan , register tasks and tunnels and start the running thread.
+grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * response)
+{
+    MPPTaskPtr task = nullptr;
+    try
+    {
         Stopwatch stopwatch;
-        MPPTaskPtr task = std::make_shared<MPPTask>(task_request.meta(), context);
+        task = std::make_shared<MPPTask>(task_request.meta(), context);
         task->prepare(task_request);
+        if (task->dag_context->isRootMPPTask())
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_root_task_run);
+        }
+        else
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
+        }
         task->memory_tracker = current_memory_tracker;
         task->run();
         LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
     }
     catch (Exception & e)
     {
-        mpp::Error error;
         LOG_ERROR(log, "dispatch task meet error : " << e.displayText());
-        error.set_msg(e.displayText());
-        response->set_allocated_error(&error);
+        auto * err = response->mutable_error();
+        err->set_msg(e.displayText());
+        handleError(task, e.displayText());
     }
     catch (std::exception & e)
     {
-        mpp::Error error;
         LOG_ERROR(log, "dispatch task meet error : " << e.what());
-        error.set_msg(e.what());
-        response->set_allocated_error(&error);
+        auto * err = response->mutable_error();
+        err->set_msg(e.what());
+        handleError(task, e.what());
     }
     catch (...)
     {
-        mpp::Error error;
         LOG_ERROR(log, "dispatch task meet fatal error");
-        error.set_msg("fatal error");
-        response->set_allocated_error(&error);
+        auto * err = response->mutable_error();
+        err->set_msg("fatal error");
+        handleError(task, "fatal error");
     }
     return grpc::Status::OK;
 }
@@ -331,7 +416,7 @@ MPPTaskManager::MPPTaskManager(BackgroundProcessingPool & background_pool_)
                     if (has_hanging_task)
                     {
                         has_hanging_query = true;
-                        this->cancelMPPQuery(query_id);
+                        this->cancelMPPQuery(query_id, "MPP Task canceled because it seems hangs");
                     }
                 }
             }
@@ -350,6 +435,131 @@ MPPTaskManager::MPPTaskManager(BackgroundProcessingPool & background_pool_)
             return has_hanging_query;
         },
         false);
+}
+
+MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg)
+{
+    MPPTaskId id{meta.start_ts(), meta.task_id()};
+    std::map<MPPTaskId, MPPTaskPtr>::iterator it;
+    bool cancelled = false;
+    std::unique_lock<std::mutex> lock(mu);
+    auto ret = cv.wait_for(lock, timeout, [&] {
+        auto query_it = mpp_query_map.find(id.start_ts);
+        // TODO: how about the query has been cancelled in advance?
+        if (query_it == mpp_query_map.end())
+        {
+            return false;
+        }
+        else if (query_it->second.to_be_cancelled)
+        {
+            /// if the query is cancelled, return true to stop waiting timeout.
+            LOG_WARNING(log, "Query " + std::to_string(id.start_ts) + " is cancelled, all its tasks are invalid.");
+            cancelled = true;
+            return true;
+        }
+        it = query_it->second.task_map.find(id);
+        return it != query_it->second.task_map.end();
+    });
+    if (cancelled)
+    {
+        errMsg = "Task [" + DB::toString(meta.start_ts()) + "," + DB::toString(meta.task_id()) + "] has been cancelled.";
+        return nullptr;
+    }
+    else if (!ret)
+    {
+        errMsg = "Can't find task [" + DB::toString(meta.start_ts()) + "," + DB::toString(meta.task_id()) + "] within "
+            + DB::toString(timeout.count()) + " s.";
+        return nullptr;
+    }
+    return it->second;
+}
+
+void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
+{
+    MPPQueryTaskSet task_set;
+    {
+        /// cancel task may take a long time, so first
+        /// set a flag, so we can cancel task one by
+        /// one without holding the lock
+        std::lock_guard<std::mutex> lock(mu);
+        auto it = mpp_query_map.find(query_id);
+        if (it == mpp_query_map.end() || it->second.to_be_cancelled)
+            return;
+        it->second.to_be_cancelled = true;
+        task_set = it->second;
+        cv.notify_all();
+    }
+    LOG_WARNING(log, "Begin cancel query: " + std::to_string(query_id));
+    std::stringstream ss;
+    ss << "Remaining task in query " + std::to_string(query_id) + " are: ";
+    // TODO: cancel tasks in order rather than issuing so many threads to cancel tasks
+    std::vector<std::thread> cancel_workers;
+    for (auto task_it = task_set.task_map.rbegin(); task_it != task_set.task_map.rend(); task_it++)
+    {
+        ss << task_it->first.toString() << " ";
+        std::thread t(&MPPTask::cancel, task_it->second, std::ref(reason));
+        cancel_workers.push_back(std::move(t));
+    }
+    LOG_WARNING(log, ss.str());
+    for (auto & worker : cancel_workers)
+    {
+        worker.join();
+    }
+    MPPQueryTaskSet canceled_task_set;
+    {
+        std::lock_guard<std::mutex> lock(mu);
+        /// just to double check the query still exists
+        auto it = mpp_query_map.find(query_id);
+        if (it != mpp_query_map.end())
+        {
+            /// hold the canceled task set, so the mpp task will not be deconstruct when holding the
+            /// `mu` of MPPTaskManager, otherwise it might cause deadlock
+            canceled_task_set = it->second;
+            mpp_query_map.erase(it);
+        }
+    }
+    LOG_WARNING(log, "Finish cancel query: " + std::to_string(query_id));
+}
+
+bool MPPTaskManager::registerTask(MPPTaskPtr task)
+{
+    std::unique_lock<std::mutex> lock(mu);
+    const auto & it = mpp_query_map.find(task->id.start_ts);
+    if (it != mpp_query_map.end() && it->second.to_be_cancelled)
+    {
+        LOG_WARNING(log, "Do not register task: " + task->id.toString() + " because the query is to be cancelled.");
+        cv.notify_all();
+        return false;
+    }
+    if (it != mpp_query_map.end() && it->second.task_map.find(task->id) != it->second.task_map.end())
+    {
+        throw Exception("The task " + task->id.toString() + " has been registered");
+    }
+    mpp_query_map[task->id.start_ts].task_map.emplace(task->id, task);
+    task->manager = this;
+    cv.notify_all();
+    return true;
+}
+
+void MPPTaskManager::unregisterTask(MPPTask * task)
+{
+    std::unique_lock<std::mutex> lock(mu);
+    auto it = mpp_query_map.find(task->id.start_ts);
+    if (it != mpp_query_map.end())
+    {
+        if (it->second.to_be_cancelled)
+            return;
+        auto task_it = it->second.task_map.find(task->id);
+        if (task_it != it->second.task_map.end())
+        {
+            it->second.task_map.erase(task_it);
+            if (it->second.task_map.empty())
+                /// remove query task map if the task is the last one
+                mpp_query_map.erase(it);
+            return;
+        }
+    }
+    LOG_ERROR(log, "The task " + task->id.toString() + " cannot be found and fail to unregister");
 }
 
 MPPTaskManager::~MPPTaskManager() { background_pool.removeTask(handle); }

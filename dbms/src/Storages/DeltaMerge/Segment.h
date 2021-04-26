@@ -2,8 +2,8 @@
 
 #include <Core/Block.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
-#include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/Index/MinMax.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -52,17 +52,29 @@ struct SegmentSnapshot : private boost::noncopyable
 class Segment : private boost::noncopyable
 {
 public:
-    using Version = UInt32;
-    static const Version CURRENT_VERSION;
-
     using DeltaTree = DefaultDeltaTree;
 
     struct ReadInfo
     {
+    private:
+        DeltaValueReaderPtr delta_reader;
+
+    public:
         DeltaIndexIterator index_begin;
         DeltaIndexIterator index_end;
 
-        ColumnDefines read_columns;
+        ColumnDefinesPtr read_columns;
+
+        ReadInfo(DeltaValueReaderPtr delta_reader_,
+                 DeltaIndexIterator  index_begin_,
+                 DeltaIndexIterator  index_end_,
+                 ColumnDefinesPtr    read_columns_)
+            : delta_reader(delta_reader_), index_begin(index_begin_), index_end(index_end_), read_columns(read_columns_)
+        {
+        }
+
+        DeltaValueReaderPtr getDeltaReader() const { return delta_reader->createNewReader(read_columns); }
+        DeltaValueReaderPtr getDeltaReader(ColumnDefinesPtr columns) const { return delta_reader->createNewReader(columns); }
     };
 
     struct SplitInfo
@@ -102,10 +114,11 @@ public:
 
     void serialize(WriteBatch & wb);
 
-    bool writeToDisk(DMContext & dm_context, const PackPtr & pack);
+    bool writeToDisk(DMContext & dm_context, const DeltaPackPtr & pack);
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
     bool write(DMContext & dm_context, const Block & block); // For test only
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
+    bool writeRegionSnapshot(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
 
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update = false) const;
 
@@ -144,12 +157,13 @@ public:
     /// For those split, merge and mergeDelta methods, we should use prepareXXX/applyXXX combo in real production.
     /// split(), merge() and mergeDelta() are only used in test cases.
 
-    SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
-    SplitInfo   prepareSplit(DMContext &                dm_context,
-                             const ColumnDefinesPtr &   schema_snap,
-                             const SegmentSnapshotPtr & segment_snap,
-                             WriteBatches &             wbs,
-                             bool                       need_rate_limit) const;
+    SegmentPair              split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    std::optional<SplitInfo> prepareSplit(DMContext &                dm_context,
+                                          const ColumnDefinesPtr &   schema_snap,
+                                          const SegmentSnapshotPtr & segment_snap,
+                                          WriteBatches &             wbs,
+                                          bool                       need_rate_limit) const;
+
     SegmentPair
     applySplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, SplitInfo & split_info) const;
 
@@ -229,6 +243,10 @@ public:
     RowsAndBytes
     getRowsAndBytesInRange(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, const RowKeyRange & check_range, bool is_exact);
 
+    DB::Timestamp getLastCheckGCSafePoint() { return last_check_gc_safe_point.load(std::memory_order_relaxed); }
+
+    void setLastCheckGCSafePoint(DB::Timestamp gc_safe_point) { last_check_gc_safe_point.store(gc_safe_point, std::memory_order_relaxed); }
+
 private:
     ReadInfo getReadInfo(const DMContext &          dm_context,
                          const ColumnDefines &      read_columns,
@@ -236,66 +254,67 @@ private:
                          const RowKeyRanges &       read_ranges,
                          UInt64                     max_version = MAX_UINT64) const;
 
-    static ColumnDefines arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
+    static ColumnDefinesPtr arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
 
     /// Create a stream which merged delta and stable streams together.
     template <bool skippable_place = false, class IndexIterator = DeltaIndexIterator>
-    static SkippableBlockInputStreamPtr getPlacedStream(const DMContext &         dm_context,
-                                                        const ColumnDefines &     read_columns,
-                                                        const RowKeyRange &       rowkey_range,
-                                                        const RSOperatorPtr &     filter,
-                                                        const StableSnapshotPtr & stable_snap,
-                                                        DeltaSnapshotPtr &        delta_snap,
-                                                        const IndexIterator &     delta_index_begin,
-                                                        const IndexIterator &     delta_index_end,
-                                                        size_t                    expected_block_size,
-                                                        UInt64                    max_version = MAX_UINT64);
+    static SkippableBlockInputStreamPtr getPlacedStream(const DMContext &           dm_context,
+                                                        const ColumnDefines &       read_columns,
+                                                        const RowKeyRange &         rowkey_range,
+                                                        const RSOperatorPtr &       filter,
+                                                        const StableSnapshotPtr &   stable_snap,
+                                                        const DeltaValueReaderPtr & delta_reader,
+                                                        const IndexIterator &       delta_index_begin,
+                                                        const IndexIterator &       delta_index_end,
+                                                        size_t                      expected_block_size,
+                                                        UInt64                      max_version = MAX_UINT64);
 
     /// Merge delta & stable, and then take the middle one.
-    RowKeyValue getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const;
+    std::optional<RowKeyValue>
+    getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const;
     /// Only look up in the stable vs.
-    RowKeyValue getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
+    std::optional<RowKeyValue> getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
 
-    SplitInfo prepareSplitLogical(DMContext &                dm_context, //
-                                  const ColumnDefinesPtr &   schema_snap,
-                                  const SegmentSnapshotPtr & segment_snap,
-                                  RowKeyValue &              split_point,
-                                  WriteBatches &             wbs) const;
-    SplitInfo prepareSplitPhysical(DMContext &                dm_context,
-                                   const ColumnDefinesPtr &   schema_snap,
-                                   const SegmentSnapshotPtr & segment_snap,
-                                   WriteBatches &             wbs,
-                                   bool                       need_rate_limit) const;
+    std::optional<SplitInfo> prepareSplitLogical(DMContext &                dm_context, //
+                                                 const ColumnDefinesPtr &   schema_snap,
+                                                 const SegmentSnapshotPtr & segment_snap,
+                                                 RowKeyValue &              split_point,
+                                                 WriteBatches &             wbs) const;
+    std::optional<SplitInfo> prepareSplitPhysical(DMContext &                dm_context,
+                                                  const ColumnDefinesPtr &   schema_snap,
+                                                  const SegmentSnapshotPtr & segment_snap,
+                                                  WriteBatches &             wbs,
+                                                  bool                       need_rate_limit) const;
 
 
     /// Make sure that all delta packs have been placed.
     /// Note that the index returned could be partial index, and cannot be updated to shared index.
     /// Returns <placed index, this index is fully indexed or not>
-    std::pair<DeltaIndexPtr, bool> ensurePlace(const DMContext &         dm_context,
-                                               const StableSnapshotPtr & stable_snap,
-                                               DeltaSnapshotPtr &        delta_snap,
-                                               const RowKeyRanges &      read_ranges,
-                                               UInt64                    max_version) const;
+    std::pair<DeltaIndexPtr, bool> ensurePlace(const DMContext &           dm_context,
+                                               const StableSnapshotPtr &   stable_snap,
+                                               const DeltaValueReaderPtr & delta_reader,
+                                               const RowKeyRanges &        read_ranges,
+                                               UInt64                      max_version) const;
 
     /// Reference the inserts/updates by delta tree.
     /// Returns fully placed or not. Some rows not match relevant_range are not placed.
     template <bool skippable_place>
-    bool placeUpsert(const DMContext &         dm_context,
-                     const StableSnapshotPtr & stable_snap,
-                     DeltaSnapshotPtr &        delta_snap,
-                     size_t                    delta_value_space_offset,
-                     Block &&                  block,
-                     DeltaTree &               delta_tree,
-                     const RowKeyRange &       relevant_range) const;
+    bool placeUpsert(const DMContext &           dm_context,
+                     const StableSnapshotPtr &   stable_snap,
+                     const DeltaValueReaderPtr & delta_reader,
+                     size_t                      delta_value_space_offset,
+                     Block &&                    block,
+                     DeltaTree &                 delta_tree,
+                     const RowKeyRange &         relevant_range) const;
     /// Reference the deletes by delta tree.
     /// Returns fully placed or not. Some rows not match relevant_range are not placed.
     template <bool skippable_place>
-    bool placeDelete(const DMContext &         dm_context,
-                     const StableSnapshotPtr & stable_snap,
-                     DeltaSnapshotPtr &        delta_snap,
-                     const RowKeyRange &       delete_range,
-                     DeltaTree &               delta_tree,
-                     const RowKeyRange &       relevant_range) const;
+    bool placeDelete(const DMContext &           dm_context,
+                     const StableSnapshotPtr &   stable_snap,
+                     const DeltaValueReaderPtr & delta_reader,
+                     const RowKeyRange &         delete_range,
+                     DeltaTree &                 delta_tree,
+                     const RowKeyRange &         relevant_range) const;
 
 private:
     const UInt64 epoch; // After split / merge / merge delta, epoch got increased by 1.
@@ -305,11 +324,20 @@ private:
     const PageId segment_id;
     const PageId next_segment_id;
 
+    std::atomic<DB::Timestamp> last_check_gc_safe_point = 0;
+
     const DeltaValueSpacePtr  delta;
     const StableValueSpacePtr stable;
 
     Logger * log;
 };
+
+DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
+                             const ColumnDefinesPtr &    schema_snap,
+                             const BlockInputStreamPtr & input_stream,
+                             UInt64                      file_id,
+                             const String &              parent_path,
+                             bool                        need_rate_limit);
 
 } // namespace DM
 } // namespace DB

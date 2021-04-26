@@ -7,6 +7,10 @@
 
 namespace DB
 {
+namespace RegionBench
+{
+extern void concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
+}
 
 // TODO move to Settings.h
 static const Seconds REGION_CACHE_GC_PERIOD(60 * 5);
@@ -25,6 +29,7 @@ using RegionPtr = std::shared_ptr<Region>;
 struct RaftCommandResult;
 class KVStoreTaskLock;
 
+struct MockRaftCommand;
 struct MockTiDBTable;
 struct TiKVRangeKey;
 
@@ -33,10 +38,10 @@ class TMTContext;
 struct SSTViewVec;
 struct WriteCmdsView;
 
-enum class TiFlashApplyRes : uint32_t;
+enum class EngineStoreApplyRes : uint32_t;
 
 struct TiFlashRaftProxyHelper;
-struct RegionPtrWrap;
+struct RegionPtrWithBlock;
 struct RegionPreDecodeBlockData;
 using RegionPreDecodeBlockDataPtr = std::unique_ptr<RegionPreDecodeBlockData>;
 
@@ -55,8 +60,6 @@ public:
 
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
-    void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
-
     void gcRegionCache(Seconds gc_persist_period = REGION_CACHE_GC_PERIOD);
 
     void tryPersist(const RegionID region_id);
@@ -64,29 +67,39 @@ public:
     static void tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log);
 
     size_t regionSize() const;
-    TiFlashApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
+    EngineStoreApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         raft_cmdpb::AdminResponse && response,
         UInt64 region_id,
         UInt64 index,
         UInt64 term,
         TMTContext & tmt);
-    TiFlashApplyRes handleWriteRaftCmd(
+    EngineStoreApplyRes handleWriteRaftCmd(
         raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
-    TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
-    void handleApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
-    void tryApplySnapshot(const RegionPtrWrap &, Context & context);
-    void handleDestroy(UInt64 region_id, TMTContext & tmt);
-    void setRegionCompactLogPeriod(Seconds period);
-    TiFlashApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPreDecodeBlockDataPtr preHandleSnapshot(RegionPtr new_region, const SSTViewVec, TMTContext & tmt);
+    void handlePreApplySnapshot(const RegionPtrWithBlock &, TMTContext & tmt);
+
+    void handleDestroy(UInt64 region_id, TMTContext & tmt);
+    void setRegionCompactLogPeriod(UInt64);
+    EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
 
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
-    friend void dbgFuncRemoveRegion(Context &, const ASTs &, /*DBGInvoker::Printer*/ std::function<void(const std::string &)>);
+    friend struct MockRaftCommand;
+    friend class RegionMockTest;
+    friend void RegionBench::concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
+    using DBGInvokerPrinter = std::function<void(const std::string &)>;
+    friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
+    friend void dbgFuncRegionSnapshotWithData(Context &, const ASTs &, DBGInvokerPrinter);
+    friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
+
+    void checkAndApplySnapshot(const RegionPtrWithBlock &, TMTContext & tmt);
+    void onSnapshot(const RegionPtrWithBlock &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
 
     // Remove region from this TiFlash node.
     // If region is destroy or moved to another node(change peer),
@@ -104,7 +117,7 @@ private:
 
     RegionMap & regionsMut();
     const RegionMap & regions() const;
-    TiFlashApplyRes handleUselessAdminRaftCmd(
+    EngineStoreApplyRes handleUselessAdminRaftCmd(
         raft_cmdpb::AdminCmdType cmd_type, UInt64 curr_region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
@@ -126,7 +139,7 @@ private:
 
     Logger * log;
 
-    std::atomic<Seconds> REGION_COMPACT_LOG_PERIOD;
+    std::atomic<UInt64> REGION_COMPACT_LOG_PERIOD;
 
     mutable std::mutex bg_gc_region_data_mutex;
     std::list<RegionDataReadInfoList> bg_gc_region_data;

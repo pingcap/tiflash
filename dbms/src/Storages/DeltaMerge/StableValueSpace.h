@@ -22,10 +22,7 @@ using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
-    StableValueSpace(PageId id_, bool is_common_handle_, size_t rowkey_column_size_)
-        : id(id_), is_common_handle(is_common_handle_), rowkey_column_size(rowkey_column_size_), log(&Logger::get("StableValueSpace"))
-    {
-    }
+    StableValueSpace(PageId id_) : id(id_), log(&Logger::get("StableValueSpace")) {}
 
     // Set DMFiles for this value space.
     // If this value space is logical split, specify `range` and `dm_context` so that we can get more precise
@@ -47,6 +44,32 @@ public:
     static StableValueSpacePtr restore(DMContext & context, PageId id);
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
+
+    bool isStablePropertyCached() const { return is_property_cached.load(std::memory_order_acquire); }
+
+    struct StableProperty
+    {
+        // when gc_safe_point exceed this version, there must be some data obsolete
+        UInt64 gc_hint_version;
+        // number of rows including all puts and deletes
+        UInt64 num_versions;
+        // number of visible rows using the latest timestamp
+        UInt64 num_puts;
+        // number of rows having at least one version(include delete)
+        UInt64 num_rows;
+
+        const String toDebugString() const
+        {
+            return "StableProperty: gc_hint_version [" + std::to_string(this->gc_hint_version) + "] num_versions ["
+                + std::to_string(this->num_versions) + "] num_puts[" + std::to_string(this->num_puts) + "] num_rows["
+                + std::to_string(this->num_rows) + "]";
+        }
+    };
+
+    const StableProperty & getStableProperty() const { return property; }
+
+    void
+    calculateStableProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle, size_t rowkey_column_size);
 
     struct Snapshot;
     using SnapshotPtr = std::shared_ptr<Snapshot>;
@@ -70,13 +93,11 @@ public:
 
         SnapshotPtr clone()
         {
-            auto c                = std::make_shared<Snapshot>();
-            c->stable             = stable;
-            c->id                 = id;
-            c->valid_rows         = valid_rows;
-            c->valid_bytes        = valid_bytes;
-            c->is_common_handle   = is_common_handle;
-            c->rowkey_column_size = rowkey_column_size;
+            auto c         = std::make_shared<Snapshot>();
+            c->stable      = stable;
+            c->id          = id;
+            c->valid_rows  = valid_rows;
+            c->valid_bytes = valid_bytes;
 
             for (size_t i = 0; i < column_caches.size(); i++)
             {
@@ -122,8 +143,6 @@ public:
     void drop(const FileProviderPtr & file_provider);
 
 private:
-    static const Int64 CURRENT_VERSION;
-
     const PageId id;
 
     // Valid rows is not always the sum of rows in file,
@@ -131,8 +150,9 @@ private:
     UInt64  valid_rows;
     UInt64  valid_bytes;
     DMFiles files;
-    bool    is_common_handle;
-    size_t  rowkey_column_size;
+
+    StableProperty    property;
+    std::atomic<bool> is_property_cached = false;
 
     Logger * log;
 };

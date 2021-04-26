@@ -30,7 +30,7 @@ RowsAndBytes Segment::getRowsAndBytesInRange(DMContext &                dm_conte
         auto & packs = segment_snap->delta->getPacks();
         for (auto & pack : packs)
         {
-            if (pack->isDeleteRange() && real_range.intersect(pack->delete_range))
+            if (auto dp_delete = pack->tryToDeleteRange(); dp_delete && real_range.intersect(dp_delete->getDeleteRange()))
             {
                 has_delete_range = true;
                 break;
@@ -49,21 +49,26 @@ RowsAndBytes Segment::getRowsAndBytesInRange(DMContext &                dm_conte
     auto & version   = getVersionColumnDefine();
     auto   read_info = getReadInfo(dm_context, {handle, version}, segment_snap, {real_range});
 
+    auto storage_snap = std::make_shared<StorageSnapshot>(dm_context.storage_pool);
+    auto pk_ver_col_defs
+        = std::make_shared<ColumnDefines>(ColumnDefines{getExtraHandleColumnDefine(dm_context.is_common_handle), getVersionColumnDefine()});
+    auto delta_reader = std::make_shared<DeltaValueReader>(dm_context, segment_snap->delta, pk_ver_col_defs, this->rowkey_range);
+
     size_t exact_rows = 0;
     {
         BlockInputStreamPtr data_stream = getPlacedStream(dm_context,
-                                                          read_info.read_columns,
+                                                          *read_info.read_columns,
                                                           real_range,
                                                           EMPTY_FILTER,
                                                           segment_snap->stable,
-                                                          segment_snap->delta,
+                                                          delta_reader,
                                                           read_info.index_begin,
                                                           read_info.index_end,
                                                           dm_context.stable_pack_rows);
 
         data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, rowkey_range, 0);
         data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-            data_stream, read_info.read_columns, dm_context.min_version, is_common_handle);
+            data_stream, *read_info.read_columns, dm_context.min_version, is_common_handle);
 
         data_stream->readPrefix();
         Block block;

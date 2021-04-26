@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Storages/GCManager.h>
 #include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/StorageEngineType.h>
@@ -23,6 +24,11 @@ using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
 class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 
+class GCManager;
+using GCManagerPtr = std::shared_ptr<GCManager>;
+
+struct TiFlashRaftConfig;
+
 class TMTContext : private boost::noncopyable
 {
 public:
@@ -38,15 +44,14 @@ public:
     const BackgroundService & getBackgroundService() const;
     BackgroundService & getBackgroundService();
 
+    GCManager & getGCManager();
+
     Context & getContext();
     bool isInitialized() const;
 
     bool isBgFlushDisabled() const { return disable_bg_flush; }
 
-    // TODO: get flusher args from config file
-    explicit TMTContext(Context & context, const std::vector<std::string> & addrs,
-        const std::unordered_set<std::string> & ignore_databases_, TiDB::StorageEngine engine_, bool disable_bg_flush_,
-        const pingcap::ClusterConfig & cluster_config);
+    explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
@@ -78,6 +83,7 @@ private:
     ManagedStorages storages;
     RegionTable region_table;
     BackGroundServicePtr background_service;
+    GCManager gc_manager;
 
 private:
     KVClusterPtr cluster;

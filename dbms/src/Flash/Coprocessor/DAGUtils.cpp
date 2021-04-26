@@ -1,11 +1,14 @@
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/FieldToDataType.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
 
@@ -30,22 +33,31 @@ bool isFunctionExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprTyp
 
 const String & getAggFunctionName(const tipb::Expr & expr)
 {
-    if (agg_func_map.find(expr.tp()) == agg_func_map.end())
+    if (expr.has_distinct())
     {
-        throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " is not supported.", Errors::Coprocessor::Unimplemented);
+        if (distinct_agg_func_map.find(expr.tp()) != distinct_agg_func_map.end())
+        {
+            return distinct_agg_func_map[expr.tp()];
+        }
     }
-    return agg_func_map[expr.tp()];
+    else
+    {
+        if (agg_func_map.find(expr.tp()) != agg_func_map.end())
+        {
+            return agg_func_map[expr.tp()];
+        }
+    }
+
+    const auto errmsg
+        = tipb::ExprType_Name(expr.tp()) + "(distinct=" + (expr.has_distinct() ? "true" : "false") + ")" + " is not supported.";
+    throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
 
 const String & getFunctionName(const tipb::Expr & expr)
 {
     if (isAggFunctionExpr(expr))
     {
-        if (agg_func_map.find(expr.tp()) == agg_func_map.end())
-        {
-            throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " is not supported.", Errors::Coprocessor::Unimplemented);
-        }
-        return agg_func_map[expr.tp()];
+        return getAggFunctionName(expr);
     }
     else
     {
@@ -94,11 +106,13 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         }
         case tipb::ExprType::MysqlTime:
         {
-            if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
-                throw TiFlashException("Invalid MySQL Time literal " + expr.DebugString(), Errors::Coprocessor::BadRequest);
+            if (!expr.has_field_type())
+                throw TiFlashException("MySQL Time literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
             auto t = decodeDAGUInt64(expr.val());
-            // TODO: Use timezone in DAG request.
-            return std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<Int64>());
+            auto ret = std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<UInt64>());
+            if (expr.field_type().tp() == TiDB::TypeTimestamp)
+                ret = ret + "_ts";
+            return ret;
         }
         case tipb::ExprType::ColumnRef:
             return getColumnNameForColumnExpr(expr, input_col);
@@ -109,11 +123,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         case tipb::ExprType::Max:
         case tipb::ExprType::First:
         case tipb::ExprType::ApproxCountDistinct:
-            if (agg_func_map.find(expr.tp()) == agg_func_map.end())
-            {
-                throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " not supported", Errors::Coprocessor::Unimplemented);
-            }
-            func_name = agg_func_map.find(expr.tp())->second;
+            func_name = getAggFunctionName(expr);
             break;
         case tipb::ExprType::ScalarFunc:
             if (scalar_func_map.find(expr.sig()) == scalar_func_map.end())
@@ -242,10 +252,9 @@ Field decodeLiteral(const tipb::Expr & expr)
             return decodeDAGDecimal(expr.val());
         case tipb::ExprType::MysqlTime:
         {
-            if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
-                throw TiFlashException("Invalid MySQL Time literal " + expr.DebugString(), Errors::Coprocessor::BadRequest);
+            if (!expr.has_field_type())
+                throw TiFlashException("MySQL Time literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
             auto t = decodeDAGUInt64(expr.val());
-            // TODO: Use timezone in DAG request.
             return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
         }
         case tipb::ExprType::MysqlBit:
@@ -274,10 +283,13 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
 // for some historical or unknown reasons, TiDB might set a invalid
 // field type. This function checks if the expr has a valid field type
 // so far the known invalid field types are:
-// 1. decimal type with scale -1
+// 1. decimal type with scale == -1
+// 2. decimal type with precision == 0
 bool exprHasValidFieldType(const tipb::Expr & expr)
 {
-    return expr.has_field_type() && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().decimal() == -1);
+    return expr.has_field_type()
+        && !((expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().decimal() == -1)
+            || (expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().flen() == 0));
 }
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)
@@ -296,6 +308,56 @@ bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::E
             return true;
     }
     return false;
+}
+
+DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
+{
+    Field value = decodeLiteral(expr);
+    DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
+    /// need to extract target_type from expr.field_type() because the flash_type derived from
+    /// value is just a `memory type`, which does not have enough information, for example:
+    /// for date literal, the flash_type is `UInt64`
+    DataTypePtr target_type{};
+    if (expr.tp() == tipb::ExprType::Null)
+    {
+        // todo We should use DataTypeNothing as NULL literal's TiFlash Type, because TiFlash has a lot of
+        //  optimization for DataTypeNothing, but there are still some bugs when using DataTypeNothing: when
+        //  TiFlash try to return data to TiDB or exchange data between TiFlash node, since codec only recognize
+        //  TiDB type, use DataTypeNothing will meet error in the codec, so do not use DataTypeNothing until
+        //  we fix the codec issue.
+        if (exprHasValidFieldType(expr))
+        {
+            target_type = getDataTypeByFieldType(expr.field_type());
+        }
+        else
+        {
+            if (expr.has_field_type() && expr.field_type().tp() == TiDB::TP::TypeNewDecimal)
+                target_type = createDecimal(1, 0);
+            else
+                target_type = flash_type;
+        }
+        target_type = makeNullable(target_type);
+    }
+    else
+    {
+        if (expr.tp() == tipb::ExprType::MysqlDecimal)
+        {
+            /// to fix https://github.com/pingcap/tics/issues/1425, when TiDB push down
+            /// a decimal literal, it contains two types: one is the type that encoded
+            /// in Decimal value itself(i.e. expr.val()), the other is the type that in
+            /// expr.field_type(). According to TiDB and Mysql behavior, the computing
+            /// layer should use the type in expr.val(), which means we should ignore
+            /// the type in expr.field_type()
+            target_type = flash_type;
+        }
+        else
+        {
+            target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
+        }
+        // We should remove nullable for constant value since TiDB may not set NOT_NULL flag for literal expression.
+        target_type = removeNullable(target_type);
+    }
+    return target_type;
 }
 
 UInt8 getFieldLengthForArrowEncode(Int32 tp)
@@ -401,6 +463,26 @@ grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code)
     return grpc::StatusCode::INTERNAL;
 }
 
+void assertBlockSchema(const DataTypes & expected_types, const Block & block, const std::string & context_description)
+{
+    size_t columns = expected_types.size();
+    if (block.columns() != columns)
+        throw Exception("Block schema mismatch in " + context_description + ": different number of columns: expected "
+            + std::to_string(columns) + " columns, got " + std::to_string(block.columns()) + " columns");
+
+    for (size_t i = 0; i < columns; ++i)
+    {
+        const auto & actual = block.getByPosition(i).type;
+        const auto & expected = expected_types[i];
+
+        if (!expected->equals(*actual))
+        {
+            throw Exception("Block schema mismatch in " + context_description + ": different types: expected " + expected->getName()
+                + ", got " + actual->getName());
+        }
+    }
+}
+
 extern const String UniqRawResName;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
@@ -420,6 +502,10 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
     //{tipb::ExprType::Variance, ""},
     //{tipb::ExprType::JsonArrayAgg, ""},
     //{tipb::ExprType::JsonObjectAgg, ""},
+});
+
+std::unordered_map<tipb::ExprType, String> distinct_agg_func_map({
+    {tipb::ExprType::Count, "countDistinct"},
 });
 
 std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
@@ -529,8 +615,9 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::MultiplyReal, "multiply"}, {tipb::ScalarFuncSig::MultiplyDecimal, "multiply"},
     {tipb::ScalarFuncSig::MultiplyInt, "multiply"},
 
-    {tipb::ScalarFuncSig::DivideReal, "divide"}, {tipb::ScalarFuncSig::DivideDecimal, "divide"},
-    {tipb::ScalarFuncSig::IntDivideInt, "intDiv"}, {tipb::ScalarFuncSig::IntDivideDecimal, "divide"},
+    {tipb::ScalarFuncSig::DivideReal, "tidbDivide"}, {tipb::ScalarFuncSig::DivideDecimal, "tidbDivide"},
+    //{tipb::ScalarFuncSig::IntDivideInt, "intDiv"},
+    //{tipb::ScalarFuncSig::IntDivideDecimal, "divide"},
 
     {tipb::ScalarFuncSig::ModReal, "modulo"}, {tipb::ScalarFuncSig::ModDecimal, "modulo"}, {tipb::ScalarFuncSig::ModInt, "modulo"},
 
@@ -829,7 +916,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::StrToDateDatetime, "cast"},
     //{tipb::ScalarFuncSig::StrToDateDuration, "cast"},
     {tipb::ScalarFuncSig::FromUnixTime1Arg, "fromUnixTime"}, {tipb::ScalarFuncSig::FromUnixTime2Arg, "fromUnixTime"},
-    //{tipb::ScalarFuncSig::ExtractDatetime, "cast"},
+    {tipb::ScalarFuncSig::ExtractDatetime, "extractMyDateTime"},
     //{tipb::ScalarFuncSig::ExtractDuration, "cast"},
 
     //{tipb::ScalarFuncSig::AddDateStringString, "cast"},
@@ -921,25 +1008,5 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Upper, "upper"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
 });
-
-tipb::FieldType columnInfoToFieldType(const TiDB::ColumnInfo & ci)
-{
-    tipb::FieldType ret;
-    ret.set_tp(ci.tp);
-    ret.set_flag(ci.flag);
-    ret.set_flen(ci.flen);
-    ret.set_decimal(ci.decimal);
-    return ret;
-}
-
-TiDB::ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
-{
-    TiDB::ColumnInfo ret;
-    ret.tp = static_cast<TiDB::TP>(field_type.tp());
-    ret.flag = field_type.flag();
-    ret.flen = field_type.flen();
-    ret.decimal = field_type.decimal();
-    return ret;
-}
 
 } // namespace DB

@@ -122,10 +122,10 @@ DB::stable::PageStorage::Config getStablePSConfig(const PageStorage::Config & co
     c.file_max_size = config.file_max_size;
     c.file_small_size = config.file_max_size;
 
-    c.merge_hint_low_used_rate = config.merge_hint_low_used_rate;
-    c.merge_hint_low_used_file_total_size = config.merge_hint_low_used_file_total_size;
-    c.merge_hint_low_used_file_num = config.merge_hint_low_used_file_num;
-    c.gc_compact_legacy_min_num = config.gc_compact_legacy_min_num;
+    c.merge_hint_low_used_rate = config.gc_max_valid_rate;
+    c.merge_hint_low_used_file_total_size = config.gc_min_bytes;
+    c.merge_hint_low_used_file_num = config.gc_min_files;
+    c.gc_compact_legacy_min_num = config.gc_min_legacy_num;
 
     c.version_set_config.compact_hint_delta_deletions = config.version_set_config.compact_hint_delta_deletions;
     c.version_set_config.compact_hint_delta_entries = config.version_set_config.compact_hint_delta_entries;
@@ -140,7 +140,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         auto delegator = path_pool.getPSDiskDelegatorRaft();
         // If there is no PageFile with basic version binary format, use the latest version of PageStorage.
         auto detect_binary_version = PageStorage::getMaxDataVersion(global_context.getFileProvider(), delegator);
-        bool run_in_compatible_mode = path_pool.isRaftCompatibleModeEnabled() && (detect_binary_version == PageFile::VERSION_BASE);
+        bool run_in_compatible_mode = path_pool.isRaftCompatibleModeEnabled() && (detect_binary_version == PageFormat::V1);
 
         fiu_do_on(FailPoints::force_enable_region_persister_compatible_mode, { run_in_compatible_mode = true; });
         fiu_do_on(FailPoints::force_disable_region_persister_compatible_mode, { run_in_compatible_mode = false; });

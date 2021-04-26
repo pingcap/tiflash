@@ -1,12 +1,17 @@
 #pragma once
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <dtpb/dmfile.pb.h>
+#pragma GCC diagnostic pop
+
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/File/DMFileDefines.h>
+#include <Storages/FormatVersion.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -76,10 +81,17 @@ public:
 
     struct MetaPackInfo
     {
+        UInt64 pack_property_offset;
+        UInt64 pack_property_size;
         UInt64 meta_offset;
         UInt64 meta_size;
         UInt64 pack_stat_offset;
         UInt64 pack_stat_size;
+
+        MetaPackInfo()
+            : pack_property_offset(0), pack_property_size(0), meta_offset(0), meta_size(0), pack_stat_offset(0), pack_stat_size(0)
+        {
+        }
     };
 
     struct Footer
@@ -89,9 +101,19 @@ public:
         UInt32       sub_file_num;
 
         DMSingleFileFormatVersion file_format_version;
+
+        Footer()
+            : meta_pack_info(),
+              sub_file_stat_offset(0),
+              sub_file_num(0),
+              file_format_version(DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE)
+        {
+        }
     };
 
     using PackStats = PaddedPODArray<PackStat>;
+    // `PackProperties` is similar to `PackStats` except it uses protobuf to do serialization
+    using PackProperties = dtpb::PackProperties;
 
     static DMFilePtr create(UInt64 file_id, const String & parent_path, bool single_file_mode = false);
 
@@ -99,6 +121,10 @@ public:
     restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
 
     static std::set<UInt64> listAllInPath(const FileProviderPtr & file_provider, const String & parent_path, bool can_gc);
+
+    // static helper function for getting path
+    static String getPathByStatus(const String & parent_path, UInt64 file_id, DMFile::Status status);
+    static String getNGCPath(const String & parent_path, UInt64 file_id, DMFile::Status status, bool is_single_mode);
 
     bool canGC();
     void enableGC();
@@ -108,34 +134,8 @@ public:
     UInt64 refId() const { return ref_id; }
 
     String path() const;
-    String metaPath() const { return subFilePath(metaFileName()); }
-    String packStatPath() const { return subFilePath(packStatFileName()); }
 
-    // Do not gc me.
-    String ngcPath() const;
-
-    using FileNameBase = String;
-    String colDataPath(const FileNameBase & file_name_base) const { return subFilePath(colDataFileName(file_name_base)); }
-    String colIndexPath(const FileNameBase & file_name_base) const { return subFilePath(colIndexFileName(file_name_base)); }
-    String colMarkPath(const FileNameBase & file_name_base) const { return subFilePath(colMarkFileName(file_name_base)); }
-
-    String colIndexCacheKey(const FileNameBase & file_name_base) const;
-    String colMarkCacheKey(const FileNameBase & file_name_base) const;
-
-    size_t colIndexOffset(const FileNameBase & file_name_base) const { return subFileOffset(colIndexFileName(file_name_base)); }
-    size_t colMarkOffset(const FileNameBase & file_name_base) const { return subFileOffset(colMarkFileName(file_name_base)); }
-    size_t colIndexSize(const FileNameBase & file_name_base) const { return subFileSize(colIndexFileName(file_name_base)); }
-    size_t colMarkSize(const FileNameBase & file_name_base) const { return subFileSize(colMarkFileName(file_name_base)); }
-    size_t colDataSize(const FileNameBase & file_name_base) const { return subFileSize(colDataFileName(file_name_base)); }
-
-    bool isColIndexExist(const ColId & col_id) const;
-
-    const String         encryptionBasePath() const;
-    const EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
-    const EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
-    const EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
-    const EncryptionPath encryptionMetaPath() const;
-    const EncryptionPath encryptionPackStatPath() const;
+    const String & parentPath() const { return parent_path; }
 
     size_t getRows() const
     {
@@ -165,23 +165,23 @@ public:
 
     size_t            getPacks() const { return pack_stats.size(); }
     const PackStats & getPackStats() const { return pack_stats; }
-    const PackStat &  getPackStat(size_t pack_index) const { return pack_stats[pack_index]; }
+    PackProperties &  getPackProperties() { return pack_properties; }
 
     const ColumnStat & getColumnStat(ColId col_id) const
     {
-        if (auto it = column_stats.find(col_id); it != column_stats.end())
+        if (auto it = column_stats.find(col_id); likely(it != column_stats.end()))
         {
             return it->second;
         }
         throw Exception("Column [" + DB::toString(col_id) + "] not found in dm file [" + path() + "]");
     }
     bool isColumnExist(ColId col_id) const { return column_stats.find(col_id) != column_stats.end(); }
+    bool isSingleFileMode() const { return mode == Mode::SINGLE_FILE; }
 
-    Status getStatus() const { return status; }
-
-    static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
+    String toString()
     {
-        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
+        return "{DMFile, packs: " + DB::toString(getPacks()) + ", rows: " + DB::toString(getRows()) + ", bytes: " + DB::toString(getBytes())
+            + ", file size: " + DB::toString(getBytesOnDisk()) + "}";
     }
 
 private:
@@ -190,27 +190,71 @@ private:
     {
     }
 
-    bool isSingleFileMode() const { return mode == Mode::SINGLE_FILE; }
     bool isFolderMode() const { return mode == Mode::FOLDER; }
+
+    // Do not gc me.
+    String ngcPath() const;
+    String metaPath() const { return subFilePath(metaFileName()); }
+    String packStatPath() const { return subFilePath(packStatFileName()); }
+    String packPropertyPath() const { return subFilePath(packPropertyFileName()); }
+
+    using FileNameBase = String;
+    String colDataPath(const FileNameBase & file_name_base) const { return subFilePath(colDataFileName(file_name_base)); }
+    String colIndexPath(const FileNameBase & file_name_base) const { return subFilePath(colIndexFileName(file_name_base)); }
+    String colMarkPath(const FileNameBase & file_name_base) const { return subFilePath(colMarkFileName(file_name_base)); }
+
+    String colIndexCacheKey(const FileNameBase & file_name_base) const;
+    String colMarkCacheKey(const FileNameBase & file_name_base) const;
+
+    size_t colIndexOffset(const FileNameBase & file_name_base) const { return subFileOffset(colIndexFileName(file_name_base)); }
+    size_t colMarkOffset(const FileNameBase & file_name_base) const { return subFileOffset(colMarkFileName(file_name_base)); }
+    size_t colIndexSize(const FileNameBase & file_name_base) const { return subFileSize(colIndexFileName(file_name_base)); }
+    size_t colMarkSize(const FileNameBase & file_name_base) const { return subFileSize(colMarkFileName(file_name_base)); }
+    size_t colDataSize(const FileNameBase & file_name_base) const { return subFileSize(colDataFileName(file_name_base)); }
+
+    bool isColIndexExist(const ColId & col_id) const;
+
+    const String         encryptionBasePath() const;
+    const EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
+    const EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
+    const EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
+    const EncryptionPath encryptionMetaPath() const;
+    const EncryptionPath encryptionPackStatPath() const;
+    const EncryptionPath encryptionPackPropertyPath() const;
+
+    static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
+    {
+        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
+    }
 
     static String metaFileName() { return "meta.txt"; }
     static String packStatFileName() { return "pack"; }
+    static String packPropertyFileName() { return "property"; }
+
     static String colDataFileName(const FileNameBase & file_name_base) { return file_name_base + ".dat"; }
     static String colIndexFileName(const FileNameBase & file_name_base) { return file_name_base + ".idx"; }
     static String colMarkFileName(const FileNameBase & file_name_base) { return file_name_base + ".mrk"; }
 
-    std::tuple<size_t, size_t> writeMeta(WriteBuffer & buffer);
-    std::tuple<size_t, size_t> writePack(WriteBuffer & buffer);
+    using OffsetAndSize = std::tuple<size_t, size_t>;
+    OffsetAndSize writeMetaToBuffer(WriteBuffer & buffer);
+    OffsetAndSize writePackStatToBuffer(WriteBuffer & buffer);
+    OffsetAndSize writePackPropertyToBuffer(WriteBuffer & buffer);
 
     void writeMeta(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
-    void readMeta(const FileProviderPtr & file_provider);
+    void writePackProperty(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
+    void readMeta(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
+    void readPackStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
+    void readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
 
-    void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVersion ver);
+    void writeMetadata(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
+    void readMetadata(const FileProviderPtr & file_provider);
+
+    void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver);
 
     void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
-    void setStatus(Status status_) { status = status_; }
 
-    void initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider);
+    Status getStatus() const { return status; }
+    void   setStatus(Status status_) { status = status_; }
 
     void finalizeForFolderMode(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
     void finalizeForSingleFileMode(WriteBuffer & buffer);
@@ -235,8 +279,9 @@ private:
     UInt64 ref_id; // It is a reference to file_id, could be the same.
     String parent_path;
 
-    PackStats   pack_stats;
-    ColumnStats column_stats;
+    PackStats      pack_stats;
+    PackProperties pack_properties;
+    ColumnStats    column_stats;
 
     Mode   mode;
     Status status;
@@ -248,6 +293,7 @@ private:
 
     friend class DMFileWriter;
     friend class DMFileReader;
+    friend class DMFilePackFilter;
 };
 
 inline ReadBufferFromFileProvider

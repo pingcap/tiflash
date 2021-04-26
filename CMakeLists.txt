@@ -284,6 +284,7 @@ include (cmake/find_grpc.cmake)
 include (cmake/find_kvproto.cmake)
 include (cmake/find_tipb.cmake)
 include (cmake/find_prometheus.cmake)
+include (cmake/find_raftstore_proxy.cmake)
 
 
 include (cmake/find_contrib_lib.cmake)
@@ -327,7 +328,6 @@ if (ENABLE_TESTS)
 endif ()
 
 add_subdirectory (libs)
-add_subdirectory (utils)
 add_subdirectory (dbms)
 
 include (cmake/print_include_directories.cmake)

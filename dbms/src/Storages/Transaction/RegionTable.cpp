@@ -17,6 +17,7 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_TABLE;
+extern const int ILLFORMAT_RAFT_ROW;
 } // namespace ErrorCodes
 
 RegionTable::Table & RegionTable::getOrCreateTable(const TableID table_id)
@@ -100,7 +101,7 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     return false;
 }
 
-RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWrap & region, bool try_persist) const
+RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & region, bool try_persist) const
 {
     auto & tmt = context->getTMTContext();
 
@@ -235,8 +236,8 @@ void removeObsoleteDataInStorage(
 
     try
     {
-        // acquire lock so that no other threads can change storage's structure
-        // if storage is dropped, this will throw exception
+        // acquire a read lock so that no other threads can drop the `storage`
+        // if storage is already dropped, this will throw exception
         auto storage_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
 
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
@@ -251,7 +252,7 @@ void removeObsoleteDataInStorage(
     }
     catch (DB::Exception & e)
     {
-        // We can ignore if storage is dropped.
+        // We can ignore if storage is already dropped.
         if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
             throw;
     }
@@ -319,7 +320,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_
     return tryFlushRegion(region, try_persist);
 }
 
-RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWrap & region, bool try_persist)
+RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist)
 {
     RegionID region_id = region->id();
 
@@ -355,6 +356,17 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWrap & region,
     try
     {
         data_list_to_remove = flushRegion(region, try_persist);
+    }
+    catch (const Exception & e)
+    {
+        if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
+        {
+            // br or lighting may write illegal data into tikv, skip flush.
+            LOG_WARNING(&Logger::get(__PRETTY_FUNCTION__),
+                "Got error while reading region committed cache: " << e.displayText() << ". Skip flush region and keep original cache.");
+        }
+        else
+            first_exception = std::current_exception();
     }
     catch (...)
     {

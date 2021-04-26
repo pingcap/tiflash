@@ -89,6 +89,11 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         LOG_INFO(log,
             "start to sync schemas. current version is: " + std::to_string(cur_version)
                 + " and try to sync schema version to: " + std::to_string(version));
+
+        // Show whether the schema mutex is held for a long time or not.
+        GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_applying).Set(1.0);
+        SCOPE_EXIT({ GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_applying).Set(0.0); });
+
         GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_count, type_diff).Increment();
         if (!tryLoadSchemaDiffs(getter, version, context))
         {

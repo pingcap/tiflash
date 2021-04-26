@@ -62,8 +62,6 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("raft_delete_row", dbgFuncRaftDeleteRow);
 
     regSchemalessFunc("put_region", dbgFuncPutRegion);
-    regSchemalessFunc("region_snapshot", dbgFuncRegionSnapshot);
-    regSchemalessFunc("region_snapshot_data", dbgFuncRegionSnapshotWithData);
 
     regSchemalessFunc("try_flush", dbgFuncTryFlush);
     regSchemalessFunc("try_flush_region", dbgFuncTryFlushRegion);
@@ -83,17 +81,22 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("region_prepare_merge", MockRaftCommand::dbgFuncPrepareMerge);
     regSchemalessFunc("region_commit_merge", MockRaftCommand::dbgFuncCommitMerge);
     regSchemalessFunc("region_rollback_merge", MockRaftCommand::dbgFuncRollbackMerge);
-    regSchemalessFunc("store_pre_handle_region_snap", MockRaftCommand::dbgFuncStorePreHandleSnapshot);
-    regSchemalessFunc("apply_pre_handle_region_snap", MockRaftCommand::dbgFuncApplyPreHandleSnapshot);
+
+    regSchemalessFunc("region_snapshot", MockRaftCommand::dbgFuncRegionSnapshot);
+    regSchemalessFunc("region_snapshot_data", MockRaftCommand::dbgFuncRegionSnapshotWithData);
+    regSchemalessFunc("region_snapshot_pre_handle_block", MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock);
+    regSchemalessFunc("region_snapshot_apply_block", MockRaftCommand::dbgFuncRegionSnapshotApplyBlock);
+    regSchemalessFunc("region_ingest_sst", MockRaftCommand::dbgFuncIngestSST);
 
     regSchemalessFunc("init_fail_point", DbgFailPointFunc::dbgInitFailPoint);
     regSchemalessFunc("enable_fail_point", DbgFailPointFunc::dbgEnableFailPoint);
     regSchemalessFunc("disable_fail_point", DbgFailPointFunc::dbgDisableFailPoint);
+    regSchemalessFunc("wait_fail_point", DbgFailPointFunc::dbgDisableFailPoint);
 
-    regSchemafulFunc("dag", dbgFuncDAG);
-    regSchemafulFunc("mock_dag", dbgFuncMockDAG);
-
-    regSchemalessFunc("region_mock_ingest_sst", dbgFuncIngestSST);
+    regSchemafulFunc("dag", dbgFuncTiDBQuery);
+    regSchemafulFunc("mock_dag", dbgFuncMockTiDBQuery);
+    regSchemafulFunc("tidb_query", dbgFuncTiDBQuery);
+    regSchemafulFunc("tidb_mock_query", dbgFuncMockTiDBQuery);
 
     regSchemalessFunc("mapped_database", dbgFuncMappedDatabase);
     regSchemalessFunc("mapped_table", dbgFuncMappedTable);

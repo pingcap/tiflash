@@ -323,7 +323,7 @@ struct TiDBConvertToInteger
         for (; ret.size < value.size; ret.size++)
         {
             char current = value.data[ret.size];
-            if ((current >= '0' && current <= '9') || current == '+' || current == '-')
+            if ((current >= '0' && current <= '9') || (ret.size == 0 && (current == '+' || current == '-')))
                 continue;
             break;
         }
@@ -363,7 +363,7 @@ struct TiDBConvertToInteger
         {
             is_negative = true;
             StringRef uint_string(value.data + 1, value.size - 1);
-            std::tie(uint_value, err) = toUInt<std::make_unsigned_t<T>>(value);
+            std::tie(uint_value, err) = toUInt<std::make_unsigned_t<T>>(uint_string);
         }
         else
         {
@@ -405,19 +405,25 @@ struct TiDBConvertToInteger
                 context.getDAGContext()->handleTruncateError("cast str as int");
             return static_cast<T>(0);
         }
-        if constexpr (to_unsigned)
+        bool is_negative = false;
+        if (int_string.data[0] == '-')
+        {
+            is_negative = true;
+        }
+        if (!is_negative)
         {
             auto [value, err] = toUInt<T>(int_string);
             if (err == OVERFLOW_ERR)
                 context.getDAGContext()->handleOverflowError("cast str as int");
-            return value;
+            return static_cast<T>(value);
         }
         else
         {
+            /// TODO: append warning CastAsSignedOverflow if try to cast negative value to unsigned
             auto [value, err] = toInt<T>(int_string);
             if (err == OVERFLOW_ERR)
                 context.getDAGContext()->handleOverflowError("cast str as int");
-            return value;
+            return static_cast<T>(value);
         }
     }
 
@@ -474,8 +480,8 @@ struct TiDBConvertToInteger
                 else
                 {
                     MyDateTime date_time(vec_from[i]);
-                    vec_to[i] = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                        + date_time.hour * 1000 + date_time.minute * 100 + date_time.second;
+                    vec_to[i] = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000
+                        + date_time.hour * 10000 + date_time.minute * 100 + date_time.second;
                 }
             }
         }

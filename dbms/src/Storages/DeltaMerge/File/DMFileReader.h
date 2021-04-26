@@ -16,7 +16,7 @@ namespace DM
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
-static const size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE * 3;
+inline static const size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE * 3;
 
 class DMFileReader
 {
@@ -31,7 +31,7 @@ public:
                size_t         max_read_buffer_size,
                Logger *       log);
 
-        bool                             single_file_mode;
+        const bool                       single_file_mode;
         double                           avg_size_hint;
         MarksInCompressedFilePtr         marks;
         MarkWithSizesInCompressedFilePtr mark_with_sizes;
@@ -53,27 +53,33 @@ public:
 
     DMFileReader(const DMFilePtr &     dmfile_,
                  const ColumnDefines & read_columns_,
-                 // clean read
-                 bool   enable_clean_read_,
+                 // Only set this param to true when
+                 // 1. There is no delta.
+                 // 2. You don't need pk, version and delete_tag columns
+                 // If you have no idea what it means, then simply set it to false.
+                 bool enable_clean_read_,
+                 // The the MVCC filter version. Used by clean read check.
                  UInt64 max_data_version_,
                  // filters
                  const RowKeyRange &   rowkey_range_,
                  const RSOperatorPtr & filter_,
                  const IdSetPtr &      read_packs_, // filter by pack index
                  // caches
-                 UInt64                  hash_salt_,
-                 MarkCache *             mark_cache_,
-                 MinMaxIndexCache *      index_cache_,
-                 bool                    enable_column_cache_,
-                 ColumnCachePtr &        column_cache_,
-                 size_t                  aio_threshold,
-                 size_t                  max_read_buffer_size,
-                 const FileProviderPtr & file_provider_,
-                 size_t                  rows_threshold_per_read_ = DMFILE_READ_ROWS_THRESHOLD);
+                 UInt64                      hash_salt_,
+                 const MarkCachePtr &        mark_cache_,
+                 const MinMaxIndexCachePtr & index_cache_,
+                 bool                        enable_column_cache_,
+                 const ColumnCachePtr &      column_cache_,
+                 size_t                      aio_threshold,
+                 size_t                      max_read_buffer_size,
+                 const FileProviderPtr &     file_provider_,
+                 size_t                      rows_threshold_per_read_  = DMFILE_READ_ROWS_THRESHOLD,
+                 bool                        read_one_pack_every_time_ = false);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
     /// Skipped rows before next call of #read().
+    /// Return false if it is the end of stream.
     bool  getSkippedRows(size_t & skip_rows);
     Block read();
 
@@ -108,7 +114,7 @@ private:
 
     /// Caches
     const UInt64   hash_salt;
-    MarkCache *    mark_cache;
+    MarkCachePtr   mark_cache;
     const bool     enable_column_cache;
     ColumnCachePtr column_cache;
 
@@ -118,7 +124,10 @@ private:
 
     FileProviderPtr file_provider;
 
-    bool single_file_mode;
+    // read_one_pack_every_time is used to create info for every pack
+    const bool read_one_pack_every_time;
+
+    const bool single_file_mode;
 
     Logger * log;
 };

@@ -1,10 +1,10 @@
 #include <Columns/ColumnsNumber.h>
 #include <Core/TMTPKType.h>
 #include <Storages/ColumnsDescription.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/PredecodeTiKVValue.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RowCodec.h>
@@ -231,8 +231,7 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
             else
             {
                 const TiKVValue & value = *value_ptr;
-                const DecodedRow * row = value.getDecodedRow().load();
-                if (!row)
+                const DecodedRow * row = nullptr;
                 {
                     // not like old logic, do not store Field cache with value in order to reduce memory cost.
                     tmp_row.reset(decodeRow(value.getStr(), table_info, column_lut));
@@ -360,13 +359,18 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
     return true;
 }
 
-std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
-    const ColumnsDescription & columns,
-    const Names & column_names_to_read,
-    RegionDataReadInfoList & data_list,
-    Timestamp start_ts,
-    bool force_decode,
-    RegionScanFilterPtr scan_filter)
+RegionBlockReader::RegionBlockReader(const ManageableStoragePtr & storage)
+    : RegionBlockReader(storage->getTableInfo(), storage->getColumns())
+{
+    // For delta-tree, we don't need to reorder for uint64_pk
+    do_reorder_for_uint64_pk = (storage->engineType() != TiDB::StorageEngine::DT);
+}
+
+RegionBlockReader::RegionBlockReader(const TiDB::TableInfo & table_info_, const ColumnsDescription & columns_)
+    : table_info(table_info_), columns(columns_), scan_filter(nullptr)
+{}
+
+std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_read, RegionDataReadInfoList & data_list, bool force_decode)
 {
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();
@@ -463,7 +467,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
     const TMTPKType pk_type = getTMTPKType(*column_map.getNameAndTypePair(handle_col_id).type);
 
-    if (pk_type == TMTPKType::UINT64)
+    if (do_reorder_for_uint64_pk && pk_type == TMTPKType::UINT64)
         ReorderRegionDataReadList(data_list);
 
     {

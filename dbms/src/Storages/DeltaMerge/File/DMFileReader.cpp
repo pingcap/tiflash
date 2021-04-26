@@ -146,15 +146,16 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                            const RSOperatorPtr & filter_,
                            const IdSetPtr &      read_packs_,
                            // caches
-                           UInt64                  hash_salt_,
-                           MarkCache *             mark_cache_,
-                           MinMaxIndexCache *      index_cache_,
-                           bool                    enable_column_cache_,
-                           ColumnCachePtr &        column_cache_,
-                           size_t                  aio_threshold,
-                           size_t                  max_read_buffer_size,
-                           const FileProviderPtr & file_provider_,
-                           size_t                  rows_threshold_per_read_)
+                           UInt64                      hash_salt_,
+                           const MarkCachePtr &        mark_cache_,
+                           const MinMaxIndexCachePtr & index_cache_,
+                           bool                        enable_column_cache_,
+                           const ColumnCachePtr &      column_cache_,
+                           size_t                      aio_threshold,
+                           size_t                      max_read_buffer_size,
+                           const FileProviderPtr &     file_provider_,
+                           size_t                      rows_threshold_per_read_,
+                           bool                        read_one_pack_every_time_)
     : dmfile(dmfile_),
       read_columns(read_columns_),
       enable_clean_read(enable_clean_read_),
@@ -166,10 +167,11 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
       skip_packs_by_column(read_columns.size(), 0),
       hash_salt(hash_salt_),
       mark_cache(mark_cache_),
-      enable_column_cache(enable_column_cache_),
+      enable_column_cache(enable_column_cache_ && column_cache_),
       column_cache(column_cache_),
       rows_threshold_per_read(rows_threshold_per_read_),
       file_provider(file_provider_),
+      read_one_pack_every_time(read_one_pack_every_time_),
       single_file_mode(dmfile_->isSingleFileMode()),
       log(&Logger::get("DMFileReader"))
 {
@@ -177,14 +179,15 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
         throw Exception("DMFile [" + DB::toString(dmfile->fileId())
                         + "] is expected to be in READABLE status, but: " + DMFile::statusString(dmfile->getStatus()));
 
-    dmfile->initializeSubFileStatIfNeeded(file_provider);
+    pack_filter.init();
 
     for (const auto & cd : read_columns)
     {
-        // New inserted column, fill them with default value later
+        // New inserted column, will be filled with default value later
         if (!dmfile->isColumnExist(cd.id))
             continue;
 
+        // Load stream for existing columns according to DataType in disk
         auto callback = [&](const IDataType::SubstreamPath & substream) {
             const auto stream_name = DMFile::getFileNameBase(cd.id, substream);
             auto       stream      = std::make_unique<Stream>( //
@@ -196,8 +199,6 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                 log);
             column_streams.emplace(stream_name, std::move(stream));
         };
-
-        // Load stream according to DataType in disk
         const auto data_type = dmfile->getColumnStat(cd.id).type;
         data_type->enumerateStreams(callback, {});
     }
@@ -211,10 +212,11 @@ bool DMFileReader::shouldSeek(size_t pack_id)
 
 bool DMFileReader::getSkippedRows(size_t & skip_rows)
 {
-    skip_rows = 0;
+    skip_rows               = 0;
+    const auto & pack_stats = dmfile->getPackStats();
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
-        skip_rows += dmfile->getPackStat(next_pack_id).rows;
+        skip_rows += pack_stats[next_pack_id].rows;
     }
     return next_pack_id < use_packs.size();
 }
@@ -240,9 +242,9 @@ Block DMFileReader::read()
 
     // Find max continuing rows we can read.
     size_t start_pack_id = next_pack_id;
-    // When single_file_mode is true, we can just read one pack every time.
+    // When single_file_mode is true, or read_one_pack_every_time is true, we can just read one pack every time.
     // 0 means no limit
-    size_t read_pack_limit = single_file_mode ? 1 : 0;
+    size_t read_pack_limit = (single_file_mode || read_one_pack_every_time) ? 1 : 0;
 
     auto & pack_stats     = dmfile->getPackStats();
     size_t read_rows      = 0;

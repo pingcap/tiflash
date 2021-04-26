@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
@@ -7,7 +8,7 @@
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PDTiKVClient.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/SSTReader.h>
@@ -18,15 +19,18 @@
 namespace DB
 {
 
+namespace FailPoints
+{
+extern const char pause_until_apply_raft_snapshot[];
+} // namespace FailPoints
+
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
 
-void KVStore::tryApplySnapshot(const RegionPtrWrap & new_region, Context & context)
+void KVStore::checkAndApplySnapshot(const RegionPtrWithBlock & new_region, TMTContext & tmt)
 {
-    auto & tmt = context.getTMTContext();
-
     auto region_id = new_region->id();
     auto old_region = getRegion(region_id);
     UInt64 old_applied_index = 0;
@@ -79,9 +83,6 @@ void KVStore::tryApplySnapshot(const RegionPtrWrap & new_region, Context & conte
     }
 
     {
-        Timestamp safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient(), /* ignore_cache= */ true);
-
-        // Traverse all table in ch and update handle_maps.
         auto table_id = new_region->getMappedTableID();
         if (auto storage = tmt.getStorages().get(table_id); storage)
         {
@@ -89,6 +90,8 @@ void KVStore::tryApplySnapshot(const RegionPtrWrap & new_region, Context & conte
             {
                 case TiDB::StorageEngine::TMT:
                 {
+                    auto & context = tmt.getContext();
+                    // Traverse all table in storage and update `new_region`.
                     if (storage->getTableInfo().is_common_handle)
                         throw Exception("TMT table does not support clustered index", ErrorCodes::NOT_IMPLEMENTED);
                     HandleMap handle_map;
@@ -109,18 +112,12 @@ void KVStore::tryApplySnapshot(const RegionPtrWrap & new_region, Context & conte
                     else
                         getHandleMapByRange<Int64>(context, *tmt_storage, handle_range, handle_map);
 
+                    Timestamp safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient(), /* ignore_cache= */ true);
                     new_region->compareAndCompleteSnapshot(handle_map, safe_point);
                     break;
                 }
                 case TiDB::StorageEngine::DT:
                 {
-                    // acquire lock so that no other threads can change storage's structure
-                    auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
-                    // In StorageDeltaMerge, we use deleteRange to remove old data
-                    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                    dm_storage->deleteRange(DM::RowKeyRange::fromRegionRange(new_region->getRange(), table_id, storage->isCommonHandle(),
-                                                storage->getRowKeyColumnSize()),
-                        context.getSettingsRef());
                     break;
                 }
                 default:
@@ -131,6 +128,176 @@ void KVStore::tryApplySnapshot(const RegionPtrWrap & new_region, Context & conte
     }
 
     onSnapshot(new_region, old_region, old_applied_index, tmt);
+}
+
+void KVStore::onSnapshot(const RegionPtrWithBlock & new_region_wrap, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
+{
+    RegionID region_id = new_region_wrap->id();
+
+    {
+        auto table_id = new_region_wrap->getMappedTableID();
+        if (auto storage = tmt.getStorages().get(table_id); storage)
+        {
+            switch (storage->engineType())
+            {
+                case TiDB::StorageEngine::DT:
+                {
+                    try
+                    {
+                        auto & context = tmt.getContext();
+                        // acquire lock so that no other threads can drop storage
+                        auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+                        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+                        auto key_range = DM::RowKeyRange::fromRegionRange(
+                            new_region_wrap->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
+                        // Call `deleteRange` to delete data for range
+                        dm_storage->deleteRange(key_range, context.getSettingsRef());
+                    }
+                    catch (DB::Exception & e)
+                    {
+                        // We can ignore if storage is dropped.
+                        if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
+                            throw;
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+    }
+
+    {
+        const auto range = new_region_wrap->getRange();
+        auto & region_table = tmt.getRegionTable();
+        // extend region to make sure data won't be removed.
+        region_table.extendRegionRange(region_id, *range);
+        // try to flush data into ch first.
+        try
+        {
+            auto tmp = region_table.tryFlushRegion(new_region_wrap, false);
+            {
+                std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
+                bg_gc_region_data.push_back(std::move(tmp));
+            }
+            tryFlushRegionCacheInStorage(tmt, *new_region_wrap, log);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+
+    RegionPtr new_region = new_region_wrap.base;
+    {
+        auto task_lock = genTaskLock();
+        auto region_lock = region_manager.genRegionTaskLock(region_id);
+
+        if (getRegion(region_id) != old_region || (old_region && old_region_index != old_region->appliedIndex()))
+        {
+            throw Exception(
+                std::string(__PRETTY_FUNCTION__) + ": region " + std::to_string(region_id) + " instance changed, should not happen",
+                ErrorCodes::LOGICAL_ERROR);
+        }
+
+        if (old_region != nullptr)
+        {
+            LOG_DEBUG(log, __FUNCTION__ << ": previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
+            region_range_index.remove(old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys(), region_id);
+            old_region->assignRegion(std::move(*new_region));
+            new_region = old_region;
+        }
+        else
+        {
+            auto manage_lock = genRegionManageLock();
+            regionsMut().emplace(region_id, new_region);
+        }
+
+        persistRegion(*new_region, region_lock, "save current region after apply");
+        region_range_index.add(new_region);
+
+        tmt.getRegionTable().shrinkRegionRange(*new_region);
+    }
+}
+
+
+extern RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr &, Context &);
+
+RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, const SSTViewVec snaps, TMTContext & tmt)
+{
+    RegionPreDecodeBlockDataPtr cache{nullptr};
+    {
+        decltype(bg_gc_region_data)::value_type tmp;
+        std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
+        if (!bg_gc_region_data.empty())
+        {
+            tmp.swap(bg_gc_region_data.back());
+            bg_gc_region_data.pop_back();
+        }
+    }
+
+    Stopwatch watch;
+    auto & ctx = tmt.getContext();
+    auto metrics = ctx.getTiFlashMetrics();
+    SCOPE_EXIT(
+        { GET_METRIC(metrics, tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
+
+    {
+        LOG_INFO(log, "Pre-handle snapshot " << new_region->toString(false) << " with " << snaps.len << " TiKV sst files");
+        // Iterator over all SST files and insert key-values into `new_region`
+        for (UInt64 i = 0; i < snaps.len; ++i)
+        {
+            auto & snapshot = snaps.views[i];
+            auto sst_reader = SSTReader{proxy_helper, snapshot};
+
+            uint64_t kv_size = 0;
+            while (sst_reader.remained())
+            {
+                auto key = sst_reader.key();
+                auto value = sst_reader.value();
+                new_region->insert(snaps.views[i].type, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
+                ++kv_size;
+                sst_reader.next();
+            }
+
+            LOG_INFO(log,
+                "Decode " << std::string_view(snapshot.path.data, snapshot.path.len) << " got [cf: " << CFToName(snapshot.type)
+                          << ", kv size: " << kv_size << "]");
+            // Note that number of keys in different cf will be aggregated into one metrics
+            GET_METRIC(metrics, tiflash_raft_process_keys, type_apply_snapshot).Increment(kv_size);
+        }
+        {
+            LOG_INFO(log, "Start to pre-decode " << new_region->toString() << " into block");
+            auto block_cache = GenRegionPreDecodeBlockData(new_region, ctx);
+            if (block_cache)
+                LOG_INFO(log, "Got pre-decode block cache"; block_cache->toString(oss_internal_rare));
+            else
+                LOG_INFO(log, "Got empty pre-decode block cache");
+
+            cache = std::move(block_cache);
+        }
+        LOG_INFO(log, "Pre-handle snapshot " << new_region->toString(false) << " cost " << watch.elapsedMilliseconds() << "ms");
+    }
+
+    return cache;
+}
+
+void KVStore::handlePreApplySnapshot(const RegionPtrWithBlock & new_region, TMTContext & tmt)
+{
+    LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
+
+    Stopwatch watch;
+    SCOPE_EXIT({
+        auto & ctx = tmt.getContext();
+        GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_command_duration_seconds, type_apply_snapshot_flush)
+            .Observe(watch.elapsedSeconds());
+    });
+
+    checkAndApplySnapshot(new_region, tmt);
+
+    FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
+
+    LOG_INFO(log, new_region->toString(false) << " apply snapshot success");
 }
 
 static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_id)
@@ -162,92 +329,14 @@ RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64
     return std::make_shared<Region>(std::move(meta), proxy_helper);
 }
 
-extern RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr &, Context &);
-
-RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, const SSTViewVec snaps, TMTContext & tmt)
-{
-    RegionPreDecodeBlockDataPtr cache{nullptr};
-    {
-        decltype(bg_gc_region_data)::value_type tmp;
-        std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
-        if (!bg_gc_region_data.empty())
-        {
-            tmp.swap(bg_gc_region_data.back());
-            bg_gc_region_data.pop_back();
-        }
-    }
-
-    Stopwatch watch;
-    auto & ctx = tmt.getContext();
-    SCOPE_EXIT({
-        GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode)
-            .Observe(watch.elapsedSeconds());
-    });
-
-    {
-        LOG_INFO(log, "Pre-handle snapshot " << new_region->toString(false) << " with " << snaps.len << " TiKV sst files");
-        for (UInt64 i = 0; i < snaps.len; ++i)
-        {
-            auto & snapshot = snaps.views[i];
-            auto sst_reader = SSTReader{proxy_helper, snapshot};
-
-            uint64_t kv_size = 0;
-            while (sst_reader.remained())
-            {
-                auto key = sst_reader.key();
-                auto value = sst_reader.value();
-                new_region->insert(snaps.views[i].type, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
-                ++kv_size;
-                sst_reader.next();
-            }
-
-            LOG_INFO(log,
-                "Decode " << std::string_view(snapshot.path.data, snapshot.path.len) << " got [cf: " << CFToName(snapshot.type)
-                          << ", kv size: " << kv_size << "]");
-            // Note that number of keys in different cf will be aggregated into one metrics
-            GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_process_keys, type_apply_snapshot).Increment(kv_size);
-        }
-        // do not really pre-decode value into Field list.
-        new_region->tryPreDecodeTiKVValue<true>(tmt);
-        {
-            LOG_INFO(log, "Start to pre-decode " << new_region->toString() << " into block");
-            auto block_cache = GenRegionPreDecodeBlockData(new_region, tmt.getContext());
-            if (block_cache)
-                LOG_INFO(log, "Got pre-decode block cache"; block_cache->toString(oss_internal_rare));
-            else
-                LOG_INFO(log, "Got empty pre-decode block cache");
-
-            cache = std::move(block_cache);
-        }
-        LOG_INFO(log, "Pre-handle snapshot " << new_region->toString(false) << " cost " << watch.elapsedMilliseconds() << "ms");
-    }
-    return cache;
-}
-
-void KVStore::handleApplySnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
-{
-    LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
-
-    Stopwatch watch;
-    SCOPE_EXIT({
-        auto & ctx = tmt.getContext();
-        GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_command_duration_seconds, type_apply_snapshot_flush)
-            .Observe(watch.elapsedSeconds());
-    });
-
-    tryApplySnapshot(new_region, tmt.getContext());
-
-    LOG_INFO(log, new_region->toString(false) << " apply snapshot success");
-}
-
 void KVStore::handleApplySnapshot(
     metapb::Region && region, UInt64 peer_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
-    handleApplySnapshot(RegionPtrWrap{new_region, preHandleSnapshot(new_region, snaps, tmt)}, tmt);
+    handlePreApplySnapshot(RegionPtrWithBlock{new_region, preHandleSnapshot(new_region, snaps, tmt)}, tmt);
 }
 
-TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
 
@@ -259,8 +348,10 @@ TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snap
     const RegionPtr region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
-        return TiFlashApplyRes::NotFound;
+        LOG_WARNING(log,
+            __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found at [term " << term << ", index " << index
+                                << "], might be removed already");
+        return EngineStoreApplyRes::NotFound;
     }
 
     const auto func_try_flush = [&]() {
@@ -282,18 +373,17 @@ TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snap
     // try to flush remain data in memory.
     func_try_flush();
     region->handleIngestSST(snaps, index, term, tmt);
-    region->tryPreDecodeTiKVValue<true>(tmt);
     func_try_flush();
 
     if (region->dataSize())
     {
         LOG_INFO(log, __FUNCTION__ << ": " << region->toString(true) << " with data " << region->dataInfo() << " skip persist");
-        return TiFlashApplyRes::None;
+        return EngineStoreApplyRes::None;
     }
     else
     {
         persistRegion(*region, region_task_lock, __FUNCTION__);
-        return TiFlashApplyRes::Persist;
+        return EngineStoreApplyRes::Persist;
     }
 }
 

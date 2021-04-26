@@ -2,9 +2,9 @@
 
 #include <Core/Names.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionException.h>
+#include <Storages/Transaction/RegionLockInfo.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <common/logger_useful.h>
 
@@ -12,6 +12,7 @@
 #include <functional>
 #include <mutex>
 #include <optional>
+#include <variant>
 #include <vector>
 
 namespace TiDB
@@ -34,7 +35,9 @@ class Block;
 struct MockTiDBTable;
 class RegionRangeKeys;
 class RegionTaskLock;
-struct RegionPtrWrap;
+struct RegionPtrWithBlock;
+class RegionScanFilter;
+using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
 
 class RegionTable : private boost::noncopyable
 {
@@ -117,25 +120,26 @@ public:
 
     bool tryFlushRegions();
     RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
-    RegionDataReadInfoList tryFlushRegion(const RegionPtrWrap & region, bool try_persist);
+    RegionDataReadInfoList tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist);
 
     void handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id) const;
 
     /// Write the data of the given region into the table with the given table ID, fill the data list for outer to remove.
     /// Will trigger schema sync on read error for only once,
-    /// assuming that newer schema can always apply to older data by setting force_decode to true in readRegionBlock.
+    /// assuming that newer schema can always apply to older data by setting force_decode to true in RegionBlockReader::read.
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
     static void writeBlockByRegion(Context & context,
-        const RegionPtrWrap & region,
+        const RegionPtrWithBlock & region,
         RegionDataReadInfoList & data_list_to_remove,
         Logger * log,
         bool lock_region = true);
 
     /// Read the data of the given region into block, take good care of learner read and locks.
     /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,
-    /// we directly ask readRegionBlock to perform a read with the given start_ts and force_decode being true.
-    static std::tuple<Block, RegionException::RegionReadStatus> readBlockByRegion(const TiDB::TableInfo & table_info,
+    /// we directly ask RegionBlockReader::read to perform a read with the given start_ts and force_decode being true.
+    using ReadBlockByRegionRes = std::variant<Block, RegionException::RegionReadStatus>;
+    static ReadBlockByRegionRes readBlockByRegion(const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & column_names_to_read,
         const RegionPtr & region,
@@ -149,7 +153,8 @@ public:
 
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
     /// The write logic is the same as #writeBlockByRegion, with some extra checks about region version and conf_version.
-    static RegionException::RegionReadStatus resolveLocksAndWriteRegion(TMTContext & tmt,
+    using ResolveLocksAndWriteRegionRes = std::variant<LockInfoPtr, RegionException::RegionReadStatus>;
+    static ResolveLocksAndWriteRegionRes resolveLocksAndWriteRegion(TMTContext & tmt,
         const TiDB::TableID table_id,
         const RegionPtr & region,
         const Timestamp start_ts,
@@ -170,7 +175,6 @@ private:
     friend class MockTiDB;
     friend class StorageMergeTree;
     friend class StorageDeltaMerge;
-    friend class StorageDebugging;
 
     Table & getOrCreateTable(const TableID table_id);
     void removeTable(TableID table_id);
@@ -179,7 +183,7 @@ private:
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id);
     InternalRegion & doGetInternalRegion(TableID table_id, RegionID region_id);
 
-    RegionDataReadInfoList flushRegion(const RegionPtrWrap & region, bool try_persist) const;
+    RegionDataReadInfoList flushRegion(const RegionPtrWithBlock & region, bool try_persist) const;
     bool shouldFlush(const InternalRegion & region) const;
     RegionID pickRegionToFlush();
 
@@ -222,13 +226,13 @@ struct RegionPreDecodeBlockData
 };
 
 // A wrap of RegionPtr, could try to use its block cache while writing region data to storage.
-struct RegionPtrWrap
+struct RegionPtrWithBlock
 {
     using Base = RegionPtr;
     using CachePtr = std::unique_ptr<RegionPreDecodeBlockData>;
 
     /// can accept const ref of RegionPtr without cache
-    RegionPtrWrap(const Base & base_, CachePtr cache = nullptr) : base(base_), pre_decode_cache(std::move(cache)) {}
+    RegionPtrWithBlock(const Base & base_, CachePtr cache = nullptr) : base(base_), pre_decode_cache(std::move(cache)) {}
 
     /// to be compatible with usage as RegionPtr.
     Base::element_type * operator->() const { return base.operator->(); }

@@ -169,11 +169,10 @@ grpc::Status FlashService::Coprocessor(
     auto & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
-    MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout);
+    std::string errMsg;
+    MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, errMsg);
     if (sender_task == nullptr)
     {
-        auto errMsg = "can't find task [" + toString(request->sender_meta().start_ts()) + "," + toString(request->sender_meta().task_id())
-            + "] within " + toString(timeout.count()) + " s";
         LOG_ERROR(log, errMsg);
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();
@@ -185,8 +184,8 @@ grpc::Status FlashService::Coprocessor(
     MPPTunnelPtr tunnel = sender_task->getTunnelWithTimeout(request->receiver_meta(), timeout);
     if (tunnel == nullptr)
     {
-        auto errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + "
-            + toString(request->sender_meta().task_id()) + " ) within " + toString(timeout.count()) + " s";
+        errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + " + toString(request->sender_meta().task_id())
+            + " ) within " + toString(timeout.count()) + " s";
         LOG_ERROR(log, errMsg);
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();
@@ -202,6 +201,39 @@ grpc::Status FlashService::Coprocessor(
     LOG_INFO(log, "connection for " << tunnel->tunnel_id << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     // TODO: Check if there are errors in task.
 
+    return grpc::Status::OK;
+}
+
+::grpc::Status FlashService::CancelMPPTask(
+    ::grpc::ServerContext * grpc_context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response)
+{
+    // CancelMPPTask cancels the query of the task.
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": cancel mpp task request: " << request->DebugString());
+
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_cancel_mpp_task).Increment();
+    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Decrement();
+        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cancel_mpp_task).Observe(watch.elapsedSeconds());
+        GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+    });
+
+    auto [context, status] = createDBContext(grpc_context);
+    auto err = new mpp::Error();
+    if (!status.ok())
+    {
+        err->set_msg("error status");
+        response->set_allocated_error(err);
+        return status;
+    }
+    auto & tmt_context = context.getTMTContext();
+    auto task_manager = tmt_context.getMPPTaskManager();
+    task_manager->cancelMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB");
     return grpc::Status::OK;
 }
 

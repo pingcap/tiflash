@@ -13,9 +13,7 @@
 
 namespace DB::DM
 {
-using RowKeyColumns    = ColumnDefines;
-using RowKeyColumnsPtr = std::shared_ptr<RowKeyColumns>;
-using HandleValuePtr   = std::shared_ptr<String>;
+using HandleValuePtr = std::shared_ptr<String>;
 
 struct RowKeyRange;
 
@@ -82,6 +80,14 @@ struct RowKeyValue
         int_value = rowkey_value.int_value;
     }
 
+    static RowKeyValue fromHandle(Handle value)
+    {
+        std::stringstream ss;
+        DB::EncodeInt64(value, ss);
+        String s_value = ss.str();
+        return RowKeyValue(false, std::make_shared<String>(s_value), value);
+    }
+
     // Format as a string
     String toString() const;
 
@@ -101,6 +107,40 @@ struct RowKeyValue
         return std::make_shared<DecodedTiKVKey>(prefix + *value);
     }
 
+    bool operator==(const RowKeyValue & v)
+    {
+        return is_common_handle == v.is_common_handle && (*value) == (*v.value) && int_value == v.int_value;
+    }
+
+    RowKeyValue toPrefixNext()
+    {
+        std::vector<UInt8> keys(value->begin(), value->end());
+        int index = keys.size() - 1;
+        for (; index >= 0; index--)
+        {
+            if (keys[index] == std::numeric_limits<UInt8>::max())
+                keys[index] = 0;
+            else
+            {
+                keys[index] = keys[index] + 1;
+                break;
+            }
+        }
+        if (index == -1)
+        {
+            keys.clear();
+            keys.insert(keys.end(), value->begin(), value->end());
+            keys.push_back(0);
+        }
+        HandleValuePtr prefix_value = std::make_shared<String>(keys.begin(), keys.end());
+        Int64 prefix_int_value = int_value;
+        if (!is_common_handle && prefix_int_value != std::numeric_limits<Int64>::max())
+        {
+            prefix_int_value++;
+        }
+        return RowKeyValue(is_common_handle, prefix_value, prefix_int_value);
+    }
+
     bool is_common_handle;
     /// In case of non common handle, the value field is redundant in most cases, except that int_value == Int64::max_value,
     /// because RowKeyValue is an end point of RowKeyRange, assuming that RowKeyRange = [start_value, end_value), since the
@@ -112,6 +152,8 @@ struct RowKeyValue
 
     static const RowKeyValue INT_HANDLE_MIN_KEY;
     static const RowKeyValue INT_HANDLE_MAX_KEY;
+    static const RowKeyValue COMMON_HANDLE_MIN_KEY;
+    static const RowKeyValue COMMON_HANDLE_MAX_KEY;
     static const RowKeyValue EMPTY_STRING_KEY;
 };
 
@@ -296,27 +338,17 @@ struct RowKeyRange
     // todo use template to refine is_common_handle
     bool is_common_handle;
     /// start and end in RowKeyRange are always meaningful
+    /// it is assumed that start value is included and end value is excluded.
     RowKeyValue start;
     RowKeyValue end;
     size_t      rowkey_column_size;
-
-    struct CommonHandleRangeMinMax
-    {
-        RowKeyValue min;
-        RowKeyValue max;
-        CommonHandleRangeMinMax(size_t rowkey_column_size)
-            : min(true, std::make_shared<String>(rowkey_column_size, TiDB::CodecFlag::CodecFlagBytes), 0),
-              max(true, std::make_shared<String>(rowkey_column_size, TiDB::CodecFlag::CodecFlagMax), 0)
-        {
-        }
-    };
 
     struct TableRangeMinMax
     {
         HandleValuePtr min;
         HandleValuePtr max;
 
-        TableRangeMinMax(TableID table_id, bool is_common_handle, size_t rowkey_column_size)
+        TableRangeMinMax(TableID table_id, bool is_common_handle)
         {
             std::stringstream ss;
             ss.put('t');
@@ -326,11 +358,8 @@ struct RowKeyRange
             String prefix = ss.str();
             if (is_common_handle)
             {
-                auto & common_handle_min_max = RowKeyRange::getMinMaxData(rowkey_column_size);
-                String min_str               = prefix + (*common_handle_min_max.min.value);
-                min                          = std::make_shared<String>(min_str);
-                String max_str               = prefix + (*common_handle_min_max.max.value);
-                max                          = std::make_shared<String>(max_str);
+                min = std::make_shared<String>(prefix + *RowKeyValue::COMMON_HANDLE_MIN_KEY.value);
+                max = std::make_shared<String>(prefix + *RowKeyValue::COMMON_HANDLE_MAX_KEY.value);
             }
             else
             {
@@ -340,12 +369,10 @@ struct RowKeyRange
         }
     };
 
-    static std::unordered_map<size_t, CommonHandleRangeMinMax> min_max_data;
-    static std::mutex                                          mutex;
-    static std::unordered_map<TableID, TableRangeMinMax>       table_min_max_data;
-    static std::mutex                                          table_mutex;
-    static const CommonHandleRangeMinMax &                     getMinMaxData(size_t rowkey_column_size);
-    static const TableRangeMinMax & getTableMinMaxData(TableID table_id, bool is_common_handle, size_t rowkey_column_size);
+    /// maybe use a LRU cache in case there are massive tables
+    static std::unordered_map<TableID, TableRangeMinMax> table_min_max_data;
+    static std::shared_mutex                             table_mutex;
+    static const TableRangeMinMax &                      getTableMinMaxData(TableID table_id, bool is_common_handle);
 
     RowKeyRange(const RowKeyValue & start_, const RowKeyValue & end_, bool is_common_handle_, size_t rowkey_column_size_)
         : is_common_handle(is_common_handle_), start(start_), end(end_), rowkey_column_size(rowkey_column_size_)
@@ -368,8 +395,7 @@ struct RowKeyRange
     {
         if (is_common_handle)
         {
-            const auto & min_max = getMinMaxData(rowkey_column_size);
-            return RowKeyRange(start_value.toRowKeyValue(), min_max.max, is_common_handle, rowkey_column_size);
+            return RowKeyRange(start_value.toRowKeyValue(), RowKeyValue::COMMON_HANDLE_MAX_KEY, is_common_handle, rowkey_column_size);
         }
         else
         {
@@ -381,8 +407,7 @@ struct RowKeyRange
     {
         if (is_common_handle)
         {
-            const auto & min_max = getMinMaxData(rowkey_column_size);
-            return RowKeyRange(min_max.min, end_value.toRowKeyValue(), is_common_handle, rowkey_column_size);
+            return RowKeyRange(RowKeyValue::COMMON_HANDLE_MIN_KEY, end_value.toRowKeyValue(), is_common_handle, rowkey_column_size);
         }
         else
         {
@@ -394,8 +419,8 @@ struct RowKeyRange
     {
         if (is_common_handle)
         {
-            const auto & min_max = getMinMaxData(rowkey_column_size);
-            return RowKeyRange(min_max.min, min_max.max, is_common_handle, rowkey_column_size);
+            return RowKeyRange(
+                RowKeyValue::COMMON_HANDLE_MIN_KEY, RowKeyValue::COMMON_HANDLE_MAX_KEY, is_common_handle, rowkey_column_size);
         }
         else
         {
@@ -407,8 +432,8 @@ struct RowKeyRange
     {
         if (is_common_handle)
         {
-            const auto & min_max = getMinMaxData(rowkey_column_size);
-            return RowKeyRange(min_max.max, min_max.min, is_common_handle, rowkey_column_size);
+            return RowKeyRange(
+                RowKeyValue::COMMON_HANDLE_MAX_KEY, RowKeyValue::COMMON_HANDLE_MIN_KEY, is_common_handle, rowkey_column_size);
         }
         else
         {
@@ -433,43 +458,59 @@ struct RowKeyRange
         readIntBinary(rowkey_column_size, buf);
         readStringBinary(start, buf);
         readStringBinary(end, buf);
-        return RowKeyRange(RowKeyValue(is_common_handle, std::make_shared<String>(start)),
-                           RowKeyValue(is_common_handle, std::make_shared<String>(end)),
-                           is_common_handle,
-                           rowkey_column_size);
+        HandleValuePtr start_ptr = std::make_shared<String>(start);
+        HandleValuePtr end_ptr   = std::make_shared<String>(end);
+        if unlikely (isLegacyCommonMin(rowkey_column_size, start_ptr))
+        {
+            start_ptr = RowKeyValue::COMMON_HANDLE_MIN_KEY.value;
+        }
+        if unlikely (isLegacyCommonMax(rowkey_column_size, end_ptr))
+        {
+            end_ptr = RowKeyValue::COMMON_HANDLE_MAX_KEY.value;
+        }
+        return RowKeyRange(
+            RowKeyValue(is_common_handle, start_ptr), RowKeyValue(is_common_handle, end_ptr), is_common_handle, rowkey_column_size);
     }
 
-    inline bool all() const
+    static bool isLegacyCommonMin(size_t column_size, HandleValuePtr value)
     {
-        if (is_common_handle)
+        if (column_size > 0)
         {
-            for (size_t i = 0; i < rowkey_column_size; i++)
+            if (value->size() != column_size)
+                return false;
+            for (size_t i = 0; i < column_size && i < value->size(); i++)
             {
-                if (!(static_cast<unsigned char>((*start.value)[i]) == TiDB::CodecFlag::CodecFlagBytes
-                      || static_cast<unsigned char>((*start.value)[i]) == TiDB::CodecFlag::CodecFlagNil)
-                    || static_cast<unsigned char>((*end.value)[i]) != TiDB::CodecFlag::CodecFlagMax)
+                if (!(static_cast<unsigned char>((*value)[i]) == TiDB::CodecFlagBytes
+                      || static_cast<unsigned char>((*value)[i]) == TiDB::CodecFlag::CodecFlagNil))
                     return false;
             }
             return true;
         }
-        else
-        {
-            return start.int_value == RowKeyValue::INT_HANDLE_MIN_KEY.int_value
-                && end.int_value == RowKeyValue::INT_HANDLE_MAX_KEY.int_value
-                && end.value->compare(*RowKeyValue::INT_HANDLE_MAX_KEY.value) >= 0;
-        }
+        return false;
     }
+    static bool isLegacyCommonMax(size_t column_size, HandleValuePtr value)
+    {
+        if (column_size > 0)
+        {
+            if (value->size() != column_size)
+                return false;
+            for (size_t i = 0; i < column_size && i < value->size(); i++)
+            {
+                if (static_cast<unsigned char>((*value)[i]) != TiDB::CodecFlagMax)
+                    return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    inline bool all() const { return isStartInfinite() && isEndInfinite(); }
 
     inline bool isEndInfinite() const
     {
         if (is_common_handle)
         {
-            for (size_t i = 0; i < rowkey_column_size; i++)
-            {
-                if (static_cast<unsigned char>((*end.value)[i]) != TiDB::CodecFlagMax)
-                    return false;
-            }
-            return true;
+            return (end.value->size() == 1 && static_cast<unsigned char>((*end.value)[0]) == TiDB::CodecFlagMax);
         }
         else
         {
@@ -482,13 +523,9 @@ struct RowKeyRange
     {
         if (is_common_handle)
         {
-            for (size_t i = 0; i < rowkey_column_size; i++)
-            {
-                if (!(static_cast<unsigned char>((*start.value)[i]) == TiDB::CodecFlagBytes
-                      || static_cast<unsigned char>((*start.value)[i]) == TiDB::CodecFlag::CodecFlagNil))
-                    return false;
-            }
-            return true;
+            return (start.value->size() == 1
+                    && ((static_cast<unsigned char>((*start.value)[0]) == TiDB::CodecFlagBytes)
+                        || (static_cast<unsigned char>((*start.value)[0]) == TiDB::CodecFlagNil)));
         }
         else
         {
@@ -575,6 +612,7 @@ struct RowKeyRange
         std::stringstream ss;
         DB::EncodeInt64(handle_range.start, ss);
         String start = ss.str();
+
         ss.str(std::string());
         DB::EncodeInt64(handle_range.end, ss);
         String end = ss.str();
@@ -601,15 +639,14 @@ struct RowKeyRange
     {
         if (likely(table_id_in_raw_key == table_id))
         {
-            auto &      start_key             = *raw_keys.first;
-            auto &      end_key               = *raw_keys.second;
-            auto        table_range_min_max   = getTableMinMaxData(table_id, is_common_handle, rowkey_column_size);
-            auto        common_handle_min_max = getMinMaxData(rowkey_column_size);
-            RowKeyValue start_value, end_value;
+            auto &       start_key           = *raw_keys.first;
+            auto &       end_key             = *raw_keys.second;
+            const auto & table_range_min_max = getTableMinMaxData(table_id, is_common_handle);
+            RowKeyValue  start_value, end_value;
             if (start_key.compare(*table_range_min_max.min) <= 0)
             {
                 if (is_common_handle)
-                    start_value = common_handle_min_max.min;
+                    start_value = RowKeyValue::COMMON_HANDLE_MIN_KEY;
                 else
                     start_value = RowKeyValue::INT_HANDLE_MIN_KEY;
             }
@@ -622,7 +659,7 @@ struct RowKeyRange
             if (end_key.compare(*table_range_min_max.max) >= 0)
             {
                 if (is_common_handle)
-                    end_value = common_handle_min_max.max;
+                    end_value = RowKeyValue::COMMON_HANDLE_MAX_KEY;
                 else
                     end_value = RowKeyValue::INT_HANDLE_MAX_KEY;
             }

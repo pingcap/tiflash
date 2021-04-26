@@ -8,6 +8,10 @@
 
 namespace DB
 {
+namespace Constant
+{
+inline static constexpr UInt64 MB = 1024UL * 1024UL;
+}
 
 /** Settings of query execution.
   */
@@ -240,27 +244,55 @@ struct Settings
     M(SettingString, query_id, "", "The query_id, only for testing.")\
     M(SettingUInt64, mutable_deduper, 5, "The deduper used by MutableMergeTree storage. By default 5. 0: OriginStreams, 1: OriginUnity, 2: ReplacingUnity, 3: ReplacingPartitioning, 4: DedupPartitioning, 5: ReplacingPartitioningOpt.")\
     \
-    M(SettingUInt64, dt_segment_limit_rows, 1000000, "Average rows of segments in DeltaTree Engine")\
+    M(SettingUInt64, dt_segment_limit_rows, 1000000, "Base rows of segments in DeltaTree Engine.")\
+    M(SettingUInt64, dt_segment_limit_size, 1073741824, "Base size of segments in DeltaTree Engine. 1 GB by default.")\
     M(SettingUInt64, dt_segment_delta_limit_rows, 80000, "Max rows of segment delta in DeltaTree Engine")\
-    M(SettingUInt64, dt_segment_force_merge_delta_deletes, 10, "Delta delete ranges before force merge into stable")\
-    M(SettingUInt64, dt_segment_force_merge_delta_rows, 10000000, "Delta rows before force merge into stable")\
-    M(SettingUInt64, dt_segment_delta_cache_limit_rows, 4000, "Max rows of cache in segment delta in DeltaTree Engine")\
-    M(SettingUInt64, dt_segment_delta_small_pack_rows, 512, "Determine whether a pack in delta is small or not")\
-    M(SettingUInt64, dt_segment_stable_pack_rows, DEFAULT_MERGE_BLOCK_SIZE, "Expected stable pack rows in DeltaTree Engine")\
+    M(SettingUInt64, dt_segment_delta_limit_size, 85983232, "Max size of segment delta in DeltaTree Engine. 82 MB by default.")\
+    M(SettingUInt64, dt_segment_force_merge_delta_deletes, 10, "Delta delete ranges before force merge into stable.")\
+    M(SettingUInt64, dt_segment_force_merge_delta_rows, 400000, "Delta rows before force merge into stable.")\
+    M(SettingUInt64, dt_segment_force_merge_delta_size, 429496729, "Delta size before force merge into stable. 400 MB by default.")\
+    M(SettingUInt64, dt_segment_stop_write_delta_rows, 2000000, "Delta rows before stop new writes.")\
+    M(SettingUInt64, dt_segment_stop_write_delta_size, 2147483648, "Delta size before stop new writes. 2 GB by default.")\
+    M(SettingUInt64, dt_segment_delta_cache_limit_rows, 4000, "Max rows of cache in segment delta in DeltaTree Engine.")\
+    M(SettingUInt64, dt_segment_delta_cache_limit_size, 4194304, "Max size of cache in segment delta in DeltaTree Engine. 4 MB by default.")\
+    M(SettingUInt64, dt_segment_delta_small_pack_rows, 512, "Determine whether a pack in delta is small or not.")\
+    M(SettingUInt64, dt_segment_delta_small_pack_size, 524288, "Determine whether a pack in delta is small or not. 512 KB by default.")\
+    M(SettingUInt64, dt_segment_stable_pack_rows, DEFAULT_MERGE_BLOCK_SIZE, "Expected stable pack rows in DeltaTree Engine.")\
+    M(SettingFloat, dt_segment_wait_duration_factor, 1, "The factor of wait duration in a write stall.")\
+    M(SettingUInt64, dt_bg_gc_check_interval, 600, "Background gc thread check interval, the unit is second.")\
+    M(SettingInt64, dt_bg_gc_max_segments_to_check_every_round, 15, "Max segments to check in every gc round, value less than or equal to 0 means gc no segments.")\
+    M(SettingFloat, dt_bg_gc_ratio_threhold_to_trigger_gc, 1.2, "Trigger segment's gc when the ratio of invalid version exceed this threhold. Values smaller than or equal to 1.0 means gc all segments")\
     M(SettingUInt64, dt_insert_max_rows, 0, "Max rows of insert blocks when write into DeltaTree Engine. By default 0 means no limit.")\
-    M(SettingBool, dt_enable_rough_set_filter, true, "Whether to parse where expression as Rough Set Index filter or not") \
+    M(SettingBool, dt_enable_rough_set_filter, true, "Whether to parse where expression as Rough Set Index filter or not.") \
     M(SettingBool, dt_raw_filter_range, true, "Do range filter or not when read data in raw mode in DeltaTree Engine.")\
     M(SettingBool, dt_read_delta_only, false, "Only read delta data in DeltaTree Engine.")\
     M(SettingBool, dt_read_stable_only, false, "Only read stable data in DeltaTree Engine.")\
     M(SettingBool, dt_enable_logical_split, true, "Enable logical split or not in DeltaTree Engine.")\
     M(SettingBool, dt_flush_after_write, false, "Flush cache or not after write in DeltaTree Engine.")\
+    M(SettingBool, dt_enable_relevant_place, false, "Enable relevant place or not in DeltaTree Engine.")\
     M(SettingBool, dt_enable_skippable_place, true, "Enable skippable place or not in DeltaTree Engine.")\
     M(SettingBool, dt_enable_stable_column_cache, true, "Enable column cache for StorageDeltaMerge.") \
     M(SettingBool, dt_enable_single_file_mode_dmfile, false, "Enable write DMFile in single file mode.") \
-    M(SettingUInt64, dt_storage_pool_log_write_slots, 4, "Max write concurrency for each StoragePool.log.") \
-    M(SettingUInt64, dt_storage_pool_data_write_slots, 1, "Max write concurrency for each StoragePool.data.") \
-    M(SettingUInt64, dt_storage_pool_meta_write_slots, 2, "Max write concurrency for each StoragePool.meta.") \
     M(SettingUInt64, dt_open_file_max_idle_seconds, 15, "Max idle time of opening files, 0 means infinite.") \
+    M(SettingFloat, dt_page_gc_low_write_prob, 0.10, "Probability to run gc when write there is few writes.") \
+    \
+    M(SettingUInt64, dt_storage_pool_log_write_slots, 4, "Max write concurrency for each StoragePool.log.") \
+    M(SettingUInt64, dt_storage_pool_log_gc_min_file_num, 10, "Min number of page files to compact") \
+    M(SettingUInt64, dt_storage_pool_log_gc_min_legacy_num, 3, "Min number of legacy page files to compact") \
+    M(SettingUInt64, dt_storage_pool_log_gc_min_bytes, 128 * Constant::MB, "Min bytes of page data to compact") \
+    M(SettingFloat, dt_storage_pool_log_gc_max_valid_rate, 0.35, "Max valid rate of deciding a page file can be compact") \
+    \
+    M(SettingUInt64, dt_storage_pool_data_write_slots, 1, "Max write concurrency for each StoragePool.data.") \
+    M(SettingUInt64, dt_storage_pool_data_gc_min_file_num, 10, "Min number of page files to compact") \
+    M(SettingUInt64, dt_storage_pool_data_gc_min_legacy_num, 3, "Min number of legacy page files to compact") \
+    M(SettingUInt64, dt_storage_pool_data_gc_min_bytes, 128 * Constant::MB, "Min bytes of page data to compact") \
+    M(SettingFloat, dt_storage_pool_data_gc_max_valid_rate, 0.35, "Max valid rate of deciding a page file can be compact") \
+    \
+    M(SettingUInt64, dt_storage_pool_meta_write_slots, 2, "Max write concurrency for each StoragePool.meta.") \
+    M(SettingUInt64, dt_storage_pool_meta_gc_min_file_num, 10, "Min number of page files to compact") \
+    M(SettingUInt64, dt_storage_pool_meta_gc_min_legacy_num, 3, "Min number of legacy page files to compact") \
+    M(SettingUInt64, dt_storage_pool_meta_gc_min_bytes, 128 * Constant::MB, "Min bytes of page data to compact") \
+    M(SettingFloat, dt_storage_pool_meta_gc_max_valid_rate, 0.35, "Max valid rate of deciding a page file can be compact") \
     \
     M(SettingUInt64, max_rows_in_set, 0, "Maximum size of the set (in number of elements) resulting from the execution of the IN section.") \
     M(SettingUInt64, max_bytes_in_set, 0, "Maximum size of the set (in bytes in memory) resulting from the execution of the IN section.") \

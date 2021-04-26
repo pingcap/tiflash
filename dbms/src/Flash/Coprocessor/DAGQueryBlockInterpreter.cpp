@@ -157,8 +157,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                     throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
                 // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
                 // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
-                if (e.unavailable_region != InvalidRegionID)
-                    force_retry.emplace(e.unavailable_region);
+                force_retry.insert(e.unavailable_region.begin(), e.unavailable_region.end());
             }
             catch (DB::Exception & e)
             {
@@ -185,7 +184,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
 
     Names required_columns;
     std::vector<NameAndTypePair> source_columns;
-    std::vector<bool> is_ts_column;
     String handle_column_name = MutableSupport::tidb_pk_column_name;
     if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
         handle_column_name = pk_handle_col->get().name;
@@ -201,7 +199,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
             required_columns.push_back(handle_column_name);
             auto pair = storage->getColumns().getPhysical(handle_column_name);
             source_columns.push_back(pair);
-            is_ts_column.push_back(false);
+            timestamp_column_flag_for_tablescan.push_back(false);
             continue;
         }
 
@@ -209,7 +207,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         required_columns.push_back(name);
         auto pair = storage->getColumns().getPhysical(name);
         source_columns.emplace_back(std::move(pair));
-        is_ts_column.push_back(ci.tp() == TiDB::TypeTimestamp);
+        timestamp_column_flag_for_tablescan.push_back(ci.tp() == TiDB::TypeTimestamp);
     }
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
@@ -224,14 +222,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     }
 
     size_t max_block_size = settings.max_block_size;
-
-    if (query_block.selection)
-    {
-        for (auto & condition : query_block.selection->selection().conditions())
-        {
-            analyzer->makeExplicitSetForIndex(condition, storage);
-        }
-    }
 
     SelectQueryInfo query_info;
     /// to avoid null point exception
@@ -339,8 +329,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
             }
         });
     }
-
-    addTimeZoneCastAfterTS(is_ts_column, pipeline);
 }
 
 void DAGQueryBlockInterpreter::readFromLocalStorage( //
@@ -367,25 +355,25 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
             // Inject failpoint to throw RegionException
             fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
                 const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
-                std::vector<RegionID> region_ids;
+                RegionException::UnavailableRegions region_ids;
                 for (const auto & info : regions_info)
                 {
                     if (rand() % 100 > 50)
-                        region_ids.push_back(info.region_id);
+                        region_ids.insert(info.region_id);
                 }
                 throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
             });
             fiu_do_on(FailPoints::region_exception_after_read_from_storage_all_error, {
                 const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
-                std::vector<RegionID> region_ids;
+                RegionException::UnavailableRegions region_ids;
                 for (const auto & info : regions_info)
-                    region_ids.push_back(info.region_id);
+                    region_ids.insert(info.region_id);
                 throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
             });
             validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
             break;
         }
-        catch (DB::RegionException & e)
+        catch (RegionException & e)
         {
             /// Recover from region exception when super batch is enable
             if (dag.isBatchCop())
@@ -400,17 +388,13 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
                 if (likely(num_allow_retry > 0))
                 {
                     --num_allow_retry;
-                    // sort e.region_ids so that we can use lower_bound to find the region happens to error or not
-                    std::sort(e.region_ids.begin(), e.region_ids.end());
                     auto & regions_query_info = query_info.mvcc_query_info->regions_query_info;
                     for (auto iter = regions_query_info.begin(); iter != regions_query_info.end(); /**/)
                     {
-                        auto error_id_iter = std::lower_bound(e.region_ids.begin(), e.region_ids.end(), iter->region_id);
-                        if (error_id_iter != e.region_ids.end() && *error_id_iter == iter->region_id)
+                        if (e.unavailable_region.find(iter->region_id) != e.unavailable_region.end())
                         {
                             // move the error regions info from `query_info.mvcc_query_info->regions_query_info` to `region_retry`
-                            auto region_iter = dag_regions.find(iter->region_id);
-                            if (likely(region_iter != dag_regions.end()))
+                            if (auto region_iter = dag_regions.find(iter->region_id); likely(region_iter != dag_regions.end()))
                             {
                                 region_retry.emplace(region_iter->first, region_iter->second);
                                 ss << region_iter->first << ",";
@@ -509,35 +493,8 @@ void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
         DataTypes types;
         types.emplace_back(getDataTypeByFieldType(join.left_join_keys(i).field_type()));
         types.emplace_back(getDataTypeByFieldType(join.right_join_keys(i).field_type()));
-        try
-        {
-            DataTypePtr common_type = getLeastSupertype(types);
-            key_types.emplace_back(common_type);
-        }
-        catch (Exception & e)
-        {
-            if (e.code() == ErrorCodes::NO_COMMON_TYPE)
-            {
-                DataTypePtr left_type = removeNullable(types[0]);
-                DataTypePtr right_type = removeNullable(types[1]);
-                if ((left_type->getTypeId() == TypeIndex::UInt64 && right_type->isInteger() && !right_type->isUnsignedInteger())
-                    || (right_type->getTypeId() == TypeIndex::UInt64 && left_type->isInteger() && !left_type->isUnsignedInteger()))
-                {
-                    /// special case for uint64 and int
-                    /// inorder to not throw exception, use Decimal(20, 0) as the common type
-                    DataTypePtr common_type = std::make_shared<DataTypeDecimal<Decimal128>>(20, 0);
-                    if (types[0]->isNullable() || types[1]->isNullable())
-                        common_type = makeNullable(common_type);
-                    key_types.emplace_back(common_type);
-                }
-                else
-                    throw;
-            }
-            else
-            {
-                throw;
-            }
-        }
+        DataTypePtr common_type = getLeastSupertype(types);
+        key_types.emplace_back(common_type);
     }
 }
 
@@ -584,12 +541,23 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     }
 
     std::vector<NameAndTypePair> join_output_columns;
+    /// columns_for_other_join_filter is a vector of columns used
+    /// as the input columns when compiling other join filter.
+    /// Note the order in the column vector is very important:
+    /// first the columns in input_streams_vec[0], then followed
+    /// by the columns in input_streams_vec[1], if there are other
+    /// columns generated before compile other join filter, then
+    /// append the extra columns afterwards. In order to figure out
+    /// whether a given column is already in the column vector or
+    /// not quickly, we use another set to store the column names
     std::vector<NameAndTypePair> columns_for_other_join_filter;
+    std::unordered_set<String> column_set_for_other_join_filter;
     bool make_nullable = join.join_type() == tipb::JoinType::TypeRightOuterJoin;
     for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
     {
         join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
         columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+        column_set_for_other_join_filter.emplace(p.name);
     }
     make_nullable = join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
     for (auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
@@ -599,6 +567,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
             join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
         /// however, when compiling join's other condition, we still need the columns from right table
         columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+        column_set_for_other_join_filter.emplace(p.name);
     }
     /// all the columns from right table should be added after join, even for the join key
     NamesAndTypesList columns_added_by_join;
@@ -642,6 +611,17 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     left_streams = left_pipeline.streams;
     right_streams = right_pipeline.streams;
     String other_filter_column_name = "";
+    for (auto const & p : left_streams[0]->getHeader().getNamesAndTypesList())
+    {
+        if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
+            columns_for_other_join_filter.emplace_back(p.name, p.type);
+    }
+    for (auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
+    {
+        if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
+            columns_for_other_join_filter.emplace_back(p.name, p.type);
+    }
+
     ExpressionActionsPtr other_condition_expr
         = genJoinOtherConditionAction(join.other_conditions(), columns_for_other_join_filter, other_filter_column_name);
 
@@ -671,12 +651,20 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     for (auto & stream : pipeline.streams)
         stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions());
 
-    // todo should add a project here???
+    /// add a project to remove all the useless column
+    NamesWithAliases project_cols;
+    for (auto & c : join_output_columns)
+    {
+        /// do not need to care about duplicated column names because
+        /// because it is guaranteed by its children query block
+        project_cols.emplace_back(c.name, c.name);
+    }
+    executeProject(pipeline, project_cols);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(join_output_columns), context);
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline)
+bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, ExpressionActionsChain & chain)
 {
     bool hasTSColumn = false;
     for (auto b : is_ts_column)
@@ -684,20 +672,22 @@ bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_
     if (!hasTSColumn)
         return false;
 
-    ExpressionActionsChain chain;
-    if (analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column))
-    {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
-        return true;
-    }
-    else
-        return false;
+    return analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column);
 }
 
 AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
+    if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
+    {
+        if (addTimeZoneCastAfterTS(timestamp_column_flag_for_tablescan, chain))
+        {
+            res.need_timezone_cast_after_tablescan = true;
+            res.timezone_cast = chain.getLastActions();
+            chain.addStep();
+        }
+    }
     if (!conditions.empty())
     {
         analyzer->appendWhere(chain, conditions, res.filter_column_name);
@@ -1105,6 +1095,8 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
 
     ::tipb::DAGRequest dag_req;
 
+    /// still need to choose encode_type although it read data from TiFlash node because
+    /// in TiFlash it has no way to tell whether the cop request is from TiFlash or TIDB
     tipb::EncodeType encode_type;
     if (!isUnsupportedEncodeType(query_block.output_field_types, tipb::EncodeType::TypeCHBlock))
         encode_type = tipb::EncodeType::TypeCHBlock;
@@ -1121,7 +1113,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     for (int i = 0; i < (int)query_block.output_field_types.size(); i++)
     {
         dag_req.add_output_offsets(i);
-        ColumnInfo info = fieldTypeToColumnInfo(query_block.output_field_types[i]);
+        ColumnInfo info = TiDB::fieldTypeToColumnInfo(query_block.output_field_types[i]);
         String col_name = query_block.qb_column_prefix + "col_" + std::to_string(i);
         schema.push_back(std::make_pair(col_name, info));
         is_ts_column.push_back(query_block.output_field_types[i].tp() == TiDB::TypeTimestamp);
@@ -1138,13 +1130,16 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     {
         /// if the encode type is default, the timestamp column in dag response is UTC based
         /// so need to cast the timezone
-        if (addTimeZoneCastAfterTS(is_ts_column, pipeline))
+        ExpressionActionsChain chain;
+        if (addTimeZoneCastAfterTS(is_ts_column, chain))
         {
             for (size_t i = 0; i < final_project.size(); i++)
             {
                 if (is_ts_column[i])
                     final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
             }
+            pipeline.transform(
+                [&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
             need_append_final_project = true;
         }
     }
@@ -1241,13 +1236,15 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
         ExpressionActionsChain::Step & last_step = chain.steps.back();
         std::vector<NameAndTypePair> output_columns;
         NamesWithAliases project_cols;
+        UniqueNameGenerator unique_name_generator;
         for (auto & expr : query_block.source->projection().exprs())
         {
             auto expr_name = dag_analyzer.getActions(expr, last_step.actions);
             last_step.required_output.emplace_back(expr_name);
             auto & col = last_step.actions->getSampleBlock().getByName(expr_name);
-            output_columns.emplace_back(col.name, col.type);
-            project_cols.emplace_back(col.name, col.name);
+            String alias = unique_name_generator.toUniqueName(col.name);
+            output_columns.emplace_back(alias, col.type);
+            project_cols.emplace_back(col.name, alias);
         }
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
         executeProject(pipeline, project_cols);
@@ -1261,6 +1258,11 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     }
 
     auto res = analyzeExpressions();
+    if (res.need_timezone_cast_after_tablescan)
+    {
+        /// execute timezone cast
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, res.timezone_cast); });
+    }
     // execute selection
     if (res.has_where)
     {
@@ -1318,7 +1320,6 @@ void DAGQueryBlockInterpreter::executeProject(Pipeline & pipeline, NamesWithAlia
     }
     ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
     project->add(ExpressionAction::project(project_cols));
-    // add final project
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project); });
 }
 

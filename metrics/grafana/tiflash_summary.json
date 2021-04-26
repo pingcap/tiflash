@@ -2099,6 +2099,7 @@
             "alignAsTable": false,
             "avg": false,
             "current": false,
+            "hideZero": false,
             "max": false,
             "min": false,
             "rightSide": false,
@@ -2114,7 +2115,12 @@
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "/^applying/",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
@@ -2146,6 +2152,13 @@
               "intervalFactor": 1,
               "legendFormat": "80",
               "refId": "D"
+            },
+            {
+              "expr": "sum(tiflash_schema_applying{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "applying-{{instance}}",
+              "refId": "E"
             }
           ],
           "thresholds": [],
@@ -2179,8 +2192,8 @@
               "format": "short",
               "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
+              "max": "2",
+              "min": "0",
               "show": true
             }
           ],
@@ -4968,7 +4981,7 @@
           "heatmap": {},
           "hideZeroBuckets": true,
           "highlightCards": true,
-          "id": 77,
+          "id": 87,
           "legend": {
             "show": true
           },
@@ -5023,25 +5036,21 @@
     "list": [
       {
         "allValue": null,
-        "current": {
-        },
+        "current": {},
         "datasource": "${DS_TEST-CLUSTER}",
+        "definition": "",
         "hide": 2,
         "includeAll": false,
         "label": "tidb_cluster",
         "multi": false,
         "name": "tidb_cluster",
-        "options": [
-
-        ],
+        "options": [],
         "query": "label_values(tiflash_system_profile_event_Query, tidb_cluster)",
         "refresh": 2,
         "regex": "",
         "sort": 1,
         "tagValuesQuery": "",
-        "tags": [
-
-        ],
+        "tags": [],
         "tagsQuery": "",
         "type": "query",
         "useTags": false

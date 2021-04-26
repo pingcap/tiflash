@@ -6,6 +6,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/WriteBatch.h>
+#include <Storages/FormatVersion.h>
 
 #include <unordered_map>
 #include <vector>
@@ -23,14 +24,6 @@ namespace DB
 class PageFile : public Allocator<false>
 {
 public:
-    using Version = UInt32;
-
-    // Basic binary version
-    static constexpr Version VERSION_BASE = 1;
-    // Support multiple thread-write && read with offset inside page
-    // See FLASH_341 && FLASH-942 for details.
-    static constexpr Version VERSION_FLASH_341 = 2;
-    static constexpr Version CURRENT_VERSION   = VERSION_FLASH_341;
 
     /// Writer can NOT be used by multi threads.
     class Writer : private boost::noncopyable
@@ -132,7 +125,7 @@ public:
     public:
         bool hasNext() const;
 
-        void moveNext(PageFile::Version * v = nullptr);
+        void moveNext(PageFormat::Version * v = nullptr);
 
         PageEntriesEdit getEdits() { return std::move(curr_edit); }
 
@@ -259,9 +252,9 @@ public:
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
     /// And the meta_file_pos, data_file_pos should be properly set before creating writer.
-    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool create_new_file)
+    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool truncate_if_exists)
     {
-        return std::make_unique<Writer>(*this, sync_on_write, create_new_file);
+        return std::make_unique<Writer>(*this, sync_on_write, truncate_if_exists);
     }
     /// Return a reader for this file.
     /// The PageFile object can be released any time.

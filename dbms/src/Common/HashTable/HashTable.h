@@ -948,44 +948,56 @@ public:
 };
 
 template <typename HashTableType>
-class HashTableWithLock {
+class HashTableWithLock
+{
 public:
     using HashTable = HashTableType;
+    /// Maybe it's more reasonable to hold a write lock for IteratorWithLock and a read lock for ConstIteratorWithLock, however,
+    /// when I refine the code using shared_mutex to return read lock for ConstIterator and write lock for Iterator, the tests
+    /// in gtest_concurrent_hashmap(with test_loop = 1000) is about 5 times slower. Since the typical usage of concurrent hash map
+    /// in TiFlash is concurrent insert(when building join hash table), I think just keep using mutex is ok.
+    using IteratorWithLock = std::pair<typename HashTableType::iterator, std::unique_ptr<std::lock_guard<std::mutex>>>;
+    using ConstIteratorWithLock = std::pair<typename HashTableType::const_iterator, std::unique_ptr<std::lock_guard<std::mutex>>>;
     HashTableWithLock() {}
     HashTableWithLock(size_t reserve_for_num_elements) : hash_table(reserve_for_num_elements) {}
     std::mutex & getMutex() { return mutex; }
     HashTableType & getHashTable() { return hash_table; }
-    typename HashTableType::iterator ALWAYS_INLINE find(const typename HashTableType::Key & x) {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.find(x);
+    IteratorWithLock ALWAYS_INLINE find(const typename HashTableType::Key & x)
+    {
+        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        return std::make_pair(hash_table.find(x), std::move(lock_ptr));
     }
-    typename HashTableType::const_iterator ALWAYS_INLINE find(const typename HashTableType::Key & x) const {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.find(x);
+    ConstIteratorWithLock ALWAYS_INLINE find(const typename HashTableType::Key & x) const
+    {
+        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        return std::make_pair(hash_table.find(x), std::move(lock_ptr));
     }
-    typename HashTableType::iterator ALWAYS_INLINE find(const typename HashTableType::Key & x, size_t hash_value) {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.find(x, hash_value);
+    IteratorWithLock ALWAYS_INLINE find(const typename HashTableType::Key & x, size_t hash_value)
+    {
+        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        return std::make_pair(hash_table.find(x, hash_value), std::move(lock_ptr));
     }
-    typename HashTableType::const_iterator ALWAYS_INLINE find(const typename HashTableType::Key & x, size_t hash_value) const {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.find(x, hash_value);
+    ConstIteratorWithLock ALWAYS_INLINE find(const typename HashTableType::Key & x, size_t hash_value) const
+    {
+        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        return std::make_pair(hash_table.find(x, hash_value), std::move(lock_ptr));
     }
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
-    std::pair<typename HashTableType::iterator, bool> ALWAYS_INLINE insert(const typename HashTableType::value_type & x)
+    std::pair<IteratorWithLock, bool> ALWAYS_INLINE insert(const typename HashTableType::value_type & x)
     {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.insert(x);
+        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        auto res = hash_table.insert(x);
+        return std::make_pair(std::make_pair(res.first, std::move(lock_ptr)), res.second);
     }
-    void ALWAYS_INLINE emplace(const typename HashTableType::Key & x, typename HashTableType::iterator & it, bool & inserted)
+    void ALWAYS_INLINE emplace(const typename HashTableType::Key & x, IteratorWithLock & it, bool & inserted)
     {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.emplace(x, it, inserted);
+        it.second = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        return hash_table.emplace(x, it.first, inserted);
     }
-    void ALWAYS_INLINE emplace(const typename HashTableType::Key & x, typename HashTableType::iterator & it, bool & inserted, size_t hash_value)
+    void ALWAYS_INLINE emplace(const typename HashTableType::Key & x, IteratorWithLock & it, bool & inserted, size_t hash_value)
     {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.emplace(x, it, inserted, hash_value);
+        it.second = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        return hash_table.emplace(x, it.first, inserted, hash_value);
     }
     bool ALWAYS_INLINE has(const typename HashTableType::Key & x) const
     {
@@ -1011,12 +1023,11 @@ private:
 };
 
 template <typename HashTableType>
-class ConcurrentHashTable :
-        private boost::noncopyable,
-        protected HashTableType::Hash,
-        protected HashTableType::Allocator,
-        protected HashTableType::Cell::State,
-        protected ZeroValueStorage<HashTableType::Cell::need_zero_value_storage, typename HashTableType::Cell>
+class ConcurrentHashTable : private boost::noncopyable,
+                            protected HashTableType::Hash,
+                            protected HashTableType::Allocator,
+                            protected HashTableType::Cell::State,
+                            protected ZeroValueStorage<HashTableType::Cell::need_zero_value_storage, typename HashTableType::Cell>
 {
 public:
     using SegmentType = HashTableWithLock<HashTableType>;
@@ -1024,13 +1035,15 @@ public:
     using Cell = typename HashTableType::Cell;
     using Hash = typename HashTableType::Hash;
 
-    ConcurrentHashTable(size_t segment_size_) : segment_size(segment_size_) {
+    ConcurrentHashTable(size_t segment_size_) : segment_size(segment_size_)
+    {
         for (size_t i = 0; i < segment_size; i++)
         {
             segments.emplace_back(std::move(std::make_unique<HashTableWithLock<HashTableType>>()));
         }
     }
-    ConcurrentHashTable(size_t segment_size_, size_t reserve_for_num_elements) : segment_size(segment_size_) {
+    ConcurrentHashTable(size_t segment_size_, size_t reserve_for_num_elements) : segment_size(segment_size_)
+    {
         for (size_t i = 0; i < segment_size; i++)
         {
             segments.emplace_back(std::make_unique<HashTableWithLock<HashTableType>>(reserve_for_num_elements));
@@ -1054,14 +1067,17 @@ public:
 
     size_t getSegmentSize() const { return segment_size; }
 
-    size_t hash(const Key & x) const {
+    size_t hash(const Key & x) const
+    {
         return Hash::operator()(x);
     }
-    bool isZero(const Key & x) const {
+    bool isZero(const Key & x) const
+    {
         return Cell::isZero(x, *this);
     }
 
-    typename SegmentType::HashTable::iterator ALWAYS_INLINE find(const Key & x) {
+    typename SegmentType::IteratorWithLock ALWAYS_INLINE find(const Key & x)
+    {
         size_t segment_index = 0;
         size_t hash_value = 0;
         if (!isZero(x))
@@ -1073,7 +1089,8 @@ public:
         return segments[segment_index]->find(x, hash_value);
     }
 
-    typename SegmentType::HashTable::const_iterator ALWAYS_INLINE find(const Key & x) const {
+    typename SegmentType::ConstIteratorWithLock ALWAYS_INLINE find(const Key & x) const
+    {
         size_t segment_index = 0;
         size_t hash_value = 0;
         if (!isZero(x))
@@ -1085,7 +1102,8 @@ public:
         return segments[segment_index].find(x, hash_value);
     }
 
-    typename SegmentType::HashTable::iterator ALWAYS_INLINE find(const Key & x, size_t hash_value) {
+    typename SegmentType::IteratorWithLock ALWAYS_INLINE find(const Key & x, size_t hash_value)
+    {
         size_t segment_index = 0;
         if (!isZero(x))
             segment_index = hash_value % segment_size;
@@ -1093,7 +1111,8 @@ public:
         return segments[segment_index]->find(x, hash_value);
     }
 
-    typename SegmentType::HashTable::const_iterator ALWAYS_INLINE find(const Key & x, size_t hash_value) const {
+    typename SegmentType::ConstIteratorWithLock ALWAYS_INLINE find(const Key & x, size_t hash_value) const
+    {
         size_t segment_index = 0;
         if (!isZero(x))
             segment_index = hash_value % segment_size;
@@ -1102,7 +1121,7 @@ public:
     }
 
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
-    std::pair<typename SegmentType::HashTable::iterator, bool> ALWAYS_INLINE insert(const typename SegmentType::HashTable::value_type & x)
+    std::pair<typename SegmentType::IteratorWithLock, bool> ALWAYS_INLINE insert(const typename SegmentType::HashTable::value_type & x)
     {
         size_t segment_index = 0;
         if (!isZero(Cell::getKey(x)))
@@ -1114,7 +1133,7 @@ public:
         return segments[segment_index]->insert(x);
     }
 
-    void ALWAYS_INLINE emplace(const Key & x, typename SegmentType::HashTable::iterator & it, bool & inserted)
+    void ALWAYS_INLINE emplace(const Key & x, typename SegmentType::IteratorWithLock & it, bool & inserted)
     {
         size_t segment_index = 0;
         if (!isZero(x))
@@ -1125,7 +1144,7 @@ public:
         return segments[segment_index]->emplace(x, it, inserted);
     }
 
-    void ALWAYS_INLINE emplace(const Key & x, typename SegmentType::HashTable::iterator & it, bool & inserted, size_t hash_value)
+    void ALWAYS_INLINE emplace(const Key & x, typename SegmentType::ConstIteratorWithLock & it, bool & inserted, size_t hash_value)
     {
         size_t segment_index = 0;
         if (!isZero(x))

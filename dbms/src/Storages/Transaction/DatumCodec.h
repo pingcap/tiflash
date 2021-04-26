@@ -4,6 +4,7 @@
 #include <Core/Field.h>
 #include <IO/Endian.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 /// Functions in this file are used for individual datum codec, i.e. UInt/Int64, Float64, String/Bytes, Decimal, Enum, Set, etc.
 /// The internal representation of a datum in TiFlash is Field.
@@ -44,7 +45,11 @@ Int64 DecodeVarInt(size_t & cursor, const String & raw_value);
 
 Field DecodeDecimal(size_t & cursor, const String & raw_value);
 
+Field DecodeDecimalForCHRow(size_t & cursor, const String & raw_value, const TiDB::ColumnInfo & column_info);
+
 Field DecodeDatum(size_t & cursor, const String & raw_value);
+
+Field DecodeDatumForCHRow(size_t & cursor, const String & raw_value, const TiDB::ColumnInfo & column_info);
 
 void SkipDatum(size_t & cursor, const String & raw_value);
 
@@ -71,6 +76,10 @@ void EncodeVarInt(Int64 num, std::stringstream & ss);
 
 void EncodeDecimal(const Field & field, std::stringstream & ss);
 
+void EncodeDecimalForRow(const Field & field, std::stringstream & ss, const ColumnInfo & column_info);
+
 void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss);
+
+void EncodeDatumForRow(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss, const ColumnInfo & column_info);
 
 } // namespace DB

@@ -123,6 +123,7 @@ else ()
     install (TARGETS dbms LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT clickhouse)
 endif ()
 
+target_include_directories(dbms PUBLIC "${TIFLASH_PROXY_FFI_SRC}")
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO" OR CMAKE_BUILD_TYPE_UC STREQUAL "MINSIZEREL")
     # Won't generate debug info for files with heavy template instantiation to achieve faster linking and lower size.
@@ -177,6 +178,7 @@ target_link_libraries (dbms
     kvproto
     kv_client
     tipb
+    dtpb
     ${Protobuf_LIBRARIES}
     gRPC::grpc++_unsecure
     ${CURL_LIBRARIES}
@@ -291,6 +293,8 @@ if (ENABLE_TESTS)
     add_executable(gtests_dbms EXCLUDE_FROM_ALL
         ${dbms_gtest_sources}
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions)

@@ -25,7 +25,6 @@ public:
 
     ~BackgroundService();
 
-    void addRegionToDecode(const RegionPtr & region);
     void addRegionToFlush(const RegionPtr & region);
 
 private:
@@ -35,12 +34,12 @@ private:
     Logger * log;
 
     std::mutex region_mutex;
-    RegionMap regions_to_decode;
     RegionMap regions_to_flush;
 
     BackgroundProcessingPool::TaskHandle single_thread_task_handle;
     BackgroundProcessingPool::TaskHandle table_flush_handle;
     BackgroundProcessingPool::TaskHandle region_handle;
+    BackgroundProcessingPool::TaskHandle storage_gc_handle;
 };
 
 } // namespace DB
