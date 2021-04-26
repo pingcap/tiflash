@@ -160,7 +160,6 @@ struct ContextShared
     SchemaSyncServicePtr schema_sync_service;               /// Schema sync service instance.
     PartPathSelectorPtr part_path_selector_ptr;             /// PartPathSelector service instance.
     PathCapacityMetricsPtr path_capacity_ptr;               /// Path capacity metrics
-    TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
     FileProviderPtr file_provider;                          /// File provider.
     IORateLimiter io_rate_limiter;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
@@ -1529,15 +1528,7 @@ SchemaSyncServicePtr & Context::getSchemaSyncService()
 void Context::initializeTiFlashMetrics()
 {
     auto lock = getLock();
-    if (shared->tiflash_metrics)
-        throw Exception("TiFlash metrics has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->tiflash_metrics = std::make_shared<TiFlashMetrics>();
-}
-
-TiFlashMetricsPtr Context::getTiFlashMetrics() const
-{
-    auto lock = getLock();
-    return shared->tiflash_metrics;
+    (void)TiFlashMetrics::instance();
 }
 
 void Context::initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption)

@@ -14,10 +14,10 @@ namespace DB
 /// Central place to define metrics across all subsystems.
 /// Refer to gtest_tiflash_metrics.cpp for more sample defines.
 /// Usage:
-/// GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_response_bytes).Increment(1);
-/// GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_count, type_batch).Set(1);
+/// GET_METRIC(tiflash_coprocessor_response_bytes).Increment(1);
+/// GET_METRIC(tiflash_coprocessor_request_count, type_batch).Set(1);
 /// Maintenance notes:
-/// 1. Use same name prefix for metrics in same subsystem (coprocessor/schema/tmt/raft/etc.).
+/// 1. Use same name prefix for metrics in same subsystem (coprocessor/schema/storage/raft/etc.).
 /// 2. Keep metrics with same prefix next to each other.
 /// 3. Add metrics of new subsystems at tail.
 /// 4. Keep it proper formatted using clang-format.
@@ -249,9 +249,11 @@ private:
 class TiFlashMetrics
 {
 public:
-    TiFlashMetrics();
+    static TiFlashMetrics & instance();
 
 private:
+    TiFlashMetrics();
+
     static constexpr auto profile_events_prefix = "tiflash_system_profile_event_";
     static constexpr auto current_metrics_prefix = "tiflash_system_current_metric_";
     static constexpr auto async_metrics_prefix = "tiflash_system_asynchronous_metric_";
@@ -271,6 +273,9 @@ public:
     }
     APPLY_FOR_METRICS(MAKE_METRIC_MEMBER_M, MAKE_METRIC_MEMBER_F)
 
+    TiFlashMetrics(TiFlashMetrics const &) = delete;
+    void operator=(TiFlashMetrics const &) = delete;
+
     friend class MetricsPrometheus;
 };
 
@@ -287,9 +292,14 @@ public:
 APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 #undef APPLY_FOR_METRICS
 
-#define __GET_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
-#define __GET_METRIC_0(ptr, family) (ptr)->family.get()
-#define __GET_METRIC_1(ptr, family, metric) (ptr)->family.get(family##_metrics::metric)
+#define __GET_METRIC_MACRO(_1, _2, NAME, ...) NAME
+#ifndef GTEST_TIFLASH_METRICS
+#define __GET_METRIC_0(family) TiFlashMetrics::instance().family.get()
+#define __GET_METRIC_1(family, metric) TiFlashMetrics::instance().family.get(family##_metrics::metric)
+#else
+#define __GET_METRIC_0(family) TestMetrics::instance().family.get()
+#define __GET_METRIC_1(family, metric) TestMetrics::instance().family.get(family##_metrics::metric)
+#endif
 #define GET_METRIC(...) __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0)(__VA_ARGS__)
 
 } // namespace DB

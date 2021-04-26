@@ -57,7 +57,7 @@ protected:
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
         auto delegator = path_pool->getPSDiskDelegatorSingle("log");
-        auto storage   = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider, db_context->getTiFlashMetrics());
+        auto storage   = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider);
         storage->restore();
         return storage;
     }

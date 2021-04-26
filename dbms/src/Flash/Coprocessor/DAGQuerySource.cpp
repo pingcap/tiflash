@@ -21,11 +21,11 @@ DAGQuerySource::DAGQuerySource(Context & context_, const RegionInfoMap & regions
 {
     if (dag_request.has_root_executor())
     {
-        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.root_executor(), context.getTiFlashMetrics());
+        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.root_executor());
     }
     else
     {
-        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors(), context.getTiFlashMetrics());
+        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors());
     }
     root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(context.getDAGContext()->getQBIdToJoinAliasMap());
     for (Int32 i : dag_request.output_offsets())

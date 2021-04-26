@@ -288,7 +288,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     auto actual_write = ProfileEvents::counters[ProfileEvents::PSMWriteBytes].load(std::memory_order_relaxed)
         + ProfileEvents::counters[ProfileEvents::WriteBufferFromFileDescriptorWriteBytes].load(std::memory_order_relaxed)
         + ProfileEvents::counters[ProfileEvents::WriteBufferAIOWriteBytes].load(std::memory_order_relaxed);
-    GET_METRIC(context.metrics, tiflash_storage_write_amplification)
+    GET_METRIC(tiflash_storage_write_amplification)
         .Set((double)(actual_write / 1024 / 1024) / (total_write / 1024 / 1024));
 
     return true;

@@ -166,7 +166,6 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
     if (unlikely(regions_snapshot.size() != regions_info.size()))
         throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
 
-    auto metrics = tmt.getContext().getTiFlashMetrics();
     const size_t num_regions = regions_info.size();
 
     const size_t batch_size = num_regions / concurrent_num;
@@ -201,7 +200,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             }
         }
 
-        GET_METRIC(metrics, tiflash_raft_read_index_count).Increment(batch_read_index_req.size());
+        GET_METRIC(tiflash_raft_read_index_count).Increment(batch_read_index_req.size());
 
         const auto & make_default_batch_read_index_result = [&]() {
             for (const auto & req : batch_read_index_req)
@@ -240,7 +239,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
         }();
 
         {
-            GET_METRIC(metrics, tiflash_raft_read_index_duration_seconds).Observe(batch_wait_index_watch.elapsedSeconds());
+            GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(batch_wait_index_watch.elapsedSeconds());
             const size_t cached_size = ori_batch_region_size - batch_read_index_req.size();
             LOG_DEBUG(
                 log,
@@ -298,7 +297,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
                 if (time_cost > 0)
                 {
                     // Only record information if wait-index does happen
-                    GET_METRIC(metrics, tiflash_raft_wait_index_duration_seconds).Observe(time_cost);
+                    GET_METRIC(tiflash_raft_wait_index_duration_seconds).Observe(time_cost);
                 }
             }
             if (mvcc_query_info->resolve_locks)

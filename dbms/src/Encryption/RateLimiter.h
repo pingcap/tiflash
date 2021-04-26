@@ -20,8 +20,6 @@ class AbstractConfiguration;
 namespace DB
 {
 
-class TiFlashMetrics;
-using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 class LimiterStat;
 class IOLimitTuner;
 
@@ -41,8 +39,6 @@ enum class LimiterType
 //
 // Constructor parameters:
 //
-// `metrics_` is the metrics pointer.
-//
 // `rate_limit_per_sec_` controls the total write rate in bytes per second, 0 means no limit.
 //
 // `type_` is the type of this limiter. It is use for metrics.
@@ -54,7 +50,7 @@ enum class LimiterType
 class WriteLimiter
 {
 public:
-    WriteLimiter(TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_ = 100);
+    WriteLimiter(Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_ = 100);
 
     virtual ~WriteLimiter();
 
@@ -105,7 +101,6 @@ protected:
     using RequestQueue = std::deque<Request *>;
     RequestQueue req_queue;
 
-    TiFlashMetricsPtr metrics;
     std::mutex request_mutex;
 
     LimiterType type;
@@ -133,7 +128,7 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter final : public WriteLimiter
 {
 public:
-    ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_,
+    ReadLimiter(std::function<Int64()> getIOStatistic_, Int64 rate_limit_per_sec_, LimiterType type_,
         Int64 get_io_stat_period_us = 2000, UInt64 refill_period_ms_ = 100);
 
 #ifndef DBMS_PUBLIC_GTEST
@@ -173,10 +168,10 @@ public:
 
     WriteLimiterPtr getWriteLimiter();
     ReadLimiterPtr getReadLimiter();
-    void init(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_);
+    void init(Poco::Util::AbstractConfiguration & config_);
     void updateConfig(Poco::Util::AbstractConfiguration & config_);
 
-    void updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_);
+    void updateConfig(Poco::Util::AbstractConfiguration & config_);
 
     void setBackgroundThreadIds(std::vector<pid_t> thread_ids);
 
@@ -230,7 +225,6 @@ private:
     std::atomic<bool> stop;
     std::thread auto_tune_thread;
 
-    TiFlashMetricsPtr metrics;
     // Noncopyable and nonmovable.
     IORateLimiter(const IORateLimiter & limiter) = delete;
     IORateLimiter & operator=(const IORateLimiter & limiter) = delete;

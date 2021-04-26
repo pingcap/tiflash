@@ -171,7 +171,7 @@ public:
 
     TableID getMappedTableID() const;
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
-    void handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt);
+    void handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt64 term);
     void finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term);
 
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }

@@ -1335,9 +1335,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         {
             // Report the unix timestamp, git hash, release version
-            auto metrics = global_context->getTiFlashMetrics();
             Poco::Timestamp ts;
-            GET_METRIC(metrics, tiflash_server_info, start_time).Set(ts.epochTime());
+            GET_METRIC(tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
         tmt_context.setStatusRunning();

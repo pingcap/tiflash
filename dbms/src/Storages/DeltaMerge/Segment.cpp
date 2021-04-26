@@ -1192,10 +1192,9 @@ void Segment::check(DMContext &, const String &) const {}
 bool Segment::flushCache(DMContext & dm_context)
 {
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_DeltaFlush};
-    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_flush).Increment();
+    GET_METRIC(tiflash_storage_subtask_count, type_delta_flush).Increment();
     Stopwatch watch;
-    SCOPE_EXIT(
-        { GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_flush).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_flush).Observe(watch.elapsedSeconds()); });
 
     return delta->flush(dm_context);
 }
@@ -1203,10 +1202,9 @@ bool Segment::flushCache(DMContext & dm_context)
 bool Segment::compactDelta(DMContext & dm_context)
 {
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_DeltaCompact};
-    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_compact).Increment();
+    GET_METRIC(tiflash_storage_subtask_count, type_delta_compact).Increment();
     Stopwatch watch;
-    SCOPE_EXIT(
-        { GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_compact).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_compact).Observe(watch.elapsedSeconds()); });
 
     return delta->compact(dm_context);
 }
@@ -1341,11 +1339,9 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext &           
         return {my_delta_index, false};
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_PlaceIndexUpdate};
-    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_place_index_update).Increment();
+    GET_METRIC(tiflash_storage_subtask_count, type_place_index_update).Increment();
     Stopwatch watch;
-    SCOPE_EXIT({
-        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_place_index_update).Observe(watch.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_place_index_update).Observe(watch.elapsedSeconds()); });
 
     EventRecorder recorder(ProfileEvents::DMPlace, ProfileEvents::DMPlaceNS);
 
