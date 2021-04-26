@@ -1,7 +1,6 @@
 #include <Storages/System/StorageSystemColumns.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeString.h>
@@ -144,10 +143,6 @@ BlockInputStreams StorageSystemColumns::read(
               * NOTE: It is possible to add getter for this info to IStorage interface.
               */
             if (auto storage_concrete = dynamic_cast<StorageMergeTree *>(storage.get()))
-            {
-                column_sizes = storage_concrete->getData().getColumnSizes();
-            }
-            else if (auto storage_concrete = dynamic_cast<StorageReplicatedMergeTree *>(storage.get()))
             {
                 column_sizes = storage_concrete->getData().getColumnSizes();
             }

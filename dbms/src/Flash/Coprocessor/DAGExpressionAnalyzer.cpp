@@ -907,14 +907,14 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
         for (size_t index = 0; index < output_offsets.size(); index++)
         {
             UInt32 i = output_offsets[index];
-            if (schema[i].tp() == TiDB::TypeTimestamp || need_append_type_cast_vec[index])
+            if ((need_append_timezone_cast && schema[i].tp() == TiDB::TypeTimestamp) || need_append_type_cast_vec[index])
             {
                 const auto & it = casted_name_map.find(current_columns[i].name);
                 if (it == casted_name_map.end())
                 {
                     /// first add timestamp cast
                     String updated_name = current_columns[i].name;
-                    if (schema[i].tp() == TiDB::TypeTimestamp)
+                    if (need_append_timezone_cast && schema[i].tp() == TiDB::TypeTimestamp)
                     {
                         if (tz_col.length() == 0)
                             tz_col = getActions(tz_expr, step.actions);

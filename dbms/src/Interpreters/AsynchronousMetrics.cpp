@@ -7,7 +7,6 @@
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Storages/MarkCache.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <chrono>
 
 #include <common/config_common.h>
@@ -149,37 +148,8 @@ void AsynchronousMetrics::update()
             for (auto iterator = db.second->getIterator(context); iterator->isValid(); iterator->next())
             {
                 auto & table = iterator->table();
-                StorageMergeTree * table_merge_tree = dynamic_cast<StorageMergeTree *>(table.get());
-                StorageReplicatedMergeTree * table_replicated_merge_tree = dynamic_cast<StorageReplicatedMergeTree *>(table.get());
 
-                if (table_replicated_merge_tree)
-                {
-                    StorageReplicatedMergeTree::Status status;
-                    table_replicated_merge_tree->getStatus(status, false);
-
-                    calculateMaxAndSum(max_queue_size, sum_queue_size, status.queue.queue_size);
-                    calculateMaxAndSum(max_inserts_in_queue, sum_inserts_in_queue, status.queue.inserts_in_queue);
-                    calculateMaxAndSum(max_merges_in_queue, sum_merges_in_queue, status.queue.merges_in_queue);
-
-                    try
-                    {
-                        time_t absolute_delay = 0;
-                        time_t relative_delay = 0;
-                        table_replicated_merge_tree->getReplicaDelays(absolute_delay, relative_delay);
-
-                        calculateMax(max_absolute_delay, absolute_delay);
-                        calculateMax(max_relative_delay, relative_delay);
-                    }
-                    catch (...)
-                    {
-                        tryLogCurrentException(__PRETTY_FUNCTION__,
-                            "Cannot get replica delay for table: " + backQuoteIfNeed(db.first) + "." + backQuoteIfNeed(iterator->name()));
-                    }
-
-                    calculateMax(max_part_count_for_partition, table_replicated_merge_tree->getData().getMaxPartsCountForPartition());
-                }
-
-                if (table_merge_tree)
+                if (StorageMergeTree * table_merge_tree = dynamic_cast<StorageMergeTree *>(table.get()); table_merge_tree)
                 {
                     calculateMax(max_part_count_for_partition, table_merge_tree->getData().getMaxPartsCountForPartition());
                 }
