@@ -1066,7 +1066,8 @@ try
             case Segment_test_Mode::V2_BlockOnly:
                 segment->write(dmContext(), std::move(block));
                 break;
-            case Segment_test_Mode::V2_FileOnly: {
+            case Segment_test_Mode::V2_FileOnly:
+            {
                 auto delegate          = dmContext().path_pool.getStableDiskDelegator();
                 auto file_provider     = dmContext().db_context.getFileProvider();
                 auto [range, file_ids] = genDMFile(dmContext(), block);
@@ -1555,6 +1556,70 @@ try
         }
         in->readSuffix();
         ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
+    }
+}
+CATCH
+
+TEST_F(Segment_test, CalculateDTFileProperty)
+try
+{
+    const size_t num_rows_write = 100;
+    const size_t tso            = 10000;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false, tso);
+        // write to segment
+        segment->write(dmContext(), block);
+        segment = segment->mergeDelta(dmContext(), tableColumns());
+    }
+
+    {
+        auto & stable = segment->getStable();
+        ASSERT_EQ(stable->getRows(), num_rows_write);
+        // caculate StableProperty
+        ASSERT_EQ(stable->isStablePropertyCached(), false);
+        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false, 1);
+        ASSERT_EQ(stable->isStablePropertyCached(), true);
+        auto & property = stable->getStableProperty();
+        ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
+        ASSERT_EQ(property.num_versions, num_rows_write);
+        ASSERT_EQ(property.num_puts, num_rows_write);
+        ASSERT_EQ(property.num_rows, num_rows_write);
+    }
+}
+CATCH
+
+TEST_F(Segment_test, CalculateDTFilePropertyWithPropertyFileDeleted)
+try
+{
+    const size_t num_rows_write = 100;
+    const size_t tso            = 10000;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false, tso);
+        // write to segment
+        segment->write(dmContext(), block);
+        segment = segment->mergeDelta(dmContext(), tableColumns());
+    }
+
+    {
+        auto & stable = segment->getStable();
+        ASSERT_EQ(stable->getRows(), num_rows_write);
+        auto & dmfiles = stable->getDMFiles();
+        ASSERT_GT(dmfiles.size(), (size_t)0);
+        auto & dmfile    = dmfiles[0];
+        auto   file_path = dmfile->path();
+        // check property file exists and then delete it
+        ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
+        Poco::File(file_path + "/property").remove();
+        ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
+        // caculate StableProperty
+        ASSERT_EQ(stable->isStablePropertyCached(), false);
+        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false, 1);
+        ASSERT_EQ(stable->isStablePropertyCached(), true);
+        auto & property = stable->getStableProperty();
+        ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
+        ASSERT_EQ(property.num_versions, num_rows_write);
+        ASSERT_EQ(property.num_puts, num_rows_write);
+        ASSERT_EQ(property.num_rows, num_rows_write);
     }
 }
 CATCH
