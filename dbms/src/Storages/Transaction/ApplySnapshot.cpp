@@ -300,7 +300,7 @@ std::vector<UInt64> KVStore::preHandleSnapshotToFiles(
 }
 
 /// `preHandleSSTsToDTFiles` read data from SSTFiles and generate DTFile(s) for commited data
-/// return the path of DTFile(s), the uncommited data will be inserted to `new_region`
+/// return the ids of DTFile(s), the uncommited data will be inserted to `new_region`
 std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
     RegionPtr new_region, const SSTViewVec snaps, uint64_t /*index*/, uint64_t /*term*/, DM::FileConvertJobType job_type, TMTContext & tmt)
 {
