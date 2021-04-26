@@ -128,8 +128,8 @@ namespace DB
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
         F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                      \
-    M(tiflash_coprocessor_read_duration_seconds, "Bucketed histogram of scaning data, in mileseconds", Histogram,                         \
-        F(type_scan, {{"type", "scan"}}, ExpBuckets{0.0005, 2, 20}))                    
+    M(tiflash_coprocessor_read_speed, "Bucketed histogram of scaning data, in mileseconds", Histogram,                                    \
+        F(type_scan, {{"type", "scan"}}, ExpBuckets{16, 4, 17}))                    
 
 
 struct ExpBuckets
