@@ -29,11 +29,13 @@ public:
     DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input,
                                     const ColumnDefines &       read_columns,
                                     UInt64                      version_limit_,
-                                    bool                        is_common_handle_)
+                                    bool                        is_common_handle_,
+                                    Context &                   context_)
         : version_limit(version_limit_),
           is_common_handle(is_common_handle_),
           header(toEmptyBlock(read_columns)),
-          log(&Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">"))
+          log(&Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">")
+          context(context_))
     {
         children.push_back(input);
 
@@ -123,6 +125,7 @@ private:
     bool   is_common_handle;
     Block  header;
     Stopwatch timer;
+    Context & context;
 
     size_t handle_col_pos;
     size_t version_col_pos;

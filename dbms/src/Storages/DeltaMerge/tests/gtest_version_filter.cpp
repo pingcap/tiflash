@@ -51,7 +51,7 @@ BlockInputStreamPtr genInputStream(const BlocksList & blocks, const ColumnDefine
     ColumnDefine handle_define(
         TiDBPkColumnID, DMTestEnv::pk_name, is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE);
     return std::make_shared<DMVersionFilterBlockInputStream<MODE>>(
-        std::make_shared<DebugBlockInputStream>(blocks, is_common_handle), columns, max_version, is_common_handle);
+        std::make_shared<DebugBlockInputStream>(blocks, is_common_handle), columns, max_version, is_common_handle, DMTestENV::getContext);
 }
 
 } // namespace
