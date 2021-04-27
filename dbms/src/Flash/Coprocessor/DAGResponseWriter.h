@@ -60,6 +60,7 @@ protected:
     DAGContext & dag_context;
     std::unordered_map<String, ExecutionSummary> previous_execution_stats;
     std::unordered_set<String> local_executors;
+    Poco::Logger * log;
 };
 
 } // namespace DB

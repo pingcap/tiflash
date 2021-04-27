@@ -23,6 +23,13 @@ void DAGResponseWriter::fillTiExecutionSummary(
     prev_stats = current;
     if (dag_context.return_executor_id)
         execution_summary->set_executor_id(executor_id);
+    if (executor_id.find("TableFullScan") == 0)
+    {
+        LOG_DEBUG(log,
+            "Execution summary for " + executor_id + " is: time = " + std::to_string(execution_summary->time_processed_ns() / 1000000.0)
+                + "ms, rows = " + std::to_string(execution_summary->num_produced_rows())
+                + ", iters = " + std::to_string(execution_summary->num_iterations()));
+    }
 }
 
 void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode)
@@ -124,7 +131,8 @@ DAGResponseWriter::DAGResponseWriter(
     : records_per_chunk(records_per_chunk_),
       encode_type(encode_type_),
       result_field_types(std::move(result_field_types_)),
-      dag_context(dag_context_)
+      dag_context(dag_context_),
+      log(&Logger::get("DAGResponseWriter"))
 {
     for (auto & p : dag_context.getProfileStreamsMap())
     {
