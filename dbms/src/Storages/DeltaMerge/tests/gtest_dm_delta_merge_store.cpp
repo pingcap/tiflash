@@ -4,8 +4,11 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Poco/File.h>
-#include <Storages/DeltaMerge/DMContext.h>
+
+#define private public
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#undef private
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -14,10 +17,6 @@
 #include <memory>
 
 #include "dm_basic_include.h"
-
-#define private public
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
-#undef private
 
 namespace DB
 {
