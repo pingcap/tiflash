@@ -330,6 +330,12 @@ public:
         }
         return block;
     }
+
+    static int getPseudoRandomNumber()
+    {
+        static int num = 0;
+        return num++;
+    }
 };
 
 } // namespace tests

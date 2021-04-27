@@ -74,17 +74,14 @@ namespace DM
 
 const static size_t SEGMENT_BUFFER_SIZE = 128; // More than enough.
 
-DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
-                             const ColumnDefinesPtr &    schema_snap,
-                             const BlockInputStreamPtr & input_stream,
-                             UInt64                      file_id,
-                             const String &              parent_path,
-                             bool                        need_rate_limit)
+DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
+                             const ColumnDefinesPtr &       schema_snap,
+                             const BlockInputStreamPtr &    input_stream,
+                             UInt64                         file_id,
+                             const String &                 parent_path,
+                             DMFileBlockOutputStream::Flags flags)
 {
-    DMFileBlockOutputStream::Flags flags;
-    flags.setRateLimit(need_rate_limit);
-
-    auto   dmfile        = DMFile::create(file_id, parent_path, dm_context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
+    auto   dmfile        = DMFile::create(file_id, parent_path, flags.isSingleFile());
     auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, flags);
     auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
@@ -140,8 +137,12 @@ StableValueSpacePtr createNewStable(DMContext &                 context,
     auto delegate   = context.path_pool.getStableDiskDelegator();
     auto store_path = delegate.choosePath();
 
+    DMFileBlockOutputStream::Flags flags;
+    flags.setRateLimit(need_rate_limit);
+    flags.setSingleFile(context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
+
     PageId dmfile_id = context.storage_pool.newDataPageId();
-    auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path, need_rate_limit);
+    auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path, flags);
     auto   stable    = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dmfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
     stable->saveMeta(wbs.meta);
