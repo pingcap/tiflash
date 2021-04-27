@@ -30,12 +30,12 @@ public:
                                     const ColumnDefines &       read_columns,
                                     UInt64                      version_limit_,
                                     bool                        is_common_handle_,
-                                    Context &                   context_)
+                                    TiFlashMetricsPtr          metric_)
         : version_limit(version_limit_),
           is_common_handle(is_common_handle_),
           header(toEmptyBlock(read_columns)),
           log(&Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">")),
-          context(context_)
+          metric(metric_)
     {
         children.push_back(input);
 
@@ -125,7 +125,7 @@ private:
     bool   is_common_handle;
     Block  header;
     Stopwatch timer;
-    Context & context;
+    TiFlashMetricsPtr  metric;
 
     size_t handle_col_pos;
     size_t version_col_pos;

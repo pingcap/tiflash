@@ -362,7 +362,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
 
         stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, read_range, 0);
         stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(
-            stream, columns_to_read, max_version, is_common_handle, dm_context.db_context);
+            stream, columns_to_read, max_version, is_common_handle, dm_context.metrics);
 
         return stream;
     };
@@ -440,7 +440,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext &      
         data_stream = std::make_shared<ReorganizeBlockInputStream>(data_stream, EXTRA_HANDLE_COLUMN_NAME);
     }
     data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-        data_stream, *read_info.read_columns, dm_context.min_version, is_common_handle, dm_context.db_context));
+        data_stream, *read_info.read_columns, dm_context.min_version, is_common_handle, dm_context.metrics));
 
     return data_stream;
 }
@@ -898,7 +898,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
         my_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(my_data, my_range, 0);
         my_data = std::make_shared<ReorganizeBlockInputStream>(my_data, EXTRA_HANDLE_COLUMN_NAME);
         my_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-            my_data, *read_info.read_columns, dm_context.min_version, is_common_handle, dm_context.db_context);
+            my_data, *read_info.read_columns, dm_context.min_version, is_common_handle, dm_context.metrics);
         auto my_stable_id = segment_snap->stable->getId();
         my_new_stable     = createNewStable(dm_context, schema_snap, my_data, my_stable_id, wbs, need_rate_limit);
     }
@@ -925,7 +925,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
         other_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(other_data, other_range, 0);
         other_data = std::make_shared<ReorganizeBlockInputStream>(other_data, EXTRA_HANDLE_COLUMN_NAME);
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-            other_data, *read_info.read_columns, dm_context.min_version, is_common_handle, dm_context.db_context);
+            other_data, *read_info.read_columns, dm_context.min_version, is_common_handle, dm_context.matrics);
         auto other_stable_id = dm_context.storage_pool.newMetaPageId();
         other_stable         = createNewStable(dm_context, schema_snap, other_data, other_stable_id, wbs, need_rate_limit);
     }
@@ -1055,7 +1055,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
         stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, segment->rowkey_range, 0);
         stream = std::make_shared<ReorganizeBlockInputStream>(stream, EXTRA_HANDLE_COLUMN_NAME);
         stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-            stream, *read_info.read_columns, dm_context.min_version, dm_context.is_common_handle, dm_context.db_context);
+            stream, *read_info.read_columns, dm_context.min_version, dm_context.is_common_handle, dm_context.metrics);
 
         return stream;
     };
