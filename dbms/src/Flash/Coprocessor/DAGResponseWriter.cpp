@@ -6,21 +6,27 @@ namespace DB
 {
 
 void DAGResponseWriter::fillTiExecutionSummary(
-    tipb::ExecutorExecutionSummary * execution_summary, ExecutionSummary & current, const String & executor_id)
+    tipb::ExecutorExecutionSummary * execution_summary, ExecutionSummary & current, const String & executor_id, bool delta_mode)
 {
     auto & prev_stats = previous_execution_stats[executor_id];
 
-    execution_summary->set_time_processed_ns(current.time_processed_ns - prev_stats.time_processed_ns);
-    execution_summary->set_num_produced_rows(current.num_produced_rows - prev_stats.num_produced_rows);
-    execution_summary->set_num_iterations(current.num_iterations - prev_stats.num_iterations);
-    execution_summary->set_concurrency(current.concurrency - prev_stats.concurrency);
+    execution_summary->set_time_processed_ns(
+        delta_mode ? current.time_processed_ns - prev_stats.time_processed_ns : current.time_processed_ns);
+    execution_summary->set_num_produced_rows(
+        delta_mode ? current.num_produced_rows - prev_stats.num_produced_rows : current.num_produced_rows);
+    execution_summary->set_num_iterations(delta_mode ? current.num_iterations - prev_stats.num_iterations : current.num_iterations);
+    execution_summary->set_concurrency(delta_mode ? current.concurrency - prev_stats.concurrency : current.concurrency);
     prev_stats = current;
     if (dag_context.return_executor_id)
         execution_summary->set_executor_id(executor_id);
 }
 
-void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
+void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode)
 {
+    /// delta_mode means when for a streaming call, return the delta execution summary
+    /// because TiDB is not aware of the streaming call when it handle the execution summaries
+    /// so we need to "pretend to be a unary call", can be removed if TiDB support streaming
+    /// call's execution summaries directly
     if (!dag_context.collect_execution_summaries)
         return;
     /// add execution_summary for local executor
@@ -51,7 +57,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
                 {
                     for (const auto & remote_execution_summary : remote_execution_info->second)
                     {
-                        current.merge(remote_execution_summary);
+                        current.merge(remote_execution_summary, false);
                     }
                 }
             }
@@ -73,7 +79,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
         }
 
         current.time_processed_ns += dag_context.compile_time_ns;
-        fillTiExecutionSummary(response.add_execution_summaries(), current, p.first);
+        fillTiExecutionSummary(response.add_execution_summaries(), current, p.first, delta_mode);
         /// do not have an easy and meaningful way to get the execution summary for exchange sender
         /// executor, however, TiDB requires execution summary for all the executors, so just return
         /// its child executor's execution summary
@@ -87,7 +93,8 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
     std::unordered_map<String, ExecutionSummary> merged_remote_execution_summaries;
     for (auto & streamPtr : dag_context.getRemoteInputStreams())
     {
-        auto remote_execution_summaries = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr
+        bool is_coprocessor_block_inputstream = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr;
+        auto remote_execution_summaries = is_coprocessor_block_inputstream
             ? dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get())->getRemoteExecutionSummaries()
             : dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get())->getRemoteExecutionSummaries();
         if (remote_execution_summaries != nullptr)
@@ -99,14 +106,14 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
                     auto & current = merged_remote_execution_summaries[p.first];
                     for (const auto & remote_execution_summary : p.second)
                     {
-                        current.merge(remote_execution_summary);
+                        current.merge(remote_execution_summary, !is_coprocessor_block_inputstream);
                     }
                 }
             }
         }
     }
     for (auto & p : merged_remote_execution_summaries)
-        fillTiExecutionSummary(response.add_execution_summaries(), p.second, p.first);
+        fillTiExecutionSummary(response.add_execution_summaries(), p.second, p.first, delta_mode);
 }
 
 DAGResponseWriter::DAGResponseWriter(
