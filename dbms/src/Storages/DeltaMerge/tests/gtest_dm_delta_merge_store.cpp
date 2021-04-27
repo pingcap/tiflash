@@ -10,7 +10,6 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <gtest/gtest.h>
 
 #include <memory>
 
