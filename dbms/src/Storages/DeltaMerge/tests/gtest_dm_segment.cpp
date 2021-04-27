@@ -1,6 +1,7 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -13,14 +14,12 @@ namespace DB
 {
 namespace DM
 {
-extern DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
-                                    const ColumnDefinesPtr &    schema_snap,
-                                    const BlockInputStreamPtr & input_stream,
-                                    UInt64                      file_id,
-                                    const String &              parent_path,
-                                    bool                        need_rate_limit,
-                                    bool                        single_file_mode);
-
+extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
+                                    const ColumnDefinesPtr &       schema_snap,
+                                    const BlockInputStreamPtr &    input_stream,
+                                    UInt64                         file_id,
+                                    const String &                 parent_path,
+                                    DMFileBlockOutputStream::Flags flags);
 namespace tests
 {
 
@@ -1042,13 +1041,12 @@ public:
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto delegate     = context.path_pool.getStableDiskDelegator();
         auto store_path   = delegate.choosePath();
-        auto dmfile       = writeIntoNewDMFile(context,
-                                         std::make_shared<ColumnDefines>(*tableColumns()),
-                                         input_stream,
-                                         file_id,
-                                         store_path,
-                                         /*need_rate_limit*/ false,
-                                         /*single_file_mode*/ DMTestEnv::getPseudoRandomNumber() % 2);
+
+        DMFileBlockOutputStream::Flags flags;
+        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
+
+        auto dmfile
+            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, flags);
 
         delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
@@ -1078,8 +1076,7 @@ try
             case Segment_test_Mode::V2_BlockOnly:
                 segment->write(dmContext(), std::move(block));
                 break;
-            case Segment_test_Mode::V2_FileOnly:
-            {
+            case Segment_test_Mode::V2_FileOnly: {
                 auto delegate          = dmContext().path_pool.getStableDiskDelegator();
                 auto file_provider     = dmContext().db_context.getFileProvider();
                 auto [range, file_ids] = genDMFile(dmContext(), block);

@@ -19,18 +19,22 @@ namespace DM
 class DMFileBlockOutputStream
 {
 public:
+    using Flags = DMFileWriter::Flags;
+
     DMFileBlockOutputStream(const Context &       context,
                             const DMFilePtr &     dmfile,
                             const ColumnDefines & write_columns,
-                            bool                  need_rate_limit = false)
-        : writer(dmfile,
-                 write_columns,
-                 context.getSettingsRef().min_compress_block_size,
-                 context.getSettingsRef().max_compress_block_size,
-                 // context.chooseCompressionSettings(0, 0), TODO: should enable this, and make unit testes work.
-                 CompressionSettings(CompressionMethod::LZ4),
-                 context.getFileProvider(),
-                 need_rate_limit ? context.getRateLimiter() : nullptr)
+                            const Flags           flags = Flags())
+        : writer(
+            dmfile,
+            write_columns,
+            context.getFileProvider(),
+            flags.needRateLimit() ? context.getRateLimiter() : nullptr,
+            DMFileWriter::Options{
+                CompressionMethod::LZ4, // context.chooseCompressionSettings(0, 0), TODO: should enable this, and make unit testes work.
+                context.getSettingsRef().min_compress_block_size,
+                context.getSettingsRef().max_compress_block_size,
+                flags})
     {
     }
 

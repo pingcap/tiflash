@@ -136,14 +136,61 @@ public:
         size_t gc_hint_version;
     };
 
+    struct Flags
+    {
+    private:
+        static constexpr size_t IS_SINGLE_FILE         = 0x01;
+        static constexpr size_t NEED_RATE_LIMIT        = 0x02;
+        static constexpr size_t PERSIST_BLOCK_PROPERTY = 0x04;
+
+        size_t value;
+
+    public:
+        // Persist block property by default
+        Flags() : value(PERSIST_BLOCK_PROPERTY) {}
+
+        inline void setSingleFile(bool v) { value = (v ? (value | IS_SINGLE_FILE) : (value & ~IS_SINGLE_FILE)); }
+        inline bool isSingleFile() const { return (value & IS_SINGLE_FILE); }
+        inline void setRateLimit(bool v) { value = (v ? (value | NEED_RATE_LIMIT) : (value & ~NEED_RATE_LIMIT)); }
+        inline bool needRateLimit() const { return (value & NEED_RATE_LIMIT); }
+        inline void setPersistBlockProperty(bool v) { value = (v ? (value | PERSIST_BLOCK_PROPERTY) : (value & ~PERSIST_BLOCK_PROPERTY)); }
+        inline bool needPersistBlockProperty() const { return (value & PERSIST_BLOCK_PROPERTY); }
+    };
+
+    struct Options
+    {
+        CompressionSettings compression_settings;
+        size_t              min_compress_block_size;
+        size_t              max_compress_block_size;
+        Flags               flags;
+
+        Options() = default;
+
+        Options(CompressionSettings compression_settings_, size_t min_compress_block_size_, size_t max_compress_block_size_, Flags flags_)
+            : compression_settings(compression_settings_),
+              min_compress_block_size(min_compress_block_size_),
+              max_compress_block_size(max_compress_block_size_),
+              flags(flags_)
+        {
+        }
+
+        Options(const Options & from, const DMFilePtr & file)
+            : compression_settings(from.compression_settings),
+              min_compress_block_size(from.min_compress_block_size),
+              max_compress_block_size(from.max_compress_block_size),
+              flags(from.flags)
+        {
+            flags.setSingleFile(file->isSingleFileMode());
+        }
+    };
+
+
 public:
-    DMFileWriter(const DMFilePtr &           dmfile_,
-                 const ColumnDefines &       write_columns_,
-                 size_t                      min_compress_block_size_,
-                 size_t                      max_compress_block_size_,
-                 const CompressionSettings & compression_settings_,
-                 const FileProviderPtr &     file_provider_,
-                 const RateLimiterPtr &      rate_limiter_);
+    DMFileWriter(const DMFilePtr &       dmfile_,
+                 const ColumnDefines &   write_columns_,
+                 const FileProviderPtr & file_provider_,
+                 const RateLimiterPtr &  rate_limiter_,
+                 const Options &         options_);
 
     void write(const Block & block, const BlockProperty & block_property);
     void finalize();
@@ -160,12 +207,9 @@ private:
     void addStreams(ColId col_id, DataTypePtr type, bool do_index);
 
 private:
-    DMFilePtr           dmfile;
-    ColumnDefines       write_columns;
-    size_t              min_compress_block_size;
-    size_t              max_compress_block_size;
-    CompressionSettings compression_settings;
-    const bool          single_file_mode;
+    DMFilePtr     dmfile;
+    ColumnDefines write_columns;
+    Options       options;
 
     ColumnStreams column_streams;
 

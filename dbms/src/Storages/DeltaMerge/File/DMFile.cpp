@@ -253,9 +253,10 @@ void DMFile::writePackProperty(const FileProviderPtr & file_provider, const Rate
     Poco::File(tmp_property_path).renameTo(property_path);
 }
 
-void DMFile::writeMetadata(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
+void DMFile::writeMetadata(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter, bool persist_block_properties)
 {
-    writePackProperty(file_provider, rate_limiter);
+    if (persist_block_properties)
+        writePackProperty(file_provider, rate_limiter);
     writeMeta(file_provider, rate_limiter);
 }
 
@@ -374,9 +375,11 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
     readPackStat(file_provider, footer.meta_pack_info);
 }
 
-void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
+void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider,
+                                   const RateLimiterPtr &  rate_limiter,
+                                   bool                    persist_block_properties)
 {
-    writeMetadata(file_provider, rate_limiter);
+    writeMetadata(file_provider, rate_limiter, persist_block_properties);
     if (unlikely(status != Status::WRITING))
         throw Exception("Expected WRITING status, now " + statusString(status));
     Poco::File old_file(path());
@@ -390,12 +393,13 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
     old_file.renameTo(new_path);
 }
 
-void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
+void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer, bool persist_block_properties)
 {
     Footer footer;
-    std::tie(footer.meta_pack_info.pack_property_offset, footer.meta_pack_info.pack_property_size) = writePackPropertyToBuffer(buffer);
-    std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)                   = writeMetaToBuffer(buffer);
-    std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size)         = writePackStatToBuffer(buffer);
+    if (persist_block_properties)
+        std::tie(footer.meta_pack_info.pack_property_offset, footer.meta_pack_info.pack_property_size) = writePackPropertyToBuffer(buffer);
+    std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)           = writeMetaToBuffer(buffer);
+    std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size) = writePackStatToBuffer(buffer);
 
     footer.sub_file_stat_offset = buffer.count();
     footer.sub_file_num         = sub_file_stats.size();

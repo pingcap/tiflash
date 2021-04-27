@@ -5,6 +5,8 @@
 #include <Parsers/ASTLiteral.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -30,14 +32,12 @@ extern const char force_triggle_foreground_flush[];
 
 namespace DM
 {
-extern DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
-                                    const ColumnDefinesPtr &    schema_snap,
-                                    const BlockInputStreamPtr & input_stream,
-                                    UInt64                      file_id,
-                                    const String &              parent_path,
-                                    bool                        need_rate_limit,
-                                    bool                        single_file_mode);
-
+extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
+                                    const ColumnDefinesPtr &       schema_snap,
+                                    const BlockInputStreamPtr &    input_stream,
+                                    UInt64                         file_id,
+                                    const String &                 parent_path,
+                                    DMFileBlockOutputStream::Flags flags);
 namespace tests
 {
 
@@ -123,13 +123,12 @@ public:
     {
         auto input_stream          = std::make_shared<OneBlockInputStream>(block);
         auto [store_path, file_id] = store->preAllocateIngestFile();
-        auto dmfile                = writeIntoNewDMFile(context,
-                                         std::make_shared<ColumnDefines>(store->getTableColumns()),
-                                         input_stream,
-                                         file_id,
-                                         store_path,
-                                         /*need_rate_limit*/ false,
-                                         /*single_file_mode*/ DMTestEnv::getPseudoRandomNumber() % 2);
+
+        DMFileBlockOutputStream::Flags flags;
+        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
+
+        auto dmfile = writeIntoNewDMFile(
+            context, std::make_shared<ColumnDefines>(store->getTableColumns()), input_stream, file_id, store_path, flags);
 
 
         store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
