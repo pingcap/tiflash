@@ -72,13 +72,10 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
             current.concurrency++;
         }
         /// part 2: remote execution info
-        for (auto & merged_remote_execution_summary : merged_remote_execution_summaries)
+        if (merged_remote_execution_summaries.find(p.first) != merged_remote_execution_summaries.end())
         {
-            if (p.first == merged_remote_execution_summary.first)
-            {
-                for (auto & remote : merged_remote_execution_summary.second)
-                    current.merge(remote, false);
-            }
+            for (auto & remote : merged_remote_execution_summaries[p.first])
+                current.merge(remote, false);
         }
         /// part 3: for join need to add the build time
         for (auto & join_alias : dag_context.getQBIdToJoinAliasMap()[p.second.qb_id])
