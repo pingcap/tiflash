@@ -93,14 +93,14 @@ void SSTFilesToDTFilesOutputStream::write()
             finishCurrDTFileStream();
 
             // Generate a DMFilePtr and its DMFileBlockOutputStream if not exists
-            bool single_file_mode = false;
+            DMFileBlockOutputStream::Flags flags;
             switch (method)
             {
             case TiDB::SnapshotApplyMethod::DTFile_Directory:
-                single_file_mode = false;
+                flags.setSingleFile(false);
                 break;
             case TiDB::SnapshotApplyMethod::DTFile_Single:
-                single_file_mode = true;
+                flags.setSingleFile(true);
                 break;
             default:
                 break;
@@ -113,10 +113,13 @@ void SSTFilesToDTFilesOutputStream::write()
                 // Can no allocate path and id for storing DTFiles (the storage may be dropped / shutdown),
                 break;
             }
-            auto dt_file = DMFile::create(file_id, parent_path, single_file_mode);
-            LOG_INFO(log, "Create file for snapshot data [file=" << dt_file->path() << "] [single_file_mode=" << single_file_mode << "]");
+            auto dt_file = DMFile::create(file_id, parent_path, flags.isSingleFile());
+            LOG_INFO(log,
+                     "Create file for snapshot data [file=" << dt_file->path() << "] [single_file_mode=" << flags.isSingleFile() << "]");
             cur_schema = schema_snap;
-            dt_stream  = std::make_unique<DMFileBlockOutputStream>(tmt.getContext(), dt_file, *cur_schema, /*need_rate_limit=*/false);
+            // FIXME: the block properties are not persisted. (tics#1833)
+            flags.setPersistBlockProperty(false);
+            dt_stream = std::make_unique<DMFileBlockOutputStream>(tmt.getContext(), dt_file, *cur_schema, flags);
             dt_stream->writePrefix();
             ingest_files.emplace_back(dt_file);
         }
@@ -133,7 +136,7 @@ void SSTFilesToDTFilesOutputStream::write()
 
         // Write block to the output stream
         // FIXME: the block properties are ignored since we only insert DTFile into delta layer
-        // now, the block properties are useless.
+        // now, the block properties are useless. (tics#1833)
         DMFileBlockOutputStream::BlockProperty property;
         property.not_clean_rows = 1;
         dt_stream->write(block, property);
