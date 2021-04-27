@@ -27,9 +27,9 @@ struct ExecutionSummary
         if (streaming_call)
         {
             time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
-            num_produced_rows += std::max(num_produced_rows, other.num_produced_rows);
-            num_iterations += std::max(num_iterations, other.num_iterations);
-            concurrency += std::max(concurrency, other.concurrency);
+            num_produced_rows = std::max(num_produced_rows, other.num_produced_rows);
+            num_iterations = std::max(num_iterations, other.num_iterations);
+            concurrency = std::max(concurrency, other.concurrency);
         }
         else
         {
