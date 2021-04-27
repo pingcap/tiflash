@@ -47,18 +47,25 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
         /// part 2: remote execution info
         for (auto & streamPtr : dag_context.getRemoteInputStreams())
         {
-            auto remote_execution_summaries = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr
-                ? dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get())->getRemoteExecutionSummaries()
-                : dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get())->getRemoteExecutionSummaries();
+            auto coprocessor_input_stream = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get());
+            auto exchange_receiver_input_stream = dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get());
+            auto remote_execution_summaries = coprocessor_input_stream != nullptr
+                ? coprocessor_input_stream->getRemoteExecutionSummaries()
+                : exchange_receiver_input_stream->getRemoteExecutionSummaries();
             if (remote_execution_summaries != nullptr)
             {
+                bool is_streaming_call = coprocessor_input_stream != nullptr ? coprocessor_input_stream->isStreamingCall()
+                                                                             : exchange_receiver_input_stream->isStreamingCall();
+                ExecutionSummary remote;
+
                 const auto & remote_execution_info = remote_execution_summaries->find(p.first);
                 if (remote_execution_info != remote_execution_summaries->end())
                 {
                     for (const auto & remote_execution_summary : remote_execution_info->second)
                     {
-                        current.merge(remote_execution_summary, false);
+                        remote.merge(remote_execution_summary, is_streaming_call);
                     }
+                    current.merge(remote, false);
                 }
             }
         }
@@ -86,19 +93,22 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
         if (dag_context.isMPPTask() && p.first == dag_context.exchange_sender_execution_summary_key)
         {
             current.concurrency = dag_context.final_concurrency;
-            fillTiExecutionSummary(response.add_execution_summaries(), current, dag_context.exchange_sender_executor_id);
+            fillTiExecutionSummary(response.add_execution_summaries(), current, dag_context.exchange_sender_executor_id, delta_mode);
         }
     }
     /// add executionSummary for remote executor
     std::unordered_map<String, ExecutionSummary> merged_remote_execution_summaries;
     for (auto & streamPtr : dag_context.getRemoteInputStreams())
     {
-        bool is_coprocessor_block_inputstream = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr;
-        auto remote_execution_summaries = is_coprocessor_block_inputstream
-            ? dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get())->getRemoteExecutionSummaries()
-            : dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get())->getRemoteExecutionSummaries();
+        auto coprocessor_input_stream = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get());
+        auto exchange_receiver_input_stream = dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get());
+        auto remote_execution_summaries = coprocessor_input_stream != nullptr
+            ? coprocessor_input_stream->getRemoteExecutionSummaries()
+            : exchange_receiver_input_stream->getRemoteExecutionSummaries();
         if (remote_execution_summaries != nullptr)
         {
+            bool is_streaming_call = coprocessor_input_stream != nullptr ? coprocessor_input_stream->isStreamingCall()
+                                                                         : exchange_receiver_input_stream->isStreamingCall();
             for (auto & p : *remote_execution_summaries)
             {
                 if (local_executors.find(p.first) == local_executors.end())
@@ -106,7 +116,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
                     auto & current = merged_remote_execution_summaries[p.first];
                     for (const auto & remote_execution_summary : p.second)
                     {
-                        current.merge(remote_execution_summary, !is_coprocessor_block_inputstream);
+                        current.merge(remote_execution_summary, is_streaming_call);
                     }
                 }
             }

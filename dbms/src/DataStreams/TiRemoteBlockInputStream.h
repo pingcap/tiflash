@@ -197,6 +197,8 @@ public:
     {
         return execution_summaries_inited.load() ? &execution_summaries : nullptr;
     }
+
+    bool isStreamingCall() const { return is_streaming_reader; }
 };
 
 using ExchangeReceiverInputStream = TiRemoteBlockInputStream<ExchangeReceiver>;
