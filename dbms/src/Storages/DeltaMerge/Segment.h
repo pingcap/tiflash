@@ -332,12 +332,5 @@ private:
     Logger * log;
 };
 
-DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
-                             const ColumnDefinesPtr &    schema_snap,
-                             const BlockInputStreamPtr & input_stream,
-                             UInt64                      file_id,
-                             const String &              parent_path,
-                             bool                        need_rate_limit);
-
 } // namespace DM
 } // namespace DB
