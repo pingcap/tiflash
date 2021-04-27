@@ -30,7 +30,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
     if (!dag_context.collect_execution_summaries)
         return;
     /// get executionSummary info from remote input streams
-    std::unordered_map<String, ExecutionSummary> merged_remote_execution_summaries;
+    std::unordered_map<String, std::vector<ExecutionSummary>> merged_remote_execution_summaries;
     for (auto & streamPtr : dag_context.getRemoteInputStreams())
     {
         auto coprocessor_input_stream = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get());
@@ -44,12 +44,14 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
                                                                          : exchange_receiver_input_stream->isStreamingCall();
             for (auto & p : *remote_execution_summaries)
             {
-                ExecutionSummary merged;
-                for (const auto & remote_execution_summary : p.second)
+                if (merged_remote_execution_summaries[p.first].size() < p.second.size())
                 {
-                    merged.merge(remote_execution_summary, false);
+                    merged_remote_execution_summaries[p.first].resize(p.second.size());
                 }
-                merged_remote_execution_summaries[p.first].merge(merged, is_streaming_call);
+                for (size_t i = 0; i < p.second.size(); i++)
+                {
+                    merged_remote_execution_summaries[p.first][i].merge(p.second[i], is_streaming_call);
+                }
             }
         }
     }
@@ -73,7 +75,10 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
         for (auto & merged_remote_execution_summary : merged_remote_execution_summaries)
         {
             if (p.first == merged_remote_execution_summary.first)
-                current.merge(merged_remote_execution_summary.second, false);
+            {
+                for (auto & remote : merged_remote_execution_summary.second)
+                    current.merge(remote, false);
+            }
         }
         /// part 3: for join need to add the build time
         for (auto & join_alias : dag_context.getQBIdToJoinAliasMap()[p.second.qb_id])
@@ -105,7 +110,12 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
     for (auto & p : merged_remote_execution_summaries)
     {
         if (local_executors.find(p.first) == local_executors.end())
-            fillTiExecutionSummary(response.add_execution_summaries(), p.second, p.first, delta_mode);
+        {
+            ExecutionSummary merged;
+            for (auto & remote : p.second)
+                merged.merge(remote, false);
+            fillTiExecutionSummary(response.add_execution_summaries(), merged, p.first, delta_mode);
+        }
     }
 }
 
