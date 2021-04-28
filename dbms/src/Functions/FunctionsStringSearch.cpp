@@ -342,15 +342,14 @@ static String getRE2ModeModifiers(const std::string & match_type, std::shared_pt
                 case 'c':
                     options.set_case_sensitive(true);
                     break;
-                case 'n':
+                case 's':
                     options.set_dot_nl(true);
                     break;
                 case 'm':
                     options.set_one_line(false);
                     break;
                 default:
-                    /// throw error or do nothing?
-                    break;
+                    throw Exception("Incorrect arguments to regexp related functions.");
             }
         }
     }
