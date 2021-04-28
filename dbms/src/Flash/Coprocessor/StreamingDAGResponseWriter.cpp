@@ -32,7 +32,7 @@ template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
 {
     tipb::SelectResponse response;
-    addExecuteSummaries(response);
+    addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
     if (exchange_type == tipb::ExchangeType::Hash)
     {
         thread_pool.schedule(getEncodePartitionTask(blocks, response));
