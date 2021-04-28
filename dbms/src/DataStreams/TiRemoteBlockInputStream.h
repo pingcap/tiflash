@@ -73,16 +73,23 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 auto & current_execution_summary = execution_summaries[executor_id][index];
                 if (is_streaming_call)
                 {
-                    current_execution_summary.time_processed_ns += execution_summary.time_processed_ns();
+                    current_execution_summary.time_processed_ns
+                        = std::max(current_execution_summary.time_processed_ns, execution_summary.time_processed_ns());
+                    current_execution_summary.num_produced_rows
+                        = std::max(current_execution_summary.num_produced_rows, execution_summary.num_produced_rows());
+                    current_execution_summary.num_iterations
+                        = std::max(current_execution_summary.num_iterations, execution_summary.num_iterations());
+                    current_execution_summary.concurrency
+                        = std::max(current_execution_summary.concurrency, execution_summary.concurrency());
                 }
                 else
                 {
                     current_execution_summary.time_processed_ns
                         = std::max(current_execution_summary.time_processed_ns, execution_summary.time_processed_ns());
+                    current_execution_summary.num_produced_rows += execution_summary.num_produced_rows();
+                    current_execution_summary.num_iterations += execution_summary.num_iterations();
+                    current_execution_summary.concurrency += execution_summary.concurrency();
                 }
-                current_execution_summary.num_produced_rows += execution_summary.num_produced_rows();
-                current_execution_summary.num_iterations += execution_summary.num_iterations();
-                current_execution_summary.concurrency += execution_summary.concurrency();
             }
         }
     }
@@ -190,6 +197,8 @@ public:
     {
         return execution_summaries_inited.load() ? &execution_summaries : nullptr;
     }
+
+    bool isStreamingCall() const { return is_streaming_reader; }
 };
 
 using ExchangeReceiverInputStream = TiRemoteBlockInputStream<ExchangeReceiver>;

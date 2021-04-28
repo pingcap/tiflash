@@ -47,7 +47,7 @@ void UnaryDAGResponseWriter::finishWrite()
     {
         encodeChunkToDAGResponse();
     }
-    addExecuteSummaries(*dag_response);
+    addExecuteSummaries(*dag_response, false);
 }
 
 void UnaryDAGResponseWriter::write(const Block & block)
