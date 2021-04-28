@@ -74,24 +74,28 @@ namespace DM
 
 const static size_t SEGMENT_BUFFER_SIZE = 128; // More than enough.
 
-DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
-                             const ColumnDefinesPtr &    schema_snap,
-                             const BlockInputStreamPtr & input_stream,
-                             UInt64                      file_id,
-                             const String &              parent_path,
-                             bool                        need_rate_limit)
+DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
+                             const ColumnDefinesPtr &       schema_snap,
+                             const BlockInputStreamPtr &    input_stream,
+                             UInt64                         file_id,
+                             const String &                 parent_path,
+                             DMFileBlockOutputStream::Flags flags)
 {
-    auto   dmfile        = DMFile::create(file_id, parent_path, dm_context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
-    auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, need_rate_limit);
+    auto   dmfile        = DMFile::create(file_id, parent_path, flags.isSingleFile());
+    auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, flags);
     auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
     input_stream->readPrefix();
     output_stream->writePrefix();
     while (true)
     {
-        size_t last_not_clean_rows = 0;
+        size_t last_effective_num_rows = 0;
+        size_t last_not_clean_rows     = 0;
         if (mvcc_stream)
-            last_not_clean_rows = mvcc_stream->getNotCleanRows();
+        {
+            last_effective_num_rows = mvcc_stream->getEffectiveNumRows();
+            last_not_clean_rows     = mvcc_stream->getNotCleanRows();
+        }
 
         Block block = input_stream->read();
         if (!block)
@@ -99,11 +103,22 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
         if (!block.rows())
             continue;
 
-        size_t cur_not_clean_rows = 1;
+        // When the input_stream is not mvcc, we assume the rows in this input_stream is most valid and make it not tend to be gc.
+        size_t cur_effective_num_rows = block.rows();
+        size_t cur_not_clean_rows     = 1;
+        size_t gc_hint_version        = UINT64_MAX;
         if (mvcc_stream)
-            cur_not_clean_rows = mvcc_stream->getNotCleanRows();
+        {
+            cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
+            cur_not_clean_rows     = mvcc_stream->getNotCleanRows();
+            gc_hint_version        = mvcc_stream->getGCHintVersion();
+        }
 
-        output_stream->write(block, cur_not_clean_rows - last_not_clean_rows);
+        DMFileBlockOutputStream::BlockProperty block_property;
+        block_property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
+        block_property.not_clean_rows     = cur_not_clean_rows - last_not_clean_rows;
+        block_property.gc_hint_version    = gc_hint_version;
+        output_stream->write(block, block_property);
     }
 
     input_stream->readSuffix();
@@ -122,8 +137,12 @@ StableValueSpacePtr createNewStable(DMContext &                 context,
     auto delegate   = context.path_pool.getStableDiskDelegator();
     auto store_path = delegate.choosePath();
 
+    DMFileBlockOutputStream::Flags flags;
+    flags.setRateLimit(need_rate_limit);
+    flags.setSingleFile(context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
+
     PageId dmfile_id = context.storage_pool.newDataPageId();
-    auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path, need_rate_limit);
+    auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path, flags);
     auto   stable    = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dmfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
     stable->saveMeta(wbs.meta);
@@ -576,6 +595,9 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
                                             new_delta,
                                             new_stable);
 
+    // avoid recheck whether to do DeltaMerge using the same gc_safe_point
+    new_me->setLastCheckGCSafePoint(context.min_version);
+
     // Store new meta data
     new_me->serialize(wbs.meta);
 
@@ -596,7 +618,11 @@ SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & sche
     if (!segment_snap)
         return {};
 
-    auto split_info = prepareSplit(dm_context, schema_snap, segment_snap, wbs, false);
+    auto split_info_opt = prepareSplit(dm_context, schema_snap, segment_snap, wbs, false);
+    if (!split_info_opt.has_value())
+        return {};
+
+    auto & split_info = split_info_opt.value();
 
     wbs.writeLogAndData();
     split_info.my_stable->enableDMFilesGC();
@@ -610,7 +636,7 @@ SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & sche
     return segment_pair;
 }
 
-RowKeyValue Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const
+std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const
 {
     // FIXME: this method does not consider invalid packs in stable dmfiles.
 
@@ -677,10 +703,11 @@ RowKeyValue Segment::getSplitPointFast(DMContext & dm_context, const StableSnaps
     stream.readSuffix();
 
     RowKeyColumnContainer rowkey_column(block.getByPosition(0).column, is_common_handle);
-    return RowKeyValue(rowkey_column.getRowKeyValue(read_row_in_pack));
+    return {RowKeyValue(rowkey_column.getRowKeyValue(read_row_in_pack))};
 }
 
-RowKeyValue Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const
+std::optional<RowKeyValue>
+Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const
 {
     EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
 
@@ -709,6 +736,12 @@ RowKeyValue Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & 
         while ((block = stream->read()))
             exact_rows += block.rows();
         stream->readSuffix();
+    }
+
+    if (exact_rows == 0)
+    {
+        LOG_WARNING(log, __FUNCTION__ << " Segment " << info() << " has no rows, should not split.");
+        return {};
     }
 
     BlockInputStreamPtr stream = getPlacedStream(dm_context,
@@ -746,16 +779,17 @@ RowKeyValue Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & 
 
     if (!rowkey_range.check(split_point.toRowKeyValueRef()))
         throw Exception("getSplitPointSlow unexpected split_handle: " + split_point.toRowKeyValueRef().toDebugString()
-                        + ", should be in range " + rowkey_range.toDebugString());
+                        + ", should be in range " + rowkey_range.toDebugString() + ", exact_rows: " + DB::toString(exact_rows)
+                        + ", cur count:" + DB::toString(count));
 
-    return split_point;
+    return {split_point};
 }
 
-Segment::SplitInfo Segment::prepareSplit(DMContext &                dm_context,
-                                         const ColumnDefinesPtr &   schema_snap,
-                                         const SegmentSnapshotPtr & segment_snap,
-                                         WriteBatches &             wbs,
-                                         bool                       need_rate_limit) const
+std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext &                dm_context,
+                                                        const ColumnDefinesPtr &   schema_snap,
+                                                        const SegmentSnapshotPtr & segment_snap,
+                                                        WriteBatches &             wbs,
+                                                        bool                       need_rate_limit) const
 {
     if (!dm_context.enable_logical_split         //
         || segment_snap->stable->getPacks() <= 3 //
@@ -763,26 +797,28 @@ Segment::SplitInfo Segment::prepareSplit(DMContext &                dm_context,
         return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs, need_rate_limit);
     else
     {
-        RowKeyValue    split_point     = getSplitPointFast(dm_context, segment_snap->stable);
-        RowKeyValueRef split_value     = split_point.toRowKeyValueRef();
-        bool           bad_split_point = !rowkey_range.check(split_value) || compare(split_value, rowkey_range.getStart()) == 0;
+        auto split_point_opt = getSplitPointFast(dm_context, segment_snap->stable);
+
+        bool bad_split_point = !split_point_opt.has_value() || !rowkey_range.check(split_point_opt->toRowKeyValueRef())
+            || compare(split_point_opt->toRowKeyValueRef(), rowkey_range.getStart()) == 0;
         if (bad_split_point)
         {
-            LOG_INFO(log,
-                     "Got bad split point [" << split_value.toDebugString() << "] for segment " << info()
-                                             << ", fall back to split physical.");
+            LOG_INFO(
+                log,
+                "Got bad split point [" << (split_point_opt.has_value() ? split_point_opt->toRowKeyValueRef().toDebugString() : "no value")
+                                        << "] for segment " << info() << ", fall back to split physical.");
             return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs, need_rate_limit);
         }
         else
-            return prepareSplitLogical(dm_context, schema_snap, segment_snap, split_point, wbs);
+            return prepareSplitLogical(dm_context, schema_snap, segment_snap, split_point_opt.value(), wbs);
     }
 }
 
-Segment::SplitInfo Segment::prepareSplitLogical(DMContext & dm_context,
-                                                const ColumnDefinesPtr & /*schema_snap*/,
-                                                const SegmentSnapshotPtr & segment_snap,
-                                                RowKeyValue &              split_point,
-                                                WriteBatches &             wbs) const
+std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_context,
+                                                               const ColumnDefinesPtr & /*schema_snap*/,
+                                                               const SegmentSnapshotPtr & segment_snap,
+                                                               RowKeyValue &              split_point,
+                                                               WriteBatches &             wbs) const
 {
     LOG_INFO(log, "Segment [" << segment_id << "] prepare split logical start");
 
@@ -834,21 +870,25 @@ Segment::SplitInfo Segment::prepareSplitLogical(DMContext & dm_context,
 
     LOG_INFO(log, "Segment [" << segment_id << "] prepare split logical done");
 
-    return {true, split_point, my_stable, other_stable};
+    return {SplitInfo{true, split_point, my_stable, other_stable}};
 }
 
-Segment::SplitInfo Segment::prepareSplitPhysical(DMContext &                dm_context,
-                                                 const ColumnDefinesPtr &   schema_snap,
-                                                 const SegmentSnapshotPtr & segment_snap,
-                                                 WriteBatches &             wbs,
-                                                 bool                       need_rate_limit) const
+std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &                dm_context,
+                                                                const ColumnDefinesPtr &   schema_snap,
+                                                                const SegmentSnapshotPtr & segment_snap,
+                                                                WriteBatches &             wbs,
+                                                                bool                       need_rate_limit) const
 {
     LOG_INFO(log, "Segment [" << segment_id << "] prepare split physical start");
 
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
-    auto read_info   = getReadInfo(dm_context, *schema_snap, segment_snap, {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-    auto split_point = getSplitPointSlow(dm_context, read_info, segment_snap);
+    auto read_info       = getReadInfo(dm_context, *schema_snap, segment_snap, {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+    auto split_point_opt = getSplitPointSlow(dm_context, read_info, segment_snap);
+    if (!split_point_opt.has_value())
+        return {};
+
+    const auto & split_point = split_point_opt.value();
 
     RowKeyRange my_range(rowkey_range.start, split_point, is_common_handle, rowkey_column_size);
     RowKeyRange other_range(split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
@@ -924,7 +964,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext &                dm_c
 
     LOG_INFO(log, "Segment [" << segment_id << "] prepare split physical done");
 
-    return {false, split_point, my_new_stable, other_stable};
+    return {SplitInfo{false, split_point, my_new_stable, other_stable}};
 }
 
 SegmentPair Segment::applySplit(DMContext &                dm_context, //
@@ -1257,7 +1297,11 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext &           
     auto my_delta_index = delta_snap->getSharedDeltaIndex()->tryClone(delta_snap->getRows(), delta_snap->getDeletes());
     auto my_delta_tree  = my_delta_index->getDeltaTree();
 
-    RowKeyRange relevant_range = mergeRanges(read_ranges, is_common_handle, rowkey_column_size);
+    // Note that, when enable_relevant_place is false , we cannot use the range of this segment.
+    // Because some block / delete ranges could contain some data / range that are not belong to current segment.
+    // If we use the range of this segment as relevant_range, fully_indexed will always be false in those cases.
+    RowKeyRange relevant_range = dm_context.enable_relevant_place ? mergeRanges(read_ranges, is_common_handle, rowkey_column_size)
+                                                                  : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
     auto [my_placed_rows, my_placed_deletes] = my_delta_index->getPlacedStatus();
 
@@ -1394,7 +1438,7 @@ bool Segment::placeDelete(const DMContext &           dm_context,
             compacted_index->end(),
             dm_context.stable_pack_rows);
 
-        delete_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(delete_stream, delete_range.shrink(relevant_range), 0);
+        delete_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(delete_stream, delete_range, 0);
 
         // Try to merge into big block. 128 MB should be enough.
         SquashingBlockInputStream squashed_delete_stream(delete_stream, 0, 128 * (1UL << 20));
@@ -1414,7 +1458,7 @@ bool Segment::placeDelete(const DMContext &           dm_context,
     {
         RowKeyValueRef first_rowkey       = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle).getRowKeyValue(0);
         auto           place_handle_range = skippable_place ? RowKeyRange::startFrom(first_rowkey, is_common_handle, rowkey_column_size)
-                                                  : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
+                                                            : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
         auto compacted_index = update_delta_tree.getCompactedEntries();
 

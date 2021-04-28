@@ -260,6 +260,36 @@ static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
 }
 
+static String buildBitwiseFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    // We should convert arguments to UInt64.
+    // See https://github.com/pingcap/tics/issues/1756
+    DataTypePtr uint64_type = std::make_shared<DataTypeUInt64>();
+    const Block & sample_block = actions->getSampleBlock();
+    for (auto & child : expr.children())
+    {
+        String name = analyzer->getActions(child, actions);
+        DataTypePtr orig_type = sample_block.getByName(name).type;
+
+        // Bump argument type
+        if (!removeNullable(orig_type)->equals(*uint64_type))
+        {
+            if (orig_type->isNullable())
+            {
+                name = analyzer->appendCast(makeNullable(uint64_type), actions, name);
+            }
+            else
+            {
+                name = analyzer->appendCast(uint64_type, actions, name);
+            }
+        }
+        argument_names.push_back(name);
+    }
+    return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
+}
+
 static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
@@ -288,6 +318,10 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"or", buildLogicalFunction},
         {"xor", buildLogicalFunction},
         {"not", buildLogicalFunction},
+        {"bitAnd", buildBitwiseFunction},
+        {"bitOr", buildBitwiseFunction},
+        {"bitXor", buildBitwiseFunction},
+        {"bitNot", buildBitwiseFunction},
     });
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
@@ -848,14 +882,14 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
         for (size_t index = 0; index < output_offsets.size(); index++)
         {
             UInt32 i = output_offsets[index];
-            if (schema[i].tp() == TiDB::TypeTimestamp || need_append_type_cast_vec[index])
+            if ((need_append_timezone_cast && schema[i].tp() == TiDB::TypeTimestamp) || need_append_type_cast_vec[index])
             {
                 const auto & it = casted_name_map.find(current_columns[i].name);
                 if (it == casted_name_map.end())
                 {
                     /// first add timestamp cast
                     String updated_name = current_columns[i].name;
-                    if (schema[i].tp() == TiDB::TypeTimestamp)
+                    if (need_append_timezone_cast && schema[i].tp() == TiDB::TypeTimestamp)
                     {
                         if (tz_col.length() == 0)
                             tz_col = getActions(tz_expr, step.actions);

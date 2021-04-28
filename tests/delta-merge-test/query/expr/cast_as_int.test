@@ -14,7 +14,7 @@
 
 => DBGInvoke dag('select count(1) from default.test group by a, cast_int_int(a), cast_real_int(b), cast_decimal_int(c), cast_string_int(d), cast_time_int(e)', 4,'encode_type:chunk')
 ┌─count(1)─┬─a─┬─cast_int_int(a)─┬─cast_real_int(b)─┬─cast_decimal_int(c)─┬─cast_string_int(d)─┬─cast_time_int(e)─┐
-│        1 │ 1 │               1 │                1 │                   1 │                123 │   20200901501000 │
+│        1 │ 1 │               1 │                1 │                   1 │                123 │   20200915010000 │
 └──────────┴───┴─────────────────┴──────────────────┴─────────────────────┴────────────────────┴──────────────────┘
 # Clean up.
 => DBGInvoke __drop_tidb_table(default, test)

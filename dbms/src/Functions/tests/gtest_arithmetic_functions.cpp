@@ -16,7 +16,6 @@
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <gtest/gtest.h>
 
 #pragma GCC diagnostic pop
 

@@ -1,7 +1,6 @@
 #include <DataStreams/PushingToViewsBlockOutputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <Interpreters/InterpreterSelectQuery.h>
-#include <Storages/MergeTree/ReplicatedMergeTreeBlockOutputStream.h>
 
 
 namespace DB
@@ -46,7 +45,6 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
     if (!no_destination)
     {
         output = storage->write(query_ptr, context.getSettingsRef());
-        replicated_output = dynamic_cast<ReplicatedMergeTreeBlockOutputStream *>(output.get());
     }
 }
 
@@ -55,10 +53,6 @@ void PushingToViewsBlockOutputStream::write(const Block & block)
 {
     if (output)
         output->write(block);
-
-    /// Don't process materialized views if this block is duplicate
-    if (replicated_output && replicated_output->lastBlockIsDuplicate())
-        return;
 
     /// Insert data into materialized views only after successful insert into main table
     for (auto & view : views)
