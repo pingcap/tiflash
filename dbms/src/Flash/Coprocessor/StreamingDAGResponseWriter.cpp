@@ -83,11 +83,11 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
             for (auto & block : input_blocks)
             {
                 chunk_codec_stream->encode(block, 0, block.rows());
-                auto dag_chunk = response.add_chunks();
-                dag_chunk->set_rows_data(chunk_codec_stream->getString());
-                chunk_codec_stream->clear();
-                current_records_num = 0;
             }
+            auto dag_chunk = response.add_chunks();
+            dag_chunk->set_rows_data(chunk_codec_stream->getString());
+            chunk_codec_stream->clear();
+            current_records_num = 0;
         }
         else
         {
