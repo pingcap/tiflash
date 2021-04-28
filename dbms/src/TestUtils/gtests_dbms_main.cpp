@@ -4,7 +4,6 @@
 #include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <gtest/gtest.h>
 
 namespace DB::tests
 {
