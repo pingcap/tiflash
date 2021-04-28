@@ -55,9 +55,9 @@ TEST_F(Regexp, regexp_TiDB_Match_Type_Test)
     ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*b", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 0);
-    DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*B", '\\', "n", nullptr, res);
+    DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*B", '\\', "s", nullptr, res);
     ASSERT_TRUE(res == 1);
-    DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*b", '\\', "in", nullptr, res);
+    DB::MatchImpl<false, false, true>::constant_constant("a\nB\n", "^a.*b", '\\', "is", nullptr, res);
     ASSERT_TRUE(res == 1);
 }
 
@@ -1718,7 +1718,7 @@ TEST_F(Regexp, func_regexp_Test)
     std::vector<String> patterns{"^a", "abc$", "a.*B.*c", "^bc$", "hello.*"};
     std::vector<UInt8> pattern_nulls{1, 0, 0, 0, 0};
 
-    std::vector<String> match_types{"", "i", "imn", "i", ""};
+    std::vector<String> match_types{"", "i", "ims", "i", ""};
     std::vector<UInt8> match_type_nulls{0, 1, 0, 0, 0};
 
     std::vector<UInt8> results{1, 0, 0, 0, 1};
@@ -2006,9 +2006,9 @@ TEST_F(Regexp, regexp_replace_TiDB_Match_Type_Test)
     ASSERT_TRUE(res == "a\nB\nc");
     DB::ReplaceRegexpImpl<false>::constant("a\nB\n", "^a.*b", "xxx", 1, 0, "", nullptr, res);
     ASSERT_TRUE(res == "a\nB\n");
-    DB::ReplaceRegexpImpl<false>::constant("a\nB\n", "^a.*B", "xxx", 1, 0, "n", nullptr, res);
+    DB::ReplaceRegexpImpl<false>::constant("a\nB\n", "^a.*B", "xxx", 1, 0, "s", nullptr, res);
     ASSERT_TRUE(res == "xxx\n");
-    DB::ReplaceRegexpImpl<false>::constant("a\nB\n", "^a.*b", "xxx", 1, 0, "in", nullptr, res);
+    DB::ReplaceRegexpImpl<false>::constant("a\nB\n", "^a.*b", "xxx", 1, 0, "is", nullptr, res);
     ASSERT_TRUE(res == "xxx\n");
 }
 
@@ -2080,7 +2080,7 @@ TEST_F(Regexp, func_regexp_replace_Test)
     std::vector<UInt8> occ{0, 2, 0, 0, 0};
     std::vector<UInt8> occ_nulls{1, 0, 0, 0, 0};
 
-    std::vector<String> match_types{"in", "", "", "i", "inm"};
+    std::vector<String> match_types{"is", "", "", "i", "ism"};
     std::vector<UInt8> match_type_nulls{1, 0, 0, 0, 0};
 
     std::vector<String> results{"xxx\nabbabb", "axxxcaxxxaxxx", "abbabbabb", "ABBABBABB", "ABB\nABBABB"};
