@@ -1374,6 +1374,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 
 
     Stopwatch watch_delta_merge;
+    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge).Increment();
     SCOPE_EXIT({
         GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge)
             .Observe(watch_delta_merge.elapsedSeconds());
