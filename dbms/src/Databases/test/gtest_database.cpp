@@ -806,11 +806,12 @@ try
     auto ctx = TiFlashTestEnv::getContext();
 
     const Strings statements = {
-        //
+        // test case for reading old format metadata without tombstone
         "CREATE DATABASE " + db_name + " ENGINE = TiFlash",
         "CREATE DATABASE " + db_name + R"(
  ENGINE = TiFlash('{"charset":"utf8mb4","collate":"utf8mb4_bin","db_name":{"L":"test_db","O":"test_db"},"id":1010,"state":5}', 1)
 )",
+        // test case for reading metadata with tombstone
         "CREATE DATABASE " + db_name + R"(
  ENGINE = TiFlash('{"charset":"utf8mb4","collate":"utf8mb4_bin","db_name":{"L":"test_db","O":"test_db"},"id":1010,"state":5}', 1, 12345)
 )",

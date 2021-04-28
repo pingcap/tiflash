@@ -58,7 +58,7 @@ public:
 
     virtual ~IBlockOutputStream() {}
 
-    /** Don't let to alter table while instance of stream is alive.
+    /** Don't let to drop table while instance of stream is alive.
       */
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 

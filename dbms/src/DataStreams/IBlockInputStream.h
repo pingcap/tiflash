@@ -103,7 +103,7 @@ public:
       */
     size_t checkDepth(size_t max_depth) const;
 
-    /** Do not allow to change the table while the blocks stream is alive.
+    /** Do not allow to drop the table while the blocks stream is alive.
       */
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
@@ -134,4 +134,3 @@ private:
 
 
 }
-
