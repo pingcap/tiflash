@@ -440,7 +440,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext &      
         data_stream = std::make_shared<ReorganizeBlockInputStream>(data_stream, EXTRA_HANDLE_COLUMN_NAME);
     }
     data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-        data_stream, *read_info.read_columns, dm_context.min_version, is_common_handle, dm_context.metrics));
+        data_stream, *read_info.read_columns, dm_context.min_version, is_common_handle, dm_context.metrics);
 
     return data_stream;
 }
@@ -925,7 +925,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
         other_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(other_data, other_range, 0);
         other_data = std::make_shared<ReorganizeBlockInputStream>(other_data, EXTRA_HANDLE_COLUMN_NAME);
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-            other_data, *read_info.read_columns, dm_context.min_version, is_common_handle, dm_context.matrics);
+            other_data, *read_info.read_columns, dm_context.min_version, is_common_handle, dm_context.metrics);
         auto other_stable_id = dm_context.storage_pool.newMetaPageId();
         other_stable         = createNewStable(dm_context, schema_snap, other_data, other_stable_id, wbs, need_rate_limit);
     }
