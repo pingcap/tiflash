@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Common/TiFlashBuildInfo.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
@@ -55,6 +57,8 @@ namespace DB
         F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.0005, 2, 30}),                                          \
         F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.0005, 2, 30}))                                                \
     M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter)                                                        \
+    M(tiflash_coprocessor_scan_speed, "Bucketed histogram of scaning data, in mileseconds", Histogram,                                    \
+        F(type_scan, {{"type", "scan"}}, ExpBuckets{16, 4, 17}))                                                                          \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                          \
     M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                             \
     M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                         \
@@ -127,9 +131,8 @@ namespace DB
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
-        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                      \
-    M(tiflash_coprocessor_read_speed, "Bucketed histogram of scaning data, in mileseconds", Histogram,                                    \
-        F(type_scan, {{"type", "scan"}}, ExpBuckets{16, 4, 17}))                    
+        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                      
+         
 
 
 struct ExpBuckets
