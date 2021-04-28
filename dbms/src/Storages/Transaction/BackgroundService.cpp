@@ -9,7 +9,7 @@ namespace DB
 {
 
 BackgroundService::BackgroundService(TMTContext & tmt_)
-    : tmt(tmt_), background_pool(tmt.getContext().getBackgroundPool()), log(&Logger::get("BackgroundService"))
+    : tmt(tmt_), background_pool(tmt.getContext().getBackgroundPool()), log(&Logger::get("BackgroundService")), store_init_task_has_run(false)
 {
     if (!tmt.isInitialized())
         throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
@@ -74,6 +74,8 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
         LOG_INFO(log, "Configuration raft.disable_bg_flush is set to true, background flush tasks are disabled.");
         storage_gc_handle = background_pool.addTask([this] { return tmt.getGCManager().work(); }, false);
     }
+
+    store_init_handle = background_pool.addTask([this] { return initStores(); }, false);
 }
 
 void BackgroundService::addRegionToFlush(const DB::RegionPtr & region)
@@ -86,6 +88,28 @@ void BackgroundService::addRegionToFlush(const DB::RegionPtr & region)
         regions_to_flush.emplace(region->id(), region);
     }
     region_handle->wake();
+}
+
+// We only need this task run once.
+bool BackgroundService::initStores()
+{
+    if (store_init_task_has_run)
+    {
+        return false;  // Return false for delay this task.
+    }
+
+    auto storages = tmt.getStorages().getAllStorage();
+    int init_cnt = 0;
+    for (auto& pa : storages)
+    {
+        init_cnt += pa.second->initStoreIfDataDirExist() ? 1 : 0;
+    }
+    LOG_INFO(log, "Storage total count " << storages.size() << " init count " << init_cnt);
+    store_init_task_has_run = true;
+
+    // Return false for delay this task.
+    // Maybe we can remove this task once it complete. But how can we remove it gracefully?
+    return false;
 }
 
 BackgroundService::~BackgroundService()
@@ -110,6 +134,11 @@ BackgroundService::~BackgroundService()
     {
         background_pool.removeTask(storage_gc_handle);
         storage_gc_handle = nullptr;
+    }
+    if (store_init_handle)
+    {
+        background_pool.removeTask(store_init_handle);
+        store_init_handle = nullptr;
     }
 }
 

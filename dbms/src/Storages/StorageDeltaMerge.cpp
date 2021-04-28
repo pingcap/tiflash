@@ -64,6 +64,7 @@ StorageDeltaMerge::StorageDeltaMerge( //
       store_inited(false),
       max_column_id_used(0),
       global_context(global_context_.getGlobalContext()),
+      path_pool(global_context_.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name)),
       log(&Logger::get("StorageDeltaMerge"))
 {
     if (primary_expr_ast_->children.empty())
@@ -1296,5 +1297,34 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
         store_inited.store(true, std::memory_order_release);
     }
     return _store;
+}
+
+bool StorageDeltaMerge::initStoreIfDataDirExist()
+{
+    // If store is inited, we don't need to check data dir.
+    if (store_inited.load(std::memory_order_relaxed))
+    {
+        return true;
+    }
+    if (!dataDirExist())
+    {
+        return false;
+    }
+    getAndMaybeInitStore();
+    return true;
+}
+
+bool StorageDeltaMerge::dataDirExist() 
+{
+    auto path_delegate = path_pool.getStableDiskDelegator();
+    for (const auto & root_path : path_delegate.listPaths())
+    {
+        int r = ::access(root_path.c_str(), F_OK);
+        if (r == 0)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 } // namespace DB

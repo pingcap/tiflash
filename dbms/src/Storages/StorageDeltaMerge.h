@@ -5,6 +5,12 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
+//<<<<<<< HEAD
+//=======
+//#include <Storages/PathPool.h>
+//#include <Storages/StorageDeltaMergeHelpers.h>
+//#include <Storages/Transaction/Region.h>
+//>>>>>>> Init store in background task.
 #include <Storages/Transaction/TiDB.h>
 
 #include <ext/shared_ptr_helper.h>
@@ -112,7 +118,8 @@ public:
     bool isCommonHandle() const override { return is_common_handle; }
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
-
+    
+    bool initStoreIfDataDirExist() override;
 protected:
     StorageDeltaMerge( //
         const String & db_engine,
@@ -139,6 +146,7 @@ private:
     bool storeInited() const { return store_inited.load(); }
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
+    bool dataDirExist();
 private:
     struct TableColumnInfo 
     {
@@ -176,6 +184,8 @@ private:
 
     Context & global_context;
 
+    StoragePathPool path_pool;
+    
     Logger * log;
 };
 
