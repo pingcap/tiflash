@@ -34,8 +34,8 @@ public:
         : version_limit(version_limit_),
           is_common_handle(is_common_handle_),
           header(toEmptyBlock(read_columns)),
-          log(&Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">")),
-          metric(metric_)
+          metric(metric_),
+          log(&Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">"))     
     {
         children.push_back(input);
 
