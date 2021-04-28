@@ -22,12 +22,22 @@ struct ExecutionSummary
     UInt64 concurrency;
     ExecutionSummary() : time_processed_ns(0), num_produced_rows(0), num_iterations(0), concurrency(0) {}
 
-    void merge(const ExecutionSummary & other)
+    void merge(const ExecutionSummary & other, bool streaming_call)
     {
-        time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
-        num_produced_rows += other.num_produced_rows;
-        num_iterations += other.num_iterations;
-        concurrency += other.concurrency;
+        if (streaming_call)
+        {
+            time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
+            num_produced_rows = std::max(num_produced_rows, other.num_produced_rows);
+            num_iterations = std::max(num_iterations, other.num_iterations);
+            concurrency = std::max(concurrency, other.concurrency);
+        }
+        else
+        {
+            time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
+            num_produced_rows += other.num_produced_rows;
+            num_iterations += other.num_iterations;
+            concurrency += other.concurrency;
+        }
     }
 };
 
@@ -36,8 +46,9 @@ class DAGResponseWriter
 public:
     DAGResponseWriter(Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_,
         DAGContext & dag_context_);
-    void fillTiExecutionSummary(tipb::ExecutorExecutionSummary * execution_summary, ExecutionSummary & current, const String & executor_id);
-    void addExecuteSummaries(tipb::SelectResponse & response);
+    void fillTiExecutionSummary(
+        tipb::ExecutorExecutionSummary * execution_summary, ExecutionSummary & current, const String & executor_id, bool delta_mode);
+    void addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode);
     virtual void write(const Block & block) = 0;
     virtual void finishWrite() = 0;
     virtual ~DAGResponseWriter() = default;
