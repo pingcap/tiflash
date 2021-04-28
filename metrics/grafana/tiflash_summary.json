@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1595916828338,
+  "iteration": 1619587165566,
   "links": [],
   "panels": [
     {
@@ -2696,7 +2696,7 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "alias": "/seg_/",
+              "alias": "/(delta_merge)|(seg_)/",
               "yaxis": 2
             }
           ],
@@ -2705,15 +2705,17 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"seg_merge|seg_split\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"delta_merge|delta_merge_fg|delta_merge_bg_gc|seg_merge|seg_split\"}[1m])) by (type)",
               "format": "time_series",
+              "hide": false,
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
               "refId": "A"
             },
             {
-              "expr": "sum(increase(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"seg_merge|seg_split\"}[1m])) by (type)",
+              "expr": "sum(increase(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"delta_merge|delta_merge_fg|delta_merge_bg_gc|seg_merge|seg_split\"}[1m])) by (type)",
               "format": "time_series",
+              "hide": false,
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
               "refId": "B"
@@ -2797,7 +2799,7 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "alias": "99-delta_merge",
+              "alias": "/^.*-delta_merge/",
               "yaxis": 2
             }
           ],
@@ -2978,6 +2980,7 @@
             "colorScale": "sqrt",
             "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
+            "min": 0,
             "mode": "spectrum"
           },
           "dataFormat": "tsbuckets",
@@ -4561,6 +4564,7 @@
             "colorScale": "sqrt",
             "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
+            "min": 0,
             "mode": "spectrum"
           },
           "dataFormat": "tsbuckets",
@@ -4626,6 +4630,7 @@
             "colorScale": "sqrt",
             "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
+            "min": 0,
             "mode": "spectrum"
           },
           "dataFormat": "tsbuckets",
@@ -4691,6 +4696,7 @@
             "colorScale": "sqrt",
             "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
+            "min": 0,
             "mode": "spectrum"
           },
           "dataFormat": "tsbuckets",
@@ -4919,6 +4925,7 @@
             "colorScale": "sqrt",
             "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
+            "min": 0,
             "mode": "spectrum"
           },
           "dataFormat": "tsbuckets",
@@ -4984,6 +4991,7 @@
             "colorScale": "sqrt",
             "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
+            "min": 0,
             "mode": "spectrum"
           },
           "dataFormat": "tsbuckets",

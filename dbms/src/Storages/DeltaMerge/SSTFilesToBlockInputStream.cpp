@@ -146,7 +146,7 @@ void SSTFilesToBlockInputStream::scanCF(ColumnFamilyType cf, const std::string_v
 
 bool SSTFilesToBlockInputStream::needUpdateSchema(const ColumnDefinesPtr & a, const ColumnDefinesPtr & b)
 {
-    // Note that we consider `a` is not `b` if both of them are `nullptr`
+    // Note that we consider `a` is not `b` and need to update schema if either of them is `nullptr`
     if (a == nullptr || b == nullptr)
         return true;
 
