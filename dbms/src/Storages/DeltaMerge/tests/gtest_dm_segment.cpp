@@ -1644,6 +1644,9 @@ try
         ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
         Poco::File(file_path + "/property").remove();
         ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
+        // clear PackProperties to force it to calculate from scratch
+        dmfile->getPackProperties().clear_property();
+        ASSERT_EQ(dmfile->getPackProperties().property_size(), 0);
         // caculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);
         auto        start = RowKeyValue::fromHandle(0);

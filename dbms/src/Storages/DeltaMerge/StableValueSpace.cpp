@@ -211,8 +211,10 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                     continue;
 
                 size_t cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
+                size_t gc_hint_version        = mvcc_stream->getGCHintVersion();
                 auto * pack_property          = new_pack_properties.add_property();
                 pack_property->set_num_rows(cur_effective_num_rows - last_effective_num_rows);
+                pack_property->set_gc_hint_version(gc_hint_version);
             }
             mvcc_stream->readSuffix();
         }
