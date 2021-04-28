@@ -225,6 +225,7 @@ nbproject/*
 config-preprocessed.xml
 
 # Protobuf
+*.pb.cc
 *.pb.cpp
 *.pb.h
 

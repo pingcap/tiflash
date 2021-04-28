@@ -74,24 +74,28 @@ namespace DM
 
 const static size_t SEGMENT_BUFFER_SIZE = 128; // More than enough.
 
-DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
-                             const ColumnDefinesPtr &    schema_snap,
-                             const BlockInputStreamPtr & input_stream,
-                             UInt64                      file_id,
-                             const String &              parent_path,
-                             bool                        need_rate_limit)
+DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
+                             const ColumnDefinesPtr &       schema_snap,
+                             const BlockInputStreamPtr &    input_stream,
+                             UInt64                         file_id,
+                             const String &                 parent_path,
+                             DMFileBlockOutputStream::Flags flags)
 {
-    auto   dmfile        = DMFile::create(file_id, parent_path, dm_context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
-    auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, need_rate_limit);
+    auto   dmfile        = DMFile::create(file_id, parent_path, flags.isSingleFile());
+    auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, flags);
     auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
     input_stream->readPrefix();
     output_stream->writePrefix();
     while (true)
     {
-        size_t last_not_clean_rows = 0;
+        size_t last_effective_num_rows = 0;
+        size_t last_not_clean_rows     = 0;
         if (mvcc_stream)
-            last_not_clean_rows = mvcc_stream->getNotCleanRows();
+        {
+            last_effective_num_rows = mvcc_stream->getEffectiveNumRows();
+            last_not_clean_rows     = mvcc_stream->getNotCleanRows();
+        }
 
         Block block = input_stream->read();
         if (!block)
@@ -99,11 +103,22 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
         if (!block.rows())
             continue;
 
-        size_t cur_not_clean_rows = 1;
+        // When the input_stream is not mvcc, we assume the rows in this input_stream is most valid and make it not tend to be gc.
+        size_t cur_effective_num_rows = block.rows();
+        size_t cur_not_clean_rows     = 1;
+        size_t gc_hint_version        = UINT64_MAX;
         if (mvcc_stream)
-            cur_not_clean_rows = mvcc_stream->getNotCleanRows();
+        {
+            cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
+            cur_not_clean_rows     = mvcc_stream->getNotCleanRows();
+            gc_hint_version        = mvcc_stream->getGCHintVersion();
+        }
 
-        output_stream->write(block, cur_not_clean_rows - last_not_clean_rows);
+        DMFileBlockOutputStream::BlockProperty block_property;
+        block_property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
+        block_property.not_clean_rows     = cur_not_clean_rows - last_not_clean_rows;
+        block_property.gc_hint_version    = gc_hint_version;
+        output_stream->write(block, block_property);
     }
 
     input_stream->readSuffix();
@@ -122,8 +137,12 @@ StableValueSpacePtr createNewStable(DMContext &                 context,
     auto delegate   = context.path_pool.getStableDiskDelegator();
     auto store_path = delegate.choosePath();
 
+    DMFileBlockOutputStream::Flags flags;
+    flags.setRateLimit(need_rate_limit);
+    flags.setSingleFile(context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
+
     PageId dmfile_id = context.storage_pool.newDataPageId();
-    auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path, need_rate_limit);
+    auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path, flags);
     auto   stable    = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dmfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
     stable->saveMeta(wbs.meta);
@@ -575,6 +594,9 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
                                             next_segment_id,
                                             new_delta,
                                             new_stable);
+
+    // avoid recheck whether to do DeltaMerge using the same gc_safe_point
+    new_me->setLastCheckGCSafePoint(context.min_version);
 
     // Store new meta data
     new_me->serialize(wbs.meta);
@@ -1436,7 +1458,7 @@ bool Segment::placeDelete(const DMContext &           dm_context,
     {
         RowKeyValueRef first_rowkey       = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle).getRowKeyValue(0);
         auto           place_handle_range = skippable_place ? RowKeyRange::startFrom(first_rowkey, is_common_handle, rowkey_column_size)
-                                                  : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
+                                                            : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
         auto compacted_index = update_delta_tree.getCompactedEntries();
 

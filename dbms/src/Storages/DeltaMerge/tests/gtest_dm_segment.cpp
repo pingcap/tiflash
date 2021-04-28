@@ -1,6 +1,7 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -13,6 +14,12 @@ namespace DB
 {
 namespace DM
 {
+extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
+                                    const ColumnDefinesPtr &       schema_snap,
+                                    const BlockInputStreamPtr &    input_stream,
+                                    UInt64                         file_id,
+                                    const String &                 parent_path,
+                                    DMFileBlockOutputStream::Flags flags);
 namespace tests
 {
 
@@ -1035,8 +1042,12 @@ public:
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto delegate     = context.path_pool.getStableDiskDelegator();
         auto store_path   = delegate.choosePath();
+
+        DMFileBlockOutputStream::Flags flags;
+        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
+
         auto dmfile
-            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, false);
+            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, flags);
 
         delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
@@ -1555,6 +1566,70 @@ try
         }
         in->readSuffix();
         ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
+    }
+}
+CATCH
+
+TEST_F(Segment_test, CalculateDTFileProperty)
+try
+{
+    const size_t num_rows_write = 100;
+    const size_t tso            = 10000;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false, tso);
+        // write to segment
+        segment->write(dmContext(), block);
+        segment = segment->mergeDelta(dmContext(), tableColumns());
+    }
+
+    {
+        auto & stable = segment->getStable();
+        ASSERT_EQ(stable->getRows(), num_rows_write);
+        // caculate StableProperty
+        ASSERT_EQ(stable->isStablePropertyCached(), false);
+        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false, 1);
+        ASSERT_EQ(stable->isStablePropertyCached(), true);
+        auto & property = stable->getStableProperty();
+        ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
+        ASSERT_EQ(property.num_versions, num_rows_write);
+        ASSERT_EQ(property.num_puts, num_rows_write);
+        ASSERT_EQ(property.num_rows, num_rows_write);
+    }
+}
+CATCH
+
+TEST_F(Segment_test, CalculateDTFilePropertyWithPropertyFileDeleted)
+try
+{
+    const size_t num_rows_write = 100;
+    const size_t tso            = 10000;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false, tso);
+        // write to segment
+        segment->write(dmContext(), block);
+        segment = segment->mergeDelta(dmContext(), tableColumns());
+    }
+
+    {
+        auto & stable = segment->getStable();
+        ASSERT_EQ(stable->getRows(), num_rows_write);
+        auto & dmfiles = stable->getDMFiles();
+        ASSERT_GT(dmfiles.size(), (size_t)0);
+        auto & dmfile    = dmfiles[0];
+        auto   file_path = dmfile->path();
+        // check property file exists and then delete it
+        ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
+        Poco::File(file_path + "/property").remove();
+        ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
+        // caculate StableProperty
+        ASSERT_EQ(stable->isStablePropertyCached(), false);
+        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false, 1);
+        ASSERT_EQ(stable->isStablePropertyCached(), true);
+        auto & property = stable->getStableProperty();
+        ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
+        ASSERT_EQ(property.num_versions, num_rows_write);
+        ASSERT_EQ(property.num_puts, num_rows_write);
+        ASSERT_EQ(property.num_rows, num_rows_write);
     }
 }
 CATCH
