@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
@@ -13,6 +14,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_set_delta_merge_max_block_size[];
+} // namespace FailPoints
+
 namespace DM
 {
 
@@ -97,6 +103,9 @@ public:
             if (!rowkey_range.isEndInfinite())
                 throw Exception("The end of rowkey range should be +Inf in skippable_place mode");
         }
+
+        // Use failpoint to change the max_block_size for some test cases
+        fiu_do_on(FailPoints::force_set_delta_merge_max_block_size, { max_block_size = 10; });
 
         header      = stable_input_stream->getHeader();
         num_columns = header.columns();

@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -12,6 +13,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_set_delta_merge_max_block_size[];
+} // namespace FailPoints
+
 namespace DM
 {
 extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
@@ -1077,7 +1083,8 @@ try
             case Segment_test_Mode::V2_BlockOnly:
                 segment->write(dmContext(), std::move(block));
                 break;
-            case Segment_test_Mode::V2_FileOnly: {
+            case Segment_test_Mode::V2_FileOnly:
+            {
                 auto delegate          = dmContext().path_pool.getStableDiskDelegator();
                 auto file_provider     = dmContext().db_context.getFileProvider();
                 auto [range, file_ids] = genDMFile(dmContext(), block);
@@ -1573,27 +1580,38 @@ CATCH
 TEST_F(Segment_test, CalculateDTFileProperty)
 try
 {
-    const size_t num_rows_write = 100;
-    const size_t tso            = 10000;
+    const size_t num_rows_write_every_round = 100;
+    const size_t write_round                = 3;
+    const size_t tso                        = 10000;
+    // set max_block_size in DeltaMerge to a small value, so the following mergeDelta can produce more than one pack
+    FailPointHelper::enableFailPoint(FailPoints::force_set_delta_merge_max_block_size);
+    for (size_t i = 0; i < write_round; i++)
     {
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false, tso);
+        size_t start = num_rows_write_every_round * i;
+        Block  block = DMTestEnv::prepareSimpleWriteBlock(start, start + num_rows_write_every_round, false, tso);
         // write to segment
         segment->write(dmContext(), block);
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
+    FailPointHelper::disableFailPoint(FailPoints::force_set_delta_merge_max_block_size);
 
     {
         auto & stable = segment->getStable();
-        ASSERT_EQ(stable->getRows(), num_rows_write);
+        ASSERT_GT(stable->getDMFiles()[0]->getPacks(), (size_t)1);
+        ASSERT_EQ(stable->getRows(), num_rows_write_every_round * write_round);
         // caculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);
-        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false);
+        auto        start = RowKeyValue::fromHandle(0);
+        auto        end   = RowKeyValue::fromHandle(num_rows_write_every_round);
+        RowKeyRange range(start, end, false, 1);
+        // calculate the StableProperty for packs in the key range [0, num_rows_write_every_round)
+        stable->calculateStableProperty(dmContext(), range, false);
         ASSERT_EQ(stable->isStablePropertyCached(), true);
         auto & property = stable->getStableProperty();
         ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
-        ASSERT_EQ(property.num_versions, num_rows_write);
-        ASSERT_EQ(property.num_puts, num_rows_write);
-        ASSERT_EQ(property.num_rows, num_rows_write);
+        ASSERT_EQ(property.num_versions, num_rows_write_every_round);
+        ASSERT_EQ(property.num_puts, num_rows_write_every_round);
+        ASSERT_EQ(property.num_rows, num_rows_write_every_round);
     }
 }
 CATCH
@@ -1601,20 +1619,25 @@ CATCH
 TEST_F(Segment_test, CalculateDTFilePropertyWithPropertyFileDeleted)
 try
 {
-    const size_t num_rows_write = 100;
-    const size_t tso            = 10000;
+    const size_t num_rows_write_every_round = 100;
+    const size_t write_round                = 3;
+    const size_t tso                        = 10000;
+    // set max_block_size in DeltaMerge to a small value, so the following mergeDelta can produce more than one pack
+    FailPointHelper::enableFailPoint(FailPoints::force_set_delta_merge_max_block_size);
+    for (size_t i = 0; i < write_round; i++)
     {
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false, tso);
+        size_t start = num_rows_write_every_round * i;
+        Block  block = DMTestEnv::prepareSimpleWriteBlock(start, start + num_rows_write_every_round, false, tso);
         // write to segment
         segment->write(dmContext(), block);
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
+    FailPointHelper::disableFailPoint(FailPoints::force_set_delta_merge_max_block_size);
 
     {
-        auto & stable = segment->getStable();
-        ASSERT_EQ(stable->getRows(), num_rows_write);
+        auto & stable  = segment->getStable();
         auto & dmfiles = stable->getDMFiles();
-        ASSERT_GT(dmfiles.size(), (size_t)0);
+        ASSERT_GT(dmfiles[0]->getPacks(), (size_t)1);
         auto & dmfile    = dmfiles[0];
         auto   file_path = dmfile->path();
         // check property file exists and then delete it
@@ -1623,13 +1646,17 @@ try
         ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
         // caculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);
-        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false);
+        auto        start = RowKeyValue::fromHandle(0);
+        auto        end   = RowKeyValue::fromHandle(num_rows_write_every_round);
+        RowKeyRange range(start, end, false, 1);
+        // calculate the StableProperty for packs in the key range [0, num_rows_write_every_round)
+        stable->calculateStableProperty(dmContext(), range, false);
         ASSERT_EQ(stable->isStablePropertyCached(), true);
         auto & property = stable->getStableProperty();
         ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
-        ASSERT_EQ(property.num_versions, num_rows_write);
-        ASSERT_EQ(property.num_puts, num_rows_write);
-        ASSERT_EQ(property.num_rows, num_rows_write);
+        ASSERT_EQ(property.num_versions, num_rows_write_every_round);
+        ASSERT_EQ(property.num_puts, num_rows_write_every_round);
+        ASSERT_EQ(property.num_rows, num_rows_write_every_round);
     }
 }
 CATCH
