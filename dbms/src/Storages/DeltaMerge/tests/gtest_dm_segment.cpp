@@ -1083,8 +1083,7 @@ try
             case Segment_test_Mode::V2_BlockOnly:
                 segment->write(dmContext(), std::move(block));
                 break;
-            case Segment_test_Mode::V2_FileOnly:
-            {
+            case Segment_test_Mode::V2_FileOnly: {
                 auto delegate          = dmContext().path_pool.getStableDiskDelegator();
                 auto file_provider     = dmContext().db_context.getFileProvider();
                 auto [range, file_ids] = genDMFile(dmContext(), block);
