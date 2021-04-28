@@ -28,7 +28,7 @@ void DMVersionFilterBlockInputStream<MODE>::readSuffix()
     if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
     {
         UInt64 elapsed_ms = timer.elapsedMilliseconds();
-        GET_METRIC(metric, tiflash_coprocessor_read_speed, type_scan).Observe(total_rows/elapsed_ms);
+        GET_METRIC(metric, tiflash_coprocessor_scan_speed, type_scan).Observe(total_rows/elapsed_ms);
     }
 }
 
