@@ -198,7 +198,6 @@ void StableValueSpace::calculateStableProperty(const DMContext &   context,
                                                            IdSetPtr{},
                                                            UINT64_MAX, // because we just read one pack at a time
                                                            true);
-            data_stream      = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, rowkey_range, 0);
             auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
                 data_stream, read_columns, 0, is_common_handle);
             mvcc_stream->readPrefix();
@@ -220,7 +219,7 @@ void StableValueSpace::calculateStableProperty(const DMContext &   context,
             if (unlikely(pack_stats.size() != (size_t)new_pack_properties.property_size()))
             {
                 throw Exception("new_pack_propertys size " + std::to_string(new_pack_properties.property_size())
-                                    + " doesn't contain all info for packs",
+                                    + " doesn't match pack_stat size " + std::to_string(pack_stats.size()),
                                 ErrorCodes::LOGICAL_ERROR);
             }
         }
