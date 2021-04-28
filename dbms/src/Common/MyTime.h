@@ -150,7 +150,7 @@ bool isPunctuation(char c);
 bool isValidSeperator(char c, int previous_parts);
 
 // Build MyDateTime value with checking overflow of internal fields, return true if input is invalid.
-bool checkedDateTime(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
+bool fromDateTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
                      const UInt64 & second, const UInt64 & microsecond, MyDateTime & result);
 
 } // namespace DB

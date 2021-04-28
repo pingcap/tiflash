@@ -980,7 +980,7 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     return;
 }
 
-bool checkedDateTime(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
+bool fromDateTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
     const UInt64 & second, const UInt64 & microsecond, MyDateTime & result)
 {
     if (year >= (1 << MyTimeBase::YEAR_BIT_FIELD_WIDTH) || month >= (1 << MyTimeBase::MONTH_BIT_FIELD_WIDTH)
