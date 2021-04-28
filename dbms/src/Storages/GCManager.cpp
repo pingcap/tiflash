@@ -3,6 +3,10 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int TABLE_IS_DROPPED;
+} // namespace ErrorCodes
 
 bool GCManager::work()
 {
@@ -39,11 +43,16 @@ bool GCManager::work()
             iter = storages.begin();
         checked_storage_num++;
         auto storage = iter->second.lock();
-        // The storage has been free or dropped.
-        if (!storage || storage->is_dropped)
+        // The storage has been free
+        if (!storage)
+        {
+            iter++;
             continue;
+        }
+
         try
         {
+            TableLockHolder table_read_lock = storage->lockForShare(RWLock::NO_QUERY);
             // Block this thread and do GC on the storage
             // It is OK if any schema changes is apply to the storage while doing GC, so we
             // do not acquire structure lock on the storage.
@@ -53,6 +62,12 @@ bool GCManager::work()
             // Reach the limit on the number of segments to be gc, stop here
             if (gc_segments_limit <= 0)
                 break;
+        }
+        catch (DB::Exception & e)
+        {
+            // If the storage is physical dropped, just ignore and continue
+            if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
+                tryLogCurrentException(__PRETTY_FUNCTION__);
         }
         catch (...)
         {
