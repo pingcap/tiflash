@@ -309,6 +309,7 @@ std::vector<UInt64> KVStore::preHandleSnapshotToFiles(
 std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
     RegionPtr new_region, const SSTViewVec snaps, uint64_t /*index*/, uint64_t /*term*/, DM::FileConvertJobType job_type, TMTContext & tmt)
 {
+    auto context = tmt.getContext();
     size_t expected_block_size = DEFAULT_MERGE_BLOCK_SIZE;
 
     // Use failpoint to change the expected_block_size for some test cases
@@ -331,11 +332,20 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 throw Exception("", ErrorCodes::TABLE_IS_DROPPED);
             }
 
+            // Get a gc safe point for compacting
+            Timestamp gc_safepoint = UINT64_MAX;
+            if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
+            {
+                gc_safepoint = PDClientHelper::getGCSafePointWithRetry(pd_client,
+                    /* ignore_cache= */ false,
+                    context.getSettingsRef().safe_point_update_interval_seconds);
+            }
+
             // Read from SSTs and refine the boundary of blocks output to DTFiles
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
                 new_region, snaps, proxy_helper, dm_storage, schema_snap, tmt, expected_block_size);
-            auto bounded_stream
-                = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, is_common_handle);
+            auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
+                sst_stream, schema_snap, ::DB::TiDBPkColumnID, is_common_handle, gc_safepoint);
             stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(
                 bounded_stream, snapshot_apply_method, job_type, dm_storage, schema_snap, tmt);
 
@@ -358,7 +368,6 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 try_clean_up();
 
                 // Update schema and try to decode again
-                auto context = tmt.getContext();
                 auto metrics = context.getTiFlashMetrics();
                 GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
                 tmt.getSchemaSyncer()->syncSchemas(context);

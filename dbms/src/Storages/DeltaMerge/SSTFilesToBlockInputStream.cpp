@@ -2,9 +2,11 @@
 #include <Interpreters/Context.h>
 #include <Poco/File.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
+#include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/ReorganizeBlockInputStream.h>
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/ProxyFFI.h>
@@ -181,45 +183,54 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
 
 BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     SSTFilesToBlockInputStreamPtr child,
-    ColId                         pk_column_id,
-    bool                          is_common_handle_)
-    : ReorganizeBlockInputStream(child, pk_column_id, is_common_handle_)
+    DM::ColumnDefinesPtr          schema_snap_,
+    const ColId                   pk_column_id_,
+    const bool                    is_common_handle_,
+    const Timestamp               gc_safepoint_)
+    : schema_snap(std::move(schema_snap_)),
+      pk_column_id(pk_column_id_),
+      is_common_handle(is_common_handle_),
+      gc_safepoint(gc_safepoint_),
+      _raw_child(std::move(child))
 {
+    // The `mvcc_compact_stream` will be initlized in `readPrefix`
 }
 
 void BoundedSSTFilesToBlockInputStream::readPrefix()
 {
-    ReorganizeBlockInputStream::readPrefix();
+    // First refine the boundary of blocks
+    auto stream = std::make_shared<ReorganizeBlockInputStream>(_raw_child, pk_column_id, is_common_handle);
+    // Generate `mvcc_compact_stream`
+    mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+        stream, *schema_snap, gc_safepoint, is_common_handle);
+    mvcc_compact_stream->readPrefix();
 }
 
-const SSTFilesToBlockInputStream * BoundedSSTFilesToBlockInputStream::getChildStream() const
+void BoundedSSTFilesToBlockInputStream::readSuffix()
 {
-    SSTFilesToBlockInputStream * stream = nullptr;
-    {
-        std::shared_lock lock(children_mutex);
-        stream = typeid_cast<SSTFilesToBlockInputStream *>(children[0].get());
-    }
-    if (likely(stream))
-        return stream;
-    throw Exception("Can not get SSTFilesToBlockInputStream, should not happen");
+    mvcc_compact_stream->readSuffix();
+}
+
+Block BoundedSSTFilesToBlockInputStream::read()
+{
+    return mvcc_compact_stream->read();
 }
 
 size_t BoundedSSTFilesToBlockInputStream::getProcessKeys() const
 {
-    auto * stream = getChildStream();
-    return stream->process_keys;
+    return _raw_child->process_keys;
 }
 
 const RegionPtr BoundedSSTFilesToBlockInputStream::getRegion() const
 {
-    auto * stream = getChildStream();
-    return stream->region;
+    return _raw_child->region;
 }
 
-Block BoundedSSTFilesToBlockInputStream::getHeader() const
+std::tuple<size_t, size_t, UInt64> //
+BoundedSSTFilesToBlockInputStream::getMvccStatistics() const
 {
-    auto * stream = getChildStream();
-    return stream->getHeader();
+    return std::make_tuple(
+        mvcc_compact_stream->getEffectiveNumRows(), mvcc_compact_stream->getNotCleanRows(), mvcc_compact_stream->getGCHintVersion());
 }
 
 } // namespace DM

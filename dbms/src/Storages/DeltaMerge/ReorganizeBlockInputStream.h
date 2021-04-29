@@ -11,7 +11,7 @@ namespace DM
 
 /// Reorganize the boundary of blocks.
 /// Note that child must be a sorted input stream with increasing pk column.
-class ReorganizeBlockInputStream : public IBlockInputStream
+class ReorganizeBlockInputStream final : public IBlockInputStream
 {
 public:
     ReorganizeBlockInputStream(BlockInputStreamPtr child, ColId pk_column_id_, bool is_common_handle_)
@@ -140,8 +140,6 @@ private:
     Block next_block;
 
     bool first_read = true;
-
-protected:
     bool is_common_handle;
 };
 

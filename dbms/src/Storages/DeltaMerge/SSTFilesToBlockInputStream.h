@@ -2,7 +2,7 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
-#include <Storages/DeltaMerge/ReorganizeBlockInputStream.h>
+#include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 
 #include <memory>
 #include <string_view>
@@ -37,7 +37,7 @@ using SSTFilesToBlockInputStreamPtr = std::shared_ptr<SSTFilesToBlockInputStream
 class BoundedSSTFilesToBlockInputStream;
 using BoundedSSTFilesToBlockInputStreamPtr = std::shared_ptr<BoundedSSTFilesToBlockInputStream>;
 
-class SSTFilesToBlockInputStream : public IBlockInputStream
+class SSTFilesToBlockInputStream final : public IBlockInputStream
 {
 public:
     using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
@@ -87,23 +87,38 @@ private:
 };
 
 // Bound the blocks read from SSTFilesToBlockInputStream by column `_tidb_rowid`
-class BoundedSSTFilesToBlockInputStream final : public ReorganizeBlockInputStream
+class BoundedSSTFilesToBlockInputStream final
 {
 public:
-    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child, ColId pk_column_id, bool is_common_handle_);
+    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child,
+                                      DM::ColumnDefinesPtr          schema_snap_,
+                                      const ColId                   pk_column_id_,
+                                      const bool                    is_common_handle_,
+                                      const Timestamp               gc_safepoint_);
 
-    String getName() const override { return "BoundedSSTFilesToBlockInputStream"; }
+    String getName() const { return "BoundedSSTFilesToBlockInputStream"; }
 
-    Block getHeader() const override;
+    void readPrefix();
 
-    void readPrefix() override;
+    void readSuffix();
+
+    Block read();
 
     size_t getProcessKeys() const;
 
     const RegionPtr getRegion() const;
 
+    std::tuple<size_t, size_t, UInt64> getMvccStatistics() const;
+
 private:
-    const SSTFilesToBlockInputStream * getChildStream() const;
+    const DM::ColumnDefinesPtr schema_snap;
+    const ColId                pk_column_id;
+    const bool                 is_common_handle;
+    const Timestamp            gc_safepoint;
+    // Note that we only keep _raw_child for getting ingest info / process key, etc. All block should be
+    // read from `mvcc_compact_stream`
+    const SSTFilesToBlockInputStreamPtr                                              _raw_child;
+    std::unique_ptr<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>> mvcc_compact_stream;
 };
 
 } // namespace DM
