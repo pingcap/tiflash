@@ -325,7 +325,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
 
     // Detach from this database and attach to new database
     // Not atomic between two databases in memory, but not big deal,
-    // because of locks in InterpreterRenameQuery
+    // because of alter_locks in InterpreterRenameQuery
     StoragePtr detach_storage = detachTable(table_name);
     to_database_concrete->attachTable(to_table_name, detach_storage);
 

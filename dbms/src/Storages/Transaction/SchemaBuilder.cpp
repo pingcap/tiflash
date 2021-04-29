@@ -648,7 +648,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     ASTRenameQuery::Element elem{.from = std::move(from), .to = std::move(to), .tidb_display = std::move(display)};
     rename->elements.emplace_back(std::move(elem));
 
-    InterpreterRenameQuery(rename, context).execute();
+    InterpreterRenameQuery(rename, context, getThreadName()).execute();
 
     LOG_INFO(log,
         "Renamed table " << old_mapped_db_name << "." << old_mapped_tbl_name << " (display name:" << old_display_table_name << ") to "
