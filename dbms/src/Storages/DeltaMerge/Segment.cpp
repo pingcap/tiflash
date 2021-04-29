@@ -467,7 +467,6 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext &      
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_context,
                                                const ColumnDefines &      columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
-
                                                bool   do_range_filter,
                                                size_t expected_block_size)
 {
