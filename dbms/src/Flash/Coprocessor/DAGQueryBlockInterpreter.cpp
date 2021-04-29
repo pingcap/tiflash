@@ -236,7 +236,9 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     {
         readFromLocalStorage(table_id, required_columns, query_info, max_block_size, learner_read_snapshot, pipeline, region_retry);
     }
-    table_lock = std::move(table_structure_lock).intoDropLock(); // release the alter lock so that reading does not block DDL operations
+    // Release the alter lock so that reading does not block DDL operations, keep the drop lock
+    // not to be dropped during reading
+    table_lock = std::move(table_structure_lock).intoDropLock(); 
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop mode.
     if (!region_retry.empty())
@@ -845,7 +847,7 @@ TableStructureLockHolder DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVe
                 Errors::Coprocessor::Internal);
         }
 
-        /// Lock storage not to be dropped during coprocessor reading
+        /// Lock storage
         auto lock = storage_->lockStructureForShare(context.getCurrentQueryId());
 
         /// Check schema version, requiring TiDB/TiSpark and TiFlash both use exactly the same schema.
