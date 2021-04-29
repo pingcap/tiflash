@@ -40,28 +40,23 @@ using BoundedSSTFilesToBlockInputStreamPtr = std::shared_ptr<BoundedSSTFilesToBl
 class SSTFilesToBlockInputStream : public IBlockInputStream
 {
 public:
+    using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
     SSTFilesToBlockInputStream(RegionPtr                      region_,
                                const SSTViewVec &             snaps_,
                                const TiFlashRaftProxyHelper * proxy_helper_,
+                               StorageDeltaMergePtr           ingest_storage_,
+                               DM::ColumnDefinesPtr           schema_snap_,
                                TMTContext &                   tmt_,
                                size_t                         expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
     ~SSTFilesToBlockInputStream();
 
     String getName() const override { return "SSTFilesToBlockInputStream"; }
 
-    Block getHeader() const override
-    {
-        if (cur_schema)
-            return toEmptyBlock(*cur_schema);
-        else
-            return {};
-    }
+    Block getHeader() const override { return toEmptyBlock(*schema_snap); }
 
     void  readPrefix() override;
     void  readSuffix() override;
     Block read() override;
-
-    static bool needUpdateSchema(const ColumnDefinesPtr & a, const ColumnDefinesPtr & b);
 
 private:
     void scanCF(ColumnFamilyType cf, const std::string_view until = std::string_view{});
@@ -72,19 +67,18 @@ private:
     RegionPtr                      region;
     const SSTViewVec &             snaps;
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
+    const StorageDeltaMergePtr     ingest_storage;
+    const DM::ColumnDefinesPtr     schema_snap;
     TMTContext &                   tmt;
     size_t                         expected_size;
     Poco::Logger *                 log;
 
     using SSTReaderPtr = std::unique_ptr<SSTReader>;
-    SSTReaderPtr write_reader;
-    SSTReaderPtr default_reader;
-    SSTReaderPtr lock_reader;
+    SSTReaderPtr write_cf_reader;
+    SSTReaderPtr default_cf_reader;
+    SSTReaderPtr lock_cf_reader;
 
     friend class BoundedSSTFilesToBlockInputStream;
-
-    std::shared_ptr<StorageDeltaMerge> ingest_storage;
-    DM::ColumnDefinesPtr               cur_schema;
 
     bool is_decode_cancelled = false;
 
@@ -96,15 +90,13 @@ private:
 class BoundedSSTFilesToBlockInputStream final : public ReorganizeBlockInputStream
 {
 public:
-    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child, ColId pk_column_id);
+    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child, ColId pk_column_id, bool is_common_handle_);
 
     String getName() const override { return "BoundedSSTFilesToBlockInputStream"; }
 
     Block getHeader() const override;
 
     void readPrefix() override;
-
-    std::tuple<std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> ingestingInfo() const;
 
     size_t getProcessKeys() const;
 

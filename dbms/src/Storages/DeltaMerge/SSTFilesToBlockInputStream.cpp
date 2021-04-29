@@ -19,26 +19,30 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int ILLFORMAT_RAFT_ROW;
-extern const int REGION_DATA_SCHEMA_UPDATED;
 } // namespace ErrorCodes
 
-std::tuple<Block, std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> //
-GenRegionBlockDatawithSchema(const RegionPtr & region, TMTContext & tmt);
-
-bool atomicGetStorageIsCommonHandle(const RegionPtr & region, TMTContext & tmt);
+Block GenRegionBlockDatawithSchema( //
+    const RegionPtr &,
+    const std::shared_ptr<StorageDeltaMerge> &,
+    const DM::ColumnDefinesPtr &,
+    TMTContext &);
 
 namespace DM
 {
 
 SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
-    RegionPtr                      region_,
-    const SSTViewVec &             snaps_,
-    const TiFlashRaftProxyHelper * proxy_helper_,
-    TMTContext &                   tmt_,
-    size_t                         expected_size_)
+    RegionPtr                                        region_,
+    const SSTViewVec &                               snaps_,
+    const TiFlashRaftProxyHelper *                   proxy_helper_,
+    SSTFilesToBlockInputStream::StorageDeltaMergePtr ingest_storage_,
+    DM::ColumnDefinesPtr                             schema_snap_,
+    TMTContext &                                     tmt_,
+    size_t                                           expected_size_)
     : region(std::move(region_)),
       snaps(snaps_),
       proxy_helper(proxy_helper_),
+      ingest_storage(std::move(ingest_storage_)),
+      schema_snap(std::move(schema_snap_)),
       tmt(tmt_),
       expected_size(expected_size_),
       log(&Poco::Logger::get("SSTFilesToBlockInputStream"))
@@ -55,13 +59,13 @@ void SSTFilesToBlockInputStream::readPrefix()
         switch (snapshot.type)
         {
         case ColumnFamilyType::Default:
-            default_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
+            default_cf_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
             break;
         case ColumnFamilyType::Write:
-            write_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
+            write_cf_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
             break;
         case ColumnFamilyType::Lock:
-            lock_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
+            lock_cf_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
             break;
         }
     }
@@ -73,30 +77,30 @@ void SSTFilesToBlockInputStream::readPrefix()
 void SSTFilesToBlockInputStream::readSuffix()
 {
     // There must be no data left when we write suffix
-    assert(!write_reader || !write_reader->remained());
-    assert(!default_reader || !default_reader->remained());
-    assert(!lock_reader || !lock_reader->remained());
+    assert(!write_cf_reader || !write_cf_reader->remained());
+    assert(!default_cf_reader || !default_cf_reader->remained());
+    assert(!lock_cf_reader || !lock_cf_reader->remained());
 
     // reset all SSTReaders and return without writting blocks any more.
-    write_reader.reset();
-    default_reader.reset();
-    lock_reader.reset();
+    write_cf_reader.reset();
+    default_cf_reader.reset();
+    lock_cf_reader.reset();
 }
 
 Block SSTFilesToBlockInputStream::read()
 {
-    while (write_reader && write_reader->remained())
+    while (write_cf_reader && write_cf_reader->remained())
     {
         // Read a key-value from write CF and continue to read key-value until
         // the key that we read from write CF.
         // All SST files store key-value in a sorted way so that we are able to
         // scan committed rows in `region`.
-        auto key   = write_reader->key();
-        auto value = write_reader->value();
+        auto key   = write_cf_reader->key();
+        auto value = write_cf_reader->value();
         region->insert(ColumnFamilyType::Write, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
         ++process_keys;
         ++process_writes;
-        write_reader->next();
+        write_cf_reader->next();
 
         if (process_writes % expected_size == 0)
         {
@@ -123,9 +127,9 @@ void SSTFilesToBlockInputStream::scanCF(ColumnFamilyType cf, const std::string_v
 {
     SSTReader * reader;
     if (cf == ColumnFamilyType::Default)
-        reader = default_reader.get();
+        reader = default_cf_reader.get();
     else if (cf == ColumnFamilyType::Lock)
-        reader = lock_reader.get();
+        reader = lock_cf_reader.get();
     else
         throw Exception("Should not happen!");
 
@@ -144,44 +148,16 @@ void SSTFilesToBlockInputStream::scanCF(ColumnFamilyType cf, const std::string_v
     }
 }
 
-bool SSTFilesToBlockInputStream::needUpdateSchema(const ColumnDefinesPtr & a, const ColumnDefinesPtr & b)
-{
-    // Note that we consider `a` is not `b` and need to update schema if either of them is `nullptr`
-    if (a == nullptr || b == nullptr)
-        return true;
-
-    // If the two schema is not the same, then it need to be updated.
-    if (a->size() != b->size())
-        return true;
-    for (size_t i = 0; i < a->size(); ++i)
-    {
-        const auto & ca = (*a)[i];
-        const auto & cb = (*b)[i];
-
-        bool col_ok = ca.id == cb.id;
-        // bool name_ok = ca.name == cb.name;
-        bool type_ok = ca.type->equals(*cb.type);
-
-        if (!col_ok || !type_ok)
-            return true;
-    }
-    return false;
-}
-
-
 Block SSTFilesToBlockInputStream::readCommitedBlock()
 {
     if (is_decode_cancelled)
         return {};
 
-    // Read block from `region`. If the schema has been updated, we need to
-    // generate a new DTFile to store blocks with new schema.
-    Block                              block;
-    std::shared_ptr<StorageDeltaMerge> storage;
-    ColumnDefinesPtr                   schema_snap;
     try
     {
-        std::tie(block, storage, schema_snap) = GenRegionBlockDatawithSchema(region, tmt);
+        // Read block from `region`. If the schema has been updated, it will
+        // throw an exception with code `ErrorCodes::REGION_DATA_SCHEMA_UPDATED`
+        return GenRegionBlockDatawithSchema(region, ingest_storage, schema_snap, tmt);
     }
     catch (DB::Exception & e)
     {
@@ -199,31 +175,20 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
         else
             throw;
     }
-
-    // No committed rows.
-    if (block.rows() == 0)
-        return {};
-
-    if (cur_schema && needUpdateSchema(cur_schema, schema_snap))
-        throw Exception("", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
-
-    ingest_storage = storage;
-    cur_schema     = schema_snap;
-    return block;
 }
 
 /// Methods for BoundedSSTFilesToBlockInputStream
 
-BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child, ColId pk_column_id)
-    : ReorganizeBlockInputStream(child, pk_column_id, false)
+BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
+    SSTFilesToBlockInputStreamPtr child,
+    ColId                         pk_column_id,
+    bool                          is_common_handle_)
+    : ReorganizeBlockInputStream(child, pk_column_id, is_common_handle_)
 {
 }
 
 void BoundedSSTFilesToBlockInputStream::readPrefix()
 {
-    // Need to update `is_common_handle`
-    auto * stream    = getChildStream();
-    is_common_handle = atomicGetStorageIsCommonHandle(stream->region, stream->tmt);
     ReorganizeBlockInputStream::readPrefix();
 }
 
@@ -237,12 +202,6 @@ const SSTFilesToBlockInputStream * BoundedSSTFilesToBlockInputStream::getChildSt
     if (likely(stream))
         return stream;
     throw Exception("Can not get SSTFilesToBlockInputStream, should not happen");
-}
-
-std::tuple<std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> BoundedSSTFilesToBlockInputStream::ingestingInfo() const
-{
-    auto * stream = getChildStream();
-    return std::make_tuple(stream->ingest_storage, stream->cur_schema);
 }
 
 size_t BoundedSSTFilesToBlockInputStream::getProcessKeys() const

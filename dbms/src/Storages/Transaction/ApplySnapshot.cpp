@@ -15,12 +15,17 @@
 #include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SSTReader.h>
+#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 
 #include <ext/scope_guard.h>
 
 namespace DB
 {
+
+std::tuple<std::shared_ptr<StorageDeltaMerge>, bool, DM::ColumnDefinesPtr> //
+AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt);
+
 namespace FailPoints
 {
 extern const char force_set_sst_to_dtfile_block_size[];
@@ -317,11 +322,22 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
         std::shared_ptr<DM::SSTFilesToDTFilesOutputStream> stream;
         try
         {
+            // Get storage schema atomically, will do schema sync if the storage does not exists.
+            // Will return the storage even if it is tombstoned.
+            auto [dm_storage, is_common_handle, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
+            if (unlikely(dm_storage == nullptr))
+            {
+                // The storage must be physically dropped, throw exception and do cleanup.
+                throw Exception("", ErrorCodes::TABLE_IS_DROPPED);
+            }
+
             // Read from SSTs and refine the boundary of blocks output to DTFiles
-            auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
-                std::make_shared<DM::SSTFilesToBlockInputStream>(new_region, snaps, proxy_helper, tmt, expected_block_size),
-                ::DB::TiDBPkColumnID);
-            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(bounded_stream, snapshot_apply_method, job_type, tmt);
+            auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
+                new_region, snaps, proxy_helper, dm_storage, schema_snap, tmt, expected_block_size);
+            auto bounded_stream
+                = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, is_common_handle);
+            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(
+                bounded_stream, snapshot_apply_method, job_type, dm_storage, schema_snap, tmt);
 
             stream->writePrefix();
             stream->write();
@@ -340,6 +356,13 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 // The schema of decoding region data has been updated, need to clear and recreate another stream for writing DTFile(s)
                 new_region->clearAllData();
                 try_clean_up();
+
+                // Update schema and try to decode again
+                auto context = tmt.getContext();
+                auto metrics = context.getTiFlashMetrics();
+                GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
+                tmt.getSchemaSyncer()->syncSchemas(context);
+
                 continue;
             }
             else if (e.code() == ErrorCodes::TABLE_IS_DROPPED)

@@ -46,9 +46,12 @@ enum class FileConvertJobType
 class SSTFilesToDTFilesOutputStream : private boost::noncopyable
 {
 public:
+    using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
     SSTFilesToDTFilesOutputStream(BoundedSSTFilesToBlockInputStreamPtr child_,
                                   TiDB::SnapshotApplyMethod            method_,
                                   FileConvertJobType                   job_type_,
+                                  StorageDeltaMergePtr                 ingest_storage_,
+                                  DM::ColumnDefinesPtr                 schema_snap_,
                                   TMTContext &                         tmt_);
     ~SSTFilesToDTFilesOutputStream();
 
@@ -62,8 +65,6 @@ public:
     void cancel();
 
 private:
-    void finishCurrDTFileStream();
-
     // Stop the process for decoding committed data into DTFiles
     void stop();
 
@@ -71,11 +72,11 @@ private:
     BoundedSSTFilesToBlockInputStreamPtr child;
     const TiDB::SnapshotApplyMethod      method;
     const FileConvertJobType             job_type;
+    StorageDeltaMergePtr                 ingest_storage;
+    DM::ColumnDefinesPtr                 schema_snap;
     TMTContext &                         tmt;
     Poco::Logger *                       log;
 
-    std::shared_ptr<StorageDeltaMerge>       ingest_storage;
-    DM::ColumnDefinesPtr                     cur_schema;
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;
 
     std::vector<DMFilePtr> ingest_files;

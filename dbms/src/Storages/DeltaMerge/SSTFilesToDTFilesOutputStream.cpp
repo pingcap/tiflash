@@ -31,10 +31,14 @@ SSTFilesToDTFilesOutputStream::SSTFilesToDTFilesOutputStream( //
     BoundedSSTFilesToBlockInputStreamPtr child_,
     TiDB::SnapshotApplyMethod            method_,
     FileConvertJobType                   job_type_,
+    StorageDeltaMergePtr                 ingest_storage_,
+    DM::ColumnDefinesPtr                 schema_snap_,
     TMTContext &                         tmt_)
     : child(child_), //
       method(method_),
       job_type(job_type_),
+      ingest_storage(std::move(ingest_storage_)),
+      schema_snap(std::move(schema_snap_)),
       tmt(tmt_),
       log(&Poco::Logger::get("SSTFilesToDTFilesOutputStream"))
 {
@@ -54,7 +58,18 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
 {
     child->readSuffix();
 
-    finishCurrDTFileStream();
+    do
+    {
+        if (dt_stream == nullptr)
+            break;
+
+        dt_stream->writeSuffix();
+        auto dt_file = dt_stream->getFile();
+        assert(!dt_file->canGC()); // The DTFile should not be able to gc until it is ingested.
+        // Add the DTFile to StoragePathPool so that we can restore it later
+        ingest_storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), dt_file->getBytesOnDisk());
+        dt_stream.reset();
+    } while (0);
 
     auto & ctx     = tmt.getContext();
     auto   metrics = ctx.getTiFlashMetrics();
@@ -84,15 +99,9 @@ void SSTFilesToDTFilesOutputStream::write()
         if (unlikely(block.rows() == 0))
             continue;
 
-        auto [storage, schema_snap] = child->ingestingInfo();
-        ingest_storage              = storage;
-
-        if (dt_stream == nullptr || SSTFilesToBlockInputStream::needUpdateSchema(cur_schema, schema_snap))
+        if (dt_stream == nullptr)
         {
-            // Close previous DTFile and output stream before creating new DTFile for new schema
-            finishCurrDTFileStream();
-
-            // Generate a DMFilePtr and its DMFileBlockOutputStream if not exists
+            // Generate a DMFilePtr and its DMFileBlockOutputStream
             DMFileBlockOutputStream::Flags flags;
             switch (method)
             {
@@ -116,10 +125,9 @@ void SSTFilesToDTFilesOutputStream::write()
             auto dt_file = DMFile::create(file_id, parent_path, flags.isSingleFile());
             LOG_INFO(log,
                      "Create file for snapshot data [file=" << dt_file->path() << "] [single_file_mode=" << flags.isSingleFile() << "]");
-            cur_schema = schema_snap;
             // FIXME: the block properties are not persisted. (tics#1833)
             flags.setPersistBlockProperty(false);
-            dt_stream = std::make_unique<DMFileBlockOutputStream>(tmt.getContext(), dt_file, *cur_schema, flags);
+            dt_stream = std::make_unique<DMFileBlockOutputStream>(tmt.getContext(), dt_file, *schema_snap, flags);
             dt_stream->writePrefix();
             ingest_files.emplace_back(dt_file);
         }
@@ -143,22 +151,6 @@ void SSTFilesToDTFilesOutputStream::write()
 
         commit_rows += block.rows();
     }
-}
-
-void SSTFilesToDTFilesOutputStream::finishCurrDTFileStream()
-{
-    if (dt_stream == nullptr)
-        return;
-
-    assert(dt_stream != nullptr);
-
-    dt_stream->writeSuffix();
-    auto dt_file = dt_stream->getFile();
-    // The DTFile should not be able to gc until it is ingested.
-    assert(!dt_file->canGC());
-    // Add the DTFile to StoragePathPool so that we can restore it later
-    ingest_storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), dt_file->getBytesOnDisk());
-    dt_stream.reset();
 }
 
 PageIds SSTFilesToDTFilesOutputStream::ingestIds() const

@@ -28,6 +28,7 @@ extern const char pause_before_apply_raft_snapshot[];
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+extern const int REGION_DATA_SCHEMA_UPDATED;
 extern const int ILLFORMAT_RAFT_ROW;
 } // namespace ErrorCodes
 
@@ -464,9 +465,12 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     return std::make_unique<RegionPreDecodeBlockData>(std::move(res_block), schema_version, std::move(*data_list_read));
 }
 
-bool atomicGetStorageIsCommonHandle(const RegionPtr & region, TMTContext & tmt)
+std::tuple<std::shared_ptr<StorageDeltaMerge>, bool, DM::ColumnDefinesPtr> //
+AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 {
     bool is_common_handle = false;
+    std::shared_ptr<StorageDeltaMerge> dm_storage;
+    DM::ColumnDefinesPtr schema_snap;
 
     auto table_id = region->getMappedTableID();
     auto context = tmt.getContext();
@@ -482,6 +486,17 @@ bool atomicGetStorageIsCommonHandle(const RegionPtr & region, TMTContext & tmt)
         }
         auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
         is_common_handle = storage->isCommonHandle();
+        if (unlikely(storage->engineType() != ::TiDB::StorageEngine::DT))
+        {
+            throw Exception("Try to get storage schema with unknown storage engine [table_id=" + DB::toString(table_id)
+                    + "] [engine_type=" + DB::toString(static_cast<Int32>(storage->engineType())) + "]",
+                ErrorCodes::LOGICAL_ERROR);
+        }
+        if (dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage); dm_storage != nullptr)
+        {
+            auto store = dm_storage->getStore();
+            schema_snap = store->getStoreColumns();
+        }
         return true;
     };
 
@@ -494,7 +509,7 @@ bool atomicGetStorageIsCommonHandle(const RegionPtr & region, TMTContext & tmt)
             throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",
                 ErrorCodes::LOGICAL_ERROR);
     }
-    return is_common_handle;
+    return std::make_tuple(dm_storage, is_common_handle, schema_snap);
 }
 
 /// Decode region data into block and belonging schema snapshot, remove committed data from `region`
@@ -504,76 +519,47 @@ bool atomicGetStorageIsCommonHandle(const RegionPtr & region, TMTContext & tmt)
 ///        It will be `nullptr` only if there is no committed data.
 ///  .2 -- The latest schema of the storage we are ingesting data into.
 ///        It will be `nullptr` only if there is no committed data.
-std::tuple<Block, std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> //
-GenRegionBlockDatawithSchema(const RegionPtr & region, TMTContext & tmt)
+Block GenRegionBlockDatawithSchema(const RegionPtr & region,
+    const std::shared_ptr<StorageDeltaMerge> & dm_storage,
+    const DM::ColumnDefinesPtr & schema_snap,
+    TMTContext & tmt)
 {
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
     // br or lighting may write illegal data into tikv, the caller should handle the exception thrown by this function
     data_list_read = ReadRegionCommitCache(region);
 
     Block res_block;
-    std::shared_ptr<StorageDeltaMerge> dm_storage;
-    DM::ColumnDefinesPtr schema_snap;
     // No committed data, just return
     if (!data_list_read)
-        return std::make_tuple(std::move(res_block), std::move(dm_storage), std::move(schema_snap));
+        return std::move(res_block);
 
     auto context = tmt.getContext();
     auto metrics = context.getTiFlashMetrics();
-    TableID table_id = region->getMappedTableID();
 
-    const auto atomicDecode = [&](bool force_decode) -> bool {
+    {
         Stopwatch watch;
-        auto storage = tmt.getStorages().get(table_id);
-        if (storage == nullptr || storage->isTombstone())
-        {
-            if (!force_decode)
-                return false;
-            if (storage == nullptr) // Table must have just been GC-ed.
-                return true;
-        }
-        auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-        auto reader = RegionBlockReader(storage);
-        auto [block, ok] = reader.read(*data_list_read, force_decode);
-        if (!ok)
-            return false;
+        auto lock = dm_storage->lockStructure(false, __PRETTY_FUNCTION__);
+        // Compare schema_snap with current schema, throw exception if changed.
+        auto store = dm_storage->getStore();
+        auto cur_schema_snap = store->getStoreColumns();
+        if (cur_schema_snap != schema_snap)
+            throw Exception("", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
 
-        // Get schema snapshot
-        if (unlikely(storage->engineType() != ::TiDB::StorageEngine::DT))
-        {
-            throw Exception("Try to convert SSTFiles into DTFiles with unknown storage engine [table_id=" + DB::toString(table_id)
-                    + "] [engine_type=" + DB::toString(static_cast<Int32>(storage->engineType())) + "]",
-                ErrorCodes::LOGICAL_ERROR);
-        }
-        if (dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage); dm_storage != nullptr)
-        {
-            auto store = dm_storage->getStore();
-            schema_snap = store->getStoreColumns();
-            // For DeltaMergeStore, we always store an extra column with column_id = -1
-            res_block = store->addExtraColumnIfNeed(context, std::move(block));
-        }
+        auto reader = RegionBlockReader(dm_storage);
+        auto [block, ok] = reader.read(*data_list_read, true); // Always force_decode
+        if (unlikely(!ok))
+            throw Exception("", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
 
         GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
-        return true;
-    };
 
-    if (!atomicDecode(false))
-    {
-        GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context);
-
-        if (!atomicDecode(true))
-            throw Exception("Pre-decode " + region->toString() + " cache to table " + DB::toString(table_id) + " block failed",
-                ErrorCodes::LOGICAL_ERROR);
+        // For DeltaMergeStore, we always store an extra column with column_id = -1
+        res_block = store->addExtraColumnIfNeed(context, std::move(block));
     }
 
     // Remove committed data
     RemoveRegionCommitCache(region, *data_list_read);
 
-    return std::make_tuple( //
-        std::move(res_block),
-        std::move(dm_storage),
-        std::move(schema_snap));
+    return std::move(res_block);
 }
 
 } // namespace DB
