@@ -12,7 +12,6 @@
 
 namespace DB
 {
-
 namespace DM
 {
 extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
