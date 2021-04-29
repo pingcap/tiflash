@@ -112,6 +112,7 @@ public:
 
     const RegionPtr getRegion() const;
 
+    // Return values: (effective rows, not clean rows, gc hint version)
     std::tuple<size_t, size_t, UInt64> getMvccStatistics() const;
 
 private:

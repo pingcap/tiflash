@@ -65,6 +65,9 @@ public:
     void cancel();
 
 private:
+
+    bool newDTFileStream();
+
     // Stop the process for decoding committed data into DTFiles
     void stop();
 
