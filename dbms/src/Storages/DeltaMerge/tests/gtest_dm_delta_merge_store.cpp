@@ -874,7 +874,6 @@ try
     {
         // Prepare DTFiles for ingesting
         auto dm_context  = store->newDMContext(*context, context->getSettingsRef());
-        auto schema_snap = store->getStoreColumns();
 
         auto [range1, file_ids1] = genDMFile(*dm_context, DMTestEnv::prepareSimpleWriteBlock(32, 48, false, tso2));
         auto [range2, file_ids2] = genDMFile(*dm_context, DMTestEnv::prepareSimpleWriteBlock(80, 256, false, tso3));
@@ -1032,6 +1031,93 @@ try
             num_rows_read += block.rows();
         in->readSuffix();
         EXPECT_EQ(num_rows_read, 2UL) << "The rows number of two point get is not match";
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStore_test, IngestEmptyFileLists)
+try
+{
+    if (mode == TestMode::V1_BlockOnly)
+        return;
+
+    const UInt64 tso1                   = 4;
+    const size_t num_rows_before_ingest = 128;
+    // Write to store [0, 128)
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_before_ingest, false, tso1);
+        store->write(*context, context->getSettingsRef(), std::move(block));
+    }
+
+    // Test that if we ingest a empty file list, the data in range will be removed.
+    // The ingest range is [32, 256)
+    {
+        auto dm_context  = store->newDMContext(*context, context->getSettingsRef());
+
+        std::vector<PageId> file_ids ;
+        auto ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
+        store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
+    }
+
+
+    // After ingesting, the data in [32, 128) should be overwrite by the data in ingested files.
+    {
+        // Read all data <= tso1
+        // We can only get [0, 32) with tso1
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ tso1,
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        Int64  expect_pk  = 0;
+        UInt64 expect_tso = tso1;
+        while (Block block = in->read())
+        {
+            ASSERT_TRUE(block.has(DMTestEnv::pk_name));
+            ASSERT_TRUE(block.has(VERSION_COLUMN_NAME));
+            auto pk_c = block.getByName(DMTestEnv::pk_name);
+            auto v_c  = block.getByName(VERSION_COLUMN_NAME);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                // std::cerr << "pk:" << pk_c.column->getInt(i) << ", ver:" << v_c.column->getInt(i) << std::endl;
+                ASSERT_EQ(pk_c.column->getInt(i), expect_pk++);
+                ASSERT_EQ(v_c.column->getUInt(i), expect_tso);
+            }
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 32UL) << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
+    }
+
+    {
+        // Read all data
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+            num_rows_read += block.rows();
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 32UL) << "The rows number after ingest is not match";
     }
 }
 CATCH
