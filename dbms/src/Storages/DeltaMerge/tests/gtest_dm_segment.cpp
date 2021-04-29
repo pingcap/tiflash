@@ -1618,7 +1618,7 @@ try
     Settings settings                    = dmContext().db_context.getSettings();
     settings.dt_segment_stable_pack_rows = 10;
 
-    segment                                 = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
+    segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
 
     const size_t num_rows_write_every_round = 100;
     const size_t write_round                = 3;
