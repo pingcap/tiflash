@@ -43,6 +43,8 @@ enum class FileConvertJobType
 };
 
 
+// This class is tightly coupling with BoundedSSTFilesToBlockInputStream
+// to get some info of the decoding process.
 class SSTFilesToDTFilesOutputStream : private boost::noncopyable
 {
 public:
@@ -50,8 +52,6 @@ public:
     SSTFilesToDTFilesOutputStream(BoundedSSTFilesToBlockInputStreamPtr child_,
                                   TiDB::SnapshotApplyMethod            method_,
                                   FileConvertJobType                   job_type_,
-                                  StorageDeltaMergePtr                 ingest_storage_,
-                                  DM::ColumnDefinesPtr                 schema_snap_,
                                   TMTContext &                         tmt_);
     ~SSTFilesToDTFilesOutputStream();
 
@@ -72,8 +72,6 @@ private:
     BoundedSSTFilesToBlockInputStreamPtr child;
     const TiDB::SnapshotApplyMethod      method;
     const FileConvertJobType             job_type;
-    StorageDeltaMergePtr                 ingest_storage;
-    DM::ColumnDefinesPtr                 schema_snap;
     TMTContext &                         tmt;
     Poco::Logger *                       log;
 

@@ -91,7 +91,6 @@ class BoundedSSTFilesToBlockInputStream final
 {
 public:
     BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child,
-                                      DM::ColumnDefinesPtr          schema_snap_,
                                       const ColId                   pk_column_id_,
                                       const bool                    is_common_handle_,
                                       const Timestamp               gc_safepoint_);
@@ -104,6 +103,8 @@ public:
 
     Block read();
 
+    std::tuple<std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> ingestingInfo() const;
+
     size_t getProcessKeys() const;
 
     const RegionPtr getRegion() const;
@@ -111,10 +112,9 @@ public:
     std::tuple<size_t, size_t, UInt64> getMvccStatistics() const;
 
 private:
-    const DM::ColumnDefinesPtr schema_snap;
-    const ColId                pk_column_id;
-    const bool                 is_common_handle;
-    const Timestamp            gc_safepoint;
+    const ColId     pk_column_id;
+    const bool      is_common_handle;
+    const Timestamp gc_safepoint;
     // Note that we only keep _raw_child for getting ingest info / process key, etc. All block should be
     // read from `mvcc_compact_stream`
     const SSTFilesToBlockInputStreamPtr                                              _raw_child;

@@ -345,9 +345,9 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
                 new_region, snaps, proxy_helper, dm_storage, schema_snap, tmt, expected_block_size);
             auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
-                sst_stream, schema_snap, ::DB::TiDBPkColumnID, is_common_handle, gc_safepoint);
+                sst_stream, ::DB::TiDBPkColumnID, is_common_handle, gc_safepoint);
             stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(
-                bounded_stream, snapshot_apply_method, job_type, dm_storage, schema_snap, tmt);
+                bounded_stream, snapshot_apply_method, job_type, tmt);
 
             stream->writePrefix();
             stream->write();

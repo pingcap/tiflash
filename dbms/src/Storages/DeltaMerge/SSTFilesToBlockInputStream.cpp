@@ -183,15 +183,10 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
 
 BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     SSTFilesToBlockInputStreamPtr child,
-    DM::ColumnDefinesPtr          schema_snap_,
     const ColId                   pk_column_id_,
     const bool                    is_common_handle_,
     const Timestamp               gc_safepoint_)
-    : schema_snap(std::move(schema_snap_)),
-      pk_column_id(pk_column_id_),
-      is_common_handle(is_common_handle_),
-      gc_safepoint(gc_safepoint_),
-      _raw_child(std::move(child))
+    : pk_column_id(pk_column_id_), is_common_handle(is_common_handle_), gc_safepoint(gc_safepoint_), _raw_child(std::move(child))
 {
     // The `mvcc_compact_stream` will be initlized in `readPrefix`
 }
@@ -202,7 +197,7 @@ void BoundedSSTFilesToBlockInputStream::readPrefix()
     auto stream = std::make_shared<ReorganizeBlockInputStream>(_raw_child, pk_column_id, is_common_handle);
     // Generate `mvcc_compact_stream`
     mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-        stream, *schema_snap, gc_safepoint, is_common_handle);
+        stream, *(_raw_child->schema_snap), gc_safepoint, is_common_handle);
     mvcc_compact_stream->readPrefix();
 }
 
@@ -214,6 +209,11 @@ void BoundedSSTFilesToBlockInputStream::readSuffix()
 Block BoundedSSTFilesToBlockInputStream::read()
 {
     return mvcc_compact_stream->read();
+}
+
+std::tuple<std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> BoundedSSTFilesToBlockInputStream::ingestingInfo() const
+{
+    return std::make_tuple(_raw_child->ingest_storage, _raw_child->schema_snap);
 }
 
 size_t BoundedSSTFilesToBlockInputStream::getProcessKeys() const
@@ -229,6 +229,8 @@ const RegionPtr BoundedSSTFilesToBlockInputStream::getRegion() const
 std::tuple<size_t, size_t, UInt64> //
 BoundedSSTFilesToBlockInputStream::getMvccStatistics() const
 {
+    // Caller should ensure only call it after `read`
+    assert(mvcc_compact_stream != nullptr);
     return std::make_tuple(
         mvcc_compact_stream->getEffectiveNumRows(), mvcc_compact_stream->getNotCleanRows(), mvcc_compact_stream->getGCHintVersion());
 }
