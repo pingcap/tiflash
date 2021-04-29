@@ -168,18 +168,19 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         }
     }
 
-    if (settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
+    // Hold read lock on both `alter_lock` and `drop_lock` until the local input streams are created.
+    TableStructureLockHolder table_structure_lock;
+    if (unlikely(settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION))
     {
-        storage = context.getTMTContext().getStorages().get(table_id);
-        if (storage == nullptr)
+        if (storage = context.getTMTContext().getStorages().get(table_id); storage == nullptr)
         {
             throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
         }
-        table_lock = storage->lockForShare(context.getCurrentQueryId());
+        table_structure_lock = storage->lockStructureForShare(context.getCurrentQueryId());
     }
     else
     {
-        getAndLockStorageWithSchemaVersion(table_id, settings.schema_version);
+        table_structure_lock = getAndLockStorageWithSchemaVersion(table_id, settings.schema_version);
     }
 
     Names required_columns;
@@ -235,6 +236,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     {
         readFromLocalStorage(table_id, required_columns, query_info, max_block_size, learner_read_snapshot, pipeline, region_retry);
     }
+    table_lock = std::move(table_structure_lock).intoDropLock(); // release the alter lock so that reading does not block DDL operations
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop mode.
     if (!region_retry.empty())
@@ -817,13 +819,13 @@ void DAGQueryBlockInterpreter::executeExpression(Pipeline & pipeline, const Expr
     }
 }
 
-void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 query_schema_version)
+TableStructureLockHolder DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 query_schema_version)
 {
     /// Get current schema version in schema syncer for a chance to shortcut.
     auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
 
     /// Lambda for get storage, then align schema version under the read lock.
-    auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<ManageableStoragePtr, TableLockHolder, Int64, bool> {
+    auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<ManageableStoragePtr, TableStructureLockHolder, Int64, bool> {
         /// Get storage in case it's dropped then re-created.
         // If schema synced, call getTable without try, leading to exception on table not existing.
         auto storage_ = context.getTMTContext().getStorages().get(table_id);
@@ -832,7 +834,7 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
             if (schema_synced)
                 throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
             else
-                return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
+                return std::make_tuple(nullptr, TableStructureLockHolder{}, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
         }
 
         if (storage_->engineType() != ::TiDB::StorageEngine::TMT && storage_->engineType() != ::TiDB::StorageEngine::DT)
@@ -843,7 +845,7 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
         }
 
         /// Lock storage not to be dropped during coprocessor reading
-        auto lock = storage_->lockForShare(context.getCurrentQueryId());
+        auto lock = storage_->lockStructureForShare(context.getCurrentQueryId());
 
         /// Check schema version, requiring TiDB/TiSpark and TiFlash both use exactly the same schema.
         // We have three schema versions, two in TiFlash:
@@ -869,12 +871,12 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
             return std::make_tuple(storage_, lock, storage_schema_version, true);
         // From now on we have global < query.
         // Return false for outer to sync and retry.
-        return std::make_tuple(nullptr, nullptr, storage_schema_version, false);
+        return std::make_tuple(nullptr, TableStructureLockHolder{}, storage_schema_version, false);
     };
 
     /// Try get storage and lock once.
     ManageableStoragePtr storage_;
-    TableLockHolder lock;
+    TableStructureLockHolder lock;
     Int64 storage_schema_version;
     auto log_schema_version = [&](const String & result) {
         LOG_DEBUG(log,
@@ -888,8 +890,7 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
         {
             log_schema_version("OK, no syncing required.");
             storage = storage_;
-            table_lock = lock;
-            return;
+            return lock;
         }
     }
 
@@ -907,8 +908,7 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
         {
             log_schema_version("OK after syncing.");
             storage = storage_;
-            table_lock = lock;
-            return;
+            return lock;
         }
 
         throw TiFlashException("Shouldn't reach here", Errors::Coprocessor::Internal);
