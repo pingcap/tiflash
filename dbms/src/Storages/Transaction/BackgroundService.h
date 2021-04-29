@@ -42,8 +42,6 @@ private:
     BackgroundProcessingPool::TaskHandle table_flush_handle;
     BackgroundProcessingPool::TaskHandle region_handle;
     BackgroundProcessingPool::TaskHandle storage_gc_handle;
-    BackgroundProcessingPool::TaskHandle store_init_handle;
-    bool store_init_task_has_run;
 };
 
 } // namespace DB
