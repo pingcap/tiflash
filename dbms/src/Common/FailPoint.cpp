@@ -39,8 +39,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_during_mpp_root_task_run)                         \
     M(exception_during_write_to_storage)
 
-#define APPLY_FOR_FAILPOINTS_ALWAYS_FAIL(M) M(force_set_delta_merge_max_block_size)
-
 #define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)  \
     M(pause_after_learner_read)               \
     M(hang_in_execution)                      \
@@ -54,7 +52,6 @@ namespace FailPoints
 {
 #define M(NAME) extern const char NAME[] = #NAME "";
 APPLY_FOR_FAILPOINTS(M)
-APPLY_FOR_FAILPOINTS_ALWAYS_FAIL(M)
 APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
 #undef M
 } // namespace FailPoints
@@ -94,17 +91,6 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
     }
 
     APPLY_FOR_FAILPOINTS(M)
-#undef M
-
-#define M(NAME)                                                                            \
-    if (fail_point_name == FailPoints::NAME)                                               \
-    {                                                                                      \
-        /* 0 -- The failpoint will always fail, you must disable the failpoint manually */ \
-        fiu_enable(FailPoints::NAME, 1, nullptr, 0);                                       \
-        return;                                                                            \
-    }
-
-    APPLY_FOR_FAILPOINTS_ALWAYS_FAIL(M)
 #undef M
 
 #define M(NAME)                                                                                             \

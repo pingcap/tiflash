@@ -1,4 +1,3 @@
-#include <Common/FailPoint.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -13,10 +12,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char force_set_delta_merge_max_block_size[];
-} // namespace FailPoints
 
 namespace DM
 {
@@ -1579,11 +1574,14 @@ CATCH
 TEST_F(Segment_test, CalculateDTFileProperty)
 try
 {
+    Settings settings                    = dmContext().db_context.getSettings();
+    settings.dt_segment_stable_pack_rows = 10;
+
+    segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
+
     const size_t num_rows_write_every_round = 100;
     const size_t write_round                = 3;
     const size_t tso                        = 10000;
-    // set max_block_size in DeltaMerge to a small value, so the following mergeDelta can produce more than one pack
-    FailPointHelper::enableFailPoint(FailPoints::force_set_delta_merge_max_block_size);
     for (size_t i = 0; i < write_round; i++)
     {
         size_t start = num_rows_write_every_round * i;
@@ -1592,7 +1590,6 @@ try
         segment->write(dmContext(), block);
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
-    FailPointHelper::disableFailPoint(FailPoints::force_set_delta_merge_max_block_size);
 
     {
         auto & stable = segment->getStable();
@@ -1618,11 +1615,14 @@ CATCH
 TEST_F(Segment_test, CalculateDTFilePropertyWithPropertyFileDeleted)
 try
 {
+    Settings settings                    = dmContext().db_context.getSettings();
+    settings.dt_segment_stable_pack_rows = 10;
+
+    segment                                 = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
+
     const size_t num_rows_write_every_round = 100;
     const size_t write_round                = 3;
     const size_t tso                        = 10000;
-    // set max_block_size in DeltaMerge to a small value, so the following mergeDelta can produce more than one pack
-    FailPointHelper::enableFailPoint(FailPoints::force_set_delta_merge_max_block_size);
     for (size_t i = 0; i < write_round; i++)
     {
         size_t start = num_rows_write_every_round * i;
@@ -1631,7 +1631,6 @@ try
         segment->write(dmContext(), block);
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
-    FailPointHelper::disableFailPoint(FailPoints::force_set_delta_merge_max_block_size);
 
     {
         auto & stable  = segment->getStable();
