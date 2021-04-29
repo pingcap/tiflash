@@ -28,8 +28,6 @@ public:
     void addRegionToFlush(const RegionPtr & region);
 
 private:
-    bool initStores();
-    
     TMTContext & tmt;
     BackgroundProcessingPool & background_pool;
 
