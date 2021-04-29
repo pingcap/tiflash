@@ -37,7 +37,7 @@ private:
 using TableExclusiveLockHolder = TableRWLocksHolder</*is_exclusive=*/true>;
 /// Table structure lock, hold read locks on both alter_lock and drop_lock of the table.
 /// Useful for decoding KV-pairs from Raft data that we want to ensure the structure
-/// won't be changed. After decoding done, the caller can use `releaseAlterLock` to
+/// won't be changed. After decoding done, the caller can use `intoDropLock` to
 /// release the read lock on alter_lock but keep the drop_lock for writing blocks
 /// into the table.
 using TableStructureLockHolder = TableRWLocksHolder</*is_exclusive=*/false>;
