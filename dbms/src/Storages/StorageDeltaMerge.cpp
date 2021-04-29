@@ -64,7 +64,6 @@ StorageDeltaMerge::StorageDeltaMerge( //
       store_inited(false),
       max_column_id_used(0),
       global_context(global_context_.getGlobalContext()),
-      path_pool(global_context_.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name)),
       log(&Logger::get("StorageDeltaMerge"))
 {
     if (primary_expr_ast_->children.empty())
@@ -1316,6 +1315,19 @@ bool StorageDeltaMerge::initStoreIfDataDirExist()
 
 bool StorageDeltaMerge::dataDirExist() 
 {
+    String db_name, table_name;
+    {
+        std::lock_guard<std::mutex> lock(store_mutex);
+        // store is inited
+        if (table_column_info == nullptr)
+        {
+            return true;
+        }
+        db_name = table_column_info->db_name;
+        table_name = table_column_info->db_name;
+    }
+
+    auto path_pool = global_context.getPathPool().withTable(db_name, table_name, data_path_contains_database_name);
     auto path_delegate = path_pool.getStableDiskDelegator();
     for (const auto & root_path : path_delegate.listPaths())
     {
