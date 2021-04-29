@@ -512,16 +512,67 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
     return std::make_tuple(dm_storage, is_common_handle, schema_snap);
 }
 
+static bool needUpdateSchema(const DM::ColumnDefinesPtr & a, const DM::ColumnDefinesPtr & b)
+{
+    // Note that we consider `a` is not `b` and need to update schema if either of them is `nullptr`
+    if (unlikely(a == nullptr || b == nullptr))
+        return true;
+
+    // If the two schema is not the same, then it need to be updated.
+    if (a->size() != b->size())
+        return true;
+    for (size_t i = 0; i < a->size(); ++i)
+    {
+        const auto & ca = (*a)[i];
+        const auto & cb = (*b)[i];
+
+        bool col_ok = ca.id == cb.id;
+        // bool name_ok = ca.name == cb.name;
+        bool type_ok = ca.type->equals(*cb.type);
+
+        if (!col_ok || !type_ok)
+            return true;
+    }
+    return false;
+}
+
+static Block sortColumnsBySchemaSnap(Block && ori, const DM::ColumnDefines & schema)
+{
+#ifndef NDEBUG
+    // Some trival check to ensure the input is legal
+    if (ori.columns() != schema.size())
+    {
+        throw Exception("Try to sortColumnsBySchemaSnap with different column size [block_columns=" + DB::toString(ori.columns())
+            + "] [schema_columns=" + DB::toString(schema.size()) + "]");
+    }
+#endif
+
+    std::map<DB::ColumnID, size_t> index_by_cid;
+    for (size_t i = 0; i < ori.columns(); ++i)
+    {
+        const ColumnWithTypeAndName & c = ori.getByPosition(i);
+        index_by_cid[c.column_id] = i;
+    }
+
+    Block res;
+    for (const auto & cd : schema)
+    {
+        res.insert(ori.getByPosition(index_by_cid[cd.id]));
+    }
+#ifndef NDEBUG
+    assertBlocksHaveEqualStructure(res, DM::toEmptyBlock(schema), "sortColumnsBySchemaSnap");
+#endif
+
+    return res;
+}
+
 /// Decode region data into block and belonging schema snapshot, remove committed data from `region`
-/// The return value is a tuple that:
-///  .0 -- The committed data scanned and removed from `region`
-///  .1 -- The storage we are ingesting data into
-///        It will be `nullptr` only if there is no committed data.
-///  .2 -- The latest schema of the storage we are ingesting data into.
-///        It will be `nullptr` only if there is no committed data.
+/// The return value is a block that store the committed data scanned and removed from `region`.
+/// The columns of returned block is sorted by `schema_snap`.
 Block GenRegionBlockDatawithSchema(const RegionPtr & region,
     const std::shared_ptr<StorageDeltaMerge> & dm_storage,
     const DM::ColumnDefinesPtr & schema_snap,
+    bool force_decode,
     TMTContext & tmt)
 {
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
@@ -542,11 +593,11 @@ Block GenRegionBlockDatawithSchema(const RegionPtr & region,
         // Compare schema_snap with current schema, throw exception if changed.
         auto store = dm_storage->getStore();
         auto cur_schema_snap = store->getStoreColumns();
-        if (cur_schema_snap != schema_snap)
+        if (needUpdateSchema(cur_schema_snap, schema_snap))
             throw Exception("", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
 
         auto reader = RegionBlockReader(dm_storage);
-        auto [block, ok] = reader.read(*data_list_read, true); // Always force_decode
+        auto [block, ok] = reader.read(*data_list_read, force_decode);
         if (unlikely(!ok))
             throw Exception("", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
 
@@ -555,6 +606,8 @@ Block GenRegionBlockDatawithSchema(const RegionPtr & region,
         // For DeltaMergeStore, we always store an extra column with column_id = -1
         res_block = store->addExtraColumnIfNeed(context, std::move(block));
     }
+
+    res_block = sortColumnsBySchemaSnap(std::move(res_block), *schema_snap);
 
     // Remove committed data
     RemoveRegionCommitCache(region, *data_list_read);

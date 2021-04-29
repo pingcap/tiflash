@@ -310,6 +310,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
     RegionPtr new_region, const SSTViewVec snaps, uint64_t /*index*/, uint64_t /*term*/, DM::FileConvertJobType job_type, TMTContext & tmt)
 {
     auto context = tmt.getContext();
+    bool force_decode = false;
     size_t expected_block_size = DEFAULT_MERGE_BLOCK_SIZE;
 
     // Use failpoint to change the expected_block_size for some test cases
@@ -343,11 +344,10 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
 
             // Read from SSTs and refine the boundary of blocks output to DTFiles
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
-                new_region, snaps, proxy_helper, dm_storage, schema_snap, tmt, expected_block_size);
-            auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(
-                sst_stream, ::DB::TiDBPkColumnID, is_common_handle, gc_safepoint);
-            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(
-                bounded_stream, snapshot_apply_method, job_type, tmt);
+                new_region, snaps, proxy_helper, dm_storage, schema_snap, force_decode, tmt, expected_block_size);
+            auto bounded_stream
+                = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, is_common_handle, gc_safepoint);
+            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(bounded_stream, snapshot_apply_method, job_type, tmt);
 
             stream->writePrefix();
             stream->write();
@@ -367,10 +367,18 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 new_region->clearAllData();
                 try_clean_up();
 
+                if (force_decode)
+                {
+                    // Can not decode data with `force_decode == true`, must be something wrong
+                    throw;
+                }
+
                 // Update schema and try to decode again
                 auto metrics = context.getTiFlashMetrics();
                 GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
                 tmt.getSchemaSyncer()->syncSchemas(context);
+                // Next time should force_decode
+                force_decode = true;
 
                 continue;
             }

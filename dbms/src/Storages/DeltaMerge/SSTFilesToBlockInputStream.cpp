@@ -27,6 +27,7 @@ Block GenRegionBlockDatawithSchema( //
     const RegionPtr &,
     const std::shared_ptr<StorageDeltaMerge> &,
     const DM::ColumnDefinesPtr &,
+    bool,
     TMTContext &);
 
 namespace DM
@@ -38,6 +39,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     const TiFlashRaftProxyHelper *                   proxy_helper_,
     SSTFilesToBlockInputStream::StorageDeltaMergePtr ingest_storage_,
     DM::ColumnDefinesPtr                             schema_snap_,
+    bool                                             force_decode_,
     TMTContext &                                     tmt_,
     size_t                                           expected_size_)
     : region(std::move(region_)),
@@ -47,7 +49,8 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
       schema_snap(std::move(schema_snap_)),
       tmt(tmt_),
       expected_size(expected_size_),
-      log(&Poco::Logger::get("SSTFilesToBlockInputStream"))
+      log(&Poco::Logger::get("SSTFilesToBlockInputStream")),
+      force_decode(force_decode_)
 {
 }
 
@@ -159,7 +162,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
     {
         // Read block from `region`. If the schema has been updated, it will
         // throw an exception with code `ErrorCodes::REGION_DATA_SCHEMA_UPDATED`
-        return GenRegionBlockDatawithSchema(region, ingest_storage, schema_snap, tmt);
+        return GenRegionBlockDatawithSchema(region, ingest_storage, schema_snap, force_decode, tmt);
     }
     catch (DB::Exception & e)
     {
@@ -190,7 +193,7 @@ BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
 {
     // Initlize `mvcc_compact_stream`
     // First refine the boundary of blocks
-    auto stream = std::make_shared<ReorganizeBlockInputStream>(_raw_child, pk_column_id, is_common_handle);
+    auto stream         = std::make_shared<ReorganizeBlockInputStream>(_raw_child, pk_column_id, is_common_handle);
     mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         stream, *(_raw_child->schema_snap), gc_safepoint, is_common_handle);
 }

@@ -46,6 +46,7 @@ public:
                                const TiFlashRaftProxyHelper * proxy_helper_,
                                StorageDeltaMergePtr           ingest_storage_,
                                DM::ColumnDefinesPtr           schema_snap_,
+                               bool                           force_decode_,
                                TMTContext &                   tmt_,
                                size_t                         expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
     ~SSTFilesToBlockInputStream();
@@ -80,6 +81,7 @@ private:
 
     friend class BoundedSSTFilesToBlockInputStream;
 
+    const bool force_decode;
     bool is_decode_cancelled = false;
 
     size_t process_keys   = 0;
