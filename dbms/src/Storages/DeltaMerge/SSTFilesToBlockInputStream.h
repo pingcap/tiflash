@@ -86,7 +86,8 @@ private:
     size_t process_writes = 0;
 };
 
-// Bound the blocks read from SSTFilesToBlockInputStream by column `_tidb_rowid`
+// Bound the blocks read from SSTFilesToBlockInputStream by column `_tidb_rowid` and
+// do some calculation for the `DMFileWriter::BlockProperty` of read blocks.
 class BoundedSSTFilesToBlockInputStream final
 {
 public:
