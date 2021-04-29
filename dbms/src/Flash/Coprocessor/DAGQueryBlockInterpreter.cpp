@@ -172,7 +172,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     TableStructureLockHolder table_structure_lock;
     if (unlikely(settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION))
     {
-        if (storage = context.getTMTContext().getStorages().get(table_id); storage == nullptr)
+        if (storage = tmt.getStorages().get(table_id); storage == nullptr)
         {
             throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
         }
@@ -822,13 +822,14 @@ void DAGQueryBlockInterpreter::executeExpression(Pipeline & pipeline, const Expr
 TableStructureLockHolder DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 query_schema_version)
 {
     /// Get current schema version in schema syncer for a chance to shortcut.
-    auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
+    auto & tmt = context.getTMTContext();
+    auto global_schema_version = tmt.getSchemaSyncer()->getCurrentVersion();
 
     /// Lambda for get storage, then align schema version under the read lock.
     auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<ManageableStoragePtr, TableStructureLockHolder, Int64, bool> {
         /// Get storage in case it's dropped then re-created.
         // If schema synced, call getTable without try, leading to exception on table not existing.
-        auto storage_ = context.getTMTContext().getStorages().get(table_id);
+        auto storage_ = tmt.getStorages().get(table_id);
         if (!storage_)
         {
             if (schema_synced)
@@ -899,7 +900,7 @@ TableStructureLockHolder DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVe
         log_schema_version("not OK, syncing schemas.");
         auto start_time = Clock::now();
         GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_trigger_count, type_cop_read).Increment();
-        context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
+        tmt.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
 
