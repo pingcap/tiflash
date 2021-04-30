@@ -107,7 +107,7 @@ static void writeRegionDataToStorage(
         }
 
         /// Write block into storage.
-        auto drop_lock = std::move(lock).intoDropLock(); // release the alter lock so that writing does not block DDL operations
+        auto drop_lock = std::move(lock).releaseAlter(); // release the alter lock so that writing does not block DDL operations
         watch.restart();
         // Note: do NOT use typeid_cast, since Storage is multi-inherite and typeid_cast will return nullptr
         switch (storage->engineType())

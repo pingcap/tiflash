@@ -169,6 +169,9 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     }
 
     // Hold read lock on both `alter_lock` and `drop_lock` until the local input streams are created.
+    // We need an immuntable structure to build the TableScan operator and create snapshot input streams
+    // of storage. After the input streams created, the `alter_lock` can be released so that reading
+    // won't block DDL operations.
     TableStructureLockHolder table_structure_lock;
     if (unlikely(settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION))
     {
@@ -180,7 +183,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     }
     else
     {
-        table_structure_lock = getAndLockStorageWithSchemaVersion(table_id, settings.schema_version);
+        std::tie(this->storage, table_structure_lock) = getAndLockStorageWithSchemaVersion(table_id, settings.schema_version);
     }
 
     Names required_columns;
@@ -236,9 +239,11 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     {
         readFromLocalStorage(table_id, required_columns, query_info, max_block_size, learner_read_snapshot, pipeline, region_retry);
     }
-    // Release the alter lock so that reading does not block DDL operations, keep the drop lock
-    // not to be dropped during reading
-    table_lock = std::move(table_structure_lock).intoDropLock(); 
+
+    // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
+    // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
+    // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
+    table_drop_lock = std::move(table_structure_lock).releaseAlter();
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop mode.
     if (!region_retry.empty())
@@ -303,7 +308,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         pipeline.streams.emplace_back(std::make_shared<NullBlockInputStream>(storage->getSampleBlockForColumns(required_columns)));
     }
 
-    pipeline.transform([&](auto & stream) { stream->addTableLock(table_lock); });
+    pipeline.transform([&](auto & stream) { stream->addTableLock(table_drop_lock); });
 
     /// Set the limits and quota for reading data, the speed and time of the query.
     {
@@ -821,7 +826,8 @@ void DAGQueryBlockInterpreter::executeExpression(Pipeline & pipeline, const Expr
     }
 }
 
-TableStructureLockHolder DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 query_schema_version)
+std::tuple<ManageableStoragePtr, TableStructureLockHolder> //
+DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 query_schema_version)
 {
     /// Get current schema version in schema syncer for a chance to shortcut.
     auto & tmt = context.getTMTContext();
@@ -892,8 +898,7 @@ TableStructureLockHolder DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVe
         if (ok)
         {
             log_schema_version("OK, no syncing required.");
-            storage = storage_;
-            return lock;
+            return std::make_tuple(storage_, lock);
         }
     }
 
@@ -910,8 +915,7 @@ TableStructureLockHolder DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVe
         if (ok)
         {
             log_schema_version("OK after syncing.");
-            storage = storage_;
-            return lock;
+            return std::make_tuple(storage_, lock);
         }
 
         throw TiFlashException("Shouldn't reach here", Errors::Coprocessor::Internal);
