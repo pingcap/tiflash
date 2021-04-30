@@ -20,6 +20,11 @@ struct SchemaNameMapper;
 class ASTStorage;
 class Region;
 
+namespace DM
+{
+struct RowKeyRange;
+}
+
 /**
  * An interface for Storages synced from TiDB.
  *
@@ -42,7 +47,7 @@ public:
 
     virtual void flushCache(const Context & /*context*/) {}
 
-    virtual void flushCache(const Context & /*context*/, const Region & /* region */) {}
+    virtual void flushCache(const Context & /*context*/, const DM::RowKeyRange & /*range_to_flush*/) {}
 
     virtual BlockInputStreamPtr status() { return {}; }
 
@@ -69,8 +74,8 @@ public:
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
     // Once called, table_info is guaranteed to be persisted, regardless commands being empty or not.
-    virtual void alterFromTiDB(const AlterCommands & commands, const String & database_name, const TiDB::TableInfo & table_info,
-        const SchemaNameMapper & name_mapper, const Context & context)
+    virtual void alterFromTiDB(const TableLockHolder &, const AlterCommands & commands, const String & database_name,
+        const TiDB::TableInfo & table_info, const SchemaNameMapper & name_mapper, const Context & context)
         = 0;
 
     /** Rename the table.

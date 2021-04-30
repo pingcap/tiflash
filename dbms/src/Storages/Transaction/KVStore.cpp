@@ -1,3 +1,4 @@
+#include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
@@ -17,7 +18,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-}
+extern const int TABLE_IS_DROPPED;
+} // namespace ErrorCodes
 
 KVStore::KVStore(Context & context)
     : region_persister(context, region_manager), raft_cmd_res(std::make_unique<RaftCommandResult>()), log(&Logger::get("KVStore"))
@@ -105,8 +107,10 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
         try
         {
             // Try to get a read lock on `storage` so it won't be dropped during `flushCache`
-            auto storage_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-            storage->flushCache(tmt.getContext(), region);
+            auto storage_lock = storage->lockForShare(getThreadName());
+            auto rowkey_range = DM::RowKeyRange::fromRegionRange(
+                region.getRange(), region.getRange()->getMappedTableID(), storage->isCommonHandle(), storage->getRowKeyColumnSize());
+            storage->flushCache(tmt.getContext(), rowkey_range);
         }
         catch (DB::Exception & e)
         {

@@ -1,3 +1,4 @@
+#include <Common/setThreadName.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
@@ -18,6 +19,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_TABLE;
 extern const int ILLFORMAT_RAFT_ROW;
+extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
 RegionTable::Table & RegionTable::getOrCreateTable(const TableID table_id)
@@ -224,7 +226,7 @@ TableID RegionTable::popOneTableToOptimize()
 namespace
 {
 /// Remove obsolete data for table after data of `handle_range` is removed from this TiFlash node.
-/// Note that this function will try to acquire lock by `IStorage->lockStructure` with will_modify_data = true
+/// Note that this function will try to acquire lock by `IStorage->lockForShare`
 void removeObsoleteDataInStorage(
     Context * const context, const TableID table_id, const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & handle_range)
 {
@@ -238,7 +240,7 @@ void removeObsoleteDataInStorage(
     {
         // acquire a read lock so that no other threads can drop the `storage`
         // if storage is already dropped, this will throw exception
-        auto storage_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
+        auto storage_lock = storage->lockForShare(getThreadName());
 
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         if (dm_storage == nullptr)
@@ -297,9 +299,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
     {
         // Try to remove obsolete data in storage
 
-        // Note that we should do this without lock on RegionTable, or apply DDL changes
-        // may meet deadlock since `removeObsoleteDataInStorage` acquire lock by
-        // `IStorage->lockStructure` with will_modify_data = true.
+        // Note that we should do this without lock on RegionTable.
         // But caller(KVStore) should ensure that no new data write into this handle_range
         // before `removeObsoleteDataInStorage` is done. (by param `RegionTaskLock`)
         // And this is expected not to block for long time.
