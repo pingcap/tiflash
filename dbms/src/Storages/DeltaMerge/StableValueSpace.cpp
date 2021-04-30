@@ -196,7 +196,6 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                                                            IdSetPtr{},
                                                            UINT64_MAX, // because we just read one pack at a time
                                                            true);
-            data_stream      = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, rowkey_range, 0);
             auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
                 data_stream, read_columns, 0, is_common_handle);
             mvcc_stream->readPrefix();
@@ -228,6 +227,21 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         auto & use_packs                 = pack_filter.getUsePacks();
         size_t new_pack_properties_index = 0;
         bool   use_new_pack_properties   = pack_properties.property_size() == 0;
+        if (use_new_pack_properties)
+        {
+            size_t use_packs_count = 0;
+            for (auto pack : use_packs)
+            {
+                if (pack)
+                    use_packs_count += 1;
+            }
+            if (unlikely((size_t)new_pack_properties.property_size() != use_packs_count))
+            {
+                throw Exception("new_pack_propertys size " + std::to_string(new_pack_properties.property_size())
+                                    + " doesn't match use packs size " + std::to_string(use_packs_count),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+        }
         for (size_t pack_id = 0; pack_id < use_packs.size(); pack_id++)
         {
             if (!use_packs[pack_id])
@@ -236,12 +250,6 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             property.num_puts += pack_stats[pack_id].rows - pack_stats[pack_id].not_clean;
             if (use_new_pack_properties)
             {
-                if (unlikely((size_t)new_pack_properties.property_size() <= new_pack_properties_index))
-                {
-                    throw Exception("new_pack_propertys size " + std::to_string(new_pack_properties.property_size())
-                                        + " doesn't contain all info for packs",
-                                    ErrorCodes::LOGICAL_ERROR);
-                }
                 auto & pack_property = new_pack_properties.property(new_pack_properties_index);
                 property.num_rows += pack_property.num_rows();
                 property.gc_hint_version = std::min(property.gc_hint_version, pack_property.gc_hint_version());

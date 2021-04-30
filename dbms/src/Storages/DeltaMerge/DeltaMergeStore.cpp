@@ -1379,11 +1379,10 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         if (segment->getLastCheckGCSafePoint() >= gc_safe_point)
             continue;
 
-        auto & segment_range = segment->getRowKeyRange();
-        auto   segment_range_debug_string = segment_range.toDebugString();
+        RowKeyRange segment_range = segment->getRowKeyRange();
         if (segment->getDelta()->isUpdating())
         {
-            LOG_DEBUG(log, "GC is skipped [range=" << segment_range_debug_string << "] [table=" << table_name << "]");
+            LOG_DEBUG(log, "GC is skipped [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
             continue;
         }
 
@@ -1416,15 +1415,15 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     checkSegmentUpdate(dm_context, segment, type);
                     gc_segments_num++;
                     finish_gc_on_segment = true;
-                    LOG_INFO(log, "GC-merge-delta done [range=" << segment_range_debug_string << "] [table=" << table_name << "]");
+                    LOG_INFO(log, "GC-merge-delta done [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
                 }
             }
             if (!finish_gc_on_segment)
-                LOG_DEBUG(log, "GC is skipped [range=" << segment_range_debug_string << "] [table=" << table_name << "]");
+                LOG_DEBUG(log, "GC is skipped [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
         }
         catch (Exception & e)
         {
-            e.addMessage("while apply gc [range=" + segment_range_debug_string + "] [table=" + table_name + "]");
+            e.addMessage("while apply gc [range=" + segment_range.toDebugString() + "] [table=" + table_name + "]");
             e.rethrow();
         }
     }
