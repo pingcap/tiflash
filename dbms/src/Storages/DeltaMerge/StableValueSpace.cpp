@@ -230,9 +230,9 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         if (use_new_pack_properties)
         {
             size_t use_packs_count = 0;
-            for (auto pack : use_packs)
+            for (auto is_used : use_packs)
             {
-                if (pack)
+                if (is_used)
                     use_packs_count += 1;
             }
             if (unlikely((size_t)new_pack_properties.property_size() != use_packs_count))
