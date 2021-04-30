@@ -149,7 +149,7 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
 {
     if (isSingleFileMode())
     {
-        const auto & index_identifier = DMFile::colIndexFileName(DMFile::getFileNameBase(col_id));
+        const auto index_identifier = DMFile::colIndexFileName(DMFile::getFileNameBase(col_id));
         return isSubFileExists(index_identifier);
     }
     else
@@ -253,10 +253,9 @@ void DMFile::writePackProperty(const FileProviderPtr & file_provider, const Rate
     Poco::File(tmp_property_path).renameTo(property_path);
 }
 
-void DMFile::writeMetadata(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter, bool persist_block_properties)
+void DMFile::writeMetadata(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
 {
-    if (persist_block_properties)
-        writePackProperty(file_provider, rate_limiter);
+    writePackProperty(file_provider, rate_limiter);
     writeMeta(file_provider, rate_limiter);
 }
 
@@ -376,10 +375,9 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
 }
 
 void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider,
-                                   const RateLimiterPtr &  rate_limiter,
-                                   bool                    persist_block_properties)
+                                   const RateLimiterPtr &  rate_limiter)
 {
-    writeMetadata(file_provider, rate_limiter, persist_block_properties);
+    writeMetadata(file_provider, rate_limiter);
     if (unlikely(status != Status::WRITING))
         throw Exception("Expected WRITING status, now " + statusString(status));
     Poco::File old_file(path());
@@ -393,11 +391,10 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider,
     old_file.renameTo(new_path);
 }
 
-void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer, bool persist_block_properties)
+void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
 {
     Footer footer;
-    if (persist_block_properties)
-        std::tie(footer.meta_pack_info.pack_property_offset, footer.meta_pack_info.pack_property_size) = writePackPropertyToBuffer(buffer);
+    std::tie(footer.meta_pack_info.pack_property_offset, footer.meta_pack_info.pack_property_size) = writePackPropertyToBuffer(buffer);
     std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)           = writeMetaToBuffer(buffer);
     std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size) = writePackStatToBuffer(buffer);
 

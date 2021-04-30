@@ -16,7 +16,7 @@ namespace DB
 
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_),
-      kvstore(std::make_shared<KVStore>(context)),
+      kvstore(std::make_shared<KVStore>(context, raft_config.snapshot_apply_method)),
       region_table(context),
       background_service(nullptr),
       gc_manager(context),

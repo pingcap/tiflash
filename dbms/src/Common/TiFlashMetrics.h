@@ -84,7 +84,7 @@ namespace DB
     M(tiflash_storage_write_amplification, "The data write amplification in storage engine", Gauge)                                       \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                             \
     M(tiflash_storage_command_count, "Total number of storage's command, such as delete range / shutdown /startup", Counter,              \
-        F(type_delete_range, {"type", "delete_range"}))                                                                                   \
+        F(type_delete_range, {"type", "delete_range"}), F(type_ingest, {"type", "ingest"}))                                               \
     M(tiflash_storage_subtask_count, "Total number of storage's sub task", Counter, F(type_delta_merge, {"type", "delta_merge"}),         \
         F(type_delta_merge_fg, {"type", "delta_merge_fg"}), F(type_delta_merge_bg_gc, {"type", "delta_merge_bg_gc"}),                     \
         F(type_delta_compact, {"type", "delta_compact"}), F(type_delta_flush, {"type", "delta_flush"}),                                   \
@@ -101,11 +101,13 @@ namespace DB
         F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.0005, 2, 20}))                                          \
     M(tiflash_storage_throughput_bytes, "Calculate the throughput of tasks of storage in bytes", Gauge,           /**/                    \
         F(type_write, {"type", "write"}),                                                                         /**/                    \
+        F(type_ingest, {"type", "ingest"}),                                                                       /**/                    \
         F(type_delta_merge, {"type", "delta_merge"}),                                                             /**/                    \
         F(type_split, {"type", "split"}),                                                                         /**/                    \
         F(type_merge, {"type", "merge"}))                                                                         /**/                    \
     M(tiflash_storage_throughput_rows, "Calculate the throughput of tasks of storage in rows", Gauge,             /**/                    \
         F(type_write, {"type", "write"}),                                                                         /**/                    \
+        F(type_ingest, {"type", "ingest"}),                                                                       /**/                    \
         F(type_delta_merge, {"type", "delta_merge"}),                                                             /**/                    \
         F(type_split, {"type", "split"}),                                                                         /**/                    \
         F(type_merge, {"type", "merge"}))                                                                         /**/                    \
