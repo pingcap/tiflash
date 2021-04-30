@@ -1,11 +1,12 @@
 #pragma once
 
-#include <Core/Types.h>
 #include <Core/NamesAndTypes.h>
+#include <Core/Types.h>
 #include <Storages/ColumnsDescription.h>
+
 #include <ctime>
-#include <memory>
 #include <functional>
+#include <memory>
 
 
 class ThreadPool;
@@ -23,6 +24,7 @@ class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
 
 struct Settings;
+using Timestamp = UInt64;
 
 
 /** Allows to iterate over tables.
@@ -59,20 +61,13 @@ public:
 
     /// Load a set of existing tables. If thread_pool is specified, use it.
     /// You can call only once, right after the object is created.
-    virtual void loadTables(
-        Context & context,
-        ThreadPool * thread_pool,
-        bool has_force_restore_data_flag) = 0;
+    virtual void loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag) = 0;
 
     /// Check the existence of the table.
-    virtual bool isTableExist(
-        const Context & context,
-        const String & name) const = 0;
+    virtual bool isTableExist(const Context & context, const String & name) const = 0;
 
     /// Get the table for work. Return nullptr if there is no table.
-    virtual StoragePtr tryGetTable(
-        const Context & context,
-        const String & name) const = 0;
+    virtual StoragePtr tryGetTable(const Context & context, const String & name) const = 0;
 
     /// Get an iterator that allows you to pass through all the tables.
     /// It is possible to have "hidden" tables that are not visible when passing through, but are visible if you get them by name using the functions above.
@@ -82,16 +77,10 @@ public:
     virtual bool empty(const Context & context) const = 0;
 
     /// Add the table to the database. Record its presence in the metadata.
-    virtual void createTable(
-        const Context & context,
-        const String & name,
-        const StoragePtr & table,
-        const ASTPtr & query) = 0;
+    virtual void createTable(const Context & context, const String & name, const StoragePtr & table, const ASTPtr & query) = 0;
 
     /// Delete the table from the database and return it. Delete the metadata.
-    virtual void removeTable(
-        const Context & context,
-        const String & name) = 0;
+    virtual void removeTable(const Context & context, const String & name) = 0;
 
     /// Add a table to the database, but do not add it to the metadata. The database may not support this method.
     virtual void attachTable(const String & name, const StoragePtr & table) = 0;
@@ -100,34 +89,23 @@ public:
     virtual StoragePtr detachTable(const String & name) = 0;
 
     /// Rename the table and possibly move the table to another database.
-    virtual void renameTable(
-        const Context & context,
-        const String & name,
-        IDatabase & to_database,
-        const String & to_name) = 0;
+    virtual void renameTable(const Context & context, const String & name, IDatabase & to_database, const String & to_name) = 0;
 
     using ASTModifier = std::function<void(IAST &)>;
 
     /// Change the table structure in metadata.
     /// You must call under the TableStructureLock of the corresponding table . If engine_modifier is empty, then engine does not change.
     virtual void alterTable(
-        const Context & context,
-        const String & name,
-        const ColumnsDescription & columns,
-        const ASTModifier & engine_modifier) = 0;
+        const Context & context, const String & name, const ColumnsDescription & columns, const ASTModifier & engine_modifier)
+        = 0;
 
     /// Returns time of table's metadata change, 0 if there is no corresponding metadata file.
-    virtual time_t getTableMetadataModificationTime(
-        const Context & context,
-        const String & name) = 0;
+    virtual time_t getTableMetadataModificationTime(const Context & context, const String & name) = 0;
 
     /// Get the CREATE TABLE query for the table. It can also provide information for detached tables for which there is metadata.
     virtual ASTPtr tryGetCreateTableQuery(const Context & context, const String & name) const = 0;
 
-    virtual ASTPtr getCreateTableQuery(const Context & context, const String & name) const
-    {
-        return tryGetCreateTableQuery(context, name);
-    }
+    virtual ASTPtr getCreateTableQuery(const Context & context, const String & name) const { return tryGetCreateTableQuery(context, name); }
 
     /// Get the CREATE DATABASE query for current database.
     virtual ASTPtr getCreateDatabaseQuery(const Context & context) const = 0;
@@ -142,6 +120,10 @@ public:
     /// Ask all tables to complete the background threads they are using and delete all table objects.
     virtual void shutdown() = 0;
 
+    virtual bool isTombstone() const { return false; }
+    virtual Timestamp getTombstone() const { return 0; }
+    virtual void alterTombstone(const Context & /*context*/, Timestamp /*tombstone_*/) {}
+
     /// Delete metadata, the deletion of which differs from the recursive deletion of the directory, if any.
     virtual void drop(const Context & context) = 0;
 
@@ -151,5 +133,4 @@ public:
 using DatabasePtr = std::shared_ptr<IDatabase>;
 using Databases = std::map<String, DatabasePtr>;
 
-}
-
+} // namespace DB

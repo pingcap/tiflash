@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTInsertQuery.h>
@@ -30,6 +31,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 extern const int REGION_DATA_SCHEMA_UPDATED;
 extern const int ILLFORMAT_RAFT_ROW;
+extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
 
@@ -55,10 +57,10 @@ static void writeRegionDataToStorage(
         }
 
         /// Lock throughout decode and write, during which schema must not change.
-        TableStructureReadLockPtr lock;
+        TableStructureLockHolder lock;
         try
         {
-            lock = storage->lockStructure(true, FUNCTION_NAME);
+            lock = storage->lockStructureForShare(getThreadName());
         }
         catch (DB::Exception & e)
         {
@@ -107,6 +109,9 @@ static void writeRegionDataToStorage(
         }
 
         /// Write block into storage.
+        // Release the alter lock so that writing does not block DDL operations
+        TableLockHolder drop_lock;
+        std::tie(std::ignore, drop_lock) = std::move(lock).release();
         watch.restart();
         // Note: do NOT use typeid_cast, since Storage is multi-inherite and typeid_cast will return nullptr
         switch (storage->engineType())
@@ -422,10 +427,10 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         }
 
         /// Lock throughout decode and write, during which schema must not change.
-        TableStructureReadLockPtr lock;
+        TableStructureLockHolder lock;
         try
         {
-            lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+            lock = storage->lockStructureForShare(getThreadName());
         }
         catch (DB::Exception & e)
         {
@@ -484,7 +489,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
             if (storage == nullptr) // Table must have just been GC-ed
                 return true;
         }
-        auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+        auto table_lock = storage->lockForShare(getThreadName());
         is_common_handle = storage->isCommonHandle();
         if (unlikely(storage->engineType() != ::TiDB::StorageEngine::DT))
         {
@@ -589,7 +594,7 @@ Block GenRegionBlockDatawithSchema(const RegionPtr & region,
 
     {
         Stopwatch watch;
-        auto lock = dm_storage->lockStructure(false, __PRETTY_FUNCTION__);
+        auto table_lock = dm_storage->lockForShare(getThreadName());
         // Compare schema_snap with current schema, throw exception if changed.
         auto store = dm_storage->getStore();
         auto cur_schema_snap = store->getStoreColumns();
