@@ -83,12 +83,6 @@ private:
 public:
     MinMaxIndexCache(size_t max_size_in_bytes, const Delay & expiration_delay) : Base(max_size_in_bytes, expiration_delay) {}
 
-    static const String& hash(const String & path_to_file, UInt64 salt = 0)
-    {
-        (void)salt; // Mask unused parameter error
-        return path_to_file;
-    }
-
     template <typename LoadFunc>
     MappedPtr getOrSet(const Key & key, LoadFunc && load)
     {
