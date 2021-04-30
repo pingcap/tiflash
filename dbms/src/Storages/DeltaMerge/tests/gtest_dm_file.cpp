@@ -28,23 +28,17 @@ TEST(DMFileWriterFlags_test, SetClearFlags)
 
     Flags flags;
 
-    EXPECT_TRUE(flags.needPersistBlockProperty());
-
     bool f = false;
     flags.setRateLimit(f);
     EXPECT_FALSE(flags.needRateLimit());
     flags.setSingleFile(f);
     EXPECT_FALSE(flags.isSingleFile());
-    flags.setPersistBlockProperty(f);
-    EXPECT_FALSE(flags.needPersistBlockProperty());
 
     f = true;
     flags.setRateLimit(f);
     EXPECT_TRUE(flags.needRateLimit());
     flags.setSingleFile(f);
     EXPECT_TRUE(flags.isSingleFile());
-    flags.setPersistBlockProperty(f);
-    EXPECT_TRUE(flags.needPersistBlockProperty());
 }
 
 String paramToString(const ::testing::TestParamInfo<DMFile::Mode> & info)
@@ -234,107 +228,6 @@ try
             dbContext(),
             std::numeric_limits<UInt64>::max(),
             false,
-            dm_file,
-            *cols,
-            RowKeyRange::newAll(false, 1),
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
-
-        size_t num_rows_read = 0;
-        stream->readPrefix();
-        Int64 cur_pk = 0;
-        while (Block in = stream->read())
-        {
-            ASSERT_TRUE(in.has(DMTestEnv::pk_name));
-            auto   col = in.getByName(DMTestEnv::pk_name);
-            auto & c   = col.column;
-            for (size_t i = 0; i < c->size(); i++)
-            {
-                EXPECT_EQ(c->getInt(i), cur_pk++);
-            }
-            num_rows_read += in.rows();
-        }
-        stream->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
-    }
-}
-CATCH
-
-TEST_P(DMFile_Test, WriteReadNoBlockProperty)
-try
-{
-    auto cols = DMTestEnv::getDefaultColumns();
-
-    const size_t num_rows_write = 128;
-
-    {
-        // Prepare for write
-        // Block 1: [0, 64)
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
-        // Block 2: [64, 128)
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
-
-        DMFileBlockOutputStream::Flags flags;
-        flags.setPersistBlockProperty(false); // Do not persist block property
-        auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols, flags);
-        stream->writePrefix();
-        stream->write(block1, DMFileBlockOutputStream::BlockProperty{});
-        stream->write(block2, DMFileBlockOutputStream::BlockProperty{});
-        stream->writeSuffix();
-
-        // Ensure that no property is written
-        ASSERT_EQ(dm_file->getPackProperties().property_size(), 0);
-    }
-
-
-    {
-        // Test read
-        auto stream = std::make_shared<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dmContext().hash_salt,
-            dm_file,
-            *cols,
-            RowKeyRange::newAll(false, 1),
-            RSOperatorPtr{},
-            column_cache_,
-            IdSetPtr{});
-
-        size_t num_rows_read = 0;
-        stream->readPrefix();
-        Int64 cur_pk = 0;
-        while (Block in = stream->read())
-        {
-            ASSERT_TRUE(in.has(DMTestEnv::pk_name));
-            auto   col = in.getByName(DMTestEnv::pk_name);
-            auto & c   = col.column;
-            for (size_t i = 0; i < c->size(); i++)
-            {
-                EXPECT_EQ(c->getInt(i), cur_pk++);
-            }
-            num_rows_read += in.rows();
-        }
-        stream->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
-    }
-
-    /// Test restore the file from disk and read
-    {
-        dm_file = restoreDMFile();
-
-        // Ensure that no property is written
-        auto propertys = dm_file->getPackProperties();
-        ASSERT_EQ(propertys.property_size(), 0);
-    }
-    {
-        // Test read after restore
-        auto stream = std::make_shared<DMFileBlockInputStream>( //
-            dbContext(),
-            std::numeric_limits<UInt64>::max(),
-            false,
-            dmContext().hash_salt,
             dm_file,
             *cols,
             RowKeyRange::newAll(false, 1),

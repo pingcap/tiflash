@@ -114,13 +114,10 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
 
     dmfile->addPack(stat);
 
-    if (options.flags.needPersistBlockProperty())
-    {
-        auto & properties = dmfile->getPackProperties();
-        auto * property   = properties.add_property();
-        property->set_num_rows(block_property.effective_num_rows);
-        property->set_gc_hint_version(block_property.gc_hint_version);
-    }
+    auto & properties = dmfile->getPackProperties();
+    auto * property   = properties.add_property();
+    property->set_num_rows(block_property.effective_num_rows);
+    property->set_gc_hint_version(block_property.gc_hint_version);
 }
 
 void DMFileWriter::finalize()
@@ -137,12 +134,12 @@ void DMFileWriter::finalize()
 
     if (options.flags.isSingleFile())
     {
-        dmfile->finalizeForSingleFileMode(single_file_stream->plain_hashing, options.flags.needPersistBlockProperty());
+        dmfile->finalizeForSingleFileMode(single_file_stream->plain_hashing);
         single_file_stream->flush();
     }
     else
     {
-        dmfile->finalizeForFolderMode(file_provider, rate_limiter, options.flags.needPersistBlockProperty());
+        dmfile->finalizeForFolderMode(file_provider, rate_limiter);
     }
 }
 

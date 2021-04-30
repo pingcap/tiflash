@@ -184,7 +184,6 @@ try
         {
             // flush segment
             segment = segment->mergeDelta(dmContext(), tableColumns());
-            ;
         }
 
         {
@@ -1090,7 +1089,7 @@ try
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
 
-                segment->writeRegionSnapshot(dmContext(), range, {pack}, false);
+                segment->ingestPacks(dmContext(), range, {pack}, false);
                 break;
             }
             default:
@@ -1353,7 +1352,6 @@ try
     {
         segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
@@ -1531,7 +1529,6 @@ try
     {
         segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
