@@ -243,7 +243,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
     // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
     // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
-    table_drop_lock = std::move(table_structure_lock).releaseAlter();
+    std::tie(std::ignore, this->table_drop_lock) = std::move(table_structure_lock).release();
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop mode.
     if (!region_retry.empty())
