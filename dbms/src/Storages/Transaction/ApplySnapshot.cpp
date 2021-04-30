@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
 #include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
@@ -36,6 +37,7 @@ extern const char pause_until_apply_raft_snapshot[];
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+extern const int TABLE_IS_DROPPED;
 extern const int REGION_DATA_SCHEMA_UPDATED;
 } // namespace ErrorCodes
 
@@ -108,7 +110,7 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
                     HandleMap handle_map;
                     const auto handle_range = getHandleRangeByTable(new_region->getRange()->rawKeys(), table_id);
 
-                    auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+                    auto table_lock = storage->lockStructureForShare(getThreadName());
 
                     auto tmt_storage = std::dynamic_pointer_cast<StorageMergeTree>(storage);
                     const bool pk_is_uint64 = getTMTPKType(*tmt_storage->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
@@ -153,8 +155,8 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
             try
             {
                 auto & context = tmt.getContext();
-                // acquire lock so that no other threads can drop storage
-                auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+                // Acquire lock so that no other threads can drop storage
+                auto table_lock = storage->lockForShare(getThreadName());
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 auto key_range = DM::RowKeyRange::fromRegionRange(
                     new_region_wrap->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
@@ -581,8 +583,8 @@ RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTVi
             auto & context = tmt.getContext();
             try
             {
-                // acquire lock so that no other threads can drop storage
-                auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+                // Acquire lock so that no other threads can drop storage
+                auto table_lock = storage->lockForShare(getThreadName());
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 auto key_range = DM::RowKeyRange::fromRegionRange(
                     region->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
