@@ -141,20 +141,16 @@ public:
     private:
         static constexpr size_t IS_SINGLE_FILE         = 0x01;
         static constexpr size_t NEED_RATE_LIMIT        = 0x02;
-        static constexpr size_t PERSIST_BLOCK_PROPERTY = 0x04;
 
         size_t value;
 
     public:
-        // Persist block property by default
-        Flags() : value(PERSIST_BLOCK_PROPERTY) {}
+        Flags() : value(0x0) {}
 
         inline void setSingleFile(bool v) { value = (v ? (value | IS_SINGLE_FILE) : (value & ~IS_SINGLE_FILE)); }
         inline bool isSingleFile() const { return (value & IS_SINGLE_FILE); }
         inline void setRateLimit(bool v) { value = (v ? (value | NEED_RATE_LIMIT) : (value & ~NEED_RATE_LIMIT)); }
         inline bool needRateLimit() const { return (value & NEED_RATE_LIMIT); }
-        inline void setPersistBlockProperty(bool v) { value = (v ? (value | PERSIST_BLOCK_PROPERTY) : (value & ~PERSIST_BLOCK_PROPERTY)); }
-        inline bool needPersistBlockProperty() const { return (value & PERSIST_BLOCK_PROPERTY); }
     };
 
     struct Options
