@@ -40,8 +40,6 @@ class Region : public std::enable_shared_from_this<Region>
 public:
     const static UInt32 CURRENT_VERSION;
 
-    const static std::string log_name;
-
     static const auto PutFlag = RecordKVFormat::CFModifyFlag::PutFlag;
     static const auto DelFlag = RecordKVFormat::CFModifyFlag::DelFlag;
 
@@ -106,6 +104,9 @@ public:
     void insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value);
     void remove(const std::string & cf, const TiKVKey & key);
 
+    // Directly drop all data in this Region object.
+    void clearAllData();
+
     CommittedScanner createCommittedScanner(bool use_lock = true);
     CommittedRemover createCommittedRemover(bool use_lock = true);
 
@@ -168,7 +169,8 @@ public:
 
     TableID getMappedTableID() const;
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
-    void handleIngestSST(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt);
+    void handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt);
+    void finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term);
 
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
 
