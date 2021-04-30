@@ -155,7 +155,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
             try
             {
                 auto & context = tmt.getContext();
-                // acquire lock so that no other threads can drop storage
+                // Acquire lock so that no other threads can drop storage
                 auto table_lock = storage->lockForShare(getThreadName());
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 auto key_range = DM::RowKeyRange::fromRegionRange(
@@ -583,7 +583,7 @@ RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTVi
             auto & context = tmt.getContext();
             try
             {
-                // acquire lock so that no other threads can drop storage
+                // Acquire lock so that no other threads can drop storage
                 auto table_lock = storage->lockForShare(getThreadName());
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 auto key_range = DM::RowKeyRange::fromRegionRange(

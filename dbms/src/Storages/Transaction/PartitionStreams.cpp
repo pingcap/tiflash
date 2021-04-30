@@ -592,7 +592,7 @@ Block GenRegionBlockDatawithSchema(const RegionPtr & region,
 
     {
         Stopwatch watch;
-        auto table_lock = storage->lockForShare(getThreadName());
+        auto table_lock = dm_storage->lockForShare(getThreadName());
         // Compare schema_snap with current schema, throw exception if changed.
         auto store = dm_storage->getStore();
         auto cur_schema_snap = store->getStoreColumns();
