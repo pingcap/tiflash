@@ -154,7 +154,7 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
     {
         /// Read from table function.
         storage = context.getQueryContext().executeTableFunction(table_expression);
-        table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+        table_lock = storage->lockForShare(context.getCurrentQueryId());
     }
     else
     {
@@ -167,7 +167,7 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
         if (settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
         {
             storage = context.getTable(database_name, table_name);
-            table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+            table_lock = storage->lockForShare(context.getCurrentQueryId());
         }
         else
         {
@@ -205,7 +205,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     const auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
 
     /// Lambda for get storage, then align schema version under the read lock.
-    auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<StoragePtr, TableStructureReadLockPtr, Int64, bool> {
+    auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<StoragePtr, TableLockHolder, Int64, bool> {
         /// Get storage in case it's dropped then re-created.
         // If schema synced, call getTable without try, leading to exception on table not existing.
         auto storage_ = schema_synced ? context.getTable(database_name, table_name) : context.tryGetTable(database_name, table_name);
@@ -222,7 +222,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         }
 
         /// Lock storage.
-        auto lock = storage_->lockStructure(false, __PRETTY_FUNCTION__);
+        auto lock = storage_->lockForShare(context.getCurrentQueryId());
 
         /// Check schema version, requiring TiDB/TiSpark and TiFlash both use exactly the same schema.
         // We have three schema versions, two in TiFlash:
@@ -252,7 +252,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
 
     /// Try get storage and lock once.
     StoragePtr storage_;
-    TableStructureReadLockPtr lock;
+    TableLockHolder lock;
     Int64 storage_schema_version;
     auto log_schema_version = [&](const String & result) {
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << qualified_name << " schema " << result

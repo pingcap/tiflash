@@ -10,6 +10,10 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int TABLE_IS_DROPPED;
+}
 
 template <typename TargetType>
 std::tuple<size_t, size_t> shouldOptimizeTable(const MergeTreeData & data)
@@ -99,7 +103,7 @@ bool shouldOptimizeTable(const TableID table_id, TMTContext & tmt, Logger * log,
         return false;
     try
     {
-        auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+        auto lock = storage->lockStructureForShare(RWLock::NO_QUERY);
     }
     catch (DB::Exception & e)
     {
