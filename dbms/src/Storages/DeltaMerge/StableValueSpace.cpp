@@ -216,12 +216,6 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                 pack_property->set_gc_hint_version(gc_hint_version);
             }
             mvcc_stream->readSuffix();
-            if (unlikely(pack_stats.size() != (size_t)new_pack_properties.property_size()))
-            {
-                throw Exception("new_pack_propertys size " + std::to_string(new_pack_properties.property_size())
-                                    + " doesn't contain all info for packs " + std::to_string(pack_stats.size()),
-                                ErrorCodes::LOGICAL_ERROR);
-            }
         }
         auto   pack_filter               = DMFilePackFilter::loadFrom(file,
                                                       context.db_context.getGlobalContext().getMinMaxIndexCache(),
