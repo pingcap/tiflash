@@ -54,11 +54,8 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
 {
     child->readSuffix();
 
-    do
+    if (dt_stream != nullptr)
     {
-        if (dt_stream == nullptr)
-            break;
-
         dt_stream->writeSuffix();
         auto dt_file = dt_stream->getFile();
         assert(!dt_file->canGC()); // The DTFile should not be able to gc until it is ingested.
@@ -67,7 +64,7 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
         (void)_schema_snap;
         ingest_storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), dt_file->getBytesOnDisk());
         dt_stream.reset();
-    } while (0);
+    }
 
     auto & ctx     = tmt.getContext();
     auto   metrics = ctx.getTiFlashMetrics();
