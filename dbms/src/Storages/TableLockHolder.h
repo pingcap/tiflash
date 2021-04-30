@@ -15,7 +15,7 @@ struct TableRWLocksHolder
 {
     void release() { *this = TableRWLocksHolder<is_exclusive>(); }
 
-    // Release lock on `drop_lock` and return the ownership of `drop_lock`.
+    // Release lock on `alter_lock` and return the ownership of `drop_lock`.
     // Once this function is invoked, should not access to this object again.
     [[nodiscard]] TableLockHolder intoDropLock() &&
     {
