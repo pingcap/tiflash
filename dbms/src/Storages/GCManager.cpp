@@ -43,12 +43,10 @@ bool GCManager::work()
             iter = storages.begin();
         checked_storage_num++;
         auto storage = iter->second.lock();
+        iter++;
         // The storage has been free
         if (!storage)
-        {
-            iter++;
             continue;
-        }
 
         try
         {
@@ -73,7 +71,6 @@ bool GCManager::work()
         {
             tryLogCurrentException(__PRETTY_FUNCTION__);
         }
-        iter++;
     }
     if (iter == storages.end())
         iter = storages.begin();
