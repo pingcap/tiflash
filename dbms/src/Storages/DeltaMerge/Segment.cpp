@@ -314,7 +314,7 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
-bool Segment::writeRegionSnapshot(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
+bool Segment::ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);
     LOG_TRACE(log, "Segment [" << segment_id << "] write region snapshot: " << new_range.toDebugString());
@@ -456,7 +456,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext &      
     data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, data_range, 0);
     if (reorgnize_block)
     {
-        data_stream = std::make_shared<ReorganizeBlockInputStream>(data_stream, EXTRA_HANDLE_COLUMN_NAME);
+        data_stream = std::make_shared<ReorganizeBlockInputStream>(data_stream, EXTRA_HANDLE_COLUMN_ID, is_common_handle);
     }
     data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         data_stream, *read_info.read_columns, dm_context.min_version, is_common_handle);
@@ -467,7 +467,6 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext &      
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_context,
                                                const ColumnDefines &      columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
-
                                                bool   do_range_filter,
                                                size_t expected_block_size)
 {
@@ -918,7 +917,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
 
 
         my_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(my_data, my_range, 0);
-        my_data = std::make_shared<ReorganizeBlockInputStream>(my_data, EXTRA_HANDLE_COLUMN_NAME);
+        my_data = std::make_shared<ReorganizeBlockInputStream>(my_data, EXTRA_HANDLE_COLUMN_ID, is_common_handle);
         my_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             my_data, *read_info.read_columns, dm_context.min_version, is_common_handle);
         auto my_stable_id = segment_snap->stable->getId();
@@ -945,7 +944,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
 
 
         other_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(other_data, other_range, 0);
-        other_data = std::make_shared<ReorganizeBlockInputStream>(other_data, EXTRA_HANDLE_COLUMN_NAME);
+        other_data = std::make_shared<ReorganizeBlockInputStream>(other_data, EXTRA_HANDLE_COLUMN_ID, is_common_handle);
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             other_data, *read_info.read_columns, dm_context.min_version, is_common_handle);
         auto other_stable_id = dm_context.storage_pool.newMetaPageId();
@@ -1075,7 +1074,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
                                                      dm_context.stable_pack_rows);
 
         stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, segment->rowkey_range, 0);
-        stream = std::make_shared<ReorganizeBlockInputStream>(stream, EXTRA_HANDLE_COLUMN_NAME);
+        stream = std::make_shared<ReorganizeBlockInputStream>(stream, EXTRA_HANDLE_COLUMN_ID, dm_context.is_common_handle);
         stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             stream, *read_info.read_columns, dm_context.min_version, dm_context.is_common_handle);
 

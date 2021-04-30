@@ -1,4 +1,5 @@
 => DBGInvoke __enable_schema_sync_service('true')
+=> DBGInvoke __clean_up_region()
 
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
