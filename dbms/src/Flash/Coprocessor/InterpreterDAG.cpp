@@ -40,19 +40,21 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     }
 }
 
-BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets)
+std::pair<BlockInputStreams, RegionInfoList> InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets)
 {
     if (!query_block.children.empty())
     {
         std::vector<BlockInputStreams> input_streams_vec;
+        RegionInfoList retry_regions;
         for (auto & child : query_block.children)
         {
-            BlockInputStreams child_streams = executeQueryBlock(*child, subqueriesForSets);
-            input_streams_vec.push_back(child_streams);
+            auto ret = executeQueryBlock(*child, subqueriesForSets);
+            input_streams_vec.push_back(ret.first);
+            retry_regions.insert(retry_regions.end(), ret.second.begin(), ret.second.end());
         }
         DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, keep_session_timezone_info,
             dag.getDAGRequest(), dag.getAST(), dag, subqueriesForSets, mpp_exchange_receiver_maps);
-        return query_block_interpreter.execute();
+        return std::make_pair(query_block_interpreter.execute().first, retry_regions);
     }
     else
     {
@@ -86,10 +88,8 @@ BlockIO InterpreterDAG::execute()
     /// tidb does not support multi-table dag request yet, so
     /// it is ok to use the same region_info for the whole dag request
     std::vector<SubqueriesForSets> subqueriesForSets;
-    BlockInputStreams streams = executeQueryBlock(*dag.getQueryBlock(), subqueriesForSets);
-
     Pipeline pipeline;
-    pipeline.streams = streams;
+    std::tie(pipeline.streams, retry_regions) = executeQueryBlock(*dag.getQueryBlock(), subqueriesForSets);
 
     DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams);
     if (!subqueriesForSets.empty())

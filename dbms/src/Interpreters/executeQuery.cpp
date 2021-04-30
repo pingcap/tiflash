@@ -27,6 +27,7 @@
 #include <Interpreters/executeQuery.h>
 #include <tipb/expression.pb.h>
 #include <tipb/select.pb.h>
+#include <Flash/Coprocessor/InterpreterDAG.h>
 
 
 namespace ProfileEvents
@@ -203,6 +204,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         auto interpreter = query_src.interpreter(context, stage);
         res = interpreter->execute();
+        auto dag_inter = static_cast<const InterpreterDAG*>(interpreter.get());
+        if (dag_inter != nullptr)
+        {
+            context.getQueryContext().getDAGContext()->retry_regions = dag_inter->retry_regions;
+        }
 
         /// Delayed initialization of query streams (required for KILL QUERY purposes)
         if (process_list_entry)
