@@ -1,6 +1,7 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
 #include <DataTypes/DataTypeString.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/MockSchemaGetter.h>
@@ -338,7 +339,9 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         schema_change.second(orig_table_info);
         /// Update schema version aggressively for the sake of correctness.
         orig_table_info.schema_version = target_version;
-        storage->alterFromTiDB(schema_change.first, name_mapper.mapDatabaseName(*db_info), orig_table_info, name_mapper, context);
+        auto alter_lock = storage->lockForAlter(getThreadName());
+        storage->alterFromTiDB(
+            alter_lock, schema_change.first, name_mapper.mapDatabaseName(*db_info), orig_table_info, name_mapper, context);
     }
 
     LOG_INFO(log, "Altered table " << name_mapper.debugCanonicalName(*db_info, *table_info));
@@ -568,7 +571,8 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
     }
 
     /// Apply new table info to logical table.
-    storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*db_info), updated_table_info, name_mapper, context);
+    auto alter_lock = storage->lockForAlter(getThreadName());
+    storage->alterFromTiDB(alter_lock, AlterCommands{}, name_mapper.mapDatabaseName(*db_info), updated_table_info, name_mapper, context);
 
     LOG_INFO(log, "Applied partition changes " << name_mapper.debugCanonicalName(*db_info, *table_info));
 }
@@ -644,7 +648,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     ASTRenameQuery::Element elem{.from = std::move(from), .to = std::move(to), .tidb_display = std::move(display)};
     rename->elements.emplace_back(std::move(elem));
 
-    InterpreterRenameQuery(rename, context).execute();
+    InterpreterRenameQuery(rename, context, getThreadName()).execute();
 
     LOG_INFO(log,
         "Renamed table " << old_mapped_db_name << "." << old_mapped_tbl_name << " (display name:" << old_display_table_name << ") to "
@@ -687,7 +691,11 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     LOG_INFO(log, "Exchange partition for table " << name_mapper.debugCanonicalName(*pt_db_info, *table_info));
     auto orig_table_info = storage->getTableInfo();
     orig_table_info.partition = table_info->partition;
-    storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*pt_db_info), orig_table_info, name_mapper, context);
+    {
+        auto alter_lock = storage->lockForAlter(getThreadName());
+        storage->alterFromTiDB(
+            alter_lock, AlterCommands{}, name_mapper.mapDatabaseName(*pt_db_info), orig_table_info, name_mapper, context);
+    }
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_after_step_1_in_exchange_partition);
 
     /// step 2 change non partition table to a partition of the partition table
@@ -700,7 +708,11 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     orig_table_info.is_partition_table = true;
     /// partition does not have explicit name, so use default name here
     orig_table_info.name = name_mapper.mapTableName(orig_table_info);
-    storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*npt_db_info), orig_table_info, name_mapper, context);
+    {
+        auto alter_lock = storage->lockForAlter(getThreadName());
+        storage->alterFromTiDB(
+            alter_lock, AlterCommands{}, name_mapper.mapDatabaseName(*npt_db_info), orig_table_info, name_mapper, context);
+    }
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_step_2_rename_in_exchange_partition);
 
     if (npt_db_info->id != pt_db_info->id)
@@ -719,7 +731,11 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     orig_table_info.belonging_table_id = DB::InvalidTableID;
     orig_table_info.is_partition_table = false;
     orig_table_info.name = table_info->name;
-    storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*pt_db_info), orig_table_info, name_mapper, context);
+    {
+        auto alter_lock = storage->lockForAlter(getThreadName());
+        storage->alterFromTiDB(
+            alter_lock, AlterCommands{}, name_mapper.mapDatabaseName(*pt_db_info), orig_table_info, name_mapper, context);
+    }
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_step_3_rename_in_exchange_partition);
 
     if (npt_db_info->id != pt_db_info->id)
@@ -814,18 +830,31 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & schema_name)
+void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
 {
     GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_drop_db).Increment();
-    LOG_INFO(log, "Dropping database " << schema_name);
-    auto drop_query = std::make_shared<ASTDropQuery>();
-    drop_query->database = schema_name;
-    drop_query->if_exists = true;
-    ASTPtr ast_drop_query = drop_query;
-    // It will drop all tables in this database.
-    InterpreterDropQuery drop_interpreter(ast_drop_query, context);
-    drop_interpreter.execute();
-    LOG_INFO(log, "Dropped database " << schema_name);
+    LOG_INFO(log, "Tombstoning database " << db_name);
+    auto db = context.tryGetDatabase(db_name);
+    if (db == nullptr)
+    {
+        LOG_INFO(log, "Database " << db_name << " does not exists");
+        return;
+    }
+
+    /// In order not to acquire `drop_lock` on storages, we tombstone the database in
+    /// this thread and physically remove data in another thread. So that applying
+    /// drop DDL from TiDB won't block or be blocked by read / write to the storages.
+
+    // Instead of getting a precise time that TiDB drops this database, use a more
+    // relaxing GC strategy:
+    // 1. Use current timestamp, which is after TiDB's drop time, to be the tombstone of this database;
+    // 2. Use the same GC safe point as TiDB.
+    // In such way our database (and its belonging tables) will be GC-ed later than TiDB, which is safe and correct.
+    auto & tmt_context = context.getTMTContext();
+    auto tombstone = tmt_context.getPDClient()->getTS();
+    db->alterTombstone(context, tombstone);
+
+    LOG_INFO(log, "Tombstoned database " << db_name);
 }
 
 String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, const SchemaNameMapper & name_mapper, Logger * log)
@@ -935,7 +964,8 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
                 command.type = AlterCommand::RECOVER;
                 commands.emplace_back(std::move(command));
             }
-            storage->alterFromTiDB(commands, name_mapper.mapDatabaseName(*db_info), *table_info, name_mapper, context);
+            auto alter_lock = storage->lockForAlter(getThreadName());
+            storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), *table_info, name_mapper, context);
             LOG_INFO(log, "Created table " << name_mapper.debugCanonicalName(*db_info, *table_info));
             return;
         }
@@ -1022,7 +1052,8 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         command.tombstone = tmt_context.getPDClient()->getTS();
         commands.emplace_back(std::move(command));
     }
-    storage->alterFromTiDB(commands, db_name, storage->getTableInfo(), name_mapper, context);
+    auto alter_lock = storage->lockForAlter(getThreadName());
+    storage->alterFromTiDB(alter_lock, commands, db_name, storage->getTableInfo(), name_mapper, context);
     LOG_INFO(log, "Tombstoned table " << db_name << "." << name_mapper.debugTableName(storage->getTableInfo()));
 }
 
@@ -1089,7 +1120,8 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(
     // Note that update replica info will update table info in table create statement by modifying
     // original table info with new replica info instead of using latest_table_info directly, so that
     // other changes (ALTER commands) won't be saved.
-    storage->alterFromTiDB(commands, name_mapper.mapDatabaseName(*db_info), table_info, name_mapper, context);
+    auto alter_lock = storage->lockForAlter(getThreadName());
+    storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), table_info, name_mapper, context);
     LOG_INFO(log, "Updated replica info for " << name_mapper.debugCanonicalName(*db_info, table_info));
 }
 

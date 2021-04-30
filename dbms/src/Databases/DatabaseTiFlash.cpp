@@ -1,13 +1,16 @@
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
+#include <Common/typeid_cast.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
+#include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
@@ -40,12 +43,13 @@ extern const char exception_before_rename_table_old_meta_removed[];
 
 static constexpr size_t METADATA_FILE_BUFFER_SIZE = 32768;
 
-DatabaseTiFlash::DatabaseTiFlash(
-    String name_, const String & metadata_path_, const TiDB::DBInfo & db_info_, DatabaseTiFlash::Version version_, const Context & context)
+DatabaseTiFlash::DatabaseTiFlash(String name_, const String & metadata_path_, const TiDB::DBInfo & db_info_,
+    DatabaseTiFlash::Version version_, Timestamp tombstone_, const Context & context)
     : DatabaseWithOwnTablesBase(std::move(name_)),
       metadata_path(metadata_path_),
       data_path(context.getPath() + "data/"),
       db_info(std::make_shared<TiDB::DBInfo>(db_info_)),
+      tombstone(tombstone_),
       log(&Logger::get("DatabaseTiFlash (" + name + ")"))
 {
     if (unlikely(version_ != DatabaseTiFlash::CURRENT_VERSION))
@@ -321,7 +325,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
 
     // Detach from this database and attach to new database
     // Not atomic between two databases in memory, but not big deal,
-    // because of locks in InterpreterRenameQuery
+    // because of alter_locks in InterpreterRenameQuery
     StoragePtr detach_storage = detachTable(table_name);
     to_database_concrete->attachTable(to_table_name, detach_storage);
 
@@ -459,6 +463,91 @@ void DatabaseTiFlash::shutdown()
     tables.clear();
 }
 
+void DatabaseTiFlash::alterTombstone(const Context & context, Timestamp tombstone_)
+{
+    const auto database_metadata_path = getDatabaseMetadataPath(metadata_path);
+    const auto database_metadata_tmp_path = database_metadata_path + ".tmp";
+    ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(context, database_metadata_path, name, true);
+    if (!ast)
+    {
+        throw Exception("There is no metadata file for database " + name, ErrorCodes::LOGICAL_ERROR);
+    }
+
+    {
+        // Alter the attach statement in metadata.
+        auto dbinfo_literal = std::make_shared<ASTLiteral>(Field(db_info == nullptr ? "" : (db_info->serialize())));
+        Field format_version_field((UInt64)DatabaseTiFlash::CURRENT_VERSION);
+        auto version_literal = std::make_shared<ASTLiteral>(format_version_field);
+        auto tombstone_literal = std::make_shared<ASTLiteral>(Field(tombstone_));
+
+        auto & create = typeid_cast<ASTCreateQuery &>(*ast);
+        create.attach = true; // Should be an attach statement but not create
+        auto & storage_ast = create.storage;
+        if (!storage_ast->engine->arguments)
+            storage_ast->engine->arguments = std::make_shared<ASTExpressionList>();
+
+        auto & args = typeid_cast<ASTExpressionList &>(*storage_ast->engine->arguments);
+        if (args.children.empty())
+        {
+            args.children.emplace_back(dbinfo_literal);
+            args.children.emplace_back(version_literal);
+            args.children.emplace_back(tombstone_literal);
+        }
+        else if (args.children.size() == 1)
+        {
+            args.children.emplace_back(version_literal);
+            args.children.emplace_back(tombstone_literal);
+        }
+        else if (args.children.size() == 2)
+        {
+            args.children.emplace_back(tombstone_literal);
+        }
+        else
+        {
+            // udpate the tombstone mark
+            args.children[2] = tombstone_literal;
+        }
+    }
+
+    String statement;
+    {
+        std::ostringstream stream;
+        formatAST(*ast, stream, false, false);
+        stream << '\n';
+        statement = stream.str();
+    }
+
+    {
+        // Atomic replace database metadata file and its encryption info
+        auto provider = context.getFileProvider();
+        bool reuse_encrypt_info = provider->isFileEncrypted(EncryptionPath(database_metadata_path, ""));
+        EncryptionPath encryption_path
+            = reuse_encrypt_info ? EncryptionPath(database_metadata_path, "") : EncryptionPath(database_metadata_tmp_path, "");
+        {
+            WriteBufferFromFileProvider out(provider, database_metadata_tmp_path, encryption_path, !reuse_encrypt_info, nullptr,
+                statement.size(), O_WRONLY | O_CREAT | O_TRUNC);
+            writeString(statement, out);
+            out.next();
+            if (context.getSettingsRef().fsync_metadata)
+                out.sync();
+            out.close();
+        }
+
+        try
+        {
+            provider->renameFile(database_metadata_tmp_path, encryption_path, database_metadata_path,
+                EncryptionPath(database_metadata_path, ""), !reuse_encrypt_info);
+        }
+        catch (...)
+        {
+            provider->deleteRegularFile(database_metadata_tmp_path, EncryptionPath(database_metadata_tmp_path, ""));
+            throw;
+        }
+    }
+
+    // After all done, set the tombstone
+    tombstone = tombstone_;
+}
 
 void DatabaseTiFlash::drop(const Context & context)
 {

@@ -1,3 +1,4 @@
+#include <Databases/DatabaseTiFlash.h>
 #include <Debug/dbgFuncSchema.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -62,18 +63,31 @@ void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer ou
 
 void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() != 2)
-        throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() < 1 || args.size() > 2)
+        throw Exception("Args not matched, should be: database-name[, table-name]", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
-    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-    auto storage = context.getTable(database_name, table_name);
-    auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
-    if (!managed_storage)
-        throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);
-
     std::stringstream ss;
-    ss << (managed_storage->isTombstone() ? "true" : "false");
+    if (args.size() == 1)
+    {
+        auto db = context.getDatabase(database_name);
+        auto tiflash_db = std::dynamic_pointer_cast<DatabaseTiFlash>(db);
+        if (!tiflash_db)
+            throw Exception(database_name + " is not DatabaseTiFlash", ErrorCodes::BAD_ARGUMENTS);
+
+        ss << (tiflash_db->isTombstone() ? "true" : "false");
+    }
+    else if (args.size() == 2)
+    {
+
+        const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+        auto storage = context.getTable(database_name, table_name);
+        auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+        if (!managed_storage)
+            throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);
+
+        ss << (managed_storage->isTombstone() ? "true" : "false");
+    }
     output(ss.str());
 }
 

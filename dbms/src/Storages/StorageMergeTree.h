@@ -1,17 +1,17 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
-
 #include <Common/SimpleIncrement.h>
 #include <Core/TMTPKType.h>
-#include <Storages/IStorage.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/IStorage.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/DiskSpaceMonitor.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataMerger.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
+
+#include <ext/shared_ptr_helper.h>
 
 namespace TiDB
 {
@@ -90,7 +90,11 @@ public:
 
     void modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info) override;
 
-    void alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
+    void alter(const TableLockHolder &, const AlterCommands & params, const String & database_name, const String & table_name,
+        const Context & context) override;
+
+    void alterFromTiDB(const TableLockHolder &, const AlterCommands & params, const String & database_name,
+        const TiDB::TableInfo & table_info, const SchemaNameMapper & name_mapper, const Context & context) override;
 
     ::TiDB::StorageEngine engineType() const override
     {
@@ -99,9 +103,6 @@ public:
         else
             return ::TiDB::StorageEngine::UNSUPPORTED_ENGINES;
     }
-
-    void alterFromTiDB(
-        const AlterCommands & params, const String & database_name, const TiDB::TableInfo & table_info, const SchemaNameMapper & name_mapper, const Context & context) override;
 
     bool checkTableCanBeDropped() const override;
 
@@ -159,7 +160,7 @@ private:
     bool mergeTask();
 
     void alterInternal(const AlterCommands & params, const String & database_name, const String & table_name,
-                       const std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info, const Context & context);
+        const std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info, const Context & context);
 
     DataTypePtr getPKTypeImpl() const override;
 

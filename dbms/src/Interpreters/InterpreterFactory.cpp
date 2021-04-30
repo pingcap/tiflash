@@ -98,7 +98,7 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, Context & 
     else if (typeid_cast<ASTRenameQuery *>(query.get()))
     {
         throwIfReadOnly(context);
-        return std::make_unique<InterpreterRenameQuery>(query, context);
+        return std::make_unique<InterpreterRenameQuery>(query, context, context.getCurrentQueryId());
     }
     else if (typeid_cast<ASTShowTablesQuery *>(query.get()))
     {

@@ -101,7 +101,7 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
             table = context.getTable(database_name, table_name);
         }
 
-        auto table_lock = table->lockStructure(false, __PRETTY_FUNCTION__);
+        auto table_lock = table->lockStructureForShare(context.getCurrentQueryId());
         columns = table->getColumns().getAll();
         column_defaults = table->getColumns().defaults;
     }

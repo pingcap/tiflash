@@ -641,6 +641,11 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
 
+void StorageDeltaMerge::flushCache(const Context & context)
+{
+    flushCache(context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
+}
+
 void StorageDeltaMerge::flushCache(const Context & context, const DM::RowKeyRange & range_to_flush)
 {
     store->flushCache(context, range_to_flush);
@@ -719,15 +724,15 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 //==========================================================================================
 // DDL methods.
 //==========================================================================================
-void StorageDeltaMerge::alterFromTiDB(const AlterCommands & params, const String & database_name, const TiDB::TableInfo & table_info,
-    const SchemaNameMapper & name_mapper, const Context & context)
+void StorageDeltaMerge::alterFromTiDB(const TableLockHolder &, const AlterCommands & params, const String & database_name,
+    const TiDB::TableInfo & table_info, const SchemaNameMapper & name_mapper, const Context & context)
 {
     alterImpl(params, database_name, name_mapper.mapTableName(table_info),
         std::optional<std::reference_wrapper<const TiDB::TableInfo>>(table_info), context);
 }
 
-void StorageDeltaMerge::alter(
-    const AlterCommands & commands, const String & database_name, const String & table_name_, const Context & context)
+void StorageDeltaMerge::alter(const TableLockHolder &, const AlterCommands & commands, const String & database_name,
+    const String & table_name_, const Context & context)
 {
     alterImpl(commands, database_name, table_name_, std::nullopt, context);
 }
@@ -800,9 +805,6 @@ try
             tombstone = 0;
         }
     }
-
-    auto table_soft_lock = lockDataForAlter(__PRETTY_FUNCTION__);
-    auto table_hard_lock = lockStructureForAlter(__PRETTY_FUNCTION__);
 
     // update the metadata in database, so that we can read the new schema using TiFlash's client
     ColumnsDescription new_columns = getColumns();

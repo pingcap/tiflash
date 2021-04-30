@@ -308,7 +308,7 @@ void SystemLog<LogElement>::prepareTable()
             LOG_DEBUG(log, "Existing table " << description << " for system log has obsolete or different structure."
             " Renaming it to " << backQuoteIfNeed(to.table));
 
-            InterpreterRenameQuery(rename, context).execute();
+            InterpreterRenameQuery(rename, context, context.getCurrentQueryId()).execute();
 
             /// The required table will be created.
             table = nullptr;

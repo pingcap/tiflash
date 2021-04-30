@@ -86,7 +86,8 @@ BlockIO InterpreterAlterQuery::execute()
         return {};
 
     alter_commands.validate(table.get(), context);
-    table->alter(alter_commands, database_name, table_name, context);
+    auto alter_lock = table->lockForAlter(context.getCurrentQueryId());
+    table->alter(alter_lock, alter_commands, database_name, table_name, context);
 
     return {};
 }

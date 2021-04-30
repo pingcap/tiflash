@@ -8,6 +8,7 @@
 #include <boost/noncopyable.hpp>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
+#include <Storages/TableLockHolder.h>
 
 
 namespace DB
@@ -18,12 +19,6 @@ class IBlockInputStream;
 
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 using BlockInputStreams = std::vector<BlockInputStreamPtr>;
-
-class TableStructureReadLock;
-
-using TableStructureReadLockPtr = std::shared_ptr<TableStructureReadLock>;
-using TableStructureReadLocks = std::vector<TableStructureReadLockPtr>;
-using TableStructureReadLocksList = std::list<TableStructureReadLockPtr>;
 
 struct Progress;
 
@@ -108,9 +103,9 @@ public:
       */
     size_t checkDepth(size_t max_depth) const;
 
-    /** Do not allow to change the table while the blocks stream is alive.
+    /** Do not allow to drop the table while the blocks stream is alive.
       */
-    void addTableLock(const TableStructureReadLockPtr & lock) { table_locks.push_back(lock); }
+    void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
 
     template <typename F>
@@ -129,7 +124,7 @@ protected:
     std::shared_mutex children_mutex;
 
 private:
-    TableStructureReadLocks table_locks;
+    TableLockHolders table_locks;
 
     size_t checkDepthImpl(size_t max_depth, size_t level) const;
 
@@ -139,4 +134,3 @@ private:
 
 
 }
-

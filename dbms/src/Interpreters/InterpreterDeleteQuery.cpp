@@ -53,7 +53,7 @@ BlockIO InterpreterDeleteQuery::execute()
     if (!table->supportsModification())
        throw Exception("Table engine " + table->getName() + " does not support Delete.");
 
-    auto table_lock = table->lockStructure(true, __PRETTY_FUNCTION__);
+    auto table_lock = table->lockStructureForShare(context.getCurrentQueryId());
 
     NamesAndTypesList required_columns = table->getColumns().getAllPhysical();
 

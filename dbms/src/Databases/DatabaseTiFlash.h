@@ -19,7 +19,8 @@ public:
     static constexpr Version CURRENT_VERSION = 1;
 
 public:
-    DatabaseTiFlash(String name_, const String & metadata_path_, const TiDB::DBInfo & db_info_, Version version_, const Context & context);
+    DatabaseTiFlash(String name_, const String & metadata_path_, const TiDB::DBInfo & db_info_, Version version_, Timestamp tombstone_,
+        const Context & context);
 
     String getEngineName() const override { return "TiFlash"; }
 
@@ -55,6 +56,11 @@ public:
     String getTableMetadataPath(const String & table_name) const override;
 
     void shutdown() override;
+
+    bool isTombstone() const override { return tombstone != 0; }
+    Timestamp getTombstone() const override { return tombstone; }
+    void alterTombstone(const Context & context, Timestamp tombstone_) override;
+
     void drop(const Context & context) override;
 
     TiDB::DBInfo & getDatabaseInfo() const;
@@ -63,6 +69,11 @@ private:
     const String metadata_path;
     const String data_path;
     TiDB::DBInfoPtr db_info;
+
+    /// Timestamp when this database is dropped.
+    /// Zero means this database is not dropped.
+    Timestamp tombstone;
+
     Poco::Logger * log;
 
     ASTPtr getCreateTableQueryImpl(const Context & context, const String & table_name, bool throw_on_error) const;

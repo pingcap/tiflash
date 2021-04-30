@@ -338,7 +338,7 @@ StorageMerge::StorageListWithLocks StorageMerge::getSelectedTables() const
         {
             auto & table = iterator->table();
             if (table.get() != this)
-                selected_tables.emplace_back(table, table->lockStructure(false, __PRETTY_FUNCTION__));
+                selected_tables.emplace_back(table, table->lockForShare(context.getCurrentQueryId()));
         }
 
         iterator->next();
@@ -348,13 +348,11 @@ StorageMerge::StorageListWithLocks StorageMerge::getSelectedTables() const
 }
 
 
-void StorageMerge::alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context)
+void StorageMerge::alter(const TableLockHolder &, const AlterCommands & params, const String & database_name, const String & table_name, const Context & context)
 {
     for (const auto & param : params)
         if (param.type == AlterCommand::MODIFY_PRIMARY_KEY)
             throw Exception("Storage engine " + getName() + " doesn't support primary key.", ErrorCodes::NOT_IMPLEMENTED);
-
-    auto lock = lockStructureForAlter(__PRETTY_FUNCTION__);
 
     ColumnsDescription new_columns = getColumns();
     params.apply(new_columns);

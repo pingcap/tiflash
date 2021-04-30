@@ -42,7 +42,7 @@ public:
 
     /// you need to add and remove columns in the sub-tables manually
     /// the structure of sub-tables is not checked
-    void alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
+    void alter(const TableLockHolder &, const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
 
     bool mayBenefitFromIndexForIn(const ASTPtr & left_in_operand) const override;
 
@@ -52,7 +52,7 @@ private:
     OptimizedRegularExpression table_name_regexp;
     const Context & context;
 
-    using StorageListWithLocks = std::list<std::pair<StoragePtr, TableStructureReadLockPtr>>;
+    using StorageListWithLocks = std::list<std::pair<StoragePtr, TableLockHolder>>;
 
     StorageListWithLocks getSelectedTables() const;
 

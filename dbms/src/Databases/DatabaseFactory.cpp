@@ -19,10 +19,11 @@ extern const int UNKNOWN_DATABASE_ENGINE;
 } // namespace ErrorCodes
 
 template <typename ValueType>
-static inline ValueType safeGetLiteralValue(const ASTPtr & ast, const String & engine_name)
+static inline ValueType safeGetLiteralValue(const ASTPtr & ast, const String & engine_name, size_t index)
 {
     if (!ast || !typeid_cast<const ASTLiteral *>(ast.get()))
-        throw Exception("Database engine " + engine_name + " requested literal argument.", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Database engine " + engine_name + " requested literal argument at index " + DB::toString(index), ErrorCodes::BAD_ARGUMENTS);
 
     return typeid_cast<const ASTLiteral *>(ast.get())->value.safeGet<ValueType>();
 }
@@ -35,6 +36,7 @@ DatabasePtr DatabaseFactory::get(
     {
         TiDB::DBInfo db_info;
         UInt64 version = DatabaseTiFlash::CURRENT_VERSION;
+        Timestamp tombstone = 0;
 
         // ENGINE=TiFlash('{JSON format database info}', version)
         const ASTFunction * engine = engine_define->engine;
@@ -43,7 +45,7 @@ DatabasePtr DatabaseFactory::get(
             const auto & arguments = engine->arguments->children;
             if (arguments.size() >= 1)
             {
-                const auto db_info_json = safeGetLiteralValue<String>(arguments[0], engine_name);
+                const auto db_info_json = safeGetLiteralValue<String>(arguments[0], engine_name, 0);
                 if (!db_info_json.empty())
                 {
                     db_info.deserialize(db_info_json);
@@ -51,11 +53,15 @@ DatabasePtr DatabaseFactory::get(
             }
             if (arguments.size() >= 2)
             {
-                version = safeGetLiteralValue<UInt64>(arguments[1], engine_name);
+                version = safeGetLiteralValue<UInt64>(arguments[1], engine_name, 1);
+            }
+            if (arguments.size() >= 3)
+            {
+                tombstone = safeGetLiteralValue<UInt64>(arguments[2], engine_name, 2);
             }
         }
 
-        return std::make_shared<DatabaseTiFlash>(database_name, metadata_path, db_info, version, context);
+        return std::make_shared<DatabaseTiFlash>(database_name, metadata_path, db_info, version, tombstone, context);
     }
     else if (engine_name == "Ordinary")
         return std::make_shared<DatabaseOrdinary>(database_name, metadata_path, context);

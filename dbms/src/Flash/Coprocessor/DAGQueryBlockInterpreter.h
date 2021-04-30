@@ -7,18 +7,10 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
-#include <Encryption/FileProvider.h>
-#include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/AggregateDescription.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/IInterpreter.h>
-#include <Storages/RegionQueryInfo.h>
-#include <Storages/Transaction/TMTStorages.h>
+#include <Storages/TableLockHolder.h>
+#include <Storages/Transaction/TiDB.h>
 #include <pingcap/coprocessor/Client.h>
 
 namespace DB
@@ -30,6 +22,21 @@ using RegionPtr = std::shared_ptr<Region>;
 struct RegionLearnerReadSnapshot;
 using LearnerReadSnapshot = std::unordered_map<RegionID, RegionLearnerReadSnapshot>;
 struct SelectQueryInfo;
+
+using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
+using DAGSchema = std::vector<DAGColumnInfo>;
+class DAGQuerySource;
+class DAGQueryBlock;
+class RegionInfo;
+class ExchangeReceiver;
+class DAGExpressionAnalyzer;
+class ExpressionActions;
+using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
+struct ExpressionActionsChain;
+class IManageableStorage;
+using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
+using NameWithAlias = std::pair<std::string, std::string>;
+using NamesWithAliases = std::vector<NameWithAlias>;
 
 struct Pipeline
 {
@@ -114,7 +121,7 @@ private:
         const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
         const LearnerReadSnapshot & learner_read_snapshot, //
         Pipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry);
-    void getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
+    std::tuple<ManageableStoragePtr, TableStructureLockHolder> getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
     AnalysisResult analyzeExpressions();
     void recordProfileStreams(Pipeline & pipeline, const String & key);
@@ -138,7 +145,7 @@ private:
 
     /// Table from where to read data, if not subquery.
     ManageableStoragePtr storage;
-    TableStructureReadLockPtr table_lock;
+    TableLockHolder table_drop_lock;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 

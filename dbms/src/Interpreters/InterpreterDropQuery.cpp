@@ -68,7 +68,7 @@ BlockIO InterpreterDropQuery::execute()
             }
             table->shutdown();
             /// If table was already dropped by anyone, an exception will be thrown
-            auto table_lock = table->lockForAlter(__PRETTY_FUNCTION__);
+            auto table_lock = table->lockExclusively(context.getCurrentQueryId(), drop.lock_timeout);
             /// Delete table data
             table->drop();
             table->is_dropped = true;
@@ -127,8 +127,10 @@ BlockIO InterpreterDropQuery::execute()
                     ErrorCodes::TABLE_WAS_NOT_DROPPED);
         }
 
-        /// If table was already dropped by anyone, an exception will be thrown
-        auto table_lock = table.first->lockForAlter(__PRETTY_FUNCTION__);
+        /// If table was already dropped by anyone, an exception will be thrown;
+        /// If can not acquire the drop lock on table within `drop.lock_timeout`,
+        /// an exception will be thrown;
+        auto table_lock = table.first->lockExclusively(context.getCurrentQueryId(), drop.lock_timeout);
 
         table.first->shutdown();
 

@@ -1,38 +1,40 @@
-#include <Storages/System/StorageSystemColumns.h>
-#include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/StorageMergeTree.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnsNumber.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataStreams/OneBlockInputStream.h>
-#include <Storages/VirtualColumnUtils.h>
-#include <Parsers/queryToString.h>
 #include <Databases/IDatabase.h>
+#include <Parsers/queryToString.h>
+#include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/StorageMergeTree.h>
+#include <Storages/System/StorageSystemColumns.h>
+#include <Storages/VirtualColumnUtils.h>
 
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int TABLE_IS_DROPPED;
+} // namespace ErrorCodes
 
-StorageSystemColumns::StorageSystemColumns(const std::string & name_)
-    : name(name_)
+StorageSystemColumns::StorageSystemColumns(const std::string & name_) : name(name_)
 {
     setColumns(ColumnsDescription({
-        { "database",           std::make_shared<DataTypeString>() },
-        { "table",              std::make_shared<DataTypeString>() },
-        { "name",               std::make_shared<DataTypeString>() },
-        { "type",               std::make_shared<DataTypeString>() },
-        { "default_kind",       std::make_shared<DataTypeString>() },
-        { "default_expression", std::make_shared<DataTypeString>() },
-        { "data_compressed_bytes",      std::make_shared<DataTypeUInt64>() },
-        { "data_uncompressed_bytes",    std::make_shared<DataTypeUInt64>() },
-        { "marks_bytes",                std::make_shared<DataTypeUInt64>() },
+        {"database", std::make_shared<DataTypeString>()},
+        {"table", std::make_shared<DataTypeString>()},
+        {"name", std::make_shared<DataTypeString>()},
+        {"type", std::make_shared<DataTypeString>()},
+        {"default_kind", std::make_shared<DataTypeString>()},
+        {"default_expression", std::make_shared<DataTypeString>()},
+        {"data_compressed_bytes", std::make_shared<DataTypeUInt64>()},
+        {"data_uncompressed_bytes", std::make_shared<DataTypeUInt64>()},
+        {"marks_bytes", std::make_shared<DataTypeUInt64>()},
     }));
 }
 
 
-BlockInputStreams StorageSystemColumns::read(
-    const Names & column_names,
+BlockInputStreams StorageSystemColumns::read(const Names & column_names,
     const SelectQueryInfo & query_info,
     const Context & context,
     QueryProcessingStage::Enum & processed_stage,
@@ -76,9 +78,8 @@ BlockInputStreams StorageSystemColumns::read(
             for (auto iterator = database->getIterator(context); iterator->isValid(); iterator->next())
             {
                 const String & table_name = iterator->name();
-                storages.emplace(std::piecewise_construct,
-                    std::forward_as_tuple(database_name, table_name),
-                    std::forward_as_tuple(iterator->table()));
+                storages.emplace(
+                    std::piecewise_construct, std::forward_as_tuple(database_name, table_name), std::forward_as_tuple(iterator->table()));
                 table_column_mut->insert(table_name);
                 offsets[i] += 1;
             }
@@ -117,11 +118,11 @@ BlockInputStreams StorageSystemColumns::read(
 
         {
             StoragePtr storage = storages.at(std::make_pair(database_name, table_name));
-            TableStructureReadLockPtr table_lock;
+            TableStructureLockHolder table_lock;
 
             try
             {
-                table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+                table_lock = storage->lockStructureForShare(context.getCurrentQueryId());
             }
             catch (const Exception & e)
             {
@@ -192,4 +193,4 @@ BlockInputStreams StorageSystemColumns::read(
     return BlockInputStreams(1, std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
 }
 
-}
+} // namespace DB
