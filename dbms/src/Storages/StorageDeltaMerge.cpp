@@ -1300,6 +1300,10 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
 
 bool StorageDeltaMerge::initStoreIfDataDirExist()
 {
+    if (shutdown_called.load(std::memory_order_relaxed) || isTombstone())
+    {
+        return false;
+    }
     // If store is inited, we don't need to check data dir.
     if (store_inited.load(std::memory_order_relaxed))
     {

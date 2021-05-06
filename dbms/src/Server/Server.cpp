@@ -354,11 +354,20 @@ void backgroundInitStores(Context& global_context, Logger* log)
     {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
         int init_cnt = 0;
+        int err_cnt = 0;
         for (auto& pa : storages)
         {
-            init_cnt += pa.second->initStoreIfDataDirExist() ? 1 : 0;
+            try 
+            {
+              init_cnt += pa.second->initStoreIfDataDirExist() ? 1 : 0;
+            }
+            catch(Poco::Exception& e)
+            {
+                err_cnt++;
+                LOG_ERROR(log, "initStoreIfDataDirExist fail: " << e.displayText());
+            }
         }
-        LOG_INFO(log, "Storage total count " << storages.size() << " init count " << init_cnt);
+        LOG_INFO(log, "Storage total count " << storages.size() << " init count " << init_cnt << " error count " << err_cnt);
     };
     std::thread(initStores).detach();
 }
