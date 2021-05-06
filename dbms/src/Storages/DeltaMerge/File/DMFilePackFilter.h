@@ -220,7 +220,7 @@ private:
 private:
     DMFilePtr           dmfile;
     MinMaxIndexCachePtr index_cache;
-    UInt64              hash_salt [[maybe_unused]];
+    UInt64              hash_salt;
     RowKeyRange         rowkey_range;
     RSOperatorPtr       filter;
     IdSetPtr            read_packs;
