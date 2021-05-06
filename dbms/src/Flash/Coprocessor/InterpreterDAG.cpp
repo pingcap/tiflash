@@ -40,7 +40,8 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     }
 }
 
-std::pair<BlockInputStreams, RegionInfoList> InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets)
+std::pair<BlockInputStreams, RegionInfoList> InterpreterDAG::executeQueryBlock(
+    DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets)
 {
     if (!query_block.children.empty())
     {

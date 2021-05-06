@@ -37,8 +37,10 @@ public:
     BlockIO execute();
 
     RegionInfoList retry_regions;
+
 private:
-    std::pair<BlockInputStreams, RegionInfoList> executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets);
+    std::pair<BlockInputStreams, RegionInfoList> executeQueryBlock(
+        DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets);
     void initMPPExchangeReceiver(const DAGQueryBlock & dag_query_block);
 
 private:
