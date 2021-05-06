@@ -5,12 +5,6 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
-//<<<<<<< HEAD
-//=======
-//#include <Storages/PathPool.h>
-//#include <Storages/StorageDeltaMergeHelpers.h>
-//#include <Storages/Transaction/Region.h>
-//>>>>>>> Init store in background task.
 #include <Storages/Transaction/TiDB.h>
 
 #include <ext/shared_ptr_helper.h>
