@@ -180,7 +180,6 @@ private:
                           const DMFilePtr &           dmfile,
                           const FileProviderPtr &     file_provider,
                           const MinMaxIndexCachePtr & index_cache,
-                          UInt64                      hash_salt,
                           ColId                       col_id)
     {
         auto &     type           = dmfile->getColumnStat(col_id).type;
@@ -198,8 +197,7 @@ private:
         MinMaxIndexPtr minmax_index;
         if (index_cache)
         {
-            auto key     = MinMaxIndexCache::hash(dmfile->colIndexCacheKey(file_name_base), hash_salt);
-            minmax_index = index_cache->getOrSet(key, load);
+            minmax_index = index_cache->getOrSet(dmfile->colIndexCacheKey(file_name_base), load);
         }
         else
         {
@@ -216,7 +214,7 @@ private:
         if (!dmfile->isColIndexExist(col_id))
             return;
 
-        loadIndex(param.indexes, dmfile, file_provider, index_cache, hash_salt, col_id);
+        loadIndex(param.indexes, dmfile, file_provider, index_cache, col_id);
     }
 
 private:
