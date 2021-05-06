@@ -587,7 +587,7 @@ Block GenRegionBlockDatawithSchema(const RegionPtr & region,
     Block res_block;
     // No committed data, just return
     if (!data_list_read)
-        return std::move(res_block);
+        return res_block;
 
     auto context = tmt.getContext();
     auto metrics = context.getTiFlashMetrics();
@@ -617,7 +617,7 @@ Block GenRegionBlockDatawithSchema(const RegionPtr & region,
     // Remove committed data
     RemoveRegionCommitCache(region, *data_list_read);
 
-    return std::move(res_block);
+    return res_block;
 }
 
 } // namespace DB
