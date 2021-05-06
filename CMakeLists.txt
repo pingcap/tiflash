@@ -56,7 +56,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # clang: warning: argument unused during compilation: '-stdlib=libc++'
     # clang: warning: argument unused during compilation: '-specs=/usr/share/dpkg/no-pie-compile.specs' [-Wunused-command-line-argument]
     # clang: warning: private field 'hash_salt' is not used [-Wunused-private-field]
-    set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-unused-command-line-argument -Wunused-private-field")
+    set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-unused-command-line-argument -Wno-unused-private-field")
 endif ()
 
 if (ARCH_LINUX)
