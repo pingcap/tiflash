@@ -113,7 +113,7 @@ private:
     std::vector<size_t> skip_packs_by_column;
 
     /// Caches
-    const UInt64   hash_salt;
+    const UInt64   hash_salt [[maybe_unused]];
     MarkCachePtr   mark_cache;
     const bool     enable_column_cache;
     ColumnCachePtr column_cache;
