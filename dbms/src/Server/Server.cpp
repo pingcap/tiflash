@@ -359,7 +359,7 @@ void backgroundInitStores(Context& global_context, Logger* log)
         {
             try 
             {
-              init_cnt += pa.second->initStoreIfDataDirExist() ? 1 : 0;
+                init_cnt += pa.second->initStoreIfDataDirExist() ? 1 : 0;
             }
             catch(Poco::Exception& e)
             {
