@@ -90,7 +90,7 @@ try
         if (!dag_context.retry_regions.empty()) {
             coprocessor::BatchResponse response;
             for (auto region : dag_context.retry_regions) {
-                auto * retry_region = response->add_retry_regions();
+                auto * retry_region = response.add_retry_regions();
                 retry_region->set_id(region.region_id);
                 retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
                 retry_region->mutable_region_epoch()->set_version(region.region_version);
