@@ -57,6 +57,7 @@ public:
     RegionData() {}
 
     RegionData(RegionData && data);
+    RegionData& operator=(RegionData && data);
 
 public:
     static UInt8 getWriteType(const ConstWriteCFIter & write_it);

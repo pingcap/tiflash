@@ -149,7 +149,7 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
 {
     if (isSingleFileMode())
     {
-        const auto & index_identifier = DMFile::colIndexFileName(DMFile::getFileNameBase(col_id));
+        const auto index_identifier = DMFile::colIndexFileName(DMFile::getFileNameBase(col_id));
         return isSubFileExists(index_identifier);
     }
     else
@@ -374,7 +374,8 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
     readPackStat(file_provider, footer.meta_pack_info);
 }
 
-void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
+void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider,
+                                   const RateLimiterPtr &  rate_limiter)
 {
     writeMetadata(file_provider, rate_limiter);
     if (unlikely(status != Status::WRITING))
@@ -394,8 +395,8 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
 {
     Footer footer;
     std::tie(footer.meta_pack_info.pack_property_offset, footer.meta_pack_info.pack_property_size) = writePackPropertyToBuffer(buffer);
-    std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)                   = writeMetaToBuffer(buffer);
-    std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size)         = writePackStatToBuffer(buffer);
+    std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)           = writeMetaToBuffer(buffer);
+    std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size) = writePackStatToBuffer(buffer);
 
     footer.sub_file_stat_offset = buffer.count();
     footer.sub_file_num         = sub_file_stats.size();

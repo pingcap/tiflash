@@ -1,4 +1,5 @@
 #include <Common/TiFlashMetrics.h>
+#include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
@@ -58,6 +59,12 @@ SchemaSyncService::~SchemaSyncService() { background_pool.removeTask(handle); }
 
 bool SchemaSyncService::syncSchemas() { return context.getTMTContext().getSchemaSyncer()->syncSchemas(context); }
 
+template <typename DatabaseOrTablePtr>
+inline bool isSafeForGC(const DatabaseOrTablePtr & ptr, Timestamp gc_safe_point)
+{
+    return ptr->isTombstone() && ptr->getTombstone() < gc_safe_point;
+}
+
 bool SchemaSyncService::gc(Timestamp gc_safe_point)
 {
     auto & tmt_context = context.getTMTContext();
@@ -67,10 +74,35 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
 
     LOG_DEBUG(log, "Performing GC using safe point " << gc_safe_point);
 
-    for (auto & pair : tmt_context.getStorages().getAllStorage())
+    // The storages that are ready for gc
+    std::vector<std::weak_ptr<IManageableStorage>> storages_to_gc;
+    // Get a snapshot of database
+    auto dbs = context.getDatabases();
+    for (const auto & iter : dbs)
     {
-        auto storage = pair.second;
-        if (!storage->isTombstone() || storage->getTombstone() >= gc_safe_point)
+        const auto & db = iter.second;
+        for (auto table_iter = db->getIterator(context); table_iter->isValid(); table_iter->next())
+        {
+            auto & storage = table_iter->table();
+            auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+            if (!managed_storage)
+                continue;
+
+            if (isSafeForGC(db, gc_safe_point) || isSafeForGC(managed_storage, gc_safe_point))
+            {
+                // Only keep a weak_ptr on storage so that the memory can be free as soon as
+                // it is dropped.
+                storages_to_gc.emplace_back(std::weak_ptr<IManageableStorage>(managed_storage));
+            }
+        }
+    }
+
+    // Physically drop tables
+    for (auto & storage_ : storages_to_gc)
+    {
+        // Get a shared_ptr from weak_ptr, it should always success.
+        auto storage = storage_.lock();
+        if (unlikely(!storage))
             continue;
 
         String database_name = storage->getDatabaseName();
@@ -87,11 +119,61 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
         drop_query->database = std::move(database_name);
         drop_query->table = std::move(table_name);
         drop_query->if_exists = true;
+        drop_query->lock_timeout = std::chrono::milliseconds(1 * 1000); // timeout for acquring table drop lock
         ASTPtr ast_drop_query = drop_query;
-        InterpreterDropQuery drop_interpreter(ast_drop_query, context);
-        drop_interpreter.execute();
-        LOG_INFO(log, "Physically dropped table " << canonical_name);
+        try
+        {
+            InterpreterDropQuery drop_interpreter(ast_drop_query, context);
+            drop_interpreter.execute();
+            LOG_INFO(log, "Physically dropped table " << canonical_name);
+        }
+        catch (DB::Exception & e)
+        {
+            // Maybe a read lock of a table is held for a long time, just ignore it this round.
+            auto err_msg = getCurrentExceptionMessage(true);
+            LOG_INFO(log, "Physically drop table " << canonical_name << " is skipped, reason: " << err_msg);
+        }
     }
+    storages_to_gc.clear();
+
+    // Physically drop database
+    for (const auto & iter : dbs)
+    {
+        const auto & db = iter.second;
+        if (!isSafeForGC(db, gc_safe_point))
+            continue;
+
+        const auto & db_name = iter.first;
+        size_t num_tables = 0;
+        for (auto table_iter = db->getIterator(context); table_iter->isValid(); table_iter->next())
+            ++num_tables;
+        if (num_tables > 0)
+        {
+            // There should be something wrong, maybe a read lock of a table is held for a long time.
+            // Just ignore and try to collect this database next time.
+            LOG_INFO(log, "Physically drop database " << db_name << " is skipped, reason: " << num_tables << " tables left");
+            continue;
+        }
+
+        LOG_INFO(log, "Physically dropping database " << db_name);
+        auto drop_query = std::make_shared<ASTDropQuery>();
+        drop_query->database = db_name;
+        drop_query->if_exists = true;
+        drop_query->lock_timeout = std::chrono::milliseconds(1 * 1000); // timeout for acquring table drop lock
+        ASTPtr ast_drop_query = drop_query;
+        try
+        {
+            InterpreterDropQuery drop_interpreter(ast_drop_query, context);
+            drop_interpreter.execute();
+            LOG_INFO(log, "Physically dropped database " << db_name);
+        }
+        catch (DB::Exception & e)
+        {
+            auto err_msg = getCurrentExceptionMessage(true);
+            LOG_INFO(log, "Physically drop database " << db_name << " is skipped, reason: " << err_msg);
+        }
+    }
+
     gc_context.last_gc_safe_point = gc_safe_point;
 
     LOG_DEBUG(log, "Performed GC using safe point " << gc_safe_point);
