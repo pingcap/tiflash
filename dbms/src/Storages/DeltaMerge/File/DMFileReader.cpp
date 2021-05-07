@@ -40,7 +40,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
     };
 
     if (reader.mark_cache)
-        marks = reader.mark_cache->getOrSet(MarkCache::hash(mark_path, reader.hash_salt), mark_load);
+        marks = reader.mark_cache->getOrSet(mark_path, mark_load);
     else
         marks = mark_load();
 
@@ -111,7 +111,6 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                            const RSOperatorPtr & filter_,
                            const IdSetPtr &      read_packs_,
                            // caches
-                           UInt64                  hash_salt_,
                            MarkCache *             mark_cache_,
                            MinMaxIndexCache *      index_cache_,
                            bool                    enable_column_cache_,
@@ -124,11 +123,10 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
       read_columns(read_columns_),
       enable_clean_read(enable_clean_read_),
       max_read_version(max_read_version_),
-      pack_filter(dmfile_, index_cache_, hash_salt_, handle_range_, filter_, read_packs_, file_provider_),
+      pack_filter(dmfile_, index_cache_, handle_range_, filter_, read_packs_, file_provider_),
       handle_res(pack_filter.getHandleRes()),
       use_packs(pack_filter.getUsePacks()),
       skip_packs_by_column(read_columns.size(), 0),
-      hash_salt(hash_salt_),
       mark_cache(mark_cache_),
       enable_column_cache(enable_column_cache_),
       column_cache(column_cache_),

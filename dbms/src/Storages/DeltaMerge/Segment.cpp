@@ -611,7 +611,6 @@ std::optional<Handle> Segment::getSplitPointFast(DMContext & dm_context, const S
     DMFileBlockInputStream stream(dm_context.db_context,
                                   MAX_UINT64,
                                   false,
-                                  dm_context.hash_salt,
                                   read_file,
                                   {getExtraHandleColumnDefine()},
                                   HandleRange::newAll(),

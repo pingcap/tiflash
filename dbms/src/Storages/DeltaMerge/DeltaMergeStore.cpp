@@ -135,7 +135,6 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       table_name(table_name_),
       original_table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
-      hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
     LOG_INFO(log, "Restore DeltaMerge Store start [" << db_name << "." << table_name << "]");
@@ -324,7 +323,6 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     auto * ctx = new DMContext(db_context.getGlobalContext(),
                                path_pool,
                                storage_pool,
-                               hash_salt,
                                latest_gc_safe_point,
                                settings.not_compress_columns,
                                db_settings);
