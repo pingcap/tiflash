@@ -26,13 +26,12 @@ class DMFilePackFilter
 public:
     static DMFilePackFilter loadFrom(const DMFilePtr &           dmfile,
                                      const MinMaxIndexCachePtr & index_cache,
-                                     UInt64                      hash_salt,
                                      const RowKeyRange &         rowkey_range,
                                      const RSOperatorPtr &       filter,
                                      const IdSetPtr &            read_packs,
                                      const FileProviderPtr &     file_provider)
     {
-        auto pack_filter = DMFilePackFilter(dmfile, index_cache, hash_salt, rowkey_range, filter, read_packs, file_provider);
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, rowkey_range, filter, read_packs, file_provider);
         pack_filter.init();
         return pack_filter;
     }
@@ -84,14 +83,12 @@ public:
 private:
     DMFilePackFilter(const DMFilePtr &           dmfile_,
                      const MinMaxIndexCachePtr & index_cache_,
-                     UInt64                      hash_salt_,
                      const RowKeyRange &         rowkey_range_, // filter by handle range
                      const RSOperatorPtr &       filter_,       // filter by push down where clause
                      const IdSetPtr &            read_packs_,   // filter by pack index
                      const FileProviderPtr &     file_provider_)
         : dmfile(dmfile_),
           index_cache(index_cache_),
-          hash_salt(hash_salt_),
           rowkey_range(rowkey_range_),
           filter(filter_),
           read_packs(read_packs_),
@@ -184,7 +181,6 @@ private:
                           const DMFilePtr &           dmfile,
                           const FileProviderPtr &     file_provider,
                           const MinMaxIndexCachePtr & index_cache,
-                          UInt64                      hash_salt,
                           ColId                       col_id)
     {
         auto &     type           = dmfile->getColumnStat(col_id).type;
@@ -202,8 +198,7 @@ private:
         MinMaxIndexPtr minmax_index;
         if (index_cache)
         {
-            auto key     = MinMaxIndexCache::hash(dmfile->colIndexCacheKey(file_name_base), hash_salt);
-            minmax_index = index_cache->getOrSet(key, load);
+            minmax_index = index_cache->getOrSet(dmfile->colIndexCacheKey(file_name_base), load);
         }
         else
         {
@@ -220,13 +215,12 @@ private:
         if (!dmfile->isColIndexExist(col_id))
             return;
 
-        loadIndex(param.indexes, dmfile, file_provider, index_cache, hash_salt, col_id);
+        loadIndex(param.indexes, dmfile, file_provider, index_cache, col_id);
     }
 
 private:
     DMFilePtr           dmfile;
     MinMaxIndexCachePtr index_cache;
-    UInt64              hash_salt;
     RowKeyRange         rowkey_range;
     RSOperatorPtr       filter;
     IdSetPtr            read_packs;

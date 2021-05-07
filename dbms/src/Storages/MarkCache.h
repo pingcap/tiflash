@@ -32,29 +32,14 @@ struct MarksWeightFunction
 /** Cache of 'marks' for StorageMergeTree.
   * Marks is an index structure that addresses ranges in column file, corresponding to ranges of primary key.
   */
-class MarkCache : public LRUCache<UInt128, MarksInCompressedFile, UInt128TrivialHash, MarksWeightFunction>
+class MarkCache : public LRUCache<String, MarksInCompressedFile, std::hash<String>, MarksWeightFunction>
 {
 private:
-    using Base = LRUCache<UInt128, MarksInCompressedFile, UInt128TrivialHash, MarksWeightFunction>;
+    using Base = LRUCache<String, MarksInCompressedFile, std::hash<String>, MarksWeightFunction>;
 
 public:
     MarkCache(size_t max_size_in_bytes, const Delay & expiration_delay)
         : Base(max_size_in_bytes, expiration_delay) {}
-
-    /// Calculate key from path to file and offset.
-    static UInt128 hash(const String & path_to_file, UInt64 salt = 0)
-    {
-        UInt128 key;
-
-        SipHash hash;
-        hash.update(path_to_file.data(), path_to_file.size() + 1);
-        hash.get128(key.low, key.high);
-
-        key.low ^= salt;
-        key.high ^= salt;
-
-        return key;
-    }
 
     template <typename LoadFunc>
     MappedPtr getOrSet(const Key & key, LoadFunc && load)
