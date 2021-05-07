@@ -15,7 +15,6 @@ public:
     DMFileBlockInputStream(const Context &        context,
                            UInt64                 max_read_version,
                            bool                   enable_clean_read,
-                           UInt64                 hash_salt,
                            const DMFilePtr &      dmfile,
                            const ColumnDefines &  read_columns,
                            const RowKeyRange &    rowkey_range,
@@ -33,7 +32,6 @@ public:
                  filter,
                  read_packs,
                  // caches
-                 hash_salt,
                  context.getGlobalContext().getMarkCache(),
                  context.getGlobalContext().getMinMaxIndexCache(),
                  context.getSettingsRef().dt_enable_stable_column_cache,
