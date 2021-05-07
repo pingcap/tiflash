@@ -104,6 +104,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
     constexpr UInt32 state_has_column  = 0x1;
     constexpr UInt32 state_has_literal = 0x2;
     constexpr UInt32 state_finish      = state_has_column | state_has_literal;
+    bool             is_timestamp_column = false;
     for (const auto & child : expr.children())
     {
         if (isColumnExpr(child))
@@ -116,6 +117,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
                 return createUnsupported(
                     expr.ShortDebugString(), "ColumnRef with field type(" + DB::toString(field_type) + ") is not supported", false);
 
+            is_timestamp_column = (field_type == TiDB::TypeTimestamp);
             state |= state_has_column;
             ColumnID id = getColumnIDForColumnExpr(child, columns_to_read);
             attr        = creator(id);
@@ -124,17 +126,26 @@ inline RSOperatorPtr parseTiCompareExpr( //
         {
             state |= state_has_literal;
             value = decodeLiteral(child);
-            if (child.field_type().tp() == TiDB::TypeTimestamp)
+            auto literal_type = child.field_type().tp();
+            if (is_timestamp_column)
             {
-                static const auto & time_zone_utc = DateLUT::instance("UTC");
-                UInt64              from_time     = value.get<UInt64>();
-                UInt64              result_time   = 0;
-                if (timezone_info.is_name_based)
-                    convertTimeZone(from_time, result_time, time_zone_utc, *timezone_info.timezone);
-                else if (timezone_info.timezone_offset != 0)
-                    convertTimeZoneByOffset(from_time, result_time, timezone_info.timezone_offset, time_zone_utc);
-
-                value = Field(result_time);
+                if (unlikely(literal_type != TiDB::TypeTimestamp && literal_type != TiDB::TypeDatetime))
+                    return createUnsupported(expr.ShortDebugString(),
+                                             "Compare timestamp column with literal type(" + DB::toString(literal_type)
+                                                 + ") is not supported",
+                                             false);
+                // convert literal value from timezone specified in cop request to UTC
+                if (literal_type == TiDB::TypeDatetime)
+                {
+                    static const auto & time_zone_utc = DateLUT::instance("UTC");
+                    UInt64              from_time     = value.get<UInt64>();
+                    UInt64              result_time   = from_time;
+                    if (timezone_info.is_name_based)
+                        convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
+                    else if (timezone_info.timezone_offset != 0)
+                        convertTimeZoneByOffset(from_time, result_time, -timezone_info.timezone_offset, time_zone_utc);
+                    value = Field(result_time);
+                }
             }
         }
     }

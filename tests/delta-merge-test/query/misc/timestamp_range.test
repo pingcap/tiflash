@@ -1,0 +1,83 @@
+# Preparation.
+=> DBGInvoke __enable_schema_sync_service('true')
+
+=> DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
+
+=> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
+# Data.
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64, col_2 default \'asTiDBType|timestamp(5)\'')
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __put_region(4, 0, 100, default, test)
+=> DBGInvoke __raft_insert_row(default, test, 4, 50, 50, '2019-06-10 09:00:00')
+=> DBGInvoke __raft_insert_row(default, test, 4, 51, 51, '2019-06-11 07:00:00')
+=> DBGInvoke __raft_insert_row(default, test, 4, 52, 52, '2019-06-12 08:00:00')
+=> DBGInvoke __raft_insert_row(default, test, 4, 53, 53, '2019-06-11 08:00:00')
+=> DBGInvoke __raft_insert_row(default, test, 4, 54, 54, '2019-06-13 09:00:01')
+=> DBGInvoke __raft_insert_row(default, test, 4, 55, 55, '2019-06-13 12:00:01')
+
+=> DBGInvoke __try_flush_region(4)
+
+=> manage table default.test flush
+=> manage table default.test merge delta
+
+# The default time zone in cop request is UTC
+=> DBGInvoke dag('select * from default.test')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         50 │ 2019-06-10 09:00:00.00000 │
+│         51 │ 2019-06-11 07:00:00.00000 │
+│         52 │ 2019-06-12 08:00:00.00000 │
+│         53 │ 2019-06-11 08:00:00.00000 │
+│         54 │ 2019-06-13 09:00:01.00000 │
+│         55 │ 2019-06-13 12:00:01.00000 │
+└────────────┴───────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 < \'2019-06-10 09:00:00.00000\'',4,'datetime_literal:true')
+
+=> DBGInvoke dag('select * from default.test where col_2 <= \'2019-06-10 09:00:00.00000\'',4,'datetime_literal:true')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         50 │ 2019-06-10 09:00:00.00000 │
+└────────────┴───────────────────────────┘
+
+# when using 'default' encoding, return timestamp value is shown in UTC time zone
+# but the literal timestamp value in where clause is in the time zone specified by the cop request
+# so '2019-06-10 17:00:00.00000'(tz_offset:28800) below is equal to '2019-06-10 09:00:00.00000' in UTC
+=> DBGInvoke dag('select * from default.test where col_2 < \'2019-06-10 17:00:00.00000\'',4,'encode_type:default,tz_offset:28800,datetime_literal:true')
+
+=> DBGInvoke dag('select * from default.test where col_2 <= \'2019-06-10 17:00:00.00000\'',4,'encode_type:default,tz_offset:28800,datetime_literal:true')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         50 │ 2019-06-10 09:00:00.00000 │
+└────────────┴───────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 < \'2019-06-10 04:00:00.00000\'',4,'encode_type:default,tz_name:America/Chicago,datetime_literal:true')
+
+=> DBGInvoke dag('select * from default.test where col_2 <= \'2019-06-10 04:00:00.00000\'',4,'encode_type:default,tz_name:America/Chicago,datetime_literal:true')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         50 │ 2019-06-10 09:00:00.00000 │
+└────────────┴───────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 > \'2019-06-13 12:00:01.00000\'',4,'datetime_literal:true')
+
+=> DBGInvoke dag('select * from default.test where col_2 >= \'2019-06-13 12:00:01.00000\'',4,'datetime_literal:true')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         55 │ 2019-06-13 12:00:01.00000 │
+└────────────┴───────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 > \'2019-06-13 20:00:01.00000\'',4,'encode_type:default,tz_offset:28800,datetime_literal:true')
+
+=> DBGInvoke dag('select * from default.test where col_2 >= \'2019-06-13 20:00:01.00000\'',4,'encode_type:default,tz_offset:28800,datetime_literal:true')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         55 │ 2019-06-13 12:00:01.00000 │
+└────────────┴───────────────────────────┘
+
+=> DBGInvoke dag('select * from default.test where col_2 > \'2019-06-13 7:00:01.00000\'',4,'encode_type:default,tz_name:America/Chicago,datetime_literal:true')
+
+=> DBGInvoke dag('select * from default.test where col_2 >= \'2019-06-13 7:00:01.00000\'',4,'encode_type:default,tz_name:America/Chicago,datetime_literal:true')
+┌─test.col_1─┬────────────────test.col_2─┐
+│         55 │ 2019-06-13 12:00:01.00000 │
+└────────────┴───────────────────────────┘
+
+# Clean up.
+=> DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
