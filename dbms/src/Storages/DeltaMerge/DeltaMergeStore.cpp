@@ -159,7 +159,6 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       background_pool(db_context.getBackgroundPool()),
       blockable_background_pool(db_context.getBlockableBackgroundPool()),
       next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY),
-      hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
     LOG_INFO(log, "Restore DeltaMerge Store start [" << db_name << "." << table_name << "]");
@@ -354,7 +353,6 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     auto * ctx = new DMContext(db_context.getGlobalContext(),
                                path_pool,
                                storage_pool,
-                               hash_salt,
                                latest_gc_safe_point.load(std::memory_order_acquire),
                                settings.not_compress_columns,
                                is_common_handle,
