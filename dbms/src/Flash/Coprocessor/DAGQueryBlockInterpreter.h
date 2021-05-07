@@ -156,8 +156,6 @@ private:
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
     std::vector<bool> timestamp_column_flag_for_tablescan;
 
-    std::vector<RegionInfo> retry_regions;
-
     Poco::Logger * log;
 };
 } // namespace DB
