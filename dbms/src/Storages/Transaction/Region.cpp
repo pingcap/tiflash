@@ -24,8 +24,6 @@ extern const int UNKNOWN_FORMAT_VERSION;
 
 const UInt32 Region::CURRENT_VERSION = 1;
 
-const std::string Region::log_name = "Region";
-
 RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIter & write_it) { return data.removeDataByWriteIt(write_it); }
 
 RegionDataReadInfo Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value) const
@@ -65,6 +63,12 @@ void Region::remove(const std::string & cf, const TiKVKey & key)
 }
 
 void Region::doRemove(ColumnFamilyType type, const TiKVKey & key) { data.remove(type, key); }
+
+void Region::clearAllData()
+{
+    std::unique_lock lock(mutex);
+    data = RegionData();
+}
 
 UInt64 Region::appliedIndex() const { return meta.appliedIndex(); }
 
@@ -691,7 +695,7 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
     return EngineStoreApplyRes::None;
 }
 
-void Region::handleIngestSST(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+void Region::handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     if (index <= appliedIndex())
         return;
@@ -728,6 +732,26 @@ void Region::handleIngestSST(const SSTViewVec snaps, UInt64 index, UInt64 term, 
     meta.notifyAll();
 }
 
+void Region::finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term)
+{
+    if (index <= appliedIndex())
+        return;
+
+    {
+        std::unique_lock<std::shared_mutex> lock(mutex);
+
+        if (rhs)
+        {
+            // Merge the uncommitted data from `rhs`
+            // (we have taken the ownership of `rhs`, so don't acquire lock on `rhs.mutex`)
+            data.mergeFrom(rhs->data);
+        }
+
+        meta.setApplied(index, term);
+    }
+    meta.notifyAll();
+}
+
 RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLock & lock)
 {
     static_assert(sizeof(RegionRaftCommandDelegate) == sizeof(Region));
@@ -741,7 +765,7 @@ RegionMetaSnapshot Region::dumpRegionMetaSnapshot() const { return meta.dumpRegi
 Region::Region(RegionMeta && meta_) : Region(std::move(meta_), nullptr) {}
 
 Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_)
-    : meta(std::move(meta_)), log(&Logger::get(log_name)), mapped_table_id(meta.getRange()->getMappedTableID()), proxy_helper(proxy_helper_)
+    : meta(std::move(meta_)), log(&Logger::get("Region")), mapped_table_id(meta.getRange()->getMappedTableID()), proxy_helper(proxy_helper_)
 {}
 
 TableID Region::getMappedTableID() const { return mapped_table_id; }

@@ -2,24 +2,24 @@
 
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
-#include <Poco/File.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
-#include <Storages/StorageDeltaMergeHelpers.h>
-#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiDB.h>
-#include <common/logger_useful.h>
 
 #include <ext/shared_ptr_helper.h>
-#include <tuple>
+
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
 
 namespace DM
 {
+struct RowKeyRange;
 class DeltaMergeStore;
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 } // namespace DM
@@ -49,24 +49,16 @@ public:
     /// Write from raft layer.
     void write(Block && block, const Settings & settings);
 
-    void flushCache(const Context & context) override
-    {
-        /// todo fix hardcoded value
-        flushCache(context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
-    }
+    void flushCache(const Context & context) override;
 
-    void flushCache(const Context & context, const Region & region) override
-    {
-        flushCache(context,
-            DM::RowKeyRange::fromRegionRange(
-                region.getRange(), region.getRange()->getMappedTableID(), is_common_handle, rowkey_column_size));
-    }
-
-    void flushCache(const Context & context, const DM::RowKeyRange & range_to_flush);
+    void flushCache(const Context & context, const DM::RowKeyRange & range_to_flush) override;
 
     void mergeDelta(const Context & context) override;
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
+
+    void ingestFiles(
+        const DM::RowKeyRange & range, const std::vector<UInt64> & file_ids, bool clear_data_in_range, const Settings & settings);
 
     UInt64 onSyncGc(Int64) override;
 
@@ -77,15 +69,20 @@ public:
 
     void modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info) override;
 
-    void alter(const AlterCommands & commands, const String & database_name, const String & table_name, const Context & context) override;
+    void alter(const TableLockHolder &,
+        const AlterCommands & commands,
+        const String & database_name,
+        const String & table_name,
+        const Context & context) override;
 
     ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DT; }
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    void alterFromTiDB(const AlterCommands & commands,
-        const String & database_name,
-        const TiDB::TableInfo & table_info,
-        const SchemaNameMapper & name_mapper,
+    void alterFromTiDB(const TableLockHolder &, //
+        const AlterCommands & commands,         //
+        const String & database_name,           //
+        const TiDB::TableInfo & table_info,     //
+        const SchemaNameMapper & name_mapper,   //
         const Context & context) override;
 
     void setTableInfo(const TiDB::TableInfo & table_info_) override { tidb_table_info = table_info_; }
@@ -143,7 +140,6 @@ private:
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
 private:
-    using ColumnIdMap = std::unordered_map<String, size_t>;
     struct TableColumnInfo 
     {
         TableColumnInfo(const String& db, const String& table, const ASTPtr& pk)

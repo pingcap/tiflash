@@ -8,6 +8,14 @@ namespace DB
 {
 namespace DM
 {
+
+/// The output stream for writing block to DTFile.
+///
+/// Note that we will filter block by `RSOperatorPtr` while reading, so the
+/// blocks output to DTFile must be bounded by primary key, or we will get
+/// wrong results by filtering.
+/// You can use `ReorganizeBlockInputStream` to reorganize the boundary of
+/// blocks.
 class DMFileBlockOutputStream
 {
 public:
@@ -29,6 +37,8 @@ public:
                 flags})
     {
     }
+
+    const DMFilePtr getFile() const { return writer.getFile(); }
 
     using BlockProperty = DMFileWriter::BlockProperty;
     void write(const Block & block, const BlockProperty & block_property) { writer.write(block, block_property); }

@@ -37,7 +37,8 @@ enum class RawCppPtrTypeImpl : RawCppPtrType
 {
     None = 0,
     String,
-    PreHandledSnapshot,
+    PreHandledSnapshotWithBlock,
+    PreHandledSnapshotWithFiles,
 };
 
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_ = nullptr, RawCppPtrTypeImpl type_ = RawCppPtrTypeImpl::None);
