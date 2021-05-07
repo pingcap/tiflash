@@ -177,7 +177,6 @@ private:
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
 
     Context & global_context;
-    
     Logger * log;
 };
 
