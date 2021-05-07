@@ -110,8 +110,13 @@ public:
     bool isCommonHandle() const override { return is_common_handle; }
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
+<<<<<<< HEAD
 
 
+=======
+    
+    bool initStoreIfDataDirExist() override;
+>>>>>>> 9b6608d3a... Init store in background task. (#1843)
 protected:
     StorageDeltaMerge( //
         const String & db_engine,
@@ -134,6 +139,14 @@ private:
 
     DataTypePtr getPKTypeImpl() const override;
 
+<<<<<<< HEAD
+=======
+    DM::DeltaMergeStorePtr& getAndMaybeInitStore();
+    bool storeInited() const { return store_inited.load(); }
+    void updateTableColumnInfo();
+    DM::ColumnDefines getStoreColumnDefines() const;
+    bool dataDirExist();
+>>>>>>> 9b6608d3a... Init store in background task. (#1843)
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
 
@@ -158,7 +171,6 @@ private:
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
 
     Context & global_context;
-
     Logger * log;
 };
 

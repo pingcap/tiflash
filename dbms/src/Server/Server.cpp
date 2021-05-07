@@ -343,6 +343,31 @@ private:
     Logger * log;
 };
 
+// We only need this task run once.
+void backgroundInitStores(Context& global_context, Logger* log)
+{
+    auto initStores = [&global_context, log] ()
+    {
+        auto storages = global_context.getTMTContext().getStorages().getAllStorage();
+        int init_cnt = 0;
+        int err_cnt = 0;
+        for (auto& pa : storages)
+        {
+            try 
+            {
+                init_cnt += pa.second->initStoreIfDataDirExist() ? 1 : 0;
+            }
+            catch(Poco::Exception& e)
+            {
+                err_cnt++;
+                LOG_ERROR(log, "initStoreIfDataDirExist fail: " << e.displayText());
+            }
+        }
+        LOG_INFO(log, "Storage total count " << storages.size() << " init count " << init_cnt << " error count " << err_cnt);
+    };
+    std::thread(initStores).detach();
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
@@ -748,7 +773,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
     LOG_DEBUG(log, "Sync schemas done.");
-
+    
+    backgroundInitStores(*global_context, log);
+    
     // After schema synced, set current database.
     global_context->setCurrentDatabase(default_database);
 

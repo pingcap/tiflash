@@ -50,6 +50,15 @@ public:
 
     virtual void deleteRows(const Context &, size_t /*rows*/) { throw Exception("Unsupported"); }
 
+<<<<<<< HEAD
+=======
+    // `limit` is the max number of segments to gc, return value is the number of segments gced
+    virtual UInt64 onSyncGc(Int64 /*limit*/) { throw Exception("Unsupported"); }
+    
+    // Return true is data dir exist
+    virtual bool initStoreIfDataDirExist() { throw Exception("Unsupported"); }
+
+>>>>>>> 9b6608d3a... Init store in background task. (#1843)
     virtual void mergeDelta(const Context &) { throw Exception("Unsupported"); }
 
     virtual BlockInputStreamPtr listSegments(const Context &) { throw Exception("Unsupported"); }

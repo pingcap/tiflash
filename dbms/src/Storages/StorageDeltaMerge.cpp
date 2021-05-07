@@ -1130,4 +1130,75 @@ DataTypePtr StorageDeltaMerge::getPKTypeImpl() const { return store->getPKDataTy
 
 SortDescription StorageDeltaMerge::getPrimarySortDescription() const { return store->getPrimarySortDescription(); }
 
+<<<<<<< HEAD
+=======
+    SortDescription desc;
+    desc.emplace_back(table_column_info->handle_column_define.name, /* direction_= */ 1, /* nulls_direction_= */ 1);
+    return desc;
+}
+
+DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
+{
+    if (store_inited.load(std::memory_order_acquire))
+    {
+        return _store;
+    }
+    std::lock_guard<std::mutex> lock(store_mutex);
+    if (_store == nullptr)
+    {
+        _store = std::make_shared<DeltaMergeStore>(global_context, data_path_contains_database_name, table_column_info->db_name,
+            table_column_info->table_name, std::move(table_column_info->table_column_defines),
+            std::move(table_column_info->handle_column_define), is_common_handle, rowkey_column_size, DeltaMergeStore::Settings());
+        table_column_info.reset(nullptr);
+        store_inited.store(true, std::memory_order_release);
+    }
+    return _store;
+}
+
+bool StorageDeltaMerge::initStoreIfDataDirExist()
+{
+    if (shutdown_called.load(std::memory_order_relaxed) || isTombstone())
+    {
+        return false;
+    }
+    // If store is inited, we don't need to check data dir.
+    if (store_inited.load(std::memory_order_relaxed))
+    {
+        return true;
+    }
+    if (!dataDirExist())
+    {
+        return false;
+    }
+    getAndMaybeInitStore();
+    return true;
+}
+
+bool StorageDeltaMerge::dataDirExist() 
+{
+    String db_name, table_name;
+    {
+        std::lock_guard<std::mutex> lock(store_mutex);
+        // store is inited
+        if (table_column_info == nullptr)
+        {
+            return true;
+        }
+        db_name = table_column_info->db_name;
+        table_name = table_column_info->db_name;
+    }
+
+    auto path_pool = global_context.getPathPool().withTable(db_name, table_name, data_path_contains_database_name);
+    auto path_delegate = path_pool.getStableDiskDelegator();
+    for (const auto & root_path : path_delegate.listPaths())
+    {
+        int r = ::access(root_path.c_str(), F_OK);
+        if (r == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+>>>>>>> 9b6608d3a... Init store in background task. (#1843)
 } // namespace DB
