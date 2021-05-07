@@ -34,18 +34,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
         size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
         auto   file = reader.file_provider->newRandomAccessFile(mark_path, reader.dmfile->encryptionMarkPath(file_name_base));
 
-<<<<<<< HEAD
         PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size);
-=======
-            return res;
-        };
-        if (reader.mark_cache)
-            marks
-                = reader.mark_cache->getOrSet(reader.dmfile->colMarkCacheKey(file_name_base), mark_load);
-        else
-            marks = mark_load();
-    }
->>>>>>> 7bb9a84fe... Use file path as cache key (#1852)
 
         return res;
     };

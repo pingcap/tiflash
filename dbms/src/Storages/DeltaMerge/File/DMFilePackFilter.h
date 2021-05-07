@@ -155,15 +155,7 @@ public:
     }
 
 private:
-<<<<<<< HEAD
     void loadIndex(const ColId col_id)
-=======
-    static void loadIndex(ColumnIndexes &             indexes,
-                          const DMFilePtr &           dmfile,
-                          const FileProviderPtr &     file_provider,
-                          const MinMaxIndexCachePtr & index_cache,
-                          ColId                       col_id)
->>>>>>> 7bb9a84fe... Use file path as cache key (#1852)
     {
         if (param.indexes.count(col_id))
             return;
@@ -185,23 +177,14 @@ private:
         MinMaxIndexPtr minmax_index;
         if (index_cache)
         {
-<<<<<<< HEAD
-            auto key     = MinMaxIndexCache::hash(index_path, hash_salt);
-            minmax_index = index_cache->getOrSet(key, load);
-=======
-            minmax_index = index_cache->getOrSet(dmfile->colIndexCacheKey(file_name_base), load);
->>>>>>> 7bb9a84fe... Use file path as cache key (#1852)
+            minmax_index = index_cache->getOrSet(index_path, load);
         }
         else
         {
             minmax_index = load();
         }
 
-<<<<<<< HEAD
         param.indexes.emplace(col_id, RSIndex(type, minmax_index));
-=======
-        loadIndex(param.indexes, dmfile, file_provider, index_cache, col_id);
->>>>>>> 7bb9a84fe... Use file path as cache key (#1852)
     }
 
 private:
