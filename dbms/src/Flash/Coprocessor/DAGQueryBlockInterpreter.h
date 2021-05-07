@@ -88,7 +88,7 @@ public:
 
     ~DAGQueryBlockInterpreter() = default;
 
-    std::pair<BlockInputStreams, RegionInfoList> execute();
+    BlockInputStreams execute();
 
     static void executeUnion(Pipeline & pipeline, size_t max_streams);
 

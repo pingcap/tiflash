@@ -241,6 +241,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     {
         for (auto it: region_retry) {
             retry_regions.push_back(it.second);
+            context.getQueryContext().getDAGContext()->retry_regions.push_back(it.second);
         }
         LOG_DEBUG(log, ({
             std::stringstream ss;
@@ -1341,7 +1342,7 @@ void DAGQueryBlockInterpreter::executeLimit(Pipeline & pipeline)
     }
 }
 
-std::pair<BlockInputStreams, RegionInfoList> DAGQueryBlockInterpreter::execute()
+BlockInputStreams DAGQueryBlockInterpreter::execute()
 {
     Pipeline pipeline;
     executeImpl(pipeline);
@@ -1349,6 +1350,6 @@ std::pair<BlockInputStreams, RegionInfoList> DAGQueryBlockInterpreter::execute()
         // todo return pipeline instead of BlockInputStreams so we can keep concurrent execution
         executeUnion(pipeline, max_streams);
 
-    return std::make_pair(pipeline.streams, retry_regions);
+    return pipeline.streams;
 }
 } // namespace DB
