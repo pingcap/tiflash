@@ -88,6 +88,16 @@ try
     else
     {
         auto streaming_writer = std::make_shared<StreamWriter>(writer);
+        if (!dag_context.retry_regions.empty()) {
+            coprocessor::BatchResponse response;
+            for (auto region : dag_context.retry_regions) {
+                auto * retry_region = response->add_retry_regions();
+                retry_region->set_id(region.region_id);
+                retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
+                retry_region->mutable_region_epoch()->set_version(region.region_version);
+            }
+            streaming_writer->write(response);
+        }
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(streaming_writer,
             std::vector<Int64>(), tipb::ExchangeType::PassThrough, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
             dag.getResultFieldTypes(), dag_context);
