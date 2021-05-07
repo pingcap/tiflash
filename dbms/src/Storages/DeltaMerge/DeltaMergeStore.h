@@ -126,9 +126,6 @@ struct RegionSplitRes
     size_t       exact_bytes;
 };
 
-// It is used to prevent hash conflict of file caches.
-static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
-
 class DeltaMergeStore : private boost::noncopyable
 {
 public:
@@ -453,7 +450,6 @@ private:
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
 
-    UInt64   hash_salt;
     Logger * log;
 }; // namespace DM
 
