@@ -89,9 +89,13 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
     output_stream->writePrefix();
     while (true)
     {
-        size_t last_not_clean_rows = 0;
+        size_t last_effective_num_rows = 0;
+        size_t last_not_clean_rows     = 0;
         if (mvcc_stream)
-            last_not_clean_rows = mvcc_stream->getNotCleanRows();
+        {
+            last_effective_num_rows = mvcc_stream->getEffectiveNumRows();
+            last_not_clean_rows     = mvcc_stream->getNotCleanRows();
+        }
 
         Block block = input_stream->read();
         if (!block)
@@ -99,11 +103,22 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
         if (!block.rows())
             continue;
 
-        size_t cur_not_clean_rows = 1;
+        // When the input_stream is not mvcc, we assume the rows in this input_stream is most valid and make it not tend to be gc.
+        size_t cur_effective_num_rows = block.rows();
+        size_t cur_not_clean_rows     = 1;
+        size_t gc_hint_version        = UINT64_MAX;
         if (mvcc_stream)
-            cur_not_clean_rows = mvcc_stream->getNotCleanRows();
+        {
+            cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
+            cur_not_clean_rows     = mvcc_stream->getNotCleanRows();
+            gc_hint_version        = mvcc_stream->getGCHintVersion();
+        }
 
-        output_stream->write(block, cur_not_clean_rows - last_not_clean_rows);
+        DMFileBlockOutputStream::BlockProperty block_property;
+        block_property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
+        block_property.not_clean_rows     = cur_not_clean_rows - last_not_clean_rows;
+        block_property.gc_hint_version    = gc_hint_version;
+        output_stream->write(block, block_property);
     }
 
     input_stream->readSuffix();
@@ -209,14 +224,16 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 
     switch (version)
     {
-    case SegmentFormat::V1: {
+    case SegmentFormat::V1:
+    {
         HandleRange range;
         readIntBinary(range.start, buf);
         readIntBinary(range.end, buf);
         rowkey_range = RowKeyRange::fromHandleRange(range);
         break;
     }
-    case SegmentFormat::V2: {
+    case SegmentFormat::V2:
+    {
         rowkey_range = RowKeyRange::deserialize(buf);
         break;
     }
@@ -576,6 +593,9 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
                                             new_delta,
                                             new_stable);
 
+    // avoid recheck whether to do DeltaMerge using the same gc_safe_point
+    new_me->setLastCheckGCSafePoint(context.min_version);
+
     // Store new meta data
     new_me->serialize(wbs.meta);
 
@@ -666,7 +686,6 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     DMFileBlockInputStream stream(dm_context.db_context,
                                   MAX_UINT64,
                                   false,
-                                  dm_context.hash_salt,
                                   read_file,
                                   {getExtraHandleColumnDefine(is_common_handle)},
                                   RowKeyRange::newAll(is_common_handle, rowkey_column_size),

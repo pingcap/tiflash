@@ -68,6 +68,8 @@ public:
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 
+    UInt64 onSyncGc(Int64) override;
+
     void rename(const String & new_path_to_db,
         const String & new_database_name,
         const String & new_table_name,
@@ -105,18 +107,17 @@ public:
     void checkStatus(const Context & context) override;
     void deleteRows(const Context &, size_t rows) override;
 
-    const DM::DeltaMergeStorePtr & getStore() { return store; }
+    const DM::DeltaMergeStorePtr & getStore() 
+    {
+         return getAndMaybeInitStore();
+    }
 
     bool isCommonHandle() const override { return is_common_handle; }
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
-<<<<<<< HEAD
-
-
-=======
     
     bool initStoreIfDataDirExist() override;
->>>>>>> 9b6608d3a... Init store in background task. (#1843)
+
 protected:
     StorageDeltaMerge( //
         const String & db_engine,
@@ -139,20 +140,31 @@ private:
 
     DataTypePtr getPKTypeImpl() const override;
 
-<<<<<<< HEAD
-=======
     DM::DeltaMergeStorePtr& getAndMaybeInitStore();
     bool storeInited() const { return store_inited.load(); }
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
+
     bool dataDirExist();
->>>>>>> 9b6608d3a... Init store in background task. (#1843)
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
-
+    struct TableColumnInfo 
+    {
+        TableColumnInfo(const String& db, const String& table, const ASTPtr& pk)
+            : db_name(db), table_name(table), pk_expr_ast(pk) {}
+        String db_name;
+        String table_name;
+        ASTPtr pk_expr_ast;
+        DM::ColumnDefines table_column_defines;
+        DM::ColumnDefine handle_column_define;
+    };
     const bool data_path_contains_database_name = false;
 
-    DM::DeltaMergeStorePtr store;
+    std::mutex store_mutex;
+    
+    std::unique_ptr<TableColumnInfo> table_column_info;  // After create DeltaMergeStore object, it is deprecated.
+    std::atomic<bool> store_inited;
+    DM::DeltaMergeStorePtr _store;
 
     Strings pk_column_names; // TODO: remove it. Only use for debug from ch-client.
     bool is_common_handle;

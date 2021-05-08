@@ -15,14 +15,14 @@ public:
     DMFileBlockInputStream(const Context &        context,
                            UInt64                 max_read_version,
                            bool                   enable_clean_read,
-                           UInt64                 hash_salt,
                            const DMFilePtr &      dmfile,
                            const ColumnDefines &  read_columns,
                            const RowKeyRange &    rowkey_range,
                            const RSOperatorPtr &  filter,
                            const ColumnCachePtr & column_cache_,
                            const IdSetPtr &       read_packs,
-                           size_t                 expected_size = DMFILE_READ_ROWS_THRESHOLD)
+                           size_t                 expected_size             = DMFILE_READ_ROWS_THRESHOLD,
+                           bool                   read_one_pack_every_time_ = false)
         : reader(dmfile,
                  read_columns,
                  // clean read
@@ -33,7 +33,6 @@ public:
                  filter,
                  read_packs,
                  // caches
-                 hash_salt,
                  context.getGlobalContext().getMarkCache(),
                  context.getGlobalContext().getMinMaxIndexCache(),
                  context.getSettingsRef().dt_enable_stable_column_cache,
@@ -41,7 +40,8 @@ public:
                  context.getSettingsRef().min_bytes_to_use_direct_io,
                  context.getSettingsRef().max_read_buffer_size,
                  context.getFileProvider(),
-                 expected_size)
+                 expected_size,
+                 read_one_pack_every_time_)
     {
     }
 

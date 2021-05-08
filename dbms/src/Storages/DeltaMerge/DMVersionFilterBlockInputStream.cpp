@@ -159,6 +159,35 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                 }
             }
 
+            // Let's set effective.
+            effective.resize(rows);
+
+            {
+                UInt8 * effective_pos   = effective.data();
+                size_t  handle_pos      = 0;
+                size_t  next_handle_pos = handle_pos + 1;
+                for (size_t i = 0; i < batch_rows; ++i)
+                {
+                    (*effective_pos)
+                        = compare(rowkey_column->getRowKeyValue(handle_pos), rowkey_column->getRowKeyValue(next_handle_pos)) != 0;
+                    ++effective_pos;
+                    ++handle_pos;
+                    ++next_handle_pos;
+                }
+            }
+
+            {
+                UInt8 * effective_pos = effective.data();
+                UInt8 * filter_pos    = filter.data();
+                for (size_t i = 0; i < batch_rows; ++i)
+                {
+                    (*effective_pos) &= (*filter_pos);
+
+                    ++effective_pos;
+                    ++filter_pos;
+                }
+            }
+
             // Let's set not_clean.
             not_clean.resize(rows);
 
@@ -199,6 +228,32 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                     ++filter_pos;
                 }
             }
+
+            // Let's calculate gc_hint_version
+            gc_hint_version = UINT64_MAX;
+            {
+                UInt8 * filter_pos      = filter.data();
+                size_t  handle_pos      = 0;
+                size_t  next_handle_pos = handle_pos + 1;
+                auto *  version_pos     = const_cast<UInt64 *>(version_col_data->data());
+                auto *  delete_pos      = const_cast<UInt8 *>(delete_col_data->data());
+                for (size_t i = 0; i < batch_rows; ++i)
+                {
+                    if (*filter_pos)
+                        gc_hint_version = std::min(gc_hint_version,
+                                                   calculateRowGcHintVersion(rowkey_column->getRowKeyValue(handle_pos),
+                                                                             *version_pos,
+                                                                             rowkey_column->getRowKeyValue(next_handle_pos),
+                                                                             true,
+                                                                             *delete_pos));
+
+                    ++filter_pos;
+                    ++handle_pos;
+                    ++next_handle_pos;
+                    ++version_pos;
+                    ++delete_pos;
+                }
+            }
         }
         else
         {
@@ -224,6 +279,11 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                 {
                     filter[rows - 1]    = cur_version >= version_limit || !deleted;
                     not_clean[rows - 1] = filter[rows - 1] && deleted;
+                    effective[rows - 1] = filter[rows - 1];
+                    if (filter[rows - 1])
+                        gc_hint_version = std::min(
+                            gc_hint_version,
+                            calculateRowGcHintVersion(cur_handle, cur_version, /* just a placeholder */ cur_handle, false, deleted));
                 }
                 else
                 {
@@ -244,6 +304,10 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                     filter[rows - 1] = cur_version >= version_limit
                         || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
                     not_clean[rows - 1] = filter[rows - 1] && (compare(cur_handle, next_handle) == 0 || deleted);
+                    effective[rows - 1] = filter[rows - 1] && (compare(cur_handle, next_handle) != 0);
+                    if (filter[rows - 1])
+                        gc_hint_version
+                            = std::min(gc_hint_version, calculateRowGcHintVersion(cur_handle, cur_version, next_handle, true, deleted));
                 }
                 else
                 {
@@ -257,6 +321,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
             not_clean_rows += countBytesInFilter(not_clean);
+            effective_num_rows += countBytesInFilter(effective);
         }
 
         ++total_blocks;
