@@ -151,6 +151,7 @@ public:
         BG_MergeDelta,
         BG_Compact,
         BG_Flush,
+        BG_GC,
     };
 
     enum TaskType
@@ -161,6 +162,13 @@ public:
         Compact,
         Flush,
         PlaceIndex,
+    };
+
+    enum TaskRunThread
+    {
+        Thread_BG_Thread_Pool,
+        Thread_FG,
+        Thread_BG_GC,
     };
 
     static std::string toString(ThreadType type)
@@ -183,6 +191,23 @@ public:
             return "BG_Compact";
         case BG_Flush:
             return "BG_Flush";
+        case BG_GC:
+            return "BG_GC";
+        default:
+            return "Unknown";
+        }
+    }
+
+    static std::string toString(TaskRunThread type)
+    {
+        switch (type)
+        {
+        case Thread_BG_Thread_Pool:
+            return "BackgroundThreadPool";
+        case Thread_FG:
+            return "Foreground";
+        case Thread_BG_GC:
+            return "BackgroundGCThread";
         default:
             return "Unknown";
         }
@@ -330,6 +355,8 @@ public:
     bool                isCommonHandle() const { return is_common_handle; }
     size_t              getRowKeyColumnSize() const { return rowkey_column_size; }
 
+    UInt64 onSyncGc(Int64 limit);
+
 public:
     /// Methods mainly used by region split.
 
@@ -354,7 +381,9 @@ private:
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
-    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, const TaskRunThread thread);
+
+    bool updateGCSafePoint();
 
     bool handleBackgroundTask(bool heavy);
 
@@ -404,7 +433,9 @@ private:
 
     MergeDeltaTaskPool background_tasks;
 
-    DB::Timestamp latest_gc_safe_point = 0;
+    std::atomic<DB::Timestamp> latest_gc_safe_point = 0;
+
+    RowKeyValue next_gc_check_key;
 
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
