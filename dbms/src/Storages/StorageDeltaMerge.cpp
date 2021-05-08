@@ -1277,9 +1277,9 @@ DeltaMergeStorePtr& StorageDeltaMerge::getAndMaybeInitStore()
     std::lock_guard<std::mutex> lock(store_mutex);
     if (_store == nullptr)
     {
-        _store = std::make_shared<DeltaMergeStore>(global_context, data_path_contains_database_name, table_column_info->db_name,
-            table_column_info->table_name, std::move(table_column_info->table_column_defines),
-            std::move(table_column_info->handle_column_define), is_common_handle, rowkey_column_size, DeltaMergeStore::Settings());
+        _store = std::make_shared<DeltaMergeStore>(global_context, data_path_contains_database_name, table_column_info->db_name, table_column_info->table_name,
+            std::move(table_column_info->table_column_defines), std::move(table_column_info->handle_column_define), is_common_handle, rowkey_column_size,
+            DeltaMergeStore::Settings());
         table_column_info.reset(nullptr);
         store_inited.store(true, std::memory_order_release);
     }
