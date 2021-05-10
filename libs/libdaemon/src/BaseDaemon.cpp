@@ -723,7 +723,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     // Split log and error log.
     Poco::AutoPtr<SplitterChannel> split = new SplitterChannel;
 
-    auto log_level = normalize(config.getString("logger.level", "trace"));
+    auto log_level = normalize(config.getString("logger.level", "debug"));
     const auto log_path = config.getString("logger.log", "");
     if (!log_path.empty())
     {
