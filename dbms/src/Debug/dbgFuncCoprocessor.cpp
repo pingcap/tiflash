@@ -3,6 +3,7 @@
 #include <Common/typeid_cast.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <DataTypes/FieldToDataType.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
@@ -12,6 +13,8 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Functions/FunctionFactory.h>
+#include <Interpreters/convertFieldToType.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -451,7 +454,148 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
     return executeQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
 }
 
-void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t collator_id)
+void literalToPB(tipb::Expr * expr, const Field & value, uint32_t collator_id)
+{
+    std::stringstream ss;
+    switch (value.getType())
+    {
+        case Field::Types::Which::Null:
+        {
+            expr->set_tp(tipb::Null);
+            auto * ft = expr->mutable_field_type();
+            ft->set_tp(TiDB::TypeNull);
+            ft->set_collate(collator_id);
+            // Null literal expr doesn't need value.
+            break;
+        }
+        case Field::Types::Which::UInt64:
+        {
+            expr->set_tp(tipb::Uint64);
+            auto * ft = expr->mutable_field_type();
+            ft->set_tp(TiDB::TypeLongLong);
+            ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
+            ft->set_collate(collator_id);
+            encodeDAGUInt64(value.get<UInt64>(), ss);
+            break;
+        }
+        case Field::Types::Which::Int64:
+        {
+            expr->set_tp(tipb::Int64);
+            auto * ft = expr->mutable_field_type();
+            ft->set_tp(TiDB::TypeLongLong);
+            ft->set_flag(TiDB::ColumnFlagNotNull);
+            ft->set_collate(collator_id);
+            encodeDAGInt64(value.get<Int64>(), ss);
+            break;
+        }
+        case Field::Types::Which::Float64:
+        {
+            expr->set_tp(tipb::Float64);
+            auto * ft = expr->mutable_field_type();
+            ft->set_tp(TiDB::TypeFloat);
+            ft->set_flag(TiDB::ColumnFlagNotNull);
+            ft->set_collate(collator_id);
+            encodeDAGFloat64(value.get<Float64>(), ss);
+            break;
+        }
+        case Field::Types::Which::Decimal32:
+        case Field::Types::Which::Decimal64:
+        case Field::Types::Which::Decimal128:
+        case Field::Types::Which::Decimal256:
+        {
+            expr->set_tp(tipb::MysqlDecimal);
+            auto * ft = expr->mutable_field_type();
+            ft->set_tp(TiDB::TypeNewDecimal);
+            ft->set_flag(TiDB::ColumnFlagNotNull);
+            ft->set_collate(collator_id);
+            encodeDAGDecimal(value, ss);
+            break;
+        }
+        case Field::Types::Which::String:
+        {
+            expr->set_tp(tipb::String);
+            auto * ft = expr->mutable_field_type();
+            ft->set_tp(TiDB::TypeString);
+            ft->set_flag(TiDB::ColumnFlagNotNull);
+            ft->set_collate(collator_id);
+            // TODO: Align with TiDB.
+            encodeDAGBytes(value.get<String>(), ss);
+            break;
+        }
+        default:
+            throw Exception(String("Unsupported literal type: ") + value.getTypeName(), ErrorCodes::LOGICAL_ERROR);
+    }
+    expr->set_val(ss.str());
+}
+
+String getFunctionNameForConstantFolding(tipb::Expr * expr)
+{
+    switch (expr->sig())
+    {
+        case tipb::ScalarFuncSig::CastStringAsTime:
+            return "toMyDateTimeOrNull";
+        default:
+            return "";
+    }
+}
+
+void foldConstant(tipb::Expr * expr, uint32_t collator_id, const Context & context)
+{
+    if (expr->tp() == tipb::ScalarFunc)
+    {
+        bool all_const = true;
+        for (auto c : expr->children())
+        {
+            if (!isLiteralExpr(c))
+            {
+                all_const = false;
+                break;
+            }
+        }
+        if (!all_const)
+            return;
+        DataTypes arguments_types;
+        ColumnsWithTypeAndName argument_columns;
+        for (auto & c : expr->children())
+        {
+            Field value = decodeLiteral(c);
+            DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
+            DataTypePtr target_type = inferDataType4Literal(c);
+            ColumnWithTypeAndName column;
+            column.column = target_type->createColumnConst(1, convertFieldToType(value, *target_type, flash_type.get()));
+            column.name = exprToString(c, {}) + "_" + target_type->getName();
+            column.type = target_type;
+            arguments_types.emplace_back(target_type);
+            argument_columns.emplace_back(column);
+        }
+        auto func_name = getFunctionNameForConstantFolding(expr);
+        const auto & function_builder_ptr = FunctionFactory::instance().get(func_name, context);
+        auto function_ptr = function_builder_ptr->build(argument_columns);
+        if (function_ptr->isSuitableForConstantFolding())
+        {
+            Block block_with_constants(argument_columns);
+            ColumnNumbers argument_numbers(arguments_types.size());
+            for (size_t i = 0, size = arguments_types.size(); i < size; i++)
+                argument_numbers[i] = i;
+            size_t result_pos = argument_numbers.size();
+            block_with_constants.insert({nullptr, function_ptr->getReturnType(), "result"});
+            function_ptr->execute(block_with_constants, argument_numbers, result_pos);
+            const auto & result_column = block_with_constants.getByPosition(result_pos).column;
+            if (result_column->isColumnConst())
+            {
+                auto updated_value = (*result_column)[0];
+                tipb::FieldType orig_field_type = expr->field_type();
+                expr->Clear();
+                literalToPB(expr, updated_value, collator_id);
+                expr->clear_field_type();
+                auto * field_type = expr->mutable_field_type();
+                (*field_type) = orig_field_type;
+            }
+        }
+    }
+}
+
+void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t collator_id, const Context & context)
 {
     if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
@@ -534,13 +678,13 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
                         for (const auto & c : tuple_func->arguments->children)
                         {
                             tipb::Expr * child = in_expr->add_children();
-                            astToPB(input, c, child, collator_id);
+                            astToPB(input, c, child, collator_id, context);
                         }
                     }
                     else
                     {
                         tipb::Expr * child = in_expr->add_children();
-                        astToPB(input, child_ast, child, collator_id);
+                        astToPB(input, child_ast, child, collator_id, context);
                     }
                 }
                 return;
@@ -556,7 +700,7 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
                 {
                     const auto & child_ast = func->arguments->children[i];
                     tipb::Expr * child = expr->add_children();
-                    astToPB(input, child_ast, child, collator_id);
+                    astToPB(input, child_ast, child, collator_id, context);
                     // todo should infer the return type based on all input types
                     if ((it_sig->second == tipb::ScalarFuncSig::IfInt && i == 1)
                         || (it_sig->second != tipb::ScalarFuncSig::IfInt && i == 0))
@@ -574,7 +718,7 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
                 for (const auto & child_ast : func->arguments->children)
                 {
                     tipb::Expr * child = expr->add_children();
-                    astToPB(input, child_ast, child, collator_id);
+                    astToPB(input, child_ast, child, collator_id, context);
                 }
                 // for like need to add the third argument
                 tipb::Expr * constant_expr = expr->add_children();
@@ -632,81 +776,13 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
         for (const auto & child_ast : func->arguments->children)
         {
             tipb::Expr * child = expr->add_children();
-            astToPB(input, child_ast, child, collator_id);
+            astToPB(input, child_ast, child, collator_id, context);
         }
+        foldConstant(expr, collator_id, context);
     }
     else if (ASTLiteral * lit = typeid_cast<ASTLiteral *>(ast.get()))
     {
-        std::stringstream ss;
-        switch (lit->value.getType())
-        {
-            case Field::Types::Which::Null:
-            {
-                expr->set_tp(tipb::Null);
-                auto * ft = expr->mutable_field_type();
-                ft->set_tp(TiDB::TypeNull);
-                ft->set_collate(collator_id);
-                // Null literal expr doesn't need value.
-                break;
-            }
-            case Field::Types::Which::UInt64:
-            {
-                expr->set_tp(tipb::Uint64);
-                auto * ft = expr->mutable_field_type();
-                ft->set_tp(TiDB::TypeLongLong);
-                ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
-                ft->set_collate(collator_id);
-                encodeDAGUInt64(lit->value.get<UInt64>(), ss);
-                break;
-            }
-            case Field::Types::Which::Int64:
-            {
-                expr->set_tp(tipb::Int64);
-                auto * ft = expr->mutable_field_type();
-                ft->set_tp(TiDB::TypeLongLong);
-                ft->set_flag(TiDB::ColumnFlagNotNull);
-                ft->set_collate(collator_id);
-                encodeDAGInt64(lit->value.get<Int64>(), ss);
-                break;
-            }
-            case Field::Types::Which::Float64:
-            {
-                expr->set_tp(tipb::Float64);
-                auto * ft = expr->mutable_field_type();
-                ft->set_tp(TiDB::TypeFloat);
-                ft->set_flag(TiDB::ColumnFlagNotNull);
-                ft->set_collate(collator_id);
-                encodeDAGFloat64(lit->value.get<Float64>(), ss);
-                break;
-            }
-            case Field::Types::Which::Decimal32:
-            case Field::Types::Which::Decimal64:
-            case Field::Types::Which::Decimal128:
-            case Field::Types::Which::Decimal256:
-            {
-                expr->set_tp(tipb::MysqlDecimal);
-                auto * ft = expr->mutable_field_type();
-                ft->set_tp(TiDB::TypeNewDecimal);
-                ft->set_flag(TiDB::ColumnFlagNotNull);
-                ft->set_collate(collator_id);
-                encodeDAGDecimal(lit->value, ss);
-                break;
-            }
-            case Field::Types::Which::String:
-            {
-                expr->set_tp(tipb::String);
-                auto * ft = expr->mutable_field_type();
-                ft->set_tp(TiDB::TypeString);
-                ft->set_flag(TiDB::ColumnFlagNotNull);
-                ft->set_collate(collator_id);
-                // TODO: Align with TiDB.
-                encodeDAGBytes(lit->value.get<String>(), ss);
-                break;
-            }
-            default:
-                throw Exception(String("Unsupported literal type: ") + lit->value.getTypeName(), ErrorCodes::LOGICAL_ERROR);
-        }
-        expr->set_val(ss.str());
+        literalToPB(expr, lit->value, collator_id);
     }
     else
     {
@@ -809,7 +885,8 @@ struct Executor
     {
         index_++;
     }
-    virtual bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) = 0;
+    virtual bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+        = 0;
     virtual void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties,
         std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map)
     {
@@ -827,7 +904,7 @@ struct ExchangeSender : Executor
         : Executor(index, "exchange_sender_" + std::to_string(index), output), type(type_), partition_keys(partition_keys_)
     {}
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeExchangeSender);
         tipb_executor->set_executor_id(name);
@@ -852,7 +929,7 @@ struct ExchangeSender : Executor
             meta.AppendToString(meta_string);
         }
         auto * child_executor = exchange_sender->mutable_child();
-        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info);
+        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
     }
 };
 
@@ -861,7 +938,7 @@ struct ExchangeReceiver : Executor
     TaskMetas task_metas;
     ExchangeReceiver(size_t & index, const DAGSchema & output) : Executor(index, "exchange_receiver_" + std::to_string(index), output) {}
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context &) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeExchangeReceiver);
         tipb_executor->set_executor_id(name);
@@ -904,7 +981,7 @@ struct TableScan : public Executor
                                 [&](const auto & field) { return used_columns.count(field.first) == 0; }),
             output_schema.end());
     }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const MPPInfo &) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const MPPInfo &, const Context &) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeTableScan);
         tipb_executor->set_executor_id(name);
@@ -943,7 +1020,7 @@ struct Selection : public Executor
     Selection(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> && conditions_)
         : Executor(index_, "selection_" + std::to_string(index_), output_schema_), conditions(std::move(conditions_))
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeSelection);
         tipb_executor->set_executor_id(name);
@@ -951,10 +1028,10 @@ struct Selection : public Executor
         for (auto & expr : conditions)
         {
             tipb::Expr * cond = sel->add_conditions();
-            astToPB(children[0]->output_schema, expr, cond, collator_id);
+            astToPB(children[0]->output_schema, expr, cond, collator_id, context);
         }
         auto * child_executor = sel->mutable_child();
-        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info);
+        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
     }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
@@ -973,7 +1050,7 @@ struct TopN : public Executor
     TopN(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> && order_columns_, size_t limit_)
         : Executor(index_, "topn_" + std::to_string(index_), output_schema_), order_columns(std::move(order_columns_)), limit(limit_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeTopN);
         tipb_executor->set_executor_id(name);
@@ -986,11 +1063,11 @@ struct TopN : public Executor
             tipb::ByItem * by = topn->add_order_by();
             by->set_desc(elem->direction < 0);
             tipb::Expr * expr = by->mutable_expr();
-            astToPB(children[0]->output_schema, elem->children[0], expr, collator_id);
+            astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
         }
         topn->set_limit(limit);
         auto * child_executor = topn->mutable_child();
-        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info);
+        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
     }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
@@ -1008,14 +1085,14 @@ struct Limit : public Executor
     Limit(size_t & index_, const DAGSchema & output_schema_, size_t limit_)
         : Executor(index_, "limit_" + std::to_string(index_), output_schema_), limit(limit_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeLimit);
         tipb_executor->set_executor_id(name);
         tipb::Limit * lt = tipb_executor->mutable_limit();
         lt->set_limit(limit);
         auto * child_executor = lt->mutable_child();
-        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info);
+        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
     }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
@@ -1041,7 +1118,7 @@ struct Aggregation : public Executor
           gby_exprs(std::move(gby_exprs_)),
           is_final_mode(is_final_mode_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeAggregation);
         tipb_executor->set_executor_id(name);
@@ -1058,7 +1135,7 @@ struct Aggregation : public Executor
             for (const auto & arg : func->arguments->children)
             {
                 tipb::Expr * arg_expr = agg_func->add_children();
-                astToPB(input_schema, arg, arg_expr, collator_id);
+                astToPB(input_schema, arg, arg_expr, collator_id, context);
             }
 
             if (func->name == "count")
@@ -1110,11 +1187,11 @@ struct Aggregation : public Executor
         for (const auto & child : gby_exprs)
         {
             tipb::Expr * gby = agg->add_group_by();
-            astToPB(input_schema, child, gby, collator_id);
+            astToPB(input_schema, child, gby, collator_id, context);
         }
 
         auto * child_executor = agg->mutable_child();
-        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info);
+        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
     }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
@@ -1196,7 +1273,7 @@ struct Project : public Executor
     Project(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> && exprs_)
         : Executor(index_, "project_" + std::to_string(index_), output_schema_), exprs(std::move(exprs_))
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeProjection);
         tipb_executor->set_executor_id(name);
@@ -1220,10 +1297,10 @@ struct Project : public Executor
                 continue;
             }
             tipb::Expr * expr = proj->add_exprs();
-            astToPB(input_schema, child, expr, collator_id);
+            astToPB(input_schema, child, expr, collator_id, context);
         }
         auto * children_executor = proj->mutable_child();
-        return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info);
+        return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
     }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
@@ -1356,7 +1433,7 @@ struct Join : Executor
             }
         }
     }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeJoin);
         tipb_executor->set_executor_id(name);
@@ -1383,9 +1460,9 @@ struct Join : Executor
             fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_build_types(), collator_id);
         }
         auto * left_child_executor = join->add_children();
-        children[0]->toTiPBExecutor(left_child_executor, collator_id, mpp_info);
+        children[0]->toTiPBExecutor(left_child_executor, collator_id, mpp_info, context);
         auto * right_child_executor = join->add_children();
-        return children[1]->toTiPBExecutor(right_child_executor, collator_id, mpp_info);
+        return children[1]->toTiPBExecutor(right_child_executor, collator_id, mpp_info, context);
     }
     void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties,
         std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override
@@ -1833,7 +1910,7 @@ struct QueryFragment
           task_ids(std::move(task_ids_))
     {}
 
-    QueryTask toQueryTask(const DAGProperties & properties, MPPInfo & mpp_info)
+    QueryTask toQueryTask(const DAGProperties & properties, MPPInfo & mpp_info, const Context & context)
     {
         std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
         tipb::DAGRequest & dag_request = *dag_request_ptr;
@@ -1858,12 +1935,12 @@ struct QueryFragment
         for (size_t i = 0; i < root_executor->output_schema.size(); i++)
             dag_request.add_output_offsets(i);
         auto * root_tipb_executor = dag_request.mutable_root_executor();
-        root_executor->toTiPBExecutor(root_tipb_executor, properties.collator, mpp_info);
+        root_executor->toTiPBExecutor(root_tipb_executor, properties.collator, mpp_info, context);
         return QueryTask(dag_request_ptr, table_id, root_executor->output_schema,
             mpp_info.sender_target_task_ids.size() == 0 ? DAG : MPP_DISPATCH, mpp_info.task_id, mpp_info.partition_id, is_top_fragment);
     }
 
-    QueryTasks toQueryTasks(const DAGProperties & properties)
+    QueryTasks toQueryTasks(const DAGProperties & properties, const Context & context)
     {
         QueryTasks ret;
         if (properties.is_mpp_query)
@@ -1872,13 +1949,13 @@ struct QueryFragment
             {
                 MPPInfo mpp_info(
                     properties.start_ts, partition_id, task_ids[partition_id], sender_target_task_ids, receiver_source_task_ids_map);
-                ret.push_back(toQueryTask(properties, mpp_info));
+                ret.push_back(toQueryTask(properties, mpp_info, context));
             }
         }
         else
         {
             MPPInfo mpp_info(properties.start_ts, -1, -1, {}, {});
-            ret.push_back(toQueryTask(properties, mpp_info));
+            ret.push_back(toQueryTask(properties, mpp_info, context));
         }
         return ret;
     }
@@ -1966,13 +2043,14 @@ QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, Execu
     }
 }
 
-QueryTasks queryPlanToQueryTasks(const DAGProperties & properties, ExecutorPtr root_executor, size_t & executor_index)
+QueryTasks queryPlanToQueryTasks(
+    const DAGProperties & properties, ExecutorPtr root_executor, size_t & executor_index, const Context & context)
 {
     QueryFragments fragments = queryPlanToQueryFragments(properties, root_executor, executor_index);
     QueryTasks tasks;
     for (auto & fragment : fragments)
     {
-        auto t = fragment.toQueryTasks(properties);
+        auto t = fragment.toQueryTasks(properties, context);
         tasks.insert(tasks.end(), t.begin(), t.end());
     }
     return tasks;
@@ -2201,7 +2279,7 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
         used_columns.emplace(schema.first);
     root_executor->columnPrune(used_columns);
 
-    return std::make_tuple(queryPlanToQueryTasks(properties, root_executor, executor_index), func_wrap_output_stream);
+    return std::make_tuple(queryPlanToQueryTasks(properties, root_executor, executor_index, context), func_wrap_output_stream);
 }
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
