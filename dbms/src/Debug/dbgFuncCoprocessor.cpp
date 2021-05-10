@@ -530,6 +530,7 @@ void literalToPB(tipb::Expr * expr, const Field & value, uint32_t collator_id)
 
 String getFunctionNameForConstantFolding(tipb::Expr * expr)
 {
+    // todo support more function for constant folding
     switch (expr->sig())
     {
         case tipb::ScalarFuncSig::CastStringAsTime:
@@ -569,6 +570,8 @@ void foldConstant(tipb::Expr * expr, uint32_t collator_id, const Context & conte
             argument_columns.emplace_back(column);
         }
         auto func_name = getFunctionNameForConstantFolding(expr);
+        if (func_name.empty())
+            return;
         const auto & function_builder_ptr = FunctionFactory::instance().get(func_name, context);
         auto function_ptr = function_builder_ptr->build(argument_columns);
         if (function_ptr->isSuitableForConstantFolding())
