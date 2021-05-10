@@ -1297,4 +1297,50 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
     }
     return _store;
 }
+
+bool StorageDeltaMerge::initStoreIfDataDirExist()
+{
+    if (shutdown_called.load(std::memory_order_relaxed) || isTombstone())
+    {
+        return false;
+    }
+    // If store is inited, we don't need to check data dir.
+    if (store_inited.load(std::memory_order_relaxed))
+    {
+        return true;
+    }
+    if (!dataDirExist())
+    {
+        return false;
+    }
+    getAndMaybeInitStore();
+    return true;
+}
+
+bool StorageDeltaMerge::dataDirExist() 
+{
+    String db_name, table_name;
+    {
+        std::lock_guard<std::mutex> lock(store_mutex);
+        // store is inited
+        if (table_column_info == nullptr)
+        {
+            return true;
+        }
+        db_name = table_column_info->db_name;
+        table_name = table_column_info->db_name;
+    }
+
+    auto path_pool = global_context.getPathPool().withTable(db_name, table_name, data_path_contains_database_name);
+    auto path_delegate = path_pool.getStableDiskDelegator();
+    for (const auto & root_path : path_delegate.listPaths())
+    {
+        int r = ::access(root_path.c_str(), F_OK);
+        if (r == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
 } // namespace DB
