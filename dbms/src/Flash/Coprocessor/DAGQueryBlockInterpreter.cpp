@@ -249,6 +249,10 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop mode.
     if (!region_retry.empty())
     {
+        for (auto it : region_retry)
+        {
+            context.getQueryContext().getDAGContext()->retry_regions.push_back(it.second);
+        }
         LOG_DEBUG(log, ({
             std::stringstream ss;
             ss << "Start to retry " << region_retry.size() << " regions (";
