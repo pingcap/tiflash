@@ -10,6 +10,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+extern const int TABLE_IS_DROPPED;
 }
 
 static const std::string RegionDataMoverName = "RegionDataMover";
@@ -112,7 +113,7 @@ void tryOptimizeStorageFinal(Context & context, TableID table_id)
 
     try
     {
-        auto table_lock = managed_storage->lockStructure(true, __PRETTY_FUNCTION__);
+        auto table_lock = managed_storage->lockStructureForShare(RWLock::NO_QUERY);
     }
     catch (DB::Exception & e)
     {

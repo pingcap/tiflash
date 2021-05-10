@@ -166,15 +166,11 @@ private:
 
         Float64 filter_rate = (Float64)(after_read_packs - after_filter) * 100 / after_read_packs;
         LOG_DEBUG(log,
-                  "RSFilter exclude rate is nan, after_pk: " << after_pk << ", after_read_packs: " << after_read_packs << ", after_filter: "
-                                                             << after_filter << ", handle_range: " << rowkey_range.toDebugString()
-                                                             << ", read_packs: " << ((!read_packs) ? 0 : read_packs->size())
-                                                             << ", pack_count: " << pack_count);
-
-        if (isnan(filter_rate))
-            LOG_DEBUG(log, "RSFilter exclude rate: nan");
-        else
-            LOG_DEBUG(log, "RSFilter exclude rate: " << DB::toString(filter_rate, 2));
+                  "RSFilter exclude rate: " << ((after_read_packs == 0) ? "nan" : DB::toString(filter_rate, 2))
+                                            << ", after_pk: " << after_pk << ", after_read_packs: " << after_read_packs
+                                            << ", after_filter: " << after_filter << ", handle_range: " << rowkey_range.toDebugString()
+                                            << ", read_packs: " << ((!read_packs) ? 0 : read_packs->size())
+                                            << ", pack_count: " << pack_count);
     }
 
     friend class DMFileReader;
@@ -184,7 +180,6 @@ private:
                           const DMFilePtr &           dmfile,
                           const FileProviderPtr &     file_provider,
                           const MinMaxIndexCachePtr & index_cache,
-                          UInt64                      hash_salt,
                           ColId                       col_id)
     {
         auto &     type           = dmfile->getColumnStat(col_id).type;
@@ -202,8 +197,7 @@ private:
         MinMaxIndexPtr minmax_index;
         if (index_cache)
         {
-            auto key     = MinMaxIndexCache::hash(dmfile->colIndexCacheKey(file_name_base), hash_salt);
-            minmax_index = index_cache->getOrSet(key, load);
+            minmax_index = index_cache->getOrSet(dmfile->colIndexCacheKey(file_name_base), load);
         }
         else
         {
@@ -220,7 +214,7 @@ private:
         if (!dmfile->isColIndexExist(col_id))
             return;
 
-        loadIndex(param.indexes, dmfile, file_provider, index_cache, hash_salt, col_id);
+        loadIndex(param.indexes, dmfile, file_provider, index_cache, col_id);
     }
 
 private:

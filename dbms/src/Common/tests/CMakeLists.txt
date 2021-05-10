@@ -80,3 +80,6 @@ target_link_libraries(decimal_test_decimal_type clickhouse_common_io gtest_main)
 
 add_executable(mytime_test gtest_mytime.cpp)
 target_link_libraries(mytime_test clickhouse_common_io clickhouse_functions gtest_main)
+
+add_executable(rw_lock_test gtest_rw_lock.cpp)
+target_link_libraries(rw_lock_test clickhouse_common_io clickhouse_functions gtest_main)

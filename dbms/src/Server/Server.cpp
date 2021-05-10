@@ -100,6 +100,10 @@ extern const int ARGUMENT_OUT_OF_BOUND;
 extern const int INVALID_CONFIG_PARAMETER;
 } // namespace ErrorCodes
 
+namespace Debug
+{
+extern void setServiceAddr(const std::string & addr);
+}
 
 static std::string getCanonicalPath(std::string path)
 {
@@ -342,6 +346,31 @@ private:
     pthread_t thread;
     Logger * log;
 };
+
+// We only need this task run once.
+void backgroundInitStores(Context& global_context, Logger* log)
+{
+    auto initStores = [&global_context, log] ()
+    {
+        auto storages = global_context.getTMTContext().getStorages().getAllStorage();
+        int init_cnt = 0;
+        int err_cnt = 0;
+        for (auto& pa : storages)
+        {
+            try 
+            {
+                init_cnt += pa.second->initStoreIfDataDirExist() ? 1 : 0;
+            }
+            catch(Poco::Exception& e)
+            {
+                err_cnt++;
+                LOG_ERROR(log, "initStoreIfDataDirExist fail: " << e.displayText());
+            }
+        }
+        LOG_INFO(log, "Storage total count " << storages.size() << " init count " << init_cnt << " error count " << err_cnt);
+    };
+    std::thread(initStores).detach();
+}
 
 int Server::main(const std::vector<std::string> & /*args*/)
 {
@@ -748,7 +777,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
     LOG_DEBUG(log, "Sync schemas done.");
-
+    
+    backgroundInitStores(*global_context, log);
+    
     // After schema synced, set current database.
     global_context->setCurrentDatabase(default_database);
 
@@ -808,6 +839,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         builder.SetMaxSendMessageSize(-1);
         flash_grpc_server = builder.BuildAndStart();
         LOG_INFO(log, "Flash grpc server listening on [" << raft_config.flash_server_addr << "]");
+        Debug::setServiceAddr(raft_config.flash_server_addr);
     }
 
     SCOPE_EXIT({

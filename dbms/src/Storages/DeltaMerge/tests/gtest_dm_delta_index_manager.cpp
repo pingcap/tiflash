@@ -1,6 +1,5 @@
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
-#include <gtest/gtest.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
