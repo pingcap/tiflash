@@ -47,23 +47,29 @@ std::unordered_map<UInt32, std::vector<String>> & DAGContext::getQBIdToJoinAlias
 
 void DAGContext::handleTruncateError(const String & msg)
 {
-    // todo record warnings
     if (!(flags & Flag::IGNORE_TRUNCATE || flags & Flag::TRUNCATE_AS_WARNING))
     {
-        throw Exception("Truncate error " + msg, ErrorCodes::TRUNCATE_ERROR);
+        throw TiFlashException("Truncate error " + msg, Errors::Types::Truncated);
     }
+    tipb::Error warning;
+    warning.set_code(0);
+    warning.set_msg(msg);
+    appendWarning(warning);
 }
 
-void DAGContext::handleOverflowError(const String & msg)
+void DAGContext::handleOverflowError(const String & msg, const TiFlashError & error)
 {
-    // todo record warnings
     if (!(flags & Flag::OVERFLOW_AS_WARNING))
     {
-        throw Exception("Overflow error " + msg, ErrorCodes::OVERFLOW_ERROR);
+        throw TiFlashException("Overflow error: " + msg, error);
     }
+    tipb::Error warning;
+    warning.set_code(0);
+    warning.set_msg("Overflow error: " + msg);
+    appendWarning(warning);
 }
 
-void DAGContext::handleDivisionByZero(const String & msg)
+void DAGContext::handleDivisionByZero()
 {
     if (flags & Flag::IN_INSERT_STMT || flags & Flag::IN_UPDATE_OR_DELETE_STMT)
     {
@@ -71,17 +77,25 @@ void DAGContext::handleDivisionByZero(const String & msg)
             return;
         if (strictSqlMode(sql_mode) && !(flags & Flag::DIVIDED_BY_ZERO_AS_WARNING))
         {
-            throw Exception("divided by zero " + msg, ErrorCodes::DIVIDED_BY_ZERO);
+            throw TiFlashException("Division by 0", Errors::Expression::DivisionByZero);
         }
     }
-    // todo record warnings
+    tipb::Error warning;
+    warning.set_code(0);
+    warning.set_msg("Division by 0");
+    appendWarning(warning);
 }
 
-void DAGContext::handleInvalidTime(const String & msg)
+void DAGContext::handleInvalidTime(const String & msg, const TiFlashError & error)
 {
+    if (error.is(Errors::Types::WrongValue) || error.is(Errors::Types::Truncated))
+    {
+        throw TiFlashException(msg, error);
+    }
+    handleTruncateError(msg);
     if (strictSqlMode(sql_mode) && (flags & Flag::IN_INSERT_STMT || flags & Flag::IN_UPDATE_OR_DELETE_STMT))
     {
-        throw Exception("invalid time error" + msg, ErrorCodes::INVALID_TIME);
+        throw TiFlashException(msg, error);
     }
 }
 
