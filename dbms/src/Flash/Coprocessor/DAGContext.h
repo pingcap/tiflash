@@ -33,7 +33,7 @@ public:
           is_root_mpp_task(false),
           flags(dag_request.flags()),
           sql_mode(dag_request.sql_mode()),
-          _warnings(std::numeric_limits<size_t>::max()){};
+          _warnings(std::numeric_limits<int>::max()){};
     explicit DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_)
         : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries()),
           return_executor_id(true),
@@ -41,7 +41,7 @@ public:
           flags(dag_request.flags()),
           sql_mode(dag_request.sql_mode()),
           mpp_task_meta(meta_),
-          _warnings(std::numeric_limits<size_t>::max())
+          _warnings(std::numeric_limits<int>::max())
     {
         exchange_sender_executor_id = dag_request.root_executor().executor_id();
         const auto & exchangeSender = dag_request.root_executor().exchange_sender();
