@@ -296,7 +296,6 @@ try
         {
             path.remove(true);
         }
-        std::cout << "TemporaryPath " << path_name << std::endl;
 
         // primary_expr_ast
         ASTPtr       astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));

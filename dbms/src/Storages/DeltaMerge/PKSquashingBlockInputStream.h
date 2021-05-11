@@ -11,14 +11,15 @@ namespace DM
 {
 
 /// Reorganize the boundary of blocks. The rows with the same primary key(s) will be squashed
-/// into the same block. The output block is sorted by increasing pk && version.
-/// Note that child must be a sorted input stream with increasing pk ( && version). If you are
-/// not sure the child stream is sorted with increasing pk, set `need_extra_sort` to be `true`.
+/// into the same output block. The output blocks are sorted by increasing pk && version.
+/// Note that the `child` must be a sorted input stream with increasing pk && version. If you are
+/// not sure the child stream is sorted with increasing pk && version, set `need_extra_sort` to
+/// be `true`.
 template <bool need_extra_sort>
-class ReorganizeBlockInputStream final : public IBlockInputStream
+class PKSquashingBlockInputStream final : public IBlockInputStream
 {
 public:
-    ReorganizeBlockInputStream(BlockInputStreamPtr child, ColId pk_column_id_, bool is_common_handle_)
+    PKSquashingBlockInputStream(BlockInputStreamPtr child, ColId pk_column_id_, bool is_common_handle_)
         : sorted_input_stream(child),
           pk_column_id(pk_column_id_),
           sort{need_extra_sort ? SortDescription{SortColumnDescription{EXTRA_HANDLE_COLUMN_NAME, 1, 0},

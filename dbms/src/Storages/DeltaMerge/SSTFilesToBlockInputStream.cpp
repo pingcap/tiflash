@@ -6,7 +6,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
-#include <Storages/DeltaMerge/ReorganizeBlockInputStream.h>
+#include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/ProxyFFI.h>
@@ -193,7 +193,7 @@ BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
 {
     // Initlize `mvcc_compact_stream`
     // First refine the boundary of blocks
-    auto stream = std::make_shared<ReorganizeBlockInputStream</*need_extra_sort=*/true>>(_raw_child, pk_column_id, is_common_handle);
+    auto stream = std::make_shared<PKSquashingBlockInputStream</*need_extra_sort=*/true>>(_raw_child, pk_column_id, is_common_handle);
     mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         stream, *(_raw_child->schema_snap), gc_safepoint, is_common_handle);
 }
