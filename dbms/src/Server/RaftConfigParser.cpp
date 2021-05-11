@@ -98,7 +98,7 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
 
     if (config.has("raft.snapshot.method"))
     {
-        String snapshot_method = config.getString("raft.snapshot.method");
+        String snapshot_method = config.getString("raft.snapshot.method", "file1");
         std::transform(snapshot_method.begin(), snapshot_method.end(), snapshot_method.begin(), [](char ch) { return std::tolower(ch); });
         if (snapshot_method == "block")
         {
@@ -108,9 +108,15 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         {
             res.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Directory;
         }
+#if 0
         else if (snapshot_method == "file2")
         {
             res.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
+        }
+#endif
+        else
+        {
+            throw Exception("Illegal arguments: unknown snapshot apply method: " + snapshot_method, ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
     }
     switch (res.snapshot_apply_method)
