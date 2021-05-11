@@ -8,8 +8,8 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Storages/Transaction/TiDB.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
@@ -65,7 +65,11 @@ public:
     void handleInvalidTime(const String & msg, const TiFlashError & error);
     bool shouldClipToZero();
     /// This method is thread-safe.
-    void appendWarning(const tipb::Error & warning) { _warnings.push(warning); }
+    void appendWarning(const tipb::Error & warning)
+    {
+        if (!_warnings.tryPush(warning))
+            throw TiFlashException("Too many warnings, exceeds limit of 2147483647", Errors::Coprocessor::Internal);
+    }
     /// Consume all warnings. Once this method called, every warning will be cleared.
     /// This method is not thread-safe.
     void consumeWarnings(std::vector<tipb::Error> & warnings)
