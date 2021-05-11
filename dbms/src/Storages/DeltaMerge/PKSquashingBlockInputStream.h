@@ -32,7 +32,7 @@ public:
         children.push_back(child);
     }
 
-    String getName() const override { return "ReorganizeBlockBoundary"; }
+    String getName() const override { return "PKSquashing"; }
     Block  getHeader() const override { return sorted_input_stream->getHeader(); }
 
     void readPrefix() override
