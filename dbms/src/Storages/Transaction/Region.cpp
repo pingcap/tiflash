@@ -523,7 +523,7 @@ void Region::doCompactionFilter(const Timestamp safe_point)
     auto & default_map = data.defaultCF().getDataMut();
     for (auto write_map_it = write_map.begin(); write_map_it != write_map.end();)
     {
-        [[maybe_unused]] const auto & [key, value, decoded_val] = write_map_it->second;
+        const auto & [key, value, decoded_val] = write_map_it->second;
         const auto & [pk, ts] = write_map_it->first;
 
         if (decoded_val.write_type == RecordKVFormat::CFModifyFlag::PutFlag)
@@ -542,8 +542,8 @@ void Region::doCompactionFilter(const Timestamp safe_point)
                     else
                     {
                         LOG_ERROR(log,
-                            __FUNCTION__ << "Raw TiDB PK: " << pk.toDebugString() << "Commit ts: " << ts
-                                         << ", Prewrite ts: " << std::to_string(decoded_val.prewrite_ts)
+                            __FUNCTION__ << "Raw TiDB PK: " << pk.toDebugString() << "Commit ts: " << ts << ", Prewrite ts: "
+                                         << std::to_string(decoded_val.prewrite_ts) << ", value: " << value->toDebugString()
                                          << ", no matched key in default cf: " << key->toDebugString());
                         throw Exception(std::string(__FUNCTION__) + ": illegal behaviour, check log for detail", ErrorCodes::LOGICAL_ERROR);
                     }
@@ -559,8 +559,11 @@ void Region::doCompactionFilter(const Timestamp safe_point)
     }
     for (auto data_it = default_map.begin(); data_it != default_map.end();)
     {
-        [[maybe_unused]] const auto & [pk, ts] = data_it->first;
+        const auto & [pk, ts] = data_it->first;
         const auto & matched = std::get<2>(data_it->second);
+
+        std::ignore = pk;
+
         if (!matched)
         {
             if (ts < safe_point)
