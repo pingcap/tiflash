@@ -1,6 +1,7 @@
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
+#include <Interpreters/sortBlock.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
@@ -9,13 +10,21 @@ namespace DB
 namespace DM
 {
 
-/// Reorganize the boundary of blocks.
-/// Note that child must be a sorted input stream with increasing pk column.
+/// Reorganize the boundary of blocks. The rows with the same primary key(s) will be squashed
+/// into the same block. The output block is sorted by increasing pk && version.
+/// Note that child must be a sorted input stream with increasing pk ( && version). If you are
+/// not sure the child stream is sorted with increasing pk, set `need_extra_sort` to be `true`.
+template <bool need_extra_sort>
 class ReorganizeBlockInputStream final : public IBlockInputStream
 {
 public:
     ReorganizeBlockInputStream(BlockInputStreamPtr child, ColId pk_column_id_, bool is_common_handle_)
-        : sorted_input_stream(child), pk_column_id(pk_column_id_), is_common_handle(is_common_handle_)
+        : sorted_input_stream(child),
+          pk_column_id(pk_column_id_),
+          sort{need_extra_sort ? SortDescription{SortColumnDescription{EXTRA_HANDLE_COLUMN_NAME, 1, 0},
+                                                 SortColumnDescription{VERSION_COLUMN_NAME, 1, 0}}
+                               : SortDescription{}},
+          is_common_handle(is_common_handle_)
     {
         assert(sorted_input_stream != nullptr);
         cur_block = {};
@@ -51,7 +60,7 @@ public:
 
         cur_block = next_block;
         if (!cur_block)
-            return cur_block;
+            return finializeBlock(std::move(cur_block));
 
         while (true)
         {
@@ -68,7 +77,7 @@ public:
             const size_t cut_offset = findCutOffsetInNextBlock(cur_block, next_block, pk_column_id, is_common_handle);
             if (unlikely(cut_offset == 0))
                 // There is no pk overlap between `cur_block` and `next_block`, or `next_block` is empty, just return `cur_block`.
-                return cur_block;
+                return finializeBlock(std::move(cur_block));
             else
             {
                 const size_t next_block_nrows = next_block.rows();
@@ -93,7 +102,7 @@ public:
                 if (cut_offset != next_block_nrows)
                 {
                     // We merge some rows to `cur_block`, return it.
-                    return cur_block;
+                    return finializeBlock(std::move(cur_block));
                 }
                 // else we merge all rows from `next_block` to `cur_block`, continue to check if we should merge more blocks.
             }
@@ -132,15 +141,27 @@ private:
         return cut_offset;
     }
 
+    Block finializeBlock(Block && block)
+    {
+        if constexpr (need_extra_sort)
+        {
+            // Sort by handle & version in ascending order.
+            if (block.rows() > 1 && !isAlreadySorted(block, sort))
+                stableSortBlock(block, sort);
+        }
+        return block;
+    }
+
 private:
     BlockInputStreamPtr sorted_input_stream;
     const ColId         pk_column_id;
+    SortDescription     sort;
 
     Block cur_block;
     Block next_block;
 
-    bool first_read = true;
-    bool is_common_handle;
+    bool       first_read = true;
+    const bool is_common_handle;
 };
 
 } // namespace DM

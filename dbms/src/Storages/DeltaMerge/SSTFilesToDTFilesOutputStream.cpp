@@ -146,9 +146,23 @@ void SSTFilesToDTFilesOutputStream::write()
             SortDescription sort;
             sort.emplace_back(MutableSupport::tidb_pk_column_name, 1, 0);
             sort.emplace_back(MutableSupport::version_column_name, 1, 0);
-            if (block.rows() > 1 && !isAlreadySorted(block, sort))
-                throw Exception("The block decoded from SSTFile is not sorted by primary key and version [region="
-                                + child->getRegion()->toString(true) + "]");
+            if (unlikely(block.rows() > 1 && !isAlreadySorted(block, sort)))
+            {
+                const String error_msg
+                    = "The block decoded from SSTFile is not sorted by primary key and version " + child->getRegion()->toString(true);
+                LOG_ERROR(log, error_msg);
+                FieldVisitorToString visitor;
+                const size_t         nrows = block.rows();
+                for (size_t i = 0; i < nrows; ++i)
+                {
+                    const auto & pk_col  = block.getByName(MutableSupport::tidb_pk_column_name);
+                    const auto & ver_col = block.getByName(MutableSupport::version_column_name);
+                    LOG_ERROR(log,
+                              "[Row=" << i << "/" << nrows << "] [pk=" << applyVisitor(visitor, (*pk_col.column)[i])
+                                      << "] [ver=" << applyVisitor(visitor, (*ver_col.column)[i]) << "]");
+                }
+                throw Exception(error_msg);
+            }
         }
 
         // Write block to the output stream
