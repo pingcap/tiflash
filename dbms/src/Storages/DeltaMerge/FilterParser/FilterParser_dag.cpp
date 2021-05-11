@@ -135,7 +135,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
                                                  + ") is not supported",
                                              false);
                 // convert literal value from timezone specified in cop request to UTC
-                if (literal_type == TiDB::TypeDatetime)
+                if (literal_type == TiDB::TypeDatetime && !timezone_info.is_utc_timezone)
                 {
                     static const auto & time_zone_utc = DateLUT::instance("UTC");
                     UInt64              from_time     = value.get<UInt64>();
