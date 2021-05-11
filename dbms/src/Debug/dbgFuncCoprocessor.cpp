@@ -56,7 +56,6 @@ static const String MPP_QUERY = "mpp_query";
 static const String USE_BROADCAST_JOIN = "use_broadcast_join";
 static const String MPP_PARTITION_NUM = "mpp_partition_num";
 static const String MPP_TIMEOUT = "mpp_timeout";
-static const String CONVERT_LITERAL_TO_DATETIME = "datetime_literal";
 static String LOCAL_HOST = "127.0.0.1:3930";
 
 namespace Debug
@@ -75,7 +74,6 @@ struct DAGProperties
     Int32 mpp_partition_num = 1;
     Timestamp start_ts = DEFAULT_MAX_READ_TSO;
     Int32 mpp_timeout = 10;
-    bool convert_literal_to_datetime = false;
 };
 
 std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
@@ -278,8 +276,6 @@ DAGProperties getDAGProperties(String prop_string)
         ret.mpp_partition_num = std::stoi(properties[MPP_PARTITION_NUM]);
     if (properties.find(MPP_TIMEOUT) != properties.end())
         ret.mpp_timeout = std::stoi(properties[MPP_TIMEOUT]);
-    if (properties.find(CONVERT_LITERAL_TO_DATETIME) != properties.end())
-        ret.convert_literal_to_datetime = properties[CONVERT_LITERAL_TO_DATETIME] == "true";
 
     return ret;
 }
@@ -944,11 +940,8 @@ struct TableScan : public Executor
 struct Selection : public Executor
 {
     std::vector<ASTPtr> conditions;
-    bool convert_literal_to_datetime = false;
-    Selection(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> && conditions_, bool convert_literal_to_datetime_)
-        : Executor(index_, "selection_" + std::to_string(index_), output_schema_),
-          conditions(std::move(conditions_)),
-          convert_literal_to_datetime(convert_literal_to_datetime_)
+    Selection(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> && conditions_)
+        : Executor(index_, "selection_" + std::to_string(index_), output_schema_), conditions(std::move(conditions_))
     {}
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
     {
@@ -959,8 +952,6 @@ struct Selection : public Executor
         {
             tipb::Expr * cond = sel->add_conditions();
             astToPB(children[0]->output_schema, expr, cond, collator_id);
-            if (convert_literal_to_datetime)
-                convertStringLiteralToDatetime(cond);
         }
         auto * child_executor = sel->mutable_child();
         return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info);
@@ -972,26 +963,6 @@ struct Selection : public Executor
         children[0]->columnPrune(used_columns);
         /// update output schema after column prune
         output_schema = children[0]->output_schema;
-    }
-    void convertStringLiteralToDatetime(tipb::Expr * expr)
-    {
-        if (expr->tp() == tipb::String)
-        {
-            const auto & value = expr->val();
-            expr->set_tp(tipb::MysqlTime);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeDatetime);
-            std::stringstream ss;
-            encodeDAGUInt64(parseMyDateTime(value, 5).get<UInt64>(), ss);
-            expr->set_val(ss.str());
-        }
-        else
-        {
-            for (tipb::Expr & child : *(expr->mutable_children()))
-            {
-                convertStringLiteralToDatetime(&child);
-            }
-        }
     }
 };
 
@@ -1671,12 +1642,11 @@ ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, St
     return std::make_shared<mock::TableScan>(executor_index, ts_output, table_info);
 }
 
-ExecutorPtr compileSelection(ExecutorPtr input, size_t & executor_index, ASTPtr filter, bool convert_literal_to_datetime)
+ExecutorPtr compileSelection(ExecutorPtr input, size_t & executor_index, ASTPtr filter)
 {
     std::vector<ASTPtr> conditions;
     compileFilter(input->output_schema, filter, conditions);
-    auto selection
-        = std::make_shared<mock::Selection>(executor_index, input->output_schema, std::move(conditions), convert_literal_to_datetime);
+    auto selection = std::make_shared<mock::Selection>(executor_index, input->output_schema, std::move(conditions));
     selection->children.push_back(input);
     return selection;
 }
@@ -2152,7 +2122,7 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
     /// Filter.
     if (ast_query.where_expression)
     {
-        root_executor = compileSelection(root_executor, executor_index, ast_query.where_expression, properties.convert_literal_to_datetime);
+        root_executor = compileSelection(root_executor, executor_index, ast_query.where_expression);
     }
 
     /// TopN.
