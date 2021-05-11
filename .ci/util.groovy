@@ -23,7 +23,7 @@ def checkoutTiCS(commit, pullId) {
 }
 
 def runClosure(label, Closure body) {
-    podTemplate(cloud: 'schrodinger', name: label, label: label, instanceCap: 15, containers: [
+    podTemplate(name: label, label: label, instanceCap: 15, containers: [
             containerTemplate(name: 'dockerd', image: 'docker:18.09.6-dind', privileged: true,
                     resourceRequestCpu: '5000m', resourceRequestMemory: '10Gi',
                     resourceLimitCpu: '16000m', resourceLimitMemory: '32Gi'),
