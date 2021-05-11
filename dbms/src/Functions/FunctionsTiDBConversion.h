@@ -1421,7 +1421,7 @@ inline bool getDatetime(const Int64 & num, MyDateTime & result, DAGContext * ctx
     UInt64 minute = hms / 100;
     UInt64 second = hms % 100;
 
-    if (fromDateTimeChecked(year, month, day, hour, minute, second, 0, result))
+    if (toCoreTimeChecked(year, month, day, hour, minute, second, 0, result))
     {
         throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
     }
