@@ -22,9 +22,6 @@ public:
     PKSquashingBlockInputStream(BlockInputStreamPtr child, ColId pk_column_id_, bool is_common_handle_)
         : sorted_input_stream(child),
           pk_column_id(pk_column_id_),
-          sort{need_extra_sort ? SortDescription{SortColumnDescription{EXTRA_HANDLE_COLUMN_NAME, 1, 0},
-                                                 SortColumnDescription{VERSION_COLUMN_NAME, 1, 0}}
-                               : SortDescription{}},
           is_common_handle(is_common_handle_)
     {
         assert(sorted_input_stream != nullptr);
@@ -142,11 +139,13 @@ private:
         return cut_offset;
     }
 
-    Block finializeBlock(Block && block)
+    static Block finializeBlock(Block && block)
     {
         if constexpr (need_extra_sort)
         {
             // Sort by handle & version in ascending order.
+            static SortDescription sort{SortColumnDescription{EXTRA_HANDLE_COLUMN_NAME, 1, 0},
+                                        SortColumnDescription{VERSION_COLUMN_NAME, 1, 0}};
             if (block.rows() > 1 && !isAlreadySorted(block, sort))
                 stableSortBlock(block, sort);
         }
@@ -156,7 +155,6 @@ private:
 private:
     BlockInputStreamPtr sorted_input_stream;
     const ColId         pk_column_id;
-    SortDescription     sort;
 
     Block cur_block;
     Block next_block;
