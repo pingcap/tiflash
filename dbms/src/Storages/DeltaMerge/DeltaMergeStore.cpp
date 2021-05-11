@@ -1420,7 +1420,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         if (segment->getLastCheckGCSafePoint() >= gc_safe_point)
             continue;
 
-        auto & segment_range = segment->getRowKeyRange();
+        RowKeyRange segment_range = segment->getRowKeyRange();
         if (segment->getDelta()->isUpdating())
         {
             LOG_DEBUG(log, "GC is skipped [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
@@ -1438,7 +1438,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         dm_context->min_version = gc_safe_point;
         // calculate StableProperty if needed
         if (!segment->getStable()->isStablePropertyCached())
-            segment->getStable()->calculateStableProperty(*dm_context, segment_range, isCommonHandle(), rowkey_column_size);
+            segment->getStable()->calculateStableProperty(*dm_context, segment_range, isCommonHandle());
 
         try
         {
