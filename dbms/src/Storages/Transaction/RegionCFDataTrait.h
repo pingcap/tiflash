@@ -46,7 +46,7 @@ struct RegionWriteCFDataTrait
 struct RegionDefaultCFDataTrait
 {
     using Key = std::pair<RawTiDBPK, Timestamp>;
-    using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>>;
+    using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, bool>;
     using Map = std::map<Key, Value>;
 
     static std::optional<Map::value_type> genKVPair(TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
@@ -54,7 +54,7 @@ struct RegionDefaultCFDataTrait
         RawTiDBPK tidb_pk = RecordKVFormat::getRawTiDBPK(raw_key);
         Timestamp ts = RecordKVFormat::getTs(key);
         return Map::value_type(Key(std::move(tidb_pk), ts),
-            Value(std::make_shared<const TiKVKey>(std::move(key)), std::make_shared<const TiKVValue>(std::move(value))));
+            Value(std::make_shared<const TiKVKey>(std::move(key)), std::make_shared<const TiKVValue>(std::move(value)), false));
     }
 
     static std::shared_ptr<const TiKVValue> getTiKVValue(const Map::const_iterator & it) { return std::get<1>(it->second); }

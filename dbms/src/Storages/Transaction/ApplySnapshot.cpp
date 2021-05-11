@@ -261,7 +261,16 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
         { GET_METRIC(metrics, tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
 
     {
-        LOG_INFO(log, "Pre-handle snapshot " << new_region->toString(false) << " with " << snaps.len << " TiKV sst files");
+        Timestamp gc_safe_point = UINT64_MAX;
+        if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
+        {
+            gc_safe_point = PDClientHelper::getGCSafePointWithRetry(
+                pd_client, false, tmt.getContext().getSettingsRef().safe_point_update_interval_seconds);
+        }
+
+        LOG_INFO(log,
+            "Pre-handle snapshot " << new_region->toString(false) << " with " << snaps.len << " TiKV sst files, at gc-safe-point "
+                                   << gc_safe_point);
         // Iterator over all SST files and insert key-values into `new_region`
         for (UInt64 i = 0; i < snaps.len; ++i)
         {
@@ -285,6 +294,7 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
             GET_METRIC(metrics, tiflash_raft_process_keys, type_apply_snapshot).Increment(kv_size);
         }
         {
+            new_region->doCompactionFilter(gc_safe_point);
             LOG_INFO(log, "Start to pre-decode " << new_region->toString() << " into block");
             auto block_cache = GenRegionPreDecodeBlockData(new_region, ctx);
             if (block_cache)

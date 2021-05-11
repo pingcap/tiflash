@@ -516,6 +516,63 @@ void Region::assignRegion(Region && new_region)
     meta.notifyAll();
 }
 
+void Region::doCompactionFilter(const Timestamp safe_point)
+{
+    size_t del_write = 0, del_default = 0;
+    auto & write_map = data.writeCF().getDataMut();
+    auto & default_map = data.defaultCF().getDataMut();
+    for (auto write_map_it = write_map.begin(); write_map_it != write_map.end();)
+    {
+        [[maybe_unused]] const auto & [key, value, decoded_val] = write_map_it->second;
+        const auto & [pk, ts] = write_map_it->first;
+
+        if (decoded_val.write_type == RecordKVFormat::CFModifyFlag::PutFlag)
+        {
+            if (!decoded_val.short_value)
+            {
+                if (auto data_it = default_map.find({pk, decoded_val.prewrite_ts}); data_it == default_map.end())
+                {
+                    if (ts < safe_point)
+                    {
+                        del_write += 1;
+                        write_map_it = write_map.erase(write_map_it);
+                        continue;
+                    }
+                    else
+                    {
+                        throw Exception(std::string(__PRETTY_FUNCTION__) + ": ", ErrorCodes::LOGICAL_ERROR);
+                    }
+                }
+                else
+                {
+                    auto & matched = std::get<2>(data_it->second);
+                    matched = true;
+                }
+            }
+        }
+        ++write_map_it;
+    }
+    for (auto data_it = default_map.begin(); data_it != default_map.end();)
+    {
+        [[maybe_unused]] const auto & [pk, ts] = data_it->first;
+        const auto & matched = std::get<2>(data_it->second);
+        if (!matched)
+        {
+            if (ts < safe_point)
+            {
+                del_default += 1;
+                data_it = default_map.erase(data_it);
+                continue;
+            }
+        }
+        ++data_it;
+    }
+    if (del_default + del_write)
+    {
+        LOG_INFO(log, __FUNCTION__ << ": delete " << del_write << " in write cf, delete " << del_default << " in default cf");
+    }
+}
+
 void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp safe_point)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
