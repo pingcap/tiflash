@@ -92,7 +92,6 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair)
     if (!ok)
         throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toDebugString(), ErrorCodes::LOGICAL_ERROR);
 
-    finishInsert(it);
     return calcTiKVKeyValueSize(it->second);
 }
 
