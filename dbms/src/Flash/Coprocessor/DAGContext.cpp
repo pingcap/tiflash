@@ -88,7 +88,7 @@ void DAGContext::handleDivisionByZero()
 
 void DAGContext::handleInvalidTime(const String & msg, const TiFlashError & error)
 {
-    if (error.is(Errors::Types::WrongValue) || error.is(Errors::Types::Truncated))
+    if (!(error.is(Errors::Types::WrongValue) || error.is(Errors::Types::Truncated)))
     {
         throw TiFlashException(msg, error);
     }
