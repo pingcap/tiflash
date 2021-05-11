@@ -535,12 +535,17 @@ void Region::doCompactionFilter(const Timestamp safe_point)
                     if (ts < safe_point)
                     {
                         del_write += 1;
+                        data.cf_data_size -= RegionWriteCFData::calcTiKVKeyValueSize(write_map_it->second);
                         write_map_it = write_map.erase(write_map_it);
                         continue;
                     }
                     else
                     {
-                        throw Exception(std::string(__PRETTY_FUNCTION__) + ": ", ErrorCodes::LOGICAL_ERROR);
+                        LOG_ERROR(log,
+                            __FUNCTION__ << "Raw TiDB PK: " << pk.toDebugString() << "Commit ts: " << ts
+                                         << ", Prewrite ts: " << std::to_string(decoded_val.prewrite_ts)
+                                         << ", no matched key in default cf: " << key->toDebugString());
+                        throw Exception(std::string(__FUNCTION__) + ": illegal behaviour, check log for detail", ErrorCodes::LOGICAL_ERROR);
                     }
                 }
                 else
@@ -561,6 +566,7 @@ void Region::doCompactionFilter(const Timestamp safe_point)
             if (ts < safe_point)
             {
                 del_default += 1;
+                data.cf_data_size -= RegionDefaultCFData::calcTiKVKeyValueSize(data_it->second);
                 data_it = default_map.erase(data_it);
                 continue;
             }
