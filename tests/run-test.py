@@ -69,6 +69,7 @@ class LogAnalyzerExecutor:
     def __init__(self, dbc):
         self.dbc = dbc
 
+    # find the last occurence of `key` in log file and extract the first number follow the key
     def exe(self, key):
         result = os.popen((self.dbc + ' "DBGInvoke get_log_path()" 2>&1').strip()).readlines()
         assert len(result) > 0
