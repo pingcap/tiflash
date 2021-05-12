@@ -5,6 +5,7 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
+#include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
 #include <Storages/StorageMergeTree.h>
 #include <pingcap/coprocessor/Client.h>

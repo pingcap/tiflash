@@ -433,7 +433,7 @@ public:
 
     /// Moves the entire data directory.
     /// Flushes the uncompressed blocks cache and the marks cache.
-    /// Must be called with locked lockStructureForAlter().
+    /// Must be called with locked lockForAlter().
     void setPath(const String & full_path);
 
     /// Check if the ALTER can be performed:

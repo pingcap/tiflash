@@ -52,6 +52,9 @@ public:
                                  << "%, effective: " << DB::toString((Float64)effective_num_rows * 100 / passed_rows, 2) << "%");
     }
 
+    void readPrefix() override;
+    void readSuffix() override;
+
     String getName() const override { return "DeltaMergeVersionFilter"; }
     Block  getHeader() const override { return header; }
 

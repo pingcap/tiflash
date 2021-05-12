@@ -196,8 +196,12 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
                 auto dag_chunk = responses[part_id].add_chunks();
                 dag_chunk->set_rows_data(chunk_codec_stream[part_id]->getString());
                 chunk_codec_stream[part_id]->clear();
-                writer->write(responses[part_id], part_id);
             }
+        }
+
+        for (auto part_id = 0; part_id < partition_num; ++part_id)
+        {
+            writer->write(responses[part_id], part_id);
         }
     };
 }
