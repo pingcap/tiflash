@@ -41,7 +41,7 @@ function run_file()
 	local fuzz="$4"
 	local skip_raw_test="$5"
 	local mysql_client="$6"
-    local verbose="$7"
+	local verbose="$7"
 
 	local ext=${path##*.}
 
@@ -76,7 +76,7 @@ function run_dir()
 	local fuzz="$4"
 	local skip_raw_test="$5"
 	local mysql_client="$6"
-    local verbose="$7"
+	local verbose="$7"
 
 	find "$path" -maxdepth 1 -name "*.visual" -type f | sort | while read file; do
 		if [ -f "$file" ]; then
@@ -122,7 +122,7 @@ function run_path()
 	local fuzz="$4"
 	local skip_raw_test="$5"
 	local mysql_client="$6"
-    local verbose="$7"
+	local verbose="$7"
 
 	if [ -f "$path" ]; then
 		run_file "$dbc" "$path" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
@@ -169,7 +169,7 @@ if [ -z "$dbc" ]; then
 	if [ "$debug" != "false" ] && [ "$debug" != "0" ]; then
 		debug="--stacktrace"
 	fi
-	dbc="DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH $storage_bin client --host $storage_server --port $storage_port -d $storage_db $debug -f PrettyCompactNoEscapes --query"
+	dbc="DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH $storage_bin client --host $storage_server --port $storage_port -d $storage_db $debug"
 fi
 
 if [ -z "$verbose" ]; then
