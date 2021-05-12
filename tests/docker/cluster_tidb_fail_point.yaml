@@ -3,8 +3,6 @@ version: '2.3'
 services:
   pd0:
     image: hub.pingcap.net/qa/pd:${PD_BRANCH:-master}
-    ports:
-      - "2379:2379"
     volumes:
       - ./config/pd.toml:/pd.toml:ro
       - ./data/pd0:/data
@@ -22,8 +20,6 @@ services:
     restart: on-failure
   tikv0:
     image: hub.pingcap.net/qa/tikv:${TIKV_BRANCH:-master}
-    ports:
-      - "20160:20160"
     volumes:
       - ./config/tikv.toml:/tikv.toml:ro
       - ./data/tikv0:/data
@@ -42,9 +38,6 @@ services:
     image: hub.pingcap.net/qa/tidb:${TIDB_BRANCH:-master}-failpoint
     environment:
       GO_FAILPOINTS: "github.com/pingcap/tidb/server/enableTestAPI=return"
-    ports:
-      - "4000:4000"
-      - "10080:10080"
     volumes:
       - ./config/tidb.toml:/tidb.toml:ro
       - ./log/tidb0:/log
