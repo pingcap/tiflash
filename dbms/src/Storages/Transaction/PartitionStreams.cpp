@@ -388,6 +388,20 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
 /// Pre-decode region data into block cache and remove committed data from `region`
 RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Context & context)
 {
+    const auto & tmt = context.getTMTContext();
+    {
+        Timestamp gc_safe_point = 0;
+        if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
+        {
+            gc_safe_point
+                = PDClientHelper::getGCSafePointWithRetry(pd_client, false, context.getSettingsRef().safe_point_update_interval_seconds);
+        }
+        /**
+         * In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
+         * If some rows were updated and add tiflash replica, tiflash store may receive region snapshot with unmatched data in write & default cf sst files.
+         */
+        region->tryCompactionFilter(gc_safe_point);
+    }
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
     try
     {
@@ -410,7 +424,6 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     }
 
     auto metrics = context.getTiFlashMetrics();
-    const auto & tmt = context.getTMTContext();
     TableID table_id = region->getMappedTableID();
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
     Block res_block;
@@ -577,11 +590,15 @@ static Block sortColumnsBySchemaSnap(Block && ori, const DM::ColumnDefines & sch
 Block GenRegionBlockDatawithSchema(const RegionPtr & region,
     const std::shared_ptr<StorageDeltaMerge> & dm_storage,
     const DM::ColumnDefinesPtr & schema_snap,
+    Timestamp gc_safepoint,
     bool force_decode,
     TMTContext & tmt)
 {
+    // In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
+    // If some rows were updated and add tiflash replica, tiflash store may receive region snapshot with unmatched data in write & default cf sst files.
+    region->tryCompactionFilter(gc_safepoint);
+
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
-    // br or lighting may write illegal data into tikv, the caller should handle the exception thrown by this function
     data_list_read = ReadRegionCommitCache(region);
 
     Block res_block;

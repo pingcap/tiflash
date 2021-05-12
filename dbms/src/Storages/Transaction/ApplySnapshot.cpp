@@ -336,7 +336,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
             }
 
             // Get a gc safe point for compacting
-            Timestamp gc_safepoint = UINT64_MAX;
+            Timestamp gc_safepoint = 0;
             if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
             {
                 gc_safepoint = PDClientHelper::getGCSafePointWithRetry(pd_client,
@@ -346,9 +346,9 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
 
             // Read from SSTs and refine the boundary of blocks output to DTFiles
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
-                new_region, snaps, proxy_helper, dm_storage, schema_snap, force_decode, tmt, expected_block_size);
+                new_region, snaps, proxy_helper, dm_storage, schema_snap, gc_safepoint, force_decode, tmt, expected_block_size);
             auto bounded_stream
-                = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, is_common_handle, gc_safepoint);
+                = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, is_common_handle);
             stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(bounded_stream, snapshot_apply_method, job_type, tmt);
 
             stream->writePrefix();
