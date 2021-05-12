@@ -336,7 +336,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
             }
 
             // Get a gc safe point for compacting
-            Timestamp gc_safepoint = UINT64_MAX;
+            Timestamp gc_safepoint = 0;
             if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
             {
                 gc_safepoint = PDClientHelper::getGCSafePointWithRetry(pd_client,

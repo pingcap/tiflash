@@ -786,6 +786,9 @@ void Region::finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term
 
         meta.setApplied(index, term);
     }
+    LOG_INFO(log,
+        __FUNCTION__ << ": " << this->toString(false) << " finish to ingest sst by DTFile [write_cf_keys=" << data.write_cf.getSize()
+                     << "] [default_cf_keys=" << data.default_cf.getSize() << "] [lock_cf_keys=" << data.lock_cf.getSize() << "]");
     meta.notifyAll();
 }
 

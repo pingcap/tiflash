@@ -390,7 +390,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
 {
     const auto & tmt = context.getTMTContext();
     {
-        Timestamp gc_safe_point = UINT64_MAX;
+        Timestamp gc_safe_point = 0;
         if (auto pd_client = tmt.getPDClient(); !pd_client->isMock())
         {
             gc_safe_point
