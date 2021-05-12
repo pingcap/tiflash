@@ -21,8 +21,9 @@ template <class StreamWriterPtr>
 class StreamingDAGResponseWriter : public DAGResponseWriter
 {
 public:
-    StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_, tipb::ExchangeType exchange_type_,
-        Int64 records_per_chunk_, tipb::EncodeType encodeType_, std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_);
+    StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_, TiDB::TiDBCollators collators_,
+        tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
+        std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_);
     void write(const Block & block) override;
     void finishWrite() override;
 
@@ -36,6 +37,7 @@ private:
     StreamWriterPtr writer;
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
+    TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
     uint16_t partition_num;
     ThreadPool thread_pool;
