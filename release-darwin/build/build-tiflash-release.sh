@@ -37,7 +37,8 @@ cmake "$SRCPATH" \
       -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
       -DENABLE_ICU=OFF \
       -DENABLE_MYSQL=OFF \
-      -Wno-dev
+      -Wno-dev \
+      -DNO_WERROR=ON
 
 make -j $NPROC tiflash
 
