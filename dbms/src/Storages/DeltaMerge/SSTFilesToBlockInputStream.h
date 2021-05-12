@@ -46,6 +46,7 @@ public:
                                const TiFlashRaftProxyHelper * proxy_helper_,
                                StorageDeltaMergePtr           ingest_storage_,
                                DM::ColumnDefinesPtr           schema_snap_,
+                               Timestamp                      gc_safepoint_,
                                bool                           force_decode_,
                                TMTContext &                   tmt_,
                                size_t                         expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
@@ -81,6 +82,7 @@ private:
     const StorageDeltaMergePtr     ingest_storage;
     const DM::ColumnDefinesPtr     schema_snap;
     TMTContext &                   tmt;
+    const Timestamp                gc_safepoint;
     size_t                         expected_size;
     Poco::Logger *                 log;
 
@@ -102,10 +104,7 @@ private:
 class BoundedSSTFilesToBlockInputStream final
 {
 public:
-    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child,
-                                      const ColId                   pk_column_id_,
-                                      const bool                    is_common_handle_,
-                                      const Timestamp               gc_safepoint_);
+    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child, const ColId pk_column_id_, const bool is_common_handle_);
 
     String getName() const { return "BoundedSSTFilesToBlockInputStream"; }
 
@@ -125,9 +124,9 @@ public:
     std::tuple<size_t, size_t, UInt64> getMvccStatistics() const;
 
 private:
-    const ColId     pk_column_id;
-    const bool      is_common_handle;
-    const Timestamp gc_safepoint;
+    const ColId pk_column_id;
+    const bool  is_common_handle;
+
     // Note that we only keep _raw_child for getting ingest info / process key, etc. All block should be
     // read from `mvcc_compact_stream`
     const SSTFilesToBlockInputStreamPtr                                              _raw_child;

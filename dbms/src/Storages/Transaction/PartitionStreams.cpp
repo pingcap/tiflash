@@ -590,11 +590,15 @@ static Block sortColumnsBySchemaSnap(Block && ori, const DM::ColumnDefines & sch
 Block GenRegionBlockDatawithSchema(const RegionPtr & region,
     const std::shared_ptr<StorageDeltaMerge> & dm_storage,
     const DM::ColumnDefinesPtr & schema_snap,
+    Timestamp gc_safepoint,
     bool force_decode,
     TMTContext & tmt)
 {
+    // In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
+    // If some rows were updated and add tiflash replica, tiflash store may receive region snapshot with unmatched data in write & default cf sst files.
+    region->tryCompactionFilter(gc_safepoint);
+
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
-    // br or lighting may write illegal data into tikv, the caller should handle the exception thrown by this function
     data_list_read = ReadRegionCommitCache(region);
 
     Block res_block;

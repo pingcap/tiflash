@@ -21,9 +21,6 @@ namespace ErrorCodes
 extern const int ILLFORMAT_RAFT_ROW;
 } // namespace ErrorCodes
 
-std::tuple<Block, std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> //
-GenRegionBlockDatawithSchema(const RegionPtr & region, TMTContext & tmt);
-
 namespace DM
 {
 

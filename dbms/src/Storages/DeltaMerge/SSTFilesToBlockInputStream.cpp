@@ -27,6 +27,7 @@ Block GenRegionBlockDatawithSchema( //
     const RegionPtr &,
     const std::shared_ptr<StorageDeltaMerge> &,
     const DM::ColumnDefinesPtr &,
+    Timestamp,
     bool,
     TMTContext &);
 
@@ -39,6 +40,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     const TiFlashRaftProxyHelper *                   proxy_helper_,
     SSTFilesToBlockInputStream::StorageDeltaMergePtr ingest_storage_,
     DM::ColumnDefinesPtr                             schema_snap_,
+    Timestamp                                        gc_safepoint_,
     bool                                             force_decode_,
     TMTContext &                                     tmt_,
     size_t                                           expected_size_)
@@ -48,6 +50,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
       ingest_storage(std::move(ingest_storage_)),
       schema_snap(std::move(schema_snap_)),
       tmt(tmt_),
+      gc_safepoint(gc_safepoint_),
       expected_size(expected_size_),
       log(&Poco::Logger::get("SSTFilesToBlockInputStream")),
       force_decode(force_decode_)
@@ -168,7 +171,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
     {
         // Read block from `region`. If the schema has been updated, it will
         // throw an exception with code `ErrorCodes::REGION_DATA_SCHEMA_UPDATED`
-        return GenRegionBlockDatawithSchema(region, ingest_storage, schema_snap, force_decode, tmt);
+        return GenRegionBlockDatawithSchema(region, ingest_storage, schema_snap, gc_safepoint, force_decode, tmt);
     }
     catch (DB::Exception & e)
     {
@@ -193,9 +196,8 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
 BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     SSTFilesToBlockInputStreamPtr child,
     const ColId                   pk_column_id_,
-    const bool                    is_common_handle_,
-    const Timestamp               gc_safepoint_)
-    : pk_column_id(pk_column_id_), is_common_handle(is_common_handle_), gc_safepoint(gc_safepoint_), _raw_child(std::move(child))
+    const bool                    is_common_handle_)
+    : pk_column_id(pk_column_id_), is_common_handle(is_common_handle_), _raw_child(std::move(child))
 {
     // Initlize `mvcc_compact_stream`
     // First refine the boundary of blocks. Note that the rows decoded from SSTFiles are sorted by primary key asc, timestamp desc
@@ -203,7 +205,7 @@ BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     // While DMVersionFilter require rows sorted by primary key asc, timestamp asc, so we need an extra sort in PKSquashing.
     auto stream = std::make_shared<PKSquashingBlockInputStream</*need_extra_sort=*/true>>(_raw_child, pk_column_id, is_common_handle);
     mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-        stream, *(_raw_child->schema_snap), gc_safepoint, is_common_handle);
+        stream, *(_raw_child->schema_snap), _raw_child->gc_safepoint, is_common_handle);
 }
 
 void BoundedSSTFilesToBlockInputStream::readPrefix()
