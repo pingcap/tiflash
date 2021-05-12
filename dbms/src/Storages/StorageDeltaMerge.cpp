@@ -994,7 +994,6 @@ void StorageDeltaMerge::rename(
 
     /// Note that this routine is only left for CI tests. `clean_rename` should always be true in production env.
     auto & store = getAndMaybeInitStore();
-
     // For DatabaseOrdinary, we need to rename data path, then recreate a new store.
     const String new_path = new_path_to_db + "/" + new_table_name;
 
@@ -1127,8 +1126,8 @@ void StorageDeltaMerge::modifyASTStorage(ASTStorage * storage_ast, const TiDB::T
     else if (args->children.size() == 3)
         args->children.at(1) = literal;
     else
-        throw Exception("Wrong arguments num: " + DB::toString(args->children.size())
-                + " in table: " + this->getTableName() + " in modifyASTStorage",
+        throw Exception(
+            "Wrong arguments num: " + DB::toString(args->children.size()) + " in table: " + this->getTableName() + " in modifyASTStorage",
             ErrorCodes::BAD_ARGUMENTS);
 }
 
@@ -1294,5 +1293,51 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
         store_inited.store(true, std::memory_order_release);
     }
     return _store;
+}
+
+bool StorageDeltaMerge::initStoreIfDataDirExist()
+{
+    if (shutdown_called.load(std::memory_order_relaxed) || isTombstone())
+    {
+        return false;
+    }
+    // If store is inited, we don't need to check data dir.
+    if (store_inited.load(std::memory_order_relaxed))
+    {
+        return true;
+    }
+    if (!dataDirExist())
+    {
+        return false;
+    }
+    getAndMaybeInitStore();
+    return true;
+}
+
+bool StorageDeltaMerge::dataDirExist()
+{
+    String db_name, table_name;
+    {
+        std::lock_guard<std::mutex> lock(store_mutex);
+        // store is inited after lock acquired.
+        if (store_inited.load(std::memory_order_acquire))
+        {
+            return true;
+        }
+        db_name = table_column_info->db_name;
+        table_name = table_column_info->table_name;
+    }
+
+    auto path_pool = global_context.getPathPool().withTable(db_name, table_name, data_path_contains_database_name);
+    auto path_delegate = path_pool.getStableDiskDelegator();
+    for (const auto & root_path : path_delegate.listPaths())
+    {
+        int r = ::access(root_path.c_str(), F_OK);
+        if (r == 0)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 } // namespace DB
