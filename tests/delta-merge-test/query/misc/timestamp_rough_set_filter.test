@@ -22,6 +22,10 @@
 
 => manage table default.test flush
 => manage table default.test merge delta
+=> select tidb_database, tidb_table, delta_rate_rows, total_stable_rows from system.dt_tables where tidb_database='default' and tidb_table='test' and is_tombstone = 0
+┌─tidb_database─┬─tidb_table─┬─delta_rate_rows─┬─total_stable_rows─┐
+│ default       │ test       │               0 │                 6 │
+└───────────────┴────────────┴─────────────────┴───────────────────┘
 
 # The default time zone in cop request is UTC
 => DBGInvoke dag('select * from default.test')
