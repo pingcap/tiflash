@@ -6,7 +6,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
-#include <Storages/DeltaMerge/ReorganizeBlockInputStream.h>
+#include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/ProxyFFI.h>
@@ -27,6 +27,7 @@ Block GenRegionBlockDatawithSchema( //
     const RegionPtr &,
     const std::shared_ptr<StorageDeltaMerge> &,
     const DM::ColumnDefinesPtr &,
+    Timestamp,
     bool,
     TMTContext &);
 
@@ -39,6 +40,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     const TiFlashRaftProxyHelper *                   proxy_helper_,
     SSTFilesToBlockInputStream::StorageDeltaMergePtr ingest_storage_,
     DM::ColumnDefinesPtr                             schema_snap_,
+    Timestamp                                        gc_safepoint_,
     bool                                             force_decode_,
     TMTContext &                                     tmt_,
     size_t                                           expected_size_)
@@ -48,6 +50,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
       ingest_storage(std::move(ingest_storage_)),
       schema_snap(std::move(schema_snap_)),
       tmt(tmt_),
+      gc_safepoint(gc_safepoint_),
       expected_size(expected_size_),
       log(&Poco::Logger::get("SSTFilesToBlockInputStream")),
       force_decode(force_decode_)
@@ -75,8 +78,9 @@ void SSTFilesToBlockInputStream::readPrefix()
         }
     }
 
-    process_keys   = 0;
-    process_writes = 0;
+    process_keys.default_cf = 0;
+    process_keys.write_cf   = 0;
+    process_keys.lock_cf    = 0;
 }
 
 void SSTFilesToBlockInputStream::readSuffix()
@@ -103,11 +107,10 @@ Block SSTFilesToBlockInputStream::read()
         auto key   = write_cf_reader->key();
         auto value = write_cf_reader->value();
         region->insert(ColumnFamilyType::Write, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
-        ++process_keys;
-        ++process_writes;
+        ++process_keys.write_cf;
         write_cf_reader->next();
 
-        if (process_writes % expected_size == 0)
+        if (process_keys.write_cf % expected_size == 0)
         {
             auto key_view = std::string_view{key.data, key.len};
             // Batch the scan from other CFs until we need to decode data
@@ -138,6 +141,7 @@ void SSTFilesToBlockInputStream::scanCF(ColumnFamilyType cf, const std::string_v
     else
         throw Exception("Should not happen!");
 
+    size_t num_process_keys = 0;
     while (reader && reader->remained())
     {
         auto key = reader->key();
@@ -145,12 +149,17 @@ void SSTFilesToBlockInputStream::scanCF(ColumnFamilyType cf, const std::string_v
         {
             auto value = reader->value();
             region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
-            ++process_keys;
+            ++num_process_keys;
             reader->next();
         }
         else
             break;
     }
+
+    if (cf == ColumnFamilyType::Default)
+        process_keys.default_cf += num_process_keys;
+    else if (cf == ColumnFamilyType::Lock)
+        process_keys.lock_cf += num_process_keys;
 }
 
 Block SSTFilesToBlockInputStream::readCommitedBlock()
@@ -162,7 +171,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
     {
         // Read block from `region`. If the schema has been updated, it will
         // throw an exception with code `ErrorCodes::REGION_DATA_SCHEMA_UPDATED`
-        return GenRegionBlockDatawithSchema(region, ingest_storage, schema_snap, force_decode, tmt);
+        return GenRegionBlockDatawithSchema(region, ingest_storage, schema_snap, gc_safepoint, force_decode, tmt);
     }
     catch (DB::Exception & e)
     {
@@ -187,15 +196,16 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
 BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     SSTFilesToBlockInputStreamPtr child,
     const ColId                   pk_column_id_,
-    const bool                    is_common_handle_,
-    const Timestamp               gc_safepoint_)
-    : pk_column_id(pk_column_id_), is_common_handle(is_common_handle_), gc_safepoint(gc_safepoint_), _raw_child(std::move(child))
+    const bool                    is_common_handle_)
+    : pk_column_id(pk_column_id_), is_common_handle(is_common_handle_), _raw_child(std::move(child))
 {
     // Initlize `mvcc_compact_stream`
-    // First refine the boundary of blocks
-    auto stream         = std::make_shared<ReorganizeBlockInputStream>(_raw_child, pk_column_id, is_common_handle);
+    // First refine the boundary of blocks. Note that the rows decoded from SSTFiles are sorted by primary key asc, timestamp desc
+    // (https://github.com/tikv/tikv/blob/v5.0.1/components/txn_types/src/types.rs#L103-L108).
+    // While DMVersionFilter require rows sorted by primary key asc, timestamp asc, so we need an extra sort in PKSquashing.
+    auto stream = std::make_shared<PKSquashingBlockInputStream</*need_extra_sort=*/true>>(_raw_child, pk_column_id, is_common_handle);
     mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-        stream, *(_raw_child->schema_snap), gc_safepoint, is_common_handle);
+        stream, *(_raw_child->schema_snap), _raw_child->gc_safepoint, is_common_handle);
 }
 
 void BoundedSSTFilesToBlockInputStream::readPrefix()
@@ -218,7 +228,7 @@ std::tuple<std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> BoundedSSTF
     return std::make_tuple(_raw_child->ingest_storage, _raw_child->schema_snap);
 }
 
-size_t BoundedSSTFilesToBlockInputStream::getProcessKeys() const
+SSTFilesToBlockInputStream::ProcessKeys BoundedSSTFilesToBlockInputStream::getProcessKeys() const
 {
     return _raw_child->process_keys;
 }

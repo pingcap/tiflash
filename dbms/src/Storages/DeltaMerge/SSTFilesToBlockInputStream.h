@@ -46,6 +46,7 @@ public:
                                const TiFlashRaftProxyHelper * proxy_helper_,
                                StorageDeltaMergePtr           ingest_storage_,
                                DM::ColumnDefinesPtr           schema_snap_,
+                               Timestamp                      gc_safepoint_,
                                bool                           force_decode_,
                                TMTContext &                   tmt_,
                                size_t                         expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
@@ -59,6 +60,16 @@ public:
     void  readSuffix() override;
     Block read() override;
 
+public:
+    struct ProcessKeys
+    {
+        size_t default_cf;
+        size_t write_cf;
+        size_t lock_cf;
+
+        inline size_t total() const { return default_cf + write_cf + lock_cf; }
+    };
+
 private:
     void scanCF(ColumnFamilyType cf, const std::string_view until = std::string_view{});
 
@@ -71,6 +82,7 @@ private:
     const StorageDeltaMergePtr     ingest_storage;
     const DM::ColumnDefinesPtr     schema_snap;
     TMTContext &                   tmt;
+    const Timestamp                gc_safepoint;
     size_t                         expected_size;
     Poco::Logger *                 log;
 
@@ -82,10 +94,9 @@ private:
     friend class BoundedSSTFilesToBlockInputStream;
 
     const bool force_decode;
-    bool is_decode_cancelled = false;
+    bool       is_decode_cancelled = false;
 
-    size_t process_keys   = 0;
-    size_t process_writes = 0;
+    ProcessKeys process_keys;
 };
 
 // Bound the blocks read from SSTFilesToBlockInputStream by column `_tidb_rowid` and
@@ -93,10 +104,7 @@ private:
 class BoundedSSTFilesToBlockInputStream final
 {
 public:
-    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child,
-                                      const ColId                   pk_column_id_,
-                                      const bool                    is_common_handle_,
-                                      const Timestamp               gc_safepoint_);
+    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child, const ColId pk_column_id_, const bool is_common_handle_);
 
     String getName() const { return "BoundedSSTFilesToBlockInputStream"; }
 
@@ -108,7 +116,7 @@ public:
 
     std::tuple<std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> ingestingInfo() const;
 
-    size_t getProcessKeys() const;
+    SSTFilesToBlockInputStream::ProcessKeys getProcessKeys() const;
 
     const RegionPtr getRegion() const;
 
@@ -116,9 +124,9 @@ public:
     std::tuple<size_t, size_t, UInt64> getMvccStatistics() const;
 
 private:
-    const ColId     pk_column_id;
-    const bool      is_common_handle;
-    const Timestamp gc_safepoint;
+    const ColId pk_column_id;
+    const bool  is_common_handle;
+
     // Note that we only keep _raw_child for getting ingest info / process key, etc. All block should be
     // read from `mvcc_compact_stream`
     const SSTFilesToBlockInputStreamPtr                                              _raw_child;

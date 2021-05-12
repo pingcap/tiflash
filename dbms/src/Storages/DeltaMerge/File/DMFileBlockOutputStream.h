@@ -14,7 +14,7 @@ namespace DM
 /// Note that we will filter block by `RSOperatorPtr` while reading, so the
 /// blocks output to DTFile must be bounded by primary key, or we will get
 /// wrong results by filtering.
-/// You can use `ReorganizeBlockInputStream` to reorganize the boundary of
+/// You can use `PKSquashingBlockInputStream` to reorganize the boundary of
 /// blocks.
 class DMFileBlockOutputStream
 {
