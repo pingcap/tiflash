@@ -59,6 +59,16 @@ public:
     void  readSuffix() override;
     Block read() override;
 
+public:
+    struct ProcessKeys
+    {
+        size_t default_cf;
+        size_t write_cf;
+        size_t lock_cf;
+
+        inline size_t total() const { return default_cf + write_cf + lock_cf; }
+    };
+
 private:
     void scanCF(ColumnFamilyType cf, const std::string_view until = std::string_view{});
 
@@ -82,10 +92,9 @@ private:
     friend class BoundedSSTFilesToBlockInputStream;
 
     const bool force_decode;
-    bool is_decode_cancelled = false;
+    bool       is_decode_cancelled = false;
 
-    size_t process_keys   = 0;
-    size_t process_writes = 0;
+    ProcessKeys process_keys;
 };
 
 // Bound the blocks read from SSTFilesToBlockInputStream by column `_tidb_rowid` and
@@ -108,7 +117,7 @@ public:
 
     std::tuple<std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> ingestingInfo() const;
 
-    size_t getProcessKeys() const;
+    SSTFilesToBlockInputStream::ProcessKeys getProcessKeys() const;
 
     const RegionPtr getRegion() const;
 

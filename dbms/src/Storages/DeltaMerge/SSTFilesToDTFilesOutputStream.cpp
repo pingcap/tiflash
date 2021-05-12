@@ -66,22 +66,25 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
         dt_stream.reset();
     }
 
-    auto & ctx     = tmt.getContext();
-    auto   metrics = ctx.getTiFlashMetrics();
+    auto &     ctx          = tmt.getContext();
+    auto       metrics      = ctx.getTiFlashMetrics();
+    const auto process_keys = child->getProcessKeys();
     if (job_type == FileConvertJobType::ApplySnapshot)
     {
         GET_METRIC(metrics, tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds());
         // Note that number of keys in different cf will be aggregated into one metrics
-        GET_METRIC(metrics, tiflash_raft_process_keys, type_apply_snapshot).Increment(child->getProcessKeys());
+        GET_METRIC(metrics, tiflash_raft_process_keys, type_apply_snapshot).Increment(process_keys.total());
     }
     else
     {
         // Note that number of keys in different cf will be aggregated into one metrics
-        GET_METRIC(metrics, tiflash_raft_process_keys, type_ingest_sst).Increment(child->getProcessKeys());
+        GET_METRIC(metrics, tiflash_raft_process_keys, type_ingest_sst).Increment(process_keys.total());
     }
     LOG_INFO(log,
              "Pre-handle snapshot " << child->getRegion()->toString(true) << " to " << ingest_files.size() << " DTFiles, cost "
-                                    << watch.elapsedMilliseconds() << "ms [rows=" << commit_rows << "]");
+                                    << watch.elapsedMilliseconds() << "ms [rows=" << commit_rows
+                                    << "] [write_cf_keys=" << process_keys.write_cf << "] [default_cf_keys=" << process_keys.default_cf
+                                    << "] [lock_cf_keys=" << process_keys.lock_cf << "]");
 }
 
 bool SSTFilesToDTFilesOutputStream::newDTFileStream()
