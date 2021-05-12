@@ -61,8 +61,10 @@ public:
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
-    void handleDivisionByZero();
+    void handleDivisionByZero(const String & msg);
     void handleInvalidTime(const String & msg, const TiFlashError & error);
+    bool allowZeroInDate() const;
+    bool allowInvalidDate() const;
     bool shouldClipToZero();
     /// This method is thread-safe.
     void appendWarning(const tipb::Error & warning)
