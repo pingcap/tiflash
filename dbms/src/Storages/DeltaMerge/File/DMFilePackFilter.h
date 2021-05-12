@@ -26,14 +26,12 @@ public:
     ///
     DMFilePackFilter(const DMFilePtr &       dmfile_,
                      MinMaxIndexCache *      index_cache_,
-                     UInt64                  hash_salt_,
                      const HandleRange &     handle_range_, // filter by handle range
                      const RSOperatorPtr &   filter_,       // filter by push down where clause
                      const IdSetPtr &        read_packs_,   // filter by pack index
                      const FileProviderPtr & file_provider_)
         : dmfile(dmfile_),
           index_cache(index_cache_),
-          hash_salt(hash_salt_),
           handle_range(handle_range_),
           filter(filter_),
           read_packs(read_packs_),
@@ -177,8 +175,7 @@ private:
         MinMaxIndexPtr minmax_index;
         if (index_cache)
         {
-            auto key     = MinMaxIndexCache::hash(index_path, hash_salt);
-            minmax_index = index_cache->getOrSet(key, load);
+            minmax_index = index_cache->getOrSet(index_path, load);
         }
         else
         {
@@ -191,7 +188,6 @@ private:
 private:
     DMFilePtr          dmfile;
     MinMaxIndexCache * index_cache;
-    UInt64             hash_salt;
     HandleRange        handle_range;
     RSOperatorPtr      filter;
     IdSetPtr           read_packs;
