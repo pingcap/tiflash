@@ -5,7 +5,12 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
+#include <Common/ConcurrentBoundedQueue.h>
 #include <DataStreams/IBlockInputStream.h>
+<<<<<<< HEAD
+=======
+#include <Flash/Coprocessor/DAGDriver.h>
+>>>>>>> 2dfcb4146... Support return warnings for coprocessor request (#1834)
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -23,11 +28,45 @@ struct ProfileStreamsInfo
 class DAGContext
 {
 public:
+<<<<<<< HEAD
     explicit DAGContext(const tipb::DAGRequest & dag_request) : flags(dag_request.flags()), sql_mode(dag_request.sql_mode()){};
+=======
+    explicit DAGContext(const tipb::DAGRequest & dag_request)
+        : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries()),
+          return_executor_id(dag_request.has_root_executor() || dag_request.executors(0).has_executor_id()),
+          is_mpp_task(false),
+          is_root_mpp_task(false),
+          flags(dag_request.flags()),
+          sql_mode(dag_request.sql_mode()),
+          _warnings(std::numeric_limits<int>::max()){};
+    explicit DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_)
+        : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries()),
+          return_executor_id(true),
+          is_mpp_task(true),
+          flags(dag_request.flags()),
+          sql_mode(dag_request.sql_mode()),
+          mpp_task_meta(meta_),
+          _warnings(std::numeric_limits<int>::max())
+    {
+        exchange_sender_executor_id = dag_request.root_executor().executor_id();
+        const auto & exchangeSender = dag_request.root_executor().exchange_sender();
+        exchange_sender_execution_summary_key = exchangeSender.child().executor_id();
+        is_root_mpp_task = false;
+        if (exchangeSender.encoded_task_meta_size() == 1)
+        {
+            /// root mpp task always has 1 task_meta because there is only one TiDB
+            /// node for each mpp query
+            mpp::TaskMeta task_meta;
+            task_meta.ParseFromString(exchangeSender.encoded_task_meta(0));
+            is_root_mpp_task = task_meta.task_id() == -1;
+        }
+    };
+>>>>>>> 2dfcb4146... Support return warnings for coprocessor request (#1834)
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
     void handleTruncateError(const String & msg);
+<<<<<<< HEAD
     void handleOverflowError(const String & msg);
     void handleDivisionByZero(const String & msg);
     void handleInvalidTime(const String & msg);
@@ -35,15 +74,63 @@ public:
     const std::vector<std::pair<Int32, String>> & getWarnings() const { return warnings; }
     
     size_t final_concurency;
+=======
+    void handleOverflowError(const String & msg, const TiFlashError & error);
+    void handleDivisionByZero();
+    void handleInvalidTime(const String & msg, const TiFlashError & error);
+    bool allowZeroInDate() const;
+    bool allowInvalidDate() const;
+    bool shouldClipToZero();
+    /// This method is thread-safe.
+    void appendWarning(const tipb::Error & warning)
+    {
+        if (!_warnings.tryPush(warning))
+            throw TiFlashException("Too many warnings, exceeds limit of 2147483647", Errors::Coprocessor::Internal);
+    }
+    /// Consume all warnings. Once this method called, every warning will be cleared.
+    /// This method is not thread-safe.
+    void consumeWarnings(std::vector<tipb::Error> & warnings)
+    {
+        warnings.reserve(_warnings.size());
+        for (size_t i = 0; i < _warnings.size(); i++)
+        {
+            tipb::Error error;
+            _warnings.pop(error);
+            warnings.push_back(error);
+        }
+    }
+    const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
+    bool isMPPTask() const { return is_mpp_task; }
+    /// root mpp task means mpp task that send data back to TiDB
+    bool isRootMPPTask() const { return is_root_mpp_task; }
+    Int64 getMPPTaskId() const
+    {
+        if (is_mpp_task)
+            return mpp_task_meta.task_id();
+        return 0;
+    }
+
+    BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
+
+    size_t final_concurrency;
+>>>>>>> 2dfcb4146... Support return warnings for coprocessor request (#1834)
     Int64 compile_time_ns;
 
 private:
     std::map<String, ProfileStreamsInfo> profile_streams_map;
     std::unordered_map<String, BlockInputStreams> profile_streams_map_for_join_build_side;
     std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
+<<<<<<< HEAD
     std::vector<std::pair<Int32, String>> warnings;
     UInt64 flags;
     UInt64 sql_mode;
+=======
+    BlockInputStreams remote_block_input_streams;
+    UInt64 flags;
+    UInt64 sql_mode;
+    mpp::TaskMeta mpp_task_meta;
+    ConcurrentBoundedQueue<tipb::Error> _warnings;
+>>>>>>> 2dfcb4146... Support return warnings for coprocessor request (#1834)
 };
 
 } // namespace DB

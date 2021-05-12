@@ -26,6 +26,7 @@ public:
     void write(const Block & block) override;
     void finishWrite() override;
     void encodeChunkToDAGResponse();
+    void appendWarningsToDAGResponse();
 
 private:
     tipb::SelectResponse * dag_response;

@@ -43,11 +43,24 @@ void UnaryDAGResponseWriter::encodeChunkToDAGResponse()
     current_records_num = 0;
 }
 
+void UnaryDAGResponseWriter::appendWarningsToDAGResponse()
+{
+    std::vector<tipb::Error> warnings{};
+    dag_context.consumeWarnings(warnings);
+    for (auto & warning : warnings)
+    {
+        auto warn = dag_response->add_warnings();
+        // TODO: consider using allocated warnings to prevent copy?
+        warn->CopyFrom(warning);
+    }
+}
+
 void UnaryDAGResponseWriter::finishWrite()
 {
     if (current_records_num > 0)
     {
         encodeChunkToDAGResponse();
+        appendWarningsToDAGResponse();
     }
     addExecuteSummaries(*dag_response);
 }
