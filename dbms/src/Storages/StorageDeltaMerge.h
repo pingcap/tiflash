@@ -115,6 +115,8 @@ public:
     bool isCommonHandle() const override { return is_common_handle; }
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
+    
+    bool initStoreIfDataDirExist() override;
 
 protected:
     StorageDeltaMerge( //
@@ -142,6 +144,8 @@ private:
     bool storeInited() const { return store_inited.load(); }
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
+
+    bool dataDirExist();
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
     struct TableColumnInfo 
@@ -179,7 +183,6 @@ private:
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
 
     Context & global_context;
-
     Logger * log;
 };
 
