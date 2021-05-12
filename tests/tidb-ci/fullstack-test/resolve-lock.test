@@ -83,4 +83,8 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t order b
 |  103 |
 +------+
 
+curl_tidb> delete fail/github.com/pingcap/tidb/store/tikv/asyncCommitDoNothing
+curl_tidb> delete fail/github.com/pingcap/tidb/store/tikv/commitFailedSkipCleanup
+curl_tidb> delete fail/github.com/pingcap/tidb/store/tikv/prewriteSecondaryFail
+
 mysql> drop table if exists test.t;
