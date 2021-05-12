@@ -47,44 +47,6 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
 }
 
 template <typename Trait>
-void RegionCFDataBase<Trait>::finishInsert(typename Map::iterator)
-{}
-
-template <>
-void RegionCFDataBase<RegionDefaultCFDataTrait>::finishInsert(typename Map::iterator)
-{}
-
-template <>
-void RegionCFDataBase<RegionWriteCFDataTrait>::finishInsert(typename Map::iterator write_it)
-{
-    auto & [key, value, decoded_val] = write_it->second;
-    auto & [pk, ts] = write_it->first;
-    auto & [write_type, prewrite_ts, short_value] = decoded_val;
-
-    std::ignore = key;
-    std::ignore = value;
-    std::ignore = ts;
-
-    if (write_type == CFModifyFlag::PutFlag)
-    {
-        if (!short_value)
-        {
-            auto & default_cf_map = RegionData::getDefaultCFMap(this);
-
-            if (auto data_it = default_cf_map.find({pk, prewrite_ts}); data_it != default_cf_map.end())
-            {
-                short_value = RegionDefaultCFDataTrait::getTiKVValue(data_it);
-            }
-        }
-    }
-    else
-    {
-        if (short_value)
-            throw Exception(std::string(__PRETTY_FUNCTION__) + ": got short value under DelFlag", ErrorCodes::LOGICAL_ERROR);
-    }
-}
-
-template <typename Trait>
 RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair)
 {
     auto & map = data;
@@ -92,7 +54,6 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair)
     if (!ok)
         throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toDebugString(), ErrorCodes::LOGICAL_ERROR);
 
-    finishInsert(it);
     return calcTiKVKeyValueSize(it->second);
 }
 

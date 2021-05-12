@@ -16,6 +16,7 @@ using DecodedLockCFValuePtr = std::shared_ptr<const RecordKVFormat::DecodedLockC
 enum class ColumnFamilyType : uint8_t;
 
 struct RegionLockReadQuery;
+class Region;
 
 class RegionData
 {
@@ -61,6 +62,9 @@ public:
 public:
     static UInt8 getWriteType(const ConstWriteCFIter & write_it);
     static const RegionDefaultCFDataTrait::Map & getDefaultCFMap(RegionWriteCFData * write);
+
+private:
+    friend class Region;
 
 private:
     RegionWriteCFData write_cf;
