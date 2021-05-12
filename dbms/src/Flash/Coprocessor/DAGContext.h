@@ -61,7 +61,7 @@ public:
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
-    void handleDivisionByZero(const String & msg);
+    void handleDivisionByZero();
     void handleInvalidTime(const String & msg, const TiFlashError & error);
     bool allowZeroInDate() const;
     bool allowInvalidDate() const;
