@@ -348,26 +348,28 @@ private:
 };
 
 // We only need this task run once.
-void backgroundInitStores(Context& global_context, Logger* log)
+void backgroundInitStores(Context & global_context, Logger * log)
 {
-    auto initStores = [&global_context, log] ()
-    {
+    auto initStores = [&global_context, log]() {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
         int init_cnt = 0;
         int err_cnt = 0;
-        for (auto& pa : storages)
+        for (auto & [table_id, storage] : storages)
         {
-            try 
+            try
             {
-                init_cnt += pa.second->initStoreIfDataDirExist() ? 1 : 0;
+                init_cnt += storage->initStoreIfDataDirExist() ? 1 : 0;
+                LOG_INFO(log, "Storage inited done [table_id=" << table_id << "]");
             }
-            catch(Poco::Exception& e)
+            catch (...)
             {
                 err_cnt++;
-                LOG_ERROR(log, "initStoreIfDataDirExist fail: " << e.displayText());
+                tryLogCurrentException(log, "Storage inited fail, [table_id=" + DB::toString(table_id) + "]");
             }
         }
-        LOG_INFO(log, "Storage total count " << storages.size() << " init count " << init_cnt << " error count " << err_cnt);
+        LOG_INFO(log,
+            "Storage inited finish. [total_count=" << storages.size() << "] [init_count=" << init_cnt << "] [error_count=" << err_cnt
+                                                   << "]");
     };
     std::thread(initStores).detach();
 }
@@ -777,9 +779,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
     LOG_DEBUG(log, "Sync schemas done.");
-    
+
     backgroundInitStores(*global_context, log);
-    
+
     // After schema synced, set current database.
     global_context->setCurrentDatabase(default_database);
 
