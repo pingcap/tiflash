@@ -108,6 +108,11 @@ inline RSOperatorPtr parseTiCompareExpr( //
     for (const auto & child : expr.children())
     {
         if (isColumnExpr(child))
+            is_timestamp_column = (child.field_type().tp() == TiDB::TypeTimestamp);
+    }
+    for (const auto & child : expr.children())
+    {
+        if (isColumnExpr(child))
         {
             if (unlikely(!child.has_field_type()))
                 return createUnsupported(expr.ShortDebugString(), "ColumnRef with no field type is not supported", false);
@@ -117,7 +122,6 @@ inline RSOperatorPtr parseTiCompareExpr( //
                 return createUnsupported(
                     expr.ShortDebugString(), "ColumnRef with field type(" + DB::toString(field_type) + ") is not supported", false);
 
-            is_timestamp_column = (field_type == TiDB::TypeTimestamp);
             state |= state_has_column;
             ColumnID id = getColumnIDForColumnExpr(child, columns_to_read);
             attr        = creator(id);
@@ -126,9 +130,9 @@ inline RSOperatorPtr parseTiCompareExpr( //
         {
             state |= state_has_literal;
             value = decodeLiteral(child);
-            auto literal_type = child.field_type().tp();
             if (is_timestamp_column)
             {
+                auto literal_type = child.field_type().tp();
                 if (unlikely(literal_type != TiDB::TypeTimestamp && literal_type != TiDB::TypeDatetime))
                     return createUnsupported(expr.ShortDebugString(),
                                              "Compare timestamp column with literal type(" + DB::toString(literal_type)
