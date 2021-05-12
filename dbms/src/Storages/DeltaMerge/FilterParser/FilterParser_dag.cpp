@@ -100,10 +100,10 @@ inline RSOperatorPtr parseTiCompareExpr( //
 
     Attr             attr;
     Field            value;
-    UInt32           state             = 0x0;
-    constexpr UInt32 state_has_column  = 0x1;
-    constexpr UInt32 state_has_literal = 0x2;
-    constexpr UInt32 state_finish      = state_has_column | state_has_literal;
+    UInt32           state               = 0x0;
+    constexpr UInt32 state_has_column    = 0x1;
+    constexpr UInt32 state_has_literal   = 0x2;
+    constexpr UInt32 state_finish        = state_has_column | state_has_literal;
     bool             is_timestamp_column = false;
     for (const auto & child : expr.children())
     {
