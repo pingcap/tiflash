@@ -34,6 +34,15 @@ void TMTContext::restore(const TiFlashRaftProxyHelper * proxy_helper)
 {
     kvstore->restore(proxy_helper);
     region_table.restore();
+    {
+        Timestamp gc_safe_point = UINT64_MAX;
+        if (auto pd_client = getPDClient(); !pd_client->isMock())
+        {
+            gc_safe_point
+                = PDClientHelper::getGCSafePointWithRetry(pd_client, false, context.getSettingsRef().safe_point_update_interval_seconds);
+        }
+        kvstore->traverseRegions([&](const RegionID, const RegionPtr & region) { region->tryCompactionFilter(gc_safe_point); });
+    }
     initialized = true;
 
     background_service = std::make_unique<BackgroundService>(*this);
