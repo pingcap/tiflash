@@ -1129,8 +1129,8 @@ void StorageDeltaMerge::modifyASTStorage(ASTStorage * storage_ast, const TiDB::T
     else if (args->children.size() == 3)
         args->children.at(1) = literal;
     else
-        throw Exception("Wrong arguments num: " + DB::toString(args->children.size())
-                + " in table: " + this->getTableName() + " in modifyASTStorage",
+        throw Exception(
+            "Wrong arguments num: " + DB::toString(args->children.size()) + " in table: " + this->getTableName() + " in modifyASTStorage",
             ErrorCodes::BAD_ARGUMENTS);
 }
 
@@ -1317,18 +1317,18 @@ bool StorageDeltaMerge::initStoreIfDataDirExist()
     return true;
 }
 
-bool StorageDeltaMerge::dataDirExist() 
+bool StorageDeltaMerge::dataDirExist()
 {
     String db_name, table_name;
     {
         std::lock_guard<std::mutex> lock(store_mutex);
-        // store is inited
-        if (table_column_info == nullptr)
+        // store is inited after lock acquired.
+        if (store_inited.load(std::memory_order_acquire))
         {
             return true;
         }
         db_name = table_column_info->db_name;
-        table_name = table_column_info->db_name;
+        table_name = table_column_info->table_name;
     }
 
     auto path_pool = global_context.getPathPool().withTable(db_name, table_name, data_path_contains_database_name);
