@@ -2,7 +2,6 @@
 # !/usr/bin/python2
 
 import os
-import re
 import sys
 import time
 import urllib2
@@ -317,7 +316,6 @@ def run():
     if len(sys.argv) == 6:
         verbose = (sys.argv[5] == 'true')
     if verbose: print 'parsing file: `{}`'.format(path)
-
     matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(mysql_client),
                                               ShellFuncExecutor(mysql_client),
                                               CurlTiDBExecutor(),

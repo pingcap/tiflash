@@ -1,4 +1,4 @@
-# Must enable DT rough set filter and with debug level log to run this test, otherwise disable it
+# Must enable DT rough set filter and open debug level log to run this test, otherwise disable this test
 # Preparation.
 => DBGInvoke __enable_schema_sync_service('true')
 

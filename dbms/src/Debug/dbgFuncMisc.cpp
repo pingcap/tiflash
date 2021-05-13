@@ -8,7 +8,6 @@
 
 namespace DB
 {
-
 void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 1)
