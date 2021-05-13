@@ -105,7 +105,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("mapped_table", dbgFuncMappedTable);
     regSchemafulFunc("query_mapped", dbgFuncQueryMapped);
 
-    regSchemalessFunc("get_log_path", dbgGetLogPath);
+    regSchemalessFunc("search_log_for_key", dbgFuncSearchLogForKey);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

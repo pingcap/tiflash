@@ -11,7 +11,6 @@ CMD_PREFIX = '>> '
 CMD_PREFIX_ALTER = '=> '
 CMD_PREFIX_TIDB = 'mysql> '
 CMD_PREFIX_FUNC = 'func> '
-CMD_PREFIX_LOG = 'log> '
 RETURN_PREFIX = '#RETURN'
 SLEEP_PREFIX = 'SLEEP '
 TODO_PREFIX = '#TODO'
@@ -63,31 +62,6 @@ class CurlTiDBExecutor:
             request.data = context[2]
         response = urllib2.urlopen(request).read().strip()
         return [response] if request.get_method() == 'GET' and response else None
-
-
-class LogAnalyzerExecutor:
-    def __init__(self, dbc):
-        self.dbc = dbc
-
-    # find the last occurence of `key` in log file and extract the first number follow the key
-    def exe(self, key):
-        result = os.popen((self.dbc + ' "DBGInvoke get_log_path()" 2>&1').strip()).readlines()
-        assert len(result) > 0
-        path = result[0].strip('\n')
-        with open(path, "r") as f:
-            for line in reversed(f.readlines()):
-                if key in line:
-                    return [self.parse_value(line, key)]
-        return ["Invalid"]
-
-    @staticmethod
-    def parse_value(line, key):
-        key_start = line.find(key)
-        line = line[key_start:]
-        searchObj = re.search(r"\d+\.?\d*",line)
-        if searchObj != None:
-            return searchObj.group(0)
-        return "Invalid"
 
 
 def parse_line(line):
@@ -227,12 +201,11 @@ def matched(outputs, matches, fuzz):
 
 
 class Matcher:
-    def __init__(self, executor, executor_tidb, executor_func, executor_curl_tidb, executor_log_analyzer, fuzz):
+    def __init__(self, executor, executor_tidb, executor_func, executor_curl_tidb, fuzz):
         self.executor = executor
         self.executor_tidb = executor_tidb
         self.executor_func = executor_func
         self.executor_curl_tidb = executor_curl_tidb
-        self.executor_log_analyzer = executor_log_analyzer
         self.query_line_number = 0
         self.fuzz = fuzz
         self.query = None
@@ -289,18 +262,6 @@ class Matcher:
             self.executor_func.exe(self.query)
             self.outputs = []
             self.matches = []
-        elif line.startswith(CMD_PREFIX_LOG):
-            if verbose: print 'running', line
-            if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
-                self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
-                return False
-            self.query_line_number = line_number
-            self.is_mysql = False
-            self.query = line[len(CMD_PREFIX_LOG):]
-            self.outputs = self.executor_log_analyzer.exe(self.query)
-            self.outputs = map(lambda x: x.strip(), self.outputs)
-            self.outputs = filter(lambda x: len(x) != 0, self.outputs)
-            self.matches = []
         else:
             self.matches.append(line)
         return True
@@ -312,12 +273,12 @@ class Matcher:
         return True
 
 
-def parse_exe_match(path, executor, executor_tidb, executor_func, executor_curl_tidb, executor_log_analyzer, fuzz):
+def parse_exe_match(path, executor, executor_tidb, executor_func, executor_curl_tidb, fuzz):
     todos = []
     line_number = 0
     line_number_cached = 0
     with open(path) as file:
-        matcher = Matcher(executor, executor_tidb, executor_func, executor_curl_tidb, executor_log_analyzer, fuzz)
+        matcher = Matcher(executor, executor_tidb, executor_func, executor_curl_tidb, fuzz)
         cached = None
         for origin in file:
             line_number += 1
@@ -357,12 +318,9 @@ def run():
         verbose = (sys.argv[5] == 'true')
     if verbose: print 'parsing file: `{}`'.format(path)
 
-    pretty_format_dbc = dbc + " -f PrettyCompactNoEscapes --query"
-    tab_format_dbc = dbc + " -f TabSeparated --query"
-    matched, matcher, todos = parse_exe_match(path, Executor(pretty_format_dbc), Executor(mysql_client),
+    matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(mysql_client),
                                               ShellFuncExecutor(mysql_client),
                                               CurlTiDBExecutor(),
-                                              LogAnalyzerExecutor(tab_format_dbc),
                                               fuzz,
                                               )
 

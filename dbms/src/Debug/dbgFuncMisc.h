@@ -7,9 +7,9 @@ namespace DB
 
 class Context;
 
-// Get the current log file path of the tiflash instance.
+// Find the last occurence of `key` in log file and extract the first number follow the key.
 // Usage:
-//   ./storage-client.sh "DBGInvoke get_log_path()"
-void dbgGetLogPath(Context & context, const ASTs &, DBGInvoker::Printer);
+//   ./storage-client.sh "DBGInvoke search_log_for_key(key)"
+void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 } // namespace DB
