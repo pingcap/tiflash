@@ -509,12 +509,9 @@ struct SubstringUTF8Impl
                     res_offsets[i] = res_offset;
                     continue;
                 }
-                else
-                {
-                    start = start_offsets.size() + original_start + 1;
-                    pos = start;
-                    j = start_offsets[start - 1];
-                }
+                start = start_offsets.size() + original_start + 1;
+                pos = start;
+                j = start_offsets[start - 1];
             }
             while (j < offsets[i] - 1)
             {
