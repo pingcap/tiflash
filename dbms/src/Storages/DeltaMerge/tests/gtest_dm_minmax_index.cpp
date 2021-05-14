@@ -128,6 +128,19 @@ try
     ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Date", "2020-09-27", createLessEqual(attr("Date"), Field((String) "2020-09-27"), 0)));
     ASSERT_EQ(false, checkMatch(__FUNCTION__, *context, "Date", "2020-09-27", createLessEqual(attr("Date"), Field((String) "2020-09-26"), 0)));
 
+    ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "MyDateTime", "2020-09-27", createEqual(attr("MyDateTime"), parseMyDateTime("2020-09-27"))));
+    ASSERT_EQ(false, checkMatch(__FUNCTION__, *context, "MyDateTime", "2020-09-27", createEqual(attr("MyDateTime"), parseMyDateTime("2020-09-28"))));
+    ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "MyDateTime", "2020-09-27", createIn(attr("MyDateTime"), {parseMyDateTime("2020-09-27")})));
+    ASSERT_EQ(false, checkMatch(__FUNCTION__, *context, "MyDateTime", "2020-09-27", createIn(attr("MyDateTime"), {parseMyDateTime("2020-09-28")})));
+    ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "MyDateTime", "2020-09-27", createGreater(attr("MyDateTime"), parseMyDateTime("2020-09-26"), 0)));
+    ASSERT_EQ(false, checkMatch(__FUNCTION__, *context, "MyDateTime", "2020-09-27", createGreater(attr("MyDateTime"), parseMyDateTime("2020-09-27"), 0)));
+    ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "MyDateTime", "2020-09-27", createGreaterEqual(attr("MyDateTime"), parseMyDateTime("2020-09-27"), 0)));
+    ASSERT_EQ(false, checkMatch(__FUNCTION__, *context, "MyDateTime", "2020-09-27", createGreaterEqual(attr("MyDateTime"), parseMyDateTime("2020-09-28"), 0)));
+    ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "MyDateTime", "2020-09-27", createLess(attr("MyDateTime"), parseMyDateTime("2020-09-28"), 0)));
+    ASSERT_EQ(false, checkMatch(__FUNCTION__, *context, "MyDateTime", "2020-09-27", createLess(attr("MyDateTime"), parseMyDateTime("2020-09-27"), 0)));
+    ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "MyDateTime", "2020-09-27", createLessEqual(attr("MyDateTime"), parseMyDateTime("2020-09-27"), 0)));
+    ASSERT_EQ(false, checkMatch(__FUNCTION__, *context, "MyDateTime", "2020-09-27", createLessEqual(attr("MyDateTime"), parseMyDateTime("2020-09-26"), 0)));
+
     /// Currently we don't do filtering for null values. i.e. if a pack contains any null values, then the pack will pass the filter.
     ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Nullable(Int64)", {{"0", "0", "0", "100"}, {"1", "1", "0", "\\N"}}, createEqual(attr("Nullable(Int64)"), Field((Int64)101))));
     ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Nullable(Int64)", {{"0", "0", "0", "100"}, {"1", "1", "0", "\\N"}}, createIn(attr("Nullable(Int64)"), {Field((Int64)101)})));

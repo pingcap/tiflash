@@ -748,5 +748,112 @@ try
 }
 CATCH
 
+<<<<<<< HEAD
+=======
+// metadata/${db_name}.sql
+String getDatabaseMetadataPath(const String & base_path)
+{
+    return (endsWith(base_path, "/") ? base_path.substr(0, base_path.size() - 1) : base_path) + ".sql";
+}
+
+String readFile(Context & ctx, const String & file)
+{
+    String res;
+    ReadBufferFromFileProvider in(ctx.getFileProvider(), file, EncryptionPath(file, ""));
+    readStringUntilEOF(res, in);
+    return res;
+}
+
+DatabasePtr detachThenAttach(Context & ctx, const String & db_name, DatabasePtr && db, Poco::Logger * log)
+{
+    auto meta = readFile(ctx, getDatabaseMetadataPath(db->getMetadataPath()));
+    LOG_DEBUG(log, "After tombstone [meta=" << meta << "]");
+    {
+        // Detach and load again
+        auto detach_query = std::make_shared<ASTDropQuery>();
+        detach_query->detach = true;
+        detach_query->database = db_name;
+        detach_query->if_exists = false;
+        ASTPtr ast_detach_query = detach_query;
+        InterpreterDropQuery detach_interpreter(ast_detach_query, ctx);
+        detach_interpreter.execute();
+    }
+    {
+        ASTPtr ast = parseCreateStatement(meta);
+        InterpreterCreateQuery interpreter(ast, ctx);
+        interpreter.setInternal(true);
+        interpreter.setForceRestoreData(false);
+        interpreter.execute();
+    }
+
+    db = ctx.getDatabase(db_name);
+    return std::move(db);
+}
+
+TEST_F(DatabaseTiFlash_test, Tombstone)
+try
+{
+    const String db_name = "db_1";
+    auto ctx = TiFlashTestEnv::getContext();
+
+    const Strings statements = {
+        // test case for reading old format metadata without tombstone
+        "CREATE DATABASE " + db_name + " ENGINE = TiFlash",
+        "CREATE DATABASE " + db_name + R"(
+ ENGINE = TiFlash('{"charset":"utf8mb4","collate":"utf8mb4_bin","db_name":{"L":"test_db","O":"test_db"},"id":1010,"state":5}', 1)
+)",
+        // test case for reading metadata with tombstone
+        "CREATE DATABASE " + db_name + R"(
+ ENGINE = TiFlash('{"charset":"utf8mb4","collate":"utf8mb4_bin","db_name":{"L":"test_db","O":"test_db"},"id":1010,"state":5}', 1, 12345)
+)",
+    };
+
+    for (auto & statement : statements)
+    {
+        {
+            // Cleanup: Drop database if exists
+            auto drop_query = std::make_shared<ASTDropQuery>();
+            drop_query->database = db_name;
+            drop_query->if_exists = true;
+            ASTPtr ast_drop_query = drop_query;
+            InterpreterDropQuery drop_interpreter(ast_drop_query, ctx);
+            drop_interpreter.execute();
+        }
+
+        {
+            // Create database
+            ASTPtr ast = parseCreateStatement(statement);
+            InterpreterCreateQuery interpreter(ast, ctx);
+            interpreter.setInternal(true);
+            interpreter.setForceRestoreData(false);
+            interpreter.execute();
+        }
+
+        auto db = ctx.getDatabase(db_name);
+        auto meta = readFile(ctx, getDatabaseMetadataPath(db->getMetadataPath()));
+        LOG_DEBUG(log, "After create [meta=" << meta << "]");
+
+        DB::Timestamp tso = 1000;
+        db->alterTombstone(ctx, tso);
+        EXPECT_TRUE(db->isTombstone());
+        EXPECT_EQ(db->getTombstone(), tso);
+
+        // Try restore from disk
+        db = detachThenAttach(ctx, db_name, std::move(db), log);
+        EXPECT_TRUE(db->isTombstone());
+        EXPECT_EQ(db->getTombstone(), tso);
+
+        // Recover
+        db->alterTombstone(ctx, 0);
+        EXPECT_FALSE(db->isTombstone());
+
+        // Try restore from disk
+        db = detachThenAttach(ctx, db_name, std::move(db), log);
+        EXPECT_FALSE(db->isTombstone());
+    }
+}
+CATCH
+
+>>>>>>> af45f0214... Push down filter on timestamp type column to storage layer (#1875)
 } // namespace tests
 } // namespace DB
