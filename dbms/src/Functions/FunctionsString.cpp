@@ -500,12 +500,12 @@ struct SubstringUTF8Impl
                     else
                         current += 1;
                 }
-                if (static_cast<size_t>(-original_start) >= start_offsets.size())
+                if (static_cast<size_t>(-original_start) > start_offsets.size())
                 {
                     // return empty string
                     res_data.resize(res_data.size() + 1);
-                    res_offset += 1;
-                    res_data[res_offset - 1] = 0;
+                    res_data[res_offset] = 0;
+                    res_offset++;
                     res_offsets[i] = res_offset;
                     continue;
                 }
