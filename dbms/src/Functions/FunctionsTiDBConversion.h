@@ -588,10 +588,16 @@ struct TiDBConvertToFloat
     }
 
     template <typename T>
-    static Float64 toFloat(const DecimalField<T> & value, bool need_truncate, Float64 shift, Float64 max_f, const Context & context)
+    static std::enable_if_t<std::is_floating_point_v<T> || std::is_integral_v<T>, Float64> toFloat(
+        const T & value)
     {
-        Float64 float_value = static_cast<Float64>(value);
-        return produceTargetFloat64(float_value, need_truncate, shift, max_f, context);
+        return static_cast<Float64>(value);
+    }
+
+    template <typename T>
+    static Float64 toFloat(const DecimalField<T> & value)
+    {
+        return static_cast<Float64>(value);
     }
 
     static StringRef getValidFloatPrefix(const StringRef & value)
@@ -673,15 +679,6 @@ struct TiDBConvertToFloat
             vec_null_map_to = &col_null_map_to->getData();
         }
 
-        bool need_truncate = tp.flen() != -1 && tp.decimal() != -1 && tp.flen() >= tp.decimal();
-        Float64 shift = 0;
-        Float64 max_f = 0;
-        if (need_truncate)
-        {
-            shift = std::pow((Float64)10, tp.flen());
-            max_f = std::pow((Float64)10, tp.flen() - tp.decimal()) - 1.0 / shift;
-        }
-
         if constexpr (IsDecimal<FromFieldType>)
         {
             /// cast decimal as real
@@ -690,7 +687,7 @@ struct TiDBConvertToFloat
             for (size_t i = 0; i < size; ++i)
             {
                 auto & field = (*col_from)[i].template safeGet<DecimalField<FromFieldType>>();
-                vec_to[i] = toFloat(field, need_truncate, shift, max_f, context);
+                vec_to[i] = toFloat(field);
             }
         }
         else if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime> || std::is_same_v<FromDataType, DataTypeMyDate>)
@@ -707,19 +704,17 @@ struct TiDBConvertToFloat
                 if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
                 {
                     MyDate date(vec_from[i]);
-                    vec_to[i] = toFloat(date.year * 10000 + date.month * 100 + date.day, need_truncate, shift, max_f, context);
+                    vec_to[i] = toFloat(date.year * 10000 + date.month * 100 + date.day);
                 }
                 else
                 {
                     MyDateTime date_time(vec_from[i]);
                     if (type.getFraction() > 0)
                         vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0,
-                            need_truncate, shift, max_f, context);
+                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
                     else
                         vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second,
-                            need_truncate, shift, max_f, context);
+                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second);
                 }
             }
         }
@@ -732,6 +727,14 @@ struct TiDBConvertToFloat
             const ColumnString::Chars_t * chars = &col_from_string->getChars();
             const IColumn::Offsets * offsets = &col_from_string->getOffsets();
             size_t current_offset = 0;
+            bool need_truncate = tp.flen() != -1 && tp.decimal() != -1 && tp.flen() >= tp.decimal();
+            Float64 shift = 0;
+            Float64 max_f = 0;
+            if (need_truncate)
+            {
+                shift = std::pow((Float64)10, tp.flen());
+                max_f = std::pow((Float64)10, tp.flen() - tp.decimal()) - 1.0 / shift;
+            }
             for (size_t i = 0; i < size; i++)
             {
                 size_t next_offset = (*offsets)[i];
@@ -748,7 +751,7 @@ struct TiDBConvertToFloat
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
             for (size_t i = 0; i < size; i++)
-                vec_to[i] = toFloat(vec_from[i], need_truncate, shift, max_f, context);
+                vec_to[i] = toFloat(vec_from[i]);
         }
         else
         {
@@ -1649,20 +1652,6 @@ private:
                 else
                 {
                     TiDBConvertToFloat<FromDataType, DataTypeFloat64, return_nullable, false>::execute(
-                        block, arguments, result, in_union_, tidb_tp_, context_);
-                }
-            };
-        if (checkDataType<DataTypeFloat32>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
-                       const Context & context_) {
-                if (hasUnsignedFlag(tidb_tp_))
-                {
-                    TiDBConvertToFloat<FromDataType, DataTypeFloat32, return_nullable, true>::execute(
-                        block, arguments, result, in_union_, tidb_tp_, context_);
-                }
-                else
-                {
-                    TiDBConvertToFloat<FromDataType, DataTypeFloat32, return_nullable, false>::execute(
                         block, arguments, result, in_union_, tidb_tp_, context_);
                 }
             };
