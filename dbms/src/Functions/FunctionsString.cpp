@@ -481,14 +481,14 @@ struct SubstringUTF8Impl
             ColumnString::Offset bytes_start = 0;
             ColumnString::Offset bytes_length = 0;
             size_t start = 0;
-            if(original_start >= 0)
+            if (original_start >= 0)
                 start = original_start;
             else
             {
                 // set the start as string_length - abs(original_start) + 1
                 std::vector<ColumnString::Offset> start_offsets;
                 ColumnString::Offset current = prev_offset;
-                while (current < offsets[i] -1)
+                while (current < offsets[i] - 1)
                 {
                     start_offsets.push_back(current);
                     if (data[current] < 0xBF)
@@ -500,9 +500,18 @@ struct SubstringUTF8Impl
                     else
                         current += 1;
                 }
+                if (static_cast<size_t>(-original_start) > start_offsets.size())
+                {
+                    // return empty string
+                    res_data.resize(res_data.size() + 1);
+                    res_data[res_offset] = 0;
+                    res_offset++;
+                    res_offsets[i] = res_offset;
+                    continue;
+                }
                 start = start_offsets.size() + original_start + 1;
                 pos = start;
-                j = start_offsets[start-1];
+                j = start_offsets[start - 1];
             }
             while (j < offsets[i] - 1)
             {
