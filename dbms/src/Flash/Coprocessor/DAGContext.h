@@ -8,10 +8,7 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <DataStreams/IBlockInputStream.h>
-<<<<<<< HEAD
-=======
 #include <Flash/Coprocessor/DAGDriver.h>
->>>>>>> 2dfcb4146... Support return warnings for coprocessor request (#1834)
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -63,17 +60,11 @@ public:
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
     void handleTruncateError(const String & msg);
-<<<<<<< HEAD
-    void handleOverflowError(const String & msg);
-    void handleDivisionByZero(const String & msg);
-    void handleInvalidTime(const String & msg);
-=======
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
     void handleInvalidTime(const String & msg, const TiFlashError & error);
     bool allowZeroInDate() const;
     bool allowInvalidDate() const;
->>>>>>> 2dfcb4146... Support return warnings for coprocessor request (#1834)
     bool shouldClipToZero();
     /// This method is thread-safe.
     void appendWarning(const tipb::Error & warning)
