@@ -19,7 +19,7 @@ public:
 
     TypeIndex getTypeId() const override { return TypeIndex::Nullable; }
 
-    void enumerateStreams(StreamCallback callback, SubstreamPath path) const override;
+    void enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const override;
 
     void serializeBinaryBulkWithMultipleStreams(
         const IColumn & column,
