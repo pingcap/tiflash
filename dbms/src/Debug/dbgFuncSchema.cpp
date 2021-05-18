@@ -3,7 +3,9 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/StorageMergeTree.h>
+#define private public
 #include <Storages/Transaction/SchemaSyncService.h>
+#undef private
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
@@ -47,6 +49,24 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
 
     std::stringstream ss;
     ss << "schemas refreshed";
+    output(ss.str());
+}
+
+// Refresh schemas for all tables.
+// Usage:
+//   ./storage-client.sh "DBGInvoke gc_schemas()"
+void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    auto & service = context.getSchemaSyncService();
+    Timestamp gc_safe_point = 0;
+    if (args.size() == 0)
+        gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
+    else
+        gc_safe_point = (Timestamp)safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    service->gc(gc_safe_point);
+
+    std::stringstream ss;
+    ss << "schemas gc done";
     output(ss.str());
 }
 

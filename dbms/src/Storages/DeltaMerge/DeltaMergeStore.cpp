@@ -61,6 +61,9 @@ namespace FailPoints
 {
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
+extern const char pause_when_writing_to_dt_store[];
+extern const char pause_when_ingesting_to_dt_store[];
+extern const char pause_when_altering_dt_store[];
 extern const char force_triggle_background_merge_delta[];
 extern const char force_triggle_foreground_flush[];
 } // namespace FailPoints
@@ -458,6 +461,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                 segment = segment_it->second;
             }
 
+            FAIL_POINT_PAUSE(FailPoints::pause_when_writing_to_dt_store);
             waitForWrite(dm_context, segment);
             if (segment->hasAbandoned())
                 continue;
@@ -610,6 +614,7 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
                 segment = segment_it->second;
             }
 
+            FAIL_POINT_PAUSE(FailPoints::pause_when_ingesting_to_dt_store);
             waitForWrite(dm_context, segment);
             if (segment->hasAbandoned())
                 continue;
@@ -1422,10 +1427,13 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         if (segment->getLastCheckGCSafePoint() >= gc_safe_point)
             continue;
 
+        const auto  segment_id    = segment->segmentId();
         RowKeyRange segment_range = segment->getRowKeyRange();
         if (segment->getDelta()->isUpdating())
         {
-            LOG_DEBUG(log, "GC is skipped [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
+            LOG_DEBUG(log,
+                      "GC is skipped Segment [" << segment_id << "] [range=" << segment_range.toDebugString() << "] [table=" << table_name
+                                                << "]");
             continue;
         }
 
@@ -1458,15 +1466,20 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     checkSegmentUpdate(dm_context, segment, type);
                     gc_segments_num++;
                     finish_gc_on_segment = true;
-                    LOG_INFO(log, "GC-merge-delta done [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
+                    LOG_INFO(log,
+                             "GC-merge-delta done Segment [" << segment_id << "] [range=" << segment_range.toDebugString()
+                                                             << "] [table=" << table_name << "]");
                 }
             }
             if (!finish_gc_on_segment)
-                LOG_DEBUG(log, "GC is skipped [range=" << segment_range.toDebugString() << "] [table=" << table_name << "]");
+                LOG_DEBUG(log,
+                          "GC is skipped Segment [" << segment_id << "] [range=" << segment_range.toDebugString()
+                                                    << "] [table=" << table_name << "]");
         }
         catch (Exception & e)
         {
-            e.addMessage("while apply gc [range=" + segment_range.toDebugString() + "] [table=" + table_name + "]");
+            e.addMessage("while apply gc Segment [" + DB::toString(segment_id) + "] [range=" + segment_range.toDebugString()
+                         + "] [table=" + table_name + "]");
             e.rethrow();
         }
     }
@@ -1900,6 +1913,8 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
                                   const Context & /* context */)
 {
     std::unique_lock lock(read_write_mutex);
+
+    FAIL_POINT_PAUSE(FailPoints::pause_when_altering_dt_store);
 
     ColumnDefines new_original_table_columns(original_table_columns.begin(), original_table_columns.end());
     for (const auto & command : commands)
