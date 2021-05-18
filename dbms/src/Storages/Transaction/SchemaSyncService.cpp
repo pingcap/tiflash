@@ -134,8 +134,12 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
         catch (DB::Exception & e)
         {
             no_error = false;
+            String err_msg;
             // Maybe a read lock of a table is held for a long time, just ignore it this round.
-            auto err_msg = getCurrentExceptionMessage(true);
+            if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
+                err_msg = "locking attempt has timed out!"; // ignore verbose stack for this error
+            else
+                err_msg = getCurrentExceptionMessage(true);
             LOG_INFO(log, "Physically drop table " << canonical_name << " is skipped, reason: " << err_msg);
         }
     }
@@ -175,7 +179,11 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
         catch (DB::Exception & e)
         {
             no_error = false;
-            auto err_msg = getCurrentExceptionMessage(true);
+            String err_msg;
+            if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
+                err_msg = "locking attempt has timed out!"; // ignore verbose stack for this error
+            else
+                err_msg = getCurrentExceptionMessage(true);
             LOG_INFO(log, "Physically drop database " << db_name << " is skipped, reason: " << err_msg);
         }
     }

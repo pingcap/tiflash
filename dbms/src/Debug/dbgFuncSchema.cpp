@@ -52,7 +52,7 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
 
 // Refresh schemas for all tables.
 // Usage:
-//   ./storage-client.sh "DBGInvoke gc_schemas()"
+//   ./storage-client.sh "DBGInvoke gc_schemas([gc_safe_point])"
 void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     auto & service = context.getSchemaSyncService();
@@ -60,7 +60,7 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
     if (args.size() == 0)
         gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
     else
-        gc_safe_point = (Timestamp)safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+        gc_safe_point = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     service->gc(gc_safe_point);
 
     std::stringstream ss;
