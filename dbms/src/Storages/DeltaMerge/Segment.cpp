@@ -319,7 +319,7 @@ bool Segment::ingestPacks(DMContext & dm_context, const RowKeyRange & range, con
     auto new_range = range.shrink(rowkey_range);
     LOG_TRACE(log, "Segment [" << segment_id << "] write region snapshot: " << new_range.toDebugString());
 
-    return delta->appendRegionSnapshot(dm_context, range, packs, clear_data_in_range);
+    return delta->ingestPacks(dm_context, range, packs, clear_data_in_range);
 }
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update) const

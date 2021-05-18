@@ -86,7 +86,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     if (file.exists())
     {
         file.remove(true);
-        LOG_WARNING(log, "Existing dmfile, removed :" << path);
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removed: " << path);
     }
     if (single_file_mode)
     {
@@ -374,8 +374,7 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
     readPackStat(file_provider, footer.meta_pack_info);
 }
 
-void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider,
-                                   const RateLimiterPtr &  rate_limiter)
+void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
 {
     writeMetadata(file_provider, rate_limiter);
     if (unlikely(status != Status::WRITING))
@@ -387,7 +386,15 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider,
 
     Poco::File file(new_path);
     if (file.exists())
+    {
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removing: " << new_path);
+        const String deleted_path = getPathByStatus(parent_path, file_id, Status::DROPPED);
+        // no need to delete the encryption info associated with the dmfile path here.
+        // because this dmfile path is still a valid path and no obsolete encryption info will be left.
+        file.renameTo(deleted_path);
         file.remove(true);
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removed: " << deleted_path);
+    }
     old_file.renameTo(new_path);
 }
 
@@ -395,8 +402,8 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
 {
     Footer footer;
     std::tie(footer.meta_pack_info.pack_property_offset, footer.meta_pack_info.pack_property_size) = writePackPropertyToBuffer(buffer);
-    std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)           = writeMetaToBuffer(buffer);
-    std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size) = writePackStatToBuffer(buffer);
+    std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)                   = writeMetaToBuffer(buffer);
+    std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size)         = writePackStatToBuffer(buffer);
 
     footer.sub_file_stat_offset = buffer.count();
     footer.sub_file_num         = sub_file_stats.size();
