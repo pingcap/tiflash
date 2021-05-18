@@ -342,10 +342,7 @@ bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const RowKeyRan
     return true;
 }
 
-bool DeltaValueSpace::appendRegionSnapshot(DMContext & /*context*/,
-                                           const RowKeyRange & range,
-                                           const DeltaPacks &  packs,
-                                           bool                clear_data_in_range)
+bool DeltaValueSpace::ingestPacks(DMContext & /*context*/, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
 {
     std::scoped_lock lock(mutex);
     if (abandoned.load(std::memory_order_relaxed))
