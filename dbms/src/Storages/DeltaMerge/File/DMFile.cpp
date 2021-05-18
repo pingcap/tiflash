@@ -387,8 +387,13 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider,
 
     Poco::File file(new_path);
     if (file.exists())
-        file.remove(true);
+    {
+        LOG_WARNING(log, "Existing dmfile, removed :" << new_path);
+        Poco::File meta_file(new_path + "/meta.txt");
+        meta_file.remove(true);
+    }
     old_file.renameTo(new_path);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_dmfile_remove_from_disk);
 }
 
 void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
