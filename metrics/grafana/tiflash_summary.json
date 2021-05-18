@@ -2353,7 +2353,16 @@
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "/5min-write/",
+              "yaxis": 2
+            },
+            {
+              "alias": "/5min-all/",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
@@ -2389,6 +2398,22 @@
               "intervalFactor": 1,
               "legendFormat": "30min-{{instance}}",
               "refId": "D"
+            },
+            {
+              "refId": "E",
+              "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]))) by (instance)",
+              "hide": true,
+              "intervalFactor": 1,
+              "format": "time_series",
+              "legendFormat": "5min-all-{{instance}}"
+            },
+            {
+              "refId": "F",
+              "expr": "sum(rate(tiflash_system_profile_event_DMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m])) by (instance)",
+              "hide": true,
+              "intervalFactor": 1,
+              "format": "time_series",
+              "legendFormat": "5min-write-{{instance}}"
             }
           ],
           "thresholds": [],
@@ -2420,7 +2445,7 @@
               "show": true
             },
             {
-              "format": "none",
+              "format": "Bps",
               "label": null,
               "logBase": 1,
               "max": null,
