@@ -42,24 +42,15 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
 
 BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets)
 {
-    if (!query_block.children.empty())
+    std::vector<BlockInputStreams> input_streams_vec;
+    for (auto & child : query_block.children)
     {
-        std::vector<BlockInputStreams> input_streams_vec;
-        for (auto & child : query_block.children)
-        {
-            BlockInputStreams child_streams = executeQueryBlock(*child, subqueriesForSets);
-            input_streams_vec.push_back(child_streams);
-        }
-        DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, keep_session_timezone_info,
-            dag.getDAGRequest(), dag.getAST(), dag, subqueriesForSets, mpp_exchange_receiver_maps);
-        return query_block_interpreter.execute();
+        BlockInputStreams child_streams = executeQueryBlock(*child, subqueriesForSets);
+        input_streams_vec.push_back(child_streams);
     }
-    else
-    {
-        DAGQueryBlockInterpreter query_block_interpreter(context, {}, query_block, keep_session_timezone_info, dag.getDAGRequest(),
-            dag.getAST(), dag, subqueriesForSets, mpp_exchange_receiver_maps);
-        return query_block_interpreter.execute();
-    }
+    DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, keep_session_timezone_info,
+        dag.getDAGRequest(), dag.getAST(), dag, subqueriesForSets, mpp_exchange_receiver_maps);
+    return query_block_interpreter.execute();
 }
 
 void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_block)
@@ -79,10 +70,10 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
 BlockIO InterpreterDAG::execute()
 {
     if (dag.getDAGContext().isMPPTask())
-        /// Due to leaner read, DAGQueryBlockInterpreter may take a long time to build
+        /// Due to learner read, DAGQueryBlockInterpreter may take a long time to build
         /// the query plan, so we init mpp exchange receiver before executeQueryBlock
         initMPPExchangeReceiver(*dag.getQueryBlock());
-    /// region_info should based on the source executor, however
+    /// region_info should base on the source executor, however
     /// tidb does not support multi-table dag request yet, so
     /// it is ok to use the same region_info for the whole dag request
     std::vector<SubqueriesForSets> subqueriesForSets;
