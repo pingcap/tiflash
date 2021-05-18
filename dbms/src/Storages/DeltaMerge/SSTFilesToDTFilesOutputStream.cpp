@@ -1,3 +1,4 @@
+#include <Common/ProfileEvents.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Poco/File.h>
@@ -12,6 +13,11 @@
 #include <Storages/Transaction/SSTReader.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
+
+namespace ProfileEvents
+{
+extern const Event DMWriteBytes;
+}
 
 namespace DB
 {
@@ -58,8 +64,13 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
         assert(!dt_file->canGC()); // The DTFile should not be able to gc until it is ingested.
         // Add the DTFile to StoragePathPool so that we can restore it later
         auto [ingest_storage, _schema_snap] = child->ingestingInfo();
-        (void)_schema_snap;
-        ingest_storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), dt_file->getBytesOnDisk());
+        std::ignore                         = _schema_snap;
+        const auto bytes_written            = dt_file->getBytesOnDisk();
+        ingest_storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), bytes_written);
+
+        // Report DMWriteBytes for calculating write amplification
+        ProfileEvents::increment(ProfileEvents::DMWriteBytes, bytes_written);
+
         dt_stream.reset();
     }
 
