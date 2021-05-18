@@ -3,9 +3,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/StorageMergeTree.h>
-#define private public
 #include <Storages/Transaction/SchemaSyncService.h>
-#undef private
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
