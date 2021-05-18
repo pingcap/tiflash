@@ -15,7 +15,6 @@ namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
 extern const char exception_before_dmfile_remove_from_disk[];
-extern const char exception_after_dmfile_finalize[];
 } // namespace FailPoints
 
 namespace DM
@@ -457,6 +456,7 @@ try
     EXPECT_TRUE(res.empty());
 }
 CATCH
+/// Test reading rows with some filters
 
 TEST_P(DMFile_Test, ReadFilteredByHandle)
 try
