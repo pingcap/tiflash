@@ -5,9 +5,7 @@ services:
   tics-gtest:
     image: hub.pingcap.net/tiflash/tics:${TAG:-master}
     volumes:
-      - ./config/config.toml:/config.toml:ro
-      - ./config/users.toml:/users.toml:ro
       - ./log/tics-gtest:/tmp/tiflash/log
       - ..:/tests
-      - ./_env.sh:/tests/_env.sh
+      - ../docker/_env.sh:/tests/_env.sh
     entrypoint: sleep infinity # just wait
