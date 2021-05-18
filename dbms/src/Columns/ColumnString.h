@@ -184,17 +184,31 @@ public:
         offsets.resize_assume_reserved(offsets.size() - n);
     }
 
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const override
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
 
         StringRef res;
-        res.size = sizeof(string_size) + string_size;
-        char * pos = arena.allocContinue(res.size, begin);
-        memcpy(pos, &string_size, sizeof(string_size));
-        memcpy(pos + sizeof(string_size), &chars[offset], string_size);
-        res.data = pos;
+
+        if (collator != nullptr)
+        {
+            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size, sort_key_container);
+            string_size = sort_key.size;
+            res.size = sizeof(string_size) + string_size;
+            char * pos = arena.allocContinue(res.size, begin);
+            memcpy(pos, &string_size, sizeof(string_size));
+            memcpy(pos + sizeof(string_size), sort_key.data, string_size);
+            res.data = pos;
+        }
+        else
+        {
+            res.size = sizeof(string_size) + string_size;
+            char * pos = arena.allocContinue(res.size, begin);
+            memcpy(pos, &string_size, sizeof(string_size));
+            memcpy(pos + sizeof(string_size), &chars[offset], string_size);
+            res.data = pos;
+        }
 
         return res;
     }
