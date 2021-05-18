@@ -24,8 +24,6 @@ extern const int UNKNOWN_FORMAT_VERSION;
 
 const UInt32 Region::CURRENT_VERSION = 1;
 
-const std::string Region::log_name = "Region";
-
 RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIter & write_it) { return data.removeDataByWriteIt(write_it); }
 
 RegionDataReadInfo Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value) const
@@ -65,6 +63,12 @@ void Region::remove(const std::string & cf, const TiKVKey & key)
 }
 
 void Region::doRemove(ColumnFamilyType type, const TiKVKey & key) { data.remove(type, key); }
+
+void Region::clearAllData()
+{
+    std::unique_lock lock(mutex);
+    data = RegionData();
+}
 
 UInt64 Region::appliedIndex() const { return meta.appliedIndex(); }
 
@@ -512,6 +516,43 @@ void Region::assignRegion(Region && new_region)
     meta.notifyAll();
 }
 
+/// try to clean illegal data because of feature `compaction filter`
+void Region::tryCompactionFilter(const Timestamp safe_point)
+{
+    size_t del_write = 0;
+    auto & write_map = data.writeCF().getDataMut();
+    auto & default_map = data.defaultCF().getDataMut();
+    for (auto write_map_it = write_map.begin(); write_map_it != write_map.end();)
+    {
+        const auto & decoded_val = std::get<2>(write_map_it->second);
+        const auto & [pk, ts] = write_map_it->first;
+
+        if (decoded_val.write_type == RecordKVFormat::CFModifyFlag::PutFlag)
+        {
+            if (!decoded_val.short_value)
+            {
+                if (auto data_it = default_map.find({pk, decoded_val.prewrite_ts}); data_it == default_map.end())
+                {
+                    // if key-val in write cf can not find matched data in default cf and its commit-ts < gc-safe-point, we can clean it safely.
+                    if (ts < safe_point)
+                    {
+                        del_write += 1;
+                        data.cf_data_size -= RegionWriteCFData::calcTiKVKeyValueSize(write_map_it->second);
+                        write_map_it = write_map.erase(write_map_it);
+                        continue;
+                    }
+                }
+            }
+        }
+        ++write_map_it;
+    }
+    // No need to check default cf. Because tikv will gc default cf before write cf.
+    if (del_write)
+    {
+        LOG_INFO(log, __FUNCTION__ << ": delete " << del_write << " in write cf");
+    }
+}
+
 void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp safe_point)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
@@ -691,7 +732,7 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
     return EngineStoreApplyRes::None;
 }
 
-void Region::handleIngestSST(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+void Region::handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     if (index <= appliedIndex())
         return;
@@ -728,6 +769,29 @@ void Region::handleIngestSST(const SSTViewVec snaps, UInt64 index, UInt64 term, 
     meta.notifyAll();
 }
 
+void Region::finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term)
+{
+    if (index <= appliedIndex())
+        return;
+
+    {
+        std::unique_lock<std::shared_mutex> lock(mutex);
+
+        if (rhs)
+        {
+            // Merge the uncommitted data from `rhs`
+            // (we have taken the ownership of `rhs`, so don't acquire lock on `rhs.mutex`)
+            data.mergeFrom(rhs->data);
+        }
+
+        meta.setApplied(index, term);
+    }
+    LOG_INFO(log,
+        __FUNCTION__ << ": " << this->toString(false) << " finish to ingest sst by DTFile [write_cf_keys=" << data.write_cf.getSize()
+                     << "] [default_cf_keys=" << data.default_cf.getSize() << "] [lock_cf_keys=" << data.lock_cf.getSize() << "]");
+    meta.notifyAll();
+}
+
 RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLock & lock)
 {
     static_assert(sizeof(RegionRaftCommandDelegate) == sizeof(Region));
@@ -741,7 +805,7 @@ RegionMetaSnapshot Region::dumpRegionMetaSnapshot() const { return meta.dumpRegi
 Region::Region(RegionMeta && meta_) : Region(std::move(meta_), nullptr) {}
 
 Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_)
-    : meta(std::move(meta_)), log(&Logger::get(log_name)), mapped_table_id(meta.getRange()->getMappedTableID()), proxy_helper(proxy_helper_)
+    : meta(std::move(meta_)), log(&Logger::get("Region")), mapped_table_id(meta.getRange()->getMappedTableID()), proxy_helper(proxy_helper_)
 {}
 
 TableID Region::getMappedTableID() const { return mapped_table_id; }

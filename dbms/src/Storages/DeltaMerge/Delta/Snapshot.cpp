@@ -200,7 +200,7 @@ Block DeltaValueReader::readPKVersion(size_t offset, size_t limit)
     Block block;
     for (size_t i = 0; i < 2; ++i)
     {
-        auto cd = (*col_defs)[i];
+        const auto & cd = (*col_defs)[i];
         block.insert(ColumnWithTypeAndName(std::move(cols[i]), cd.type, cd.name, cd.id));
     }
     return block;

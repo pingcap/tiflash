@@ -1,6 +1,5 @@
 #include <Common/ClickHouseRevision.h>
 
-#include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>

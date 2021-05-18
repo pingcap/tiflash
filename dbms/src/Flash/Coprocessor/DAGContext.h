@@ -6,7 +6,9 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
+#include <Common/ConcurrentBoundedQueue.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/DAGDriver.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -30,14 +32,16 @@ public:
           is_mpp_task(false),
           is_root_mpp_task(false),
           flags(dag_request.flags()),
-          sql_mode(dag_request.sql_mode()){};
+          sql_mode(dag_request.sql_mode()),
+          _warnings(std::numeric_limits<int>::max()){};
     explicit DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_)
         : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries()),
           return_executor_id(true),
           is_mpp_task(true),
           flags(dag_request.flags()),
           sql_mode(dag_request.sql_mode()),
-          mpp_task_meta(meta_)
+          mpp_task_meta(meta_),
+          _warnings(std::numeric_limits<int>::max())
     {
         exchange_sender_executor_id = dag_request.root_executor().executor_id();
         const auto & exchangeSender = dag_request.root_executor().exchange_sender();
@@ -56,11 +60,30 @@ public:
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
     void handleTruncateError(const String & msg);
-    void handleOverflowError(const String & msg);
-    void handleDivisionByZero(const String & msg);
-    void handleInvalidTime(const String & msg);
+    void handleOverflowError(const String & msg, const TiFlashError & error);
+    void handleDivisionByZero();
+    void handleInvalidTime(const String & msg, const TiFlashError & error);
+    bool allowZeroInDate() const;
+    bool allowInvalidDate() const;
     bool shouldClipToZero();
-    const std::vector<std::pair<Int32, String>> & getWarnings() const { return warnings; }
+    /// This method is thread-safe.
+    void appendWarning(const tipb::Error & warning)
+    {
+        if (!_warnings.tryPush(warning))
+            throw TiFlashException("Too many warnings, exceeds limit of 2147483647", Errors::Coprocessor::Internal);
+    }
+    /// Consume all warnings. Once this method called, every warning will be cleared.
+    /// This method is not thread-safe.
+    void consumeWarnings(std::vector<tipb::Error> & warnings)
+    {
+        warnings.reserve(_warnings.size());
+        for (size_t i = 0; i < _warnings.size(); i++)
+        {
+            tipb::Error error;
+            _warnings.pop(error);
+            warnings.push_back(error);
+        }
+    }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
     bool isMPPTask() const { return is_mpp_task; }
     /// root mpp task means mpp task that send data back to TiDB
@@ -83,6 +106,8 @@ public:
     bool is_mpp_task;
     bool is_root_mpp_task;
 
+    RegionInfoList retry_regions;
+
 private:
     /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo
     std::map<String, ProfileStreamsInfo> profile_streams_map;
@@ -95,10 +120,10 @@ private:
     /// in this query block and all its children query block
     std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
     BlockInputStreams remote_block_input_streams;
-    std::vector<std::pair<Int32, String>> warnings;
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
+    ConcurrentBoundedQueue<tipb::Error> _warnings;
 };
 
 } // namespace DB
