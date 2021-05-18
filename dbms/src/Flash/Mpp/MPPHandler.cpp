@@ -127,7 +127,6 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         }
     }
     context.getTimezoneInfo().resetByDAGRequest(*dag_req);
-    context.setProgressCallback([this](const Progress & progress) { this->updateProgress(progress); });
 
     dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
     context.setDAGContext(dag_context.get());
