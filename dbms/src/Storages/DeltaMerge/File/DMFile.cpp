@@ -149,7 +149,7 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
 {
     if (isSingleFileMode())
     {
-        const auto & index_identifier = DMFile::colIndexFileName(DMFile::getFileNameBase(col_id));
+        const auto index_identifier = DMFile::colIndexFileName(DMFile::getFileNameBase(col_id));
         return isSubFileExists(index_identifier);
     }
     else

@@ -196,7 +196,6 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                                                            IdSetPtr{},
                                                            UINT64_MAX, // because we just read one pack at a time
                                                            true);
-            data_stream      = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, rowkey_range, 0);
             auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
                 data_stream, read_columns, 0, is_common_handle);
             mvcc_stream->readPrefix();

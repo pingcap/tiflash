@@ -1,6 +1,7 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <gtest/gtest.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -14,6 +15,12 @@ namespace DB
 {
 namespace DM
 {
+extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
+                                    const ColumnDefinesPtr &       schema_snap,
+                                    const BlockInputStreamPtr &    input_stream,
+                                    UInt64                         file_id,
+                                    const String &                 parent_path,
+                                    DMFileBlockOutputStream::Flags flags);
 namespace tests
 {
 
@@ -177,7 +184,6 @@ try
         {
             // flush segment
             segment = segment->mergeDelta(dmContext(), tableColumns());
-            ;
         }
 
         {
@@ -1035,8 +1041,12 @@ public:
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto delegate     = context.path_pool.getStableDiskDelegator();
         auto store_path   = delegate.choosePath();
+
+        DMFileBlockOutputStream::Flags flags;
+        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
+
         auto dmfile
-            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, false);
+            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, flags);
 
         delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
@@ -1066,8 +1076,7 @@ try
             case Segment_test_Mode::V2_BlockOnly:
                 segment->write(dmContext(), std::move(block));
                 break;
-            case Segment_test_Mode::V2_FileOnly:
-            {
+            case Segment_test_Mode::V2_FileOnly: {
                 auto delegate          = dmContext().path_pool.getStableDiskDelegator();
                 auto file_provider     = dmContext().db_context.getFileProvider();
                 auto [range, file_ids] = genDMFile(dmContext(), block);
@@ -1080,7 +1089,7 @@ try
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
 
-                segment->writeRegionSnapshot(dmContext(), range, {pack}, false);
+                segment->ingestPacks(dmContext(), range, {pack}, false);
                 break;
             }
             default:
@@ -1343,7 +1352,6 @@ try
     {
         segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
@@ -1521,7 +1529,6 @@ try
     {
         segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
