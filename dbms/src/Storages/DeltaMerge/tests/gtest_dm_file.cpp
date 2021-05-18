@@ -456,6 +456,7 @@ try
     EXPECT_TRUE(res.empty());
 }
 CATCH
+
 /// Test reading rows with some filters
 
 TEST_P(DMFile_Test, ReadFilteredByHandle)
