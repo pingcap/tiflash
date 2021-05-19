@@ -117,7 +117,8 @@ private:
         TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
     void executeProject(Pipeline & pipeline, NamesWithAliases & project_cols);
 
-    void readFromLocalStorage( //
+    void readFromLocalStorage(            //
+        const TableStructureLockHolder &, //
         const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
         const LearnerReadSnapshot & learner_read_snapshot, //
         Pipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry);
