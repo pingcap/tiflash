@@ -313,7 +313,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     if (!region_retry.empty())
     {
 #ifndef NDEBUG
-        if (!dag_req.has_value() || !schema.has_value())
+        if (unlikely(!dag_req.has_value() || !schema.has_value()))
             throw TiFlashException(
                 "Try to read from remote but can not build DAG request. Should not happen!", Errors::Coprocessor::Internal);
 #endif
