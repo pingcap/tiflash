@@ -2,10 +2,14 @@
 
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/Transaction/Types.h>
-#include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
 #include <memory>
+
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
@@ -43,7 +47,7 @@ private:
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle handle;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;

@@ -8,6 +8,7 @@
 #include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -101,7 +102,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
     }
 
     // Physically drop tables
-    bool no_error = true;
+    bool succeeded = true;
     for (auto & storage_ : storages_to_gc)
     {
         // Get a shared_ptr from weak_ptr, it should always success.
@@ -133,7 +134,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
         }
         catch (DB::Exception & e)
         {
-            no_error = false;
+            succeeded = false;
             String err_msg;
             // Maybe a read lock of a table is held for a long time, just ignore it this round.
             if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
@@ -178,7 +179,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
         }
         catch (DB::Exception & e)
         {
-            no_error = false;
+            succeeded = false;
             String err_msg;
             if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
                 err_msg = "locking attempt has timed out!"; // ignore verbose stack for this error
@@ -188,7 +189,7 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
         }
     }
 
-    if (no_error)
+    if (succeeded)
     {
         gc_context.last_gc_safe_point = gc_safe_point;
         LOG_INFO(log, "Performed GC using safe point " << gc_safe_point);
