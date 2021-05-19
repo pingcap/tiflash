@@ -1247,6 +1247,37 @@ void Join::joinBlockImplCross(Block & block) const
     }
 
     block = block.cloneWithColumns(std::move(dst_columns));
+
+    if (!other_filter_column.empty())
+    {
+        other_condition_ptr->execute(block);
+        const ColumnVector<UInt8> * filter_column = nullptr;
+        ColumnVector<UInt8> * mutable_nested_column = nullptr;
+        auto orig_filter_column = block.getByName(other_filter_column).column;
+        if (orig_filter_column->isColumnConst())
+            orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
+        if (orig_filter_column->isColumnNullable())
+        {
+            auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
+            mutable_nested_column = static_cast<ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr()->assumeMutable().get());
+            auto & mutable_nested_column_data = mutable_nested_column->getData();
+            for (size_t i = 0; i < nullable_column->size(); i++)
+            {
+                if (nullable_column->isNullAt(i))
+                    mutable_nested_column_data[i] = 0;
+            }
+            filter_column = mutable_nested_column;
+        }
+        else
+        {
+            filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
+        }
+        auto & filter = filter_column->getData();
+        for (size_t i = 0; i < block.columns(); i++)
+        {
+            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, -1);
+        }
+    }
 }
 
 

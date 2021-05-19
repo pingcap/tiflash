@@ -598,19 +598,34 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
                 collators.push_back(nullptr);
         }
 
+    if (join.left_join_keys_size() == 0)
+    {
+        if (kind != ASTTableJoin::Kind::Inner)
+            throw TiFlashException("CARTESIAN Join only support inner join", Errors::Coprocessor::BadRequest);
+        if (join.left_conditions_size() != 0 || join.right_conditions_size() != 0)
+            throw TiFlashException("CARTESIAN Inner Join does not support left conditions or right conditions", Errors::Coprocessor::BadRequest);
+        kind = ASTTableJoin::Kind::Cross;
+    }
+
     /// add necessary transformation if the join key is an expression
     Pipeline left_pipeline;
     left_pipeline.streams = left_streams;
     String left_filter_column_name = "";
-    prepareJoin(join.inner_idx() == 0 ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names, true,
-        kind == ASTTableJoin::Kind::Right, join.inner_idx() == 0 ? join.right_conditions() : join.left_conditions(),
-        left_filter_column_name);
+    if (kind != ASTTableJoin::Kind::Cross)
+    {
+        prepareJoin(join.inner_idx() == 0 ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names, true,
+                    kind == ASTTableJoin::Kind::Right, join.inner_idx() == 0 ? join.right_conditions() : join.left_conditions(),
+                    left_filter_column_name);
+    }
     Pipeline right_pipeline;
     right_pipeline.streams = right_streams;
     String right_filter_column_name = "";
-    prepareJoin(join.inner_idx() == 0 ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names,
-        false, kind == ASTTableJoin::Kind::Right, join.inner_idx() == 0 ? join.left_conditions() : join.right_conditions(),
-        right_filter_column_name);
+    if (kind != ASTTableJoin::Kind::Cross)
+    {
+        prepareJoin(join.inner_idx() == 0 ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names,
+                    false, kind == ASTTableJoin::Kind::Right, join.inner_idx() == 0 ? join.left_conditions() : join.right_conditions(),
+                    right_filter_column_name);
+    }
 
     left_streams = left_pipeline.streams;
     right_streams = right_pipeline.streams;
