@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <memory>
 #include <iostream>
+#include <type_traits>
 
 #include <boost/noncopyable.hpp>
 #include <boost/iterator_adaptors.hpp>
@@ -87,6 +88,7 @@ protected:
     static constexpr char * null = pad_left ? const_cast<char *>(EmptyPODArray) + EmptyPODArraySize : nullptr;
 
     static_assert(pad_left <= EmptyPODArraySize && "Left Padding exceeds EmptyPODArraySize. Is the element size too large?");
+    static_assert(INITIAL_SIZE > 0 && "INITIAL_SIZE should be positive. ");
 
     char * c_start          = null;    /// Does not include pad_left.
     char * c_end            = null;
@@ -271,6 +273,8 @@ template <typename T, size_t INITIAL_SIZE = 4096, typename TAllocator = Allocato
 class PODArray : public PODArrayBase<sizeof(T), INITIAL_SIZE, TAllocator, pad_right_, pad_left_>
 {
 protected:
+    static_assert(std::is_pod_v<T> && "Try to specialize PODArray by a non-pod type.");
+
     using Base = PODArrayBase<sizeof(T), INITIAL_SIZE, TAllocator, pad_right_, pad_left_>;
 
     T * t_start()                      { return reinterpret_cast<T *>(this->c_start); }
@@ -300,7 +304,7 @@ public:
 
     PODArray() {}
 
-    PODArray(size_t n)
+    explicit PODArray(size_t n)
     {
         this->alloc_for_num_elements(n);
         this->c_end += this->byte_size(n);
@@ -383,8 +387,7 @@ public:
     template <typename U, typename ... TAllocatorParams>
     void push_back(U && x, TAllocatorParams &&... allocator_params)
     {
-        // FIXME:: It's dangerous here !!
-        if (unlikely(this->c_end >= this->c_end_of_storage))
+        if (unlikely(this->c_end + sizeof(T) > this->c_end_of_storage))
             this->reserveForNextSize(std::forward<TAllocatorParams>(allocator_params)...);
 
         new (t_end()) T(std::forward<U>(x));
@@ -397,7 +400,7 @@ public:
     template <typename... Args>
     void emplace_back(Args &&... args)
     {
-        if (unlikely(this->c_end >= this->c_end_of_storage))
+        if (unlikely(this->c_end + sizeof(T) > this->c_end_of_storage))
             this->reserveForNextSize();
 
         new (t_end()) T(std::forward<Args>(args)...);
