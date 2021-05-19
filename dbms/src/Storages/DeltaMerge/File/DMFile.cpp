@@ -72,7 +72,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path)
     if (file.exists())
     {
         file.remove(true);
-        LOG_WARNING(log, "Existing dmfile, removed :" << path);
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removed: " << path);
     }
     file.createDirectories();
 
@@ -175,7 +175,15 @@ void DMFile::finalize(const FileProviderPtr & file_provider)
 
     Poco::File file(new_path);
     if (file.exists())
+    {
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removing: " << new_path);
+        const String deleted_path = getPathByStatus(parent_path, file_id, Status::DROPPED);
+        // no need to delete the encryption info associated with the dmfile path here.
+        // because this dmfile path is still a valid path and no obsolete encryption info will be left.
+        file.renameTo(deleted_path);
         file.remove(true);
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removed: " << deleted_path);
+    }
     old_file.renameTo(new_path);
 }
 
