@@ -397,7 +397,7 @@ public:
                     write_block.insert(ColumnWithTypeAndName(std::move(col), column.type, column.name, column.column_id));
                 }
 
-                store->write(db_context, db_settings, write_block);
+                store->write(db_context, db_settings, std::move(write_block));
             }
         }
     }
@@ -483,7 +483,7 @@ void StorageDeltaMerge::write(Block && block, const Settings & settings)
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_write_to_storage);
 
-    store->write(global_context, settings, block);
+    store->write(global_context, settings, std::move(block));
 }
 
 std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
@@ -709,6 +709,14 @@ void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, con
     auto metrics = global_context.getTiFlashMetrics();
     GET_METRIC(metrics, tiflash_storage_command_count, type_delete_range).Increment();
     return getAndMaybeInitStore()->deleteRange(global_context, settings, range_to_delete);
+}
+
+void StorageDeltaMerge::ingestFiles(
+    const DM::RowKeyRange & range, const std::vector<UInt64> & file_ids, bool clear_data_in_range, const Settings & settings)
+{
+    auto metrics = global_context.getTiFlashMetrics();
+    GET_METRIC(metrics, tiflash_storage_command_count, type_ingest).Increment();
+    return getAndMaybeInitStore()->ingestFiles(global_context, settings, range, file_ids, clear_data_in_range);
 }
 
 UInt64 StorageDeltaMerge::onSyncGc(Int64 limit)
@@ -984,6 +992,7 @@ void StorageDeltaMerge::rename(
         return;
     }
 
+    /// Note that this routine is only left for CI tests. `clean_rename` should always be true in production env.
     auto & store = getAndMaybeInitStore();
     // For DatabaseOrdinary, we need to rename data path, then recreate a new store.
     const String new_path = new_path_to_db + "/" + new_table_name;

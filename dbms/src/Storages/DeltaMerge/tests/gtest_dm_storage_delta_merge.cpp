@@ -24,7 +24,6 @@
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
-#include <gtest/gtest.h>
 
 #include <limits>
 
@@ -297,7 +296,6 @@ try
         {
             path.remove(true);
         }
-        std::cout << "TemporaryPath " << path_name << std::endl;
 
         // primary_expr_ast
         ASTPtr       astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
