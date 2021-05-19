@@ -18,7 +18,7 @@ void dbgFuncEnableSchemaSyncService(Context & context, const ASTs & args, DBGInv
 //   ./storage-client.sh "DBGInvoke refresh_schemas()"
 void dbgFuncRefreshSchemas(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
-// Refresh schemas for all tables.
+// Trigger gc on all databases / tables.
 // Usage:
 //   ./storage-client.sh "DBGInvoke gc_schemas([gc_safe_point])"
 void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer output);

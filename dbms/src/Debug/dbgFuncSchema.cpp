@@ -50,7 +50,7 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
     output(ss.str());
 }
 
-// Refresh schemas for all tables.
+// Trigger gc on all databases / tables.
 // Usage:
 //   ./storage-client.sh "DBGInvoke gc_schemas([gc_safe_point])"
 void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer output)

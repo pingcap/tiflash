@@ -13,13 +13,17 @@ namespace DB
 class Context;
 class BackgroundProcessingPool;
 
+class IAST;
+using ASTPtr = std::shared_ptr<IAST>;
+using ASTs = std::vector<ASTPtr>;
+using DBGInvokerPrinter = std::function<void(const std::string &)>;
+extern void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
+
 class SchemaSyncService : public std::enable_shared_from_this<SchemaSyncService>, private boost::noncopyable
 {
 public:
     SchemaSyncService(Context & context_);
     ~SchemaSyncService();
-
-    bool gc(Timestamp gc_safe_point);
 
 private:
     bool syncSchemas();
@@ -29,8 +33,12 @@ private:
         Timestamp last_gc_safe_point = 0;
     } gc_context;
 
+    bool gc(Timestamp gc_safe_point);
+
 private:
     Context & context;
+
+    friend void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
 
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle handle;
