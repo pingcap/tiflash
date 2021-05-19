@@ -93,6 +93,65 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
     }
 }
 
+static std::tuple<std::optional<::tipb::DAGRequest>, std::optional<DAGSchema>> //
+buildRemoteTS(const std::unordered_map<RegionID, const RegionInfo &> & region_retry, const DAGQueryBlock & query_block,
+    const tipb::TableScan & ts, const String & handle_column_name, const TableStructureLockHolder &, const ManageableStoragePtr & storage,
+    Context & context, Poco::Logger * log)
+{
+    if (region_retry.empty())
+        return std::make_tuple(std::nullopt, std::nullopt);
+
+    for (auto it : region_retry)
+    {
+        context.getQueryContext().getDAGContext()->retry_regions.push_back(it.second);
+    }
+    LOG_DEBUG(log, ({
+        std::stringstream ss;
+        ss << "Start to retry " << region_retry.size() << " regions (";
+        for (auto & r : region_retry)
+            ss << r.first << ",";
+        ss << ")";
+        ss.str();
+    }));
+
+    DAGSchema schema;
+    ::tipb::DAGRequest dag_req;
+
+    {
+        const auto & table_info = storage->getTableInfo();
+        tipb::Executor * ts_exec = dag_req.add_executors();
+        ts_exec->set_tp(tipb::ExecType::TypeTableScan);
+        ts_exec->set_executor_id(query_block.source->executor_id());
+        *(ts_exec->mutable_tbl_scan()) = ts;
+
+        for (int i = 0; i < ts.columns().size(); ++i)
+        {
+            const auto & col = ts.columns(i);
+            auto col_id = col.column_id();
+
+            if (col_id == DB::TiDBPkColumnID)
+            {
+                ColumnInfo ci;
+                ci.tp = TiDB::TypeLongLong;
+                ci.setPriKeyFlag();
+                ci.setNotNullFlag();
+                schema.emplace_back(std::make_pair(handle_column_name, std::move(ci)));
+            }
+            else
+            {
+                auto & col_info = table_info.getColumnInfo(col_id);
+                schema.emplace_back(std::make_pair(col_info.name, col_info));
+            }
+            dag_req.add_output_offsets(i);
+        }
+        dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
+    }
+    /// do not collect execution summaries because in this case because the execution summaries
+    /// will be collected by CoprocessorBlockInputStream
+    dag_req.set_collect_execution_summaries(false);
+    return std::make_tuple(dag_req, schema);
+}
+
 // the flow is the same as executeFetchcolumns
 void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 {
@@ -237,9 +296,13 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     bool need_local_read = !query_info.mvcc_query_info->regions_query_info.empty();
     if (need_local_read)
     {
-        readFromLocalStorage(table_id, required_columns, query_info, max_block_size, learner_read_snapshot, pipeline, region_retry);
+        readFromLocalStorage(
+            table_structure_lock, table_id, required_columns, query_info, max_block_size, learner_read_snapshot, pipeline, region_retry);
     }
 
+    // Should build these vars under protect of `table_structure_lock`.
+    auto [dag_req, schema] = buildRemoteTS(region_retry, query_block, ts, handle_column_name, table_structure_lock, storage, context, log);
+    auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage->getSampleBlockForColumns(required_columns));
     // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
     // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
     // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
@@ -248,55 +311,11 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop mode.
     if (!region_retry.empty())
     {
-        for (auto it : region_retry)
-        {
-            context.getQueryContext().getDAGContext()->retry_regions.push_back(it.second);
-        }
-        LOG_DEBUG(log, ({
-            std::stringstream ss;
-            ss << "Start to retry " << region_retry.size() << " regions (";
-            for (auto & r : region_retry)
-                ss << r.first << ",";
-            ss << ")";
-            ss.str();
-        }));
-
-        DAGSchema schema;
-        ::tipb::DAGRequest dag_req;
-
-        {
-            const auto & table_info = storage->getTableInfo();
-            tipb::Executor * ts_exec = dag_req.add_executors();
-            ts_exec->set_tp(tipb::ExecType::TypeTableScan);
-            ts_exec->set_executor_id(query_block.source->executor_id());
-            *(ts_exec->mutable_tbl_scan()) = ts;
-
-            for (int i = 0; i < ts.columns().size(); ++i)
-            {
-                const auto & col = ts.columns(i);
-                auto col_id = col.column_id();
-
-                if (col_id == DB::TiDBPkColumnID)
-                {
-                    ColumnInfo ci;
-                    ci.tp = TiDB::TypeLongLong;
-                    ci.setPriKeyFlag();
-                    ci.setNotNullFlag();
-                    schema.emplace_back(std::make_pair(handle_column_name, std::move(ci)));
-                }
-                else
-                {
-                    auto & col_info = table_info.getColumnInfo(col_id);
-                    schema.emplace_back(std::make_pair(col_info.name, col_info));
-                }
-                dag_req.add_output_offsets(i);
-            }
-            dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
-        }
-        /// do not collect execution summaries because in this case because the execution summaries
-        /// will be collected by CoprocessorBlockInputStream
-        dag_req.set_collect_execution_summaries(false);
-
+#ifndef NDEBUG
+        if (unlikely(!dag_req.has_value() || !schema.has_value()))
+            throw TiFlashException(
+                "Try to read from remote but can not build DAG request. Should not happen!", Errors::Coprocessor::Internal);
+#endif
         std::vector<pingcap::coprocessor::KeyRange> ranges;
         for (auto & info : region_retry)
         {
@@ -304,12 +323,12 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                 ranges.emplace_back(*range.first, *range.second);
         }
         sort(ranges.begin(), ranges.end());
-        executeRemoteQueryImpl(pipeline, ranges, dag_req, schema);
+        executeRemoteQueryImpl(pipeline, ranges, *dag_req, *schema);
     }
 
     if (pipeline.streams.empty())
     {
-        pipeline.streams.emplace_back(std::make_shared<NullBlockInputStream>(storage->getSampleBlockForColumns(required_columns)));
+        pipeline.streams.emplace_back(null_stream_if_empty);
     }
 
     pipeline.transform([&](auto & stream) { stream->addTableLock(table_drop_lock); });
@@ -345,6 +364,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
 }
 
 void DAGQueryBlockInterpreter::readFromLocalStorage( //
+    const TableStructureLockHolder &,                //
     const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
     const LearnerReadSnapshot & learner_read_snapshot, //
     Pipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry)

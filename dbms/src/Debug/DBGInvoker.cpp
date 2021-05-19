@@ -74,6 +74,7 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);
+    regSchemalessFunc("gc_schemas", dbgFuncGcSchemas);
     regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
     regSchemalessFunc("is_tombstone", dbgFuncIsTombstone);
 

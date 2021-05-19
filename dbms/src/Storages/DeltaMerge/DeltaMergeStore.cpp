@@ -61,6 +61,9 @@ namespace FailPoints
 {
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
+extern const char pause_when_writing_to_dt_store[];
+extern const char pause_when_ingesting_to_dt_store[];
+extern const char pause_when_altering_dt_store[];
 extern const char force_triggle_background_merge_delta[];
 extern const char force_triggle_foreground_flush[];
 } // namespace FailPoints
@@ -451,6 +454,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                 segment = segment_it->second;
             }
 
+            FAIL_POINT_PAUSE(FailPoints::pause_when_writing_to_dt_store);
             waitForWrite(dm_context, segment);
             if (segment->hasAbandoned())
                 continue;
@@ -574,6 +578,7 @@ void DeltaMergeStore::writeRegionSnapshot(const DMContextPtr & dm_context,
                 segment = segment_it->second;
             }
 
+            FAIL_POINT_PAUSE(FailPoints::pause_when_ingesting_to_dt_store);
             waitForWrite(dm_context, segment);
             if (segment->hasAbandoned())
                 continue;
@@ -1689,6 +1694,8 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
                                   const Context & /* context */)
 {
     std::unique_lock lock(read_write_mutex);
+
+    FAIL_POINT_PAUSE(FailPoints::pause_when_altering_dt_store);
 
     ColumnDefines new_original_table_columns(original_table_columns.begin(), original_table_columns.end());
     for (const auto & command : commands)
