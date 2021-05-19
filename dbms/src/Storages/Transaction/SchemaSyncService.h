@@ -2,16 +2,26 @@
 
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/Transaction/Types.h>
-#include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
 #include <memory>
+
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
 
 class Context;
 class BackgroundProcessingPool;
+
+class IAST;
+using ASTPtr = std::shared_ptr<IAST>;
+using ASTs = std::vector<ASTPtr>;
+using DBGInvokerPrinter = std::function<void(const std::string &)>;
+extern void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
 
 class SchemaSyncService : public std::enable_shared_from_this<SchemaSyncService>, private boost::noncopyable
 {
@@ -32,10 +42,12 @@ private:
 private:
     Context & context;
 
+    friend void dbgFuncGcSchemas(Context &, const ASTs &, DBGInvokerPrinter);
+
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle handle;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;

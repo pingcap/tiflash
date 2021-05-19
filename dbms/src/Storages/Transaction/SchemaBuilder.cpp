@@ -822,7 +822,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(DatabaseID schema_id)
     if (unlikely(it == databases.end()))
     {
         LOG_INFO(
-            log, "Syncer wants to drop database: " << std::to_string(schema_id) << " . But database is not found, may has been dropped.");
+            log, "Syncer wants to drop database [id=" << std::to_string(schema_id) << "], but database is not found, may has been dropped.");
         return;
     }
     applyDropSchema(name_mapper.mapDatabaseName(*it->second));
