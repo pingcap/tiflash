@@ -39,7 +39,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_during_mpp_root_task_run)                         \
     M(exception_during_write_to_storage)                          \
     M(force_set_sst_to_dtfile_block_size)                         \
-    M(force_set_sst_decode_rand)
+    M(force_set_sst_decode_rand)                                  \
+    M(exception_before_page_file_write_sync)
 
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_after_learner_read)                   \

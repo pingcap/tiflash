@@ -1,4 +1,5 @@
 #include <Common/CurrentMetrics.h>
+#include <Common/FailPoint.h>
 #include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/AutoPtr.h>
@@ -13,8 +14,8 @@
 #include <Storages/Page/PageFile.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
-#include <common/logger_useful.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
 
 #include "gtest/gtest.h"
 
@@ -24,6 +25,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_before_page_file_write_sync[];
+} // namespace FailPoints
+
 namespace tests
 {
 
@@ -710,6 +716,81 @@ try
         ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
+    }
+}
+CATCH
+
+TEST_F(PageStorage_test, IgnoreIncompleteWriteBatch)
+try
+{
+    // If there is any incomplete write batch, we should able to ignore those
+    // broken write batches and continue to write more data.
+
+    const size_t buf_sz = 1024;
+    char         buf[buf_sz];
+    {
+        WriteBatch batch;
+        memset(buf, 0x01, buf_sz);
+        batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
+        batch.putPage(2, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz, PageFieldSizes{{64, 79, 128, 196, 256, 301}});
+        batch.putRefPage(3, 2);
+        batch.putRefPage(4, 2);
+        try
+        {
+            FailPointHelper::enableFailPoint(FailPoints::exception_before_page_file_write_sync);
+            storage->write(std::move(batch));
+        }
+        catch (DB::Exception & e)
+        {
+            if (e.code() != ErrorCodes::FAIL_POINT_ERROR)
+                throw;
+        }
+    }
+
+    // Restore, the broken meta should be ignored
+    storage = reopenWithConfig(PageStorage::Config{});
+
+    {
+        size_t num_pages = 0;
+        storage->traverse([&num_pages](const Page &) { num_pages += 1; });
+        ASSERT_EQ(num_pages, 0);
+    }
+
+    // Continue to write some pages
+    {
+        WriteBatch batch;
+        memset(buf, 0x02, buf_sz);
+        batch.putPage(1,
+                      0,
+                      std::make_shared<ReadBufferFromMemory>(buf, buf_sz),
+                      buf_sz, //
+                      PageFieldSizes{{32, 128, 196, 256, 12, 99, 1, 300}});
+        storage->write(std::move(batch));
+
+        auto page1 = storage->read(1);
+        ASSERT_EQ(page1.data.size(), buf_sz);
+        for (size_t i = 0; i < page1.data.size(); ++i)
+        {
+            auto p = page1.data.begin();
+            EXPECT_EQ(*p, 0x02);
+        }
+    }
+
+    // Restore again, we should be able to read page 1
+    storage = reopenWithConfig(PageStorage::Config{});
+
+    {
+        size_t num_pages = 0;
+        storage->traverse([&num_pages](const Page &) { num_pages += 1; });
+        ASSERT_EQ(num_pages, 1);
+
+        auto page1 = storage->read(1);
+        ASSERT_EQ(page1.data.size(), buf_sz);
+        for (size_t i = 0; i < page1.data.size(); ++i)
+        {
+            auto p = page1.data.begin();
+            EXPECT_EQ(*p, 0x02);
+        }
     }
 }
 CATCH
