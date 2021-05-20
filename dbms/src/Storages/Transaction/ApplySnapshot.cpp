@@ -148,7 +148,7 @@ void KVStore::onSnapshot(const RegionPtrWithBlock & new_region_wrap, RegionPtr o
                     try
                     {
                         auto & context = tmt.getContext();
-                        // acquire lock so that no other threads can drop storage
+                        // Acquire `drop_lock` so that no other threads can drop the storage. `alter_lock` is not required.
                         auto table_lock = storage->lockForShare(getThreadName());
                         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                         auto key_range = DM::RowKeyRange::fromRegionRange(
