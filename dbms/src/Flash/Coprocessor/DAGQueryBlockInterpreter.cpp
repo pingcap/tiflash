@@ -101,10 +101,13 @@ buildRemoteTS(const std::unordered_map<RegionID, const RegionInfo &> & region_re
     if (region_retry.empty())
         return std::make_tuple(std::nullopt, std::nullopt);
 
+#if 0
+    // FIXME: Should resolve this conflict in #1877
     for (auto it : region_retry)
     {
         context.getQueryContext().getDAGContext()->retry_regions.push_back(it.second);
     }
+#endif
     LOG_DEBUG(log, ({
         std::stringstream ss;
         ss << "Start to retry " << region_retry.size() << " regions (";
