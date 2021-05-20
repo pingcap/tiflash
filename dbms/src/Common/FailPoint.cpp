@@ -42,6 +42,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_set_sst_decode_rand)                                  \
     M(exception_before_page_file_write_sync)
 
+#define APPLY_FOR_FAILPOINTS(M) M(force_set_page_file_write_errno)
+
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_after_learner_read)                   \
     M(hang_in_execution)                          \
@@ -61,6 +63,7 @@ namespace FailPoints
 {
 #define M(NAME) extern const char NAME[] = #NAME "";
 APPLY_FOR_FAILPOINTS_ONCE(M)
+APPLY_FOR_FAILPOINTS(M)
 APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M)
 APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
 #undef M
@@ -92,16 +95,21 @@ private:
 
 void FailPointHelper::enableFailPoint(const String & fail_point_name)
 {
-#define M(NAME)                                                                                             \
+#define SUB_M(NAME, flags)                                                                                  \
     if (fail_point_name == FailPoints::NAME)                                                                \
     {                                                                                                       \
         /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
-        fiu_enable(FailPoints::NAME, 1, nullptr, FIU_ONETIME);                                              \
+        fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
         return;                                                                                             \
     }
 
+#define M(NAME) SUB_M(NAME, FIU_ONETIME)
     APPLY_FOR_FAILPOINTS_ONCE(M)
 #undef M
+#define M(NAME) SUB_M(NAME, 0)
+    APPLY_FOR_FAILPOINTS(M)
+#undef M
+#undef SUB_M
 
 #define SUB_M(NAME, flags)                                                                                  \
     if (fail_point_name == FailPoints::NAME)                                                                \
@@ -113,7 +121,6 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
     }
 
 #define M(NAME) SUB_M(NAME, FIU_ONETIME)
-
     APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M)
 #undef M
 

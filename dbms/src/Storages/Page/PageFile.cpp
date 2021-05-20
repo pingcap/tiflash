@@ -458,6 +458,15 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Ra
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
+#ifndef NDEBUG
+    auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf, bool enable_failpoint) {
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), rate_limiter, enable_failpoint);
+        if (sync_on_write)
+            PageUtil::syncFile(file);
+    };
+    write_buf(data_file, page_file.data_file_pos, data_buf, false);
+    write_buf(meta_file, page_file.meta_file_pos, meta_buf, true);
+#else
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf) {
         PageUtil::writeFile(file, offset, buf.begin(), buf.size(), rate_limiter);
         if (sync_on_write)
@@ -465,6 +474,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Ra
     };
     write_buf(data_file, page_file.data_file_pos, data_buf);
     write_buf(meta_file, page_file.meta_file_pos, meta_buf);
+#endif
 
     fiu_do_on(FailPoints::exception_before_page_file_write_sync,
               { // Mock that writing page file meta is not completed
