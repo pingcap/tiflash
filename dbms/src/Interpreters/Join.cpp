@@ -41,6 +41,15 @@ static bool isRightJoin(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right;
 }
+static bool isInnerJoin(ASTTableJoin::Kind kind)
+{
+    return kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Cross;
+}
+static bool isAntiJoin(ASTTableJoin::Kind kind)
+{
+    return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti;
+}
+
 
 Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
     const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_,
@@ -979,7 +988,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
     }
     auto & filter = filter_column->getData();
 
-    if (kind == ASTTableJoin::Kind::Inner && original_strictness == ASTTableJoin::Strictness::All)
+    if (isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All)
     {
         /// inner join, just use other_filter_column to filter result
         for (size_t i = 0; i < block.columns(); i++)
@@ -1013,9 +1022,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
                 has_row_kept = true;
         }
         /// for outer join, at least one row must be kept
-        if (kind == ASTTableJoin::Kind::Left && !has_row_kept)
+        if (isLeftJoin(kind) && !has_row_kept)
             row_filter[start] = 1;
-        if (kind == ASTTableJoin::Kind::Anti)
+        if (isAntiJoin(kind))
         {
             if ((*anti_filter)[i])
                 /// for anti join, if the equal join condition is not matched, it always need to be selected
@@ -1037,7 +1046,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         }
         prev_offset = end;
     }
-    if (kind == ASTTableJoin::Kind::Left)
+    if (isLeftJoin(kind))
     {
         /// for left join, convert right column to null if not joined
         for (size_t i = 0; i < right_table_columns.size(); i++)
@@ -1057,7 +1066,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
             block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
         return;
     }
-    if (kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Anti)
+    if (isInnerJoin(kind) || isAntiJoin(kind))
     {
         /// for semi/anti join, filter out not matched rows
         for (size_t i = 0; i < block.columns(); i++)
