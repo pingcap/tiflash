@@ -10,8 +10,9 @@
 #include <Common/Arena.h>
 #include <Common/HashTable/HashMap.h>
 
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
 
 #include <DataStreams/SizeLimits.h>
 #include <DataStreams/IBlockInputStream.h>
@@ -474,6 +475,12 @@ private:
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
     void joinBlockImplCross(Block & block) const;
+
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
+    void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map, std::unique_ptr<IColumn::Filter> & is_row_matched,
+                                          std::unique_ptr<IColumn::Offsets> & expanded_row_size_after_join) const;
+
+    void handleOtherConditionsForCrossJoin(Block & block, std::vector<UInt8 > & is_row_matched, std::vector<size_t> & expanded_row_size_after_join, const std::vector<size_t> & right_table_columns) const;
 };
 
 using JoinPtr = std::shared_ptr<Join>;
