@@ -505,14 +505,20 @@ void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
 void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & pipeline, SubqueryForSet & right_query)
 {
     // build
-    static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> join_type_map{
+    static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner}, {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
         {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right}, {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Inner},
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Anti}};
+    static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> cartesian_join_type_map{
+        {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Cross}, {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Cross_Left},
+        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Cross_Right}, {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Cross},
+        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Cross_Anti}};
     if (input_streams_vec.size() != 2)
     {
         throw TiFlashException("Join query block must have 2 input streams", Errors::BroadcastJoin::Internal);
     }
+    bool is_cartesian_join = join.left_join_keys_size() == 0;
+    auto & join_type_map = is_cartesian_join ? cartesian_join_type_map : equal_join_type_map;
 
     auto join_type_it = join_type_map.find(join.join_type());
     if (join_type_it == join_type_map.end())
@@ -527,14 +533,27 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     BlockInputStreams right_streams;
     Names left_key_names;
     Names right_key_names;
-    if (join.inner_idx() == 0)
+    bool swap_join_side = false;
+    if (is_cartesian_join)
     {
-        // in DAG request, inner part is the build side, however for tiflash implementation,
-        // the build side must be the right side, so need to update the join type if needed
+        /// cartesian right join will always be converted to cartesian left join
+        swap_join_side = kind == ASTTableJoin::Kind::Cross_Right;
+    }
+    else
+    {
+        /// in DAG request, inner part is the build side, however for TiFlash implementation,
+        /// the build side must be the right side, so need to swap the join side if needed
+        swap_join_side = join.inner_idx() == 0;
+    }
+
+    if (swap_join_side)
+    {
         if (kind == ASTTableJoin::Kind::Left)
             kind = ASTTableJoin::Kind::Right;
         else if (kind == ASTTableJoin::Kind::Right)
             kind = ASTTableJoin::Kind::Left;
+        else if (kind == ASTTableJoin::Kind::Cross_Right)
+            kind = ASTTableJoin::Kind::Cross_Left;
         left_streams = input_streams_vec[1];
         right_streams = input_streams_vec[0];
     }
@@ -573,9 +592,13 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
         columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
         column_set_for_other_join_filter.emplace(p.name);
     }
+
+    bool is_tiflash_left_join = kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Cross_Left;
+    /// Cross_Right join will be converted to Cross_Left join, so no need to check Cross_Right
+    bool is_tiflash_right_join = kind == ASTTableJoin::Kind::Right;
     /// all the columns from right table should be added after join, even for the join key
     NamesAndTypesList columns_added_by_join;
-    make_nullable = kind == ASTTableJoin::Kind::Left;
+    make_nullable = is_tiflash_left_join;
     for (auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
     {
         columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
@@ -598,34 +621,17 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
                 collators.push_back(nullptr);
         }
 
-    if (join.left_join_keys_size() == 0)
-    {
-        if (kind != ASTTableJoin::Kind::Inner)
-            throw TiFlashException("CARTESIAN Join only support inner join", Errors::Coprocessor::BadRequest);
-        if (join.left_conditions_size() != 0 || join.right_conditions_size() != 0)
-            throw TiFlashException("CARTESIAN Inner Join does not support left conditions or right conditions", Errors::Coprocessor::BadRequest);
-        kind = ASTTableJoin::Kind::Cross;
-    }
-
     /// add necessary transformation if the join key is an expression
     Pipeline left_pipeline;
     left_pipeline.streams = left_streams;
     String left_filter_column_name = "";
-    if (kind != ASTTableJoin::Kind::Cross)
-    {
-        prepareJoin(join.inner_idx() == 0 ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names, true,
-                    kind == ASTTableJoin::Kind::Right, join.inner_idx() == 0 ? join.right_conditions() : join.left_conditions(),
-                    left_filter_column_name);
-    }
+    prepareJoin(swap_join_side ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names, true,
+        is_tiflash_right_join, swap_join_side ? join.right_conditions() : join.left_conditions(), left_filter_column_name);
     Pipeline right_pipeline;
     right_pipeline.streams = right_streams;
     String right_filter_column_name = "";
-    if (kind != ASTTableJoin::Kind::Cross)
-    {
-        prepareJoin(join.inner_idx() == 0 ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names,
-                    false, kind == ASTTableJoin::Kind::Right, join.inner_idx() == 0 ? join.left_conditions() : join.right_conditions(),
-                    right_filter_column_name);
-    }
+    prepareJoin(swap_join_side ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names, false,
+        is_tiflash_right_join, swap_join_side ? join.left_conditions() : join.right_conditions(), right_filter_column_name);
 
     left_streams = left_pipeline.streams;
     right_streams = right_pipeline.streams;
@@ -664,7 +670,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     dag_analyzer.appendJoin(chain, right_query, columns_added_by_join);
     pipeline.streams = left_streams;
     /// add join input stream
-    if (kind == ASTTableJoin::Kind::Full || kind == ASTTableJoin::Kind::Right)
+    if (is_tiflash_right_join)
         pipeline.stream_with_non_joined_data = chain.getLastActions()->createStreamWithNonJoinedDataIfFullOrRightJoin(
             pipeline.firstStream()->getHeader(), settings.max_block_size);
     for (auto & stream : pipeline.streams)
