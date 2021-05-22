@@ -1,6 +1,10 @@
 #include <Common/MyTime.h>
+#include <Common/StringUtils/StringRefUtils.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Functions/FunctionsDateTime.h>
 #include <Poco/String.h>
+#include <common/StringRef.h>
+#include <common/logger_useful.h>
 
 #include <cctype>
 #include <initializer_list>
@@ -9,7 +13,14 @@
 namespace DB
 {
 
-int adjustYear(int year)
+namespace ErrorCodes
+{
+extern const int BAD_ARGUMENTS;
+}
+
+// adjustYear adjusts year according to y.
+// See https://dev.mysql.com/doc/refman/5.7/en/two-digit-years.html
+int32_t adjustYear(int32_t year)
 {
     if (year >= 0 && year <= 69)
         return 2000 + year;
@@ -1241,6 +1252,516 @@ MyDateTimeFormatter::MyDateTimeFormatter(const String & layout)
         else
             formatters.emplace_back([x](const MyTimeBase &, String & result) { result.push_back(x); });
     }
+}
+
+// Try to parse digits with number of `limit` starting from view[pos]
+// Return <n chars to step forward, number> if success, the number is limited by [0, 99].
+// Return <0, _> if fail.
+std::tuple<size_t, int32_t> parseNDigits(const StringRef view, size_t pos, size_t limit)
+{
+    size_t step = 0;
+    int32_t num = 0;
+    while (step < limit && (pos + step) < view.size && isNumericASCII(view.data[pos + step]))
+    {
+        num = num * 10 + (view.data[pos + step] - '0');
+        step += 1;
+    }
+    return std::make_tuple(step, num);
+}
+
+std::tuple<size_t, int32_t> parseYearNDigits(const StringRef view, size_t pos, size_t limit)
+{
+    int32_t effective_count = 0;
+    int32_t effective_value = 0;
+    while (static_cast<size_t>(effective_count + 1) <= limit)
+    {
+        auto [step, num] = parseNDigits(view, pos, effective_count + 1);
+        if (step == 0)
+            break;
+        effective_count++;
+        effective_value = num;
+    }
+    if (effective_count == 0)
+        return std::make_tuple(effective_count, 0);
+    else if (effective_count <= 2)
+        effective_value = adjustYear(effective_value);
+    return std::make_tuple(effective_count, effective_value);
+}
+
+// Refer: https://github.com/pingcap/tidb/blob/v5.0.1/types/time.go#L2946
+MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
+{
+    // Ignore all prefix white spaces (TODO: handle unicode space?)
+    size_t format_pos = 0;
+    while (format_pos < format.size() && isWhitespaceASCII(format[format_pos]))
+        format_pos++;
+
+    bool in_pattern_match = false;
+    for (/*empty*/; format_pos < format.size(); format_pos++)
+    {
+        char x = format[format_pos];
+        if (in_pattern_match)
+        {
+            switch (x)
+            {
+                case 'b':
+                {
+                    //"%b": Abbreviated month name (Jan..Dec)
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        bool found = false;
+                        auto v = removePrefix(view, pos);
+                        for (size_t p = 0; p < 12; p++)
+                        {
+                            if (startsWith(v, abbrev_month_names[p]))
+                            {
+                                found = true;
+                                time.month = p + 1;
+                                break;
+                            }
+                        }
+                        if (!found)
+                            return false;
+                        pos += 3;
+                        return true;
+                    });
+                    break;
+                }
+                case 'c':
+                {
+                    //"%c": Month, numeric (0..12)
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        // To be compatible with TiDB & MySQL, first try to take two digit and parse it as `num`
+                        auto [step, month] = parseNDigits(view, pos, 2);
+                        // Then check whether num is valid month
+                        // Note that 0 is valid when sql_mode does not contain NO_ZERO_IN_DATE,NO_ZERO_DATE
+                        if (step == 0 || month > 12)
+                            return false;
+                        time.month = month;
+                        pos += step;
+                        return true;
+                    });
+                    break;
+                }
+                case 'd': //"%d": Day of the month, numeric (00..31)
+                    [[fallthrough]];
+                case 'e': //"%e": Day of the month, numeric (0..31)
+                {
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        auto [step, day] = parseNDigits(view, pos, 2);
+                        if (step == 0 || day > 31)
+                            return false;
+                        time.day = day;
+                        pos += step;
+                        return true;
+                    });
+                    break;
+                }
+                case 'f':
+                {
+                    //"%f": Microseconds (000000..999999)
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        auto [step, ms] = parseNDigits(view, pos, 6);
+                        // Empty string is a valid input
+                        if (step == 0)
+                        {
+                            time.micro_second = 0;
+                            return true;
+                        }
+                        // The siffix '0' can be ignored.
+                        // "9" means 900000
+                        while (ms > 0 && ms * 10 < 1000000)
+                        {
+                            ms *= 10;
+                        }
+                        time.micro_second = ms;
+                        pos += step;
+                        return true;
+                    });
+                    break;
+                }
+                case 'k':
+                    //"%k": Hour (0..23)
+                    [[fallthrough]];
+                case 'H':
+                {
+                    //"%H": Hour (00..23)
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        auto [step, hour] = parseNDigits(view, pos, 2);
+                        if (step == 0 || hour > 23)
+                            return false;
+                        time.hour = hour;
+                        pos += step;
+                        return true;
+                    });
+                    break;
+                }
+                case 'l':
+                    //"%l": Hour (1..12)
+                    [[fallthrough]];
+                case 'I':
+                    //"%I": Hour (01..12)
+                    [[fallthrough]];
+                case 'h':
+                {
+                    //"%h": Hour (01..12)
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        auto [step, num] = parseNDigits(view, pos, 2);
+                        if (step == 0 || num <= 0 || num > 12)
+                            return false;
+                        time.hour = num;
+                        pos += step;
+                        return true;
+                    });
+                    break;
+                }
+                case 'i':
+                {
+                    //"%i": Minutes, numeric (00..59)
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        auto [step, num] = parseNDigits(view, pos, 2);
+                        if (step == 0 || num > 59)
+                            return false;
+                        time.minute = num;
+                        pos += step;
+                        return true;
+                    });
+                    break;
+                }
+                case 'j':
+                {
+                    //"%j": Day of year (001..366)
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context & ctx, MyTimeBase &) -> bool {
+                        auto [step, num] = parseNDigits(view, pos, 3);
+                        if (step == 0 || num == 0 || num > 366)
+                            return false;
+                        ctx.day_of_year = num;
+                        pos += step;
+                        return true;
+                    });
+                    break;
+                }
+                case 'M':
+                {
+                    //"%M": Month name (January..December)
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        bool found = false;
+                        auto v = removePrefix(view, pos);
+                        size_t step = 0;
+                        for (size_t p = 0; p < 12; p++)
+                        {
+                            if (startsWith(v, month_names[p]))
+                            {
+                                found = true;
+                                step = month_names[p].size();
+                                time.month = p + 1;
+                                break;
+                            }
+                        }
+                        if (!found)
+                            return false;
+                        pos += step;
+                        return true;
+                    });
+                    break;
+                }
+                case 'm':
+                {
+                    //"%m": Month, numeric (00..12)
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        auto [step, month] = parseNDigits(view, pos, 2);
+                        if (step == 0 || month > 12)
+                            return false;
+                        time.month = month;
+                        pos += step;
+                        return true;
+                    });
+                    break;
+                }
+                case 'S':
+                    //"%S": Seconds (00..59)
+                    [[fallthrough]];
+                case 's':
+                {
+                    //"%s": Seconds (00..59)
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        auto [step, second] = parseNDigits(view, pos, 2);
+                        if (step == 0 || second > 60)
+                            return false;
+                        time.second = second;
+                        pos += step;
+                        return true;
+                    });
+                    break;
+                }
+                case 'p':
+                {
+                    //"%p": AM or PM
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context & ctx, MyTimeBase &) -> bool {
+                        if (view.size - pos < 2)
+                            return false;
+
+                        int meridiem = 0; // 0 - invalid, 1 - am, 2 - pm
+                        if (toLowerIfAlphaASCII(view.data[pos]) == 'a')
+                            meridiem = 1;
+                        else if (toLowerIfAlphaASCII(view.data[pos]) == 'p')
+                            meridiem = 2;
+
+                        if (toLowerIfAlphaASCII(view.data[pos + 1]) != 'm')
+                            meridiem = 0;
+
+                        ctx.meridiem = meridiem;
+                        pos += 2;
+                        return true;
+                    });
+                    break;
+                }
+                case 'r':
+                {
+                    //"%r": Time, 12-hour (hh:mm:ss followed by AM or PM)
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        constexpr auto min_format_len = strlen("hh:mm:ssAM");
+                        if (view.size - pos < min_format_len)
+                            return false;
+                        // Use temp_pos instead of changing `pos` directly in case of parsing failure
+                        size_t temp_pos = pos;
+                        // hh
+                        size_t step = 0;
+                        int32_t hour = 0;
+                        std::tie(step, hour) = parseNDigits(view, temp_pos, 2);
+                        if (step == 0 || hour > 12 || hour == 0 || view.data[temp_pos + step] != ':')
+                            return false;
+                        // 12:34:56 AM -> 00:34:56
+                        if (hour == 12)
+                        {
+                            hour = 0;
+                        }
+                        temp_pos += step; // move forward
+
+                        int32_t minute = 0;
+                        std::tie(step, minute) = parseNDigits(view, temp_pos, 2);
+                        if (step == 0 || minute > 59 || view.data[temp_pos + step] != ':')
+                            return false;
+                        temp_pos += step; // move forward
+
+                        int32_t second = 0;
+                        std::tie(step, second) = parseNDigits(view, temp_pos, 2);
+                        if (step == 0 || second > 59)
+                            return false;
+                        temp_pos += step; // move forward
+
+                        while (temp_pos < view.size && isWhitespaceASCII(view.data[temp_pos]))
+                            temp_pos++;
+
+                        int meridiem = 0; // 0 - invalid, 1 - am, 2 - pm
+                        if (toLowerIfAlphaASCII(view.data[temp_pos]) == 'a')
+                            meridiem = 1;
+                        else if (toLowerIfAlphaASCII(view.data[temp_pos]) == 'p')
+                            meridiem = 2;
+
+                        if (toLowerIfAlphaASCII(view.data[temp_pos + 1]) != 'm')
+                            meridiem = 0;
+                        switch (meridiem)
+                        {
+                            case 0:
+                                return false;
+                            case 1:
+                                time.hour = hour;
+                                break;
+                            case 2:
+                                time.hour = hour + 12;
+                        }
+                        temp_pos += 2; // move forward
+                        time.minute = minute;
+                        time.second = second;
+
+                        pos = temp_pos; // finally update the `pos` for caller
+                        return true;
+                    });
+                    break;
+                }
+                case 'T':
+                {
+                    //"%T": Time, 24-hour (hh:mm:ss)
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        constexpr auto min_format_len = strlen("hh:mm:ss");
+                        if (view.size - pos < min_format_len)
+                            return false;
+                        // Use temp_pos instead of changing `pos` directly in case of parsing failure
+                        size_t temp_pos = pos;
+                        // hh
+                        size_t step = 0;
+                        int32_t hour = 0;
+                        std::tie(step, hour) = parseNDigits(view, temp_pos, 2);
+                        if (step == 0 || hour > 23 || view.data[temp_pos + step] != ':')
+                            return false;
+                        temp_pos += step; // move forward
+
+                        int32_t minute = 0;
+                        std::tie(step, minute) = parseNDigits(view, temp_pos, 2);
+                        if (step == 0 || minute > 59 || view.data[temp_pos + step] != ':')
+                            return false;
+                        temp_pos += step; // move forward
+
+                        int32_t second = 0;
+                        std::tie(step, second) = parseNDigits(view, temp_pos, 2);
+                        if (step == 0 || second > 59)
+                            return false;
+
+                        time.hour = hour;
+                        time.minute = minute;
+                        time.second = second;
+
+                        pos = temp_pos;
+                        return true;
+                    });
+                    break;
+                }
+                case 'Y':
+                {
+                    //"%Y": Year, numeric, four digits
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        auto [step, year] = parseYearNDigits(view, pos, 4);
+                        if (step == 0)
+                            return false;
+                        time.year = year;
+                        pos += step;
+                        return true;
+                    });
+                    break;
+                }
+                case 'y':
+                {
+                    //"%y": Year, numeric, two digits. Deprecated since MySQL 5.7.5
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
+                        auto [step, year] = parseYearNDigits(view, pos, 2);
+                        if (step == 0)
+                            return false;
+                        time.year = year;
+                        pos += step;
+                        return true;
+                    });
+                    break;
+                }
+                case '#':
+                {
+                    //"%#": Skip all numbers
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase &) -> bool {
+                        // TODO: Does ASCII numeric the same with unicode numeric?
+                        size_t temp_pos = pos;
+                        while (temp_pos < view.size && isNumericASCII(view.data[temp_pos]))
+                            temp_pos++;
+                        pos = temp_pos;
+                        return true;
+                    });
+                    break;
+                }
+                case '.':
+                {
+                    //"%.": Skip all punctation characters
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase &) -> bool {
+                        // TODO: Does ASCII punctuation the same with unicode punctuation?
+                        size_t temp_pos = pos;
+                        while (temp_pos < view.size && isPunctuation(view.data[temp_pos]))
+                            temp_pos++;
+                        pos = temp_pos;
+                        return true;
+                    });
+                    break;
+                }
+                case '@':
+                {
+                    //"%@": Skip all alpha characters
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase &) -> bool {
+                        // TODO: Does ASCII alpha the same with unicode alpha?
+                        size_t temp_pos = pos;
+                        while (temp_pos < view.size && isAlphaASCII(view.data[temp_pos]))
+                            temp_pos++;
+                        pos = temp_pos;
+                        return true;
+                    });
+                    break;
+                }
+                case '%':
+                {
+                    //"%%": A literal % character
+                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase &) -> bool {
+                        if (view.data[pos] != '%')
+                            return false;
+                        pos++;
+                        return true;
+                    });
+                    break;
+                }
+                default:
+                    throw Exception("Unknown date format pattern: " + x, ErrorCodes::BAD_ARGUMENTS);
+            }
+            in_pattern_match = false;
+            continue;
+        }
+
+        if (x == '%')
+            in_pattern_match = true;
+        else
+        {
+            // Move forward view with a sequence of chars `format[format_pos:plain_match_end]`
+            size_t plain_match_end = format_pos;
+            while (plain_match_end < format.size() && format[plain_match_end] != '%')
+                ++plain_match_end;
+            parsers.emplace_back(
+                [format_pos, plain_match_end, this](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase &) {
+                    size_t span_size = plain_match_end - format_pos;
+                    if (span_size == 1)
+                    {
+                        // Shortcut for only 1 char
+                        if (view.data[pos] != this->format[format_pos])
+                            return false;
+                    }
+                    else
+                    {
+                        auto v = removePrefix(view, pos);
+                        if (!startsWith(v, StringRef(this->format.data() + format_pos, span_size)))
+                            return false;
+                    }
+
+                    pos += span_size;
+                    return true;
+                });
+        }
+    }
+}
+
+std::optional<UInt64> MyDateTimeParser::parseAsPackedUInt(const StringRef & str_view) const
+{
+    MyTimeBase my_time{0, 0, 0, 0, 0, 0, 0};
+    size_t parse_pos = 0;
+    // Ignore all prefix white spaces (TODO: handle unicode space?)
+    while (parse_pos < str_view.size && isWhitespaceASCII(str_view.data[parse_pos]))
+        parse_pos++;
+
+    // FIXME: return nullopt or "zero"?
+    if (parse_pos >= str_view.size)
+        return std::nullopt;
+
+    MyDateTimeParser::Context ctx;
+    for (auto & f : parsers)
+    {
+        if (f(str_view, parse_pos, ctx, my_time) != true)
+        {
+#ifndef NDEBUG
+            LOG_TRACE(&Logger::get("MyDateTimeParser"),
+                "parse error, [str=" << String(str_view.data, str_view.size) << "] [parse_pos=" << parse_pos << "]");
+#endif
+            return std::nullopt;
+        }
+        // TODO: handle `parse_pos` >= str_view.size after callback
+    }
+    // TODO: handle the var in `ctx`
+    if (ctx.meridiem == 2)
+    {
+        my_time.hour += 12;
+    }
+
+    return my_time.toPackedUInt();
 }
 
 } // namespace DB

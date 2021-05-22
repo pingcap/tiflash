@@ -3,6 +3,7 @@
 #include <Core/Field.h>
 #include <common/DateLUTImpl.h>
 
+struct StringRef;
 namespace DB
 {
 
@@ -129,6 +130,28 @@ struct MyDateTimeFormatter
     }
 };
 
+struct MyDateTimeParser
+{
+    explicit MyDateTimeParser(const String & format_);
+
+    std::optional<UInt64> parseAsPackedUInt(const StringRef & str_view) const;
+
+private:
+    const String format;
+
+    struct Context
+    {
+        int32_t day_of_year = 0;
+        // 0 - invalid, 1 - am, 2 - pm
+        int32_t meridiem = 0;
+    };
+    // Parse from view[pos]
+    // If success, update `datetime` and return true.
+    // If fail, return false.
+    using ParserCallback = std::function<bool(const StringRef view, size_t & pos, MyDateTimeParser::Context & ctx, MyTimeBase & datetime)>;
+    std::vector<ParserCallback> parsers;
+};
+
 Field parseMyDateTime(const String & str, int8_t fsp = 6);
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to);
@@ -145,5 +168,9 @@ bool isPunctuation(char c);
 
 bool isValidSeperator(char c, int previous_parts);
 
+// Build CoreTime value with checking overflow of internal bit fields, return true if input is invalid.
+// Note that this function will not check if the input is logically a valid datetime value.
+bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
+    const UInt64 & second, const UInt64 & microsecond, MyDateTime & result);
 
 } // namespace DB
