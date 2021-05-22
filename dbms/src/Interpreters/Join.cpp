@@ -54,7 +54,8 @@ static bool isAntiJoin(ASTTableJoin::Kind kind)
 Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
     const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_,
     const TiDB::TiDBCollators & collators_, const String & left_filter_column_, const String & right_filter_column_,
-    const String & other_filter_column_, ExpressionActionsPtr other_condition_ptr_)
+    const String & other_filter_column_, ExpressionActionsPtr other_condition_ptr_, const String & other_eq_filter_from_in_column_,
+    ExpressionActionsPtr other_eq_condition_from_in_ptr_)
     : kind(kind_), strictness(strictness_),
     key_names_left(key_names_left_),
     key_names_right(key_names_right_),
@@ -65,6 +66,8 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     right_filter_column(right_filter_column_),
     other_filter_column(other_filter_column_),
     other_condition_ptr(other_condition_ptr_),
+    other_eq_filter_from_in_column(other_eq_filter_from_in_column_),
+    other_eq_condition_from_in_ptr(other_eq_condition_from_in_ptr_),
     original_strictness(strictness),
     have_finish_build(true),
     log(&Logger::get("Join")),
@@ -75,7 +78,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
         pools.emplace_back(std::make_shared<Arena>());
     if (build_concurrency > 1 && getFullness(kind))
         pools.emplace_back(std::make_shared<Arena>());
-    if (!other_filter_column.empty())
+    if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
         if (strictness == ASTTableJoin::Strictness::Any)
@@ -964,28 +967,93 @@ namespace
  */
 void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & anti_filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_columns) const
 {
-    other_condition_ptr->execute(block);
+    if (other_eq_condition_from_in_ptr != nullptr)
+        other_eq_condition_from_in_ptr->execute(block);
+    if (other_condition_ptr != nullptr)
+        other_condition_ptr->execute(block);
+
     const ColumnVector<UInt8> * filter_column = nullptr;
     ColumnVector<UInt8> * mutable_nested_column = nullptr;
-    auto orig_filter_column = block.getByName(other_filter_column).column;
-    if (orig_filter_column->isColumnConst())
-        orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
-    if (orig_filter_column->isColumnNullable())
+    if (other_condition_ptr != nullptr)
     {
-        auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
-        mutable_nested_column = static_cast<ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr()->assumeMutable().get());
-        auto & mutable_nested_column_data = mutable_nested_column->getData();
-        for (size_t i = 0; i < nullable_column->size(); i++)
+        auto orig_filter_column = block.getByName(other_filter_column).column;
+        if (orig_filter_column->isColumnConst())
+            orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
+        if (orig_filter_column->isColumnNullable())
         {
-            if (nullable_column->isNullAt(i))
-                mutable_nested_column_data[i] = 0;
+            auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
+            mutable_nested_column = static_cast<ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr()->assumeMutable().get());
+            auto & mutable_nested_column_data = mutable_nested_column->getData();
+            for (size_t i = 0; i < nullable_column->size(); i++)
+            {
+                if (nullable_column->isNullAt(i))
+                    mutable_nested_column_data[i] = 0;
+            }
+            filter_column = mutable_nested_column;
         }
-        filter_column = mutable_nested_column;
+        else
+        {
+            filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
+        }
     }
-    else
+
+    if (other_eq_condition_from_in_ptr != nullptr)
     {
-        filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
+        /// other_eq_condition is used in anti semi join:
+        /// if there is a row that return null or false for other_condition, then for anti semi join, this row should be returned.
+        /// otherwise, it will check other_eq_condition, if other_eq_condition return false, this row should be returned, if
+        /// other_eq_condition return true or null this row should not be returned.
+        bool has_other_condition_filter = other_condition_ptr != nullptr;
+        auto orig_eq_filter_from_in_column = block.getByName(other_eq_filter_from_in_column).column;
+        if (orig_eq_filter_from_in_column->isColumnConst())
+            orig_eq_filter_from_in_column = orig_eq_filter_from_in_column->convertToFullColumnIfConst();
+        if (orig_eq_filter_from_in_column->isColumnNullable())
+        {
+            auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_eq_filter_from_in_column.get());
+
+            ColumnVector<UInt8> * mutable_filter_column = nullptr;
+            if (has_other_condition_filter)
+            {
+                mutable_filter_column = static_cast<ColumnVector<UInt8> *>(filter_column->assumeMutable().get());
+            }
+            else
+            {
+                mutable_filter_column = static_cast<ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr()->assumeMutable().get());
+            }
+            auto & mutable_filter_column_data = mutable_filter_column->getData();
+            auto & nested_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
+            for (size_t i = 0; i < nullable_column->size(); i++)
+            {
+                if (has_other_condition_filter && mutable_filter_column_data[i] == 0)
+                    continue;
+                if (nullable_column->isNullAt(i))
+                    mutable_filter_column_data[i] = isAntiJoin(kind) ? 1 : 0;
+                else
+                    mutable_filter_column_data[i] = mutable_filter_column_data[i] && nested_column_data[i];
+            }
+            filter_column = mutable_filter_column;
+        }
+        else
+        {
+            if (has_other_condition_filter)
+            {
+                auto * mutable_filter_column = static_cast<ColumnVector<UInt8> *>(filter_column->assumeMutable().get());
+                auto & mutable_filter_column_data = mutable_filter_column->getData();
+                auto * eq_filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_eq_filter_from_in_column.get());
+                auto & eq_filter_column_data = static_cast<const ColumnVector<UInt8> *>(eq_filter_column)->getData();
+                for (size_t i = 0; i < eq_filter_column->size(); i++)
+                {
+                    mutable_filter_column_data[i] = mutable_filter_column_data[i] && eq_filter_column_data[i];
+                }
+                filter_column = mutable_filter_column;
+            }
+            else
+            {
+                filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_eq_filter_from_in_column.get());
+            }
+        }
     }
+
     auto & filter = filter_column->getData();
 
     if (isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All)
@@ -1021,26 +1089,29 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
             if (row_filter[x])
                 has_row_kept = true;
         }
-        /// for outer join, at least one row must be kept
-        if (isLeftJoin(kind) && !has_row_kept)
-            row_filter[start] = 1;
-        if (isAntiJoin(kind))
+        if (start < end)
         {
-            if ((*anti_filter)[i])
-                /// for anti join, if the equal join condition is not matched, it always need to be selected
+            /// for outer join, at least one row must be kept
+            if (isLeftJoin(kind) && !has_row_kept)
                 row_filter[start] = 1;
-            else
+            if (isAntiJoin(kind))
             {
-                if (has_row_kept)
-                {
-                    /// has_row_kept = true means at least one row is joined, in
-                    /// case of anti join, this row should not be returned
-                    for (size_t index = start; index < end; index++)
-                        row_filter[index] = 0;
-                }
+                if ((*anti_filter)[i])
+                    /// for anti join, if the equal join condition is not matched, it always need to be selected
+                    row_filter[start] = 1;
                 else
                 {
-                    row_filter[start] = 1;
+                    if (has_row_kept)
+                    {
+                        /// has_row_kept = true means at least one row is joined, in
+                        /// case of anti join, this row should not be returned
+                        for (size_t index = start; index < end; index++)
+                            row_filter[index] = 0;
+                    }
+                    else
+                    {
+                        row_filter[start] = 1;
+                    }
                 }
             }
         }
@@ -1212,7 +1283,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(*offsets_to_replicate);
 
     /// handle other conditions
-    if (!other_filter_column.empty())
+    if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())
     {
         if (!offsets_to_replicate)
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
@@ -1400,7 +1471,7 @@ void Join::joinBlockImplCross(Block & block) const
     else
         joinBlockImplCrossInternal<KIND, STRICTNESS, false>(block, nullptr, filter, offsets_to_replicate);
 
-    if (!other_filter_column.empty())
+    if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())
     {
         std::vector<size_t> right_column_index;
         for (size_t i = 0; i < num_columns_to_add; i++)

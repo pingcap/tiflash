@@ -636,6 +636,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     left_streams = left_pipeline.streams;
     right_streams = right_pipeline.streams;
     String other_filter_column_name = "";
+    String other_eq_filter_from_in_column_name = "";
     for (auto const & p : left_streams[0]->getHeader().getNamesAndTypesList())
     {
         if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
@@ -647,6 +648,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
             columns_for_other_join_filter.emplace_back(p.name, p.type);
     }
 
+    ExpressionActionsPtr other_eq_condition_from_in_expr = genJoinOtherConditionAction(
+        join.other_eq_conditions_from_in(), columns_for_other_join_filter, other_eq_filter_from_in_column_name);
     ExpressionActionsPtr other_condition_expr
         = genJoinOtherConditionAction(join.other_conditions(), columns_for_other_join_filter, other_filter_column_name);
 
@@ -655,7 +658,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
         SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness,
         join_build_concurrency, collators, left_filter_column_name, right_filter_column_name, other_filter_column_name,
-        other_condition_expr);
+        other_condition_expr, other_eq_filter_from_in_column_name, other_eq_condition_from_in_expr);
     executeUnion(right_pipeline, max_streams);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
