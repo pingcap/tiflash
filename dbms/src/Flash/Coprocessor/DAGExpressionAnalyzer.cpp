@@ -193,8 +193,8 @@ static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb
 
     // the second parameter: const(1)
     auto const_one = tipb::Expr();
-    constructInt64LiteralTiExpr(const_one,1);
-    auto col_const_one = analyzer->getActions(const_one,actions,false);
+    constructInt64LiteralTiExpr(const_one, 1);
+    auto col_const_one = analyzer->getActions(const_one, actions, false);
     argument_names.push_back(col_const_one);
 
     // the third parameter: len
