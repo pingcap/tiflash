@@ -953,6 +953,59 @@ namespace
     }
 }
 
+void mergeNullAndFilterResult(Block & block, const ColumnVector<UInt8> ** filter_column, const String & filter_column_name, bool null_as_true)
+{
+    bool has_base_value = *filter_column != nullptr;
+    auto orig_filter_column = block.getByName(filter_column_name).column;
+    if (orig_filter_column->isColumnConst())
+        orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
+    if (orig_filter_column->isColumnNullable())
+    {
+        auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
+
+        ColumnVector<UInt8> * mutable_filter_column = nullptr;
+        if (has_base_value)
+        {
+            mutable_filter_column = static_cast<ColumnVector<UInt8> *>((*filter_column)->assumeMutable().get());
+        }
+        else
+        {
+            mutable_filter_column = static_cast<ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr()->assumeMutable().get());
+        }
+        auto & mutable_filter_column_data = mutable_filter_column->getData();
+        auto & nested_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
+        for (size_t i = 0; i < nullable_column->size(); i++)
+        {
+            if (has_base_value && mutable_filter_column_data[i] == 0)
+                continue;
+            if (nullable_column->isNullAt(i))
+                mutable_filter_column_data[i] = null_as_true ? 1 : 0;
+            else if (has_base_value)
+                mutable_filter_column_data[i] = mutable_filter_column_data[i] && nested_column_data[i];
+        }
+        *filter_column = mutable_filter_column;
+    }
+    else
+    {
+        if (has_base_value)
+        {
+            auto * mutable_filter_column = static_cast<ColumnVector<UInt8> *>((*filter_column)->assumeMutable().get());
+            auto & mutable_filter_column_data = mutable_filter_column->getData();
+            auto * other_filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
+            auto & other_filter_column_data = static_cast<const ColumnVector<UInt8> *>(other_filter_column)->getData();
+            for (size_t i = 0; i < other_filter_column->size(); i++)
+            {
+                mutable_filter_column_data[i] = mutable_filter_column_data[i] && other_filter_column_data[i];
+            }
+            *filter_column = mutable_filter_column;
+        }
+        else
+        {
+            *filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
+        }
+    }
+}
+
 /**
  * handle other join conditions
  * Join Kind/Strictness               ALL               ANY
@@ -967,34 +1020,15 @@ namespace
  */
 void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & anti_filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_columns) const
 {
-    if (other_eq_condition_from_in_ptr != nullptr)
-        other_eq_condition_from_in_ptr->execute(block);
     if (other_condition_ptr != nullptr)
         other_condition_ptr->execute(block);
+    if (other_eq_condition_from_in_ptr != nullptr)
+        other_eq_condition_from_in_ptr->execute(block);
 
     const ColumnVector<UInt8> * filter_column = nullptr;
-    ColumnVector<UInt8> * mutable_nested_column = nullptr;
     if (other_condition_ptr != nullptr)
     {
-        auto orig_filter_column = block.getByName(other_filter_column).column;
-        if (orig_filter_column->isColumnConst())
-            orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
-        if (orig_filter_column->isColumnNullable())
-        {
-            auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
-            mutable_nested_column = static_cast<ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr()->assumeMutable().get());
-            auto & mutable_nested_column_data = mutable_nested_column->getData();
-            for (size_t i = 0; i < nullable_column->size(); i++)
-            {
-                if (nullable_column->isNullAt(i))
-                    mutable_nested_column_data[i] = 0;
-            }
-            filter_column = mutable_nested_column;
-        }
-        else
-        {
-            filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
-        }
+        mergeNullAndFilterResult(block, &filter_column, other_filter_column, false);
     }
 
     if (other_eq_condition_from_in_ptr != nullptr)
@@ -1003,55 +1037,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         /// if there is a row that return null or false for other_condition, then for anti semi join, this row should be returned.
         /// otherwise, it will check other_eq_condition, if other_eq_condition return false, this row should be returned, if
         /// other_eq_condition return true or null this row should not be returned.
-        bool has_other_condition_filter = other_condition_ptr != nullptr;
-        auto orig_eq_filter_from_in_column = block.getByName(other_eq_filter_from_in_column).column;
-        if (orig_eq_filter_from_in_column->isColumnConst())
-            orig_eq_filter_from_in_column = orig_eq_filter_from_in_column->convertToFullColumnIfConst();
-        if (orig_eq_filter_from_in_column->isColumnNullable())
-        {
-            auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_eq_filter_from_in_column.get());
-
-            ColumnVector<UInt8> * mutable_filter_column = nullptr;
-            if (has_other_condition_filter)
-            {
-                mutable_filter_column = static_cast<ColumnVector<UInt8> *>(filter_column->assumeMutable().get());
-            }
-            else
-            {
-                mutable_filter_column = static_cast<ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr()->assumeMutable().get());
-            }
-            auto & mutable_filter_column_data = mutable_filter_column->getData();
-            auto & nested_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
-            for (size_t i = 0; i < nullable_column->size(); i++)
-            {
-                if (has_other_condition_filter && mutable_filter_column_data[i] == 0)
-                    continue;
-                if (nullable_column->isNullAt(i))
-                    mutable_filter_column_data[i] = isAntiJoin(kind) ? 1 : 0;
-                else
-                    mutable_filter_column_data[i] = mutable_filter_column_data[i] && nested_column_data[i];
-            }
-            filter_column = mutable_filter_column;
-        }
-        else
-        {
-            if (has_other_condition_filter)
-            {
-                auto * mutable_filter_column = static_cast<ColumnVector<UInt8> *>(filter_column->assumeMutable().get());
-                auto & mutable_filter_column_data = mutable_filter_column->getData();
-                auto * eq_filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_eq_filter_from_in_column.get());
-                auto & eq_filter_column_data = static_cast<const ColumnVector<UInt8> *>(eq_filter_column)->getData();
-                for (size_t i = 0; i < eq_filter_column->size(); i++)
-                {
-                    mutable_filter_column_data[i] = mutable_filter_column_data[i] && eq_filter_column_data[i];
-                }
-                filter_column = mutable_filter_column;
-            }
-            else
-            {
-                filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_eq_filter_from_in_column.get());
-            }
-        }
+        mergeNullAndFilterResult(block, &filter_column, other_eq_filter_from_in_column, isAntiJoin(kind));
     }
 
     auto & filter = filter_column->getData();
@@ -1395,7 +1381,7 @@ template<> struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::S
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
-void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map, std::unique_ptr<IColumn::Filter> & is_row_matched,
+void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[maybe_unused]], std::unique_ptr<IColumn::Filter> & is_row_matched,
     std::unique_ptr<IColumn::Offsets> & expanded_row_size_after_join) const
 {
     size_t num_existing_columns = block.columns();
