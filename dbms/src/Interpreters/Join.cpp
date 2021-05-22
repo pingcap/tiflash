@@ -953,56 +953,31 @@ namespace
     }
 }
 
-void mergeNullAndFilterResult(Block & block, const ColumnVector<UInt8> ** filter_column, const String & filter_column_name, bool null_as_true)
+void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & filter_column, const String & filter_column_name, bool null_as_true)
 {
-    bool has_base_value = *filter_column != nullptr;
     auto orig_filter_column = block.getByName(filter_column_name).column;
     if (orig_filter_column->isColumnConst())
         orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
     if (orig_filter_column->isColumnNullable())
     {
         auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
-
-        ColumnVector<UInt8> * mutable_filter_column = nullptr;
-        if (has_base_value)
-        {
-            mutable_filter_column = static_cast<ColumnVector<UInt8> *>((*filter_column)->assumeMutable().get());
-        }
-        else
-        {
-            mutable_filter_column = static_cast<ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr()->assumeMutable().get());
-        }
-        auto & mutable_filter_column_data = mutable_filter_column->getData();
         auto & nested_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
         for (size_t i = 0; i < nullable_column->size(); i++)
         {
-            if (has_base_value && mutable_filter_column_data[i] == 0)
+            if (filter_column[i] == 0)
                 continue;
             if (nullable_column->isNullAt(i))
-                mutable_filter_column_data[i] = null_as_true ? 1 : 0;
-            else if (has_base_value)
-                mutable_filter_column_data[i] = mutable_filter_column_data[i] && nested_column_data[i];
+                filter_column[i] = null_as_true ? 1 : 0;
+            else
+                filter_column[i] = filter_column[i] && nested_column_data[i];
         }
-        *filter_column = mutable_filter_column;
     }
     else
     {
-        if (has_base_value)
-        {
-            auto * mutable_filter_column = static_cast<ColumnVector<UInt8> *>((*filter_column)->assumeMutable().get());
-            auto & mutable_filter_column_data = mutable_filter_column->getData();
-            auto * other_filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
-            auto & other_filter_column_data = static_cast<const ColumnVector<UInt8> *>(other_filter_column)->getData();
-            for (size_t i = 0; i < other_filter_column->size(); i++)
-            {
-                mutable_filter_column_data[i] = mutable_filter_column_data[i] && other_filter_column_data[i];
-            }
-            *filter_column = mutable_filter_column;
-        }
-        else
-        {
-            *filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
-        }
+        auto * other_filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
+        auto & other_filter_column_data = static_cast<const ColumnVector<UInt8> *>(other_filter_column)->getData();
+        for (size_t i = 0; i < other_filter_column->size(); i++)
+            filter_column[i] = filter_column[i] && other_filter_column_data[i];
     }
 }
 
@@ -1025,10 +1000,12 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
     if (other_eq_condition_from_in_ptr != nullptr)
         other_eq_condition_from_in_ptr->execute(block);
 
-    const ColumnVector<UInt8> * filter_column = nullptr;
+    auto filter_column = ColumnUInt8::create();
+    auto & filter = filter_column->getData();
+    filter.assign(block.rows(), (UInt8)1);
     if (other_condition_ptr != nullptr)
     {
-        mergeNullAndFilterResult(block, &filter_column, other_filter_column, false);
+        mergeNullAndFilterResult(block, filter, other_filter_column, false);
     }
 
     if (other_eq_condition_from_in_ptr != nullptr)
@@ -1037,10 +1014,8 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         /// if there is a row that return null or false for other_condition, then for anti semi join, this row should be returned.
         /// otherwise, it will check other_eq_condition, if other_eq_condition return false, this row should be returned, if
         /// other_eq_condition return true or null this row should not be returned.
-        mergeNullAndFilterResult(block, &filter_column, other_eq_filter_from_in_column, isAntiJoin(kind));
+        mergeNullAndFilterResult(block, filter, other_eq_filter_from_in_column, isAntiJoin(kind));
     }
-
-    auto & filter = filter_column->getData();
 
     if (isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All)
     {
