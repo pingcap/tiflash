@@ -47,7 +47,7 @@
 namespace DB
 {
 
-StringRef trim(const StringRef & value);
+String trim(const StringRef & value);
 
 enum CastError
 {
@@ -391,14 +391,14 @@ struct TiDBConvertToInteger
     static T strToInt(const StringRef & value, const Context & context)
     {
         // trim space
-        StringRef trim_string = trim(value);
-        if (trim_string.size == 0)
+        String trim_string = trim(value);
+        if (trim_string.size() == 0)
         {
             if (value.size != 0)
                 context.getDAGContext()->handleTruncateError("cast str as int");
             return static_cast<T>(0);
         }
-        StringRef int_string = getValidIntPrefix(trim_string);
+        StringRef int_string = getValidIntPrefix(StringRef(trim_string));
         if (int_string.size == 0)
         {
             if (value.size != 0)
@@ -643,9 +643,9 @@ struct TiDBConvertToFloat
 
     static Float64 strToFloat(const StringRef & value, bool need_truncate, Float64 shift, Float64 max_f, const Context & context)
     {
-        StringRef trim_string = trim(value);
-        StringRef float_string = getValidFloatPrefix(trim_string);
-        if (trim_string.size == 0 && value.size != 0)
+        String trim_string = trim(value);
+        StringRef float_string = getValidFloatPrefix(StringRef(trim_string));
+        if (trim_string.size() == 0 && value.size != 0)
         {
             context.getDAGContext()->handleTruncateError("cast str as real");
             return 0.0;
@@ -725,7 +725,6 @@ struct TiDBConvertToFloat
         else if constexpr (std::is_same_v<FromDataType, DataTypeString>)
         {
             /// cast string as real
-            /// the implementation is quite different from TiDB/TiKV, so cast string as float will not be pushed to TiFlash
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
             const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
             const ColumnString::Chars_t * chars = &col_from_string->getChars();
