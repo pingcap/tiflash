@@ -16,7 +16,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
-}
+extern const int NOT_IMPLEMENTED;
+} // namespace ErrorCodes
 
 // adjustYear adjusts year according to y.
 // See https://dev.mysql.com/doc/refman/5.7/en/two-digit-years.html
@@ -1297,7 +1298,7 @@ MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
         format_pos++;
 
     bool in_pattern_match = false;
-    for (/*empty*/; format_pos < format.size(); format_pos++)
+    while (format_pos < format.size())
     {
         char x = format[format_pos];
         if (in_pattern_match)
@@ -1308,20 +1309,20 @@ MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
                 {
                     //"%b": Abbreviated month name (Jan..Dec)
                     parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
-                        bool found = false;
+                        size_t step = 0;
                         auto v = removePrefix(view, pos);
                         for (size_t p = 0; p < 12; p++)
                         {
-                            if (startsWith(v, abbrev_month_names[p]))
+                            if (startsWithCI(v, abbrev_month_names[p]))
                             {
-                                found = true;
                                 time.month = p + 1;
+                                step = abbrev_month_names[p].size();
                                 break;
                             }
                         }
-                        if (!found)
+                        if (step == 0)
                             return false;
-                        pos += 3;
+                        pos += step;
                         return true;
                     });
                     break;
@@ -1385,14 +1386,16 @@ MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
                 case 'H':
                 {
                     //"%H": Hour (00..23)
-                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
-                        auto [step, hour] = parseNDigits(view, pos, 2);
-                        if (step == 0 || hour > 23)
-                            return false;
-                        time.hour = hour;
-                        pos += step;
-                        return true;
-                    });
+                    parsers.emplace_back(
+                        [](const StringRef view, size_t & pos, MyDateTimeParser::Context & ctx, MyTimeBase & time) -> bool {
+                            auto [step, hour] = parseNDigits(view, pos, 2);
+                            if (step == 0 || hour > 23)
+                                return false;
+                            ctx.state |= MyDateTimeParser::Context::ST_HOUR_0_23;
+                            time.hour = hour;
+                            pos += step;
+                            return true;
+                        });
                     break;
                 }
                 case 'l':
@@ -1404,14 +1407,16 @@ MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
                 case 'h':
                 {
                     //"%h": Hour (01..12)
-                    parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
-                        auto [step, num] = parseNDigits(view, pos, 2);
-                        if (step == 0 || num <= 0 || num > 12)
-                            return false;
-                        time.hour = num;
-                        pos += step;
-                        return true;
-                    });
+                    parsers.emplace_back(
+                        [](const StringRef view, size_t & pos, MyDateTimeParser::Context & ctx, MyTimeBase & time) -> bool {
+                            auto [step, hour] = parseNDigits(view, pos, 2);
+                            if (step == 0 || hour <= 0 || hour > 12)
+                                return false;
+                            ctx.state |= MyDateTimeParser::Context::ST_HOUR_1_12;
+                            time.hour = hour;
+                            pos += step;
+                            return true;
+                        });
                     break;
                 }
                 case 'i':
@@ -1434,6 +1439,7 @@ MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
                         auto [step, num] = parseNDigits(view, pos, 3);
                         if (step == 0 || num == 0 || num > 366)
                             return false;
+                        ctx.state |= MyDateTimeParser::Context::ST_YEAR_OF_DAY;
                         ctx.day_of_year = num;
                         pos += step;
                         return true;
@@ -1444,20 +1450,18 @@ MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
                 {
                     //"%M": Month name (January..December)
                     parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
-                        bool found = false;
                         auto v = removePrefix(view, pos);
                         size_t step = 0;
                         for (size_t p = 0; p < 12; p++)
                         {
-                            if (startsWith(v, month_names[p]))
+                            if (startsWithCI(v, month_names[p]))
                             {
-                                found = true;
-                                step = month_names[p].size();
                                 time.month = p + 1;
+                                step = month_names[p].size();
                                 break;
                             }
                         }
-                        if (!found)
+                        if (step == 0)
                             return false;
                         pos += step;
                         return true;
@@ -1485,7 +1489,7 @@ MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
                     //"%s": Seconds (00..59)
                     parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase & time) -> bool {
                         auto [step, second] = parseNDigits(view, pos, 2);
-                        if (step == 0 || second > 60)
+                        if (step == 0 || second > 59)
                             return false;
                         time.second = second;
                         pos += step;
@@ -1509,6 +1513,10 @@ MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
                         if (toLowerIfAlphaASCII(view.data[pos + 1]) != 'm')
                             meridiem = 0;
 
+                        if (meridiem == 0)
+                            return false;
+
+                        ctx.state |= MyDateTimeParser::Context::ST_MERIDIEM;
                         ctx.meridiem = meridiem;
                         pos += 2;
                         return true;
@@ -1685,22 +1693,38 @@ MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
                 {
                     //"%%": A literal % character
                     parsers.emplace_back([](const StringRef view, size_t & pos, MyDateTimeParser::Context &, MyTimeBase &) -> bool {
+#if 0
                         if (view.data[pos] != '%')
                             return false;
                         pos++;
                         return true;
+#else
+                        // FIXME: Ignored by now, both tidb 5.0.0 and mariadb 10.3.14 can not handle it
+                        std::ignore = view;
+                        std::ignore = pos;
+                        return false;
+#endif
                     });
                     break;
                 }
                 default:
-                    throw Exception("Unknown date format pattern: " + x, ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception(
+                        "Unknown date format pattern, [format=" + format + "] [pattern=" + x + "] [pos=" + DB::toString(format_pos) + "]",
+                        ErrorCodes::BAD_ARGUMENTS);
             }
+            // end the state of pattern match
             in_pattern_match = false;
+            // move format_pos forward
+            format_pos++;
             continue;
         }
 
         if (x == '%')
+        {
             in_pattern_match = true;
+            // move format_pos forward
+            format_pos++;
+        }
         else
         {
             // Move forward view with a sequence of chars `format[format_pos:plain_match_end]`
@@ -1726,8 +1750,47 @@ MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
                     pos += span_size;
                     return true;
                 });
+            // move format_pos forward
+            format_pos = plain_match_end;
         }
     }
+}
+
+bool mysqlTimeFix(const MyDateTimeParser::Context & ctx, MyTimeBase & my_time)
+{
+    // TODO: Implement the function that converts day of year to yy:mm:dd
+    if (ctx.state & MyDateTimeParser::Context::ST_YEAR_OF_DAY)
+    {
+        // %j Day of year (001..366) set
+        throw Exception("%j set, parsing day of year is not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    if (ctx.state & MyDateTimeParser::Context::ST_MERIDIEM)
+    {
+        // %H (00..23) set, should not set AM/PM
+        if (ctx.state & MyDateTimeParser::Context::ST_HOUR_0_23)
+            return false;
+        if (my_time.hour == 0)
+            return false;
+        if (my_time.hour == 12)
+        {
+            // 12 is a special hour.
+            if (ctx.meridiem == 1) // AM
+                my_time.hour = 0;
+            else if (ctx.meridiem == 2) // PM
+                my_time.hour = 12;
+            return true;
+        }
+        if (ctx.meridiem == 2) // PM
+            my_time.hour += 12;
+    }
+    else
+    {
+        // %h (01..12) set
+        if ((ctx.state & MyDateTimeParser::Context::ST_HOUR_1_12) && my_time.hour == 12)
+            my_time.hour = 0; // why?
+    }
+    return true;
 }
 
 std::optional<UInt64> MyDateTimeParser::parseAsPackedUInt(const StringRef & str_view) const
@@ -1742,6 +1805,7 @@ std::optional<UInt64> MyDateTimeParser::parseAsPackedUInt(const StringRef & str_
     if (parse_pos >= str_view.size)
         return std::nullopt;
 
+    // TODO: can we return warnings to TiDB?
     MyDateTimeParser::Context ctx;
     for (auto & f : parsers)
     {
@@ -1749,17 +1813,17 @@ std::optional<UInt64> MyDateTimeParser::parseAsPackedUInt(const StringRef & str_
         {
 #ifndef NDEBUG
             LOG_TRACE(&Logger::get("MyDateTimeParser"),
-                "parse error, [str=" << String(str_view.data, str_view.size) << "] [parse_pos=" << parse_pos << "]");
+                "parse error, [str=" << String(str_view.data, str_view.size) << "] [format=" << format << "] [parse_pos=" << parse_pos
+                                     << "]");
 #endif
             return std::nullopt;
         }
         // TODO: handle `parse_pos` >= str_view.size after callback
     }
-    // TODO: handle the var in `ctx`
-    if (ctx.meridiem == 2)
-    {
-        my_time.hour += 12;
-    }
+
+    // Handle the var in `ctx`
+    if (bool success = mysqlTimeFix(ctx, my_time); !success)
+        return std::nullopt;
 
     return my_time.toPackedUInt();
 }

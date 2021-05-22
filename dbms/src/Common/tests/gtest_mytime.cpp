@@ -159,18 +159,47 @@ try
 {
     std::vector<std::tuple<String, String, std::optional<MyDateTime>>> cases{
         {"31/May/2016 12:34:56.1234", "%d/%b/%Y %H:%i:%S.%f", MyDateTime{2016, 5, 31, 12, 34, 56, 123400}},
-        {"30/April/2016 12:34:56.", "%d/%M/%Y %H:%i:%s.%f", MyDateTime{2016, 4, 30, 12, 34, 56, 0}},
+        {"31/may/2016 12:34:56.1234", "%d/%b/%Y %H:%i:%S.%f", MyDateTime{2016, 5, 31, 12, 34, 56, 123400}}, // case insensitive
+        {"31/mayy/2016 12:34:56.1234", "%d/%b/%Y %H:%i:%S.%f", std::nullopt},                               // invalid %b
+        {"31/mey/2016 12:34:56.1234", "%d/%b/%Y %H:%i:%S.%f", std::nullopt},                                // invalid %b
+        {"30/April/2016 12:34:56.", "%d/%M/%Y %H:%i:%s.%f", MyDateTime{2016, 4, 30, 12, 34, 56, 0}},        // empty %f is valid
+        {"30/april/2016 12:34:56.", "%d/%M/%Y %H:%i:%s.%f", MyDateTime{2016, 4, 30, 12, 34, 56, 0}},        // case insensitive
+        {"30/Apri/2016 12:34:56.", "%d/%M/%Y %H:%i:%s.%f", std::nullopt},                                   // invalid %M
+        {"30/Aprill/2016 12:34:56.", "%d/%M/%Y %H:%i:%s.%f", std::nullopt},                                 // invalid %M
+        {"30/Feb/2016 12:34:56.1234", "%d/%b/%Y %H:%i:%S.%f",
+            MyDateTime{2016, 2, 30, 12, 34, 56, 123400}}, // Feb 30th (not exist in actual) is valid for parsing (in mariadb)
         {"01,5,2013 9", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 900000}},
-        {"01,52013", "%d,%c%Y", std::nullopt},
+        {"01,52013", "%d,%c%Y", std::nullopt}, // %c will try to parse '52' as month and fail
         {"01,5,2013", "%d,%c,%Y", MyDateTime{2013, 5, 1, 0, 0, 0, 0}},
         {"01,5,2013 ", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 0}},
+
+        /// Test cases for AM/PM set
+        {"10:11:12 AM", "%H:%i:%S %p", std::nullopt}, // should not set %H %p at the same time
+        {"10:11:12 Am", "%h:%i:%S %p", MyDateTime(0, 0, 0, 10, 11, 12, 0)},
+        {"00:11:12 AM", "%h:%i:%S %p", std::nullopt},                // should not happen: %p set, %h not set
+        {"11:12 AM", "%i:%S %p", std::nullopt},                      // should not happen: %p set, %h not set
+        {"11:12 abcd", "%i:%S ", MyDateTime{0, 0, 0, 0, 11, 12, 0}}, // without %p, %h not set is ok
+        {"00:11:12 ", "%h:%i:%S ", std::nullopt},                    // 0 is not a valid number of %h
+        {"12:11:12 AP", "%h:%i:%S %p", std::nullopt},                // only AM/PM is valid
+        {"12:11:12 AM", "%h:%i:%S %p", MyDateTime(0, 0, 0, 0, 11, 12, 0)},
+        {"12:11:12 PM", "%h:%i:%S %p", MyDateTime(0, 0, 0, 12, 11, 12, 0)},
+        {"11:11:12 pM", "%h:%i:%S %p", MyDateTime(0, 0, 0, 23, 11, 12, 0)},
+        /// Special case for %h with 12
+        {"12:11:23 ", "%h:%i:%S ", MyDateTime(0, 0, 0, 0, 11, 23, 0)},
+        // For %% -- FIXME: Ignored by now, both tidb and mariadb 10.3.14 can not handle it
+        // {"01/Feb/2016 % 23:45:54", "%d/%b/%Y %% %H:%i:%S", MyDateTime(2016, 2, 1, 23, 45, 54, 0)},
+        // {"01/Feb/2016 %% 23:45:54", "%d/%b/%Y %%%% %H:%i:%S", MyDateTime(2016, 2, 1, 23, 45, 54, 0)},
+        {"01/Feb/2016 % 23:45:54", "%d/%b/%Y %% %H:%i:%S", std::nullopt},
+        {"01/Feb/2016 %% 23:45:54", "%d/%b/%Y %%%% %H:%i:%S", std::nullopt},
+        // mutiple chars between pattern
+        {"01/Feb/2016 abcdefg 23:45:54", "%d/%b/%Y abcdefg %H:%i:%S", MyDateTime(2016, 2, 1, 23, 45, 54, 0)},
 
         /// Below cases are ported from TiDB
         {"10/28/2011 9:46:29 pm", "%m/%d/%Y %l:%i:%s %p", MyDateTime(2011, 10, 28, 21, 46, 29, 0)},
         {"10/28/2011 9:46:29 Pm", "%m/%d/%Y %l:%i:%s %p", MyDateTime(2011, 10, 28, 21, 46, 29, 0)},
         {"2011/10/28 9:46:29 am", "%Y/%m/%d %l:%i:%s %p", MyDateTime(2011, 10, 28, 9, 46, 29, 0)},
         {"20161122165022", "%Y%m%d%H%i%s", MyDateTime(2016, 11, 22, 16, 50, 22, 0)},
-        {"2016 11 22 16 50 22", "%Y%m%d%H%i%s", MyDateTime(2016, 11, 22, 16, 50, 22, 0)}, // fail, should ignore sep
+        {"2016 11 22 16 50 22", "%Y%m%d%H%i%s", MyDateTime(2016, 11, 22, 16, 50, 22, 0)},   // fail, should ignore sep
         {"16-50-22 2016 11 22", "%H-%i-%s%Y%m%d", MyDateTime(2016, 11, 22, 16, 50, 22, 0)}, // fail, should ignore sep
         {"16-50 2016 11 22", "%H-%i-%s%Y%m%d", std::nullopt},
         {"15-01-2001 1:59:58.999", "%d-%m-%Y %I:%i:%s.%f", MyDateTime(2001, 1, 15, 1, 59, 58, 999000)},
@@ -178,8 +207,8 @@ try
         {"15-01-2001 1:59:58.", "%d-%m-%Y %H:%i:%s.%f", MyDateTime(2001, 1, 15, 1, 59, 58, 0)},
         {"15-01-2001 1:9:8.999", "%d-%m-%Y %H:%i:%s.%f", MyDateTime(2001, 1, 15, 1, 9, 8, 999000)},
         {"15-01-2001 1:9:8.999", "%d-%m-%Y %H:%i:%S.%f", MyDateTime(2001, 1, 15, 1, 9, 8, 999000)},
-        {"2003-01-02 10:11:12 PM", "%Y-%m-%d %H:%i:%S %p", std::nullopt}, // fail ?
-        {"10:20:10AM", "%H:%i:%S%p", std::nullopt}, // fail ?
+        {"2003-01-02 10:11:12 PM", "%Y-%m-%d %H:%i:%S %p", std::nullopt}, // should not set %H %p at the same time
+        {"10:20:10AM", "%H:%i:%S%p", std::nullopt},                       // should not set %H %p at the same time
         // test %@(skip alpha), %#(skip number), %.(skip punct)
         {"2020-10-10ABCD", "%Y-%m-%d%@", MyDateTime(2020, 10, 10, 0, 0, 0, 0)},
         {"2020-10-101234", "%Y-%m-%d%#", MyDateTime(2020, 10, 10, 0, 0, 0, 0)},

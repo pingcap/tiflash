@@ -136,17 +136,24 @@ struct MyDateTimeParser
 
     std::optional<UInt64> parseAsPackedUInt(const StringRef & str_view) const;
 
-private:
-    const String format;
-
     struct Context
     {
+        uint32_t state = 0;
+        static constexpr uint32_t ST_YEAR_OF_DAY = 0x01;
+        static constexpr uint32_t ST_MERIDIEM = 0x02;
+        static constexpr uint32_t ST_HOUR_0_23 = 0x04;
+        static constexpr uint32_t ST_HOUR_1_12 = 0x08;
+
         int32_t day_of_year = 0;
         // 0 - invalid, 1 - am, 2 - pm
         int32_t meridiem = 0;
     };
-    // Parse from view[pos]
-    // If success, update `datetime` and return true.
+
+private:
+    const String format;
+
+    // Parsing method. Parse from view[pos].
+    // If success, update `datetime`, `pos`, `ctx` and return true.
     // If fail, return false.
     using ParserCallback = std::function<bool(const StringRef view, size_t & pos, MyDateTimeParser::Context & ctx, MyTimeBase & datetime)>;
     std::vector<ParserCallback> parsers;
