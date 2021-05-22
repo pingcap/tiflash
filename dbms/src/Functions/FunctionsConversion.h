@@ -1588,7 +1588,118 @@ public:
             throw Exception("Second argument for function " + getName() + " must be String constant", ErrorCodes::ILLEGAL_COLUMN);
         }
     }
+};
 
+struct NameStrToDateDate
+{
+    static constexpr auto name = "strToDateDate";
+};
+struct NameStrToDateDatetime
+{
+    static constexpr auto name = "strToDateDatetime";
+};
+template <typename Name>
+class FunctionStrToDate : public IFunction
+{
+public:
+    static constexpr auto name = Name::name;
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionStrToDate>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 2; }
+    bool isInjective(const Block &) override { return false; }
+
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        if (arguments.size() != 2)
+            throw Exception("Function " + getName() + " only accept 2 arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        // TODO: Maybe FixedString?
+        if (!removeNullable(arguments[0].type)->isString())
+            throw Exception("First argument for function " + getName() + " must be String, but get " + arguments[0].type->getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+        if (!arguments[1].type->isString())
+            throw Exception(
+                "Second argument for function " + getName() + " must be String constant, but get " + arguments[1].type->getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+
+        if constexpr (std::is_same_v<Name, NameStrToDateDatetime>)
+        {
+            // FIXME: Should it be nullable for invalid result?
+            // FIXME: set fraction for DataTypeMyDateTime
+            return makeNullable(std::make_shared<DataTypeMyDateTime>());
+        }
+        else if constexpr (std::is_same_v<Name, NameStrToDateDate>)
+        {
+            // FIXME: Should it be nullable for invalid result?
+            return makeNullable(std::make_shared<DataTypeMyDate>());
+        }
+        else
+        {
+            throw Exception("Unknown name for FunctionStrToDate:" + getName(), ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
+    // FIXME: Should we override other method?
+    bool useDefaultImplementationForConstants() const override { return true; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    {
+        const auto & input_column = block.getByPosition(arguments[0]).column;
+        const size_t num_rows = input_column->size();
+        const ColumnString * col_from = nullptr;
+        if (input_column->isColumnNullable())
+        {
+            auto null_input_column = checkAndGetColumn<ColumnNullable>(input_column.get());
+            col_from = checkAndGetColumn<ColumnString>(null_input_column->getNestedColumnPtr().get());
+        }
+        else
+        {
+            col_from = checkAndGetColumn<ColumnString>(input_column.get());
+        }
+
+        auto datetime_column = ColumnVector<DataTypeMyDateTime::FieldType>::create(num_rows);
+        auto & datetime_res = datetime_column->getData();
+        auto null_column = ColumnUInt8::create(num_rows);
+        auto & null_res = null_column->getData();
+
+        const auto & format_col = block.getByPosition(arguments[1]).column;
+        if (format_col->isColumnConst())
+        {
+            const auto & col_const = checkAndGetColumnConst<ColumnString>(format_col.get());
+            auto format = col_const->getValue<String>();
+
+            auto parser = MyDateTimeParser(format);
+            for (size_t i = 0; i < num_rows; i++)
+            {
+                if (input_column->isColumnNullable())
+                {
+                    null_res[i] = input_column->isNullAt(i);
+                    continue;
+                }
+
+                const auto str_ref = col_from->getDataAt(i);
+                if (auto parse_res = parser.parseAsPackedUInt(str_ref); parse_res)
+                {
+                    datetime_res[i] = *parse_res;
+                    null_res[i] = 0;
+                }
+                else
+                {
+                    datetime_res[i] = 0;
+                    null_res[i] = 1;
+                }
+            }
+            block.getByPosition(result).column = ColumnNullable::create(std::move(datetime_column), std::move(null_column));
+        }
+        else
+        {
+            // TODO: the second argument could be a column, support it later.
+            throw Exception("Second argument for function " + getName() + " must be String constant", ErrorCodes::ILLEGAL_COLUMN);
+        }
+    }
 };
 
 

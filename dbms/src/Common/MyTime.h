@@ -3,6 +3,7 @@
 #include <Core/Field.h>
 #include <common/DateLUTImpl.h>
 
+struct StringRef;
 namespace DB
 {
 
@@ -131,6 +132,24 @@ struct MyDateTimeFormatter
             f(datetime, result);
         }
     }
+};
+
+struct MyDateTimeParser
+{
+    explicit MyDateTimeParser(const String & format_);
+
+    std::optional<UInt64> parseAsPackedUInt(const StringRef & str_view) const;
+
+    struct Context;
+
+private:
+    const String format;
+
+    // Parsing method. Parse from ctx.view[ctx.pos].
+    // If success, update `datetime`, `ctx` and return true.
+    // If fail, return false.
+    using ParserCallback = std::function<bool(MyDateTimeParser::Context & ctx, MyTimeBase & datetime)>;
+    std::vector<ParserCallback> parsers;
 };
 
 Field parseMyDateTime(const String & str, int8_t fsp = 6);
