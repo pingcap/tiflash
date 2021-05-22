@@ -11,35 +11,55 @@ mysql> analyze table test.f;
 
 func> wait_table test f
 
-mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,id) c1,right(b,id) c2, a, b, id from test.f) t group by t.c1, t.c2,a,b,id;
-+------+------+---------+------+------+----------+
-| c1   | c2   | a       | b    | id   | count(*) |
-+------+------+---------+------+------+----------+
-| s    | NULL | shipai  | NULL |    1 |        1 |
-| p    | b    | pingcap | tidb |    1 |        1 |
-| a    | h    | abc     | fzh  |    1 |        1 |
-| NULL | NULL | NULL    | NULL | NULL |        1 |
-| NULL | NULL | NULL    | std  | NULL |        1 |
-+------+------+---------+------+------+----------+
+mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,1) c1,right(b,1) c2, a, b, 1 as id from test.f) t group by t.c1, t.c2,a,b,id;
++------+------+---------+------+----+----------+
+| c1   | c2   | a       | b    | id | count(*) |
++------+------+---------+------+----+----------+
+| NULL | d    | NULL    | std  |  1 |        1 |
+| p    | b    | pingcap | tidb |  1 |        1 |
+| NULL | NULL | NULL    | NULL |  1 |        1 |
+| a    | h    | abc     | fzh  |  1 |        1 |
+| s    | NULL | shipai  | NULL |  1 |        1 |
++------+------+---------+------+----+----------+
 
-mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,id+10) c1,right(b,id+10) c2, a, b, id+10 as id from test.f) t group by t.c1, t.c2,a,b,id;
+mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,11) c1,right(b,11) c2, a, b, 11 as id from test.f) t group by t.c1, t.c2,a,b,id;
 +---------+------+---------+------+----+----------+
 | c1      | c2   | a       | b    | id | count(*) |
 +---------+------+---------+------+----+----------+
 | abc     | fzh  | abc     | fzh  | 11 |        1 |
-| NULL    | NULL | NULL    | NULL | NULL |        1 |
-| pingcap | tidb | pingcap | tidb | 11 |        1 |
-| NULL    | NULL | NULL    | std  | NULL |        1 |
+| NULL    | std  | NULL    | std  | 11 |        1 |
 | shipai  | NULL | shipai  | NULL | 11 |        1 |
+| NULL    | NULL | NULL    | NULL | 11 |        1 |
+| pingcap | tidb | pingcap | tidb | 11 |        1 |
 +---------+------+---------+------+----+----------+
 
-mysql> use test; select t.c1,t.c2,a,b,id, count(*) from (select left(a,id-1) c1,right(b,id-1) c2, a, b, id-1 as id from test.f) t group by t.c1, t.c2,a,b,id;
+mysql> use test; select t.c1,t.c2,a,b,id, count(*) from (select left(a,0) c1,right(b,0) c2, a, b, 0 as id from test.f) t group by t.c1, t.c2,a,b,id;
 +------+------+---------+------+----+----------+
 | c1   | c2   | a       | b    | id | count(*) |
 +------+------+---------+------+----+----------+
-|      | NULL | shipai  | NULL |  0 |        1 |
-|      |      | pingcap | tidb |  0 |        1 |
 |      |      | abc     | fzh  |  0 |        1 |
-| NULL | NULL | NULL    | NULL | NULL |        1 |
-| NULL | NULL | NULL    | std  | NULL |        1 |
+|      | NULL | shipai  | NULL |  0 |        1 |
+| NULL |      | NULL    | std  |  0 |        1 |
+| NULL | NULL | NULL    | NULL |  0 |        1 |
+|      |      | pingcap | tidb |  0 |        1 |
 +------+------+---------+------+----+----------+
+
+mysql> use test; select a,t.c0,t.c1,t.c2,t.c3,t.c4,t.c5, count(*) from (select right(a,0) c0 ,right(a,1) c1,right(a,-1) c2, right(a,100) c3, right(a,null) c4, right(null,0) c5,a from test.f) t group by c0, c1,c2,c3,c4,c5,a;
++---------+------+------+------+---------+------+------+----------+
+| a       | c0   | c1   | c2   | c3      | c4   | c5   | count(*) |
++---------+------+------+------+---------+------+------+----------+
+| abc     |      | c    |      | abc     | NULL | NULL |        1 |
+| shipai  |      | i    |      | shipai  | NULL | NULL |        1 |
+| pingcap |      | p    |      | pingcap | NULL | NULL |        1 |
+| NULL    | NULL | NULL | NULL | NULL    | NULL | NULL |        2 |
++---------+------+------+------+---------+------+------+----------+
+
+mysql> use test; select a, t.c0,t.c1,t.c2,t.c3,t.c4,t.c5, count(*) from (select left(a,0) c0 ,left(a,1) c1,left(a,-1) c2, left(a,100) c3,left(a,null)c4,left(null,0)c5, a from test.f) t group by c0, c1,c2,c3,c4,c5,a;
++---------+------+------+------+---------+------+------+----------+
+| a       | c0   | c1   | c2   | c3      | c4   | c5   | count(*) |
++---------+------+------+------+---------+------+------+----------+
+| pingcap |      | p    |      | pingcap | NULL | NULL |        1 |
+| abc     |      | a    |      | abc     | NULL | NULL |        1 |
+| NULL    | NULL | NULL | NULL | NULL    | NULL | NULL |        2 |
+| shipai  |      | s    |      | shipai  | NULL | NULL |        1 |
++---------+------+------+------+---------+------+------+----------+

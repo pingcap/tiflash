@@ -181,10 +181,10 @@ static String buildLogicalFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
-// left(str,len) = substr(str,1,len), use substrUTF8() later if consider collation or implement leftUTF8() and left()
+// left(str,len) = substrUTF8(str,1,len)
 static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
-    const String & func_name = "substring";
+    const String & func_name = "substringUTF8";
     Names argument_names;
 
     // the first parameter: str
@@ -192,62 +192,15 @@ static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb
     argument_names.push_back(str);
 
     // the second parameter: const(1)
-    auto col_const_one
-        = ColumnWithTypeAndName(DataTypeUInt8().createColumnConst(1, UInt64(1)), std::make_shared<DataTypeUInt8>(), "_start_pos_");
-    actions->add(ExpressionAction::addColumn(col_const_one));
-    argument_names.push_back(col_const_one.name);
+    auto const_one = tipb::Expr();
+    constructInt64LiteralTiExpr(const_one,1);
+    auto col_const_one = analyzer->getActions(const_one,actions,false);
+    argument_names.push_back(col_const_one);
 
     // the third parameter: len
     String name = analyzer->getActions(expr.children()[1], actions, false);
     argument_names.push_back(name);
 
-    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
-}
-
-// right(str,len) = substr(str,if(char_length(str) <= len, 1,char_length(str)-len+1)), use substrUTF8() later if consider collation or implement rightUTF8() and right()
-static String buildRightUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
-{
-    const String & func_name = "substring";
-    Names argument_names;
-    // the first parameter: str
-    String str = analyzer->getActions(expr.children()[0], actions, false);
-    argument_names.push_back(str);
-
-    // char_length(str)
-    auto char_length = analyzer->applyFunction("lengthUTF8", argument_names, actions, getCollatorFromExpr(expr));
-
-    // const(1)
-    auto col_const_one
-        = ColumnWithTypeAndName(DataTypeUInt8().createColumnConst(1, UInt64(1)), std::make_shared<DataTypeUInt8>(), "_start_pos_");
-    actions->add(ExpressionAction::addColumn(col_const_one));
-
-    // the third parameter: len
-    String len_name = analyzer->getActions(expr.children()[1], actions, false);
-
-    // char_length(str) <= len
-    Names less_equ_argument_names;
-    less_equ_argument_names.push_back(char_length);
-    less_equ_argument_names.push_back(len_name);
-    auto less_equ_name = analyzer->applyFunction("lessOrEquals", less_equ_argument_names, actions, getCollatorFromExpr(expr));
-
-    // char_length(str)-len+1
-    Names sub_argument_names;
-    sub_argument_names.push_back(char_length);
-    sub_argument_names.push_back(len_name);
-    auto sub_name = analyzer->applyFunction("minus", sub_argument_names, actions, getCollatorFromExpr(expr));
-
-    Names add_argument_names;
-    add_argument_names.push_back(sub_name);
-    add_argument_names.push_back(col_const_one.name);
-    auto add_name = analyzer->applyFunction("plus", add_argument_names, actions, getCollatorFromExpr(expr));
-
-    Names if_argument_names;
-    if_argument_names.push_back(less_equ_name);
-    if_argument_names.push_back(col_const_one.name);
-    if_argument_names.push_back(add_name);
-    auto if_name = analyzer->applyFunction("multiIf", if_argument_names, actions, getCollatorFromExpr(expr));
-
-    argument_names.push_back(if_name);
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
@@ -378,7 +331,7 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"multiIf", buildMultiIfFunction}, {"tidb_cast", buildCastFunction}, {"date_add", buildDateAddFunction},
         {"and", buildLogicalFunction}, {"or", buildLogicalFunction}, {"xor", buildLogicalFunction}, {"not", buildLogicalFunction},
         {"bitAnd", buildBitwiseFunction}, {"bitOr", buildBitwiseFunction}, {"bitXor", buildBitwiseFunction},
-        {"bitNot", buildBitwiseFunction}, {"LeftUTF8", buildLeftUTF8Function}, {"RightUTF8", buildRightUTF8Function}});
+        {"bitNot", buildBitwiseFunction}, {"LeftUTF8", buildLeftUTF8Function}});
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_)), context(context_), after_agg(false), implicit_cast_count(0)
