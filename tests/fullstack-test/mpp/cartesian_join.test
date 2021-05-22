@@ -18,6 +18,54 @@ func> wait_table test a
 func> wait_table test b
 
 
+# test inner cartesian join
+# without any condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_cartesian_bcj=1; set @@tidb_opt_force_cartesian_bcj=1; select * from a as t1 join a as t2 on 1 = 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | d     |
+|    1 | a     |    3 | c     |
+|    1 | a     |    2 | b     |
+|    1 | a     |    1 | a     |
+|    2 | b     | NULL | d     |
+|    2 | b     |    3 | c     |
+|    2 | b     |    2 | b     |
+|    2 | b     |    1 | a     |
+|    3 | c     | NULL | d     |
+|    3 | c     |    3 | c     |
+|    3 | c     |    2 | b     |
+|    3 | c     |    1 | a     |
+| NULL | d     | NULL | d     |
+| NULL | d     |    3 | c     |
+| NULL | d     |    2 | b     |
+| NULL | d     |    1 | a     |
++------+-------+------+-------+
+# with other condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_cartesian_bcj=1; set @@tidb_opt_force_cartesian_bcj=1; select * from a as t1 join a as t2 on t1.id > t2.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    2 | b     |    1 | a     |
+|    3 | c     |    1 | a     |
+|    3 | c     |    2 | b     |
++------+-------+------+-------+
+
+# without any condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_cartesian_bcj=1; set @@tidb_opt_force_cartesian_bcj=1; select * from a as t1 join b as t2 on 1 = 1;
+# with other condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_cartesian_bcj=1; set @@tidb_opt_force_cartesian_bcj=1; select * from a as t1 join b as t2 on t1.id > t2.id;
+
+# without any condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_cartesian_bcj=1; set @@tidb_opt_force_cartesian_bcj=1; select * from b as t1 join a as t2 on 1 = 1;
+# with other condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_cartesian_bcj=1; set @@tidb_opt_force_cartesian_bcj=1; select * from b as t1 join a as t2 on t1.id > t2.id;
+
+# without any condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_cartesian_bcj=1; set @@tidb_opt_force_cartesian_bcj=1; select * from b as t1 join b as t2 on 1 = 1;
+# with other condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_cartesian_bcj=1; set @@tidb_opt_force_cartesian_bcj=1; select * from b as t1 join b as t2 on t1.id > t2.id;
+
 # test left out cartesian join
 # without any condition, non-empty join non-empty
 mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_cartesian_bcj=1; set @@tidb_opt_force_cartesian_bcj=1; select * from a as t1 left join a as t2 on 1 = 1;
