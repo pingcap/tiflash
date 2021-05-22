@@ -181,6 +181,76 @@ static String buildLogicalFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
+// left(str,len) = substr(str,1,len), use substrUTF8() later if consider collation or implement leftUTF8() and left()
+static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    const String & func_name = "substring";
+    Names argument_names;
+
+    // the first parameter: str
+    String str = analyzer->getActions(expr.children()[0], actions, false);
+    argument_names.push_back(str);
+
+    // the second parameter: const(1)
+    auto col_const_one
+        = ColumnWithTypeAndName(DataTypeUInt8().createColumnConst(1, UInt64(1)), std::make_shared<DataTypeUInt8>(), "_start_pos_");
+    actions->add(ExpressionAction::addColumn(col_const_one));
+    argument_names.push_back(col_const_one.name);
+
+    // the third parameter: len
+    String name = analyzer->getActions(expr.children()[1], actions, false);
+    argument_names.push_back(name);
+
+    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+}
+
+// right(str,len) = substr(str,if(char_length(str) <= len, 1,char_length(str)-len+1)), use substrUTF8() later if consider collation or implement rightUTF8() and right()
+static String buildRightUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    const String & func_name = "substring";
+    Names argument_names;
+    // the first parameter: str
+    String str = analyzer->getActions(expr.children()[0], actions, false);
+    argument_names.push_back(str);
+
+    // char_length(str)
+    auto char_length = analyzer->applyFunction("lengthUTF8", argument_names, actions, getCollatorFromExpr(expr));
+
+    // const(1)
+    auto col_const_one
+        = ColumnWithTypeAndName(DataTypeUInt8().createColumnConst(1, UInt64(1)), std::make_shared<DataTypeUInt8>(), "_start_pos_");
+    actions->add(ExpressionAction::addColumn(col_const_one));
+
+    // the third parameter: len
+    String len_name = analyzer->getActions(expr.children()[1], actions, false);
+
+    // char_length(str) <= len
+    Names less_equ_argument_names;
+    less_equ_argument_names.push_back(char_length);
+    less_equ_argument_names.push_back(len_name);
+    auto less_equ_name = analyzer->applyFunction("lessOrEquals", less_equ_argument_names, actions, getCollatorFromExpr(expr));
+
+    // char_length(str)-len+1
+    Names sub_argument_names;
+    sub_argument_names.push_back(char_length);
+    sub_argument_names.push_back(len_name);
+    auto sub_name = analyzer->applyFunction("minus", sub_argument_names, actions, getCollatorFromExpr(expr));
+
+    Names add_argument_names;
+    add_argument_names.push_back(sub_name);
+    add_argument_names.push_back(col_const_one.name);
+    auto add_name = analyzer->applyFunction("plus", add_argument_names, actions, getCollatorFromExpr(expr));
+
+    Names if_argument_names;
+    if_argument_names.push_back(less_equ_name);
+    if_argument_names.push_back(col_const_one.name);
+    if_argument_names.push_back(add_name);
+    auto if_name = analyzer->applyFunction("multiIf", if_argument_names, actions, getCollatorFromExpr(expr));
+
+    argument_names.push_back(if_name);
+    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+}
+
 static const String tidb_cast_name = "tidb_cast";
 
 static String buildCastFunctionInternal(DAGExpressionAnalyzer * analyzer, const Names & argument_names, bool in_union,
@@ -303,26 +373,12 @@ static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr &
 }
 
 static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>>
-    function_builder_map({
-        {"in", buildInFunction},
-        {"notIn", buildInFunction},
-        {"globalIn", buildInFunction},
-        {"globalNotIn", buildInFunction},
-        {"tidbIn", buildInFunction},
-        {"tidbNotIn", buildInFunction},
-        {"ifNull", buildIfNullFunction},
-        {"multiIf", buildMultiIfFunction},
-        {"tidb_cast", buildCastFunction},
-        {"date_add", buildDateAddFunction},
-        {"and", buildLogicalFunction},
-        {"or", buildLogicalFunction},
-        {"xor", buildLogicalFunction},
-        {"not", buildLogicalFunction},
-        {"bitAnd", buildBitwiseFunction},
-        {"bitOr", buildBitwiseFunction},
-        {"bitXor", buildBitwiseFunction},
-        {"bitNot", buildBitwiseFunction},
-    });
+    function_builder_map({{"in", buildInFunction}, {"notIn", buildInFunction}, {"globalIn", buildInFunction},
+        {"globalNotIn", buildInFunction}, {"tidbIn", buildInFunction}, {"tidbNotIn", buildInFunction}, {"ifNull", buildIfNullFunction},
+        {"multiIf", buildMultiIfFunction}, {"tidb_cast", buildCastFunction}, {"date_add", buildDateAddFunction},
+        {"and", buildLogicalFunction}, {"or", buildLogicalFunction}, {"xor", buildLogicalFunction}, {"not", buildLogicalFunction},
+        {"bitAnd", buildBitwiseFunction}, {"bitOr", buildBitwiseFunction}, {"bitXor", buildBitwiseFunction},
+        {"bitNot", buildBitwiseFunction}, {"LeftUTF8", buildLeftUTF8Function}, {"RightUTF8", buildRightUTF8Function}});
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_)), context(context_), after_agg(false), implicit_cast_count(0)
@@ -882,14 +938,14 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
         for (size_t index = 0; index < output_offsets.size(); index++)
         {
             UInt32 i = output_offsets[index];
-            if (schema[i].tp() == TiDB::TypeTimestamp || need_append_type_cast_vec[index])
+            if ((need_append_timezone_cast && schema[i].tp() == TiDB::TypeTimestamp) || need_append_type_cast_vec[index])
             {
                 const auto & it = casted_name_map.find(current_columns[i].name);
                 if (it == casted_name_map.end())
                 {
                     /// first add timestamp cast
                     String updated_name = current_columns[i].name;
-                    if (schema[i].tp() == TiDB::TypeTimestamp)
+                    if (need_append_timezone_cast && schema[i].tp() == TiDB::TypeTimestamp)
                     {
                         if (tz_col.length() == 0)
                             tz_col = getActions(tz_expr, step.actions);
