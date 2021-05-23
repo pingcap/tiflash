@@ -1394,10 +1394,11 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             meridiem = 1;
         else if (toLowerIfAlphaASCII(ctx.view.data[temp_pos]) == 'p')
             meridiem = 2;
+        temp_pos += 1; // move forward
 
         if (state = checkIfEnd(); state != ParseState::NORMAL)
             return state;
-        if (toLowerIfAlphaASCII(ctx.view.data[temp_pos + 1]) != 'm')
+        if (toLowerIfAlphaASCII(ctx.view.data[temp_pos]) != 'm')
             meridiem = 0;
         switch (meridiem)
         {
@@ -1409,7 +1410,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
                 time.hour += 12;
                 break;
         }
-        temp_pos += 2; // move forward
+        temp_pos += 1; // move forward
         return ParseState::NORMAL;
     };
     if (auto state = tryParse(); state == ParseState::FAIL)
