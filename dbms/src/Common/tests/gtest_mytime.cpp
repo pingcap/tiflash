@@ -158,6 +158,15 @@ TEST_F(TestMyTime, Parser)
 try
 {
     std::vector<std::tuple<String, String, std::optional<MyDateTime>>> cases{
+        {" 2/Jun", "%d/%b/%Y", MyDateTime{0, 6, 2, 0, 0, 0, 0}},  // More patterns than input string
+        {" liter", "lit era l", MyDateTime{0, 0, 0, 0, 0, 0, 0}}, // More patterns than input string
+        // Test case for empty input
+        {"   ", " ", MyDateTime{0, 0, 0, 0, 0, 0, 0}},
+        {"    ", "%d/%b/%Y", MyDateTime{0, 0, 0, 0, 0, 0, 0}},
+        // Prefix white spaces should be ignored
+        {"  2/Jun/2019 ", "%d/%b/%Y", MyDateTime{2019, 6, 2, 0, 0, 0, 0}},
+        {"   2/Jun/2019 ", " %d/%b/%Y", MyDateTime{2019, 6, 2, 0, 0, 0, 0}},
+        //
         {"31/May/2016 12:34:56.1234", "%d/%b/%Y %H:%i:%S.%f", MyDateTime{2016, 5, 31, 12, 34, 56, 123400}},
         {"31/may/2016 12:34:56.1234", "%d/%b/%Y %H:%i:%S.%f", MyDateTime{2016, 5, 31, 12, 34, 56, 123400}}, // case insensitive
         {"31/mayy/2016 12:34:56.1234", "%d/%b/%Y %H:%i:%S.%f", std::nullopt},                               // invalid %b
@@ -191,8 +200,33 @@ try
         // {"01/Feb/2016 %% 23:45:54", "%d/%b/%Y %%%% %H:%i:%S", MyDateTime(2016, 2, 1, 23, 45, 54, 0)},
         {"01/Feb/2016 % 23:45:54", "%d/%b/%Y %% %H:%i:%S", std::nullopt},
         {"01/Feb/2016 %% 23:45:54", "%d/%b/%Y %%%% %H:%i:%S", std::nullopt},
+
+        /// Test cases for %r
+        {" 04 :13:56 AM13/05/2019", "%r %d/%c/%Y", MyDateTime{2019, 5, 13, 4, 13, 56, 0}},
+        {"13:13:56 AM13/5/2019", "%r", std::nullopt},  // hh = 13 with am is invalid
+        {"00:13:56 AM13/05/2019", "%r", std::nullopt}, // hh = 0 with am is invalid
+        {"00:13:56 pM13/05/2019", "%r", std::nullopt}, // hh = 0 with pm is invalid
+        {"12: 13:56 AM 13/05/2019", "%r%d/%c/%Y", MyDateTime{2019, 5, 13, 0, 13, 56, 0}},
+        {"12:13 :56 pm 13/05/2019", "%r %d/%c/%Y", MyDateTime{2019, 5, 13, 12, 13, 56, 0}},
+        {"11:13: 56pm  13/05/2019", "%r %d/%c/%Y", MyDateTime{2019, 5, 13, 23, 13, 56, 0}},
+        {"11:13", "%r", MyDateTime{0, 0, 0, 11, 13, 0, 0}},
+        {"11:", "%r", MyDateTime{0, 0, 0, 11, 0, 0, 0}},
+        {"12", "%r", MyDateTime{0, 0, 0, 0, 0, 0, 0}},
+
+        /// Test cases for %T
+        {" 4 :13:56 13/05/2019", "%T %d/%c/%Y", MyDateTime{2019, 5, 13, 4, 13, 56, 0}},
+        {"23: 13:56  13/05/2019", "%T%d/%c/%Y", MyDateTime{2019, 5, 13, 23, 13, 56, 0}},
+        {"12:13 :56 13/05/2019", "%T %d/%c/%Y", MyDateTime{2019, 5, 13, 12, 13, 56, 0}},
+        {"19:13: 56  13/05/2019", "%T %d/%c/%Y", MyDateTime{2019, 5, 13, 19, 13, 56, 0}},
+        {"21:13", "%T", MyDateTime{0, 0, 0, 21, 13, 0, 0}},
+        {"21:", "%T", MyDateTime{0, 0, 0, 21, 0, 0, 0}},
+
         // mutiple chars between pattern
         {"01/Feb/2016 abcdefg 23:45:54", "%d/%b/%Y abcdefg %H:%i:%S", MyDateTime(2016, 2, 1, 23, 45, 54, 0)},
+        // the number of whitespace between pattern and input doesn't matter
+        {"01/Feb/2016   abcdefg 23:45: 54", "%d/%b/%Y abcdefg %H  :%i:%S", MyDateTime(2016, 2, 1, 23, 45, 54, 0)},
+        {"01/Feb/  2016   abc  defg   23:45:54", "%d/  %b/%Y abcdefg %H:   %i:%S", MyDateTime(2016, 2, 1, 23, 45, 54, 0)},
+        {"01/Feb  /2016   ab cdefg 23:  45:54", "%d  /%b/%Y abc  defg %H:%i  :%S", MyDateTime{2016, 2, 1, 23, 45, 54, 0}},
 
         /// Below cases are ported from TiDB
         {"10/28/2011 9:46:29 pm", "%m/%d/%Y %l:%i:%s %p", MyDateTime(2011, 10, 28, 21, 46, 29, 0)},
