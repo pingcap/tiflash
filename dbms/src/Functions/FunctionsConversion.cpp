@@ -36,7 +36,7 @@ class FunctionTiDBUnixTimeStamp : public IFunction
 public:
     static constexpr auto name = Name::name;
     static FunctionPtr create(const Context & context) { return std::make_shared<FunctionTiDBUnixTimeStamp>(context); };
-    explicit FunctionTiDBUnixTimeStamp(const Context & context) : timezone_(context.getTimezoneInfo().timezone){};
+    explicit FunctionTiDBUnixTimeStamp(const Context & context) : timezone_(context.getTimezoneInfo()){};
 
     String getName() const override
     {
@@ -70,17 +70,14 @@ public:
             auto & vec_to = col_to->getData();
             vec_to.resize(size);
 
+
             for (size_t i = 0; i < size; i++)
             {
-                try
-                {
-                    vec_to[i] = getEpochSecond(vec_from[i], *timezone_);
-                }
-                catch (...)
-                {
+                UInt64 ret = 0;
+                if (getUnixTimeStampHelper(vec_from[i], ret))
+                    vec_to[i] = ret;
+                else
                     vec_to[i] = 0;
-                    continue;
-                }
             }
 
             block.getByPosition(result).column = std::move(col_to);
@@ -104,18 +101,13 @@ public:
             for (size_t i = 0; i < size; i++)
             {
                 UInt64 ret = 0;
-                try
+                if (getUnixTimeStampHelper(vec_from[i], ret))
                 {
-                    ret = getEpochSecond(vec_from[i], *timezone_);
+                    MyDateTime datetime(vec_from[i]);
+                    vec_to[i] = ret * multiplier + datetime.micro_second / divider;
                 }
-                catch (...)
-                {
+                else
                     vec_to[i] = 0;
-                    continue;
-                }
-
-                MyDateTime datetime(vec_from[i]);
-                vec_to[i] = ret * multiplier + datetime.micro_second / divider;
             }
 
             block.getByPosition(result).column = std::move(col_to);
@@ -123,7 +115,27 @@ public:
     }
 
 private:
-    const DateLUTImpl * timezone_;
+    const TimezoneInfo & timezone_;
+
+    bool getUnixTimeStampHelper(UInt64 packed, UInt64 & ret)
+    {
+        static const auto lut_utc = DateLUT::instance("UTC");
+
+        if (timezone_.is_name_based)
+            convertTimeZone(packed, ret, *timezone_.timezone, lut_utc);
+        else
+            convertTimeZoneByOffset(packed, ret, timezone_.timezone_offset, lut_utc);
+
+        try
+        {
+            ret = getEpochSecond(ret, lut_utc);
+        }
+        catch (...)
+        {
+            return false;
+        }
+        return true;
+    }
 };
 
 void registerFunctionsConversion(FunctionFactory & factory)
