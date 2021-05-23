@@ -10,8 +10,9 @@
 #include <Common/Arena.h>
 #include <Common/HashTable/HashMap.h>
 
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
 
 #include <DataStreams/SizeLimits.h>
 #include <DataStreams/IBlockInputStream.h>
@@ -239,7 +240,8 @@ public:
     Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
          const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency = 1,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators, const String & left_filter_column = "",
-         const String & right_filter_column = "", const String & other_filter_column = "", ExpressionActionsPtr other_condition_ptr = nullptr);
+         const String & right_filter_column = "", const String & other_filter_column = "", ExpressionActionsPtr other_condition_ptr = nullptr,
+         const String & other_eq_filter_from_in_column = "", ExpressionActionsPtr other_eq_condition_from_in_ptr = nullptr);
 
     bool empty() { return type == Type::EMPTY; }
 
@@ -403,6 +405,8 @@ private:
     String right_filter_column;
     String other_filter_column;
     ExpressionActionsPtr other_condition_ptr;
+    String other_eq_filter_from_in_column;
+    ExpressionActionsPtr other_eq_condition_from_in_ptr;
     ASTTableJoin::Strictness original_strictness;
     /** Blocks of "right" table.
       */
@@ -472,7 +476,14 @@ private:
     void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
 
 
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
     void joinBlockImplCross(Block & block) const;
+
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
+    void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map, std::unique_ptr<IColumn::Filter> & is_row_matched,
+                                          std::unique_ptr<IColumn::Offsets> & expanded_row_size_after_join) const;
+
+    void handleOtherConditionsForCrossJoin(Block & block, std::vector<UInt8 > & is_row_matched, std::vector<size_t> & expanded_row_size_after_join, const std::vector<size_t> & right_table_columns) const;
 };
 
 using JoinPtr = std::shared_ptr<Join>;
