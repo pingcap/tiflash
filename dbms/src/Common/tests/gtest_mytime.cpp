@@ -232,10 +232,10 @@ try
 
         /// Cases collect from MySQL 8.0 document
         {"01,5,2013", "%d,%m,%Y", MyDateTime{2013, 5, 1, 0, 0, 0, 0}},
-        {"May 1, 2013", "%d %m,%Y", MyDateTime{2013, 5, 1, 0, 0, 0, 0}},
-        {"a09:30:17", "a%h:%i%s", MyDateTime{0, 0, 0, 9, 30, 17, 0}},
-        {"a09:30:17", "%h:%i%s", std::nullopt},
-        {"09:30:17a", "%h:%i%s", std::nullopt},
+        {"May 1, 2013", "%M %d,%Y", MyDateTime{2013, 5, 1, 0, 0, 0, 0}},
+        {"a09:30:17", "a%h:%i:%s", MyDateTime{0, 0, 0, 9, 30, 17, 0}},
+        {"a09:30:17", "%h:%i:%s", std::nullopt},
+        {"09:30:17a", "%h:%i:%s", MyDateTime{0, 0, 0, 9, 30, 17, 0}},
         {"abc", "abc", MyDateTime{0, 0, 0, 0, 0, 0, 0}},
         {"9", "%m", MyDateTime{0, 9, 0, 0, 0, 0, 0}},
         {"9", "%s", MyDateTime{0, 0, 0, 0, 0, 9, 0}},
