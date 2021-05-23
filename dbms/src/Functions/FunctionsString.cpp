@@ -1201,14 +1201,9 @@ public:
         return name;
     }
 
-    bool isVariadic() const override
-    {
-        return true;
-    }
-
     size_t getNumberOfArguments() const override
     {
-        return 0;
+        return 2;
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
