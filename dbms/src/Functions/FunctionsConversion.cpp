@@ -53,7 +53,13 @@ public:
         if constexpr (std::is_same_v<Name, NameTiDBUnixTimeStampInt>)
             return std::make_shared<DataTypeUInt64>();
 
-        return std::make_shared<DataTypeDecimal64>();
+        int fsp = 0;
+        if (checkDataType<DataTypeMyDateTime>(arguments[0].type.get()))
+        {
+            auto & datetimeType = dynamic_cast<const DataTypeMyDateTime &>(*arguments[0].type);
+            fsp = datetimeType.getFraction();
+        }
+        return std::make_shared<DataTypeDecimal64>(12+fsp, fsp);
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
@@ -69,7 +75,6 @@ public:
             auto col_to = ColumnUInt64::create();
             auto & vec_to = col_to->getData();
             vec_to.resize(size);
-
 
             for (size_t i = 0; i < size; i++)
             {
