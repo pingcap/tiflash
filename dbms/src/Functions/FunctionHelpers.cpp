@@ -1,10 +1,11 @@
-#include <Functions/FunctionHelpers.h>
-#include <Columns/ColumnTuple.h>
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnTuple.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <Functions/FunctionHelpers.h>
 #include <IO/WriteHelpers.h>
+
 #include "FunctionsArithmetic.h"
 
 
@@ -18,8 +19,7 @@ const ColumnConst * checkAndGetColumnConstStringOrFixedString(const IColumn * co
 
     const ColumnConst * res = static_cast<const ColumnConst *>(column);
 
-    if (checkColumn<ColumnString>(&res->getDataColumn())
-        || checkColumn<ColumnFixedString>(&res->getDataColumn()))
+    if (checkColumn<ColumnString>(&res->getDataColumn()) || checkColumn<ColumnFixedString>(&res->getDataColumn()))
         return res;
 
     return {};
@@ -67,13 +67,18 @@ static Block createBlockWithNestedColumnsImpl(const Block & block, const std::un
             }
             else if (col.column->isColumnConst())
             {
-                const auto & nested_col = static_cast<const ColumnNullable &>(
-                    static_cast<const ColumnConst &>(*col.column).getDataColumn()).getNestedColumnPtr();
+                const auto & nested_col = static_cast<const ColumnNullable &>( //
+                    static_cast<const ColumnConst &>(*col.column).getDataColumn())
+                                              .getNestedColumnPtr();
 
-                res.insert({ ColumnConst::create(nested_col, rows), nested_type, col.name});
+                res.insert({ColumnConst::create(nested_col, rows), nested_type, col.name});
             }
             else
-                throw Exception("Illegal column for DataTypeNullable", ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception("Illegal column for DataTypeNullable:" + col.type->getName() + " [column_name=" + col.name
+                        + "] [created=" + DB::toString(bool(col.column))
+                        + "] [nullable=" + (col.column ? DB::toString(bool(col.column->isColumnNullable())) : "null")
+                        + "] [const=" + (col.column ? DB::toString(bool(col.column->isColumnConst())) : "null") + "]",
+                    ErrorCodes::ILLEGAL_COLUMN);
         }
         else
             res.insert(col);
@@ -96,14 +101,11 @@ Block createBlockWithNestedColumns(const Block & block, const ColumnNumbers & ar
     return createBlockWithNestedColumnsImpl(block, args_set);
 }
 
-bool functionIsInOperator(const String & name)
-{
-    return name == "in" || name == "notIn" || name == "tidbIn" || name == "tidbNotIn";
-}
+bool functionIsInOperator(const String & name) { return name == "in" || name == "notIn" || name == "tidbIn" || name == "tidbNotIn"; }
 
 bool functionIsInOrGlobalInOperator(const String & name)
 {
     return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn" || name == "tidbIn" || name == "tidbNotIn";
 }
 
-}
+} // namespace DB
