@@ -1389,7 +1389,7 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
     for (const Block & block_right : blocks)
         right_table_rows += block_right.rows();
 
-    size_t current_offset = 0;
+    IColumn::Offset current_offset = 0;
     for (size_t i = 0; i < rows_left; ++i)
     {
         if constexpr (has_null_map)
