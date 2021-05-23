@@ -922,6 +922,89 @@ private:
     }
 };
 
+/** TiDB Function CONCAT(str1,str2,...)
+  * Returns the string that results from concatenating the arguments. May have one or more arguments.
+  * CONCAT() returns NULL if any argument is NULL.
+*/
+class FunctionTiDBConcat : public IFunction
+{
+public:
+    static constexpr auto name = "tidbConcat";
+    static FunctionPtr create(const Context &){ return std::make_shared<FunctionTiDBConcat>(); }
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    bool isVariadic() const override
+    {
+        return true;
+    }
+
+    size_t getNumberOfArguments() const override
+    {
+        return 0;
+    }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.empty())
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                    + ", should be at least 1.",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        for (const auto arg_idx : ext::range(0, arguments.size()))
+        {
+            const auto arg = removeNullable(arguments[arg_idx]).get();
+            if (!arg->isStringOrFixedString())
+                throw Exception{
+                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+        }
+
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    {
+        Block nested_block = createBlockWithNestedColumns(block, arguments, result);
+        StringSources sources(arguments.size());
+        for (size_t i = 0; i < arguments.size(); ++i)
+            sources[i] = createDynamicStringSource(*nested_block.getByPosition(arguments[i]).column);
+
+        size_t rows = block.rows();
+        auto result_null_map = ColumnUInt8::create(rows);
+        auto res = ColumnString::create();
+        StringSink sink(*res, rows);
+
+        for (size_t row = 0; row < rows; row++)
+        {
+            result_null_map->getData()[row] = false;
+            for (const auto & arg : arguments)
+            {
+               if (block.getByPosition(arg).column->isNullAt(row))
+               {
+                   result_null_map->getData()[row] = true;
+                   break;
+               }
+            }
+            if (result_null_map->getData()[row] == false)
+            {
+                for (size_t col = 0; col < arguments.size(); ++col)
+                    writeSlice(sources[col]->getWhole(), sink);
+            }
+            for (size_t col = 0; col < arguments.size(); ++col)
+                sources[col]->next();
+            sink.next();
+        }
+
+        block.getByPosition(result).column = ColumnNullable::create(std::move(res), std::move(result_null_map));
+    }
+};
 
 class FunctionSubstring : public IFunction
 {
@@ -2744,6 +2827,7 @@ void registerFunctionsString(FunctionFactory & factory)
 	factory.registerFunction<FunctionRPadUTF8>();
     factory.registerFunction<FunctionConcat>();
     factory.registerFunction<FunctionConcatAssumeInjective>();
+    factory.registerFunction<FunctionTiDBConcat>();
     factory.registerFunction<FunctionSubstring>();
     factory.registerFunction<FunctionSubstringUTF8>();
     factory.registerFunction<FunctionAppendTrailingCharIfAbsent>();

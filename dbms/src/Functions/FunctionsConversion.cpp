@@ -27,6 +27,105 @@ void throwExceptionForIncompletelyParsedValue(
 }
 
 
+struct NameTiDBUnixTimeStampInt { static constexpr auto name = "tidbUnixTimeStampInt"; };
+struct NameTiDBUnixTimeStampDec { static constexpr auto name = "tidbUnixTimeStampDec"; };
+
+template <typename Name>
+class FunctionTiDBUnixTimeStamp : public IFunction
+{
+public:
+    static constexpr auto name = Name::name;
+    static FunctionPtr create(const Context & context) { return std::make_shared<FunctionTiDBUnixTimeStamp>(context); };
+    explicit FunctionTiDBUnixTimeStamp(const Context & context) : timezone_(context.getTimezoneInfo().timezone){};
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        if (!arguments[0].type->isMyDateOrMyDateTime())
+            throw Exception("The argument of function " + getName() + " must be date or datetime type", ErrorCodes::ILLEGAL_COLUMN);
+
+        if constexpr (std::is_same_v<Name, NameTiDBUnixTimeStampInt>)
+            return std::make_shared<DataTypeUInt64>();
+
+        return std::make_shared<DataTypeDecimal64>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    {
+        const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
+
+        const auto * col_from = checkAndGetColumn<ColumnUInt64>(col_with_type_and_name.column.get());
+        const ColumnUInt64::Container & vec_from = col_from->getData();
+        size_t size = vec_from.size();
+
+        if constexpr (std::is_same_v<Name, NameTiDBUnixTimeStampInt>)
+        {
+            auto col_to = ColumnUInt64::create();
+            auto & vec_to = col_to->getData();
+            vec_to.resize(size);
+
+            for (size_t i = 0; i < size; i++)
+            {
+                try
+                {
+                    vec_to[i] = getEpochSecond(vec_from[i], *timezone_);
+                }
+                catch (...)
+                {
+                    vec_to[i] = 0;
+                    continue;
+                }
+            }
+
+            block.getByPosition(result).column = std::move(col_to);
+        }
+        else /* if constexpr (std::is_same_v<Name, NameTiDBUnixTimeStampDec>) */
+        {
+            // Todo: speed up by `prepare`.
+            int fsp = 0, multiplier = 1, divider = 1'000'000;
+            if (checkDataType<DataTypeMyDateTime>(col_with_type_and_name.type.get()))
+            {
+                auto & datetimeType = dynamic_cast<const DataTypeMyDateTime &>(*col_with_type_and_name.type);
+                fsp = datetimeType.getFraction();
+            }
+            multiplier = getScaleMultiplier<Decimal64>(fsp);
+            divider = 1'000'000 / multiplier;
+
+            auto col_to = ColumnDecimal<Decimal64>::create(0, fsp);
+            auto & vec_to = col_to->getData();
+            vec_to.resize(size);
+
+            for (size_t i = 0; i < size; i++)
+            {
+                UInt64 ret = 0;
+                try
+                {
+                    ret = getEpochSecond(vec_from[i], *timezone_);
+                }
+                catch (...)
+                {
+                    vec_to[i] = 0;
+                    continue;
+                }
+
+                MyDateTime datetime(vec_from[i]);
+                vec_to[i] = ret * multiplier + datetime.micro_second / divider;
+            }
+
+            block.getByPosition(result).column = std::move(col_to);
+        }
+    }
+
+private:
+    const DateLUTImpl * timezone_;
+};
+
 void registerFunctionsConversion(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionToUInt8>();
@@ -91,6 +190,8 @@ void registerFunctionsConversion(FunctionFactory & factory)
 
     factory.registerFunction<FunctionFromUnixTime>();
     factory.registerFunction<FunctionDateFormat>();
+    factory.registerFunction<FunctionTiDBUnixTimeStamp<NameTiDBUnixTimeStampInt>>();
+    factory.registerFunction<FunctionTiDBUnixTimeStamp<NameTiDBUnixTimeStampDec>>();
 }
 
 }

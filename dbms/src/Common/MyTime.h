@@ -141,6 +141,8 @@ size_t maxFormattedDateTimeStringLength(const String & format);
 
 MyDateTime numberToDateTime(Int64 number);
 
+time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone);
+
 bool isPunctuation(char c);
 
 bool isValidSeperator(char c, int previous_parts);
