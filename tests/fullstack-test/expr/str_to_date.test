@@ -8,33 +8,33 @@ mysql> insert into test.t values ('31/May/2016', 4),('30/ Apr/ 2016 ', 4),(' 1/A
 
 func> wait_table test t
 
+# Note that we need to put `str_to_date` in group by to make sure it is pushed down
+
 ## Test suite 1 - Allow zero day
-#mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; explain select a, str_to_date(a, '%d/%m/%Y') from test.t where suite = 1 order by a
-mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select a, str_to_date(a, '%d/%m/%Y') as date from test.t where suite = 1 order by a
-+------------+------------+
-| a          | date       |
-+------------+------------+
-| 0/0/2012   | 2012-00-00 |
-| 00/00/0000 | 0000-00-00 |
-| 13/05/2019 | 2019-05-13 |
-| abc        | NULL       |
-+------------+------------+
+#mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; explain select a, ifnull(str_to_date(a, '%d/%m/%Y'),str_to_date('0000/00/00', '%d/%m/%Y')) as date, count(*) as cnt from test.t where suite = 1 group by date order by a
+mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select a, ifnull(str_to_date(a, '%d/%m/%Y'),str_to_date('0000/00/00', '%d/%m/%Y')) as date, count(*) as cnt from test.t where suite = 1 group by date order by a
++------------+------------+-----+
+| a          | date       | cnt |
++------------+------------+-----+
+| 0/0/2012   | 2012-00-00 |   1 |
+| 00/00/0000 | 0000-00-00 |   2 |
+| 13/05/2019 | 2019-05-13 |   1 |
++------------+------------+-----+
 
 ## Test suite 1 - Disallow zero day
-#mysql> set sql_mode='NO_ZERO_IN_DATE,NO_ZERO_DATE'; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; explain select a, str_to_date(a, '%d/%m/%Y') from test.t where suite = 1 order by a
-mysql> set sql_mode='NO_ZERO_IN_DATE,NO_ZERO_DATE'; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select a, str_to_date(a, '%d/%m/%Y') as date from test.t where suite = 1 order by a
-+------------+------------+
-| a          | date       |
-+------------+------------+
-| 0/0/2012   | NULL       |
-| 00/00/0000 | NULL       |
-| 13/05/2019 | 2019-05-13 |
-| abc        | NULL       |
-+------------+------------+
+#mysql> set sql_mode='NO_ZERO_IN_DATE,NO_ZERO_DATE'; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; explain select a, ifnull(str_to_date(a, '%d/%m/%Y'),str_to_date('0000/00/00', '%d/%m/%Y')) as date, count(*) as cnt from test.t where suite = 1 group by date order by a
+mysql> set sql_mode='NO_ZERO_IN_DATE,NO_ZERO_DATE'; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select a, ifnull(str_to_date(a, '%d/%m/%Y'),str_to_date('0000/00/00', '%d/%m/%Y')) as date, count(*) as cnt from test.t where suite = 1 group by date order by a
++------------+------------+-----+
+| a          | date       | cnt |
++------------+------------+-----+
+| 0/0/2012   | NULL       |   1 |
+| 00/00/0000 | NULL       |   2 |
+| 13/05/2019 | 2019-05-13 |   1 |
++------------+------------+-----+
 
 ## Test suite 2 - showing datetime with fractions
-#mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; explain select a, str_to_date(a, '%d/%b/%Y  %H:%i:%S.%f') from test.t where suite = 2 order by a
-mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select a, str_to_date(a, '%d/%b/%Y  %H:%i:%S.%f') as date from test.t where suite = 2 order by a
+#mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; explain select a, str_to_date(a, '%d/%b/%Y  %H:%i:%S.%f') as date from test.t where suite = 2 group by date order by a
+mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select /*+ agg_to_cop() */ a, str_to_date(a, '%d/%b/%Y  %H:%i:%S.%f') as date from test.t where suite = 2 group by date order by a
 +-----------------------------+----------------------------+
 | a                           | date                       |
 +-----------------------------+----------------------------+
@@ -44,8 +44,8 @@ mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='t
 +-----------------------------+----------------------------+
 
 ## Test suite 3 - showing datetime without fractions
-#mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; explain select a, str_to_date(a, ' %d/%b/%Y  %H:%i:%S') from test.t where suite = 3 order by a
-mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select a, str_to_date(a, ' %d/%b/%Y  %H:%i:%S') as date from test.t where suite = 3 order by a
+#mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; explain select a, str_to_date(a, ' %d/%b/%Y  %H:%i:%S') as date from test.t where suite = 3 group by date order by a
+mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select a, str_to_date(a, ' %d/%b/%Y  %H:%i:%S') as date from test.t where suite = 3 group by date order by a
 +-------------------------+---------------------+
 | a                       | date                |
 +-------------------------+---------------------+
@@ -54,8 +54,8 @@ mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='t
 +-------------------------+---------------------+
 
 ## Test suite 4 - showing date
-#mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; explain select a, str_to_date(a, '%d/%b/%Y ') from test.t where suite = 4 order by a
-mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select a, str_to_date(a, '%d/%b/%Y ') as date from test.t where suite = 4 order by a
+#mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; explain select a, str_to_date(a, '%d/%b/%Y ') as date from test.t where suite = 4 group by date order by a
+mysql> set sql_mode=''; set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select a, str_to_date(a, '%d/%b/%Y ') as date from test.t where suite = 4 group by date order by a
 +---------------+------------+
 | a             | date       |
 +---------------+------------+
