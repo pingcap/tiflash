@@ -145,6 +145,12 @@ size_t maxFormattedDateTimeStringLength(const String & format);
 
 
 
+time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone);
+
+void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, const DateLUTImpl & time_zone);
+
+void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to);
+
 bool isPunctuation(char c);
 
 bool isValidSeperator(char c, int previous_parts);
