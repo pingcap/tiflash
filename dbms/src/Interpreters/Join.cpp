@@ -59,8 +59,7 @@ static bool isCrossJoin(ASTTableJoin::Kind kind)
 Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
     const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_,
     const TiDB::TiDBCollators & collators_, const String & left_filter_column_, const String & right_filter_column_,
-    const String & other_filter_column_, ExpressionActionsPtr other_condition_ptr_, const String & other_eq_filter_from_in_column_,
-    ExpressionActionsPtr other_eq_condition_from_in_ptr_)
+    const String & other_filter_column_, const String & other_eq_filter_from_in_column_, ExpressionActionsPtr other_condition_ptr_)
     : kind(kind_), strictness(strictness_),
     key_names_left(key_names_left_),
     key_names_right(key_names_right_),
@@ -70,9 +69,8 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     left_filter_column(left_filter_column_),
     right_filter_column(right_filter_column_),
     other_filter_column(other_filter_column_),
-    other_condition_ptr(other_condition_ptr_),
     other_eq_filter_from_in_column(other_eq_filter_from_in_column_),
-    other_eq_condition_from_in_ptr(other_eq_condition_from_in_ptr_),
+    other_condition_ptr(other_condition_ptr_),
     original_strictness(strictness),
     have_finish_build(true),
     log(&Logger::get("Join")),
@@ -83,7 +81,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
         pools.emplace_back(std::make_shared<Arena>());
     if (build_concurrency > 1 && getFullness(kind))
         pools.emplace_back(std::make_shared<Arena>());
-    if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())
+    if (other_condition_ptr != nullptr)
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
         if (strictness == ASTTableJoin::Strictness::Any)
@@ -1000,25 +998,22 @@ void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & fi
  */
 void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & anti_filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_columns) const
 {
-    if (other_condition_ptr != nullptr)
-        other_condition_ptr->execute(block);
-    if (other_eq_condition_from_in_ptr != nullptr)
-        other_eq_condition_from_in_ptr->execute(block);
+    other_condition_ptr->execute(block);
 
     auto filter_column = ColumnUInt8::create();
     auto & filter = filter_column->getData();
     filter.assign(block.rows(), (UInt8)1);
-    if (other_condition_ptr != nullptr)
+    if (!other_filter_column.empty())
     {
         mergeNullAndFilterResult(block, filter, other_filter_column, false);
     }
 
-    if (other_eq_condition_from_in_ptr != nullptr)
+    if (!other_eq_filter_from_in_column.empty())
     {
-        /// other_eq_condition is used in anti semi join:
+        /// other_eq_filter_from_in_column is used in anti semi join:
         /// if there is a row that return null or false for other_condition, then for anti semi join, this row should be returned.
-        /// otherwise, it will check other_eq_condition, if other_eq_condition return false, this row should be returned, if
-        /// other_eq_condition return true or null this row should not be returned.
+        /// otherwise, it will check other_eq_filter_from_in_column, if other_eq_filter_from_in_column return false, this row should
+        /// be returned, if other_eq_filter_from_in_column return true or null this row should not be returned.
         mergeNullAndFilterResult(block, filter, other_eq_filter_from_in_column, isAntiJoin(kind));
     }
 
@@ -1389,7 +1384,7 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
     for (const Block & block_right : blocks)
         right_table_rows += block_right.rows();
 
-    size_t current_offset = 0;
+    IColumn::Offset current_offset = 0;
     for (size_t i = 0; i < rows_left; ++i)
     {
         if constexpr (has_null_map)
