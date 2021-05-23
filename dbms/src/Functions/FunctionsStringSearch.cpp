@@ -4,6 +4,7 @@
 #include <mutex>
 #include <Poco/UTF8String.h>
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnNothing.h>
 #include <Common/Volnitsky.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <Functions/FunctionFactory.h>
@@ -1059,22 +1060,30 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
     {
-        const ColumnPtr column_src = block.getByPosition(arguments[0]).column;
-        const ColumnPtr column_needle = block.getByPosition(arguments[1]).column;
-        const ColumnPtr column_replacement = block.getByPosition(arguments[2]).column;
+        const ColumnPtr & column_src = block.getByPosition(arguments[0]).column;
+        const ColumnPtr & column_needle = block.getByPosition(arguments[1]).column;
+        const ColumnPtr & column_replacement = block.getByPosition(arguments[2]).column;
 
         if (!column_needle->isColumnConst() || !column_replacement->isColumnConst())
             throw Exception("2nd and 3rd arguments of function " + getName() + " must be constants.");
 
-        const IColumn * c1 = block.getByPosition(arguments[1]).column.get();
-        const IColumn * c2 = block.getByPosition(arguments[2]).column.get();
-        const ColumnConst * c1_const = typeid_cast<const ColumnConst *>(c1);
-        const ColumnConst * c2_const = typeid_cast<const ColumnConst *>(c2);
+        const ColumnConst * c1_const = typeid_cast<const ColumnConst *>(column_needle.get());
+        const ColumnConst * c2_const = typeid_cast<const ColumnConst *>(column_replacement.get());
         String needle = c1_const->getValue<String>();
         String replacement = c2_const->getValue<String>();
 
         if (needle.size() == 0)
-            throw Exception("Length of the second argument of function replace must be greater than 0.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        {
+            /// needle may be empty string('') or NULL. 
+            ///
+            /// Due to issue#1729, a NULL needle in a DAG request will not be treated as NULL and
+            /// automatically handled by PreparedFunctionImpl::defaultImplementationForNulls.
+            ///
+            /// Just return the raw strings in such case.
+            /// The substitution of NULL will be taken by upper function (see wrapInNullable).
+            block.getByPosition(result).column = column_src;
+            return;
+        }
 
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
         {
