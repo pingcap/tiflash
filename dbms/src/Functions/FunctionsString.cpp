@@ -928,81 +928,57 @@ private:
 */
 class FunctionTiDBConcat : public IFunction
 {
+private:
+    const Context & context;
+
+    struct NameTiDBConcat
+    {
+        static constexpr auto name = "tidbConcat";
+    };
+
 public:
-    static constexpr auto name = "tidbConcat";
-    static FunctionPtr create(const Context &){ return std::make_shared<FunctionTiDBConcat>(); }
-
-    String getName() const override
+    static constexpr auto name = NameTiDBConcat::name;
+    FunctionTiDBConcat(const Context & context) : context(context) {}
+    static FunctionPtr create(const Context & context)
     {
-        return name;
+        return std::make_shared<FunctionTiDBConcat>(context);
     }
 
-    bool isVariadic() const override
-    {
-        return true;
-    }
+    String getName() const override{ return name; }
 
-    size_t getNumberOfArguments() const override
-    {
-        return 0;
-    }
+    bool isVariadic() const override{ return true; }
+    size_t getNumberOfArguments() const override{ return 0; }
 
-    bool useDefaultImplementationForNulls() const override { return false; }
-    bool useDefaultImplementationForConstants() const override { return true; }
+    bool useDefaultImplementationForNulls() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.empty())
+        if (arguments.size() < 1)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                    + ", should be at least 1.",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                            + ", should be at least 1.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
-            const auto arg = removeNullable(arguments[arg_idx]).get();
+            const auto & arg = arguments[arg_idx].get();
             if (!arg->isStringOrFixedString())
                 throw Exception{
                     "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
 
-        return makeNullable(std::make_shared<DataTypeString>());
+        return std::make_shared<DataTypeString>();
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
     {
-        Block nested_block = createBlockWithNestedColumns(block, arguments, result);
-        StringSources sources(arguments.size());
-        for (size_t i = 0; i < arguments.size(); ++i)
-            sources[i] = createDynamicStringSource(*nested_block.getByPosition(arguments[i]).column);
-
-        size_t rows = block.rows();
-        auto result_null_map = ColumnUInt8::create(rows);
-        auto res = ColumnString::create();
-        StringSink sink(*res, rows);
-
-        for (size_t row = 0; row < rows; row++)
+        if (arguments.size() == 1)
         {
-            result_null_map->getData()[row] = false;
-            for (const auto & arg : arguments)
-            {
-               if (block.getByPosition(arg).column->isNullAt(row))
-               {
-                   result_null_map->getData()[row] = true;
-                   break;
-               }
-            }
-            if (result_null_map->getData()[row] == false)
-            {
-                for (size_t col = 0; col < arguments.size(); ++col)
-                    writeSlice(sources[col]->getWhole(), sink);
-            }
-            for (size_t col = 0; col < arguments.size(); ++col)
-                sources[col]->next();
-            sink.next();
+            const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
+            block.getByPosition(result).column = c0->cloneResized(c0->size());
         }
-
-        block.getByPosition(result).column = ColumnNullable::create(std::move(res), std::move(result_null_map));
+        else
+            return ConcatImpl<NameTiDBConcat, false>(context).executeImpl(block, arguments, result);
     }
 };
 
