@@ -1257,6 +1257,7 @@ MyDateTimeFormatter::MyDateTimeFormatter(const String & layout)
 
 struct MyDateTimeParser::Context
 {
+    // Some state for `mysqlTimeFix`
     uint32_t state = 0;
     static constexpr uint32_t ST_DAY_OF_YEAR = 0x01;
     static constexpr uint32_t ST_MERIDIEM = 0x02;
@@ -1267,14 +1268,16 @@ struct MyDateTimeParser::Context
     // 0 - invalid, 1 - am, 2 - pm
     int32_t meridiem = 0;
 
+    // The input string view
     const StringRef view;
+    // The pos we are parsing from
     size_t pos = 0;
 
-    Context(const StringRef view_) : view(view_) {}
+    Context(const StringRef view_) : view(std::move(view_)) {}
 };
 
 // Try to parse digits with number of `limit` starting from view[pos]
-// Return <n chars to step forward, number> if success, the number is limited by [0, 99].
+// Return <n chars to step forward, number> if success.
 // Return <0, _> if fail.
 static std::tuple<size_t, int32_t> parseNDigits(const StringRef & view, const size_t pos, const size_t limit)
 {
@@ -1309,7 +1312,7 @@ static std::tuple<size_t, int32_t> parseYearNDigits(const StringRef & view, cons
 
 enum class ParseState
 {
-    NORMAL = 0,      // parsing
+    NORMAL = 0,      // Parsing
     FAIL = 1,        // Fail to parse
     END_OF_FILE = 2, // The end of input
 };
@@ -1392,6 +1395,8 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         else if (toLowerIfAlphaASCII(ctx.view.data[temp_pos]) == 'p')
             meridiem = 2;
 
+        if (state = checkIfEnd(); state != ParseState::NORMAL)
+            return state;
         if (toLowerIfAlphaASCII(ctx.view.data[temp_pos + 1]) != 'm')
             meridiem = 0;
         switch (meridiem)
@@ -1699,6 +1704,7 @@ MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
                 {
                     //"%p": AM or PM
                     parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase &) -> bool {
+                        // Check the offset that will visit
                         if (ctx.view.size - ctx.pos < 2)
                             return false;
 
@@ -1838,11 +1844,11 @@ MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
             // Ignore whitespace for literal forwarding (TODO: handle unicode space?)
             while (format_pos < format.size() && isWhitespaceASCII(format[format_pos]))
                 format_pos++;
-            // Move forward ctx.view with a sequence of literal `format[format_pos:plain_match_end]`
-            size_t plain_match_end = format_pos;
-            while (plain_match_end < format.size() && format[plain_match_end] != '%' && !isWhitespaceASCII(format[plain_match_end]))
-                ++plain_match_end;
-            const size_t span_size = plain_match_end - format_pos;
+            // Move forward ctx.view with a sequence of literal `format[format_pos:span_end]`
+            size_t span_end = format_pos;
+            while (span_end < format.size() && format[span_end] != '%' && !isWhitespaceASCII(format[span_end]))
+                ++span_end;
+            const size_t span_size = span_end - format_pos;
             if (span_size > 0)
             {
                 StringRef format_view{format.data() + format_pos, span_size};
@@ -1876,7 +1882,7 @@ MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
                 });
             }
             // move format_pos forward
-            format_pos = plain_match_end;
+            format_pos = span_end;
         }
     }
 }
@@ -1953,7 +1959,7 @@ std::optional<UInt64> MyDateTimeParser::parseAsPackedUInt(const StringRef & str_
     // if (ctx.pos < ctx.view.size) {}
 
     // Handle the var in `ctx`
-    if (bool success = mysqlTimeFix(ctx, my_time); !success)
+    if (!mysqlTimeFix(ctx, my_time))
         return std::nullopt;
 
     return my_time.toPackedUInt();

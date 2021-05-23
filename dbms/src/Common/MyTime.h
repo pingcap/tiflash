@@ -141,8 +141,8 @@ struct MyDateTimeParser
 private:
     const String format;
 
-    // Parsing method. Parse from view[pos].
-    // If success, update `datetime`, `pos`, `ctx` and return true.
+    // Parsing method. Parse from ctx.view[ctx.pos].
+    // If success, update `datetime`, `ctx` and return true.
     // If fail, return false.
     using ParserCallback = std::function<bool(MyDateTimeParser::Context & ctx, MyTimeBase & datetime)>;
     std::vector<ParserCallback> parsers;

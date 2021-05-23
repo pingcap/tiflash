@@ -185,6 +185,7 @@ try
         /// Test cases for AM/PM set
         {"10:11:12 AM", "%H:%i:%S %p", std::nullopt}, // should not set %H %p at the same time
         {"10:11:12 Am", "%h:%i:%S %p", MyDateTime(0, 0, 0, 10, 11, 12, 0)},
+        {"10:11:12 A", "%h:%i:%S %p", std::nullopt},                 // EOF while parsing "AM"/"PM"
         {"00:11:12 AM", "%h:%i:%S %p", std::nullopt},                // should not happen: %p set, %h not set
         {"11:12 AM", "%i:%S %p", std::nullopt},                      // should not happen: %p set, %h not set
         {"11:12 abcd", "%i:%S ", MyDateTime{0, 0, 0, 0, 11, 12, 0}}, // without %p, %h not set is ok
@@ -209,6 +210,7 @@ try
         {"12: 13:56 AM 13/05/2019", "%r%d/%c/%Y", MyDateTime{2019, 5, 13, 0, 13, 56, 0}},
         {"12:13 :56 pm 13/05/2019", "%r %d/%c/%Y", MyDateTime{2019, 5, 13, 12, 13, 56, 0}},
         {"11:13: 56pm  13/05/2019", "%r %d/%c/%Y", MyDateTime{2019, 5, 13, 23, 13, 56, 0}},
+        {"11:13:56a", "%r", std::nullopt}, // EOF while parsing "AM"/"PM"
         {"11:13", "%r", MyDateTime{0, 0, 0, 11, 13, 0, 0}},
         {"11:", "%r", MyDateTime{0, 0, 0, 11, 0, 0, 0}},
         {"12", "%r", MyDateTime{0, 0, 0, 0, 0, 0, 0}},
