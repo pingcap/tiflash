@@ -5,7 +5,7 @@ mysql> insert into test.t values ('1.23'),('123'),('-123.99'),('+123.123-'),(0),
 
 func> wait_table test t
 
-mysql> set tidb_allow_mpp=2; set tidb_isolation_read_engines='tiflash'; select a, b from (select a, cast(a as double) as b from test.t) t group by a, b order by a
+mysql> set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select a, b from (select a, cast(a as double) as b from test.t) t group by a, b order by a
 +--------------------+-------------------------+
 | a                  | b                       |
 +--------------------+-------------------------+
