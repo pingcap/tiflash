@@ -647,10 +647,20 @@ struct TiDBConvertToFloat
         StringRef float_string = getValidFloatPrefix(StringRef(trim_string));
         if (trim_string.size() == 0 && value.size != 0)
         {
-            context.getDAGContext()->handleTruncateError("cast str as real");
+            context.getDAGContext()->handleTruncateError("Truncated incorrect DOUBLE value");
             return 0.0;
         }
         Float64 f = strtod(float_string.data, nullptr);
+        if (std::numeric_limits<Float64>::infinity())
+        {
+            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value");
+            return std::numeric_limits<Float64>::max();
+        }
+        if (-std::numeric_limits<double>::infinity())
+        {
+            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value");
+            return -std::numeric_limits<Float64>::max();
+        }
         return produceTargetFloat64(f, need_truncate, shift, max_f, context);
     }
 

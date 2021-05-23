@@ -1,27 +1,25 @@
 mysql> drop table if exists test.t
-mysql> create table test.t(a char(30))
+mysql> create table test.t(a char(30), b double)
 mysql> alter table test.t set tiflash replica 1
-mysql> insert into test.t values ('1.23'),('123'),('-123.99'),('+123.123-'),(0),(0.0),(NULL),('1.11.00'),('11xx'),('11.xx'),('xx.11'),('1e649'),('-1e649')
+mysql> insert into test.t values ('1.23', 1.23),('123', 123),('-123.99', -123.99),('+123.123-', 123.123),('0', 0),('0.0', 0),(NULL, NULL),('1.11.00', 1.11),('11xx', 11),('11.xx', 11),('xx.11', 0),('1e649', 1.7976931348623157e308),('-1e649', -1.7976931348623157e308)
 
 func> wait_table test t
 
-mysql> set tidb_allow_mpp=2; set tidb_isolation_read_engines='tiflash'; select a, cast(a as double) from test.t group by 1 order by a
-+-----------+-------------------------+
-| a         | cast(a as double)       |
-+-----------+-------------------------+
-| NULL      |                    NULL |
-| +123.123- |                 123.123 |
-| -123.99   |                 -123.99 |
-| -1e649    | -1.7976931348623157e308 |
-| 0         |                       0 |
-| 0.0       |                       0 |
-| 1.11.00   |                    1.11 |
-| 1.23      |                    1.23 |
-| 11.xx     |                      11 |
-| 11xx      |                      11 |
-| 123       |                     123 |
-| 1e649     |  1.7976931348623157e308 |
-| xx.11     |                       0 |
-+-----------+-------------------------+
+mysql> set tidb_allow_mpp=2; set tidb_isolation_read_engines='tiflash'; select a, b from test.t where cast(a as double) = b or cast(a as double) is null order by a
++-----------+---------+
+| a         | b       |
++-----------+---------+
+| NULL      |    NULL |
+| +123.123- | 123.123 |
+| -123.99   | -123.99 |
+| 0         |       0 |
+| 0.0       |       0 |
+| 1.11.00   |    1.11 |
+| 1.23      |    1.23 |
+| 11.xx     |      11 |
+| 11xx      |      11 |
+| 123       |     123 |
+| xx.11     |       0 |
++-----------+---------+
 
 mysql> drop table if exists test.t
