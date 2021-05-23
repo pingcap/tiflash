@@ -985,7 +985,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Quote, "cast"},
     {tipb::ScalarFuncSig::RTrim, "rtrim"},
     //{tipb::ScalarFuncSig::Repeat, "cast"},
-    {tipb::ScalarFuncSig::Replace, "replaceAll"},
+    //{tipb::ScalarFuncSig::Replace, "cast"},
     //{tipb::ScalarFuncSig::ReverseUTF8, "cast"},
     //{tipb::ScalarFuncSig::Reverse, "cast"},
     //{tipb::ScalarFuncSig::RightUTF8, "cast"},
