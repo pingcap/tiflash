@@ -256,7 +256,8 @@ void flashEnumColToArrowCol(
 void flashColToArrowCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & flash_col, const tipb::FieldType & field_type,
     size_t start_index, size_t end_index)
 {
-    const IColumn * col = flash_col.column.get();
+    auto column = flash_col.column->isColumnConst() ? flash_col.column->convertToFullColumnIfConst() : flash_col.column;
+    const IColumn * col = column.get();
     const IDataType * type = flash_col.type.get();
     const TiDB::ColumnInfo tidb_column_info = TiDB::fieldTypeToColumnInfo(field_type);
 

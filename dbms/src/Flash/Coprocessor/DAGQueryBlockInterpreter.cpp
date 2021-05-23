@@ -502,20 +502,32 @@ void DAGQueryBlockInterpreter::prepareJoin(const google::protobuf::RepeatedPtrFi
     }
 }
 
-ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & other_conditions, std::vector<NameAndTypePair> & source_columns,
-    String & filter_column)
+ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(const tipb::Join & join,
+    std::vector<NameAndTypePair> & source_columns, String & filter_column_for_other_condition,
+    String & filter_column_for_other_eq_condition)
 {
-    if (other_conditions.empty())
+    if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0)
         return nullptr;
-    std::vector<const tipb::Expr *> condition_vector;
-    for (const auto & c : other_conditions)
-    {
-        condition_vector.push_back(&c);
-    }
     DAGExpressionAnalyzer dag_analyzer(source_columns, context);
     ExpressionActionsChain chain;
-    dag_analyzer.appendWhere(chain, condition_vector, filter_column);
+    std::vector<const tipb::Expr *> condition_vector;
+    if (join.other_conditions_size() > 0)
+    {
+        for (const auto & c : join.other_conditions())
+        {
+            condition_vector.push_back(&c);
+        }
+        dag_analyzer.appendWhere(chain, condition_vector, filter_column_for_other_condition);
+    }
+    if (join.other_eq_conditions_from_in_size() > 0)
+    {
+        condition_vector.clear();
+        for (const auto & c : join.other_eq_conditions_from_in())
+        {
+            condition_vector.push_back(&c);
+        }
+        dag_analyzer.appendWhere(chain, condition_vector, filter_column_for_other_eq_condition);
+    }
     return chain.getLastActions();
 }
 
@@ -662,14 +674,14 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     }
 
     ExpressionActionsPtr other_condition_expr
-        = genJoinOtherConditionAction(join.other_conditions(), columns_for_other_join_filter, other_filter_column_name);
+        = genJoinOtherConditionAction(join, columns_for_other_join_filter, other_filter_column_name, other_eq_filter_from_in_column_name);
 
     const Settings & settings = context.getSettingsRef();
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, right_pipeline.streams.size()) : 1;
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
         SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness,
         join_build_concurrency, collators, left_filter_column_name, right_filter_column_name, other_filter_column_name,
-        other_condition_expr);
+        other_eq_filter_from_in_column_name, other_condition_expr);
     executeUnion(right_pipeline, max_streams);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;

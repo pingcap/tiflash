@@ -239,7 +239,8 @@ public:
     Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
          const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency = 1,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators, const String & left_filter_column = "",
-         const String & right_filter_column = "", const String & other_filter_column = "", ExpressionActionsPtr other_condition_ptr = nullptr);
+         const String & right_filter_column = "", const String & other_filter_column = "",
+         const String & other_eq_filter_from_in_column = "", ExpressionActionsPtr other_condition_ptr = nullptr);
 
     bool empty() { return type == Type::EMPTY; }
 
@@ -402,6 +403,7 @@ private:
     String left_filter_column;
     String right_filter_column;
     String other_filter_column;
+    String other_eq_filter_from_in_column;
     ExpressionActionsPtr other_condition_ptr;
     ASTTableJoin::Strictness original_strictness;
     /** Blocks of "right" table.
