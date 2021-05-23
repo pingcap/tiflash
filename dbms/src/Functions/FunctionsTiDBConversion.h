@@ -651,12 +651,12 @@ struct TiDBConvertToFloat
             return 0.0;
         }
         Float64 f = strtod(float_string.data, nullptr);
-        if (std::numeric_limits<Float64>::infinity())
+        if (f == std::numeric_limits<Float64>::infinity())
         {
             context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value");
             return std::numeric_limits<Float64>::max();
         }
-        if (-std::numeric_limits<double>::infinity())
+        if (f == -std::numeric_limits<double>::infinity())
         {
             context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value");
             return -std::numeric_limits<Float64>::max();
