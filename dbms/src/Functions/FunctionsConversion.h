@@ -1590,11 +1590,20 @@ public:
     }
 };
 
-class FunctionStrToDateDatetime : public IFunction
+struct NameStrToDateDate
+{
+    static constexpr auto name = "strToDateDate";
+};
+struct NameStrToDateDatetime
+{
+    static constexpr auto name = "strToDateDatetime";
+};
+template <typename Name>
+class FunctionStrToDate : public IFunction
 {
 public:
-    static constexpr auto name = "strToDateDatetime";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionStrToDateDatetime>(); }
+    static constexpr auto name = Name::name;
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionStrToDate>(); }
 
     String getName() const override { return name; }
 
@@ -1605,6 +1614,8 @@ public:
     {
         if (arguments.size() != 2)
             throw Exception("Function " + getName() + " only accept 2 arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        // TODO: Maybe FixedString?
         if (!removeNullable(arguments[0].type)->isString())
             throw Exception("First argument for function " + getName() + " must be String, but get " + arguments[0].type->getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
@@ -1613,9 +1624,21 @@ public:
                 "Second argument for function " + getName() + " must be String constant, but get " + arguments[1].type->getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
 
-        // FIXME: Should it be nullable for invalid result?
-        // FIXME: set scale for DataTypeMyDateTime
-        return makeNullable(std::make_shared<DataTypeMyDateTime>());
+        if constexpr (std::is_same_v<Name, NameStrToDateDatetime>)
+        {
+            // FIXME: Should it be nullable for invalid result?
+            // FIXME: set fraction for DataTypeMyDateTime
+            return makeNullable(std::make_shared<DataTypeMyDateTime>());
+        }
+        else if constexpr (std::is_same_v<Name, NameStrToDateDate>)
+        {
+            // FIXME: Should it be nullable for invalid result?
+            return makeNullable(std::make_shared<DataTypeMyDate>());
+        }
+        else
+        {
+            throw Exception("Unknown name for FunctionStrToDate:" + getName(), ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     // FIXME: Should we override other method?
