@@ -45,6 +45,8 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (!arguments[0].type->isMyDateOrMyDateTime())
