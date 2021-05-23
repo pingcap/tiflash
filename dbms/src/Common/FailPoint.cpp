@@ -8,7 +8,7 @@ namespace DB
 {
 std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
 
-#define APPLY_FOR_FAILPOINTS(M)                                   \
+#define APPLY_FOR_FAILPOINTS_ONCE(M)                              \
     M(exception_between_drop_meta_and_data)                       \
     M(exception_between_alter_data_and_meta)                      \
     M(exception_drop_table_during_remove_meta)                    \
@@ -39,19 +39,26 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_during_mpp_root_task_run)                         \
     M(exception_during_write_to_storage)
 
-#define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)  \
-    M(pause_after_learner_read)               \
-    M(hang_in_execution)                      \
-    M(pause_before_dt_background_delta_merge) \
-    M(pause_until_dt_background_delta_merge)  \
-    M(pause_before_apply_raft_cmd)            \
-    M(pause_before_apply_raft_snapshot)       \
+#define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
+    M(pause_after_learner_read)                   \
+    M(hang_in_execution)                          \
+    M(pause_before_dt_background_delta_merge)     \
+    M(pause_until_dt_background_delta_merge)      \
+    M(pause_before_apply_raft_cmd)                \
+    M(pause_before_apply_raft_snapshot)           \
     M(pause_until_apply_raft_snapshot)
+
+#define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M) \
+    M(pause_when_reading_from_dt_stream)     \
+    M(pause_when_writing_to_dt_store)        \
+    M(pause_when_ingesting_to_dt_store)      \
+    M(pause_when_altering_dt_store)
 
 namespace FailPoints
 {
 #define M(NAME) extern const char NAME[] = #NAME "";
-APPLY_FOR_FAILPOINTS(M)
+APPLY_FOR_FAILPOINTS_ONCE(M)
+APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M)
 APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
 #undef M
 } // namespace FailPoints
@@ -90,20 +97,28 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
         return;                                                                                             \
     }
 
-    APPLY_FOR_FAILPOINTS(M)
+    APPLY_FOR_FAILPOINTS_ONCE(M)
 #undef M
 
-#define M(NAME)                                                                                             \
+#define SUB_M(NAME, flags)                                                                                  \
     if (fail_point_name == FailPoints::NAME)                                                                \
     {                                                                                                       \
         /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
-        fiu_enable(FailPoints::NAME, 1, nullptr, FIU_ONETIME);                                              \
+        fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
         fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>());       \
         return;                                                                                             \
     }
 
+#define M(NAME) SUB_M(NAME, FIU_ONETIME)
+
+    APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M)
+#undef M
+
+#define M(NAME) SUB_M(NAME, 0)
     APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
 #undef M
+#undef SUB_M
+
     throw Exception("Cannot find fail point " + fail_point_name, ErrorCodes::FAIL_POINT_ERROR);
 }
 

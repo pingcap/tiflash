@@ -7,7 +7,6 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Databases/IDatabase.h>
 #include <Parsers/queryToString.h>
@@ -16,6 +15,10 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int TABLE_IS_DROPPED;
+} // namespace ErrorCodes
 
 bool StorageSystemPartsBase::hasStateColumn(const Names & column_names)
 {
@@ -41,8 +44,8 @@ bool StorageSystemPartsBase::hasStateColumn(const Names & column_names)
 class StoragesInfoStream
 {
 public:
-    StoragesInfoStream(const SelectQueryInfo & query_info, const Context & context, bool has_state_column)
-            : has_state_column(has_state_column)
+    StoragesInfoStream(const SelectQueryInfo & query_info, const Context & context_, bool has_state_column)
+            : context(context_), has_state_column(has_state_column)
     {
         /// Will apply WHERE to subset of columns and then add more columns.
         /// This is kind of complicated, but we use WHERE to do less work.
@@ -88,8 +91,7 @@ public:
                         StoragePtr storage = iterator->table();
                         String engine_name = storage->getName();
 
-                        if (!dynamic_cast<StorageMergeTree *>(&*storage) &&
-                            !dynamic_cast<StorageReplicatedMergeTree *>(&*storage))
+                        if (!dynamic_cast<StorageMergeTree *>(&*storage))
                             continue;
 
                         storages[std::make_pair(database_name, iterator->name())] = storage;
@@ -162,7 +164,7 @@ public:
             try
             {
                 /// For table not to be dropped and set of columns to remain constant.
-                info.table_lock = info.storage->lockStructure(false, __PRETTY_FUNCTION__);
+                info.table_lock = info.storage->lockForShare(context.getCurrentQueryId());
             }
             catch (const Exception & e)
             {
@@ -184,10 +186,6 @@ public:
             if (auto merge_tree = dynamic_cast<StorageMergeTree *>(&*info.storage))
             {
                 info.data = &merge_tree->getData();
-            }
-            else if (auto replicated_merge_tree = dynamic_cast<StorageReplicatedMergeTree *>(&*info.storage))
-            {
-                info.data = &replicated_merge_tree->getData();
             }
             else
             {
@@ -216,6 +214,7 @@ public:
     }
 
 private:
+    const Context & context;
     bool has_state_column;
 
     ColumnPtr database_column;

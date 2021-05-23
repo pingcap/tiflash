@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTInsertQuery.h>
@@ -28,6 +29,7 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 extern const int ILLFORMAT_RAFT_ROW;
+extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
 
@@ -52,15 +54,15 @@ static void writeRegionDataToStorage(
                 return true;
         }
 
-        /// Lock throughout decode and write, during which schema must not change.
-        TableStructureReadLockPtr lock;
+        /// Get a structure read lock throughout decode, during which schema must not change.
+        TableStructureLockHolder lock;
         try
         {
-            lock = storage->lockStructure(true, FUNCTION_NAME);
+            lock = storage->lockStructureForShare(getThreadName());
         }
         catch (DB::Exception & e)
         {
-            // If the storage is physical dropped (but not removed from `ManagedStorages`) when we want to flsuh raft data into it, consider the write done.
+            // If the storage is physical dropped (but not removed from `ManagedStorages`) when we want to write raft data into it, consider the write done.
             if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
                 return true;
             else
@@ -105,6 +107,9 @@ static void writeRegionDataToStorage(
         }
 
         /// Write block into storage.
+        // Release the alter lock so that writing does not block DDL operations
+        TableLockHolder drop_lock;
+        std::tie(std::ignore, drop_lock) = std::move(lock).release();
         watch.restart();
         // Note: do NOT use typeid_cast, since Storage is multi-inherite and typeid_cast will return nullptr
         switch (storage->engineType())
@@ -419,11 +424,11 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
                 return true;
         }
 
-        /// Lock throughout decode and write, during which schema must not change.
-        TableStructureReadLockPtr lock;
+        /// Get a structure read lock throughout decode, during which schema must not change.
+        TableStructureLockHolder lock;
         try
         {
-            lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+            lock = storage->lockStructureForShare(getThreadName());
         }
         catch (DB::Exception & e)
         {

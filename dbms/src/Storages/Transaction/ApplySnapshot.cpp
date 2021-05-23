@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
 #include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageDeltaMerge.h>
@@ -27,7 +28,9 @@ extern const char pause_until_apply_raft_snapshot[];
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-}
+extern const int TABLE_IS_DROPPED;
+extern const int REGION_DATA_SCHEMA_UPDATED;
+} // namespace ErrorCodes
 
 void KVStore::checkAndApplySnapshot(const RegionPtrWithBlock & new_region, TMTContext & tmt)
 {
@@ -97,7 +100,7 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWithBlock & new_region, TMTCo
                     HandleMap handle_map;
                     const auto handle_range = getHandleRangeByTable(new_region->getRange()->rawKeys(), table_id);
 
-                    auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+                    auto table_lock = storage->lockStructureForShare(getThreadName());
 
                     auto tmt_storage = std::dynamic_pointer_cast<StorageMergeTree>(storage);
                     const bool pk_is_uint64 = getTMTPKType(*tmt_storage->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
@@ -145,8 +148,8 @@ void KVStore::onSnapshot(const RegionPtrWithBlock & new_region_wrap, RegionPtr o
                     try
                     {
                         auto & context = tmt.getContext();
-                        // acquire lock so that no other threads can drop storage
-                        auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+                        // Acquire `drop_lock` so that no other threads can drop the storage. `alter_lock` is not required.
+                        auto table_lock = storage->lockForShare(getThreadName());
                         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                         auto key_range = DM::RowKeyRange::fromRegionRange(
                             new_region_wrap->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
