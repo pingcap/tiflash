@@ -1,6 +1,6 @@
 #include "StringUtils.h"
 
-#include <algorithm>
+#include <cctype>
 
 namespace detail
 {

@@ -1,7 +1,6 @@
 #include <Common/Exception.h>
 #include <Common/MyTime.h>
 #include <DataTypes/DataTypeMyDateTime.h>
-#include <Functions/FunctionsTiDBConversion.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <iostream>
@@ -177,6 +176,7 @@ try
         {"30/Aprill/2016 12:34:56.", "%d/%M/%Y %H:%i:%s.%f", std::nullopt},                                 // invalid %M
         {"30/Feb/2016 12:34:56.1234", "%d/%b/%Y %H:%i:%S.%f",
             MyDateTime{2016, 2, 30, 12, 34, 56, 123400}}, // Feb 30th (not exist in actual) is valid for parsing (in mariadb)
+        {"31/April/2016 12:34:56.", "%d/%M/%Y %H:%i:%s.%f", MyDateTime{2016, 4, 31, 12, 34, 56, 0}}, // April 31th (not exist in actual)
         {"01,5,2013 9", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 900000}},
         {"01,52013", "%d,%c%Y", std::nullopt}, // %c will try to parse '52' as month and fail
         {"01,5,2013", "%d,%c,%Y", MyDateTime{2013, 5, 1, 0, 0, 0, 0}},
@@ -227,6 +227,19 @@ try
         {"01/Feb/2016   abcdefg 23:45: 54", "%d/%b/%Y abcdefg %H  :%i:%S", MyDateTime(2016, 2, 1, 23, 45, 54, 0)},
         {"01/Feb/  2016   abc  defg   23:45:54", "%d/  %b/%Y abcdefg %H:   %i:%S", MyDateTime(2016, 2, 1, 23, 45, 54, 0)},
         {"01/Feb  /2016   ab cdefg 23:  45:54", "%d  /%b/%Y abc  defg %H:%i  :%S", MyDateTime{2016, 2, 1, 23, 45, 54, 0}},
+
+        /// Cases collect from MySQL 8.0 document
+        {"01,5,2013", "%d,%m,%Y", MyDateTime{2013, 5, 1, 0, 0, 0, 0}},
+        {"May 1, 2013", "%d %m,%Y", MyDateTime{2013, 5, 1, 0, 0, 0, 0}},
+        {"a09:30:17", "a%h:%i%s", MyDateTime{0, 0, 0, 9, 30, 17, 0}},
+        {"a09:30:17", "%h:%i%s", std::nullopt},
+        {"09:30:17a", "%h:%i%s", std::nullopt},
+        {"abc", "abc", MyDateTime{0, 0, 0, 0, 0, 0, 0}},
+        {"9", "%m", MyDateTime{0, 9, 0, 0, 0, 0, 0}},
+        {"9", "%s", MyDateTime{0, 0, 0, 0, 0, 9, 0}},
+        // Range checking on the parts of date values is as described in Section 11.2.2, “The DATE, DATETIME, and TIMESTAMP Types”. This means, for example, that “zero” dates or dates with part values of 0 are permitted unless the SQL mode is set to disallow such values.
+        {"00/00/0000", "%m/%d/%Y", MyDateTime{0, 0, 0, 0, 0, 0, 0}},
+        {"04/31/2004", "%m/%d/%Y", MyDateTime{2004, 4, 31, 0, 0, 0, 0}},
 
         /// Below cases are ported from TiDB
         {"10/28/2011 9:46:29 pm", "%m/%d/%Y %l:%i:%s %p", MyDateTime(2011, 10, 28, 21, 46, 29, 0)},
