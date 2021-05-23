@@ -181,6 +181,29 @@ static String buildLogicalFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
+// left(str,len) = substrUTF8(str,1,len)
+static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    const String & func_name = "substringUTF8";
+    Names argument_names;
+
+    // the first parameter: str
+    String str = analyzer->getActions(expr.children()[0], actions, false);
+    argument_names.push_back(str);
+
+    // the second parameter: const(1)
+    auto const_one = tipb::Expr();
+    constructInt64LiteralTiExpr(const_one, 1);
+    auto col_const_one = analyzer->getActions(const_one, actions, false);
+    argument_names.push_back(col_const_one);
+
+    // the third parameter: len
+    String name = analyzer->getActions(expr.children()[1], actions, false);
+    argument_names.push_back(name);
+
+    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+}
+
 static const String tidb_cast_name = "tidb_cast";
 
 static String buildCastFunctionInternal(DAGExpressionAnalyzer * analyzer, const Names & argument_names, bool in_union,
@@ -303,26 +326,12 @@ static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr &
 }
 
 static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>>
-    function_builder_map({
-        {"in", buildInFunction},
-        {"notIn", buildInFunction},
-        {"globalIn", buildInFunction},
-        {"globalNotIn", buildInFunction},
-        {"tidbIn", buildInFunction},
-        {"tidbNotIn", buildInFunction},
-        {"ifNull", buildIfNullFunction},
-        {"multiIf", buildMultiIfFunction},
-        {"tidb_cast", buildCastFunction},
-        {"date_add", buildDateAddFunction},
-        {"and", buildLogicalFunction},
-        {"or", buildLogicalFunction},
-        {"xor", buildLogicalFunction},
-        {"not", buildLogicalFunction},
-        {"bitAnd", buildBitwiseFunction},
-        {"bitOr", buildBitwiseFunction},
-        {"bitXor", buildBitwiseFunction},
-        {"bitNot", buildBitwiseFunction},
-    });
+    function_builder_map({{"in", buildInFunction}, {"notIn", buildInFunction}, {"globalIn", buildInFunction},
+        {"globalNotIn", buildInFunction}, {"tidbIn", buildInFunction}, {"tidbNotIn", buildInFunction}, {"ifNull", buildIfNullFunction},
+        {"multiIf", buildMultiIfFunction}, {"tidb_cast", buildCastFunction}, {"date_add", buildDateAddFunction},
+        {"and", buildLogicalFunction}, {"or", buildLogicalFunction}, {"xor", buildLogicalFunction}, {"not", buildLogicalFunction},
+        {"bitAnd", buildBitwiseFunction}, {"bitOr", buildBitwiseFunction}, {"bitXor", buildBitwiseFunction},
+        {"bitNot", buildBitwiseFunction}, {"LeftUTF8", buildLeftUTF8Function}});
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_)), context(context_), after_agg(false), implicit_cast_count(0)
@@ -882,14 +891,14 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
         for (size_t index = 0; index < output_offsets.size(); index++)
         {
             UInt32 i = output_offsets[index];
-            if (schema[i].tp() == TiDB::TypeTimestamp || need_append_type_cast_vec[index])
+            if ((need_append_timezone_cast && schema[i].tp() == TiDB::TypeTimestamp) || need_append_type_cast_vec[index])
             {
                 const auto & it = casted_name_map.find(current_columns[i].name);
                 if (it == casted_name_map.end())
                 {
                     /// first add timestamp cast
                     String updated_name = current_columns[i].name;
-                    if (schema[i].tp() == TiDB::TypeTimestamp)
+                    if (need_append_timezone_cast && schema[i].tp() == TiDB::TypeTimestamp)
                     {
                         if (tz_col.length() == 0)
                             tz_col = getActions(tz_expr, step.actions);
