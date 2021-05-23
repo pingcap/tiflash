@@ -1,13 +1,11 @@
-# seems fullstack test can't set variables, so we should use other method to test it.
+mysql> drop table if exists test.t
+mysql> create table test.t(a date, b datetime, c timestamp(3), d timestamp(6));
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
 
-#mysql> drop table if exists test.t
-#mysql> create table test.t(a date, b datetime, c timestamp(3), d timestamp(6));
-#mysql> alter table test.t set tiflash replica 1;
-#func> wait_table test t
-#
-#mysql> insert into test.t values ('2021-05-23 11:45:14', '2021-05-23 11:45:14', '2021-05-23 11:45:14', '2021-05-23 11:45:14');
-#mysql> insert into test.t values ('2021-05-23 11:45:14.192', '2021-05-23 11:45:14.192', '2021-05-23 11:45:14.192', '2021-05-23 11:45:14.192');
-#mysql> insert into test.t values ('2021-05-23 11:45:14.191981', '2021-05-23 11:45:14.191981', '2021-05-23 11:45:14.191981', '2021-05-23 11:45:14.191981');
+mysql> insert into test.t values ('2021-05-23 11:45:14', '2021-05-23 11:45:14', '2021-05-23 11:45:14', '2021-05-23 11:45:14');
+mysql> insert into test.t values ('2021-05-23 11:45:14.192', '2021-05-23 11:45:14.192', '2021-05-23 11:45:14.192', '2021-05-23 11:45:14.192');
+mysql> insert into test.t values ('2021-05-23 11:45:14.191981', '2021-05-23 11:45:14.191981', '2021-05-23 11:45:14.191981', '2021-05-23 11:45:14.191981');
 mysql> analyze table test.t;
 
 mysql> explain select * from test.t where unix_timestamp(c)='1621753500.109000';
