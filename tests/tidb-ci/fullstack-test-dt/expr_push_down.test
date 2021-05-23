@@ -11,7 +11,7 @@ mysql> analyze table test.f;
 
 func> wait_table test f
 
-mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,1) c1,right(b,1) c2, a, b, 1 as id from test.f) t group by t.c1, t.c2,a,b,id;
+mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=2; select t.c1,t.c2,a,b,id, count(*) from (select left(a,1) c1,right(b,1) c2, a, b, 1 as id from test.f) t group by t.c1, t.c2,a,b,id;
 +------+------+---------+------+----+----------+
 | c1   | c2   | a       | b    | id | count(*) |
 +------+------+---------+------+----+----------+
@@ -22,7 +22,7 @@ mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,1) c1,ri
 | s    | NULL | shipai  | NULL |  1 |        1 |
 +------+------+---------+------+----+----------+
 
-mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,11) c1,right(b,11) c2, a, b, 11 as id from test.f) t group by t.c1, t.c2,a,b,id;
+mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=2; select t.c1,t.c2,a,b,id, count(*) from (select left(a,11) c1,right(b,11) c2, a, b, 11 as id from test.f) t group by t.c1, t.c2,a,b,id;
 +---------+------+---------+------+----+----------+
 | c1      | c2   | a       | b    | id | count(*) |
 +---------+------+---------+------+----+----------+
@@ -33,7 +33,7 @@ mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,11) c1,r
 | pingcap | tidb | pingcap | tidb | 11 |        1 |
 +---------+------+---------+------+----+----------+
 
-mysql> use test; select t.c1,t.c2,a,b,id, count(*) from (select left(a,0) c1,right(b,0) c2, a, b, 0 as id from test.f) t group by t.c1, t.c2,a,b,id;
+mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=2; select t.c1,t.c2,a,b,id, count(*) from (select left(a,0) c1,right(b,0) c2, a, b, 0 as id from test.f) t group by t.c1, t.c2,a,b,id;
 +------+------+---------+------+----+----------+
 | c1   | c2   | a       | b    | id | count(*) |
 +------+------+---------+------+----+----------+
@@ -44,7 +44,7 @@ mysql> use test; select t.c1,t.c2,a,b,id, count(*) from (select left(a,0) c1,rig
 |      |      | pingcap | tidb |  0 |        1 |
 +------+------+---------+------+----+----------+
 
-mysql> use test; select a,t.c0,t.c1,t.c2,t.c3,t.c4,t.c5, count(*) from (select right(a,0) c0 ,right(a,1) c1,right(a,-1) c2, right(a,100) c3, right(a,null) c4, right(null,0) c5,a from test.f) t group by c0, c1,c2,c3,c4,c5,a;
+mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=2; select a,t.c0,t.c1,t.c2,t.c3,t.c4,t.c5, count(*) from (select right(a,0) c0 ,right(a,1) c1,right(a,-1) c2, right(a,100) c3, right(a,null) c4, right(null,0) c5,a from test.f) t group by c0, c1,c2,c3,c4,c5,a;
 +---------+------+------+------+---------+------+------+----------+
 | a       | c0   | c1   | c2   | c3      | c4   | c5   | count(*) |
 +---------+------+------+------+---------+------+------+----------+
@@ -54,7 +54,7 @@ mysql> use test; select a,t.c0,t.c1,t.c2,t.c3,t.c4,t.c5, count(*) from (select r
 | NULL    | NULL | NULL | NULL | NULL    | NULL | NULL |        2 |
 +---------+------+------+------+---------+------+------+----------+
 
-mysql> use test; select a, t.c0,t.c1,t.c2,t.c3,t.c4,t.c5, count(*) from (select left(a,0) c0 ,left(a,1) c1,left(a,-1) c2, left(a,100) c3,left(a,null)c4,left(null,0)c5, a from test.f) t group by c0, c1,c2,c3,c4,c5,a;
+mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=2; select a, t.c0,t.c1,t.c2,t.c3,t.c4,t.c5, count(*) from (select left(a,0) c0 ,left(a,1) c1,left(a,-1) c2, left(a,100) c3,left(a,null)c4,left(null,0)c5, a from test.f) t group by c0, c1,c2,c3,c4,c5,a;
 +---------+------+------+------+---------+------+------+----------+
 | a       | c0   | c1   | c2   | c3      | c4   | c5   | count(*) |
 +---------+------+------+------+---------+------+------+----------+
