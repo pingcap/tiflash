@@ -1692,7 +1692,7 @@ public:
                     null_res[i] = 1;
                 }
             }
-            block.getByPosition(result).column = std::move(datetime_column);
+            block.getByPosition(result).column = ColumnNullable::create(std::move(datetime_column), std::move(null_column));
         }
         else
         {

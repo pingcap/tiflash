@@ -91,6 +91,8 @@ void registerFunctionsConversion(FunctionFactory & factory)
 
     factory.registerFunction<FunctionFromUnixTime>();
     factory.registerFunction<FunctionDateFormat>();
+    factory.registerFunction<FunctionStrToDate<NameStrToDateDate>>();
+    factory.registerFunction<FunctionStrToDate<NameStrToDateDatetime>>();
 }
 
 }
