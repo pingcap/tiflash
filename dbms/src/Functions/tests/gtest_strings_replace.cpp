@@ -103,7 +103,7 @@ TEST_F(StringReplace, string_replace_all_unit_Test)
     auto bp = factory.tryGet("replaceAll", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(!bp->isVariadic());
-    EXPECT_EQ(bp->getNumberOfArguments(), 3);
+    EXPECT_EQ(bp->getNumberOfArguments(), static_cast<size_t>(3));
 
     std::vector<String> data{"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"};
     std::vector<String> actual = executeReplace(bp, data, " ", "");
@@ -133,7 +133,7 @@ TEST_F(StringReplace, string_replace_all_utf_8_unit_Test)
     auto bp = factory.tryGet("replaceAll", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(!bp->isVariadic());
-    EXPECT_EQ(bp->getNumberOfArguments(), 3);
+    EXPECT_EQ(bp->getNumberOfArguments(), static_cast<size_t>(3));
 
     std::vector<String> data{"  你好   ", "   你 好", "你好 你好", "你 好     ", "你不好"};
     std::vector<String> actual = executeReplace(bp, data, "你好", "");
