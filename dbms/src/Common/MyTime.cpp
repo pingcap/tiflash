@@ -1364,15 +1364,16 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         int meridiem = 0; // 0 - invalid, 1 - am, 2 - pm
         if (state = skipWhitespaces(); state != ParseState::NORMAL)
             return state;
+        // "AM"/"PM" must be parsed as a single element
+        // "11:13:56a" is an invalid input for "%r".
+        if (auto size_to_end = ctx.view.size - temp_pos; size_to_end < 2)
+            return ParseState::FAIL;
         if (toLowerIfAlphaASCII(ctx.view.data[temp_pos]) == 'a')
             meridiem = 1;
         else if (toLowerIfAlphaASCII(ctx.view.data[temp_pos]) == 'p')
             meridiem = 2;
-        temp_pos += 1; // move forward
 
-        if (state = checkIfEnd(); state != ParseState::NORMAL)
-            return state;
-        if (toLowerIfAlphaASCII(ctx.view.data[temp_pos]) != 'm')
+        if (toLowerIfAlphaASCII(ctx.view.data[temp_pos + 1]) != 'm')
             meridiem = 0;
         switch (meridiem)
         {
@@ -1384,7 +1385,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
                 time.hour += 12;
                 break;
         }
-        temp_pos += 1; // move forward
+        temp_pos += 2; // move forward
         return ParseState::NORMAL;
     };
     if (auto state = tryParse(); state == ParseState::FAIL)
