@@ -551,6 +551,7 @@ private:
     template <typename T>
     bool executeForType(Block & block, const ColumnNumbers & arguments, size_t result)
     {
+        //Todo: ColumnVector<T> will not compile if T is decimal type
         if (auto col = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[0]).column.get()))
         {
             Dispatcher<T, rounding_mode>::apply(block, col, arguments, result);
@@ -577,6 +578,7 @@ public:
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & type : arguments)
+            // Todo: decimal type currently is not "number"
             if (!type->isNumber())
                 throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
