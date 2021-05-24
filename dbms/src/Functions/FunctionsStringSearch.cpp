@@ -910,6 +910,72 @@ struct ReplaceStringImpl
         }
     }
 
+    /// fallback when needle or replacement is variable.
+    static void vector(
+        const ColumnString & data,
+        const IColumn & needleCol,
+        const IColumn & replacementCol,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        auto dataChars = data.getChars();
+        res_data.reserve(dataChars.size());
+        res_offsets.resize(data.size());
+        ColumnString::Offset res_offset = 0;
+
+        for (size_t i = 0; i < data.size(); ++i)
+        {
+            auto offset = data.offsetAt(i);
+            auto size = data.sizeAt(i);
+
+            const UInt8 * begin = &dataChars[offset];
+            const UInt8 * pos = begin;
+            const UInt8 * end = pos + size;
+
+            auto needle = needleCol[i].getValue<String>();
+            auto replacement = replacementCol[i].getValue<String>();
+            if (needle.empty())
+            {
+                res_data.resize(res_data.size() + size);
+                memcpy(&res_data[res_offset], begin, size);
+                res_offset += size;
+                res_offsets[i] = res_offset;
+                continue;
+            }
+
+            Volnitsky searcher(needle.data(), needle.size(), size);
+            while (pos < end)
+            {
+                const UInt8 * match = searcher.search(pos, end - pos);
+
+                /// Copy the data without changing
+                res_data.resize(res_data.size() + (match - pos));
+                memcpy(&res_data[res_offset], pos, match - pos);
+
+                if (match == end)
+                {
+                    res_offset += size;
+                    res_offsets[i] = res_offset;
+                    break;
+                }
+
+                res_data.resize(res_data.size() + replacement.size());
+                memcpy(&res_data[res_offset], replacement.data(), replacement.size());
+                res_offset += replacement.size();
+                pos = match + needle.size();
+
+                if (replace_one)
+                {
+                    res_data.resize(res_data.size() + (end - pos));
+                    memcpy(&res_data[res_offset], pos, (end - pos));
+                    res_offset += (end - pos);
+                    res_offsets[i] = res_offset;
+                    break;
+                }
+            }
+        }
+    }
+
     /// Note: this function converts fixed-length strings to variable-length strings
     ///       and each variable-length string should ends with zero byte.
     static void vector_fixed(const ColumnString::Chars_t & data,
@@ -993,6 +1059,76 @@ struct ReplaceStringImpl
         }
     }
 
+    /// Note: this function converts fixed-length strings to variable-length strings
+    ///       and each variable-length string should ends with zero byte.
+    static void vector_fixed(
+        const ColumnString::Chars_t & data,
+        size_t n,
+        const IColumn & needleCol,
+        const IColumn & replacementCol,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t count = data.size() / n;
+        res_data.reserve(data.size());
+        res_offsets.resize(count);
+        ColumnString::Offset res_offset = 0;
+
+        for (size_t i = 0; i < count; ++i)
+        {
+            const UInt8 * begin = &dataChars[i * n];
+            const UInt8 * pos = begin;
+            const UInt8 * end = pos + n;
+
+#define COPY_REST_OF_CURRENT_STRING() \
+    do { \
+        const size_t len = end - pos; \
+        res_data.resize(res_data.size() + len + 1); \
+        memcpy(&res_data[res_offset], pos, len); \
+        res_offset += len; \
+        res_data[res_offset++] = 0; \
+        res_offsets[i] = res_offset; \
+        pos = end; \
+    } while (false)
+
+            auto needle = needleCol[i].getValue<String>();
+            auto replacement = replacementCol[i].getValue<String>();
+            if (needle.empty())
+            {
+                COPY_REST_OF_CURRENT_STRING();
+                continue;
+            }
+
+            Volnitsky searcher(needle.data(), needle.size(), n);
+            while (pos < end)
+            {
+                const UInt8 * match = searcher.search(pos, end - pos);
+
+                if (match == end)
+                {
+                    COPY_REST_OF_CURRENT_STRING();
+                    break;
+                }
+
+                /// Copy the data without changing
+                res_data.resize(res_data.size() + (match - pos));
+                memcpy(&res_data[res_offset], pos, match - pos);
+                res_offset += match - pos;
+
+                res_data.resize(res_data.size() + replacement.size());
+                memcpy(&res_data[res_offset], replacement.data(), replacement.size());
+                res_offset += replacement.size();
+                pos = match + needle.size();
+
+                if (replace_one)
+                {
+                    COPY_REST_OF_CURRENT_STRING();
+                    break;
+                }
+            }
+        }
+    }
+
     static void constant(const std::string & data, const std::string & needle, const std::string & replacement, std::string & res_data)
     {
         res_data = "";
@@ -1065,42 +1201,61 @@ public:
         const ColumnPtr & column_replacement = block.getByPosition(arguments[2]).column;
 
         if (!column_needle->isColumnConst() || !column_replacement->isColumnConst())
-            throw Exception("2nd and 3rd arguments of function " + getName() + " must be constants.");
-
-        const ColumnConst * c1_const = typeid_cast<const ColumnConst *>(column_needle.get());
-        const ColumnConst * c2_const = typeid_cast<const ColumnConst *>(column_replacement.get());
-        String needle = c1_const->getValue<String>();
-        String replacement = c2_const->getValue<String>();
-
-        if (needle.size() == 0)
         {
-            /// needle may be empty string('') or NULL. 
-            ///
-            /// Due to issue#1729, a NULL needle in a DAG request will not be treated as NULL and
-            /// automatically handled by PreparedFunctionImpl::defaultImplementationForNulls.
-            ///
-            /// Just return the raw strings in such case.
-            /// The substitution of NULL will be taken by upper function (see wrapInNullable).
-            block.getByPosition(result).column = column_src;
-            return;
-        }
-
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
-        {
-            auto col_res = ColumnString::create();
-            Impl::vector(col->getChars(), col->getOffsets(), needle, replacement, col_res->getChars(), col_res->getOffsets());
-            block.getByPosition(result).column = std::move(col_res);
-        }
-        else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
-        {
-            auto col_res = ColumnString::create();
-            Impl::vector_fixed(col->getChars(), col->getN(), needle, replacement, col_res->getChars(), col_res->getOffsets());
-            block.getByPosition(result).column = std::move(col_res);
+            // fallback to slow path, search and replace for each row
+            if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
+            {
+                auto col_res = ColumnString::create();
+                Impl::vector(col->getChars(), col->getOffsets(), column_needle, column_replacement, col_res->getChars(), col_res->getOffsets());
+                block.getByPosition(result).column = std::move(col_res);
+            }
+            else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
+            {
+                auto col_res = ColumnString::create();
+                Impl::vector_fixed(col->getChars(), col->getN(), column_needle, column_replacement, col_res->getChars(), col_res->getOffsets());
+                block.getByPosition(result).column = std::move(col_res);
+            }
+            else
+                throw Exception(
+                    "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
         }
         else
-            throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+        {
+            const ColumnConst * c1_const = typeid_cast<const ColumnConst *>(column_needle.get());
+            const ColumnConst * c2_const = typeid_cast<const ColumnConst *>(column_replacement.get());
+            String needle = c1_const->getValue<String>();
+            String replacement = c2_const->getValue<String>();
+
+            if (needle.size() == 0)
+            {
+                /// needle may be empty string('') or NULL. 
+                ///
+                /// Due to issue#1729, a NULL needle in a DAG request will not be treated as NULL and
+                /// automatically handled by PreparedFunctionImpl::defaultImplementationForNulls.
+                ///
+                /// Just return the raw strings in such case.
+                /// The substitution of NULL will be taken by upper function (see wrapInNullable).
+                block.getByPosition(result).column = column_src;
+                return;
+            }
+
+            if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
+            {
+                auto col_res = ColumnString::create();
+                Impl::vector(col->getChars(), col->getOffsets(), needle, replacement, col_res->getChars(), col_res->getOffsets());
+                block.getByPosition(result).column = std::move(col_res);
+            }
+            else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
+            {
+                auto col_res = ColumnString::create();
+                Impl::vector_fixed(col->getChars(), col->getN(), needle, replacement, col_res->getChars(), col_res->getOffsets());
+                block.getByPosition(result).column = std::move(col_res);
+            }
+            else
+                throw Exception(
+                    "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_COLUMN);
+        } 
     }
 };
 
