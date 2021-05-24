@@ -25,22 +25,6 @@ mysql> insert into test.t values(360, 124, null);
 mysql> insert into test.t values(null, null, null);
 mysql> analyze table test.t;
 
-#mysql> explain select concat(a, b, c), count(*) from test.t group by 1;
-#+----------------------------------------+---------+-------------------+---------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-#| id                                     | estRows | task              | access object | operator info                                                                                                                                                     |
-#+----------------------------------------+---------+-------------------+---------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-#| Projection_4                           | 4.00    | root              |               | concat(cast(test.t.a, var_string(20)), test.t.b, test.t.c)->Column#6, Column#5                                                                                    |
-#| └─TableReader_24                       | 4.00    | root              |               | data:ExchangeSender_23                                                                                                                                            |
-#|   └─ExchangeSender_23                  | 4.00    | batchCop[tiflash] |               | ExchangeType: PassThrough                                                                                                                                         |
-#|     └─Projection_19                    | 4.00    | batchCop[tiflash] |               | Column#5, test.t.a, test.t.b, test.t.c                                                                                                                            |
-#|       └─HashAgg_20                     | 4.00    | batchCop[tiflash] |               | group by:Column#13, funcs:sum(Column#14)->Column#5, funcs:firstrow(Column#15)->test.t.a, funcs:firstrow(Column#16)->test.t.b, funcs:firstrow(Column#17)->test.t.c |
-#|         └─ExchangeReceiver_22          | 4.00    | batchCop[tiflash] |               |                                                                                                                                                                   |
-#|           └─ExchangeSender_21          | 4.00    | batchCop[tiflash] |               | ExchangeType: HashPartition, Hash Cols: Column#13                                                                                                                 |
-#|             └─HashAgg_8                | 4.00    | batchCop[tiflash] |               | group by:Column#26, funcs:count(1)->Column#14, funcs:firstrow(Column#23)->Column#15, funcs:firstrow(Column#24)->Column#16, funcs:firstrow(Column#25)->Column#17   |
-#|               └─Projection_28          | 6.00    | batchCop[tiflash] |               | test.t.a, test.t.b, test.t.c, concat(cast(test.t.a, var_string(20)), test.t.b, test.t.c)->Column#26                                                               |
-#|                 └─TableFullScan_18     | 6.00    | batchCop[tiflash] | table:t       | keep order:false                                                                                                                                    |
-#+----------------------------------------+---------+-------------------+---------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-
 #mysql> select concat(a, b, c), count(*) from test.t group by 1;
 #+-----------------+----------+
 #| concat(a, b, c) | count(*) |
