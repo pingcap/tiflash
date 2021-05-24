@@ -86,11 +86,15 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
         if ((-1 == res || 0 == res) && errno != EINTR)
         {
             ProfileEvents::increment(ProfileEvents::PSMWriteFailed);
-            auto saved_errno = errno; // save errno to ignore the errno of `ftruncate`
+            auto saved_errno = errno; // save errno before `ftruncate`
             // If error occurs, apply `ftruncate` try to truncate the broken bytes we have written.
-            // Note that the result of this ftruncate is ignored.
-            ::ftruncate(file->getFd(), offset);
-            DB::throwFromErrno("Cannot write to file " + file->getFileName(), ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR, saved_errno);
+            // Note that the result of this ftruncate is ignored, there is nothing we can do to
+            // handle ftruncate error. The errno may change after ftruncate called.
+            int truncate_res = ::ftruncate(file->getFd(), offset);
+            DB::throwFromErrno("Cannot write to file " + file->getFileName() + " [truncate_res=" + DB::toString(truncate_res)
+                                   + "] [errno_after_truncate=" + strerror(errno) + "]",
+                               ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR,
+                               saved_errno);
         }
 
         if (res > 0)
