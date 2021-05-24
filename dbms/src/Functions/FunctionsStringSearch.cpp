@@ -1198,7 +1198,7 @@ public:
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2}; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {}; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
