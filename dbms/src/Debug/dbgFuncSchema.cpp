@@ -50,6 +50,24 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
     output(ss.str());
 }
 
+// Trigger gc on all databases / tables.
+// Usage:
+//   ./storage-client.sh "DBGInvoke gc_schemas([gc_safe_point])"
+void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    auto & service = context.getSchemaSyncService();
+    Timestamp gc_safe_point = 0;
+    if (args.size() == 0)
+        gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
+    else
+        gc_safe_point = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    service->gc(gc_safe_point);
+
+    std::stringstream ss;
+    ss << "schemas gc done";
+    output(ss.str());
+}
+
 void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
     TMTContext & tmt = context.getTMTContext();
