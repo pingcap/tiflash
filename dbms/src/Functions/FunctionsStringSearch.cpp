@@ -666,7 +666,6 @@ struct ReplaceRegexpImpl
 
     static const size_t max_captures = 10;
 
-
     static Instructions createInstructions(const std::string & s, int num_captures)
     {
         Instructions instructions;
@@ -803,6 +802,29 @@ struct ReplaceRegexpImpl
         }
     }
 
+    /// fallback when needle or replacement is variable.
+    static void vector(
+        const ColumnString::Chars_t &,
+        const ColumnString::Offsets &,
+        const IColumn &,
+        const IColumn &,
+        ColumnString::Chars_t &,
+        ColumnString::Offsets &)
+    {
+        throw Exception("Non-const needle or replacement is not supported.", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    static void vector_fixed(
+        const ColumnString::Chars_t &,
+        size_t,
+        const IColumn &,
+        const IColumn &,
+        ColumnString::Chars_t &,
+        ColumnString::Offsets &)
+    {
+        throw Exception("Non-const needle or replacement is not supported.", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     static void vector_fixed(const ColumnString::Chars_t & data,
         size_t n,
         const std::string & needle,
@@ -912,28 +934,28 @@ struct ReplaceStringImpl
 
     /// fallback when needle or replacement is variable.
     static void vector(
-        const ColumnString & data,
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
         const IColumn & needleCol,
         const IColumn & replacementCol,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
-        auto dataChars = data.getChars();
-        res_data.reserve(dataChars.size());
-        res_offsets.resize(data.size());
+        res_data.reserve(data.size());
+        res_offsets.resize(offsets.size());
         ColumnString::Offset res_offset = 0;
 
-        for (size_t i = 0; i < data.size(); ++i)
+        for (size_t i = 0; i < offsets.size(); ++i)
         {
-            auto offset = data.offsetAt(i);
-            auto size = data.sizeAt(i);
+            auto offset = i == 0 ? 0 : offsets[i - 1];
+            auto size = i == 0 ? offsets[0] : (offsets[i] - offsets[i - 1]);
 
-            const UInt8 * begin = &dataChars[offset];
+            const UInt8 * begin = &data[offset];
             const UInt8 * pos = begin;
             const UInt8 * end = pos + size;
 
-            auto needle = needleCol[i].getValue<String>();
-            auto replacement = replacementCol[i].getValue<String>();
+            auto needle = needleCol[i].safeGet<String>();
+            auto replacement = replacementCol[i].safeGet<String>();
             if (needle.empty())
             {
                 res_data.resize(res_data.size() + size);
@@ -1076,7 +1098,7 @@ struct ReplaceStringImpl
 
         for (size_t i = 0; i < count; ++i)
         {
-            const UInt8 * begin = &dataChars[i * n];
+            const UInt8 * begin = &data[i * n];
             const UInt8 * pos = begin;
             const UInt8 * end = pos + n;
 
@@ -1091,8 +1113,8 @@ struct ReplaceStringImpl
         pos = end; \
     } while (false)
 
-            auto needle = needleCol[i].getValue<String>();
-            auto replacement = replacementCol[i].getValue<String>();
+            auto needle = needleCol[i].safeGet<String>();
+            auto replacement = replacementCol[i].safeGet<String>();
             if (needle.empty())
             {
                 COPY_REST_OF_CURRENT_STRING();
@@ -1126,6 +1148,7 @@ struct ReplaceStringImpl
                     break;
                 }
             }
+#undef COPY_REST_OF_CURRENT_STRING
         }
     }
 
@@ -1206,18 +1229,19 @@ public:
             if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
-                Impl::vector(col->getChars(), col->getOffsets(), column_needle, column_replacement, col_res->getChars(), col_res->getOffsets());
+                Impl::vector(col->getChars(), col->getOffsets(), *column_needle, *column_replacement, col_res->getChars(), col_res->getOffsets());
                 block.getByPosition(result).column = std::move(col_res);
             }
             else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
-                Impl::vector_fixed(col->getChars(), col->getN(), column_needle, column_replacement, col_res->getChars(), col_res->getOffsets());
+                Impl::vector_fixed(col->getChars(), col->getN(), *column_needle, *column_replacement, col_res->getChars(), col_res->getOffsets());
                 block.getByPosition(result).column = std::move(col_res);
             }
             else
                 throw Exception(
                     "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_COLUMN);
         }
         else
         {
