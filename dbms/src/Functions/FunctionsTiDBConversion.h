@@ -1513,6 +1513,18 @@ private:
                 TiDBConvertToInteger<FromDataType, DataTypeInt64, return_nullable>::execute(
                     block, arguments, result, in_union_, tidb_tp_, context_);
             };
+        if (checkDataType<DataTypeInt32>(to_type.get()))
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
+                       const Context & context_) {
+                TiDBConvertToInteger<FromDataType, DataTypeInt32, return_nullable>::execute(
+                    block, arguments, result, in_union_, tidb_tp_, context_);
+            };
+        if (checkDataType<DataTypeUInt32>(to_type.get()))
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
+                       const Context & context_) {
+                TiDBConvertToInteger<FromDataType, DataTypeUInt32, return_nullable>::execute(
+                    block, arguments, result, in_union_, tidb_tp_, context_);
+            };
         /// cast as decimal
         if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal32>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_,
