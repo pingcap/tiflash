@@ -1677,8 +1677,13 @@ public:
             {
                 if (input_column->isColumnNullable())
                 {
-                    null_res[i] = input_column->isNullAt(i);
-                    continue;
+                    // For null input, just set the result as null
+                    if (bool is_null = input_column->isNullAt(i); is_null)
+                    {
+                        null_res[i] = is_null;
+                        continue;
+                    }
+                    // else fallthrough to parsing
                 }
 
                 const auto str_ref = col_from->getDataAt(i);
