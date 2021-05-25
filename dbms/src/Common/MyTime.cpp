@@ -1267,21 +1267,15 @@ static std::tuple<size_t, int32_t> parseNDigits(const StringRef & view, const si
 
 static std::tuple<size_t, int32_t> parseYearNDigits(const StringRef & view, const size_t pos, const size_t limit)
 {
-    int32_t effective_count = 0;
-    int32_t effective_value = 0;
-    while (static_cast<size_t>(effective_count + 1) <= limit)
-    {
-        auto [step, num] = parseNDigits(view, pos, effective_count + 1);
-        if (step == 0)
-            break;
-        effective_count++;
-        effective_value = num;
-    }
-    if (effective_count == 0)
-        return std::make_tuple(effective_count, 0);
-    else if (effective_count <= 2)
-        effective_value = adjustYear(effective_value);
-    return std::make_tuple(effective_count, effective_value);
+    // Try to parse a "year" within `limit` digits
+    size_t step = 0;
+    int32_t year = 0;
+    std::tie(step, year) = parseNDigits(view, pos, limit);
+    if (step == 0)
+        return std::make_tuple(step, 0);
+    else if (step <= 2)
+        year = adjustYear(year);
+    return std::make_tuple(step, year);
 }
 
 enum class ParseState
