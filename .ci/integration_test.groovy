@@ -25,7 +25,7 @@ catchError {
 
     stage("Stash tics code") {
         dir("/home/jenkins/agent/git-code-archive/tics") {
-            checkoutTiCS("${params.ghprbActualCommit}", "${params.ghprbPullId}")
+            utils.checkoutTiCS("${params.ghprbActualCommit}", "${params.ghprbPullId}")
         }
         stash includes: "/home/jenkins/agent/git-code-archive/tics/**", name: "git-code-tics", useDefaultExcludes: false
     }
