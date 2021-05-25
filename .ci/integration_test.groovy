@@ -23,6 +23,13 @@ catchError {
         }
     }
 
+    stage("Stash tics code") {
+        dir("/home/jenkins/agent/git-code-archive/tics") {
+            checkoutTiCS("${params.ghprbActualCommit}", "${params.ghprbPullId}")
+        }
+        stash includes: "/home/jenkins/agent/git-code-archive/tics/**", name: "git-code-tics", useDefaultExcludes: false
+    }
+
     parallel (
         "tidb ci test": {
             def label = "tidb-ci-test"
