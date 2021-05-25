@@ -136,7 +136,7 @@ struct MyDateTimeFormatter
 
 struct MyDateTimeParser
 {
-    explicit MyDateTimeParser(const String & format_);
+    explicit MyDateTimeParser(String format_);
 
     std::optional<UInt64> parseAsPackedUInt(const StringRef & str_view) const;
 

@@ -1619,20 +1619,20 @@ public:
         if (!removeNullable(arguments[0].type)->isString())
             throw Exception("First argument for function " + getName() + " must be String, but get " + arguments[0].type->getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
-        if (!arguments[1].type->isString())
+        if (!removeNullable(arguments[1].type)->isString())
             throw Exception(
-                "Second argument for function " + getName() + " must be String constant, but get " + arguments[1].type->getName(),
+                "Second argument for function " + getName() + " must be String, but get " + arguments[1].type->getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
 
         if constexpr (std::is_same_v<Name, NameStrToDateDatetime>)
         {
-            // FIXME: Should it be nullable for invalid result?
+            // Return null for invalid result
             // FIXME: set fraction for DataTypeMyDateTime
             return makeNullable(std::make_shared<DataTypeMyDateTime>());
         }
         else if constexpr (std::is_same_v<Name, NameStrToDateDate>)
         {
-            // FIXME: Should it be nullable for invalid result?
+            // Return null for invalid result
             return makeNullable(std::make_shared<DataTypeMyDate>());
         }
         else
@@ -1643,21 +1643,20 @@ public:
 
     // FIXME: Should we override other method?
     bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
     {
         const auto & input_column = block.getByPosition(arguments[0]).column;
         const size_t num_rows = input_column->size();
-        const ColumnString * col_from = nullptr;
+        const ColumnString * input_raw_col = nullptr;
         if (input_column->isColumnNullable())
         {
             auto null_input_column = checkAndGetColumn<ColumnNullable>(input_column.get());
-            col_from = checkAndGetColumn<ColumnString>(null_input_column->getNestedColumnPtr().get());
+            input_raw_col = checkAndGetColumn<ColumnString>(null_input_column->getNestedColumnPtr().get());
         }
         else
         {
-            col_from = checkAndGetColumn<ColumnString>(input_column.get());
+            input_raw_col = checkAndGetColumn<ColumnString>(input_column.get());
         }
 
         auto datetime_column = ColumnVector<DataTypeMyDateTime::FieldType>::create(num_rows);
@@ -1665,14 +1664,14 @@ public:
         auto null_column = ColumnUInt8::create(num_rows);
         auto & null_res = null_column->getData();
 
-        const auto & format_col = block.getByPosition(arguments[1]).column;
-        if (format_col->isColumnConst())
+        const auto & format_column = block.getByPosition(arguments[1]).column;
+        if (format_column->isColumnConst())
         {
-            const auto & col_const = checkAndGetColumnConst<ColumnString>(format_col.get());
+            // Precomplie format parser
+            const auto & col_const = checkAndGetColumnConst<ColumnString>(format_column.get());
             auto format = col_const->getValue<String>();
-
             auto parser = MyDateTimeParser(format);
-            for (size_t i = 0; i < num_rows; i++)
+            for (size_t i = 0; i < num_rows; ++i)
             {
                 if (input_column->isColumnNullable())
                 {
@@ -1684,8 +1683,7 @@ public:
                     }
                     // else fallthrough to parsing
                 }
-
-                const auto str_ref = col_from->getDataAt(i);
+                const auto str_ref = input_raw_col->getDataAt(i);
                 if (auto parse_res = parser.parseAsPackedUInt(str_ref); parse_res)
                 {
                     datetime_res[i] = *parse_res;
@@ -1697,13 +1695,58 @@ public:
                     null_res[i] = 1;
                 }
             }
-            block.getByPosition(result).column = ColumnNullable::create(std::move(datetime_column), std::move(null_column));
-        }
+        } // end of format_column->isColumnConst()
         else
         {
-            // TODO: the second argument could be a column, support it later.
-            throw Exception("Second argument for function " + getName() + " must be String constant", ErrorCodes::ILLEGAL_COLUMN);
-        }
+            const ColumnString * format_raw_col = nullptr;
+            if (format_column->isColumnNullable())
+            {
+                auto null_format_column = checkAndGetColumn<ColumnNullable>(format_column.get());
+                format_raw_col = checkAndGetColumn<ColumnString>(null_format_column->getNestedColumnPtr().get());
+            }
+            else
+            {
+                format_raw_col = checkAndGetColumn<ColumnString>(format_column.get());
+            }
+
+            for (size_t i = 0; i < num_rows; ++i)
+            {
+                // Set null for either null input or null format
+                if (input_column->isColumnNullable())
+                {
+                    if (bool is_null = input_column->isNullAt(i); is_null)
+                    {
+                        null_res[i] = is_null;
+                        continue;
+                    }
+                    // else fallthrough to parsing
+                }
+                if (format_column->isColumnNullable())
+                {
+                    if (bool is_null = format_column->isNullAt(i); is_null)
+                    {
+                        null_res[i] = is_null;
+                        continue;
+                    }
+                    // else fallthrough to parsing
+                }
+
+                const auto format_ref = format_raw_col->getDataAt(i);
+                auto parser = MyDateTimeParser(format_ref.toString());
+                const auto str_ref = input_raw_col->getDataAt(i);
+                if (auto parse_res = parser.parseAsPackedUInt(str_ref); parse_res)
+                {
+                    datetime_res[i] = *parse_res;
+                    null_res[i] = 0;
+                }
+                else
+                {
+                    datetime_res[i] = 0;
+                    null_res[i] = 1;
+                }
+            }
+        } // end of !format_column->isColumnConst()
+        block.getByPosition(result).column = ColumnNullable::create(std::move(datetime_column), std::move(null_column));
     }
 };
 

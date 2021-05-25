@@ -1471,7 +1471,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
 }
 
 // Refer: https://github.com/pingcap/tidb/blob/v5.0.1/types/time.go#L2946
-MyDateTimeParser::MyDateTimeParser(const String & format_) : format(format_)
+MyDateTimeParser::MyDateTimeParser(String format_) : format(std::move(format_))
 {
     // Ignore all prefix white spaces (TODO: handle unicode space?)
     size_t format_pos = 0;
