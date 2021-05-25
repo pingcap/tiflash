@@ -956,6 +956,7 @@ struct ReplaceStringImpl
 
             auto needle = needleCol[i].safeGet<String>();
             auto replacement = replacementCol[i].safeGet<String>();
+
             if (needle.empty())
             {
                 res_data.resize(res_data.size() + size);
@@ -973,11 +974,10 @@ struct ReplaceStringImpl
                 /// Copy the data without changing
                 res_data.resize(res_data.size() + (match - pos));
                 memcpy(&res_data[res_offset], pos, match - pos);
+                res_offset += match - pos;
 
                 if (match == end)
                 {
-                    res_offset += size;
-                    res_offsets[i] = res_offset;
                     break;
                 }
 
@@ -991,10 +991,10 @@ struct ReplaceStringImpl
                     res_data.resize(res_data.size() + (end - pos));
                     memcpy(&res_data[res_offset], pos, (end - pos));
                     res_offset += (end - pos);
-                    res_offsets[i] = res_offset;
                     break;
                 }
             }
+            res_offsets[i] = res_offset;
         }
     }
 
