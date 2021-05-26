@@ -3,23 +3,51 @@ def checkoutTiCS(commit, pullId) {
     if (pullId) {
         refspec += " +refs/pull/${pullId}/*:refs/remotes/origin/pr/${pullId}/*"
     }
-    checkout(changelog: false, poll: false, scm: [
-            $class           : "GitSCM",
-            branches         : [
-                    [name: "${commit}"],
-            ],
-            userRemoteConfigs: [
-                    [
-                            url          : "git@github.com:pingcap/tics.git",
-                            refspec      : refspec,
-                            credentialsId: "github-sre-bot-ssh",
-                    ]
-            ],
-            extensions       : [
-                    [$class: 'PruneStaleBranch'],
-                    [$class: 'CleanBeforeCheckout'],
-            ],
-    ])
+    try {
+        checkout(changelog: false, poll: false, scm: [
+                $class           : "GitSCM",
+                branches         : [
+                        [name: "${commit}"],
+                ],
+                userRemoteConfigs: [
+                        [
+                                url          : "git@github.com:pingcap/tics.git",
+                                refspec      : refspec,
+                                credentialsId: "github-sre-bot-ssh",
+                        ]
+                ],
+                extensions       : [
+                        [$class: 'PruneStaleBranch'],
+                        [$class: 'CleanBeforeCheckout'],
+                ],
+        ])
+    } catch (info) {
+        retry(2) {
+            echo "checkout failed, retry.."
+            sleep 5
+            if (sh(returnStatus: true, script: '[ -d .git ] && git rev-parse --git-dir > /dev/null 2>&1') != 0) {
+                echo ".git already exist or not a valid git dir. Delete dir..."
+                deleteDir()
+            }
+            checkout(changelog: false, poll: false, scm: [
+                    $class           : "GitSCM",
+                    branches         : [
+                            [name: "${commit}"],
+                    ],
+                    userRemoteConfigs: [
+                            [
+                                    url          : "git@github.com:pingcap/tics.git",
+                                    refspec      : refspec,
+                                    credentialsId: "github-sre-bot-ssh",
+                            ]
+                    ],
+                    extensions       : [
+                            [$class: 'PruneStaleBranch'],
+                            [$class: 'CleanBeforeCheckout'],
+                    ],
+            ])
+        }
+    }
 }
 
 def runClosure(label, Closure body) {
@@ -40,10 +68,8 @@ def runClosure(label, Closure body) {
 
 def runTest(label, testPath, tidbBranch) {
     runClosure(label) {
-        stage("Checkout") {
-            dir("tics") {
-            	checkoutTiCS("${params.ghprbActualCommit}", "${params.ghprbPullId}")
-            }
+        stage("Unstash") {
+            unstash 'git-code-tics'
         }
         dir(testPath) {
             stage("Test") {
