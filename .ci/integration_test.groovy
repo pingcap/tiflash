@@ -43,7 +43,7 @@ catchError {
                 }
             }
             dir("${curws}/tics") {
-                checkoutTiCS("${params.ghprbActualCommit}", "${params.ghprbPullId}")
+                util.checkoutTiCS("${params.ghprbActualCommit}", "${params.ghprbPullId}")
             }
         }
         stash includes: "tics/**", name: "git-code-tics", useDefaultExcludes: false
