@@ -238,8 +238,7 @@ void removeObsoleteDataInStorage(
 
     try
     {
-        // acquire a read lock so that no other threads can drop the `storage`
-        // if storage is already dropped, this will throw exception
+        // Acquire a `drop_lock` so that no other threads can drop the `storage`
         auto storage_lock = storage->lockForShare(getThreadName());
 
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
@@ -254,7 +253,7 @@ void removeObsoleteDataInStorage(
     }
     catch (DB::Exception & e)
     {
-        // We can ignore if storage is already dropped.
+        // We can ignore if the storage is already dropped.
         if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
             throw;
     }

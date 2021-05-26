@@ -54,7 +54,7 @@ static void writeRegionDataToStorage(
                 return true;
         }
 
-        /// Lock throughout decode and write, during which schema must not change.
+        /// Get a structure read lock throughout decode, during which schema must not change.
         TableStructureLockHolder lock;
         try
         {
@@ -62,7 +62,7 @@ static void writeRegionDataToStorage(
         }
         catch (DB::Exception & e)
         {
-            // If the storage is physical dropped (but not removed from `ManagedStorages`) when we want to flsuh raft data into it, consider the write done.
+            // If the storage is physical dropped (but not removed from `ManagedStorages`) when we want to write raft data into it, consider the write done.
             if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
                 return true;
             else
@@ -437,7 +437,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
                 return true;
         }
 
-        /// Lock throughout decode and write, during which schema must not change.
+        /// Get a structure read lock throughout decode, during which schema must not change.
         TableStructureLockHolder lock;
         try
         {
