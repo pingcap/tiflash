@@ -107,6 +107,8 @@ buildRemoteTS(const std::unordered_map<RegionID, const RegionInfo &> & region_re
     {
         context.getQueryContext().getDAGContext()->retry_regions.push_back(it.second);
     }
+#else
+    (void) context;
 #endif
     LOG_DEBUG(log, ({
         std::stringstream ss;
