@@ -138,6 +138,8 @@ struct TiDBConvertToString
                 offsets_to[i] = write_buffer.count();
                 current_offset = next_offset;
             }
+
+            data_to.resize(write_buffer.count());
         }
         else if constexpr (IsDecimal<FromFieldType>)
         {
@@ -167,6 +169,8 @@ struct TiDBConvertToString
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
             }
+
+            data_to.resize(write_buffer.count());
         }
         else if (const auto col_from = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get()))
         {
@@ -210,6 +214,8 @@ struct TiDBConvertToString
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
             }
+
+            data_to.resize(write_buffer.count());
         }
         else
             throw Exception(
@@ -588,8 +594,7 @@ struct TiDBConvertToFloat
     }
 
     template <typename T>
-    static std::enable_if_t<std::is_floating_point_v<T> || std::is_integral_v<T>, Float64> toFloat(
-        const T & value)
+    static std::enable_if_t<std::is_floating_point_v<T> || std::is_integral_v<T>, Float64> toFloat(const T & value)
     {
         return static_cast<Float64>(value);
     }
@@ -711,10 +716,10 @@ struct TiDBConvertToFloat
                     MyDateTime date_time(vec_from[i]);
                     if (type.getFraction() > 0)
                         vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
+                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
                     else
                         vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second);
+                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second);
                 }
             }
         }
@@ -1315,7 +1320,8 @@ struct TiDBConvertToTime
                 {
                     // Cannot cast, fill with NULL
                     (*vec_null_map_to)[i] = 1;
-                    context.getDAGContext()->handleInvalidTime("Invalid time value: '" + toString(vec_from[i]) + "'", Errors::Types::WrongValue);
+                    context.getDAGContext()->handleInvalidTime(
+                        "Invalid time value: '" + toString(vec_from[i]) + "'", Errors::Types::WrongValue);
                 }
             }
         }
