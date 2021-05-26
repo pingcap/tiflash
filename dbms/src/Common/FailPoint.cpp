@@ -111,11 +111,11 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
 #undef M
 #undef SUB_M
 
-#define M(NAME)                                                                                             \
+#define SUB_M(NAME, flags)                                                                                  \
     if (fail_point_name == FailPoints::NAME)                                                                \
     {                                                                                                       \
         /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
-        fiu_enable(FailPoints::NAME, 1, nullptr, FIU_ONETIME);                                              \
+        fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
         fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>());       \
         return;                                                                                             \
     }
@@ -127,6 +127,8 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
 #define M(NAME) SUB_M(NAME, 0)
     APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
 #undef M
+#undef SUB_M
+
     throw Exception("Cannot find fail point " + fail_point_name, ErrorCodes::FAIL_POINT_ERROR);
 }
 

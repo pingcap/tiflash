@@ -500,7 +500,7 @@ void PageStorage::write(WriteBatch && wb)
     try
     {
         wb.setSequence(++write_batch_seq); // Set sequence number to keep ordering between writers.
-        size_t bytes_written = file_to_write->write(wb, edit, rate_limiter);
+        size_t bytes_written = file_to_write->write(wb, edit);
         delegator->addPageFileUsedSize(file_to_write->fileIdLevel(),
                                        bytes_written,
                                        file_to_write->parentPath(),

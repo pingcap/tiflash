@@ -461,7 +461,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
 
 #ifndef NDEBUG
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf, bool enable_failpoint) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), rate_limiter, enable_failpoint);
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), enable_failpoint);
         if (sync_on_write)
             PageUtil::syncFile(file);
     };
