@@ -865,7 +865,7 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
 
     for (auto & segment : all_segments)
     {
-        segmentMergeDelta(*dm_context, segment, TaskRunThread::Thread_FG);
+        segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
     }
 }
 
@@ -1221,7 +1221,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                         .Observe(watch.elapsedSeconds());
             });
 
-            return segmentMergeDelta(*dm_context, segment, TaskRunThread::Thread_FG);
+            return segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
         }
         return {};
     };
@@ -1362,7 +1362,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             break;
         case TaskType::MergeDelta: {
             FAIL_POINT_PAUSE(FailPoints::pause_before_dt_background_delta_merge);
-            left = segmentMergeDelta(*task.dm_context, task.segment, TaskRunThread::Thread_BG_Thread_Pool);
+            left = segmentMergeDelta(*task.dm_context, task.segment, TaskRunThread::BackgroundThreadPool);
             type = ThreadType::BG_MergeDelta;
             // Wake up all waiting threads if failpoint is enabled
             FailPointHelper::disableFailPoint(FailPoints::pause_until_dt_background_delta_merge);
@@ -1531,7 +1531,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             bool finish_gc_on_segment = false;
             if (should_compact)
             {
-                if (segment = segmentMergeDelta(*dm_context, segment, TaskRunThread::Thread_BG_GC); segment)
+                if (segment = segmentMergeDelta(*dm_context, segment, TaskRunThread::BackgroundGCThread); segment)
                 {
                     // Continue to check whether we need to apply more tasks on this segment
                     checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
@@ -1821,13 +1821,13 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext &         dm_context,
 
     switch (run_thread)
     {
-    case TaskRunThread::Thread_BG_Thread_Pool:
+    case TaskRunThread::BackgroundThreadPool:
         GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge).Increment();
         break;
-    case TaskRunThread::Thread_FG:
+    case TaskRunThread::Foreground:
         GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge_fg).Increment();
         break;
-    case TaskRunThread::Thread_BG_GC:
+    case TaskRunThread::BackgroundGCThread:
         GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge_bg_gc).Increment();
         break;
     default:
@@ -1838,15 +1838,15 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext &         dm_context,
     SCOPE_EXIT({
         switch (run_thread)
         {
-        case TaskRunThread::Thread_BG_Thread_Pool:
+        case TaskRunThread::BackgroundThreadPool:
             GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge)
                 .Observe(watch_delta_merge.elapsedSeconds());
             break;
-        case TaskRunThread::Thread_FG:
+        case TaskRunThread::Foreground:
             GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge_fg)
                 .Observe(watch_delta_merge.elapsedSeconds());
             break;
-        case TaskRunThread::Thread_BG_GC:
+        case TaskRunThread::BackgroundGCThread:
             GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge_bg_gc)
                 .Observe(watch_delta_merge.elapsedSeconds());
             break;

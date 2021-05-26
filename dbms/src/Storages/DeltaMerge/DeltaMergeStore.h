@@ -147,97 +147,66 @@ public:
     using SegmentSortedMap = std::map<RowKeyValueRef, SegmentPtr, std::less<>>;
     using SegmentMap       = std::unordered_map<PageId, SegmentPtr>;
 
-#undef APPLY_FOR_ENUM
-#define APPLY_FOR_ENUM(M) \
-    M(Init)               \
-    M(Write)              \
-    M(Read)               \
-    M(BG_Split)           \
-    M(BG_Merge)           \
-    M(BG_MergeDelta)      \
-    M(BG_Compact)         \
-    M(BG_Flush)           \
-    M(BG_GC)
+#undef M_VALUE
+#undef M_TO_STR
+#undef DEF_ENUM
 
-    enum class ThreadType
-    {
-#define M(NAME) NAME,
-        APPLY_FOR_ENUM(M)
-#undef M
-    };
-
-    static std::string toString(ThreadType type)
-    {
-        switch (type)
-        {
-#define M(NAME)            \
-    case ThreadType::NAME: \
-        return #NAME;
-            APPLY_FOR_ENUM(M)
-#undef M
-        default:
-            return "Unknown";
-        }
+#define M_VALUE(ENUM_NAME, VAL) VAL,
+#define M_TO_STR(ENUM_NAME, VAL) \
+    case ENUM_NAME::VAL:         \
+        return #VAL;
+#define DEF_ENUM(ENUM_NAME, APPLY, M1, M2)      \
+    enum class ENUM_NAME                        \
+    {                                           \
+        APPLY(ENUM_NAME, M1)                    \
+    };                                          \
+    static std::string toString(ENUM_NAME type) \
+    {                                           \
+        switch (type)                           \
+        {                                       \
+            APPLY(ENUM_NAME, M2)                \
+        default:                                \
+            return "Unknown";                   \
+        }                                       \
     }
 
 #undef APPLY_FOR_ENUM
-#define APPLY_FOR_ENUM(M) \
-    M(Split)              \
-    M(Merge)              \
-    M(MergeDelta)         \
-    M(Compact)            \
-    M(Flush)              \
-    M(PlaceIndex)
+#define APPLY_FOR_ENUM(E, M) \
+    M(E, Init)               \
+    M(E, Write)              \
+    M(E, Read)               \
+    M(E, BG_Split)           \
+    M(E, BG_Merge)           \
+    M(E, BG_MergeDelta)      \
+    M(E, BG_Compact)         \
+    M(E, BG_Flush)           \
+    M(E, BG_GC)
 
-    enum class TaskType
-    {
-#define M(NAME) NAME,
-        APPLY_FOR_ENUM(M)
-#undef M
-    };
-
-    static std::string toString(TaskType type)
-    {
-        switch (type)
-        {
-#define M(NAME)          \
-    case TaskType::NAME: \
-        return #NAME;
-            APPLY_FOR_ENUM(M)
-#undef M
-        default:
-            return "Unknown";
-        }
-    }
+    DEF_ENUM(ThreadType, APPLY_FOR_ENUM, M_VALUE, M_TO_STR);
 
 #undef APPLY_FOR_ENUM
-#define APPLY_FOR_ENUM(M)    \
-    M(Thread_BG_Thread_Pool) \
-    M(Thread_FG)             \
-    M(Thread_BG_GC)
+#define APPLY_FOR_ENUM(E, M) \
+    M(E, Split)              \
+    M(E, Merge)              \
+    M(E, MergeDelta)         \
+    M(E, Compact)            \
+    M(E, Flush)              \
+    M(E, PlaceIndex)
 
-    enum class TaskRunThread
-    {
-#define M(NAME) NAME,
-        APPLY_FOR_ENUM(M)
-#undef M
-    };
-
-    static std::string toString(TaskRunThread type)
-    {
-        switch (type)
-        {
-#define M(NAME)               \
-    case TaskRunThread::NAME: \
-        return #NAME;
-            APPLY_FOR_ENUM(M)
-#undef M
-        default:
-            return "Unknown";
-        }
-    }
+    DEF_ENUM(TaskType, APPLY_FOR_ENUM, M_VALUE, M_TO_STR);
 
 #undef APPLY_FOR_ENUM
+#define APPLY_FOR_ENUM(E, M)   \
+    M(E, BackgroundThreadPool) \
+    M(E, Foreground)           \
+    M(E, BackgroundGCThread)
+
+    DEF_ENUM(TaskRunThread, APPLY_FOR_ENUM, M_VALUE, M_TO_STR);
+
+#undef APPLY_FOR_ENUM
+#undef M_VALUE
+#undef M_TO_STR
+#undef DEF_ENUM
 
     struct BackgroundTask
     {
