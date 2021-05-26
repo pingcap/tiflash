@@ -73,9 +73,8 @@ def runClosure(label, Closure body) {
 def runTest(label, testPath, tidbBranch) {
     runClosure(label) {
         stage("Unstash") {
-            dir("tics") {
-                unstash 'git-code-tics'
-            }
+            sh "if [ -d 'tics' ]; then rm -rf tics/; fi"
+            unstash 'git-code-tics'
         }
         dir(testPath) {
             stage("Test") {
