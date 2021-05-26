@@ -15,17 +15,36 @@ catchError {
         util.runClosure("wait-for-images") {
             timeout(time: 60, unit: 'MINUTES') {
                 container("docker") {
+                    // TODO hack here to validate tics code cache, remove hack code before pr to merge
+                    // https://github.com/pingcap/tics/pull/1994
+//                    sh  """
+//                        while ! docker pull hub.pingcap.net/tiflash/tics:${params.ghprbActualCommit}; do sleep 60; done
+//                        """
                     sh  """
-                        while ! docker pull hub.pingcap.net/tiflash/tics:${params.ghprbActualCommit}; do sleep 60; done
+                        while ! docker pull hub.pingcap.net/tiflash/tics:cff1f3cb13c995a32cf3cd9bcba917b29a552107; do sleep 60; done
                         """
                 }
             }
         }
     }
 
-    stage("Stash tics code") {
-        dir("tics") {
-            util.checkoutTiCS("${params.ghprbActualCommit}", "${params.ghprbPullId}")
+    node("${GO_BUILD_SLAVE}") {
+        def curws = pwd()
+        dir("/home/jenkins/agent/code-archive") {
+            container("golang") {
+                if(fileExists("/nfs/cache/git/src-tics.tar.gz")){
+                    timeout(5) {
+                        sh """
+                        cp -R /nfs/cache/git/src-tics.tar.gz*  ./
+                        mkdir -p ${curws}/tics
+                        tar -xzf src-tics.tar.gz -C ${curws}/tics --strip-components=1
+                    """
+                    }
+                }
+            }
+            dir("${curws}/tics") {
+                checkoutTiCS("${params.ghprbActualCommit}", "${params.ghprbPullId}")
+            }
         }
         stash includes: "tics/**", name: "git-code-tics", useDefaultExcludes: false
     }
