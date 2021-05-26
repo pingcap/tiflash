@@ -24,10 +24,10 @@ catchError {
     }
 
     stage("Stash tics code") {
-        dir("/home/jenkins/agent/git-code-archive/tics") {
+        dir("git-code-archive/tics") {
             util.checkoutTiCS("${params.ghprbActualCommit}", "${params.ghprbPullId}")
         }
-        stash includes: "/home/jenkins/agent/git-code-archive/tics/**", name: "git-code-tics", useDefaultExcludes: false
+        stash includes: "git-code-archive/tics/**", name: "git-code-tics", useDefaultExcludes: false
     }
 
     parallel (
