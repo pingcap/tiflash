@@ -56,7 +56,7 @@ static void writeRegionDataToStorage(
                 return true;
         }
 
-        /// Lock throughout decode and write, during which schema must not change.
+        /// Get a structure read lock throughout decode, during which schema must not change.
         TableStructureLockHolder lock;
         try
         {
@@ -64,7 +64,7 @@ static void writeRegionDataToStorage(
         }
         catch (DB::Exception & e)
         {
-            // If the storage is physical dropped (but not removed from `ManagedStorages`) when we want to flsuh raft data into it, consider the write done.
+            // If the storage is physical dropped (but not removed from `ManagedStorages`) when we want to write raft data into it, consider the write done.
             if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
                 return true;
             else
@@ -439,7 +439,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
                 return true;
         }
 
-        /// Lock throughout decode and write, during which schema must not change.
+        /// Get a structure read lock throughout decode, during which schema must not change.
         TableStructureLockHolder lock;
         try
         {
@@ -502,7 +502,9 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
             if (storage == nullptr) // Table must have just been GC-ed
                 return true;
         }
-        auto table_lock = storage->lockForShare(getThreadName());
+        // Get a structure read lock. It will throw exception if the table has been dropped,
+        // the caller should handle this situation.
+        auto table_lock = storage->lockStructureForShare(getThreadName());
         is_common_handle = storage->isCommonHandle();
         if (unlikely(storage->engineType() != ::TiDB::StorageEngine::DT))
         {
@@ -611,7 +613,9 @@ Block GenRegionBlockDatawithSchema(const RegionPtr & region,
 
     {
         Stopwatch watch;
-        auto table_lock = dm_storage->lockForShare(getThreadName());
+        // Get a structure read lock. It will throw exception if the table has been
+        // dropped, the caller should handle this situation.
+        auto table_lock = dm_storage->lockStructureForShare(getThreadName());
         // Compare schema_snap with current schema, throw exception if changed.
         auto store = dm_storage->getStore();
         auto cur_schema_snap = store->getStoreColumns();
