@@ -155,7 +155,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
             try
             {
                 auto & context = tmt.getContext();
-                // Acquire lock so that no other threads can drop storage
+                // Acquire `drop_lock` so that no other threads can drop the storage. `alter_lock` is not required.
                 auto table_lock = storage->lockForShare(getThreadName());
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 auto key_range = DM::RowKeyRange::fromRegionRange(
@@ -583,13 +583,13 @@ RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTVi
             auto & context = tmt.getContext();
             try
             {
-                // Acquire lock so that no other threads can drop storage
+                // Acquire `drop_lock` so that no other threads can drop the storage. `alter_lock` is not required.
                 auto table_lock = storage->lockForShare(getThreadName());
-                auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 auto key_range = DM::RowKeyRange::fromRegionRange(
                     region->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
                 // Call `ingestFiles` to ingest external DTFiles.
                 // Note that ingest sst won't remove the data in the key range
+                auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 dm_storage->ingestFiles(key_range, ingest_ids, /*clear_data_in_range=*/false, context.getSettingsRef());
             }
             catch (DB::Exception & e)
