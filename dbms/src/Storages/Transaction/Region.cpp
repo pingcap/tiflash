@@ -655,16 +655,17 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
     };
 
     const auto handle_write_cmd_func = [&]() {
-        auto need_handle_write_cf = false;
+        size_t cmd_write_cf_cnt = 0, cache_written_size = 0;
+        auto ori_cache_size = dataSize();
         for (UInt64 i = 0; i < cmds.len; ++i)
         {
             if (cmds.cmd_cf[i] == ColumnFamilyType::Write)
-                need_handle_write_cf = true;
+                cmd_write_cf_cnt++;
             else
                 handle_by_index_func(i);
         }
 
-        if (need_handle_write_cf)
+        if (cmd_write_cf_cnt)
         {
             for (UInt64 i = 0; i < cmds.len; ++i)
             {
@@ -672,6 +673,9 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
                     handle_by_index_func(i);
             }
         }
+        cache_written_size = dataSize() - ori_cache_size;
+        approx_mem_cache_rows += cmd_write_cf_cnt;
+        approx_mem_cache_bytes += cache_written_size;
     };
 
     {
@@ -772,5 +776,16 @@ const RegionRangeKeys & RegionRaftCommandDelegate::getRange() { return *meta.mak
 UInt64 RegionRaftCommandDelegate::appliedIndex() { return meta.makeRaftCommandDelegate().applyState().applied_index(); }
 metapb::Region Region::getMetaRegion() const { return meta.getMetaRegion(); }
 raft_serverpb::MergeState Region::getMergeState() const { return meta.getMergeState(); }
+
+std::pair<size_t, size_t> Region::getApproxMemCacheInfo() const
+{
+    return {approx_mem_cache_rows.load(std::memory_order_relaxed), approx_mem_cache_bytes.load(std::memory_order_relaxed)};
+}
+
+void Region::cleanApproxMemCacheInfo() const
+{
+    approx_mem_cache_rows = 0;
+    approx_mem_cache_bytes = 0;
+}
 
 } // namespace DB
