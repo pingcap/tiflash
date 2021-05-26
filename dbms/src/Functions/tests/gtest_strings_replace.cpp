@@ -44,10 +44,10 @@ ColumnWithTypeAndName buildDataColumn(
         const String & name,
         const std::vector<String> & data)
 {
-    MutableColumnPtr col = ColumnString::create();
+    auto col = ColumnString::create();
     for (const auto & s : data)
     {
-        col->insert(Field(s.c_str(), s.size()));
+        col->insertData(s.data(), s.size());
     }
     return ColumnWithTypeAndName(std::move(col), std::make_shared<DataTypeString>(), name);
 }
@@ -63,16 +63,12 @@ ColumnWithTypeAndName buildConstColumn(
     return ColumnWithTypeAndName(std::move(col), std::make_shared<DataTypeString>(), name);
 }
 
-std::vector<String> executeReplace(
+std::vector<String> executeReplaceImpl(
         const FunctionBuilderPtr & funcBuilder,
-        const std::vector<String> & rawStrs,
-        const String & needleStr,
-        const String & replacementStr)
+        const ColumnWithTypeAndName & data,
+        const ColumnWithTypeAndName & needle,
+        const ColumnWithTypeAndName & replacement)
 {
-    ColumnWithTypeAndName data = buildDataColumn("test", rawStrs);
-    ColumnWithTypeAndName needle = buildConstColumn("needle", needleStr, rawStrs.size());
-    ColumnWithTypeAndName replacement = buildConstColumn("replacement", replacementStr, rawStrs.size());
-
     Block block;
     block.insert(data);
     block.insert(needle);
@@ -92,6 +88,58 @@ std::vector<String> executeReplace(
     }
     return result;
 }
+
+std::vector<String> executeReplace(
+        const FunctionBuilderPtr & funcBuilder,
+        const std::vector<String> & rawStrs,
+        const String & needleStr,
+        const String & replacementStr)
+{
+    ColumnWithTypeAndName data = buildDataColumn("test", rawStrs);
+    ColumnWithTypeAndName needle = buildConstColumn("needle", needleStr, rawStrs.size());
+    ColumnWithTypeAndName replacement = buildConstColumn("replacement", replacementStr, rawStrs.size());
+
+    return executeReplaceImpl(funcBuilder, data, needle, replacement);
+}
+
+std::vector<String> executeReplace(
+        const FunctionBuilderPtr & funcBuilder,
+        const std::vector<String> & rawStrs,
+        const std::vector<String> & needleStrs,
+        const String & replacementStr)
+{
+    ColumnWithTypeAndName data = buildDataColumn("test", rawStrs);
+    ColumnWithTypeAndName needle = buildDataColumn("needle", needleStrs);
+    ColumnWithTypeAndName replacement = buildConstColumn("replacement", replacementStr, rawStrs.size());
+
+    return executeReplaceImpl(funcBuilder, data, needle, replacement);
+}
+
+std::vector<String> executeReplace(
+        const FunctionBuilderPtr & funcBuilder,
+        const std::vector<String> & rawStrs,
+        const String & needleStr,
+        const std::vector<String> & replacementStrs)
+{
+    ColumnWithTypeAndName data = buildDataColumn("test", rawStrs);
+    ColumnWithTypeAndName needle = buildConstColumn("needle", needleStr, rawStrs.size());
+    ColumnWithTypeAndName replacement = buildDataColumn("replacement", replacementStrs);
+
+    return executeReplaceImpl(funcBuilder, data, needle, replacement);
+}
+
+std::vector<String> executeReplace(
+        const FunctionBuilderPtr & funcBuilder,
+        const std::vector<String> & rawStrs,
+        const std::vector<String> & needleStrs,
+        const std::vector<String> & replacementStrs)
+{
+    ColumnWithTypeAndName data = buildDataColumn("test", rawStrs);
+    ColumnWithTypeAndName needle = buildDataColumn("needle", needleStrs);
+    ColumnWithTypeAndName replacement = buildDataColumn("replacement", replacementStrs);
+
+    return executeReplaceImpl(funcBuilder, data, needle, replacement);
+}
 } // namespace
 
 
@@ -105,9 +153,16 @@ TEST_F(StringReplace, string_replace_all_unit_Test)
     ASSERT_TRUE(!bp->isVariadic());
     EXPECT_EQ(bp->getNumberOfArguments(), static_cast<size_t>(3));
 
-    std::vector<String> data{"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"};
-    std::vector<String> actual = executeReplace(bp, data, " ", "");
-    std::vector<String> expect{"hello", "hello", "hello", "", "hello,world"};
+    std::vector<String> data;
+    std::vector<String> needle;
+    std::vector<String> replacement;
+    std::vector<String> expect;
+    std::vector<String> actual;
+
+    /// const needle and const replacement
+    data = {"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"};
+    actual = executeReplace(bp, data, " ", "");
+    expect = {"hello", "hello", "hello", "", "hello,world"};
     EXPECT_EQ(expect, actual);
 
     data = {"", "w", "ww", " www ", "w w w"};
@@ -123,6 +178,34 @@ TEST_F(StringReplace, string_replace_all_unit_Test)
     data = {"", "w", "ww", " www ", "w w w"};
     actual = executeReplace(bp, data, "", " ");
     EXPECT_EQ(data, actual);
+
+    /// non-const needle and const replacement
+    data = {"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"};
+    needle = {" ", "h", "", "h", ","};
+    actual = executeReplace(bp, data, needle, "");
+    expect = {"hello", "    e llo", "hello    ", "     ", "hello world"};
+    EXPECT_EQ(expect, actual);
+
+    data = {"", "w", "ww", " www ", "w w w"};
+    needle = {" ", "w", "w", "www", " w"};
+    actual = executeReplace(bp, data, needle, "ww");
+    expect = {"", "ww", "wwww", " ww ", "wwwww"};
+    EXPECT_EQ(expect, actual);
+
+    /// const needle and non-const replacement
+    data = {"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"};
+    replacement = {"", "x", "xx", " ", ","};
+    actual = executeReplace(bp, data, " ", replacement);
+    expect = {"hello", "xxxhxexllo", "helloxxxxxxxx", "     ", "hello,,world"};
+    EXPECT_EQ(expect, actual);
+
+    /// non-const needle and non-const replacement
+    data = {"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"};
+    needle = {" ", "h", "", "h", ","};
+    replacement = {"", "x", "xx", " ", ","};
+    actual = executeReplace(bp, data, needle, replacement);
+    expect = {"hello", "   x e llo", "hello    ", "     ", "hello, world"};
+    EXPECT_EQ(expect, actual);
 }
 
 TEST_F(StringReplace, string_replace_all_utf_8_unit_Test)
@@ -135,14 +218,49 @@ TEST_F(StringReplace, string_replace_all_utf_8_unit_Test)
     ASSERT_TRUE(!bp->isVariadic());
     EXPECT_EQ(bp->getNumberOfArguments(), static_cast<size_t>(3));
 
-    std::vector<String> data{"  你好   ", "   你 好", "你好 你好", "你 好     ", "你不好"};
-    std::vector<String> actual = executeReplace(bp, data, "你好", "");
-    std::vector<String> expect{"     ", "   你 好", " ", "你 好     ", "你不好"};
+    std::vector<String> data;
+    std::vector<String> needle;
+    std::vector<String> replacement;
+    std::vector<String> expect;
+    std::vector<String> actual;
+
+    /// const needle and const replacement
+    data = {"  你好   ", "   你 好", "你好 你好", "你 好     ", "你不好"};
+    actual = executeReplace(bp, data, "你好", "");
+    expect = {"     ", "   你 好", " ", "你 好     ", "你不好"};
     EXPECT_EQ(expect, actual);
 
     data = {"  你好   ", "   你 好", "你好 你好", "你 好     ", "你不好"};
     actual = executeReplace(bp, data, "你", "您");
     expect = {"  您好   ", "   您 好", "您好 您好", "您 好     ", "您不好"};
+    EXPECT_EQ(expect, actual);
+
+    /// non-const needle and const replacement
+    data = {"  你好   ", "   你 好", "你好 你好", "你 好     ", "你不好"};
+    needle = {"", " ", "你好", " 你", "你好"};
+    actual = executeReplace(bp, data, needle, "");
+    expect = {"  你好   ", "你好", " ", "你 好     ", "你不好"};
+    EXPECT_EQ(expect, actual);
+
+    data = {"  你好   ", "   你 好", "你好 你好", "你 好     ", "你不好"};
+    needle = {" ", " 你", "你好", " 你", "你好"};
+    actual = executeReplace(bp, data, needle, "x");
+    expect = {"xx你好xxx", "  x 好", "x x", "你 好     ", "你不好"};
+    EXPECT_EQ(expect, actual);
+
+    /// const needle and non-const replacement
+    data = {"  你好   ", "   你 好", "你好 你好", "你 好     ", "你不好"};
+    replacement = {"", " 你", "你好", " 你", "你好"};
+    actual = executeReplace(bp, data, "你", replacement);
+    expect = {"  好   ", "    你 好", "你好好 你好好", " 你 好     ", "你好不好"};
+    EXPECT_EQ(expect, actual);
+
+    /// non-const needle and non-const replacement
+    data = {"  你好   ", "   你 好", "你好 你好", "你 好     ", "你不好"};
+    needle = {"", " ", "你好", "你 ", "你好"};
+    replacement = {" ", " 你", "好", " 你", "你好"};
+    actual = executeReplace(bp, data, needle, replacement);
+    expect = {"  你好   ", " 你 你 你你 你好", "好 好", " 你好     ", "你不好"};
     EXPECT_EQ(expect, actual);
 }
 

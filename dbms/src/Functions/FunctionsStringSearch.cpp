@@ -29,6 +29,19 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
 }
 
+namespace
+{
+/// Same as ColumnString's private offsetAt and sizeAt.
+size_t offsetAt(const ColumnString::Offsets & offsets, size_t i)
+{
+    return i == 0 ? 0 : offsets[i - 1];
+}
+
+size_t sizeAt(const ColumnString::Offsets & offsets, size_t i)
+{
+    return i == 0 ? offsets[0] : (offsets[i] - offsets[i - 1]);
+}
+} // namespace
 
 /** Implementation details for functions of 'position' family depending on ASCII/UTF8 and case sensitiveness.
   */
@@ -658,6 +671,9 @@ struct ExtractImpl
 template <bool replace_one = false>
 struct ReplaceRegexpImpl
 {
+    static constexpr bool support_non_const_needle = false;
+    static constexpr bool support_non_const_replacement = false;
+
     /// Sequence of instructions, describing how to get resulting string.
     /// Each element is either:
     /// - substitution (in that case first element of pair is their number and second element is empty)
@@ -802,29 +818,6 @@ struct ReplaceRegexpImpl
         }
     }
 
-    /// fallback when needle or replacement is variable.
-    static void vector(
-        const ColumnString::Chars_t &,
-        const ColumnString::Offsets &,
-        const IColumn &,
-        const IColumn &,
-        ColumnString::Chars_t &,
-        ColumnString::Offsets &)
-    {
-        throw Exception("Non-const needle or replacement is not supported.", ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-    static void vector_fixed(
-        const ColumnString::Chars_t &,
-        size_t,
-        const IColumn &,
-        const IColumn &,
-        ColumnString::Chars_t &,
-        ColumnString::Offsets &)
-    {
-        throw Exception("Non-const needle or replacement is not supported.", ErrorCodes::NOT_IMPLEMENTED);
-    }
-
     static void vector_fixed(const ColumnString::Chars_t & data,
         size_t n,
         const std::string & needle,
@@ -859,6 +852,9 @@ struct ReplaceRegexpImpl
 template <bool replace_one = false>
 struct ReplaceStringImpl
 {
+    static constexpr bool support_non_const_needle = true;
+    static constexpr bool support_non_const_replacement = true;
+
     static void vector(const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
         const std::string & needle,
@@ -932,12 +928,161 @@ struct ReplaceStringImpl
         }
     }
 
-    /// fallback when needle or replacement is variable.
-    static void vector(
+    static void vector_non_const_needle(
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
-        const IColumn & needleCol,
-        const IColumn & replacementCol,
+        const ColumnString::Chars_t & needle_chars,
+        const ColumnString::Offsets & needle_offsets,
+        const std::string & replacement,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        res_offsets.resize(offsets.size());
+
+        ColumnString::Offset res_offset = 0;
+        
+        for (size_t i = 0; i < offsets.size(); ++i)
+        {
+            auto data_offset = offsetAt(offsets, i);
+            auto data_size = sizeAt(offsets, i);
+
+            auto needle_offset = offsetAt(needle_offsets, i);
+            auto needle_size = sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+
+            const UInt8 * begin = &data[data_offset];
+            const UInt8 * pos = begin;
+            const UInt8 * end = pos + data_size;
+
+            if (needle_size == 0)
+            {
+                /// Copy the whole data to res without changing
+                res_data.resize(res_data.size() + data_size);
+                memcpy(&res_data[res_offset], begin, data_size);
+                res_offset += data_size;
+                res_offsets[i] = res_offset;
+                continue;
+            }
+
+            Volnitsky searcher(reinterpret_cast<const char *>(&needle_chars[needle_offset]), needle_size, data_size);
+            while (pos < end)
+            {
+                const UInt8 * match = searcher.search(pos, end - pos);
+
+                /// Copy the data without changing.
+                res_data.resize(res_data.size() + (match - pos));
+                memcpy(&res_data[res_offset], pos, match - pos);
+                res_offset += match - pos;
+
+                if (match == end)
+                {
+                    /// It's time to stop.
+                    break;
+                }
+
+                res_data.resize(res_data.size() + replacement.size());
+                memcpy(&res_data[res_offset], replacement.data(), replacement.size());
+                res_offset += replacement.size();
+                pos = match + needle_size;
+
+                if (replace_one)
+                {
+                    /// Copy the rest of data and stop.
+                    res_data.resize(res_data.size() + (end - pos));
+                    memcpy(&res_data[res_offset], pos, (end - pos));
+                    res_offset += (end - pos);
+                    break;
+                }
+            }
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    static void vector_non_const_replacement(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const std::string & needle,
+        const ColumnString::Chars_t & replacement_chars,
+        const ColumnString::Offsets & replacement_offsets,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        const UInt8 * begin = &data[0];
+        const UInt8 * pos = begin;
+        const UInt8 * end = pos + data.size();
+
+        ColumnString::Offset res_offset = 0;
+        res_data.reserve(data.size());
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        /// The current index in the array of strings.
+        size_t i = 0;
+
+        Volnitsky searcher(needle.data(), needle.size(), end - pos);
+
+        /// We will search for the next occurrence in all rows at once.
+        while (pos < end)
+        {
+            const UInt8 * match = searcher.search(pos, end - pos);
+
+            /// Copy the data without changing
+            res_data.resize(res_data.size() + (match - pos));
+            memcpy(&res_data[res_offset], pos, match - pos);
+
+            /// Determine which index it belongs to.
+            while (i < offsets.size() && begin + offsets[i] <= match)
+            {
+                res_offsets[i] = res_offset + ((begin + offsets[i]) - pos);
+                ++i;
+            }
+            res_offset += (match - pos);
+
+            /// If you have reached the end, it's time to stop
+            if (i == offsets.size())
+                break;
+
+            /// Is it true that this line no longer needs to perform transformations.
+            bool can_finish_current_string = false;
+
+            auto replacement_offset = offsetAt(replacement_offsets, i);
+            auto replacement_size = sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+
+            /// We check that the entry does not go through the boundaries of strings.
+            if (match + needle.size() < begin + offsets[i])
+            {
+                res_data.resize(res_data.size() + replacement_size);
+                memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
+                res_offset += replacement_size;
+                pos = match + needle.size();
+                if (replace_one)
+                    can_finish_current_string = true;
+            }
+            else
+            {
+                pos = match;
+                can_finish_current_string = true;
+            }
+
+            if (can_finish_current_string)
+            {
+                res_data.resize(res_data.size() + (begin + offsets[i] - pos));
+                memcpy(&res_data[res_offset], pos, (begin + offsets[i] - pos));
+                res_offset += (begin + offsets[i] - pos);
+                res_offsets[i] = res_offset;
+                pos = begin + offsets[i];
+                ++i;
+            }
+        }
+    }
+
+    static void vector_non_const_needle_replacement(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const ColumnString::Chars_t & needle_chars,
+        const ColumnString::Offsets & needle_offsets,
+        const ColumnString::Chars_t & replacement_chars,
+        const ColumnString::Offsets & replacement_offsets,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -947,47 +1092,52 @@ struct ReplaceStringImpl
 
         for (size_t i = 0; i < offsets.size(); ++i)
         {
-            auto offset = i == 0 ? 0 : offsets[i - 1];
-            auto size = i == 0 ? offsets[0] : (offsets[i] - offsets[i - 1]);
+            auto data_offset = offsetAt(offsets, i);
+            auto data_size = sizeAt(offsets, i);
 
-            const UInt8 * begin = &data[offset];
+            auto needle_offset = offsetAt(needle_offsets, i);
+            auto needle_size = sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+
+            auto replacement_offset = offsetAt(replacement_offsets, i);
+            auto replacement_size = sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+
+            const UInt8 * begin = &data[data_offset];
             const UInt8 * pos = begin;
-            const UInt8 * end = pos + size;
+            const UInt8 * end = pos + data_size;
 
-            auto needle = needleCol[i].safeGet<String>();
-            auto replacement = replacementCol[i].safeGet<String>();
-
-            if (needle.empty())
+            if (needle_size == 0)
             {
-                res_data.resize(res_data.size() + size);
-                memcpy(&res_data[res_offset], begin, size);
-                res_offset += size;
+                res_data.resize(res_data.size() + data_size);
+                memcpy(&res_data[res_offset], begin, data_size);
+                res_offset += data_size;
                 res_offsets[i] = res_offset;
                 continue;
             }
 
-            Volnitsky searcher(needle.data(), needle.size(), size);
+            Volnitsky searcher(reinterpret_cast<const char *>(&needle_chars[needle_offset]), needle_size, data_size);
             while (pos < end)
             {
                 const UInt8 * match = searcher.search(pos, end - pos);
 
-                /// Copy the data without changing
+                /// Copy the data without changing.
                 res_data.resize(res_data.size() + (match - pos));
                 memcpy(&res_data[res_offset], pos, match - pos);
                 res_offset += match - pos;
 
                 if (match == end)
                 {
+                    /// It's time to stop.
                     break;
                 }
 
-                res_data.resize(res_data.size() + replacement.size());
-                memcpy(&res_data[res_offset], replacement.data(), replacement.size());
-                res_offset += replacement.size();
-                pos = match + needle.size();
+                res_data.resize(res_data.size() + replacement_size);
+                memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
+                res_offset += replacement_size;
+                pos = match + needle_size;
 
                 if (replace_one)
                 {
+                    /// Copy the rest of data and stop.
                     res_data.resize(res_data.size() + (end - pos));
                     memcpy(&res_data[res_offset], pos, (end - pos));
                     res_offset += (end - pos);
@@ -1081,13 +1231,12 @@ struct ReplaceStringImpl
         }
     }
 
-    /// Note: this function converts fixed-length strings to variable-length strings
-    ///       and each variable-length string should ends with zero byte.
-    static void vector_fixed(
+    static void vector_fixed_non_const_needle(
         const ColumnString::Chars_t & data,
         size_t n,
-        const IColumn & needleCol,
-        const IColumn & replacementCol,
+        const ColumnString::Chars_t & needle_chars,
+        const ColumnString::Offsets & needle_offsets,
+        const std::string & replacement,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -1113,15 +1262,15 @@ struct ReplaceStringImpl
         pos = end; \
     } while (false)
 
-            auto needle = needleCol[i].safeGet<String>();
-            auto replacement = replacementCol[i].safeGet<String>();
-            if (needle.empty())
+            auto needle_offset = offsetAt(needle_offsets, i);
+            auto needle_size = sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+            if (needle_size == 0)
             {
                 COPY_REST_OF_CURRENT_STRING();
                 continue;
             }
 
-            Volnitsky searcher(needle.data(), needle.size(), n);
+            Volnitsky searcher(reinterpret_cast<const char *>(&needle_chars[needle_offset]), needle_size, n);
             while (pos < end)
             {
                 const UInt8 * match = searcher.search(pos, end - pos);
@@ -1140,7 +1289,168 @@ struct ReplaceStringImpl
                 res_data.resize(res_data.size() + replacement.size());
                 memcpy(&res_data[res_offset], replacement.data(), replacement.size());
                 res_offset += replacement.size();
+                pos = match + needle_size;
+
+                if (replace_one)
+                {
+                    COPY_REST_OF_CURRENT_STRING();
+                    break;
+                }
+            }
+#undef COPY_REST_OF_CURRENT_STRING
+        }
+    }
+
+    static void vector_fixed_non_const_replacement(
+        const ColumnString::Chars_t & data,
+        size_t n,
+        const std::string & needle,
+        const ColumnString::Chars_t & replacement_chars,
+        const ColumnString::Offsets & replacement_offsets,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        const UInt8 * begin = &data[0];
+        const UInt8 * pos = begin;
+        const UInt8 * end = pos + data.size();
+
+        ColumnString::Offset res_offset = 0;
+        size_t count = data.size() / n;
+        res_data.reserve(data.size());
+        res_offsets.resize(count);
+
+        /// The current index in the string array.
+        size_t i = 0;
+
+        Volnitsky searcher(needle.data(), needle.size(), end - pos);
+
+        /// We will search for the next occurrence in all rows at once.
+        while (pos < end)
+        {
+            const UInt8 * match = searcher.search(pos, end - pos);
+
+#define COPY_REST_OF_CURRENT_STRING() \
+    do { \
+        const size_t len = begin + n * (i + 1) - pos; \
+        res_data.resize(res_data.size() + len + 1); \
+        memcpy(&res_data[res_offset], pos, len); \
+        res_offset += len; \
+        res_data[res_offset++] = 0; \
+        res_offsets[i] = res_offset; \
+        pos = begin + n * (i + 1); \
+        ++i; \
+    } while (false)
+
+            /// Copy skipped strings without any changes but
+            /// add zero byte to the end of each string.
+            while (i < count && begin + n * (i + 1) <= match)
+            {
+                COPY_REST_OF_CURRENT_STRING();
+            }
+
+            /// If you have reached the end, it's time to stop
+            if (i == count)
+                break;
+
+            /// Copy unchanged part of current string.
+            res_data.resize(res_data.size() + (match - pos));
+            memcpy(&res_data[res_offset], pos, match - pos);
+            res_offset += (match - pos);
+
+            /// Is it true that this line no longer needs to perform conversions.
+            bool can_finish_current_string = false;
+
+            /// We check that the entry does not pass through the boundaries of strings.
+            if (match + needle.size() <= begin + n * (i + 1))
+            {
+                auto replacement_offset = offsetAt(replacement_offsets, i);
+                auto replacement_size = sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+
+                res_data.resize(res_data.size() + replacement_size);
+                memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
+                res_offset += replacement_size;
                 pos = match + needle.size();
+                if (replace_one || pos == begin + n * (i + 1))
+                    can_finish_current_string = true;
+            }
+            else
+            {
+                pos = match;
+                can_finish_current_string = true;
+            }
+
+            if (can_finish_current_string)
+            {
+                COPY_REST_OF_CURRENT_STRING();
+            }
+#undef COPY_REST_OF_CURRENT_STRING
+        }
+    }
+
+    static void vector_fixed_non_const_needle_replacement(
+        const ColumnString::Chars_t & data,
+        size_t n,
+        const ColumnString::Chars_t & needle_chars,
+        const ColumnString::Offsets & needle_offsets,
+        const ColumnString::Chars_t & replacement_chars,
+        const ColumnString::Offsets & replacement_offsets,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t count = data.size() / n;
+        res_data.reserve(data.size());
+        res_offsets.resize(count);
+        ColumnString::Offset res_offset = 0;
+
+        for (size_t i = 0; i < count; ++i)
+        {
+            const UInt8 * begin = &data[i * n];
+            const UInt8 * pos = begin;
+            const UInt8 * end = pos + n;
+
+#define COPY_REST_OF_CURRENT_STRING() \
+    do { \
+        const size_t len = end - pos; \
+        res_data.resize(res_data.size() + len + 1); \
+        memcpy(&res_data[res_offset], pos, len); \
+        res_offset += len; \
+        res_data[res_offset++] = 0; \
+        res_offsets[i] = res_offset; \
+        pos = end; \
+    } while (false)
+
+            auto needle_offset = offsetAt(needle_offsets, i);
+            auto needle_size = sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+
+            auto replacement_offset = offsetAt(replacement_offsets, i);
+            auto replacement_size = sizeAt(replacement_offsets, i);
+
+            if (needle_size == 0)
+            {
+                COPY_REST_OF_CURRENT_STRING();
+                continue;
+            }
+
+            Volnitsky searcher(reinterpret_cast<const char *>(&needle_chars[needle_offset]), needle_size, n);
+            while (pos < end)
+            {
+                const UInt8 * match = searcher.search(pos, end - pos);
+
+                if (match == end)
+                {
+                    COPY_REST_OF_CURRENT_STRING();
+                    break;
+                }
+
+                /// Copy the data without changing
+                res_data.resize(res_data.size() + (match - pos));
+                memcpy(&res_data[res_offset], pos, match - pos);
+                res_offset += match - pos;
+
+                res_data.resize(res_data.size() + replacement_size);
+                memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
+                res_offset += replacement_size;
+                pos = match + needle_size;
 
                 if (replace_one)
                 {
@@ -1222,64 +1532,173 @@ public:
         const ColumnPtr & column_src = block.getByPosition(arguments[0]).column;
         const ColumnPtr & column_needle = block.getByPosition(arguments[1]).column;
         const ColumnPtr & column_replacement = block.getByPosition(arguments[2]).column;
+        ColumnWithTypeAndName & column_result = block.getByPosition(result);
 
-        if (!column_needle->isColumnConst() || !column_replacement->isColumnConst())
+        bool needle_const = column_needle->isColumnConst();
+        bool replacement_const = column_replacement->isColumnConst();
+
+        if (needle_const && replacement_const)
         {
-            // fallback to slow path, search and replace for each row
+            executeImpl(column_src, column_needle, column_replacement, column_result);
+        }
+        else if (needle_const)
+        {
+            executeImplNonConstReplacement(column_src, column_needle, column_replacement, column_result);
+        }
+        else if (replacement_const)
+        {
+            executeImplNonConstNeedle(column_src, column_needle, column_replacement, column_result);
+        }
+        else
+        {
+            executeImplNonConstNeedleReplacement(column_src, column_needle, column_replacement, column_result);
+        }
+    }
+private:
+    void executeImpl(
+        const ColumnPtr & column_src,
+        const ColumnPtr & column_needle,
+        const ColumnPtr & column_replacement,
+        ColumnWithTypeAndName & column_result)
+    {
+        const ColumnConst * c1_const = typeid_cast<const ColumnConst *>(column_needle.get());
+        const ColumnConst * c2_const = typeid_cast<const ColumnConst *>(column_replacement.get());
+        String needle = c1_const->getValue<String>();
+        String replacement = c2_const->getValue<String>();
+
+        if (needle.size() == 0)
+        {
+            /// needle may be empty string('') or NULL. 
+            ///
+            /// Due to issue#1729, a NULL needle in a DAG request will not be treated as NULL and
+            /// automatically handled by PreparedFunctionImpl::defaultImplementationForNulls.
+            ///
+            /// Just return the raw strings in such case.
+            /// The substitution of NULL will be taken by upper function (see wrapInNullable).
+            column_result.column = column_src;
+            return;
+        }
+
+        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
+        {
+            auto col_res = ColumnString::create();
+            Impl::vector(col->getChars(), col->getOffsets(), needle, replacement, col_res->getChars(), col_res->getOffsets());
+            column_result.column = std::move(col_res);
+        }
+        else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
+        {
+            auto col_res = ColumnString::create();
+            Impl::vector_fixed(col->getChars(), col->getN(), needle, replacement, col_res->getChars(), col_res->getOffsets());
+            column_result.column = std::move(col_res);
+        }
+        else
+            throw Exception(
+                "Illegal column " + column_src->getName() + " of first argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+    void executeImplNonConstNeedle(
+        const ColumnPtr & column_src,
+        const ColumnPtr & column_needle,
+        const ColumnPtr & column_replacement,
+        ColumnWithTypeAndName & column_result)
+    {
+        if constexpr (Impl::support_non_const_needle)
+        {
+            const ColumnString * col_needle = typeid_cast<const ColumnString *>(column_needle.get());
+            const ColumnConst * col_replacement_const = typeid_cast<const ColumnConst *>(column_replacement.get());
+            String replacement = col_replacement_const->getValue<String>();
+
             if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
-                Impl::vector(col->getChars(), col->getOffsets(), *column_needle, *column_replacement, col_res->getChars(), col_res->getOffsets());
-                block.getByPosition(result).column = std::move(col_res);
+                Impl::vector_non_const_needle(col->getChars(), col->getOffsets(), col_needle->getChars(), col_needle->getOffsets(), replacement, col_res->getChars(), col_res->getOffsets());
+                column_result.column = std::move(col_res);
             }
             else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
-                Impl::vector_fixed(col->getChars(), col->getN(), *column_needle, *column_replacement, col_res->getChars(), col_res->getOffsets());
-                block.getByPosition(result).column = std::move(col_res);
+                Impl::vector_fixed_non_const_needle(col->getChars(), col->getN(), col_needle->getChars(), col_needle->getOffsets(), replacement, col_res->getChars(), col_res->getOffsets());
+                column_result.column = std::move(col_res);
             }
             else
                 throw Exception(
-                    "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
+                    "Illegal column " + column_src->getName() + " of first argument of function " + getName(),
                     ErrorCodes::ILLEGAL_COLUMN);
         }
         else
         {
-            const ColumnConst * c1_const = typeid_cast<const ColumnConst *>(column_needle.get());
-            const ColumnConst * c2_const = typeid_cast<const ColumnConst *>(column_replacement.get());
-            String needle = c1_const->getValue<String>();
-            String replacement = c2_const->getValue<String>();
+            throw Exception("Length of the second argument of function replace must be greater than 0.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        }
+    }
 
-            if (needle.size() == 0)
-            {
-                /// needle may be empty string('') or NULL. 
-                ///
-                /// Due to issue#1729, a NULL needle in a DAG request will not be treated as NULL and
-                /// automatically handled by PreparedFunctionImpl::defaultImplementationForNulls.
-                ///
-                /// Just return the raw strings in such case.
-                /// The substitution of NULL will be taken by upper function (see wrapInNullable).
-                block.getByPosition(result).column = column_src;
-                return;
-            }
+    void executeImplNonConstReplacement(
+        const ColumnPtr & column_src,
+        const ColumnPtr & column_needle,
+        const ColumnPtr & column_replacement,
+        ColumnWithTypeAndName & column_result)
+    {
+        if constexpr (Impl::support_non_const_replacement)
+        {
+            const ColumnConst * col_needle_const = typeid_cast<const ColumnConst *>(column_needle.get());
+            String needle = col_needle_const->getValue<String>();
+            const ColumnString * col_replacement = typeid_cast<const ColumnString *>(column_replacement.get());
 
             if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
-                Impl::vector(col->getChars(), col->getOffsets(), needle, replacement, col_res->getChars(), col_res->getOffsets());
-                block.getByPosition(result).column = std::move(col_res);
+                Impl::vector_non_const_replacement(col->getChars(), col->getOffsets(), needle, col_replacement->getChars(), col_replacement->getOffsets(), col_res->getChars(), col_res->getOffsets());
+                column_result.column = std::move(col_res);
             }
             else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
-                Impl::vector_fixed(col->getChars(), col->getN(), needle, replacement, col_res->getChars(), col_res->getOffsets());
-                block.getByPosition(result).column = std::move(col_res);
+                Impl::vector_fixed_non_const_replacement(col->getChars(), col->getN(), needle, col_replacement->getChars(), col_replacement->getOffsets(), col_res->getChars(), col_res->getOffsets());
+                column_result.column = std::move(col_res);
             }
             else
                 throw Exception(
-                    "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
+                    "Illegal column " + column_src->getName() + " of first argument of function " + getName(),
                     ErrorCodes::ILLEGAL_COLUMN);
-        } 
+        }
+        else
+        {
+            throw Exception("Length of the third argument of function replace must be greater than 0.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        }
+    }
+
+    void executeImplNonConstNeedleReplacement(
+        const ColumnPtr & column_src,
+        const ColumnPtr & column_needle,
+        const ColumnPtr & column_replacement,
+        ColumnWithTypeAndName & column_result)
+    {
+        if constexpr (Impl::support_non_const_needle && Impl::support_non_const_replacement)
+        {
+            const ColumnString * col_needle = typeid_cast<const ColumnString *>(column_needle.get());
+            const ColumnString * col_replacement = typeid_cast<const ColumnString *>(column_replacement.get());
+
+            if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
+            {
+                auto col_res = ColumnString::create();
+                Impl::vector_non_const_needle_replacement(col->getChars(), col->getOffsets(), col_needle->getChars(), col_needle->getOffsets(), col_replacement->getChars(), col_replacement->getOffsets(), col_res->getChars(), col_res->getOffsets());
+                column_result.column = std::move(col_res);
+            }
+            else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
+            {
+                auto col_res = ColumnString::create();
+                Impl::vector_fixed_non_const_needle_replacement(col->getChars(), col->getN(), col_needle->getChars(), col_needle->getOffsets(), col_replacement->getChars(), col_replacement->getOffsets(), col_res->getChars(), col_res->getOffsets());
+                column_result.column = std::move(col_res);
+            }
+            else
+                throw Exception(
+                    "Illegal column " + column_src->getName() + " of first argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_COLUMN);
+        }
+        else
+        {
+            throw Exception("Length of the third argument of function replace must be greater than 0.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        }
     }
 };
 
