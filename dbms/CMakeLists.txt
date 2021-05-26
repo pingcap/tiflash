@@ -178,6 +178,7 @@ target_link_libraries (dbms
     kvproto
     kv_client
     tipb
+    dtpb
     ${Protobuf_LIBRARIES}
     gRPC::grpc++_unsecure
     ${CURL_LIBRARIES}

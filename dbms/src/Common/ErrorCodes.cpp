@@ -390,6 +390,7 @@ namespace ErrorCodes
     extern const int PAGE_SIZE_NOT_MATCH = 9006;
     extern const int ILLFORMED_PAGE_NAME = 9007;
     extern const int ILLFORMAT_RAFT_ROW = 9008;
+    extern const int REGION_DATA_SCHEMA_UPDATED = 9009;
 
     extern const int LOCK_EXCEPTION = 10000;
     extern const int VERSION_ERROR = 10001;
@@ -404,6 +405,8 @@ namespace ErrorCodes
     extern const int OVERFLOW_ERROR = 10010;
     extern const int DIVIDED_BY_ZERO = 10011;
     extern const int INVALID_TIME = 10012;
+    extern const int DEADLOCK_AVOIDED = 10013;
+    extern const int PTHREAD_ERROR = 10014;
 }
 
 }

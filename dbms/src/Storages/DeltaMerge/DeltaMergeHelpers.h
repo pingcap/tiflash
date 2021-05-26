@@ -207,7 +207,7 @@ inline bool hasColumn(const ColumnDefines & columns, const ColId & col_id)
 }
 
 template <bool check_default_value = false>
-inline bool checkSchema(const Block & a, const Block & b)
+inline bool isSameSchema(const Block & a, const Block & b)
 {
     if (a.columns() != b.columns())
         return false;

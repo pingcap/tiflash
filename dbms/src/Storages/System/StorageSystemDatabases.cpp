@@ -8,8 +8,8 @@
 #include <Interpreters/Context.h>
 #include <Storages/System/StorageSystemDatabases.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
-#include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/Types.h>
 
 
 namespace DB
@@ -23,6 +23,7 @@ StorageSystemDatabases::StorageSystemDatabases(const std::string & name_) : name
         {"tidb_name", std::make_shared<DataTypeString>()},
         {"id", std::make_shared<DataTypeInt64>()},
         {"engine", std::make_shared<DataTypeString>()},
+        {"is_tombstone", std::make_shared<DataTypeUInt64>()},
         {"data_path", std::make_shared<DataTypeString>()},
         {"metadata_path", std::make_shared<DataTypeString>()},
     }));
@@ -46,24 +47,25 @@ BlockInputStreams StorageSystemDatabases::read(const Names & column_names,
     auto databases = context.getDatabases();
     for (const auto & database : databases)
     {
-        const DatabaseTiFlash * db_tiflash = typeid_cast<DatabaseTiFlash *>(database.second.get());
-
         size_t j = 0;
         res_columns[j++]->insert(database.first);
 
         String tidb_db_name;
         DatabaseID database_id = -1;
-        if (db_tiflash)
+        Timestamp tombstone = 0;
+        if (const DatabaseTiFlash * db_tiflash = typeid_cast<DatabaseTiFlash *>(database.second.get()); db_tiflash)
         {
             auto & db_info = db_tiflash->getDatabaseInfo();
             tidb_db_name = mapper.displayDatabaseName(db_info);
             database_id = db_info.id;
+            tombstone = db_tiflash->getTombstone();
         }
 
         res_columns[j++]->insert(tidb_db_name);
         res_columns[j++]->insert(Int64(database_id));
 
         res_columns[j++]->insert(database.second->getEngineName());
+        res_columns[j++]->insert((UInt64)tombstone);
         res_columns[j++]->insert(database.second->getDataPath());
         res_columns[j++]->insert(database.second->getMetadataPath());
     }

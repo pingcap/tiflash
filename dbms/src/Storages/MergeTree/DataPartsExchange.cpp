@@ -77,7 +77,7 @@ void Service::processQuery(const Poco::Net::HTMLForm & params, ReadBuffer & /*bo
 
     try
     {
-        auto storage_lock = owned_storage->lockStructure(false, __PRETTY_FUNCTION__);
+        auto storage_lock = owned_storage->lockStructureForShare(RWLock::NO_QUERY);
 
         MergeTreeData::DataPartPtr part = findPart(part_name);
 
