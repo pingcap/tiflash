@@ -703,7 +703,8 @@ struct TiDBConvertToFloat
             for (size_t i = 0; i < size; ++i)
             {
                 auto & field = (*col_from)[i].template safeGet<DecimalField<FromFieldType>>();
-                vec_to[i] = toFloat(field, need_truncate, shift, max_f, context);
+                String str_value = field.toString();
+                vec_to[i] = strToFloat(StringRef(str_value), need_truncate, shift, max_f, context);
             }
         }
         else if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime> || std::is_same_v<FromDataType, DataTypeMyDate>)

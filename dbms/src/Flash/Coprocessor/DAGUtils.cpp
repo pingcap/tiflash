@@ -523,8 +523,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastRealAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastRealAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastDecimalAsInt, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastDecimalAsReal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastDecimalAsInt, "tidb_cast"}, {tipb::ScalarFuncSig::CastDecimalAsReal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastDecimalAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastDecimalAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastDecimalAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsDuration, "cast"},
