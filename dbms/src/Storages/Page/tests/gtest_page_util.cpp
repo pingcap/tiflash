@@ -18,15 +18,11 @@ TEST(PageUtils_test, ReadWriteFile)
     WritableFilePtr file = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
 
     std::string data_to_write = "123";
-<<<<<<< HEAD
-    PageUtil::writeFile(file, 0, data_to_write.data(), 3);
-=======
 #ifndef NDEBUG
-    PageUtil::writeFile(file, 0, data_to_write.data(), 3, nullptr, true);
+    PageUtil::writeFile(file, 0, data_to_write.data(), 3, true);
 #elif
-    PageUtil::writeFile(file, 0, data_to_write.data(), 3, nullptr);
+    PageUtil::writeFile(file, 0, data_to_write.data(), 3);
 #endif
->>>>>>> f9d94d5d5... Fix the bug that incomplete write batches are not truncated (#1934)
     PageUtil::syncFile(file);
     file->close();
 

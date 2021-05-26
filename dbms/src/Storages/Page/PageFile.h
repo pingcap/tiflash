@@ -2,7 +2,6 @@
 
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/FormatVersion.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
@@ -24,7 +23,6 @@ namespace DB
 class PageFile : public Allocator<false>
 {
 public:
-<<<<<<< HEAD
     using Version = UInt32;
 
     // Basic binary version
@@ -34,8 +32,6 @@ public:
     static constexpr Version VERSION_FLASH_341 = 2;
     static constexpr Version CURRENT_VERSION   = VERSION_FLASH_341;
 
-=======
->>>>>>> f9d94d5d5... Fix the bug that incomplete write batches are not truncated (#1934)
     /// Writer can NOT be used by multi threads.
     class Writer : private boost::noncopyable
     {

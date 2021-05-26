@@ -301,18 +301,12 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
     else if (binary_version == PageFile::VERSION_FLASH_341)
     {
         wb_sequence = PageUtil::get<WriteBatch::SequenceID>(pos);
-<<<<<<< HEAD
     }
     else
     {
-        throw Exception("PageFile binary version not match, unknown [version=" + DB::toString(binary_version) + "] [file=" + page_file.metaPath() + "]", ErrorCodes::LOGICAL_ERROR);
-=======
-        break;
-    default:
         throw Exception("PageFile binary version not match {" + toString() + "} [unknown_version=" + DB::toString(binary_version)
                             + "] [file=" + page_file.metaPath() + "]",
                         ErrorCodes::LOGICAL_ERROR);
->>>>>>> f9d94d5d5... Fix the bug that incomplete write batches are not truncated (#1934)
     }
 
     // return the binary_version if `v` is not null
@@ -356,15 +350,13 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
                 entry.level   = PageUtil::get<PageFileLevel>(pos);
                 flags         = PageUtil::get<PageMetaFormat::PageFlags>(pos);
             }
-<<<<<<< HEAD
-=======
-            default:
+            else
+            {
                 throw Exception("PageFile binary version not match {" + toString() + "} [unknown_version=" + DB::toString(binary_version)
                                     + "] [file=" + page_file.metaPath() + "]",
                                 ErrorCodes::LOGICAL_ERROR);
             }
 
->>>>>>> f9d94d5d5... Fix the bug that incomplete write batches are not truncated (#1934)
             entry.tag      = PageUtil::get<PageMetaFormat::PageTag>(pos);
             entry.offset   = PageUtil::get<PageMetaFormat::PageOffset>(pos);
             entry.size     = PageUtil::get<PageSize>(pos);

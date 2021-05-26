@@ -97,7 +97,7 @@ int openFile(const std::string & path)
 
 inline void touchFile(const std::string & path)
 {
-    auto fd = openFile<false>(path);
+    auto                      fd = openFile<false>(path);
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite};
     if (fd > 0)
         ::close(fd);
@@ -107,16 +107,11 @@ inline void touchFile(const std::string & path)
 
 void syncFile(WritableFilePtr & file);
 
-<<<<<<< HEAD
-void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write);
-=======
 #ifndef NDEBUG
-void writeFile(
-    WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const RateLimiterPtr & rate_limiter, bool enable_failpoint);
+void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, bool enable_failpoint);
 #else
-void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const RateLimiterPtr & rate_limiter);
+void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write);
 #endif
->>>>>>> f9d94d5d5... Fix the bug that incomplete write batches are not truncated (#1934)
 
 void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes);
 

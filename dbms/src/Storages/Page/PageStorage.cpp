@@ -497,14 +497,6 @@ void PageStorage::write(WriteBatch && wb)
     }
 
     PageEntriesEdit edit;
-<<<<<<< HEAD
-    wb.setSequence(++write_batch_seq); // Set sequence number to keep ordering between writers.
-    size_t bytes_written = file_to_write->write(wb, edit);
-    delegator->addPageFileUsedSize(file_to_write->fileIdLevel(),
-                                   bytes_written,
-                                   file_to_write->parentPath(),
-                                   /*need_insert_location*/ false);
-=======
     try
     {
         wb.setSequence(++write_batch_seq); // Set sequence number to keep ordering between writers.
@@ -522,7 +514,6 @@ void PageStorage::write(WriteBatch && wb)
         write_mutex_cv.notify_one(); // wake up any paused thread for write
         throw;
     }
->>>>>>> f9d94d5d5... Fix the bug that incomplete write batches are not truncated (#1934)
 
     {
         // Return writer to idle queue

@@ -384,14 +384,8 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_context,
                                                const ColumnDefines &      columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
-<<<<<<< HEAD
-
-                                               bool   do_range_filter,
-                                               size_t expected_block_size)
-=======
                                                bool                       do_range_filter,
                                                size_t                     expected_block_size)
->>>>>>> f9d94d5d5... Fix the bug that incomplete write batches are not truncated (#1934)
 {
     ColumnDefines new_columns_to_read;
 

@@ -4,11 +4,6 @@
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashException.h>
-<<<<<<< HEAD
-
-=======
-#include <Encryption/RateLimiter.h>
->>>>>>> f9d94d5d5... Fix the bug that incomplete write batches are not truncated (#1934)
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageUtil.h>
 
@@ -57,16 +52,11 @@ void syncFile(WritableFilePtr & file)
         DB::throwFromErrno("Cannot fsync file: " + file->getFileName(), ErrorCodes::CANNOT_FSYNC);
 }
 
-<<<<<<< HEAD
-void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write)
-=======
 #ifndef NDEBUG
-void writeFile(
-    WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const RateLimiterPtr & rate_limiter, bool enable_failpoint)
+void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, bool enable_failpoint)
 #else
-void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const RateLimiterPtr & rate_limiter)
+void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write)
 #endif
->>>>>>> f9d94d5d5... Fix the bug that incomplete write batches are not truncated (#1934)
 {
     ProfileEvents::increment(ProfileEvents::PSMWriteCalls);
     ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
