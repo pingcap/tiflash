@@ -3,10 +3,6 @@ def checkoutTiCS(commit, pullId) {
     if (pullId) {
         refspec = "+refs/pull/${pullId}/*:refs/remotes/origin/pr/${pullId}/*"
     }
-    if (sh(returnStatus: true, script: '[ -d .git ] && git rev-parse --git-dir > /dev/null 2>&1') != 0) {
-        echo ".git already exist or not a valid git dir. Delete dir..."
-        deleteDir()
-    }
     try {
         checkout(changelog: false, poll: false, scm: [
                 $class           : "GitSCM",
