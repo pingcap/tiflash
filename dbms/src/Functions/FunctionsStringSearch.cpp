@@ -1628,7 +1628,7 @@ private:
         }
         else
         {
-            throw Exception("Length of the second argument of function replace must be greater than 0.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception("Argument at index 2 for function replace must be constant", ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 
@@ -1663,7 +1663,7 @@ private:
         }
         else
         {
-            throw Exception("Length of the third argument of function replace must be greater than 0.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception("Argument at index 3 for function replace must be constant", ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 
@@ -1697,7 +1697,7 @@ private:
         }
         else
         {
-            throw Exception("Length of the third argument of function replace must be greater than 0.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception("Argument at index 2 and 3 for function replace must be constant", ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 };
