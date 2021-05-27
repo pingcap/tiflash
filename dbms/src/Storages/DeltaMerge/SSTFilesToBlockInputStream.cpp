@@ -238,11 +238,9 @@ const RegionPtr BoundedSSTFilesToBlockInputStream::getRegion() const
     return _raw_child->region;
 }
 
-std::tuple<size_t, size_t, UInt64> //
-BoundedSSTFilesToBlockInputStream::getMvccStatistics() const
+size_t BoundedSSTFilesToBlockInputStream::getMvccStatistics() const
 {
-    return std::make_tuple(
-        mvcc_compact_stream->getEffectiveNumRows(), mvcc_compact_stream->getNotCleanRows(), mvcc_compact_stream->getGCHintVersion());
+    return mvcc_compact_stream->getNotCleanRows();
 }
 
 } // namespace DM

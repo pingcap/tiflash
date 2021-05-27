@@ -129,10 +129,7 @@ bool SSTFilesToDTFilesOutputStream::newDTFileStream()
 
 void SSTFilesToDTFilesOutputStream::write()
 {
-    size_t last_effective_num_rows = 0;
     size_t last_not_clean_rows     = 0;
-    size_t cur_effective_num_rows  = 0;
-    size_t cur_not_clean_rows      = 0;
     while (true)
     {
 
@@ -177,15 +174,10 @@ void SSTFilesToDTFilesOutputStream::write()
         }
 
         // Write block to the output stream
-        DMFileBlockOutputStream::BlockProperty property;
-        std::tie(cur_effective_num_rows, cur_not_clean_rows, property.gc_hint_version) //
-            = child->getMvccStatistics();
-        property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
-        property.not_clean_rows     = cur_not_clean_rows - last_not_clean_rows;
-        dt_stream->write(block, property);
+        auto cur_not_clean_rows = child->getMvccStatistics();
+        dt_stream->write(block, cur_not_clean_rows - last_not_clean_rows);
 
         commit_rows += block.rows();
-        last_effective_num_rows = cur_effective_num_rows;
         last_not_clean_rows     = cur_not_clean_rows;
     }
 }
