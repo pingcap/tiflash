@@ -273,7 +273,7 @@ template <typename T, size_t INITIAL_SIZE = 4096, typename TAllocator = Allocato
 class PODArray : public PODArrayBase<sizeof(T), INITIAL_SIZE, TAllocator, pad_right_, pad_left_>
 {
 protected:
-    static_assert(std::is_pod_v<T> && "Try to specialize PODArray by a non-pod type.");
+    /// Can't static_assert std::is_pod_v<T> because of Decimal256.
 
     using Base = PODArrayBase<sizeof(T), INITIAL_SIZE, TAllocator, pad_right_, pad_left_>;
 
