@@ -2,11 +2,11 @@
 
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/FormatVersion.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/WriteBatch.h>
-#include <Storages/FormatVersion.h>
 
 #include <unordered_map>
 #include <vector>
@@ -24,7 +24,6 @@ namespace DB
 class PageFile : public Allocator<false>
 {
 public:
-
     /// Writer can NOT be used by multi threads.
     class Writer : private boost::noncopyable
     {
@@ -275,11 +274,7 @@ public:
     bool               isExist() const;
     Type               getType() const { return type; }
 
-    void setFileAppendPos(size_t meta_pos, size_t data_pos)
-    {
-        meta_file_pos = meta_pos;
-        data_file_pos = data_pos;
-    }
+    void   setFileAppendPos(size_t meta_pos, size_t data_pos);
     UInt64 getDataFileAppendPos() const { return data_file_pos; }
     UInt64 getMetaFileAppendPos() const { return meta_file_pos; }
 
