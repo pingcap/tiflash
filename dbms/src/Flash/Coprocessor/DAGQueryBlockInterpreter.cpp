@@ -156,6 +156,17 @@ buildRemoteTS(const std::unordered_map<RegionID, const RegionInfo &> & region_re
     return std::make_tuple(dag_req, schema);
 }
 
+BlockInputStreamPtr combinedNonJoinedDataStream(DAGPipeline & pipeline, size_t max_threads)
+{
+    BlockInputStreamPtr ret = nullptr;
+    if (pipeline.streams_with_non_joined_data.size() == 1)
+        ret = pipeline.streams_with_non_joined_data.at(0);
+    if (pipeline.streams_with_non_joined_data.size() > 0)
+        ret = std::make_shared<UnionBlockInputStream<>>(pipeline.streams_with_non_joined_data, nullptr, max_threads);
+    pipeline.streams_with_non_joined_data.clear();
+    return ret;
+}
+
 // the flow is the same as executeFetchcolumns
 void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline)
 {
@@ -862,18 +873,17 @@ void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
-        BlockInputStreamPtr stream_with_non_joined_data = pipeline.combinedNonJoinedDataStream(max_streams);
+        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams);
         pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams, stream_with_non_joined_data,
             params, context.getFileProvider(), true, max_streams,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                                                                 : static_cast<size_t>(settings.max_threads));
 
-        pipeline.streams_with_non_joined_data.clear();
         pipeline.streams.resize(1);
     }
     else
     {
-        BlockInputStreamPtr stream_with_non_joined_data = pipeline.combinedNonJoinedDataStream(max_streams);
+        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams);
         BlockInputStreams inputs;
         if (!pipeline.streams.empty())
             inputs.push_back(pipeline.firstStream());
@@ -883,7 +893,6 @@ void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const 
             inputs.push_back(stream_with_non_joined_data);
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
             std::make_shared<ConcatBlockInputStream>(inputs), params, context.getFileProvider(), true);
-        pipeline.streams_with_non_joined_data.clear();
     }
     // add cast
 }
@@ -1018,15 +1027,12 @@ void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_s
     if (pipeline.hasMoreThanOneStream())
     {
         pipeline.firstStream()
-            = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, pipeline.combinedNonJoinedDataStream(max_streams), max_streams);
-        pipeline.streams_with_non_joined_data.clear();
-        ;
+            = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, combinedNonJoinedDataStream(pipeline, max_streams), max_streams);
         pipeline.streams.resize(1);
     }
     else if (pipeline.streams_with_non_joined_data.size() > 0)
     {
-        pipeline.streams.push_back(pipeline.streams_with_non_joined_data.at(0));
-        pipeline.streams_with_non_joined_data.clear();
+        pipeline.streams.push_back(combinedNonJoinedDataStream(pipeline, max_streams));
     }
 }
 
