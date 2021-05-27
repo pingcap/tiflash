@@ -7,7 +7,6 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
-#include <DataStreams/UnionBlockInputStream.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/TableLockHolder.h>
@@ -60,14 +59,6 @@ struct DAGPipeline
     }
 
     bool hasMoreThanOneStream() const { return streams.size() + streams_with_non_joined_data.size() > 1; }
-    BlockInputStreamPtr combinedNonJoinedDataStream(size_t max_threads)
-    {
-        if (streams_with_non_joined_data.size() == 0)
-            return nullptr;
-        if (streams_with_non_joined_data.size() == 1)
-            return streams_with_non_joined_data.at(0);
-        return std::make_shared<UnionBlockInputStream<>>(streams_with_non_joined_data, nullptr, max_threads);
-    }
 };
 
 struct AnalysisResult
