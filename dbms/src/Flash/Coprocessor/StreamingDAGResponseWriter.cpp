@@ -181,10 +181,12 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             }
 
             // partition each row
-            std::vector<PaddedPODArray<UInt8>> partition_filters(partition_num);
+            std::vector<IColumn::Filter> partition_filters(partition_num);
+            std::vector<UInt64> partition_size(partition_num, 0);
             for (size_t i = 0; i < partition_num; ++i)
             {
-                partition_filters[i] = PaddedPODArray<UInt8>(rows, 0);
+                partition_filters[i].resize_fill(rows, 0);
+                partition_size[i] = 0;
             }
             for (size_t row_index = 0; row_index < rows; ++row_index)
             {
@@ -193,19 +195,17 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
 
                 auto part_id = (key.low % partition_num);
                 partition_filters[part_id][row_index] = 1;
+                partition_size[part_id]++;
             }
             for (size_t part_id = 0; part_id < partition_num; ++part_id)
             {
                 const auto & filter = partition_filters[part_id];
+                auto & reserve = partition_size[part_id];
                 auto & columns = dest_tbl_cols[part_id];
-                Int64 reserve = -1;
                 // Partition block with filter map
                 for (size_t col_id = 0; col_id < block.columns(); ++col_id)
                 {
                     columns[col_id] = block.getByPosition(col_id).column->filter(filter, reserve)->assumeMutable();
-                    Int64 rest_rows = columns[col_id]->size();
-                    if (reserve == -1)
-                        reserve = rest_rows;
                 }
             }
 
