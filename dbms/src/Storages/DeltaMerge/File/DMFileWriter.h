@@ -129,13 +129,6 @@ public:
     };
     using SingleFileStreamPtr = std::shared_ptr<SingleFileStream>;
 
-    struct BlockProperty
-    {
-        size_t not_clean_rows;
-        size_t effective_num_rows;
-        size_t gc_hint_version;
-    };
-
     struct Flags
     {
     private:
@@ -180,7 +173,6 @@ public:
         }
     };
 
-
 public:
     DMFileWriter(const DMFilePtr &       dmfile_,
                  const ColumnDefines &   write_columns_,
@@ -188,7 +180,7 @@ public:
                  const RateLimiterPtr &  rate_limiter_,
                  const Options &         options_);
 
-    void write(const Block & block, const BlockProperty & block_property);
+    void write(const Block & block, size_t not_clean_rows);
     void finalize();
 
     const DMFilePtr getFile() const { return dmfile; }

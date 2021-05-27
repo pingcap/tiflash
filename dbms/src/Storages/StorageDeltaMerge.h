@@ -60,8 +60,6 @@ public:
     void ingestFiles(
         const DM::RowKeyRange & range, const std::vector<UInt64> & file_ids, bool clear_data_in_range, const Settings & settings);
 
-    UInt64 onSyncGc(Int64) override;
-
     void rename(const String & new_path_to_db,
         const String & new_database_name,
         const String & new_table_name,

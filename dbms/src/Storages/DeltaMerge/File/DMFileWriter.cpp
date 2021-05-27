@@ -85,11 +85,11 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 }
 
 
-void DMFileWriter::write(const Block & block, const BlockProperty & block_property)
+void DMFileWriter::write(const Block & block, size_t not_clean_rows)
 {
     DMFile::PackStat stat;
     stat.rows      = block.rows();
-    stat.not_clean = block_property.not_clean_rows;
+    stat.not_clean = not_clean_rows;
     stat.bytes     = block.bytes(); // This is bytes of pack data in memory.
 
     auto del_mark_column = tryGetByColumnId(block, TAG_COLUMN_ID).column;
@@ -113,11 +113,6 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
     }
 
     dmfile->addPack(stat);
-
-    auto & properties = dmfile->getPackProperties();
-    auto * property   = properties.add_property();
-    property->set_num_rows(block_property.effective_num_rows);
-    property->set_gc_hint_version(block_property.gc_hint_version);
 }
 
 void DMFileWriter::finalize()

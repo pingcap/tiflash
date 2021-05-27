@@ -19,7 +19,6 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
       kvstore(std::make_shared<KVStore>(context, raft_config.snapshot_apply_method)),
       region_table(context),
       background_service(nullptr),
-      gc_manager(context),
       cluster(raft_config.pd_addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>()
                                                : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config)),
       ignore_databases(raft_config.ignore_databases),
@@ -56,7 +55,6 @@ BackgroundService & TMTContext::getBackgroundService() { return *background_serv
 
 const BackgroundService & TMTContext::getBackgroundService() const { return *background_service; }
 
-GCManager & TMTContext::getGCManager() { return gc_manager; }
 
 Context & TMTContext::getContext() { return context; }
 

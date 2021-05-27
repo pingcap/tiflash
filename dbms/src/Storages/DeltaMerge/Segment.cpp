@@ -89,13 +89,9 @@ DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
     output_stream->writePrefix();
     while (true)
     {
-        size_t last_effective_num_rows = 0;
-        size_t last_not_clean_rows     = 0;
+        size_t last_not_clean_rows = 0;
         if (mvcc_stream)
-        {
-            last_effective_num_rows = mvcc_stream->getEffectiveNumRows();
-            last_not_clean_rows     = mvcc_stream->getNotCleanRows();
-        }
+            last_not_clean_rows = mvcc_stream->getNotCleanRows();
 
         Block block = input_stream->read();
         if (!block)
@@ -103,22 +99,11 @@ DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
         if (!block.rows())
             continue;
 
-        // When the input_stream is not mvcc, we assume the rows in this input_stream is most valid and make it not tend to be gc.
-        size_t cur_effective_num_rows = block.rows();
-        size_t cur_not_clean_rows     = 1;
-        size_t gc_hint_version        = UINT64_MAX;
+        size_t cur_not_clean_rows = 1;
         if (mvcc_stream)
-        {
-            cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
-            cur_not_clean_rows     = mvcc_stream->getNotCleanRows();
-            gc_hint_version        = mvcc_stream->getGCHintVersion();
-        }
+            cur_not_clean_rows = mvcc_stream->getNotCleanRows();
 
-        DMFileBlockOutputStream::BlockProperty block_property;
-        block_property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
-        block_property.not_clean_rows     = cur_not_clean_rows - last_not_clean_rows;
-        block_property.gc_hint_version    = gc_hint_version;
-        output_stream->write(block, block_property);
+        output_stream->write(block, cur_not_clean_rows - last_not_clean_rows);
     }
 
     input_stream->readSuffix();
@@ -593,9 +578,6 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
                                             next_segment_id,
                                             new_delta,
                                             new_stable);
-
-    // avoid recheck whether to do DeltaMerge using the same gc_safe_point
-    new_me->setLastCheckGCSafePoint(context.min_version);
 
     // Store new meta data
     new_me->serialize(wbs.meta);

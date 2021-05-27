@@ -724,15 +724,6 @@ void StorageDeltaMerge::ingestFiles(
     return getAndMaybeInitStore()->ingestFiles(global_context, settings, range, file_ids, clear_data_in_range);
 }
 
-UInt64 StorageDeltaMerge::onSyncGc(Int64 limit)
-{
-    if (store_inited.load(std::memory_order_acquire))
-    {
-        return _store->onSyncGc(limit);
-    }
-    return 0;
-}
-
 size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::RowKeyRange & range)
 {
     size_t rows = 0;
