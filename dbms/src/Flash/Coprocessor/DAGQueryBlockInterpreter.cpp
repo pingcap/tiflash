@@ -295,8 +295,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     SelectQueryInfo query_info;
     /// to avoid null point exception
     query_info.query = dummy_query;
-    query_info.dag_query = std::make_unique<DAGQueryInfo>(
-        conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns(), context.getTimezoneInfo());
+    query_info.dag_query = std::make_unique<DAGQueryInfo>(conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns());
     query_info.mvcc_query_info = std::move(mvcc_query_info);
 
     FAIL_POINT_PAUSE(FailPoints::pause_after_learner_read);

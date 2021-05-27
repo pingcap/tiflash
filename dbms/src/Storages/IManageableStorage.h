@@ -54,9 +54,6 @@ public:
     virtual void checkStatus(const Context &) {}
 
     virtual void deleteRows(const Context &, size_t /*rows*/) { throw Exception("Unsupported"); }
-    
-    // Return true is data dir exist
-    virtual bool initStoreIfDataDirExist() { throw Exception("Unsupported"); }
 
     virtual void mergeDelta(const Context &) { throw Exception("Unsupported"); }
 
