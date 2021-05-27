@@ -63,7 +63,7 @@ public:
       * This is necessary, because when implementing nested structures, several arrays can have common sizes.
       */
 
-    void enumerateStreams(StreamCallback callback, SubstreamPath path) const override;
+    void enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const override;
 
     void serializeBinaryBulkWithMultipleStreams(
         const IColumn & column,
