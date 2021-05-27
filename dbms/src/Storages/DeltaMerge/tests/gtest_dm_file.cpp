@@ -163,8 +163,6 @@ try
         stream->write(block1, 0);
         stream->write(block2, 0);
         stream->writeSuffix();
-
-        ASSERT_EQ(dm_file->getPackProperties().property_size(), 2);
     }
 
 
