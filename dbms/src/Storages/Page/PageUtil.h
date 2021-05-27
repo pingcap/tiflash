@@ -1,17 +1,16 @@
 #pragma once
 
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
-
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashException.h>
-#include <common/logger_useful.h>
-
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
+#include <common/logger_useful.h>
+
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 
 #ifndef __APPLE__
 #include <fcntl.h>
@@ -21,9 +20,9 @@
 #include <Encryption/WritableFile.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
-#include <ext/scope_guard.h>
-
 #include <Storages/Page/PageFile.h>
+
+#include <ext/scope_guard.h>
 
 namespace ProfileEvents
 {
@@ -98,7 +97,7 @@ int openFile(const std::string & path)
 
 inline void touchFile(const std::string & path)
 {
-    auto fd = openFile<false>(path);
+    auto                      fd = openFile<false>(path);
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite};
     if (fd > 0)
         ::close(fd);
@@ -108,7 +107,11 @@ inline void touchFile(const std::string & path)
 
 void syncFile(WritableFilePtr & file);
 
+#ifndef NDEBUG
+void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, bool enable_failpoint);
+#else
 void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write);
+#endif
 
 void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes);
 

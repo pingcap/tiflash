@@ -282,11 +282,7 @@ public:
     bool               isExist() const;
     Type               getType() const { return type; }
 
-    void setFileAppendPos(size_t meta_pos, size_t data_pos)
-    {
-        meta_file_pos = meta_pos;
-        data_file_pos = data_pos;
-    }
+    void   setFileAppendPos(size_t meta_pos, size_t data_pos);
     UInt64 getDataFileAppendPos() const { return data_file_pos; }
     UInt64 getMetaFileAppendPos() const { return meta_file_pos; }
 
