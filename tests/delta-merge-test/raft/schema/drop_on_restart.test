@@ -65,3 +65,10 @@
 => DBGInvoke __refresh_schemas()
 # db4 and db5 should be tombstoned
 => select name from system.databases where name like '%db%' and is_tombstone = 0
+
+# Physical cleanup so that it won't make trouble for other tests
+=> DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
+=> drop database if exists db3
+=> drop database if exists db4
+=> drop database if exists db5

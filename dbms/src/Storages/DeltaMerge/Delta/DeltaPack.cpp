@@ -8,11 +8,6 @@
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 
-namespace ProfileEvents
-{
-extern const Event DMWriteBytes;
-}
-
 namespace DB
 {
 namespace DM

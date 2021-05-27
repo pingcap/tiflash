@@ -319,7 +319,7 @@ bool Segment::ingestPacks(DMContext & dm_context, const RowKeyRange & range, con
     auto new_range = range.shrink(rowkey_range);
     LOG_TRACE(log, "Segment [" << segment_id << "] write region snapshot: " << new_range.toDebugString());
 
-    return delta->appendRegionSnapshot(dm_context, range, packs, clear_data_in_range);
+    return delta->ingestPacks(dm_context, range, packs, clear_data_in_range);
 }
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update) const
@@ -341,7 +341,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
                                             UInt64                     max_version,
                                             size_t                     expected_block_size)
 {
-    LOG_TRACE(log, "Segment [" << segment_id << "] create InputStream");
+    LOG_TRACE(log, "Segment [" << segment_id << "] [epoch=" << epoch << "] create InputStream");
 
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, max_version);
 
@@ -467,8 +467,8 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext &      
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_context,
                                                const ColumnDefines &      columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
-                                               bool   do_range_filter,
-                                               size_t expected_block_size)
+                                               bool                       do_range_filter,
+                                               size_t                     expected_block_size)
 {
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 

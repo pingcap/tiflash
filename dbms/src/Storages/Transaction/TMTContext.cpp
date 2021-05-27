@@ -26,7 +26,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
       schema_syncer(raft_config.pd_addrs.size() == 0
               ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ true>>(cluster))
               : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ false>>(cluster))),
-      mpp_task_manager(std::make_shared<MPPTaskManager>(context.getBackgroundPool())),
+      mpp_task_manager(std::make_shared<MPPTaskManager>()),
       engine(raft_config.engine),
       disable_bg_flush(raft_config.disable_bg_flush)
 {}
@@ -84,11 +84,16 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 {
     static constexpr const char * TABLE_OVERLAP_THRESHOLD = "flash.overlap_threshold";
     static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
+    static constexpr const char * COMPACT_LOG_MIN_ROWS = "flash.compact_log_min_rows";
+    static constexpr const char * COMPACT_LOG_MIN_BYTES = "flash.compact_log_min_bytes";
     static constexpr const char * REPLICA_READ_MAX_THREAD = "flash.replica_read_max_thread";
 
 
     getRegionTable().setTableCheckerThreshold(config.getDouble(TABLE_OVERLAP_THRESHOLD, 0.6));
-    getKVStore()->setRegionCompactLogPeriod(std::max(config.getUInt64(COMPACT_LOG_MIN_PERIOD, 120), 1));
+    // default config about compact-log: period 120s, rows 20k, bytes 32MB.
+    getKVStore()->setRegionCompactLogConfig(std::max(config.getUInt64(COMPACT_LOG_MIN_PERIOD, 120), 1),
+        std::max(config.getUInt64(COMPACT_LOG_MIN_ROWS, 20 * 1024), 1),
+        std::max(config.getUInt64(COMPACT_LOG_MIN_BYTES, 32 * 1024 * 1024), 1));
     replica_read_max_thread = std::max(config.getUInt64(REPLICA_READ_MAX_THREAD, 1), 1);
 }
 

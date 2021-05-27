@@ -3,6 +3,7 @@
 #include <Debug/DBGInvoker.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgFuncFailPoint.h>
+#include <Debug/dbgFuncMisc.h>
 #include <Debug/dbgFuncMockRaftCommand.h>
 #include <Debug/dbgFuncMockTiDBData.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
@@ -74,6 +75,7 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);
+    regSchemalessFunc("gc_schemas", dbgFuncGcSchemas);
     regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
     regSchemalessFunc("is_tombstone", dbgFuncIsTombstone);
 
@@ -103,6 +105,8 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("mapped_database", dbgFuncMappedDatabase);
     regSchemalessFunc("mapped_table", dbgFuncMappedTable);
     regSchemafulFunc("query_mapped", dbgFuncQueryMapped);
+
+    regSchemalessFunc("search_log_for_key", dbgFuncSearchLogForKey);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
