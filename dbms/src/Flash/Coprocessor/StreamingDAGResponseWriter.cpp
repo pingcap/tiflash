@@ -1,3 +1,4 @@
+#include <Common/TiFlashException.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
@@ -180,16 +181,31 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             }
 
             // partition each row
+            std::vector<IColumn::Filter> partition_filters(partition_num);
+            std::vector<UInt64> partition_size(partition_num, 0);
+            for (size_t i = 0; i < partition_num; ++i)
+            {
+                partition_filters[i].resize_fill(rows, 0);
+                partition_size[i] = 0;
+            }
             for (size_t row_index = 0; row_index < rows; ++row_index)
             {
                 UInt128 key;
                 hash_values[row_index].get128(key.low, key.high);
 
                 auto part_id = (key.low % partition_num);
-                // copy each field
+                partition_filters[part_id][row_index] = 1;
+                partition_size[part_id]++;
+            }
+            for (size_t part_id = 0; part_id < partition_num; ++part_id)
+            {
+                const auto & filter = partition_filters[part_id];
+                auto & reserve = partition_size[part_id];
+                auto & columns = dest_tbl_cols[part_id];
+                // Partition block with filter map
                 for (size_t col_id = 0; col_id < block.columns(); ++col_id)
                 {
-                    dest_tbl_cols[part_id][col_id]->insert(block.getByPosition(col_id).column->operator[](row_index));
+                    columns[col_id] = block.getByPosition(col_id).column->filter(filter, reserve)->assumeMutable();
                 }
             }
 
