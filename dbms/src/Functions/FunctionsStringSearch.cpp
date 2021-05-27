@@ -802,6 +802,12 @@ struct ReplaceRegexpImpl
         size_t size = offsets.size();
         res_offsets.resize(size);
 
+        if (needle.empty())
+        {
+            /// TODO: copy all the data without changing
+            throw Exception("Length of the second argument of function replace must be greater than 0.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        }
+
         re2_st::RE2 searcher(needle);
         int num_captures = std::min(searcher.NumberOfCapturingGroups() + 1, static_cast<int>(max_captures));
 
@@ -829,6 +835,12 @@ struct ReplaceRegexpImpl
         size_t size = data.size() / n;
         res_data.reserve(data.size());
         res_offsets.resize(size);
+
+        if (needle.empty())
+        {
+            /// TODO: copy all the data without changing
+            throw Exception("Length of the second argument of function replace must be greater than 0.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        }
 
         re2_st::RE2 searcher(needle);
         int num_captures = std::min(searcher.NumberOfCapturingGroups() + 1, static_cast<int>(max_captures));
@@ -870,6 +882,15 @@ struct ReplaceStringImpl
         res_data.reserve(data.size());
         size_t size = offsets.size();
         res_offsets.resize(size);
+
+        if (needle.empty())
+        {
+            /// Copy all the data without changing.
+            res_data.resize(data.size());
+            memcpy(&res_data[0], begin, data.size());
+            memcpy(&res_offsets[0], &offsets[0], size * sizeof(UInt64));
+            return;
+        }
 
         /// The current index in the array of strings.
         size_t i = 0;
@@ -1015,6 +1036,15 @@ struct ReplaceStringImpl
         res_data.reserve(data.size());
         size_t size = offsets.size();
         res_offsets.resize(size);
+
+        if (needle.empty())
+        {
+            /// Copy all the data without changing.
+            res_data.resize(data.size());
+            memcpy(&res_data[0], begin, data.size());
+            memcpy(&res_offsets[0], &offsets[0], size * sizeof(UInt64));
+            return;
+        }
 
         /// The current index in the array of strings.
         size_t i = 0;
@@ -1169,13 +1199,6 @@ struct ReplaceStringImpl
         /// The current index in the string array.
         size_t i = 0;
 
-        Volnitsky searcher(needle.data(), needle.size(), end - pos);
-
-        /// We will search for the next occurrence in all rows at once.
-        while (pos < end)
-        {
-            const UInt8 * match = searcher.search(pos, end - pos);
-
 #define COPY_REST_OF_CURRENT_STRING() \
     do { \
         const size_t len = begin + n * (i + 1) - pos; \
@@ -1187,6 +1210,23 @@ struct ReplaceStringImpl
         pos = begin + n * (i + 1); \
         ++i; \
     } while (false)
+
+        if (needle.empty())
+        {
+            /// Copy all the data without changing.
+            while (i < count)
+            {
+                COPY_REST_OF_CURRENT_STRING();
+            }
+            return;
+        }
+
+        Volnitsky searcher(needle.data(), needle.size(), end - pos);
+
+        /// We will search for the next occurrence in all rows at once.
+        while (pos < end)
+        {
+            const UInt8 * match = searcher.search(pos, end - pos);
 
             /// Copy skipped strings without any changes but
             /// add zero byte to the end of each string.
@@ -1322,13 +1362,6 @@ struct ReplaceStringImpl
         /// The current index in the string array.
         size_t i = 0;
 
-        Volnitsky searcher(needle.data(), needle.size(), end - pos);
-
-        /// We will search for the next occurrence in all rows at once.
-        while (pos < end)
-        {
-            const UInt8 * match = searcher.search(pos, end - pos);
-
 #define COPY_REST_OF_CURRENT_STRING() \
     do { \
         const size_t len = begin + n * (i + 1) - pos; \
@@ -1340,6 +1373,23 @@ struct ReplaceStringImpl
         pos = begin + n * (i + 1); \
         ++i; \
     } while (false)
+
+        if (needle.empty())
+        {
+            /// Copy all the data without changing.
+            while (i < count)
+            {
+                COPY_REST_OF_CURRENT_STRING();
+            }
+            return;
+        }
+
+        Volnitsky searcher(needle.data(), needle.size(), end - pos);
+
+        /// We will search for the next occurrence in all rows at once.
+        while (pos < end)
+        {
+            const UInt8 * match = searcher.search(pos, end - pos);
 
             /// Copy skipped strings without any changes but
             /// add zero byte to the end of each string.
@@ -1423,7 +1473,7 @@ struct ReplaceStringImpl
             auto needle_size = sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
 
             auto replacement_offset = offsetAt(replacement_offsets, i);
-            auto replacement_size = sizeAt(replacement_offsets, i);
+            auto replacement_size = sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
 
             if (needle_size == 0)
             {
@@ -1464,6 +1514,11 @@ struct ReplaceStringImpl
 
     static void constant(const std::string & data, const std::string & needle, const std::string & replacement, std::string & res_data)
     {
+        if (needle.empty())
+        {
+            res_data = data;
+            return;
+        }
         res_data = "";
         int replace_cnt = 0;
         for (size_t i = 0; i < data.size(); ++i)
@@ -1565,19 +1620,6 @@ private:
         const ColumnConst * c2_const = typeid_cast<const ColumnConst *>(column_replacement.get());
         String needle = c1_const->getValue<String>();
         String replacement = c2_const->getValue<String>();
-
-        if (needle.size() == 0)
-        {
-            /// needle may be empty string('') or NULL. 
-            ///
-            /// Due to issue#1729, a NULL needle in a DAG request will not be treated as NULL and
-            /// automatically handled by PreparedFunctionImpl::defaultImplementationForNulls.
-            ///
-            /// Just return the raw strings in such case.
-            /// The substitution of NULL will be taken by upper function (see wrapInNullable).
-            column_result.column = column_src;
-            return;
-        }
 
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
         {

@@ -1,6 +1,8 @@
+#include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnConst.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeFixedString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/registerFunctions.h>
@@ -40,7 +42,7 @@ protected:
 
 namespace
 {
-ColumnWithTypeAndName buildDataColumn(
+ColumnWithTypeAndName buildStringColumn(
         const String & name,
         const std::vector<String> & data)
 {
@@ -50,6 +52,19 @@ ColumnWithTypeAndName buildDataColumn(
         col->insertData(s.data(), s.size());
     }
     return ColumnWithTypeAndName(std::move(col), std::make_shared<DataTypeString>(), name);
+}
+
+ColumnWithTypeAndName buildFixedStringColumn(
+        const String & name,
+        size_t n,
+        const std::vector<String> & data)
+{
+    auto col = ColumnFixedString::create(n);
+    for (const auto & s : data)
+    {
+        col->insertData(s.data(), std::min(n, s.size()));
+    }
+    return ColumnWithTypeAndName(std::move(col), std::make_shared<DataTypeFixedString>(n), name);
 }
 
 ColumnWithTypeAndName buildConstColumn(
@@ -95,7 +110,7 @@ std::vector<String> executeReplace(
         const String & needleStr,
         const String & replacementStr)
 {
-    ColumnWithTypeAndName data = buildDataColumn("test", rawStrs);
+    ColumnWithTypeAndName data = buildStringColumn("test", rawStrs);
     ColumnWithTypeAndName needle = buildConstColumn("needle", needleStr, rawStrs.size());
     ColumnWithTypeAndName replacement = buildConstColumn("replacement", replacementStr, rawStrs.size());
 
@@ -108,8 +123,8 @@ std::vector<String> executeReplace(
         const std::vector<String> & needleStrs,
         const String & replacementStr)
 {
-    ColumnWithTypeAndName data = buildDataColumn("test", rawStrs);
-    ColumnWithTypeAndName needle = buildDataColumn("needle", needleStrs);
+    ColumnWithTypeAndName data = buildStringColumn("test", rawStrs);
+    ColumnWithTypeAndName needle = buildStringColumn("needle", needleStrs);
     ColumnWithTypeAndName replacement = buildConstColumn("replacement", replacementStr, rawStrs.size());
 
     return executeReplaceImpl(funcBuilder, data, needle, replacement);
@@ -121,9 +136,9 @@ std::vector<String> executeReplace(
         const String & needleStr,
         const std::vector<String> & replacementStrs)
 {
-    ColumnWithTypeAndName data = buildDataColumn("test", rawStrs);
+    ColumnWithTypeAndName data = buildStringColumn("test", rawStrs);
     ColumnWithTypeAndName needle = buildConstColumn("needle", needleStr, rawStrs.size());
-    ColumnWithTypeAndName replacement = buildDataColumn("replacement", replacementStrs);
+    ColumnWithTypeAndName replacement = buildStringColumn("replacement", replacementStrs);
 
     return executeReplaceImpl(funcBuilder, data, needle, replacement);
 }
@@ -134,11 +149,74 @@ std::vector<String> executeReplace(
         const std::vector<String> & needleStrs,
         const std::vector<String> & replacementStrs)
 {
-    ColumnWithTypeAndName data = buildDataColumn("test", rawStrs);
-    ColumnWithTypeAndName needle = buildDataColumn("needle", needleStrs);
-    ColumnWithTypeAndName replacement = buildDataColumn("replacement", replacementStrs);
+    ColumnWithTypeAndName data = buildStringColumn("test", rawStrs);
+    ColumnWithTypeAndName needle = buildStringColumn("needle", needleStrs);
+    ColumnWithTypeAndName replacement = buildStringColumn("replacement", replacementStrs);
 
     return executeReplaceImpl(funcBuilder, data, needle, replacement);
+}
+
+std::vector<String> executeReplaceFixed(
+        const FunctionBuilderPtr & funcBuilder,
+        size_t n,
+        const std::vector<String> & rawStrs,
+        const String & needleStr,
+        const String & replacementStr)
+{
+    ColumnWithTypeAndName data = buildFixedStringColumn("test", n, rawStrs);
+    ColumnWithTypeAndName needle = buildConstColumn("needle", needleStr, rawStrs.size());
+    ColumnWithTypeAndName replacement = buildConstColumn("replacement", replacementStr, rawStrs.size());
+
+    return executeReplaceImpl(funcBuilder, data, needle, replacement);
+}
+
+std::vector<String> executeReplaceFixed(
+        const FunctionBuilderPtr & funcBuilder,
+        size_t n,
+        const std::vector<String> & rawStrs,
+        const std::vector<String> & needleStrs,
+        const String & replacementStr)
+{
+    ColumnWithTypeAndName data = buildFixedStringColumn("test", n, rawStrs);
+    ColumnWithTypeAndName needle = buildStringColumn("needle", needleStrs);
+    ColumnWithTypeAndName replacement = buildConstColumn("replacement", replacementStr, rawStrs.size());
+
+    return executeReplaceImpl(funcBuilder, data, needle, replacement);
+}
+
+std::vector<String> executeReplaceFixed(
+        const FunctionBuilderPtr & funcBuilder,
+        size_t n,
+        const std::vector<String> & rawStrs,
+        const String & needleStr,
+        const std::vector<String> & replacementStrs)
+{
+    ColumnWithTypeAndName data = buildFixedStringColumn("test", n, rawStrs);
+    ColumnWithTypeAndName needle = buildConstColumn("needle", needleStr, rawStrs.size());
+    ColumnWithTypeAndName replacement = buildStringColumn("replacement", replacementStrs);
+
+    return executeReplaceImpl(funcBuilder, data, needle, replacement);
+}
+
+std::vector<String> executeReplaceFixed(
+        const FunctionBuilderPtr & funcBuilder,
+        size_t n,
+        const std::vector<String> & rawStrs,
+        const std::vector<String> & needleStrs,
+        const std::vector<String> & replacementStrs)
+{
+    ColumnWithTypeAndName data = buildFixedStringColumn("test", n, rawStrs);
+    ColumnWithTypeAndName needle = buildStringColumn("needle", needleStrs);
+    ColumnWithTypeAndName replacement = buildStringColumn("replacement", replacementStrs);
+
+    return executeReplaceImpl(funcBuilder, data, needle, replacement);
+}
+
+String padZero(const String & s, size_t n)
+{
+    String res = s;
+    res.resize(n, '\0');
+    return res;
 }
 } // namespace
 
@@ -261,6 +339,72 @@ TEST_F(StringReplace, string_replace_all_utf_8_unit_Test)
     replacement = {" ", " 你", "好", " 你", "你好"};
     actual = executeReplace(bp, data, needle, replacement);
     expect = {"  你好   ", " 你 你 你你 你好", "好 好", " 你好     ", "你不好"};
+    EXPECT_EQ(expect, actual);
+}
+
+TEST_F(StringReplace, fixed_string_replace_all_unit_Test)
+{
+    const Context context = TiFlashTestEnv::getContext();
+    auto & factory = FunctionFactory::instance();
+
+    auto bp = factory.tryGet("replaceAll", context);
+    ASSERT_TRUE(bp != nullptr);
+    ASSERT_TRUE(!bp->isVariadic());
+    EXPECT_EQ(bp->getNumberOfArguments(), static_cast<size_t>(3));
+
+    std::vector<String> data;
+    std::vector<String> needle;
+    std::vector<String> replacement;
+    std::vector<String> expect;
+    std::vector<String> actual;
+
+    /// const needle and const replacement
+    data = {"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"};
+    actual = executeReplaceFixed(bp, 20, data, " ", "");
+    expect = {padZero("hello", 15), padZero("hello", 15), padZero("hello", 16), padZero("", 15), padZero("hello,world", 19)};
+    EXPECT_EQ(expect, actual);
+
+    data = {"", "w", "ww", " www ", "w w w"};
+    actual = executeReplaceFixed(bp, 10, data, "w", "ww");
+    expect = {padZero("", 10), padZero("ww", 11), padZero("wwww", 12), padZero(" wwwwww ", 13), padZero("ww ww ww", 13)};
+    EXPECT_EQ(expect, actual);
+
+    data = {"", "w", "ww", " www ", "w w w"};
+    actual = executeReplaceFixed(bp, 10, data, "ww", "w");
+    expect = {padZero("", 10), padZero("w", 10), padZero("w", 9), padZero(" ww ", 9), padZero("w w w", 10)};
+    EXPECT_EQ(expect, actual);
+
+    data = {"", "w", "ww", " www ", "w w w"};
+    actual = executeReplaceFixed(bp, 10, data, "", " ");
+    expect = {padZero("", 10), padZero("w", 10), padZero("ww", 10), padZero(" www ", 10), padZero("w w w", 10)};
+    EXPECT_EQ(expect, actual);
+
+    /// non-const needle and const replacement
+    data = {"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"};
+    needle = {" ", "h", "", "h", ","};
+    actual = executeReplaceFixed(bp, 20, data, needle, "");
+    expect = {padZero("hello", 15), padZero("    e llo", 19), padZero("hello    ", 20), padZero("     ", 20), padZero("hello world", 19)};
+    EXPECT_EQ(expect, actual);
+
+    data = {"", "w", "ww", " www ", "w w w"};
+    needle = {" ", "w", "w", "www", " w"};
+    actual = executeReplaceFixed(bp, 10, data, needle, "ww");
+    expect = {padZero("", 10), padZero("ww", 11), padZero("wwww", 12), padZero(" ww ", 9), padZero("wwwww", 10)};
+    EXPECT_EQ(expect, actual);
+
+    /// const needle and non-const replacement
+    data = {"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"};
+    replacement = {"", "x", "xx", " ", ","};
+    actual = executeReplaceFixed(bp, 20, data, " ", replacement);
+    expect = {padZero("hello", 15), padZero("xxxhxexllo", 20), padZero("helloxxxxxxxx", 24), padZero("     ", 20), padZero("hello,,world", 20)};
+    EXPECT_EQ(expect, actual);
+
+    /// non-const needle and non-const replacement
+    data = {"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"};
+    needle = {" ", "h", "", "h", ","};
+    replacement = {"", "x", "xx", " ", ","};
+    actual = executeReplaceFixed(bp, 20, data, needle, replacement);
+    expect = {padZero("hello", 15), padZero("   x e llo", 20), padZero("hello    ", 20), padZero("     ", 20), padZero("hello, world", 20)};
     EXPECT_EQ(expect, actual);
 }
 
