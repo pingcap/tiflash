@@ -22,10 +22,7 @@ using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
-    StableValueSpace(PageId id_)
-        : id(id_), log(&Logger::get("StableValueSpace"))
-    {
-    }
+    StableValueSpace(PageId id_) : id(id_), log(&Logger::get("StableValueSpace")) {}
 
     // Set DMFiles for this value space.
     // If this value space is logical split, specify `range` and `dm_context` so that we can get more precise
@@ -70,11 +67,11 @@ public:
 
         SnapshotPtr clone()
         {
-            auto c                = std::make_shared<Snapshot>();
-            c->stable             = stable;
-            c->id                 = id;
-            c->valid_rows         = valid_rows;
-            c->valid_bytes        = valid_bytes;
+            auto c         = std::make_shared<Snapshot>();
+            c->stable      = stable;
+            c->id          = id;
+            c->valid_rows  = valid_rows;
+            c->valid_bytes = valid_bytes;
 
             for (size_t i = 0; i < column_caches.size(); i++)
             {
