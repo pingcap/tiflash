@@ -496,7 +496,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                 const ASTTableJoin & join = static_cast<const ASTTableJoin &>(*query.join()->table_join);
                 if (join.kind == ASTTableJoin::Kind::Full || join.kind == ASTTableJoin::Kind::Right)
                     pipeline.stream_with_non_joined_data = expressions.before_join->createStreamWithNonJoinedDataIfFullOrRightJoin(
-                        pipeline.firstStream()->getHeader(), settings.max_block_size);
+                        pipeline.firstStream()->getHeader(), 0, 1, settings.max_block_size);
 
                 for (auto & stream : pipeline.streams)   /// Applies to all sources except stream_with_non_joined_data.
                     stream = std::make_shared<ExpressionBlockInputStream>(stream, expressions.before_join);

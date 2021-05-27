@@ -80,7 +80,7 @@ BlockIO InterpreterDAG::execute()
     std::vector<SubqueriesForSets> subqueriesForSets;
     BlockInputStreams streams = executeQueryBlock(*dag.getQueryBlock(), subqueriesForSets);
 
-    Pipeline pipeline;
+    DAGPipeline pipeline;
     pipeline.streams = streams;
 
     DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams);
