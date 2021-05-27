@@ -1083,10 +1083,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
     auto left_stream  = getStream(left, left_snap);
     auto right_stream = getStream(right, right_snap);
 
-    BlockInputStreamPtr merged_stream = std::make_shared<ConcatBlockInputStream>(BlockInputStreams{left_stream, right_stream});
-    // for the purpose to calculate StableProperty of the new segment
-    merged_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-        merged_stream, *schema_snap, dm_context.min_version, dm_context.is_common_handle);
+    auto merged_stream = std::make_shared<ConcatBlockInputStream>(BlockInputStreams{left_stream, right_stream});
 
     auto merged_stable_id = left->stable->getId();
     auto merged_stable    = createNewStable(dm_context, schema_snap, merged_stream, merged_stable_id, wbs, need_rate_limit);

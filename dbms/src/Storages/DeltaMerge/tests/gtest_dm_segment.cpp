@@ -1570,18 +1570,10 @@ CATCH
 TEST_F(Segment_test, CalculateDTFileProperty)
 try
 {
-    Settings settings                    = dmContext().db_context.getSettings();
-    settings.dt_segment_stable_pack_rows = 10;
-
-    segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
-
-    const size_t num_rows_write_every_round = 100;
-    const size_t write_round                = 3;
-    const size_t tso                        = 10000;
-    for (size_t i = 0; i < write_round; i++)
+    const size_t num_rows_write = 100;
+    const size_t tso            = 10000;
     {
-        size_t start = num_rows_write_every_round * i;
-        Block  block = DMTestEnv::prepareSimpleWriteBlock(start, start + num_rows_write_every_round, false, tso);
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false, tso);
         // write to segment
         segment->write(dmContext(), block);
         segment = segment->mergeDelta(dmContext(), tableColumns());
@@ -1589,21 +1581,16 @@ try
 
     {
         auto & stable = segment->getStable();
-        ASSERT_GT(stable->getDMFiles()[0]->getPacks(), (size_t)1);
-        ASSERT_EQ(stable->getRows(), num_rows_write_every_round * write_round);
+        ASSERT_EQ(stable->getRows(), num_rows_write);
         // caculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);
-        auto        start = RowKeyValue::fromHandle(0);
-        auto        end   = RowKeyValue::fromHandle(num_rows_write_every_round);
-        RowKeyRange range(start, end, false, 1);
-        // calculate the StableProperty for packs in the key range [0, num_rows_write_every_round)
-        stable->calculateStableProperty(dmContext(), range, false);
+        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false, 1);
         ASSERT_EQ(stable->isStablePropertyCached(), true);
         auto & property = stable->getStableProperty();
         ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
-        ASSERT_EQ(property.num_versions, num_rows_write_every_round);
-        ASSERT_EQ(property.num_puts, num_rows_write_every_round);
-        ASSERT_EQ(property.num_rows, num_rows_write_every_round);
+        ASSERT_EQ(property.num_versions, num_rows_write);
+        ASSERT_EQ(property.num_puts, num_rows_write);
+        ASSERT_EQ(property.num_rows, num_rows_write);
     }
 }
 CATCH
@@ -1611,49 +1598,35 @@ CATCH
 TEST_F(Segment_test, CalculateDTFilePropertyWithPropertyFileDeleted)
 try
 {
-    Settings settings                    = dmContext().db_context.getSettings();
-    settings.dt_segment_stable_pack_rows = 10;
-
-    segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
-
-    const size_t num_rows_write_every_round = 100;
-    const size_t write_round                = 3;
-    const size_t tso                        = 10000;
-    for (size_t i = 0; i < write_round; i++)
+    const size_t num_rows_write = 100;
+    const size_t tso            = 10000;
     {
-        size_t start = num_rows_write_every_round * i;
-        Block  block = DMTestEnv::prepareSimpleWriteBlock(start, start + num_rows_write_every_round, false, tso);
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false, tso);
         // write to segment
         segment->write(dmContext(), block);
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
-        auto & stable  = segment->getStable();
+        auto & stable = segment->getStable();
+        ASSERT_EQ(stable->getRows(), num_rows_write);
         auto & dmfiles = stable->getDMFiles();
-        ASSERT_GT(dmfiles[0]->getPacks(), (size_t)1);
+        ASSERT_GT(dmfiles.size(), (size_t)0);
         auto & dmfile    = dmfiles[0];
         auto   file_path = dmfile->path();
         // check property file exists and then delete it
         ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
         Poco::File(file_path + "/property").remove();
         ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
-        // clear PackProperties to force it to calculate from scratch
-        dmfile->getPackProperties().clear_property();
-        ASSERT_EQ(dmfile->getPackProperties().property_size(), 0);
         // caculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);
-        auto        start = RowKeyValue::fromHandle(0);
-        auto        end   = RowKeyValue::fromHandle(num_rows_write_every_round);
-        RowKeyRange range(start, end, false, 1);
-        // calculate the StableProperty for packs in the key range [0, num_rows_write_every_round)
-        stable->calculateStableProperty(dmContext(), range, false);
+        stable->calculateStableProperty(dmContext(), segment->getRowKeyRange(), false, 1);
         ASSERT_EQ(stable->isStablePropertyCached(), true);
         auto & property = stable->getStableProperty();
         ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
-        ASSERT_EQ(property.num_versions, num_rows_write_every_round);
-        ASSERT_EQ(property.num_puts, num_rows_write_every_round);
-        ASSERT_EQ(property.num_rows, num_rows_write_every_round);
+        ASSERT_EQ(property.num_versions, num_rows_write);
+        ASSERT_EQ(property.num_puts, num_rows_write);
+        ASSERT_EQ(property.num_rows, num_rows_write);
     }
 }
 CATCH

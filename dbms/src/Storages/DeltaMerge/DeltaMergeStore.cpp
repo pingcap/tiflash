@@ -1446,7 +1446,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         dm_context->min_version = gc_safe_point;
         // calculate StableProperty if needed
         if (!segment->getStable()->isStablePropertyCached())
-            segment->getStable()->calculateStableProperty(*dm_context, segment_range, isCommonHandle());
+            segment->getStable()->calculateStableProperty(*dm_context, segment_range, isCommonHandle(), rowkey_column_size);
 
         try
         {
