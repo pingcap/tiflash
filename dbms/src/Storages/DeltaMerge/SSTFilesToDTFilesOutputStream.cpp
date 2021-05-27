@@ -129,7 +129,7 @@ bool SSTFilesToDTFilesOutputStream::newDTFileStream()
 
 void SSTFilesToDTFilesOutputStream::write()
 {
-    size_t last_not_clean_rows     = 0;
+    size_t last_not_clean_rows = 0;
     while (true)
     {
 
@@ -178,7 +178,7 @@ void SSTFilesToDTFilesOutputStream::write()
         dt_stream->write(block, cur_not_clean_rows - last_not_clean_rows);
 
         commit_rows += block.rows();
-        last_not_clean_rows     = cur_not_clean_rows;
+        last_not_clean_rows = cur_not_clean_rows;
     }
 }
 
