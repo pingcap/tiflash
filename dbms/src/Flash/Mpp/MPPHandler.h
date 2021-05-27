@@ -201,15 +201,14 @@ struct MPPTunnelSet
         std::string data;
         response.SerializeToString(&data);
         mpp::MPPDataPacket packet;
-        packet.set_data(data);
+        packet.set_data(std::move(data));
         tunnels[0]->write(packet);
 
         if (tunnels.size() > 1)
         {
             clearExecutionSummaries(response);
-            data.clear();
             response.SerializeToString(&data);
-            packet.set_data(data);
+            packet.set_data(std::move(data));
             for (size_t i = 1; i < tunnels.size(); i++)
             {
                 tunnels[i]->write(packet);
@@ -227,7 +226,7 @@ struct MPPTunnelSet
         std::string data;
         response.SerializeToString(&data);
         mpp::MPPDataPacket packet;
-        packet.set_data(data);
+        packet.set_data(std::move(data));
         tunnels[partition_id]->write(packet);
     }
 

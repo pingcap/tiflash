@@ -35,7 +35,7 @@ struct StreamWriter
         std::string dag_data;
         response.SerializeToString(&dag_data);
         ::coprocessor::BatchResponse resp;
-        resp.set_data(dag_data);
+        resp.set_data(std::move(dag_data));
         std::lock_guard<std::mutex> lk(write_mutex);
         writer->Write(resp);
     }
