@@ -276,7 +276,7 @@ public:
       * Use only after all calls to joinBlock was done.
       * left_sample_block is passed without account of 'use_nulls' setting (columns will be converted to Nullable inside).
       */
-    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t max_block_size) const;
+    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
 
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
@@ -309,6 +309,12 @@ public:
 
         RowRefList() {}
         RowRefList(const Block * block_, size_t row_num_) : RowRef(block_, row_num_) {}
+    };
+
+    struct RowRefListWithLock {
+        RowRefList row_ref_list;
+        /// mutex to protect concurrent insert to rows_not_inserted_to_map
+        std::mutex mutex;
     };
 
 
@@ -423,9 +429,7 @@ private:
     /// For right/full join, including
     /// 1. Rows with NULL join keys
     /// 2. Rows that are filtered by right join conditions
-    RowRefList rows_not_inserted_to_map;
-    /// mutex to protect concurrent insert to rows_not_inserted_to_map
-    std::mutex not_inserted_rows_mutex;
+    std::vector<std::unique_ptr<RowRefListWithLock>> rows_not_inserted_to_map;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arenas pools;
@@ -482,7 +486,6 @@ private:
     void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map, std::unique_ptr<IColumn::Filter> & is_row_matched,
                                           std::unique_ptr<IColumn::Offsets> & expanded_row_size_after_join) const;
 
-    void handleOtherConditionsForCrossJoin(Block & block, std::vector<UInt8 > & is_row_matched, std::vector<size_t> & expanded_row_size_after_join, const std::vector<size_t> & right_table_columns) const;
 };
 
 using JoinPtr = std::shared_ptr<Join>;
