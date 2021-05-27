@@ -42,8 +42,10 @@ inline bool isRoughSetFilterSupportType(const Int32 field_type)
     case TiDB::TypeDate:
     case TiDB::TypeTime:
     case TiDB::TypeDatetime:
-    case TiDB::TypeTimestamp:
         return true;
+    // For timestamp, should take time_zone into consideration. Disable it.
+    case TiDB::TypeTimestamp:
+        return false;
     // For these types, should take collation into consideration. Disable them.
     case TiDB::TypeVarchar:
     case TiDB::TypeJSON:
@@ -87,7 +89,6 @@ inline RSOperatorPtr parseTiCompareExpr( //
     const FilterParser::RSFilterType            filter_type,
     const ColumnDefines &                       columns_to_read,
     const FilterParser::AttrCreatorByColumnID & creator,
-    const TimezoneInfo &                        timezone_info,
     Poco::Logger * /* log */)
 {
     if (unlikely(expr.children_size() != 2))
@@ -100,16 +101,10 @@ inline RSOperatorPtr parseTiCompareExpr( //
 
     Attr             attr;
     Field            value;
-    UInt32           state               = 0x0;
-    constexpr UInt32 state_has_column    = 0x1;
-    constexpr UInt32 state_has_literal   = 0x2;
-    constexpr UInt32 state_finish        = state_has_column | state_has_literal;
-    bool             is_timestamp_column = false;
-    for (const auto & child : expr.children())
-    {
-        if (isColumnExpr(child))
-            is_timestamp_column = (child.field_type().tp() == TiDB::TypeTimestamp);
-    }
+    UInt32           state             = 0x0;
+    constexpr UInt32 state_has_column  = 0x1;
+    constexpr UInt32 state_has_literal = 0x2;
+    constexpr UInt32 state_finish      = state_has_column | state_has_literal;
     for (const auto & child : expr.children())
     {
         if (isColumnExpr(child))
@@ -130,27 +125,6 @@ inline RSOperatorPtr parseTiCompareExpr( //
         {
             state |= state_has_literal;
             value = decodeLiteral(child);
-            if (is_timestamp_column)
-            {
-                auto literal_type = child.field_type().tp();
-                if (unlikely(literal_type != TiDB::TypeTimestamp && literal_type != TiDB::TypeDatetime))
-                    return createUnsupported(expr.ShortDebugString(),
-                                             "Compare timestamp column with literal type(" + DB::toString(literal_type)
-                                                 + ") is not supported",
-                                             false);
-                // convert literal value from timezone specified in cop request to UTC
-                if (literal_type == TiDB::TypeDatetime && !timezone_info.is_utc_timezone)
-                {
-                    static const auto & time_zone_utc = DateLUT::instance("UTC");
-                    UInt64              from_time     = value.get<UInt64>();
-                    UInt64              result_time   = from_time;
-                    if (timezone_info.is_name_based)
-                        convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
-                    else if (timezone_info.timezone_offset != 0)
-                        convertTimeZoneByOffset(from_time, result_time, -timezone_info.timezone_offset, time_zone_utc);
-                    value = Field(result_time);
-                }
-            }
         }
     }
 
@@ -193,7 +167,6 @@ inline RSOperatorPtr parseTiCompareExpr( //
 RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
                           const ColumnDefines &                       columns_to_read,
                           const FilterParser::AttrCreatorByColumnID & creator,
-                          const TimezoneInfo &                        timezone_info,
                           Poco::Logger *                              log)
 {
     assert(isFunctionExpr(expr));
@@ -219,7 +192,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
             {
                 const auto & child = expr.children(0);
                 if (likely(isFunctionExpr(child)))
-                    op = createNot(parseTiExpr(child, columns_to_read, creator, timezone_info, log));
+                    op = createNot(parseTiExpr(child, columns_to_read, creator, log));
                 else
                     op = createUnsupported(child.ShortDebugString(), "child of logical not is not function", false);
             }
@@ -233,7 +206,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
             {
                 const auto & child = expr.children(i);
                 if (likely(isFunctionExpr(child)))
-                    children.emplace_back(parseTiExpr(child, columns_to_read, creator, timezone_info, log));
+                    children.emplace_back(parseTiExpr(child, columns_to_read, creator, log));
                 else
                     children.emplace_back(createUnsupported(child.ShortDebugString(), "child of logical operator is not function", false));
             }
@@ -250,7 +223,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
         case FilterParser::RSFilterType::GreaterEqual:
         case FilterParser::RSFilterType::Less:
         case FilterParser::RSFilterType::LessEuqal:
-            op = parseTiCompareExpr(expr, filter_type, columns_to_read, creator, timezone_info, log);
+            op = parseTiCompareExpr(expr, filter_type, columns_to_read, creator, log);
             break;
 
         case FilterParser::RSFilterType::In:
@@ -273,11 +246,10 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
 inline RSOperatorPtr tryParse(const tipb::Expr &                          filter,
                               const ColumnDefines &                       columns_to_read,
                               const FilterParser::AttrCreatorByColumnID & creator,
-                              const TimezoneInfo &                        timezone_info,
                               Poco::Logger *                              log)
 {
     if (isFunctionExpr(filter))
-        return cop::parseTiExpr(filter, columns_to_read, creator, timezone_info, log);
+        return cop::parseTiExpr(filter, columns_to_read, creator, log);
     else
         return createUnsupported(filter.ShortDebugString(), "child of logical and is not function", false);
 }
@@ -296,7 +268,7 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo &                  
 
     if (dag_info.filters.size() == 1)
     {
-        op = cop::tryParse(*dag_info.filters[0], columns_to_read, creator, dag_info.timezone_info, log);
+        op = cop::tryParse(*dag_info.filters[0], columns_to_read, creator, log);
     }
     else
     {
@@ -305,7 +277,7 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo &                  
         for (size_t i = 0; i < dag_info.filters.size(); ++i)
         {
             const auto & filter = *dag_info.filters[i];
-            children.emplace_back(cop::tryParse(filter, columns_to_read, creator, dag_info.timezone_info, log));
+            children.emplace_back(cop::tryParse(filter, columns_to_read, creator, log));
         }
         op = createAnd(children);
     }
