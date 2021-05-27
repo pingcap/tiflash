@@ -1,6 +1,5 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
-#include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
