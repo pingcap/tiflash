@@ -148,6 +148,12 @@ void ColumnTuple::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<
         column->updateHashWithValue(n, hash, collator, sort_key_container);
 }
 
+void ColumnTuple::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+{
+    for (auto & column : columns)
+        column->updateHashWithValues(hash_values, collator, sort_key_container);
+}
+
 void ColumnTuple::insertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
     const size_t tuple_size = columns.size();

@@ -1,3 +1,4 @@
+#include <Common/TiFlashException.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
@@ -153,7 +154,6 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
         // 3) encode each chunk and send it
         for (auto & block : input_blocks)
         {
-            ColumnRawPtrs key_col_ptrs;
             std::vector<Block> dest_blocks(partition_num);
             std::vector<MutableColumns> dest_tbl_cols(partition_num);
 
@@ -170,24 +170,45 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
                 dest_tbl_cols[i] = block.cloneEmptyColumns();
                 dest_blocks[i] = block.cloneEmpty();
             }
-            // get partition key column ids
+
+            size_t rows = block.rows();
+            IColumn::HashValues hash_values(rows);
+
+            // get hash values by all partition key columns
             for (auto i : partition_col_ids)
             {
-                key_col_ptrs.emplace_back(block.getByPosition(i).column.get());
+                block.getByPosition(i).column->updateHashWithValues(hash_values, nullptr, TiDB::dummy_sort_key_contaner);
             }
+
             // partition each row
-            size_t rows = block.rows();
+            std::vector<IColumn::Filter> partition_filters(partition_num);
+            std::vector<UInt64> partition_size(partition_num, 0);
+            for (size_t i = 0; i < partition_num; ++i)
+            {
+                partition_filters[i].resize_fill(rows, 0);
+                partition_size[i] = 0;
+            }
             for (size_t row_index = 0; row_index < rows; ++row_index)
             {
-                // TODO: add specific collators
-                UInt128 key = hash128(row_index, key_col_ptrs.size(), key_col_ptrs, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
+                UInt128 key;
+                hash_values[row_index].get128(key.low, key.high);
+
                 auto part_id = (key.low % partition_num);
-                // copy each field
+                partition_filters[part_id][row_index] = 1;
+                partition_size[part_id]++;
+            }
+            for (size_t part_id = 0; part_id < partition_num; ++part_id)
+            {
+                const auto & filter = partition_filters[part_id];
+                auto & reserve = partition_size[part_id];
+                auto & columns = dest_tbl_cols[part_id];
+                // Partition block with filter map
                 for (size_t col_id = 0; col_id < block.columns(); ++col_id)
                 {
-                    dest_tbl_cols[part_id][col_id]->insert(block.getByPosition(col_id).column->operator[](row_index));
+                    columns[col_id] = block.getByPosition(col_id).column->filter(filter, reserve)->assumeMutable();
                 }
             }
+
             // serialize each partitioned block and write it to its destination
             for (auto part_id = 0; part_id < partition_num; ++part_id)
             {
