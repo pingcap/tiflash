@@ -83,9 +83,9 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 
 
     getRegionTable().setTableCheckerThreshold(config.getDouble(TABLE_OVERLAP_THRESHOLD, 0.6));
-    // default config about compact-log: period 120s, rows 20k, bytes 32MB.
+    // default config about compact-log: period 120s, rows 40k, bytes 32MB.
     getKVStore()->setRegionCompactLogConfig(std::max(config.getUInt64(COMPACT_LOG_MIN_PERIOD, 120), 1),
-        std::max(config.getUInt64(COMPACT_LOG_MIN_ROWS, 20 * 1024), 1),
+        std::max(config.getUInt64(COMPACT_LOG_MIN_ROWS, 40 * 1024), 1),
         std::max(config.getUInt64(COMPACT_LOG_MIN_BYTES, 32 * 1024 * 1024), 1));
     replica_read_max_thread = std::max(config.getUInt64(REPLICA_READ_MAX_THREAD, 1), 1);
 }
