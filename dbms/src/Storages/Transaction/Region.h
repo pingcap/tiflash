@@ -174,6 +174,10 @@ public:
 
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
 
+    /// get approx rows, bytes info about mem cache.
+    std::pair<size_t, size_t> getApproxMemCacheInfo() const;
+    void cleanApproxMemCacheInfo() const;
+
 private:
     Region() = delete;
     friend class RegionRaftCommandDelegate;
@@ -199,14 +203,15 @@ private:
 
     RegionMeta meta;
 
-    mutable std::atomic<Timepoint> last_compact_log_time = Timepoint::min();
-
     Logger * log;
 
     const TableID mapped_table_id;
 
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
+    mutable std::atomic<Timepoint> last_compact_log_time = Timepoint::min();
+    mutable std::atomic<size_t> approx_mem_cache_rows{0};
+    mutable std::atomic<size_t> approx_mem_cache_bytes{0};
 };
 
 class RegionRaftCommandDelegate : public Region, private boost::noncopyable
