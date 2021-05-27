@@ -153,7 +153,6 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
         // 3) encode each chunk and send it
         for (auto & block : input_blocks)
         {
-            ColumnRawPtrs key_col_ptrs;
             std::vector<Block> dest_blocks(partition_num);
             std::vector<MutableColumns> dest_tbl_cols(partition_num);
 
@@ -170,17 +169,22 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
                 dest_tbl_cols[i] = block.cloneEmptyColumns();
                 dest_blocks[i] = block.cloneEmpty();
             }
-            // get partition key column ids
+
+            size_t rows = block.rows();
+            IColumn::HashValues hash_values(rows);
+
+            // get hash values by all partition key columns
             for (auto i : partition_col_ids)
             {
-                key_col_ptrs.emplace_back(block.getByPosition(i).column.get());
+                block.getByPosition(i).column->updateHashWithValues(hash_values, nullptr, TiDB::dummy_sort_key_contaner);
             }
+
             // partition each row
-            size_t rows = block.rows();
             for (size_t row_index = 0; row_index < rows; ++row_index)
             {
-                // TODO: add specific collators
-                UInt128 key = hash128(row_index, key_col_ptrs.size(), key_col_ptrs, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
+                UInt128 key;
+                hash_values[row_index].get128(key.low, key.high);
+
                 auto part_id = (key.low % partition_num);
                 // copy each field
                 for (size_t col_id = 0; col_id < block.columns(); ++col_id)
@@ -188,6 +192,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
                     dest_tbl_cols[part_id][col_id]->insert(block.getByPosition(col_id).column->operator[](row_index));
                 }
             }
+
             // serialize each partitioned block and write it to its destination
             for (auto part_id = 0; part_id < partition_num; ++part_id)
             {
