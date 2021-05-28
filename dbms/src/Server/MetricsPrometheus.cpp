@@ -5,6 +5,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
+#include <Common/PocoNetInjection.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/Context.h>
 #include <Poco/Crypto/X509Certificate.h>
@@ -13,13 +14,15 @@
 #include <Poco/Net/HTTPRequestHandlerFactory.h>
 #include <Poco/Net/HTTPServerRequest.h>
 #include <Poco/Net/HTTPServerResponse.h>
-#include <Poco/Net/SecureServerSocket.h>
-#include <Poco/Net/SSLManager.h>
 #include <daemon/BaseDaemon.h>
 #include <prometheus/collectable.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
 #include <prometheus/text_serializer.h>
+
+#ifndef USE_INTERNAL_POCO_LIBRARY
+#include <Common/PocoNetInjection.h>
+#endif
 
 namespace DB
 {
@@ -86,10 +89,8 @@ private:
 std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     const TiFlashSecurityConfig & security_config, const std::weak_ptr<prometheus::Collectable> & collectable, const String & metrics_port)
 {
-    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path,
-        security_config.cert_path, security_config.ca_path, Poco::Net::Context::VerificationMode::VERIFY_STRICT);
-
-    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+    using namespace PocoInjection;
+    auto check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
         if (security_config.allowed_common_names.empty())
         {
             return true;
@@ -97,9 +98,11 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
         return security_config.allowed_common_names.count(cert.commonName()) > 0;
     };
 
-    //FIXME: common name filter
+    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path,
+        security_config.cert_path, security_config.ca_path, Poco::Net::Context::VerificationMode::VERIFY_STRICT);
 
-    Poco::Net::SecureServerSocket socket(context);
+
+    VerifiedSecureServerSocket<decltype(check_common_name)> socket(std::move(check_common_name),context);
 
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
 
