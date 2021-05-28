@@ -72,7 +72,6 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
     else
     {
         LOG_INFO(log, "Configuration raft.disable_bg_flush is set to true, background flush tasks are disabled.");
-        storage_gc_handle = background_pool.addTask([this] { return tmt.getGCManager().work(); }, false);
     }
 }
 
@@ -105,11 +104,6 @@ BackgroundService::~BackgroundService()
     {
         background_pool.removeTask(region_handle);
         region_handle = nullptr;
-    }
-    if (storage_gc_handle)
-    {
-        background_pool.removeTask(storage_gc_handle);
-        storage_gc_handle = nullptr;
     }
 }
 
