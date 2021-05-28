@@ -84,6 +84,8 @@
 #endif
 #endif
 
+#include <Common/PocoNetInjection.h>
+
 namespace CurrentMetrics
 {
 extern const Metric Revision;
@@ -861,6 +863,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     {
+        using namespace PocoInjection;
         Poco::Timespan keep_alive_timeout(config().getUInt("keep_alive_timeout", 10), 0);
 
         Poco::ThreadPool server_pool(1, config().getUInt("max_connections", 1024));
@@ -962,7 +965,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                         security_config.cert_path,
                         security_config.ca_path,
                         Poco::Net::Context::VerificationMode::VERIFY_STRICT);
-                    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name
+                    auto check_common_name
                         = [&](const Poco::Crypto::X509Certificate & cert) {
                               if (security_config.allowed_common_names.empty())
                               {
@@ -970,12 +973,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
                               }
                               return security_config.allowed_common_names.count(cert.commonName()) > 0;
                           };
-                    // context->setAdhocVerification(check_common_name);
-
-                    // FIXME: common name filter
                     std::call_once(ssl_init_once, SSLInit);
 
-                    Poco::Net::SecureServerSocket socket(context);
+                    VerifiedSecureServerSocket<decltype(check_common_name)> socket(std::move(check_common_name),context);
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("https_port"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
