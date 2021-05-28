@@ -297,7 +297,7 @@ struct OneAdder
                 UInt128 key;
                 SipHash hash;
                 hash.update(value.data, value.size);
-                hash.get128(key.low, key.high);
+                hash.get128(key.low(), key.high());
 
                 data.set.insert(key);
             }

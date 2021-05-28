@@ -149,7 +149,7 @@ private:
             if (block.rows() > 1 && !isAlreadySorted(block, sort))
                 stableSortBlock(block, sort);
         }
-        return std::move(block);
+        return block;
     }
 
 private:

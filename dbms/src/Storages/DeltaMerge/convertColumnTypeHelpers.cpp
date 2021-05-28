@@ -356,7 +356,7 @@ ColumnPtr convertColumnByColumnDefineIfNeed(const DataTypePtr & from_type, Colum
 {
     // No need to convert
     if (likely(from_type->equals(*to_column_define.type)))
-        return std::move(from_col);
+        return from_col;
 
     // Check if support
     auto [compatible, need_data_cast] = checkColumnTypeCompatibility(from_type, to_column_define.type);
@@ -368,7 +368,7 @@ ColumnPtr convertColumnByColumnDefineIfNeed(const DataTypePtr & from_type, Colum
     }
     if (unlikely(!need_data_cast))
     {
-        return std::move(from_col);
+        return from_col;
     }
 
     // Cast column's data from DataType in disk to what we need now

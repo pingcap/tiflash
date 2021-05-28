@@ -181,7 +181,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             {
                 // TODO: add specific collators
                 UInt128 key = hash128(row_index, key_col_ptrs.size(), key_col_ptrs, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
-                auto part_id = (key.low % partition_num);
+                auto part_id = (key.low() % partition_num);
                 // copy each field
                 for (size_t col_id = 0; col_id < block.columns(); ++col_id)
                 {

@@ -1,3 +1,4 @@
+#include <Common/config.h>
 #if Poco_MongoDB_FOUND
 #include <Common/config.h>
 #include <Poco/Util/AbstractConfiguration.h>

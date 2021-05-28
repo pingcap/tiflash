@@ -21,9 +21,11 @@ find_path(ODBC_INCLUDE_DIRECTORIES
 	/usr/include
 	/usr/include/odbc
 	/usr/include/iodbc
+	/usr/include/libiodbc
 	/usr/local/include
 	/usr/local/include/odbc
 	/usr/local/include/iodbc
+	/usr/local/include/libiodbc
 	/usr/local/odbc/include
 	/usr/local/iodbc/include
 	"C:/Program Files/ODBC/include"
@@ -64,3 +66,4 @@ find_package_handle_standard_args(ODBC
 	)
 
 mark_as_advanced(ODBC_FOUND ODBC_LIBRARIES ODBC_INCLUDE_DIRECTORIES)
+

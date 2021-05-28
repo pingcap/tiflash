@@ -100,7 +100,7 @@ void CreatingSetsBlockInputStream::createAll()
                     if (isCancelledOrThrowIfKilled())
                         return;
 
-                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
+                    workers.emplace_back(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker);
                 }
             }
         }

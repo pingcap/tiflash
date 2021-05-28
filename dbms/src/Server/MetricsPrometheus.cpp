@@ -14,6 +14,7 @@
 #include <Poco/Net/HTTPServerRequest.h>
 #include <Poco/Net/HTTPServerResponse.h>
 #include <Poco/Net/SecureServerSocket.h>
+#include <Poco/Net/SSLManager.h>
 #include <daemon/BaseDaemon.h>
 #include <prometheus/collectable.h>
 #include <prometheus/exposer.h>
@@ -96,7 +97,7 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
         return security_config.allowed_common_names.count(cert.commonName()) > 0;
     };
 
-    context->setAdhocVerification(check_common_name);
+    //FIXME: common name filter
 
     Poco::Net::SecureServerSocket socket(context);
 

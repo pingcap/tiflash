@@ -970,7 +970,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
                               }
                               return security_config.allowed_common_names.count(cert.commonName()) > 0;
                           };
-                    context->setAdhocVerification(check_common_name);
+                    // context->setAdhocVerification(check_common_name);
+
+                    // FIXME: common name filter
                     std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);

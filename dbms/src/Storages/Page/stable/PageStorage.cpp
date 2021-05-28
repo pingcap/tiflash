@@ -698,7 +698,7 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
                 itr++;
             }
         }
-        return std::move(page_files);
+        return page_files;
     }
 
     // Build a version_set with snapshot
@@ -761,7 +761,7 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
         archievePageFiles(page_files_to_archieve);
     }
 
-    return std::move(page_files);
+    return page_files;
 }
 
 void PageStorage::prepareSnapshotWriteBatch(const SnapshotPtr snapshot, WriteBatch & wb)

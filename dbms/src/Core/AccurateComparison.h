@@ -238,13 +238,13 @@ inline bool greaterOp<DB::UInt64, DB::Float32>(DB::UInt64 u, DB::Float32 f)
 template <>
 inline bool greaterOp<DB::Float64, DB::UInt128>(DB::Float64 f, DB::UInt128 u)
 {
-    return u.low == 0 && greaterOp(f, u.high);
+    return u.low() == 0 && greaterOp(f, u.high());
 }
 
 template <>
 inline bool greaterOp<DB::UInt128, DB::Float64>(DB::UInt128 u, DB::Float64 f)
 {
-    return u.low != 0 || greaterOp(u.high, f);
+    return u.low() != 0 || greaterOp(u.high(), f);
 }
 
 template <>
@@ -323,7 +323,7 @@ inline bool  equalsOp<DB::Int64, DB::Float32>(DB::Int64 u, DB::Float32 f)
 template <>
 inline bool  equalsOp<DB::UInt128, DB::Float64>(DB::UInt128 u, DB::Float64 f)
 {
-    return u.low == 0 && equalsOp(static_cast<UInt64>(u.high), f);
+    return u.low() == 0 && equalsOp(static_cast<UInt64>(u.high()), f);
 }
 
 template <>

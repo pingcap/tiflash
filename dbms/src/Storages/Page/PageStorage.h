@@ -14,6 +14,7 @@
 #include <shared_mutex>
 #include <type_traits>
 #include <unordered_map>
+#include <condition_variable>
 
 namespace DB
 {

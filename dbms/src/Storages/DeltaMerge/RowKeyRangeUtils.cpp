@@ -135,7 +135,7 @@ void sortRangesByStartEdge(RowKeyRanges & ranges)
 RowKeyRanges tryMergeRanges(RowKeyRanges && sorted_ranges, size_t expected_ranges_count, Logger * log)
 {
     if (sorted_ranges.size() <= 1)
-        return std::move(sorted_ranges);
+        return sorted_ranges;
 
     size_t ori_size = sorted_ranges.size();
     /// First merge continuously ranges together.

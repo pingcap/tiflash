@@ -403,7 +403,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, Block &&
         // Fill the new column with data in column[handle_pos]
         FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
     }
-    return std::move(block);
+    return block;
 }
 
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block && to_write)
@@ -1947,7 +1947,7 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);
 
-    std::atomic_store<Block>(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
+    std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
 }
 
 

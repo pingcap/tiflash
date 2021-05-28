@@ -9,7 +9,7 @@ if (NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/poco/CMakeLists.txt")
 endif ()
 
 if (NOT USE_INTERNAL_POCO_LIBRARY)
-    find_package (Poco COMPONENTS Net NetSSL XML SQL Data Crypto DataODBC MongoDB)
+    find_package (Poco COMPONENTS Net NetSSL XML SQL Data Crypto DataODBC MongoDB JSON)
 endif ()
 
 if (Poco_INCLUDE_DIRS AND Poco_Foundation_LIBRARY)

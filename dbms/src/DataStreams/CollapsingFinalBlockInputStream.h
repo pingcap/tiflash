@@ -150,9 +150,11 @@ private:
                 --ptr->refcount;
                 if (!ptr->refcount)
                 {
+#if __cplusplus < 201703L
                     if (std::uncaught_exception())
                         delete ptr;
                     else
+#endif
                         ptr->output_blocks->push_back(ptr);
                 }
                 ptr = nullptr;

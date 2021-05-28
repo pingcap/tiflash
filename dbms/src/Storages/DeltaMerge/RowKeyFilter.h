@@ -26,7 +26,7 @@ inline Block cutBlock(Block && block, size_t offset, size_t limit)
     if (!limit)
         return {};
     if (offset == 0 && limit == rows)
-        return std::move(block);
+        return block;
 
     if (offset == 0)
     {
@@ -49,7 +49,7 @@ inline Block cutBlock(Block && block, size_t offset, size_t limit)
             column.column = std::move(new_column);
         }
     }
-    return std::move(block);
+    return block;
 }
 
 inline Block filterSorted(const RowKeyRange & rowkey_range, Block && block, size_t handle_pos)
@@ -75,14 +75,14 @@ inline Block filterUnsorted(const RowKeyRange & rowkey_range, Block && block, si
     if (!passed_count)
         return {};
     if (passed_count == rows)
-        return std::move(block);
+        return block;
 
     for (size_t i = 0; i < block.columns(); ++i)
     {
         auto & column = block.getByPosition(i);
         column.column = column.column->filter(filter, passed_count);
     }
-    return std::move(block);
+    return block;
 }
 } // namespace RowKeyFilter
 

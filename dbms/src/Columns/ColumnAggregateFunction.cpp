@@ -65,7 +65,7 @@ MutableColumnPtr ColumnAggregateFunction::convertToValues() const
         auto res = createView();
         res->set(function_state->getNestedFunction());
         res->getData().assign(getData().begin(), getData().end());
-        return std::move(res);
+        return res;
     }
 
     MutableColumnPtr res = function->getReturnType()->createColumn();
@@ -136,7 +136,7 @@ ColumnPtr ColumnAggregateFunction::filter(const Filter & filter, ssize_t result_
     if (res_data.size() * 2 < res_data.capacity())
         res_data = Container(res_data.cbegin(), res_data.cend());
 
-    return std::move(res);
+    return res;
 }
 
 
@@ -158,7 +158,7 @@ ColumnPtr ColumnAggregateFunction::permute(const Permutation & perm, size_t limi
     for (size_t i = 0; i < limit; ++i)
         res->getData()[i] = getData()[perm[i]];
 
-    return std::move(res);
+    return res;
 }
 
 /// Is required to support operations with Set
@@ -348,7 +348,7 @@ ColumnPtr ColumnAggregateFunction::replicate(const IColumn::Offsets & offsets) c
             res_data.push_back(data[i]);
     }
 
-    return std::move(res);
+    return res;
 }
 
 MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector) const

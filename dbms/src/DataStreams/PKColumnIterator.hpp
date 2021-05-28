@@ -12,6 +12,12 @@ struct PKColumnIterator : public std::iterator<std::random_access_iterator_tag, 
         return *this;
     }
 
+    PKColumnIterator & operator--()
+    {
+        --pos;
+        return *this;
+    }
+
     PKColumnIterator & operator=(const PKColumnIterator & itr)
     {
         pos = itr.pos;

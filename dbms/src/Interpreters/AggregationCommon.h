@@ -193,7 +193,7 @@ static inline UInt128 ALWAYS_INLINE hash128(
         hash.update(keys[j].data, keys[j].size);
     }
 
-    hash.get128(key.low, key.high);
+    hash.get128(key.low(), key.high());
 
     return key;
 }
@@ -217,7 +217,7 @@ static inline UInt128 ALWAYS_INLINE hash128(
             key_columns[j]->updateHashWithValue(i, hash, collators[j], sort_key_containers[j]);
     }
 
-    hash.get128(key.low, key.high);
+    hash.get128(key.low(), key.high());
 
     return key;
 }

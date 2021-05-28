@@ -194,7 +194,7 @@ void CppStrVec::updateView()
 kvrpcpb::ReadIndexResponse TiFlashRaftProxyHelper::readIndex(const kvrpcpb::ReadIndexRequest & req) const
 {
     auto res = batchReadIndex({req});
-    return std::move(res->at(0).first);
+    return res->at(0).first;
 }
 
 BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req) const
