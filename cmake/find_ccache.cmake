@@ -15,5 +15,5 @@ if (USE_CCACHE AND CCACHE_FOUND AND NOT CMAKE_CXX_COMPILER_LAUNCHER MATCHES "cca
         message (STATUS "Not using ${CCACHE_FOUND} ${CCACHE_VERSION} bug: https://bugzilla.samba.org/show_bug.cgi?id=8118")
     endif ()
 else ()
-    message (STATUS "Not using ccache ${CCACHE_FOUND} ${CCACHE_VERSION}, USE_CCACHE=${USE_CCACHE}")
+    message (STATUS "Not using ccache ${CCACHE_FOUND}, USE_CCACHE=${USE_CCACHE}")
 endif ()
