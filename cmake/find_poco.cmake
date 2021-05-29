@@ -53,6 +53,10 @@ elseif (NOT MISSING_INTERNAL_POCO_LIBRARY)
         set (Poco_Crypto_LIBRARY PocoCrypto)
     endif ()
 
+    set (Poco_Data_FOUND 1)
+    set (Poco_Data_INCLUDE_DIRS "${ClickHouse_SOURCE_DIR}/contrib/poco/Data/include")
+    set (Poco_Data_LIBRARY PocoData)
+
     if (USE_STATIC_LIBRARIES AND USE_INTERNAL_ZLIB_LIBRARY)
         list (APPEND Poco_INCLUDE_DIRS
             "${ClickHouse_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}/"
