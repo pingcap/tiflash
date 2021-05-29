@@ -76,9 +76,6 @@ Block createSampleBlock(const DictionaryStructure & dict_struct)
 DictionarySourceFactory::DictionarySourceFactory()
     : log(&Poco::Logger::get("DictionarySourceFactory"))
 {
-#if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
-    Poco::Data::ODBC::Connector::registerConnector();
-#endif
 }
 
 void DictionarySourceFactory::registerSource(const std::string & source_type, Creator create_source)

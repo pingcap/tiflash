@@ -23,7 +23,6 @@
 #include <DataStreams/XMLRowOutputStream.h>
 #include <DataStreams/TSKVRowOutputStream.h>
 #include <DataStreams/TSKVRowInputStream.h>
-#include <DataStreams/ODBCDriverBlockOutputStream.h>
 #include <DataStreams/CSVRowInputStream.h>
 #include <DataStreams/CSVRowOutputStream.h>
 #include <DataStreams/MaterializingBlockOutputStream.h>
@@ -124,8 +123,7 @@ BlockInputStreamPtr FormatFactory::getInput(const String & name, ReadBuffer & bu
         || name == "Null"
         || name == "JSON"
         || name == "JSONCompact"
-        || name == "XML"
-        || name == "ODBCDriver")
+        || name == "XML")
     {
         throw Exception("Format " + name + " is not suitable for input", ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT);
     }
@@ -197,8 +195,6 @@ static BlockOutputStreamPtr getOutputImpl(const String & name, WriteBuffer & buf
             settings.output_format_write_statistics), sample);
     else if (name == "TSKV")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(std::make_shared<TSKVRowOutputStream>(buf, sample), sample);
-    else if (name == "ODBCDriver")
-        return std::make_shared<ODBCDriverBlockOutputStream>(buf, sample);
     else if (name == "Null")
         return std::make_shared<NullBlockOutputStream>(sample);
     else
