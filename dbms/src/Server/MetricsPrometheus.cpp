@@ -20,6 +20,9 @@
 #include <prometheus/gauge.h>
 #include <prometheus/text_serializer.h>
 
+#ifdef TIFLASH_POCO_NET_INJECTION
+#include <Common/PocoNetInjection.h>
+#endif
 namespace DB
 {
 
@@ -87,7 +90,7 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
 {
     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path,
         security_config.cert_path, security_config.ca_path, Poco::Net::Context::VerificationMode::VERIFY_STRICT);
-
+#ifndef TIFLASH_POCO_NET_INJECTION
     std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
         if (security_config.allowed_common_names.empty())
         {
@@ -99,6 +102,17 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     context->setAdhocVerification(check_common_name);
 
     Poco::Net::SecureServerSocket socket(context);
+#else
+    auto check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+        if (security_config.allowed_common_names.empty())
+        {
+            return true;
+        }
+        return security_config.allowed_common_names.count(cert.commonName()) > 0;
+    };
+
+    Poco::Net::Injection::VerifiedSecureServerSocket<decltype(check_common_name)> socket(std::move(check_common_name), context);
+#endif
 
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
 

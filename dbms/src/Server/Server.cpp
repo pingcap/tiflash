@@ -962,6 +962,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                         security_config.cert_path,
                         security_config.ca_path,
                         Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+                    std::call_once(ssl_init_once, SSLInit);
+#ifndef TIFLASH_POCO_NET_INJECTION
                     std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name
                         = [&](const Poco::Crypto::X509Certificate & cert) {
                               if (security_config.allowed_common_names.empty())
@@ -970,10 +972,21 @@ int Server::main(const std::vector<std::string> & /*args*/)
                               }
                               return security_config.allowed_common_names.count(cert.commonName()) > 0;
                           };
+
                     context->setAdhocVerification(check_common_name);
-                    std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
+#else
+                    auto check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+                        if (security_config.allowed_common_names.empty())
+                        {
+                            return true;
+                        }
+                        return security_config.allowed_common_names.count(cert.commonName()) > 0;
+                    };
+
+                    Poco::Net::Injection::VerifiedSecureServerSocket<decltype(check_common_name)> socket(std::move(check_common_name), context);
+#endif
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("https_port"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);

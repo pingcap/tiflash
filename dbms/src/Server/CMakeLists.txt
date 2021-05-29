@@ -64,6 +64,10 @@ if (USE_EMBEDDED_COMPILER)
     add_subdirectory ("Compiler-${LLVM_VERSION}")
 endif ()
 
+if (NOT USE_INTERNAL_POCO_LIBRARY)
+    target_link_libraries(tiflash ${Poco_JSON_LIBRARY} ${Poco_Crypto_LIBRARY})
+endif()
+
 if (CLICKHOUSE_SPLIT_BINARY)
     add_executable (clickhouse-server clickhouse-server.cpp)
     target_link_libraries (clickhouse-server clickhouse-server-lib)
