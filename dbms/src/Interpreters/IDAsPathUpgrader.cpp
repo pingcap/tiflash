@@ -15,6 +15,7 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/DirectoryIterator.h>
+#include <Poco/Exception.h>
 #include <Poco/File.h>
 #include <Poco/FileStream.h>
 #include <Storages/MutableSupport.h>
@@ -24,6 +25,7 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiDBSchemaSyncer.h>
 #include <common/logger_useful.h>
+#include <chrono>
 
 namespace DB
 {
@@ -210,7 +212,11 @@ void tryRemoveDirectory(const String & directory, Poco::Logger * log, bool recur
         {
             dir.remove(/*recursive=*/recursive);
         }
+#if POCO_VERSION <= 0x01070000
+        catch (Poco::FileException &)
+#else
         catch (Poco::DirectoryNotEmptyException &)
+#endif
         {
             // just ignore and keep that directory if it is not empty
             LOG_WARNING(log, "Can not remove directory: " << directory << ", it is not empty");

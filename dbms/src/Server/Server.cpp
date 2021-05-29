@@ -84,6 +84,10 @@
 #endif
 #endif
 
+#ifdef TIFLASH_POCO_NET_INJECTION
+#include <Common/PocoNetInjection.h>
+#endif
+
 namespace CurrentMetrics
 {
 extern const Metric Revision;

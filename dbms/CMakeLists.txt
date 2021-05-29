@@ -124,7 +124,7 @@ else ()
 endif ()
 
 if (NOT USE_INTERNAL_POCO_LIBRARY)
-    target_compile_definitions(dbms -DTIFLASH_POCO_NET_INJECTION=1)
+    target_compile_definitions(dbms PRIVATE -DTIFLASH_POCO_NET_INJECTION=1)
 endif()
 
 target_include_directories(dbms PUBLIC "${TIFLASH_PROXY_FFI_SRC}")

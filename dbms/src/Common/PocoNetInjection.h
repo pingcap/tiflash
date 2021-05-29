@@ -14,11 +14,13 @@
 #include <Poco/Net/DNS.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/Net/SSLException.h>
-#include <Poco/Net/VerifiedSecureSocketImpl.h>
+#include <Poco/Net/SecureSocketImpl.h>
 #include <Poco/Net/SecureStreamSocket.h>
 #include <Poco/Net/SecureStreamSocketImpl.h>
 #include <Poco/Net/StreamSocket.h>
 #include <Poco/Net/StreamSocketImpl.h>
+#include <Poco/Net/ServerSocketImpl.h>
+#include <Poco/Net/SSLManager.h>
 #include <Poco/Net/Utility.h>
 #include <Poco/Net/X509Certificate.h>
 #include <Poco/NumberFormatter.h>
@@ -37,6 +39,24 @@ using Poco::NumberFormatter;
 using Poco::TimeoutException;
 using Poco::Timespan;
 
+struct StreamSocketProxy : public SecureStreamSocket {
+    StreamSocketProxy(SocketImpl* pImpl) : SecureStreamSocket(pImpl) {}
+};
+
+struct SocketImplProxy : public SocketImpl {
+    template <class T>
+    friend class VerifiedSecureSocketImpl;
+};
+
+struct SecureStreamSocketImplProxy : public SecureStreamSocketImpl {
+    template <class T>
+    friend class VerifiedSecureSocketImpl;
+   
+    template <typename ...Args>
+    SecureStreamSocketImplProxy(Args&&...args) : SecureStreamSocketImpl(std::forward<Args>(args)...){}
+};
+
+
 static inline bool isLocalHost(const std::string& hostName)
 {
 	try
@@ -51,9 +71,9 @@ static inline bool isLocalHost(const std::string& hostName)
 }
 
 template <class Verifier>
-class VerifiedSecureSocketImpl
+class VerifiedSecureSocketImpl {
 public:
-    VerifiedSecureSocketImpl(Verifier verifer, Poco::AutoPtr<SocketImpl> pSocketImpl, Context::Ptr pContext);
+    VerifiedSecureSocketImpl(Verifier verifier, Poco::AutoPtr<SocketImpl> pSocketImpl, Context::Ptr pContext);
     virtual ~VerifiedSecureSocketImpl();
     SocketImpl * acceptConnection(SocketAddress & clientAddr);
     void connect(const SocketAddress & address, bool performHandshake);
@@ -95,37 +115,25 @@ private:
     bool _needHandshake;
     std::string _peerHostName;
     Session::Ptr _pSession;
-    Verifier _verifer;
+    Verifier _verifier;
 };
 
 
 
 
 template <typename Verifier>
-VerifiedSecureSocketImpl<Verifier>::VerifiedSecureSocketImpl(Verifier verifer, Poco::AutoPtr<SocketImpl> pSocketImpl, Context::Ptr pContext):
+VerifiedSecureSocketImpl<Verifier>::VerifiedSecureSocketImpl(Verifier verifier, Poco::AutoPtr<SocketImpl> pSocketImpl, Context::Ptr pContext):
 	_pSSL(0),
 	_pSocket(pSocketImpl),
 	_pContext(pContext),
 	_needHandshake(false),
-    _verifier(std::move(verifier))
+        _verifier(std::move(verifier))
 {
 	poco_check_ptr (_pSocket);
 	poco_check_ptr (_pContext);
 }
 
-VerifieSecureSocketImpl::~VerifiedSecureSocketImpl()
-{
-	try
-	{
-		reset();
-	}
-	catch (...)
-	{
-		poco_unexpected();
-	}
-}
-
-template <typename Verifier>
+template<typename Verifier>
 VerifiedSecureSocketImpl<Verifier>::~VerifiedSecureSocketImpl()
 {
 	try
@@ -138,17 +146,16 @@ VerifiedSecureSocketImpl<Verifier>::~VerifiedSecureSocketImpl()
 	}
 }
 
-
 template <typename Verifier>
 SocketImpl* VerifiedSecureSocketImpl<Verifier>::acceptConnection(SocketAddress& clientAddr)
 {
 	poco_assert (!_pSSL);
 
 	StreamSocket ss = _pSocket->acceptConnection(clientAddr);
-	Poco::AutoPtr<SecureStreamSocketImpl> pSecureStreamSocketImpl = new SecureStreamSocketImpl(static_cast<StreamSocketImpl*>(ss.impl()), _pContext);
-	pSecureStreamSocketImpl->acceptSSL();
-	pSecureStreamSocketImpl->duplicate();
-	return pSecureStreamSocketImpl;
+	Poco::AutoPtr<SecureStreamSocketImplProxy> pSecureStreamSocketImplProxy = new SecureStreamSocketImplProxy(static_cast<StreamSocketImpl*>(ss.impl()), _pContext);
+	pSecureStreamSocketImplProxy->acceptSSL();
+	pSecureStreamSocketImplProxy->duplicate();
+	return pSecureStreamSocketImplProxy;
 }
 
 
@@ -511,7 +518,7 @@ int VerifiedSecureSocketImpl<Verifier>::handleError(int rc)
 	if (rc > 0) return rc;
 
 	int sslError = SSL_get_error(_pSSL, rc);
-	int error = SocketImpl::lastError();
+	int error = SocketImplProxy::lastError();
 
 	switch (sslError)
 	{
@@ -552,7 +559,7 @@ int VerifiedSecureSocketImpl<Verifier>::handleError(int rc)
 				}
 				else
 				{
-					SecureStreamSocketImpl::error(Poco::format("The BIO reported an error: %d", rc));
+					SecureStreamSocketImplProxy::error(Poco::format("The BIO reported an error: %d", rc));
 				}
 			}
 			else
@@ -729,19 +736,15 @@ private:
     VerifiedSecureSocketImpl<Verifier> _impl;
 };
 
-struct StreamSocketProxy : public SecureStreamSocket {
-    StreamSocketProxy(SocketImpl* pImpl) : SecureStreamSocket(pImpl) {}
-};
-
 template <class Verifier>
 class NetSSL_API VerifiedSecureServerSocket : public ServerSocket
 {
 public:
     VerifiedSecureServerSocket(Verifier verifier)
-        : ServerSocket(new VerifiedSecureServerSocketImpl(std::move(verifier), SSLManager::instance().defaultClientContext()), true){};
+        : ServerSocket(new VerifiedSecureServerSocketImpl<Verifier>(std::move(verifier), SSLManager::instance().defaultClientContext()), true){};
 
     explicit VerifiedSecureServerSocket(Verifier verifier, Context::Ptr pContext)
-        : ServerSocket(new VerifiedSecureServerSocketImpl(std::move(verifier), pContext), true) {};
+        : ServerSocket(new VerifiedSecureServerSocketImpl<Verifier>(std::move(verifier), pContext), true) {};
 
     VerifiedSecureServerSocket(const Socket & socket) : ServerSocket(socket)
     {
@@ -750,19 +753,19 @@ public:
     };
 
     VerifiedSecureServerSocket(Verifier verifier, const SocketAddress & address, int backlog = 64)
-        : ServerSocket(new VerifiedSecureServerSocketImpl(std::move(verifier), SSLManager::instance().defaultClientContext()), true)
+        : ServerSocket(new VerifiedSecureServerSocketImpl<Verifier>(std::move(verifier), SSLManager::instance().defaultClientContext()), true)
     {
         impl()->bind(address, true);
         impl()->listen(backlog);
     };
     VerifiedSecureServerSocket(Verifier verifier, const SocketAddress & address, int backlog, Context::Ptr pContext)
-        : ServerSocket(new VerifiedSecureServerSocketImpl(std::move(verifier), pContext), true)
+        : ServerSocket(new VerifiedSecureServerSocketImpl<Verifier>(std::move(verifier), pContext), true)
     {
         impl()->bind(address, true);
         impl()->listen(backlog);
     };
     VerifiedSecureServerSocket(Verifier verifier, Poco::UInt16 port, int backlog = 64)
-        : ServerSocket(new VerifiedSecureServerSocketImpl(std::move(verifier), SSLManager::instance().defaultClientContext()), true)
+        : ServerSocket(new VerifiedSecureServerSocketImpl<Verifier>(std::move(verifier), SSLManager::instance().defaultClientContext()), true)
     {
         IPAddress wildcardAddr;
         SocketAddress address(wildcardAddr, port);
@@ -770,7 +773,7 @@ public:
         impl()->listen(backlog);
     };
     VerifiedSecureServerSocket(Verifier verifier, Poco::UInt16 port, int backlog, Context::Ptr pContext)
-        : ServerSocket(new VerifiedSecureServerSocketImpl(std::move(verifier), pContext), true)
+        : ServerSocket(new VerifiedSecureServerSocketImpl<Verifier>(std::move(verifier), pContext), true)
     {
         IPAddress wildcardAddr;
         SocketAddress address(wildcardAddr, port);

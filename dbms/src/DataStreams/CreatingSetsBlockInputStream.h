@@ -4,7 +4,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/ExpressionAnalyzer.h> /// SubqueriesForSets
 #include <Poco/Logger.h>
-
+#include <thread>
 
 namespace Poco
 {

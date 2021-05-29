@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/Exception.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/Page/PageDefines.h>
@@ -207,7 +208,11 @@ void StoragePathPool::drop(bool recursive, bool must_success)
                 global_capacity->freeUsedSize(path_info.path, total_bytes);
             }
         }
-        catch (Poco::DirectoryNotEmptyException & e)
+#if POCO_VERSION <= 0x01070000
+	catch (Poco::FileException & _e)
+#else
+        catch (Poco::DirectoryNotEmptyException & _e)
+#endif
         {
             if (must_success)
                 throw;
@@ -230,7 +235,11 @@ void StoragePathPool::drop(bool recursive, bool must_success)
                 // Don't need to update global_capacity here.
             }
         }
-        catch (Poco::DirectoryNotEmptyException & e)
+#if POCO_VERSION <= 0x01070000
+        catch (Poco::FileException & _e)
+#else
+        catch (Poco::DirectoryNotEmptyException & _e)
+#endif
         {
             if (must_success)
                 throw;

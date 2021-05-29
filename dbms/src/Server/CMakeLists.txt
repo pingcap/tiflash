@@ -11,6 +11,10 @@ option (ENABLE_CLICKHOUSE_BENCHMARK "Enable benchmark" OFF)
 option (ENABLE_CLICKHOUSE_PERFORMANCE "Enable performance" OFF)
 option (ENABLE_CLICKHOUSE_TOOLS "Enable tools: compressor format extract-from-config-lib" OFF)
 
+if (NOT USE_INTERNAL_POCO_LIBRARY)
+    add_compile_definitions(TIFLASH_POCO_NET_INJECTION=1)
+endif()
+
 configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
 
 add_library (clickhouse-server-lib
@@ -30,8 +34,7 @@ add_library (clickhouse-server-lib
     ClusterManagerService.cpp)
 
 target_link_libraries(clickhouse-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
-
-target_link_libraries (clickhouse-server-lib clickhouse_common_io daemon clickhouse_storages_system clickhouse_functions clickhouse_aggregate_functions clickhouse_table_functions)
+target_link_libraries (clickhouse-server-lib PRIVATE clickhouse_common_io daemon clickhouse_storages_system clickhouse_functions clickhouse_aggregate_functions clickhouse_table_functions)
 target_include_directories (clickhouse-server-lib PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
 
 add_library (clickhouse-local-lib LocalServer.cpp)
@@ -63,10 +66,6 @@ if (USE_EMBEDDED_COMPILER)
     link_directories (${LLVM_LIBRARY_DIRS})
     add_subdirectory ("Compiler-${LLVM_VERSION}")
 endif ()
-
-if (NOT USE_INTERNAL_POCO_LIBRARY)
-    target_link_libraries(tiflash ${Poco_JSON_LIBRARY} ${Poco_Crypto_LIBRARY})
-endif()
 
 if (CLICKHOUSE_SPLIT_BINARY)
     add_executable (clickhouse-server clickhouse-server.cpp)
@@ -105,6 +104,9 @@ if (CLICKHOUSE_SPLIT_BINARY)
     add_custom_target (tiflash ALL DEPENDS clickhouse-bundle)
 else ()
     add_executable (tiflash main.cpp)
+    if (NOT USE_INTERNAL_POCO_LIBRARY)
+        target_link_libraries(tiflash ${Poco_JSON_LIBRARY} ${Poco_Crypto_LIBRARY} )
+    endif()
     target_link_libraries (tiflash clickhouse_common_io)
     target_include_directories (tiflash BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
     target_include_directories (tiflash PRIVATE ${CMAKE_CURRENT_BINARY_DIR})

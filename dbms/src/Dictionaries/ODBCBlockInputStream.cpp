@@ -1,3 +1,4 @@
+#include <Common/config.h>
 #if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
 
 #include <Dictionaries/ODBCBlockInputStream.h>
