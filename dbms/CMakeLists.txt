@@ -182,7 +182,6 @@ target_link_libraries (dbms
     ${Protobuf_LIBRARIES}
     gRPC::grpc++_unsecure
     ${CURL_LIBRARIES}
-    ${MYSQLXX_LIBRARY}
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
@@ -237,13 +236,6 @@ if (USE_CAPNP)
     target_link_libraries (dbms ${CAPNP_LIBRARY})
     if (NOT USE_INTERNAL_CAPNP_LIBRARY)
         target_include_directories (dbms BEFORE PRIVATE ${CAPNP_INCLUDE_DIR})
-    endif ()
-endif ()
-
-if (USE_RDKAFKA)
-    target_link_libraries (dbms ${RDKAFKA_LIBRARY})
-    if (NOT USE_INTERNAL_RDKAFKA_LIBRARY)
-        target_include_directories (dbms BEFORE PRIVATE ${RDKAFKA_INCLUDE_DIR})
     endif ()
 endif ()
 
