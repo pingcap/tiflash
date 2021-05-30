@@ -88,7 +88,6 @@ protected:
     static constexpr char * null = pad_left ? const_cast<char *>(EmptyPODArray) + EmptyPODArraySize : nullptr;
 
     static_assert(pad_left <= EmptyPODArraySize && "Left Padding exceeds EmptyPODArraySize. Is the element size too large?");
-    static_assert(INITIAL_SIZE > 0 && "INITIAL_SIZE should be positive. ");
 
     char * c_start          = null;    /// Does not include pad_left.
     char * c_end            = null;
@@ -644,3 +643,4 @@ template <typename T, size_t stack_size_in_bytes>
 using PODArrayWithStackMemory = PODArray<T, 0, AllocatorWithStackMemory<Allocator<false>, integerRoundUp(stack_size_in_bytes, sizeof(T))>>;
 
 }
+
