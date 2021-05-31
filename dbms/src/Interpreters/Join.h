@@ -289,6 +289,7 @@ public:
     const Names & getLeftJoinKeys() const { return key_names_left; }
     size_t getBuildConcurrency() const { return build_concurrency; }
     bool isBuildSetExceeded() const { return build_set_exceeded.load(); }
+    size_t getNotJoinedStreamConcurrency() const { return build_concurrency; };
 
     void setFinishBuildTable(bool);
 
@@ -315,6 +316,8 @@ public:
         RowRefList row_ref_list;
         /// mutex to protect concurrent insert to rows_not_inserted_to_map
         std::mutex mutex;
+        size_t index;
+        RowRefListWithLock(size_t index_) : index(index_) {}
     };
 
 

@@ -7,7 +7,6 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/NullableUtils.h>
@@ -64,7 +63,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     key_names_left(key_names_left_),
     key_names_right(key_names_right_),
     use_nulls(use_nulls_),
-    build_concurrency(build_concurrency_),
+    build_concurrency(std::max(1, build_concurrency_)),
     collators(collators_),
     left_filter_column(left_filter_column_),
     right_filter_column(right_filter_column_),
@@ -80,7 +79,10 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     for (size_t i = 0; i < build_concurrency; i++)
         pools.emplace_back(std::make_shared<Arena>());
     if (build_concurrency > 1 && getFullness(kind))
-        pools.emplace_back(std::make_shared<Arena>());
+    {
+        for (size_t i = 0; i < build_concurrency; i++)
+            pools.emplace_back(std::make_shared<Arena>());
+    }
     if (other_condition_ptr != nullptr)
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
@@ -92,7 +94,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     if (getFullness(kind))
     {
         for (size_t i = 0; i < build_concurrency; i++)
-            rows_not_inserted_to_map.push_back(std::make_unique<RowRefListWithLock>());
+            rows_not_inserted_to_map.push_back(std::make_unique<RowRefListWithLock>(i));
     }
     if (!left_filter_column.empty() && !isLeftJoin(kind))
         throw Exception("Not supported: non left join with left conditions");
@@ -515,7 +517,7 @@ namespace
                 for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
                 {
                     /// for right/full out join, need to record the rows not inserted to map
-                    auto elem = reinterpret_cast<Join::RowRefList *>(pools[segment_index]->alloc(sizeof(Join::RowRefList)));
+                    auto elem = reinterpret_cast<Join::RowRefList *>(pools[segment_index + rows_not_inserted_to_map->index]->alloc(sizeof(Join::RowRefList)));
                     insertRowToList(&rows_not_inserted_to_map->row_ref_list, elem, stored_block, segment_index_info[segment_index][i]);
                 }
             }
