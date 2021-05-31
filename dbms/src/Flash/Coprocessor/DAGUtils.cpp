@@ -487,7 +487,7 @@ extern const String UniqRawResName;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"}, {tipb::ExprType::Sum, "sum"}, {tipb::ExprType::Min, "min"}, {tipb::ExprType::Max, "max"},
-    {tipb::ExprType::First, "any"}, {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
+    {tipb::ExprType::First, "first_row"}, {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
     //{tipb::ExprType::Avg, ""},
     //{tipb::ExprType::GroupConcat, ""},
     //{tipb::ExprType::Agg_BitAnd, ""},
@@ -529,8 +529,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastDecimalAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastStringAsInt, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastStringAsReal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastStringAsInt, "tidb_cast"}, {tipb::ScalarFuncSig::CastStringAsReal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastStringAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastStringAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastStringAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastStringAsDuration, "cast"},
