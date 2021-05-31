@@ -69,6 +69,40 @@ private:
         }
     }
 
+    DeltaIndexPtr tryCloneInner(size_t placed_deletes_limit, const Updates * updates = nullptr)
+    {
+        DeltaTreePtr delta_tree_copy;
+        size_t       placed_rows_copy;
+        size_t       placed_deletes_copy;
+        // Make sure the delta index do not place more deletes than `placed_deletes_limit`.
+        // Because delete ranges can break MVCC view.
+        {
+            std::scoped_lock lock(mutex);
+            // Safe to reuse the copy of the existing DeltaIndex
+            if (placed_deletes <= placed_deletes_limit)
+            {
+                delta_tree_copy     = delta_tree;
+                placed_rows_copy    = placed_rows;
+                placed_deletes_copy = placed_deletes;
+            }
+        }
+
+        if (delta_tree_copy)
+        {
+            auto new_delta_tree = std::make_shared<DefaultDeltaTree>(*delta_tree_copy);
+            auto new_index      = std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy);
+            // try to do some updates before return it if need
+            if (updates)
+                new_index->applyUpdates(*updates);
+            return new_index;
+        }
+        else
+        {
+            // Otherwise, create an empty new DeltaIndex.
+            return std::make_shared<DeltaIndex>();
+        }
+    }
+
 public:
     DeltaIndex() : id(++NEXT_DELTA_INDEX_ID), delta_tree(std::make_shared<DefaultDeltaTree>()), placed_rows(0), placed_deletes(0) {}
 
@@ -139,35 +173,7 @@ public:
 
     DeltaIndexPtr tryClone(size_t /*rows*/, size_t deletes)
     {
-        bool         safe_to_copy = false;
-        DeltaTreePtr delta_tree_copy;
-        size_t       placed_rows_copy;
-        size_t       placed_deletes_copy;
-        // Make sure `placed_deletes` is smaller than the required `deletes`,
-        // Because delete ranges can break MVCC view.
-        {
-            std::scoped_lock lock(mutex);
-
-            // Safe to reuse the copy of the existing DeltaIndex
-            if (placed_deletes <= deletes)
-            {
-                safe_to_copy        = true;
-                delta_tree_copy     = delta_tree;
-                placed_rows_copy    = placed_rows;
-                placed_deletes_copy = placed_deletes;
-            }
-        }
-
-        if (safe_to_copy)
-        {
-            auto new_delta_tree = std::make_shared<DefaultDeltaTree>(*delta_tree_copy);
-            return std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy);
-        }
-        else
-        {
-            // Otherwise, create an empty new DeltaIndex.
-            return std::make_shared<DeltaIndex>();
-        }
+        return tryCloneInner(deletes);
     }
 
     DeltaIndexPtr cloneWithUpdates(const Updates & updates)
@@ -175,37 +181,7 @@ public:
         if (unlikely(updates.empty()))
             throw Exception("Unexpected empty updates");
 
-        bool         safe_to_copy = false;
-        DeltaTreePtr delta_tree_copy;
-        size_t       placed_rows_copy;
-        size_t       placed_deletes_copy;
-        // Make sure the delta index has only placed deletes in front of the `updates`
-        {
-            std::scoped_lock lock(mutex);
-            // Safe to reuse the copy of the existing DeltaIndex
-            if (placed_deletes <= updates.front().delete_ranges_offset)
-            {
-                safe_to_copy        = true;
-                delta_tree_copy     = delta_tree;
-                placed_rows_copy    = placed_rows;
-                placed_deletes_copy = placed_deletes;
-            }
-        }
-
-        if (safe_to_copy)
-        {
-            auto new_delta_tree = std::make_shared<DefaultDeltaTree>(*delta_tree_copy);
-            auto new_index = std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy);
-            // try to do some updates before return it
-            new_index->applyUpdates(updates);
-            return new_index;
-        }
-        else
-        {
-            // Otherwise, the `updates` shuffled before placed delete range,
-            // so we need create an empty new DeltaIndex.
-            return std::make_shared<DeltaIndex>();
-        }
+        return tryCloneInner(updates.front().delete_ranges_offset, &updates);
     }
 };
 
