@@ -11,6 +11,7 @@ endif ()
 if (NOT USE_INTERNAL_POCO_LIBRARY)
     find_package (Poco COMPONENTS Net NetSSL XML SQL Data Crypto DataODBC MongoDB JSON)
     add_compile_definitions(TIFLASH_POCO_NET_INJECTION=1)
+    add_compile_definitions(TIFLASH_POCO_JSON_INJECTION=1)
 endif ()
 
 if (Poco_INCLUDE_DIRS AND Poco_Foundation_LIBRARY)

@@ -2,9 +2,7 @@
 /// Using system-wised POCO Library, but we still need to add ad-hoc checks for certificates.
 /// Therefore, we provide an implementation for secured sockets on ourselves.
 ///
-
-#ifndef CLICKHOUSE_POCONETINJECTION_H
-#define CLICKHOUSE_POCONETINJECTION_H
+#pragma once
 #ifdef TIFLASH_POCO_NET_INJECTION
 #include <openssl/err.h>
 #include <openssl/x509v3.h>
@@ -814,4 +812,3 @@ public:
 
 #undef POCO_BIO_set_nbio_accept
 #endif
-#endif //CLICKHOUSE_POCONETINJECTION_H
