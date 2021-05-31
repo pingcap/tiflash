@@ -11,10 +11,6 @@ option (ENABLE_CLICKHOUSE_BENCHMARK "Enable benchmark" OFF)
 option (ENABLE_CLICKHOUSE_PERFORMANCE "Enable performance" OFF)
 option (ENABLE_CLICKHOUSE_TOOLS "Enable tools: compressor format extract-from-config-lib" OFF)
 
-if (NOT USE_INTERNAL_POCO_LIBRARY)
-    add_compile_definitions(TIFLASH_POCO_NET_INJECTION=1)
-endif()
-
 configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
 
 add_library (clickhouse-server-lib
