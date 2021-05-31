@@ -22,12 +22,47 @@ DeltaValueSpace::Snapshot::~Snapshot()
         bool v = true;
         if (!delta->is_updating.compare_exchange_strong(v, false))
         {
+<<<<<<< HEAD
             Logger * logger = &Logger::get("DeltaValueSpace::Snapshot");
             LOG_ERROR(logger,
                       "!!!=========================delta [" << delta->getId()
                                                             << "] is expected to be updating=========================!!!");
         }
     }
+=======
+            if (deletes_count == deletes_offset)
+            {
+                if (unlikely(rows_count != rows_offset))
+                    throw Exception("rows_count and rows_offset are expected to be equal. pack_index: " + DB::toString(pack_index)
+                                    + ", pack_size: " + DB::toString(packs.size()) + ", rows_count: " + DB::toString(rows_count)
+                                    + ", rows_offset: " + DB::toString(rows_offset) + ", deletes_count: " + DB::toString(deletes_count)
+                                    + ", deletes_offset: " + DB::toString(deletes_offset));
+                return {pack_index, 0};
+            }
+            ++deletes_count;
+        }
+        else
+        {
+            rows_count += pack->getRows();
+            if (rows_count > rows_offset)
+            {
+                if (unlikely(deletes_count != deletes_offset))
+                    throw Exception("deletes_count and deletes_offset are expected to be equal. pack_index: " + DB::toString(pack_index)
+                                    + ", pack_size: " + DB::toString(packs.size()) + ", rows_count: " + DB::toString(rows_count)
+                                    + ", rows_offset: " + DB::toString(rows_offset) + ", deletes_count: " + DB::toString(deletes_count)
+                                    + ", deletes_offset: " + DB::toString(deletes_offset));
+
+                return {pack_index, pack->getRows() - (rows_count - rows_offset)};
+            }
+        }
+    }
+    if (rows_count != rows_offset || deletes_count != deletes_offset)
+        throw Exception("illegal rows_offset and deletes_offset. pack_size: " + DB::toString(packs.size())
+                        + ", rows_count: " + DB::toString(rows_count) + ", rows_offset: " + DB::toString(rows_offset)
+                        + ", deletes_count: " + DB::toString(deletes_count) + ", deletes_offset: " + DB::toString(deletes_offset));
+
+    return {pack_index, 0};
+>>>>>>> 1076ba58a... Fix the potential concurrency problem when clone the shared delta index (#2030)
 }
 
 SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update)

@@ -63,19 +63,66 @@ private:
         }
     }
 
+<<<<<<< HEAD
 public:
     DeltaIndex() : delta_tree(std::make_shared<DefaultDeltaTree>()), placed_rows(0), placed_deletes(0) {}
     DeltaIndex(const DeltaIndex & o)
+=======
+    DeltaIndexPtr tryCloneInner(size_t placed_deletes_limit, const Updates * updates = nullptr)
+>>>>>>> 1076ba58a... Fix the potential concurrency problem when clone the shared delta index (#2030)
     {
         DeltaTreePtr delta_tree_copy;
+        size_t       placed_rows_copy;
+        size_t       placed_deletes_copy;
+        // Make sure the delta index do not place more deletes than `placed_deletes_limit`.
+        // Because delete ranges can break MVCC view.
         {
-            std::scoped_lock lock(o.mutex);
-            delta_tree_copy = o.delta_tree;
-            placed_rows     = o.placed_rows;
-            placed_deletes  = o.placed_deletes;
+            std::scoped_lock lock(mutex);
+            // Safe to reuse the copy of the existing DeltaIndex
+            if (placed_deletes <= placed_deletes_limit)
+            {
+                delta_tree_copy     = delta_tree;
+                placed_rows_copy    = placed_rows;
+                placed_deletes_copy = placed_deletes;
+            }
         }
-        delta_tree = std::make_shared<DefaultDeltaTree>(*delta_tree_copy);
+
+        if (delta_tree_copy)
+        {
+            auto new_delta_tree = std::make_shared<DefaultDeltaTree>(*delta_tree_copy);
+            auto new_index      = std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy);
+            // try to do some updates before return it if need
+            if (updates)
+                new_index->applyUpdates(*updates);
+            return new_index;
+        }
+        else
+        {
+            // Otherwise, create an empty new DeltaIndex.
+            return std::make_shared<DeltaIndex>();
+        }
     }
+<<<<<<< HEAD
+=======
+
+public:
+    DeltaIndex() : id(++NEXT_DELTA_INDEX_ID), delta_tree(std::make_shared<DefaultDeltaTree>()), placed_rows(0), placed_deletes(0) {}
+
+    DeltaIndex(const DeltaTreePtr & delta_tree_, size_t placed_rows_, size_t placed_deletes_)
+        : id(++NEXT_DELTA_INDEX_ID), delta_tree(delta_tree_), placed_rows(placed_rows_), placed_deletes(placed_deletes_)
+    {
+    }
+
+    /// Note that we don't swap the id.
+    void swap(DeltaIndex & other)
+    {
+        std::scoped_lock lock(mutex, other.mutex);
+        delta_tree.swap(other.delta_tree);
+        std::swap(placed_rows, other.placed_rows);
+        std::swap(placed_deletes, other.placed_deletes);
+    }
+
+>>>>>>> 1076ba58a... Fix the potential concurrency problem when clone the shared delta index (#2030)
     String toString()
     {
         std::stringstream s;
@@ -119,35 +166,14 @@ public:
         return false;
     }
 
-    DeltaIndexPtr tryClone(size_t /*rows*/, size_t deletes)
-    {
-        // Delete ranges can break MVCC view.
-        {
-            std::scoped_lock lock(mutex);
-
-            if (placed_deletes > deletes)
-                return std::make_shared<DeltaIndex>();
-        }
-        // Otherwise, clone it.
-        return std::make_shared<DeltaIndex>(*this);
-    }
+    DeltaIndexPtr tryClone(size_t /*rows*/, size_t deletes) { return tryCloneInner(deletes); }
 
     DeltaIndexPtr cloneWithUpdates(const Updates & updates)
     {
         if (unlikely(updates.empty()))
             throw Exception("Unexpected empty updates");
 
-        {
-            std::scoped_lock lock(mutex);
-            // If inserts shuffled before delete range, the old index cannot used any more.
-            if (placed_deletes > updates.front().delete_ranges_offset)
-                return std::make_shared<DeltaIndex>();
-        }
-
-        // Otherwise clone a new index, and do some updates.
-        auto new_index = std::make_shared<DeltaIndex>(*this);
-        new_index->applyUpdates(updates);
-        return new_index;
+        return tryCloneInner(updates.front().delete_ranges_offset, &updates);
     }
 };
 
