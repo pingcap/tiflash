@@ -156,11 +156,12 @@ public:
         {
             std::scoped_lock lock(mutex);
 
-            if (placed_deletes > deletes)
-                return std::make_shared<DeltaIndex>();
+            // clone it
+            if (placed_deletes <= deletes)
+                return std::make_shared<DeltaIndex>(*this);
         }
-        // Otherwise, clone it.
-        return std::make_shared<DeltaIndex>(*this);
+        // Otherwise, create a new DeltaIndex.
+        return std::make_shared<DeltaIndex>();
     }
 
     DeltaIndexPtr cloneWithUpdates(const Updates & updates)
@@ -170,15 +171,17 @@ public:
 
         {
             std::scoped_lock lock(mutex);
-            // If inserts shuffled before delete range, the old index cannot used any more.
-            if (placed_deletes > updates.front().delete_ranges_offset)
-                return std::make_shared<DeltaIndex>();
+            // Otherwise clone a new index, and do some updates.
+            if (placed_deletes <= updates.front().delete_ranges_offset)
+            {
+                auto new_index = std::make_shared<DeltaIndex>(*this);
+                new_index->applyUpdates(updates);
+                return new_index;
+            }
         }
-
-        // Otherwise clone a new index, and do some updates.
-        auto new_index = std::make_shared<DeltaIndex>(*this);
-        new_index->applyUpdates(updates);
-        return new_index;
+        
+        // If inserts shuffled before delete range, the old index cannot used any more.
+        return std::make_shared<DeltaIndex>();
     }
 };
 
