@@ -171,10 +171,7 @@ public:
         return false;
     }
 
-    DeltaIndexPtr tryClone(size_t /*rows*/, size_t deletes)
-    {
-        return tryCloneInner(deletes);
-    }
+    DeltaIndexPtr tryClone(size_t /*rows*/, size_t deletes) { return tryCloneInner(deletes); }
 
     DeltaIndexPtr cloneWithUpdates(const Updates & updates)
     {
