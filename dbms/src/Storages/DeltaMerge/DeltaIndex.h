@@ -72,8 +72,8 @@ private:
     DeltaIndexPtr tryCloneInner(size_t placed_deletes_limit, const Updates * updates = nullptr)
     {
         DeltaTreePtr delta_tree_copy;
-        size_t       placed_rows_copy;
-        size_t       placed_deletes_copy;
+        size_t       placed_rows_copy    = 0;
+        size_t       placed_deletes_copy = 0;
         // Make sure the delta index do not place more deletes than `placed_deletes_limit`.
         // Because delete ranges can break MVCC view.
         {
