@@ -139,10 +139,10 @@ public:
 
     DeltaIndexPtr tryClone(size_t /*rows*/, size_t deletes)
     {
-        bool safe_to_copy = false;
+        bool         safe_to_copy = false;
         DeltaTreePtr delta_tree_copy;
-        size_t placed_rows_copy;
-        size_t placed_deletes_copy;
+        size_t       placed_rows_copy;
+        size_t       placed_deletes_copy;
         // Make sure `placed_deletes` is smaller than the required `deletes`,
         // Because delete ranges can break MVCC view.
         {
@@ -151,10 +151,10 @@ public:
             // Safe to reuse the copy of the existing DeltaIndex
             if (placed_deletes <= deletes)
             {
-                safe_to_copy = true;
-                delta_tree_copy = delta_tree;
+                safe_to_copy        = true;
+                delta_tree_copy     = delta_tree;
                 placed_rows_copy    = placed_rows;
-                placed_deletes_copy  = placed_deletes;
+                placed_deletes_copy = placed_deletes;
             }
         }
 
@@ -175,27 +175,30 @@ public:
         if (unlikely(updates.empty()))
             throw Exception("Unexpected empty updates");
 
-        bool safe_to_copy = false;
+        bool         safe_to_copy = false;
         DeltaTreePtr delta_tree_copy;
-        size_t placed_rows_copy;
-        size_t placed_deletes_copy;
+        size_t       placed_rows_copy;
+        size_t       placed_deletes_copy;
         // Make sure the delta index has only placed deletes in front of the `updates`
         {
             std::scoped_lock lock(mutex);
             // Safe to reuse the copy of the existing DeltaIndex
             if (placed_deletes <= updates.front().delete_ranges_offset)
             {
-                safe_to_copy = true;
-                delta_tree_copy = delta_tree;
+                safe_to_copy        = true;
+                delta_tree_copy     = delta_tree;
                 placed_rows_copy    = placed_rows;
-                placed_deletes_copy  = placed_deletes;
+                placed_deletes_copy = placed_deletes;
             }
         }
 
         if (safe_to_copy)
         {
             auto new_delta_tree = std::make_shared<DefaultDeltaTree>(*delta_tree_copy);
-            return std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy);
+            auto new_index = std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy);
+            // try to do some updates before return it
+            new_index->applyUpdates(updates);
+            return new_index;
         }
         else
         {
