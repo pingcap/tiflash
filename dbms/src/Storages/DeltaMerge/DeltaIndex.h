@@ -152,15 +152,16 @@ public:
 
     DeltaIndexPtr tryClone(size_t /*rows*/, size_t deletes)
     {
-        // Delete ranges can break MVCC view.
+        // Make sure `placed_deletes` is smaller than the required `deletes`,
+        // Because delete ranges can break MVCC view.
         {
             std::scoped_lock lock(mutex);
 
-            // clone it
+            // Safe to reuse the copy of the existing DeltaIndex
             if (placed_deletes <= deletes)
                 return std::make_shared<DeltaIndex>(*this);
         }
-        // Otherwise, create a new DeltaIndex.
+        // Otherwise, create an empty new DeltaIndex.
         return std::make_shared<DeltaIndex>();
     }
 
@@ -169,18 +170,21 @@ public:
         if (unlikely(updates.empty()))
             throw Exception("Unexpected empty updates");
 
+        // Make sure the delta index has only placed deletes in front of the `updates`
         {
             std::scoped_lock lock(mutex);
-            // Otherwise clone a new index, and do some updates.
+            // Safe to reuse the copy of the existing DeltaIndex
             if (placed_deletes <= updates.front().delete_ranges_offset)
             {
                 auto new_index = std::make_shared<DeltaIndex>(*this);
+                // try to do some updates before return it
                 new_index->applyUpdates(updates);
                 return new_index;
             }
         }
-        
-        // If inserts shuffled before delete range, the old index cannot used any more.
+
+        // Otherwise, the `updates` shuffled before placed delete range,
+        // so we need create an empty new DeltaIndex.
         return std::make_shared<DeltaIndex>();
     }
 };
