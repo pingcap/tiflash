@@ -4,12 +4,17 @@
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
 #include <Storages/Transaction/RegionsRangeIndex.h>
+#include <Storages/Transaction/StorageEngineType.h>
 
 namespace DB
 {
 namespace RegionBench
 {
 extern void concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
+}
+namespace DM
+{
+enum class FileConvertJobType;
 }
 
 // TODO move to Settings.h
@@ -41,7 +46,6 @@ struct WriteCmdsView;
 enum class EngineStoreApplyRes : uint32_t;
 
 struct TiFlashRaftProxyHelper;
-struct RegionPtrWithBlock;
 struct RegionPreDecodeBlockData;
 using RegionPreDecodeBlockDataPtr = std::unique_ptr<RegionPreDecodeBlockData>;
 
@@ -49,7 +53,7 @@ using RegionPreDecodeBlockDataPtr = std::unique_ptr<RegionPreDecodeBlockData>;
 class KVStore final : private boost::noncopyable
 {
 public:
-    KVStore(Context & context);
+    KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_);
     void restore(const TiFlashRaftProxyHelper *);
 
     RegionPtr getRegion(const RegionID region_id) const;
@@ -60,7 +64,7 @@ public:
 
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
-    void gcRegionCache(Seconds gc_persist_period = REGION_CACHE_GC_PERIOD);
+    void gcRegionPersistedCache(Seconds gc_persist_period = REGION_CACHE_GC_PERIOD);
 
     void tryPersist(const RegionID region_id);
 
@@ -78,14 +82,20 @@ public:
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
-    RegionPreDecodeBlockDataPtr preHandleSnapshot(RegionPtr new_region, const SSTViewVec, TMTContext & tmt);
-    void handlePreApplySnapshot(const RegionPtrWithBlock &, TMTContext & tmt);
+    RegionPreDecodeBlockDataPtr preHandleSnapshotToBlock(
+        RegionPtr new_region, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+    std::vector<UInt64> /*   */ preHandleSnapshotToFiles(
+        RegionPtr new_region, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+    template <typename RegionPtrWrap>
+    void handlePreApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
-    void setRegionCompactLogPeriod(UInt64);
+    void setRegionCompactLogConfig(UInt64, UInt64, UInt64);
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
+
+    TiDB::SnapshotApplyMethod applyMethod() const { return snapshot_apply_method; }
 
 private:
     friend class MockTiDB;
@@ -95,11 +105,18 @@ private:
     friend void RegionBench::concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
     using DBGInvokerPrinter = std::function<void(const std::string &)>;
     friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
-    friend void dbgFuncRegionSnapshotWithData(Context &, const ASTs &, DBGInvokerPrinter);
     friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
 
-    void checkAndApplySnapshot(const RegionPtrWithBlock &, TMTContext & tmt);
-    void onSnapshot(const RegionPtrWithBlock &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
+
+    std::vector<UInt64> preHandleSSTsToDTFiles(
+        RegionPtr new_region, const SSTViewVec, uint64_t index, uint64_t term, DM::FileConvertJobType, TMTContext & tmt);
+
+    template <typename RegionPtrWrap>
+    void checkAndApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    template <typename RegionPtrWrap>
+    void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
+
+    RegionPtr handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
 
     // Remove region from this TiFlash node.
     // If region is destroy or moved to another node(change peer),
@@ -137,9 +154,13 @@ private:
     // raft_cmd_res stores the result of applying raft cmd. It must be protected by task_mutex.
     std::unique_ptr<RaftCommandResult> raft_cmd_res;
 
+    TiDB::SnapshotApplyMethod snapshot_apply_method;
+
     Logger * log;
 
     std::atomic<UInt64> REGION_COMPACT_LOG_PERIOD;
+    std::atomic<UInt64> REGION_COMPACT_LOG_MIN_ROWS;
+    std::atomic<UInt64> REGION_COMPACT_LOG_MIN_BYTES;
 
     mutable std::mutex bg_gc_region_data_mutex;
     std::list<RegionDataReadInfoList> bg_gc_region_data;

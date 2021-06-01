@@ -4,12 +4,15 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Poco/File.h>
-#include <Storages/DeltaMerge/DMContext.h>
+
+#define private public
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#undef private
+#include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <gtest/gtest.h>
 
 #include <memory>
 
@@ -24,10 +27,19 @@ extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 extern const char force_triggle_background_merge_delta[];
 extern const char force_triggle_foreground_flush[];
+extern const char force_set_segment_ingest_packs_fail[];
+extern const char segment_merge_after_ingest_packs[];
+extern const char force_set_segment_physical_split[];
 } // namespace FailPoints
 
 namespace DM
 {
+extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
+                                    const ColumnDefinesPtr &       schema_snap,
+                                    const BlockInputStreamPtr &    input_stream,
+                                    UInt64                         file_id,
+                                    const String &                 parent_path,
+                                    DMFileBlockOutputStream::Flags flags);
 namespace tests
 {
 
@@ -111,14 +123,17 @@ public:
 
     std::pair<RowKeyRange, std::vector<PageId>> genDMFile(DMContext & context, const Block & block)
     {
-        auto file_id      = context.storage_pool.newDataPageId();
-        auto input_stream = std::make_shared<OneBlockInputStream>(block);
-        auto delegate     = context.path_pool.getStableDiskDelegator();
-        auto store_path   = delegate.choosePath();
-        auto dmfile       = writeIntoNewDMFile(
-            context, std::make_shared<ColumnDefines>(store->getTableColumns()), input_stream, file_id, store_path, false);
+        auto input_stream          = std::make_shared<OneBlockInputStream>(block);
+        auto [store_path, file_id] = store->preAllocateIngestFile();
 
-        delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
+        DMFileBlockOutputStream::Flags flags;
+        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
+
+        auto dmfile = writeIntoNewDMFile(
+            context, std::make_shared<ColumnDefines>(store->getTableColumns()), input_stream, file_id, store_path, flags);
+
+
+        store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
 
         auto &      pk_column = block.getByPosition(0).column;
         auto        min_pk    = pk_column->getInt(0);
@@ -254,12 +269,12 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
-            store->write(*context, context->getSettingsRef(), block);
+            store->write(*context, context->getSettingsRef(), std::move(block));
             break;
         default: {
             auto dm_context        = store->newDMContext(*context, context->getSettingsRef());
             auto [range, file_ids] = genDMFile(*dm_context, block);
-            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            store->ingestFiles(dm_context, range, file_ids, false);
             break;
         }
         }
@@ -364,12 +379,12 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
-            store->write(*context, context->getSettingsRef(), block);
+            store->write(*context, context->getSettingsRef(), std::move(block));
             break;
         default: {
             auto dm_context        = store->newDMContext(*context, context->getSettingsRef());
             auto [range, file_ids] = genDMFile(*dm_context, block);
-            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            store->ingestFiles(dm_context, range, file_ids, false);
             break;
         }
         }
@@ -458,9 +473,9 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly: {
-            store->write(*context, context->getSettingsRef(), block1);
-            store->write(*context, context->getSettingsRef(), block2);
-            store->write(*context, context->getSettingsRef(), block3);
+            store->write(*context, context->getSettingsRef(), std::move(block1));
+            store->write(*context, context->getSettingsRef(), std::move(block2));
+            store->write(*context, context->getSettingsRef(), std::move(block3));
             break;
         }
         case TestMode::V2_FileOnly: {
@@ -472,7 +487,7 @@ try
             auto file_ids            = file_ids1;
             file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
             file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            store->ingestFiles(dm_context, range, file_ids, false);
             break;
         }
         case TestMode::V2_Mix: {
@@ -482,9 +497,9 @@ try
             auto range               = range1.merge(range3);
             auto file_ids            = file_ids1;
             file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            store->ingestFiles(dm_context, range, file_ids, false);
 
-            store->write(*context, context->getSettingsRef(), block2);
+            store->write(*context, context->getSettingsRef(), std::move(block2));
             break;
         }
         }
@@ -536,9 +551,9 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly: {
-            store->write(*context, context->getSettingsRef(), block1);
-            store->write(*context, context->getSettingsRef(), block2);
-            store->write(*context, context->getSettingsRef(), block3);
+            store->write(*context, context->getSettingsRef(), std::move(block1));
+            store->write(*context, context->getSettingsRef(), std::move(block2));
+            store->write(*context, context->getSettingsRef(), std::move(block3));
             break;
         }
         case TestMode::V2_FileOnly: {
@@ -550,11 +565,11 @@ try
             auto file_ids            = file_ids1;
             file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
             file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            store->ingestFiles(dm_context, range, file_ids, false);
             break;
         }
         case TestMode::V2_Mix: {
-            store->write(*context, context->getSettingsRef(), block2);
+            store->write(*context, context->getSettingsRef(), std::move(block2));
 
             auto dm_context          = store->newDMContext(*context, context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -562,7 +577,7 @@ try
             auto range               = range1.merge(range3);
             auto file_ids            = file_ids1;
             file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            store->ingestFiles(dm_context, range, file_ids, false);
             break;
         }
         }
@@ -654,7 +669,7 @@ try
     {
         // Write 7 rows that would not trigger a split
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, 8, false);
-        store->write(*context, settings, block);
+        store->write(*context, settings, std::move(block));
     }
 
     {
@@ -689,7 +704,7 @@ try
     {
         // Write rows that would trigger a split
         Block block = DMTestEnv::prepareSimpleWriteBlock(8, 9, false);
-        store->write(*context, settings, block);
+        store->write(*context, settings, std::move(block));
     }
 
     // Now there is 2 segments
@@ -741,7 +756,7 @@ try
     {
         // write to store
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_tso1, false, tso1);
-        store->write(*context, context->getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), std::move(block));
     }
 
     const UInt64 tso2          = 890;
@@ -749,7 +764,7 @@ try
     {
         // write to store
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_tso1, num_rows_tso1 + num_rows_tso2, false, tso2);
-        store->write(*context, context->getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), std::move(block));
     }
 
     {
@@ -842,6 +857,407 @@ try
 }
 CATCH
 
+TEST_P(DeltaMergeStore_test, Ingest)
+try
+{
+    if (mode == TestMode::V1_BlockOnly)
+        return;
+
+    const UInt64 tso1                   = 4;
+    const size_t num_rows_before_ingest = 128;
+    // Write to store [0, 128)
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_before_ingest, false, tso1);
+        store->write(*context, context->getSettingsRef(), std::move(block));
+    }
+
+    const UInt64 tso2 = 10;
+    const UInt64 tso3 = 18;
+
+    {
+        // Prepare DTFiles for ingesting
+        auto dm_context = store->newDMContext(*context, context->getSettingsRef());
+
+        auto [range1, file_ids1] = genDMFile(*dm_context, DMTestEnv::prepareSimpleWriteBlock(32, 48, false, tso2));
+        auto [range2, file_ids2] = genDMFile(*dm_context, DMTestEnv::prepareSimpleWriteBlock(80, 256, false, tso3));
+
+        auto file_ids = file_ids1;
+        file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
+        auto ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
+        // verify that ingest_range must not less than range1.merge(range2)
+        ASSERT_ROWKEY_RANGE_EQ(ingest_range, range1.merge(range2).merge(ingest_range));
+
+        store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
+    }
+
+
+    // After ingesting, the data in [32, 128) should be overwrite by the data in ingested files.
+    {
+        // Read all data <= tso1
+        // We can only get [0, 32) with tso1
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ tso1,
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        Int64  expect_pk  = 0;
+        UInt64 expect_tso = tso1;
+        while (Block block = in->read())
+        {
+            ASSERT_TRUE(block.has(DMTestEnv::pk_name));
+            ASSERT_TRUE(block.has(VERSION_COLUMN_NAME));
+            auto pk_c = block.getByName(DMTestEnv::pk_name);
+            auto v_c  = block.getByName(VERSION_COLUMN_NAME);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                // std::cerr << "pk:" << pk_c.column->getInt(i) << ", ver:" << v_c.column->getInt(i) << std::endl;
+                ASSERT_EQ(pk_c.column->getInt(i), expect_pk++);
+                ASSERT_EQ(v_c.column->getUInt(i), expect_tso);
+            }
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 32UL) << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
+    }
+
+    {
+        // Read all data between [tso, tso2)
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ tso2 - 1,
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        Int64  expect_pk  = 0;
+        UInt64 expect_tso = tso1;
+        while (Block block = in->read())
+        {
+            ASSERT_TRUE(block.has(DMTestEnv::pk_name));
+            ASSERT_TRUE(block.has(VERSION_COLUMN_NAME));
+            auto pk_c = block.getByName(DMTestEnv::pk_name);
+            auto v_c  = block.getByName(VERSION_COLUMN_NAME);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                // std::cerr << "pk:" << pk_c.column->getInt(i) << ", ver:" << v_c.column->getInt(i) << std::endl;
+                ASSERT_EQ(pk_c.column->getInt(i), expect_pk++);
+                ASSERT_EQ(v_c.column->getUInt(i), expect_tso);
+            }
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 32UL) << "Data [32, 128) after ingest with tso less than: " << tso2
+                                       << " are erased, should only get [0, 32)";
+    }
+
+    {
+        // Read all data between [tso2, tso3)
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ tso3 - 1,
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 32UL + 16) << "The rows number after ingest with tso less than " << tso3 << " is not match";
+    }
+
+    {
+        // Read all data between [tso2, tso3)
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+            num_rows_read += block.rows();
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 32UL + (48 - 32) + (256UL - 80)) << "The rows number after ingest is not match";
+    }
+
+    {
+        // Read with two point get, issue 1616
+        auto              range0  = RowKeyRange::fromHandleRange(HandleRange(32, 33));
+        auto              range1  = RowKeyRange::fromHandleRange(HandleRange(40, 41));
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {range0, range1},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+            num_rows_read += block.rows();
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 2UL) << "The rows number of two point get is not match";
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStore_test, IngestWithFail)
+try
+{
+    if (mode == TestMode::V1_BlockOnly)
+        return;
+
+    const UInt64 tso1                   = 4;
+    const size_t num_rows_before_ingest = 128;
+    // Write to store [0, 128)
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_before_ingest, false, tso1);
+        store->write(*context, context->getSettingsRef(), std::move(block));
+
+        auto dm_context = store->newDMContext(*context, context->getSettingsRef());
+        store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+        SegmentPtr seg;
+        std::tie(std::ignore, seg) = *store->segments.begin();
+        store->segmentSplit(*dm_context, seg, /*is_foreground*/ true);
+    }
+
+    const UInt64 tso2 = 10;
+
+    {
+        // Prepare DTFiles for ingesting
+        auto dm_context               = store->newDMContext(*context, context->getSettingsRef());
+        auto [ingest_range, file_ids] = genDMFile(*dm_context, DMTestEnv::prepareSimpleWriteBlock(32, 128, false, tso2));
+        // Enable failpoint for testing
+        FailPointHelper::enableFailPoint(FailPoints::force_set_segment_ingest_packs_fail);
+        FailPointHelper::enableFailPoint(FailPoints::segment_merge_after_ingest_packs);
+        store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
+    }
+
+
+    // After ingesting, the data in [32, 128) should be overwrite by the data in ingested files.
+    {
+        // Read all data <= tso1
+        // We can only get [0, 32) with tso1
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ tso1,
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        Int64  expect_pk  = 0;
+        UInt64 expect_tso = tso1;
+        while (Block block = in->read())
+        {
+            ASSERT_TRUE(block.has(DMTestEnv::pk_name));
+            ASSERT_TRUE(block.has(VERSION_COLUMN_NAME));
+            auto pk_c = block.getByName(DMTestEnv::pk_name);
+            auto v_c  = block.getByName(VERSION_COLUMN_NAME);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                // std::cerr << "pk:" << pk_c.column->getInt(i) << ", ver:" << v_c.column->getInt(i) << std::endl;
+                ASSERT_EQ(pk_c.column->getInt(i), expect_pk++);
+                ASSERT_EQ(v_c.column->getUInt(i), expect_tso);
+            }
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 32) << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
+    }
+
+    {
+        // Read all data between [tso, tso2)
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ tso2 - 1,
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        Int64  expect_pk  = 0;
+        UInt64 expect_tso = tso1;
+        while (Block block = in->read())
+        {
+            ASSERT_TRUE(block.has(DMTestEnv::pk_name));
+            ASSERT_TRUE(block.has(VERSION_COLUMN_NAME));
+            auto pk_c = block.getByName(DMTestEnv::pk_name);
+            auto v_c  = block.getByName(VERSION_COLUMN_NAME);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                // std::cerr << "pk:" << pk_c.column->getInt(i) << ", ver:" << v_c.column->getInt(i) << std::endl;
+                ASSERT_EQ(pk_c.column->getInt(i), expect_pk++);
+                ASSERT_EQ(v_c.column->getUInt(i), expect_tso);
+            }
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 32) << "Data [32, 128) after ingest with tso less than: " << tso2
+                                     << " are erased, should only get [0, 32)";
+    }
+
+    {
+        // Read all data between [tso2, tso3)
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+            num_rows_read += block.rows();
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 32 + 128 - 32) << "The rows number after ingest is not match";
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStore_test, IngestEmptyFileLists)
+try
+{
+    if (mode == TestMode::V1_BlockOnly)
+        return;
+
+    const UInt64 tso1                   = 4;
+    const size_t num_rows_before_ingest = 128;
+    // Write to store [0, 128)
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_before_ingest, false, tso1);
+        store->write(*context, context->getSettingsRef(), std::move(block));
+    }
+
+    // Test that if we ingest a empty file list, the data in range will be removed.
+    // The ingest range is [32, 256)
+    {
+        auto dm_context = store->newDMContext(*context, context->getSettingsRef());
+
+        std::vector<PageId> file_ids;
+        auto                ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
+        store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
+    }
+
+
+    // After ingesting, the data in [32, 128) should be overwrite by the data in ingested files.
+    {
+        // Read all data <= tso1
+        // We can only get [0, 32) with tso1
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ tso1,
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        Int64  expect_pk  = 0;
+        UInt64 expect_tso = tso1;
+        while (Block block = in->read())
+        {
+            ASSERT_TRUE(block.has(DMTestEnv::pk_name));
+            ASSERT_TRUE(block.has(VERSION_COLUMN_NAME));
+            auto pk_c = block.getByName(DMTestEnv::pk_name);
+            auto v_c  = block.getByName(VERSION_COLUMN_NAME);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                // std::cerr << "pk:" << pk_c.column->getInt(i) << ", ver:" << v_c.column->getInt(i) << std::endl;
+                ASSERT_EQ(pk_c.column->getInt(i), expect_pk++);
+                ASSERT_EQ(v_c.column->getUInt(i), expect_tso);
+            }
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 32UL) << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
+    }
+
+    {
+        // Read all data
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+            num_rows_read += block.rows();
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 32UL) << "The rows number after ingest is not match";
+    }
+}
+CATCH
+
 TEST_P(DeltaMergeStore_test, Split)
 try
 {
@@ -867,14 +1283,14 @@ try
             auto write_as_file = [&]() {
                 auto dm_context        = store->newDMContext(*context, context->getSettingsRef());
                 auto [range, file_ids] = genDMFile(*dm_context, block);
-                store->writeRegionSnapshot(dm_context, range, file_ids, false);
+                store->ingestFiles(dm_context, range, file_ids, false);
             };
 
             switch (mode)
             {
             case TestMode::V1_BlockOnly:
             case TestMode::V2_BlockOnly:
-                store->write(*context, settings, block);
+                store->write(*context, settings, std::move(block));
                 break;
             case TestMode::V2_FileOnly:
                 write_as_file();
@@ -882,7 +1298,7 @@ try
             case TestMode::V2_Mix: {
                 if ((std::rand() % 2) == 0)
                 {
-                    store->write(*context, settings, block);
+                    store->write(*context, settings, std::move(block));
                 }
                 else
                 {
@@ -1000,7 +1416,7 @@ try
             }
             block.insert(col2);
         }
-        store->write(*context, context->getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), std::move(block));
     }
 
     {
@@ -1113,7 +1529,7 @@ try
             }
             block.insert(col2);
         }
-        store->write(*context, context->getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), std::move(block));
     }
 
     {
@@ -1208,7 +1624,7 @@ try
             }
             block.insert(col1);
         }
-        store->write(*context, context->getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), std::move(block));
     }
 
     {
@@ -1298,7 +1714,7 @@ try
     size_t num_rows_write = 1;
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        store->write(*context, context->getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), std::move(block));
     }
 
     // DDL add column f32 with default value
@@ -1372,7 +1788,7 @@ try
     // write some rows before DDL
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, 1, false);
-        store->write(*context, context->getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), std::move(block));
     }
 
     // DDL add column date with default value
@@ -1477,7 +1893,7 @@ try
             }
             block.insert(col2);
         }
-        store->write(*context, context->getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), std::move(block));
     }
 
     {
@@ -1587,7 +2003,7 @@ try
     {
         // write to store
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false, /*tso=*/2, col_name_before_ddl, col_id_ddl, col_type);
-        store->write(*context, context->getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), std::move(block));
     }
 
     {
@@ -1674,7 +2090,7 @@ try
             // Then write new block with new pk name
             Block block = DMTestEnv::prepareSimpleWriteBlock(
                 num_rows_write, num_rows_write * 2, false, /*tso=*/2, col_name_after_ddl, col_id_ddl, col_type);
-            store->write(*context, context->getSettingsRef(), block);
+            store->write(*context, context->getSettingsRef(), std::move(block));
         }
         {
             // read all columns from store
@@ -1745,7 +2161,7 @@ try
         FailPointHelper::enableFailPoint(FailPoints::force_triggle_background_merge_delta);
 
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        store->write(*context, context->getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), std::move(block));
     }
 
     // DDL add column f32 with default value
@@ -1824,7 +2240,7 @@ try
             f_col.column = std::move(m_col);
         }
         block.insert(f_col);
-        store->write(*context, context->getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), std::move(block));
     }
 
     // disable pause so that delta-merge can continue
@@ -1952,7 +2368,7 @@ try
             }
             block.insert(std::move(i8));
         }
-        store->write(*context, context->getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), std::move(block));
     }
 
     {
@@ -2082,9 +2498,9 @@ try
                                                           EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                           true,
                                                           rowkey_column_size);
-        store->write(*context, context->getSettingsRef(), block1);
-        store->write(*context, context->getSettingsRef(), block2);
-        store->write(*context, context->getSettingsRef(), block3);
+        store->write(*context, context->getSettingsRef(), std::move(block1));
+        store->write(*context, context->getSettingsRef(), std::move(block2));
+        store->write(*context, context->getSettingsRef(), std::move(block3));
 
         store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
@@ -2152,9 +2568,9 @@ try
                                                           EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                           true,
                                                           rowkey_column_size);
-        store->write(*context, context->getSettingsRef(), block1);
-        store->write(*context, context->getSettingsRef(), block2);
-        store->write(*context, context->getSettingsRef(), block3);
+        store->write(*context, context->getSettingsRef(), std::move(block1));
+        store->write(*context, context->getSettingsRef(), std::move(block2));
+        store->write(*context, context->getSettingsRef(), std::move(block3));
 
         store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
@@ -2238,7 +2654,7 @@ try
 
         Block block = DMTestEnv::prepareSimpleWriteBlock(
             0, 128, false, 2, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_STRING_TYPE, true, rowkey_column_size);
-        store->write(*context, context->getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), std::move(block));
     }
     // Test Reading first
     {

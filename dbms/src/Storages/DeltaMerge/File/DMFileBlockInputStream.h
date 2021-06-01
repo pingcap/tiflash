@@ -21,8 +21,7 @@ public:
                            const RSOperatorPtr &  filter,
                            const ColumnCachePtr & column_cache_,
                            const IdSetPtr &       read_packs,
-                           size_t                 expected_size             = DMFILE_READ_ROWS_THRESHOLD,
-                           bool                   read_one_pack_every_time_ = false)
+                           size_t                 expected_size = DMFILE_READ_ROWS_THRESHOLD)
         : reader(dmfile,
                  read_columns,
                  // clean read
@@ -40,8 +39,7 @@ public:
                  context.getSettingsRef().min_bytes_to_use_direct_io,
                  context.getSettingsRef().max_read_buffer_size,
                  context.getFileProvider(),
-                 expected_size,
-                 read_one_pack_every_time_)
+                 expected_size)
     {
     }
 

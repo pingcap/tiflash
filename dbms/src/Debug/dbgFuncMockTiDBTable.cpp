@@ -2,7 +2,6 @@
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
-#include <Interpreters/InterpreterRenameQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
