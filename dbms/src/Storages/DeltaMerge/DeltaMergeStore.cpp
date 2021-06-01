@@ -670,7 +670,7 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr &        dm_context,
                 file_used.swap(my_file_used);
                 fiu_do_on(FailPoints::segment_merge_after_ingest_packs, {
                     segment->flushCache(*dm_context);
-                    segmentMergeDelta(*dm_context, segment, TaskRunThread::Thread_BG_Thread_Pool);
+                    segmentMergeDelta(*dm_context, segment, false);
                     storage_pool.gc(global_context.getSettingsRef(), StoragePool::Seconds(0));
                 });
                 break;
