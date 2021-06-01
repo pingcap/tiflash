@@ -31,13 +31,35 @@ namespace ErrorCodes
 /// Do I need to use the hash table maps_*_full, in which we remember whether the row was joined.
 static bool getFullness(ASTTableJoin::Kind kind)
 {
-    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full;
+    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Full;
+}
+static bool isLeftJoin(ASTTableJoin::Kind kind)
+{
+    return kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Cross_Left;
+}
+static bool isRightJoin(ASTTableJoin::Kind kind)
+{
+    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right;
+}
+static bool isInnerJoin(ASTTableJoin::Kind kind)
+{
+    return kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Cross;
+}
+static bool isAntiJoin(ASTTableJoin::Kind kind)
+{
+    return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti;
+}
+static bool isCrossJoin(ASTTableJoin::Kind kind)
+{
+    return kind == ASTTableJoin::Kind::Cross || kind == ASTTableJoin::Kind::Cross_Left
+        || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Cross_Anti;
 }
 
-Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
-    const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_,
-    const TiDB::TiDBCollators & collators_, const String & left_filter_column_, const String & right_filter_column_,
-    const String & other_filter_column_, ExpressionActionsPtr other_condition_ptr_)
+
+Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_, const SizeLimits & limits,
+    ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_, const TiDB::TiDBCollators & collators_,
+    const String & left_filter_column_, const String & right_filter_column_, const String & other_filter_column_,
+    const String & other_eq_filter_from_in_column_, ExpressionActionsPtr other_condition_ptr_, size_t max_block_size_)
     : kind(kind_), strictness(strictness_),
     key_names_left(key_names_left_),
     key_names_right(key_names_right_),
@@ -47,8 +69,10 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     left_filter_column(left_filter_column_),
     right_filter_column(right_filter_column_),
     other_filter_column(other_filter_column_),
+    other_eq_filter_from_in_column(other_eq_filter_from_in_column_),
     other_condition_ptr(other_condition_ptr_),
     original_strictness(strictness),
+    max_block_size_for_cross_join(max_block_size_),
     have_finish_build(true),
     log(&Logger::get("Join")),
     limits(limits)
@@ -58,7 +82,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
         pools.emplace_back(std::make_shared<Arena>());
     if (build_concurrency > 1 && getFullness(kind))
         pools.emplace_back(std::make_shared<Arena>());
-    if (!other_filter_column.empty())
+    if (other_condition_ptr != nullptr)
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
         if (strictness == ASTTableJoin::Strictness::Any)
@@ -66,6 +90,10 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
             strictness = ASTTableJoin::Strictness::All;
         }
     }
+    if (!left_filter_column.empty() && !isLeftJoin(kind))
+        throw Exception("Not supported: non left join with left conditions");
+    if (!right_filter_column.empty() && !isRightJoin(kind))
+        throw Exception("Not supported: non right join with right conditions");
 }
 
 void Join::setFinishBuildTable(bool finish_)
@@ -327,7 +355,7 @@ void Join::setSampleBlock(const Block & block)
     }
 
     /// In case of LEFT and FULL joins, if use_nulls, convert joined columns to Nullable.
-    if (use_nulls && (kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Full))
+    if (use_nulls && (isLeftJoin(kind) || kind == ASTTableJoin::Kind::Full))
         for (size_t i = 0; i < num_columns_to_add; ++i)
             convertColumnToNullable(sample_block_with_columns_to_add.getByPosition(i));
 }
@@ -716,7 +744,7 @@ bool Join::insertFromBlockInternal(Block * stored_block, size_t block_index)
     }
 
     /// In case of LEFT and FULL joins, if use_nulls, convert joined columns to Nullable.
-    if (use_nulls && (kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Full))
+    if (use_nulls && (isLeftJoin(kind) || kind == ASTTableJoin::Kind::Full))
     {
         for (size_t i = getFullness(kind) ? keys_size : 0; i < size; ++i)
         {
@@ -724,7 +752,7 @@ bool Join::insertFromBlockInternal(Block * stored_block, size_t block_index)
         }
     }
 
-    if (kind != ASTTableJoin::Kind::Cross)
+    if (!isCrossJoin(kind))
     {
         /// Fill the hash table.
         if (!getFullness(kind))
@@ -929,6 +957,34 @@ namespace
     }
 }
 
+void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & filter_column, const String & filter_column_name, bool null_as_true)
+{
+    auto orig_filter_column = block.getByName(filter_column_name).column;
+    if (orig_filter_column->isColumnConst())
+        orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
+    if (orig_filter_column->isColumnNullable())
+    {
+        auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
+        auto & nested_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
+        for (size_t i = 0; i < nullable_column->size(); i++)
+        {
+            if (filter_column[i] == 0)
+                continue;
+            if (nullable_column->isNullAt(i))
+                filter_column[i] = null_as_true ? 1 : 0;
+            else
+                filter_column[i] = filter_column[i] && nested_column_data[i];
+        }
+    }
+    else
+    {
+        auto * other_filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
+        auto & other_filter_column_data = static_cast<const ColumnVector<UInt8> *>(other_filter_column)->getData();
+        for (size_t i = 0; i < other_filter_column->size(); i++)
+            filter_column[i] = filter_column[i] && other_filter_column_data[i];
+    }
+}
+
 /**
  * handle other join conditions
  * Join Kind/Strictness               ALL               ANY
@@ -944,30 +1000,25 @@ namespace
 void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & anti_filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_columns) const
 {
     other_condition_ptr->execute(block);
-    const ColumnVector<UInt8> * filter_column = nullptr;
-    ColumnVector<UInt8> * mutable_nested_column = nullptr;
-    auto orig_filter_column = block.getByName(other_filter_column).column;
-    if (orig_filter_column->isColumnConst())
-        orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
-    if (orig_filter_column->isColumnNullable())
-    {
-        auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
-        mutable_nested_column = static_cast<ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr()->assumeMutable().get());
-        auto & mutable_nested_column_data = mutable_nested_column->getData();
-        for (size_t i = 0; i < nullable_column->size(); i++)
-        {
-            if (nullable_column->isNullAt(i))
-                mutable_nested_column_data[i] = 0;
-        }
-        filter_column = mutable_nested_column;
-    }
-    else
-    {
-        filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
-    }
-    auto & filter = filter_column->getData();
 
-    if (kind == ASTTableJoin::Kind::Inner && original_strictness == ASTTableJoin::Strictness::All)
+    auto filter_column = ColumnUInt8::create();
+    auto & filter = filter_column->getData();
+    filter.assign(block.rows(), (UInt8)1);
+    if (!other_filter_column.empty())
+    {
+        mergeNullAndFilterResult(block, filter, other_filter_column, false);
+    }
+
+    if (!other_eq_filter_from_in_column.empty())
+    {
+        /// other_eq_filter_from_in_column is used in anti semi join:
+        /// if there is a row that return null or false for other_condition, then for anti semi join, this row should be returned.
+        /// otherwise, it will check other_eq_filter_from_in_column, if other_eq_filter_from_in_column return false, this row should
+        /// be returned, if other_eq_filter_from_in_column return true or null this row should not be returned.
+        mergeNullAndFilterResult(block, filter, other_eq_filter_from_in_column, isAntiJoin(kind));
+    }
+
+    if (isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All)
     {
         /// inner join, just use other_filter_column to filter result
         for (size_t i = 0; i < block.columns(); i++)
@@ -1000,32 +1051,35 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
             if (row_filter[x])
                 has_row_kept = true;
         }
-        /// for outer join, at least one row must be kept
-        if (kind == ASTTableJoin::Kind::Left && !has_row_kept)
-            row_filter[start] = 1;
-        if (kind == ASTTableJoin::Kind::Anti)
+        if (start < end)
         {
-            if ((*anti_filter)[i])
-                /// for anti join, if the equal join condition is not matched, it always need to be selected
+            /// for outer join, at least one row must be kept
+            if (isLeftJoin(kind) && !has_row_kept)
                 row_filter[start] = 1;
-            else
+            if (isAntiJoin(kind))
             {
-                if (has_row_kept)
-                {
-                    /// has_row_kept = true means at least one row is joined, in
-                    /// case of anti join, this row should not be returned
-                    for (size_t index = start; index < end; index++)
-                        row_filter[index] = 0;
-                }
+                if ((*anti_filter)[i])
+                    /// for anti join, if the equal join condition is not matched, it always need to be selected
+                    row_filter[start] = 1;
                 else
                 {
-                    row_filter[start] = 1;
+                    if (has_row_kept)
+                    {
+                        /// has_row_kept = true means at least one row is joined, in
+                        /// case of anti join, this row should not be returned
+                        for (size_t index = start; index < end; index++)
+                            row_filter[index] = 0;
+                    }
+                    else
+                    {
+                        row_filter[start] = 1;
+                    }
                 }
             }
         }
         prev_offset = end;
     }
-    if (kind == ASTTableJoin::Kind::Left)
+    if (isLeftJoin(kind))
     {
         /// for left join, convert right column to null if not joined
         for (size_t i = 0; i < right_table_columns.size(); i++)
@@ -1045,7 +1099,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
             block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
         return;
     }
-    if (kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Anti)
+    if (isInnerJoin(kind) || isAntiJoin(kind))
     {
         /// for semi/anti join, filter out not matched rows
         for (size_t i = 0; i < block.columns(); i++)
@@ -1191,7 +1245,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(*offsets_to_replicate);
 
     /// handle other conditions
-    if (!other_filter_column.empty())
+    if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())
     {
         if (!offsets_to_replicate)
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
@@ -1199,38 +1253,24 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     }
 }
 
-
-void Join::joinBlockImplCross(Block & block) const
+namespace
 {
-    /// Add new columns to the block.
-    size_t num_existing_columns = block.columns();
-    size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
+struct CrossJoinAdder;
 
-    size_t rows_left = block.rows();
-
-    ColumnRawPtrs src_left_columns(num_existing_columns);
-    MutableColumns dst_columns(num_existing_columns + num_columns_to_add);
-
-    for (size_t i = 0; i < num_existing_columns; ++i)
+template<ASTTableJoin::Strictness STRICTNESS> struct CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>
+{
+    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add,
+                         size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
     {
-        src_left_columns[i] = block.getByPosition(i).column.get();
-        dst_columns[i] = src_left_columns[i]->cloneEmpty();
-    }
-
-    for (size_t i = 0; i < num_columns_to_add; ++i)
-    {
-        const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
-        dst_columns[num_existing_columns + i] = src_column.column->cloneEmpty();
-        block.insert(src_column);
-    }
-
-    /// NOTE It would be better to use `reserve`, as well as `replicate` methods to duplicate the values of the left block.
-
-    for (size_t i = 0; i < rows_left; ++i)
-    {
+        size_t expanded_row_size = 0;
         for (const Block & block_right : blocks)
         {
             size_t rows_right = block_right.rows();
+            if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+            {
+                rows_right = std::min(rows_right, 1);
+            }
 
             for (size_t col_num = 0; col_num < num_existing_columns; ++col_num)
                 for (size_t j = 0; j < rows_right; ++j)
@@ -1243,10 +1283,217 @@ void Join::joinBlockImplCross(Block & block) const
                 for (size_t j = 0; j < rows_right; ++j)
                     dst_columns[num_existing_columns + col_num]->insertFrom(*column_right, j);
             }
+            expanded_row_size += rows_right;
+            if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+            {
+                if (expanded_row_size >= 1)
+                    break;
+            }
         }
+        (*is_row_matched)[i - start_offset] = 0;
+        (*expanded_row_size_after_join)[i - start_offset] = current_offset + expanded_row_size;
+        current_offset += expanded_row_size;
+    }
+    static void addNotFound(MutableColumns & /* dst_columns */, size_t /* num_existing_columns */, ColumnRawPtrs & /* src_left_columns */,
+        size_t /* num_columns_to_add */, size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    {
+        /// for inner all/any join, just skip this row
+        (*is_row_matched)[i - start_offset] = 0;
+        (*expanded_row_size_after_join)[i - start_offset] = current_offset;
+    }
+    static bool allRightRowsMaybeAdded() {
+        return STRICTNESS == ASTTableJoin::Strictness::All;
+    }
+};
+template<ASTTableJoin::Strictness STRICTNESS> struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Left, STRICTNESS>
+{
+    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add,
+                         size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    {
+        CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>::addFound(dst_columns, num_existing_columns, src_left_columns,
+            num_columns_to_add, start_offset, i, blocks, is_row_matched, current_offset, expanded_row_size_after_join);
+    }
+    static void addNotFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add,
+        size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    {
+        /// for left all/any join, mark this row as matched
+        (*is_row_matched)[i - start_offset] = 1;
+        (*expanded_row_size_after_join)[i - start_offset] = 1 + current_offset;
+        current_offset += 1;
+        for (size_t col_num = 0; col_num < num_existing_columns; ++col_num)
+            dst_columns[col_num]->insertFrom(*src_left_columns[col_num], i);
+        for (size_t col_num = 0; col_num < num_columns_to_add; ++col_num)
+            dst_columns[num_existing_columns + col_num]->insertDefault();
+    }
+    static bool allRightRowsMaybeAdded() {
+        return STRICTNESS == ASTTableJoin::Strictness::All;
+    }
+};
+template<> struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::Any>
+{
+    static void addFound(MutableColumns & /* dst_columns */, size_t /* num_existing_columns */, ColumnRawPtrs & /* src_left_columns */, size_t /* num_columns_to_add */,
+                         size_t start_offset, size_t i, const BlocksList & /* blocks */, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    {
+        (*is_row_matched)[i - start_offset] = 0;
+        (*expanded_row_size_after_join)[i - start_offset] = current_offset;
+    }
+    static void addNotFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add,
+                            size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    {
+        CrossJoinAdder<ASTTableJoin::Kind::Cross_Left, ASTTableJoin::Strictness::Any>::addNotFound(dst_columns, num_existing_columns, src_left_columns,
+            num_columns_to_add, start_offset, i, is_row_matched, current_offset, expanded_row_size_after_join);
+    }
+    static bool allRightRowsMaybeAdded() {
+        return false;
+    }
+};
+template<> struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::All>
+    {
+
+    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add,
+                         size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    {
+        CrossJoinAdder<ASTTableJoin::Kind::Cross, ASTTableJoin::Strictness::All>::addFound(dst_columns, num_existing_columns, src_left_columns,
+            num_columns_to_add, start_offset, i, blocks, is_row_matched, current_offset, expanded_row_size_after_join);
+    }
+    static void addNotFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add,
+                            size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+    {
+        CrossJoinAdder<ASTTableJoin::Kind::Cross_Left, ASTTableJoin::Strictness::Any>::addNotFound(dst_columns, num_existing_columns, src_left_columns,
+            num_columns_to_add, start_offset, i, is_row_matched, current_offset, expanded_row_size_after_join);
+    }
+    static bool allRightRowsMaybeAdded() {
+        return true;
+    }
+};
+}
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
+void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[maybe_unused]]) const
+{
+    /// Add new columns to the block.
+    size_t num_existing_columns = block.columns();
+    size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
+    size_t rows_left = block.rows();
+
+    ColumnRawPtrs src_left_columns(num_existing_columns);
+
+    for (size_t i = 0; i < num_existing_columns; ++i)
+    {
+        src_left_columns[i] = block.getByPosition(i).column.get();
     }
 
-    block = block.cloneWithColumns(std::move(dst_columns));
+    for (size_t i = 0; i < num_columns_to_add; ++i)
+    {
+        const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
+        block.insert(src_column);
+    }
+
+    /// NOTE It would be better to use `reserve`, as well as `replicate` methods to duplicate the values of the left block.
+    size_t right_table_rows = 0;
+    for (const Block & block_right : blocks)
+        right_table_rows += block_right.rows();
+
+    size_t left_rows_per_iter = std::max(rows_left , 1);
+    if (max_block_size_for_cross_join > 0 && right_table_rows > 0 && other_condition_ptr != nullptr
+        && CrossJoinAdder<KIND, STRICTNESS>::allRightRowsMaybeAdded())
+    {
+        /// if other_condition is not null, and all right columns maybe added during join, try to use multiple iter
+        /// to make memory usage under control, for anti semi cross join that is converted by not in subquery,
+        /// it is likely that other condition may filter out most of the rows
+        left_rows_per_iter = std::max(max_block_size_for_cross_join / right_table_rows, 1);
+    }
+
+    std::vector<size_t> right_column_index;
+    for (size_t i = 0; i < num_columns_to_add; i++)
+        right_column_index.push_back(num_existing_columns + i);
+
+    std::vector<Block> result_blocks;
+    for (size_t start = 0; start <= rows_left; start += left_rows_per_iter)
+    {
+        size_t end = std::min(start + left_rows_per_iter, rows_left);
+        MutableColumns dst_columns(num_existing_columns + num_columns_to_add);
+        for (size_t i = 0; i < block.columns(); i++)
+        {
+            dst_columns[i] = block.getByPosition(i).column->cloneEmpty();
+        }
+        IColumn::Offset current_offset = 0;
+        std::unique_ptr<IColumn::Filter> is_row_matched = std::make_unique<IColumn::Filter>(end - start);
+        std::unique_ptr<IColumn::Offsets> expanded_row_size_after_join = std::make_unique<IColumn::Offsets>(end - start);
+        for (size_t i = start; i < end; i++)
+        {
+            if constexpr (has_null_map)
+            {
+                if ((*null_map)[i])
+                {
+                    /// filter out by left_conditions, so just treated as not joined column
+                    CrossJoinAdder<KIND, STRICTNESS>::addNotFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add,
+                                                                  start, i, is_row_matched.get(), current_offset, expanded_row_size_after_join.get());
+                    continue;
+                }
+            }
+            if (right_table_rows > 0)
+            {
+                CrossJoinAdder<KIND, STRICTNESS>::addFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add,
+                                                           start, i, blocks, is_row_matched.get(), current_offset, expanded_row_size_after_join.get());
+            }
+            else
+            {
+                CrossJoinAdder<KIND, STRICTNESS>::addNotFound(dst_columns, num_existing_columns, src_left_columns, num_columns_to_add,
+                                                              start, i, is_row_matched.get(), current_offset, expanded_row_size_after_join.get());
+            }
+        }
+        auto block_per_iter = block.cloneWithColumns(std::move(dst_columns));
+        if (other_condition_ptr != nullptr)
+            handleOtherConditions(block_per_iter, is_row_matched, expanded_row_size_after_join, right_column_index);
+        if (start == 0 || block_per_iter.rows() > 0)
+            /// always need to generate at least one block
+            result_blocks.push_back(block_per_iter);
+    }
+
+    if (result_blocks.size() == 1)
+    {
+        block = result_blocks[0];
+    }
+    else
+    {
+        auto & sample_block = result_blocks[0];
+        MutableColumns dst_columns(sample_block.columns());
+        for (size_t i = 0; i < sample_block.columns(); i++)
+        {
+            dst_columns[i] = sample_block.getByPosition(i).column->cloneEmpty();
+        }
+        for (size_t i = 0; i < result_blocks.size(); i++)
+        {
+            auto & current_block = result_blocks[i];
+            if (current_block.rows() > 0)
+            {
+                for (size_t column = 0; column < current_block.columns(); column++)
+                {
+                    dst_columns[column]->insertRangeFrom(*current_block.getByPosition(column).column, 0, current_block.rows());
+                }
+            }
+        }
+        block = sample_block.cloneWithColumns(std::move(dst_columns));
+    }
+}
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
+void Join::joinBlockImplCross(Block & block) const
+{
+    size_t rows_left = block.rows();
+    ColumnPtr null_map_holder;
+    ConstNullMapPtr null_map{};
+    recordFilteredRows(block, left_filter_column, null_map_holder, null_map);
+
+    std::unique_ptr<IColumn::Filter> filter = std::make_unique<IColumn::Filter>(rows_left);
+    std::unique_ptr<IColumn::Offsets> offsets_to_replicate = std::make_unique<IColumn::Offsets>(rows_left);
+
+    if (null_map)
+        joinBlockImplCrossInternal<KIND, STRICTNESS, true>(block, null_map);
+    else
+        joinBlockImplCrossInternal<KIND, STRICTNESS, false>(block, nullptr);
+
 }
 
 
@@ -1305,8 +1552,18 @@ void Join::joinBlock(Block & block) const
         joinBlockImpl<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any>(block, maps_any);
     else if (kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All)
         joinBlockImpl<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::All>(block, maps_all);
-    else if (kind == ASTTableJoin::Kind::Cross)
-        joinBlockImplCross(block);
+    else if (kind == ASTTableJoin::Kind::Cross && strictness == ASTTableJoin::Strictness::All)
+        joinBlockImplCross<ASTTableJoin::Kind::Cross, ASTTableJoin::Strictness::All>(block);
+    else if (kind == ASTTableJoin::Kind::Cross && strictness == ASTTableJoin::Strictness::Any)
+        joinBlockImplCross<ASTTableJoin::Kind::Cross, ASTTableJoin::Strictness::Any>(block);
+    else if (kind == ASTTableJoin::Kind::Cross_Left && strictness == ASTTableJoin::Strictness::All)
+        joinBlockImplCross<ASTTableJoin::Kind::Cross_Left, ASTTableJoin::Strictness::All>(block);
+    else if (kind == ASTTableJoin::Kind::Cross_Left && strictness == ASTTableJoin::Strictness::Any)
+        joinBlockImplCross<ASTTableJoin::Kind::Cross_Left, ASTTableJoin::Strictness::Any>(block);
+    else if (kind == ASTTableJoin::Kind::Cross_Anti && strictness == ASTTableJoin::Strictness::All)
+        joinBlockImplCross<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::All>(block);
+    else if (kind == ASTTableJoin::Kind::Cross_Anti && strictness == ASTTableJoin::Strictness::Any)
+        joinBlockImplCross<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::Any>(block);
     else
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 }
