@@ -1,20 +1,16 @@
 #pragma once
 
+#include <Core/Block.h>
+#include <Storages/TableLockHolder.h>
+
+#include <boost/noncopyable.hpp>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
-#include <boost/noncopyable.hpp>
-#include <Core/Block.h>
 
 
 namespace DB
 {
-
-struct Progress;
-
-class TableStructureReadLock;
-using TableStructureReadLockPtr = std::shared_ptr<TableStructureReadLock>;
-using TableStructureReadLocks = std::vector<TableStructureReadLockPtr>;
 
 struct Progress;
 
@@ -62,14 +58,14 @@ public:
 
     virtual ~IBlockOutputStream() {}
 
-    /** Don't let to alter table while instance of stream is alive.
+    /** Don't let to drop table while instance of stream is alive.
       */
-    void addTableLock(const TableStructureReadLockPtr & lock) { table_locks.push_back(lock); }
+    void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
 private:
-    TableStructureReadLocks table_locks;
+    TableLockHolders table_locks;
 };
 
 using BlockOutputStreamPtr = std::shared_ptr<IBlockOutputStream>;
 
-}
+} // namespace DB

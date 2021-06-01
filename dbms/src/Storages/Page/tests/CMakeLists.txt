@@ -8,7 +8,7 @@ endmacro()
 # attach all dm gtest sources
 grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/tests ps_gtest_sources)
 
-add_executable(gtests_page_storage ${ps_gtest_sources})
+add_executable(gtests_page_storage ${ps_gtest_sources} ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/gtests_dbms_main.cpp)
 target_link_libraries(gtests_page_storage gtest_main page_storage)
 target_compile_options(gtests_page_storage PRIVATE -Wno-unknown-pragmas)
 add_check(gtests_page_storage)

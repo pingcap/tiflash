@@ -16,10 +16,9 @@ namespace DB
 
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_),
-      kvstore(std::make_shared<KVStore>(context)),
+      kvstore(std::make_shared<KVStore>(context, raft_config.snapshot_apply_method)),
       region_table(context),
       background_service(nullptr),
-      gc_manager(context),
       cluster(raft_config.pd_addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>()
                                                : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config)),
       ignore_databases(raft_config.ignore_databases),
@@ -56,7 +55,6 @@ BackgroundService & TMTContext::getBackgroundService() { return *background_serv
 
 const BackgroundService & TMTContext::getBackgroundService() const { return *background_service; }
 
-GCManager & TMTContext::getGCManager() { return gc_manager; }
 
 Context & TMTContext::getContext() { return context; }
 
@@ -84,11 +82,16 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 {
     static constexpr const char * TABLE_OVERLAP_THRESHOLD = "flash.overlap_threshold";
     static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
+    static constexpr const char * COMPACT_LOG_MIN_ROWS = "flash.compact_log_min_rows";
+    static constexpr const char * COMPACT_LOG_MIN_BYTES = "flash.compact_log_min_bytes";
     static constexpr const char * REPLICA_READ_MAX_THREAD = "flash.replica_read_max_thread";
 
 
     getRegionTable().setTableCheckerThreshold(config.getDouble(TABLE_OVERLAP_THRESHOLD, 0.6));
-    getKVStore()->setRegionCompactLogPeriod(std::max(config.getUInt64(COMPACT_LOG_MIN_PERIOD, 120), 1));
+    // default config about compact-log: period 120s, rows 40k, bytes 32MB.
+    getKVStore()->setRegionCompactLogConfig(std::max(config.getUInt64(COMPACT_LOG_MIN_PERIOD, 120), 1),
+        std::max(config.getUInt64(COMPACT_LOG_MIN_ROWS, 40 * 1024), 1),
+        std::max(config.getUInt64(COMPACT_LOG_MIN_BYTES, 32 * 1024 * 1024), 1));
     replica_read_max_thread = std::max(config.getUInt64(REPLICA_READ_MAX_THREAD, 1), 1);
 }
 

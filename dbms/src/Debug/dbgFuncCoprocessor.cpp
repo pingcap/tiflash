@@ -59,7 +59,12 @@ static const String MPP_QUERY = "mpp_query";
 static const String USE_BROADCAST_JOIN = "use_broadcast_join";
 static const String MPP_PARTITION_NUM = "mpp_partition_num";
 static const String MPP_TIMEOUT = "mpp_timeout";
-static const String LOCAL_HOST = "127.0.0.1:3930";
+static String LOCAL_HOST = "127.0.0.1:3930";
+
+namespace Debug
+{
+void setServiceAddr(const std::string & addr) { LOCAL_HOST = addr; }
+} // namespace Debug
 
 struct DAGProperties
 {
@@ -97,7 +102,9 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"notequals", tipb::ScalarFuncSig::NEInt},
     {"like", tipb::ScalarFuncSig::LikeSig},
     {"cast_int_int", tipb::ScalarFuncSig::CastIntAsInt},
+    {"cast_int_real", tipb::ScalarFuncSig::CastIntAsReal},
     {"cast_real_int", tipb::ScalarFuncSig::CastRealAsInt},
+    {"cast_real_real", tipb::ScalarFuncSig::CastRealAsReal},
     {"cast_decimal_int", tipb::ScalarFuncSig::CastDecimalAsInt},
     {"cast_time_int", tipb::ScalarFuncSig::CastTimeAsInt},
     {"cast_string_int", tipb::ScalarFuncSig::CastStringAsInt},
@@ -758,6 +765,15 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
                 {
                     ft->set_tp(TiDB::TypeDate);
                 }
+                break;
+            }
+            case tipb::ScalarFuncSig::CastIntAsReal:
+            case tipb::ScalarFuncSig::CastRealAsReal:
+            {
+                expr->set_sig(it_sig->second);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeDouble);
+                ft->set_collate(collator_id);
                 break;
             }
             default:
@@ -1623,6 +1639,12 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
                     ci.tp = TiDB::TypeDate;
                 }
                 break;
+            case tipb::ScalarFuncSig::CastIntAsReal:
+            case tipb::ScalarFuncSig::CastRealAsReal:
+            {
+                ci.tp = TiDB::TypeDouble;
+                break;
+            }
             default:
                 ci.tp = TiDB::TypeLongLong;
                 ci.flag = TiDB::ColumnFlagUnsigned;

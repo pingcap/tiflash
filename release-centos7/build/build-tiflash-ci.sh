@@ -39,13 +39,6 @@ if [ -d "$SRCPATH/contrib/tipb" ]; then
   cd -
 fi
 
-if [ -d "$SRCPATH/dbms/src/Storages/DeltaMerge/File/dtpb" ]; then
-  cd "$SRCPATH/dbms/src/Storages/DeltaMerge/File/dtpb"
-  rm -rf cpp/dtpb
-  ./generate_cpp.sh
-  cd -
-fi
-
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
 mkdir -p ${SRCPATH}/libs/libtiflash-proxy
 
