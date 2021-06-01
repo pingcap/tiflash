@@ -15,10 +15,6 @@
 #include <gperftools/malloc_extension.h>
 #endif
 
-#if USE_MIMALLOC
-#include <mimalloc-new-delete.h>
-#endif
-
 #if ENABLE_CLICKHOUSE_SERVER
 #include "Server.h"
 #endif
