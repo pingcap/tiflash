@@ -91,6 +91,14 @@ if (ENABLE_JEMALLOC AND USE_INTERNAL_JEMALLOC_LIBRARY)
     add_subdirectory (jemalloc-cmake)
 endif ()
 
+if (ENABLE_MIMALLOC)
+    # we use object library on default
+    set(MI_BUILD_SHARED OFF CACHE BOOL "disable mimalloc shared library on default" FORCE)
+    set(MI_BUILD_TESTS OFF CACHE BOOL "disable mimalloc tests on default" FORCE)
+    set(MI_BUILD_STATIC OFF CACHE BOOL "disable mimalloc static library on default" FORCE)
+    add_subdirectory (mimalloc)
+endif()
+
 if (NOT ARCH_ARM)
     add_subdirectory (libcpuid)
 endif ()
