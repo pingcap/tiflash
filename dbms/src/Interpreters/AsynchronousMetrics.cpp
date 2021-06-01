@@ -7,9 +7,9 @@
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Storages/MarkCache.h>
 #include <Storages/StorageMergeTree.h>
-#include <chrono>
-
 #include <common/config_common.h>
+
+#include <chrono>
 
 #if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
@@ -201,28 +201,18 @@ void AsynchronousMetrics::update()
 #endif
 
 #if USE_MIMALLOC
-#define MI_STATS_SET(X) \
-    set("mimalloc." #X, X)
+#define MI_STATS_SET(X) set("mimalloc." #X, X)
 
     {
         size_t elapsed_msecs;
-		size_t user_msecs;
-		size_t system_msecs;
-		size_t current_rss;
-		size_t peak_rss;
-		size_t current_commit;
-		size_t peak_commit;
-		size_t page_faults;
-        mi_process_info(
-            &elapsed_msecs,
-            &user_msecs,
-            &system_msecs,
-            &current_rss,
-            &peak_rss,
-            &current_commit,
-            &peak_commit,
-            &page_faults,
-        );
+        size_t user_msecs;
+        size_t system_msecs;
+        size_t current_rss;
+        size_t peak_rss;
+        size_t current_commit;
+        size_t peak_commit;
+        size_t page_faults;
+        mi_process_info(&elapsed_msecs, &user_msecs, &system_msecs, &current_rss, &peak_rss, &current_commit, &peak_commit, &page_faults);
         MI_STATS_SET(elapsed_msecs);
         MI_STATS_SET(user_msecs);
         MI_STATS_SET(system_msecs);
