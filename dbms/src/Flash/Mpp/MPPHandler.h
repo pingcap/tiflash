@@ -220,10 +220,8 @@ struct MPPTunnelSet
         {
             clearExecutionSummaries(response);
         }
-        std::string data;
-        response.SerializeToString(&data);
         mpp::MPPDataPacket packet;
-        packet.set_data(std::move(data));
+        response.SerializeToString(packet.mutable_data());
         tunnels[partition_id]->write(packet);
     }
 
