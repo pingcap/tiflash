@@ -240,7 +240,7 @@ TEST(DataType_test, isSupportedDataTypeCast)
         ASSERT_TRUE(isSupportedDataTypeCast(typeFromString("UInt16"), typeFromString("Nullable(UInt32)")));
 
         // float32 -> float64 is lossy
-        ASSERT_FALSE(isSupportedDataTypeCast(typeFromString("Float32"), typeFromString("Float64")));
+        ASSERT_TRUE(isSupportedDataTypeCast(typeFromString("Float32"), typeFromString("Float64")));
         // float64 -> float32 is lossy
         ASSERT_FALSE(isSupportedDataTypeCast(typeFromString("Float64"), typeFromString("Float32")));
 
