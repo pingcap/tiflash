@@ -23,6 +23,27 @@ catchError {
         }
     }
 
+    node("${GO_BUILD_SLAVE}") {
+        def curws = pwd()
+        dir("/home/jenkins/agent/code-archive") {
+            container("golang") {
+                if(fileExists("/nfs/cache/git/src-tics.tar.gz")){
+                    timeout(5) {
+                        sh """
+                        cp -R /nfs/cache/git/src-tics.tar.gz*  ./
+                        mkdir -p ${curws}/tics
+                        tar -xzf src-tics.tar.gz -C ${curws}/tics --strip-components=1
+                    """
+                    }
+                }
+            }
+            dir("${curws}/tics") {
+                util.checkoutTiCS("${params.ghprbActualCommit}", "${params.ghprbPullId}")
+            }
+        }
+        stash includes: "tics/**", name: "git-code-tics", useDefaultExcludes: false
+    }
+
     parallel (
         "tidb ci test": {
             def label = "tidb-ci-test"

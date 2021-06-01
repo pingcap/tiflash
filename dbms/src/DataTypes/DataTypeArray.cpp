@@ -144,7 +144,7 @@ namespace
 }
 
 
-void DataTypeArray::enumerateStreams(StreamCallback callback, SubstreamPath path) const
+void DataTypeArray::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
 {
     path.push_back(Substream::ArraySizes);
     callback(path);
