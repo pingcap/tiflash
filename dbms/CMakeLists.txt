@@ -209,13 +209,6 @@ if (USE_ICU)
     target_include_directories (dbms PRIVATE ${ICU_INCLUDE_DIR})
 endif ()
 
-if (USE_CAPNP)
-    target_link_libraries (dbms ${CAPNP_LIBRARY})
-    if (NOT USE_INTERNAL_CAPNP_LIBRARY)
-        target_include_directories (dbms BEFORE PRIVATE ${CAPNP_INCLUDE_DIR})
-    endif ()
-endif ()
-
 target_link_libraries (dbms
     Threads::Threads
 )
