@@ -644,14 +644,14 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr &        dm_context,
 
             for (const auto & file : files)
             {
-                /// For generate DMFile instance with a new ref_id pointed to the file_id.
+                /// Generate DMFile instance with a new ref_id pointed to the file_id.
                 auto   file_id          = file->fileId();
                 auto & file_parent_path = file->parentPath();
                 auto   ref_id           = storage_pool.newDataPageId();
 
                 auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path);
                 auto pack     = std::make_shared<DeltaPackFile>(*dm_context, ref_file, segment_range);
-                if (pack->getRows())
+                if (pack->getRows() != 0)
                 {
                     packs.emplace_back(std::move(pack));
                     wbs.data.putRefPage(ref_id, file_id);
@@ -686,8 +686,8 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr &        dm_context,
 
     // Enable gc for DTFile after all segment applied.
     // Note that we can not enable gc for them once they have applied to any segments.
-    // Assume that one segment (call `s0`) get compacted after file ingested, `gc_handle`
-    // gc the DTFiles before they get applied to all segments. Then we will apply some
+    // Assume that one segment get compacted after file ingested, `gc_handle` gc the
+    // DTFiles before they get applied to all segments. Then we will apply some
     // deleted DTFiles to other segments.
     for (const auto & file : files)
         file->enableGC();
@@ -2002,15 +2002,16 @@ void DeltaMergeStore::restoreStableFiles()
 {
     LOG_DEBUG(log, "Loading dt files");
 
-    auto                path_delegate = path_pool.getStableDiskDelegator();
     DMFile::ListOptions options;
-    options.only_list_can_gc = false;
+    options.only_list_can_gc = false; // We need all files to restore the bytes on disk
     options.clean_up         = true;
+    auto file_provider       = global_context.getFileProvider();
+    auto path_delegate       = path_pool.getStableDiskDelegator();
     for (const auto & root_path : path_delegate.listPaths())
     {
-        for (auto & file_id : DMFile::listAllInPath(global_context.getFileProvider(), root_path, options))
+        for (auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
         {
-            auto dmfile = DMFile::restore(global_context.getFileProvider(), file_id, /* ref_id= */ 0, root_path, true);
+            auto dmfile = DMFile::restore(file_provider, file_id, /* ref_id= */ 0, root_path, true);
             path_delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), root_path);
         }
     }

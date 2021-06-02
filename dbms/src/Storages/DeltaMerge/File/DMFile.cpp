@@ -465,7 +465,8 @@ DMFile::listAllInPath(const FileProviderPtr & file_provider, const String & pare
     for (const auto & name : file_names)
     {
         // Clean up temporary files and files should be deleted
-        // Note that you should not call it if some DTFiles are writing
+        // Note that you should not do clean up if some DTFiles are writing,
+        // or you may delete some writing files
         if (options.clean_up)
         {
             if (startsWith(name, details::FOLDER_PREFIX_WRITABLE))
