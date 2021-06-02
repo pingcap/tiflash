@@ -65,7 +65,8 @@ void ColumnNullable::updateHashWithValues(
     }
     else
     {
-        IColumn::HashValues original_values(null_count);
+        IColumn::HashValues original_values;
+        original_values.reserve(null_count);
         for (size_t i = 0, n = arr.size(); i < n; ++i)
         {
             if (arr[i])
