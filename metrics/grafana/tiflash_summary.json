@@ -558,6 +558,7 @@
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
+              "legendFormat": "mmap",
               "refId": "H"
             },
             {
