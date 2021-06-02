@@ -167,7 +167,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
 {
     LOG_INFO(log, "Restore DeltaMerge Store start [" << db_name << "." << table_name << "]");
 
-    // restore existing dm files and set capacity for path_pool.
+    // Restore existing dm files and set capacity for path_pool.
+    // Should be done before any background task setup.
     restoreStableFiles();
 
     original_table_columns.emplace_back(original_table_handle_define);
@@ -236,11 +237,13 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     auto dmfile_scanner = [=]() {
         PageStorage::PathAndIdsVec path_and_ids_vec;
         auto                       delegate = path_pool.getStableDiskDelegator();
+        DMFile::ListOptions        options;
+        options.only_list_can_gc = true;
         for (auto & root_path : delegate.listPaths())
         {
             auto & path_and_ids           = path_and_ids_vec.emplace_back();
             path_and_ids.first            = root_path;
-            auto file_ids_in_current_path = DMFile::listAllInPath(global_context.getFileProvider(), root_path, /* can_gc= */ true);
+            auto file_ids_in_current_path = DMFile::listAllInPath(global_context.getFileProvider(), root_path, options);
             for (auto id : file_ids_in_current_path)
                 path_and_ids.second.insert(id);
         }
@@ -1829,10 +1832,13 @@ void DeltaMergeStore::restoreStableFiles()
 {
     LOG_DEBUG(log, "Loading dt files");
 
-    auto path_delegate = path_pool.getStableDiskDelegator();
+    auto                path_delegate = path_pool.getStableDiskDelegator();
+    DMFile::ListOptions options;
+    options.only_list_can_gc = false;
+    options.clean_up         = true;
     for (const auto & root_path : path_delegate.listPaths())
     {
-        for (auto & file_id : DMFile::listAllInPath(global_context.getFileProvider(), root_path, false))
+        for (auto & file_id : DMFile::listAllInPath(global_context.getFileProvider(), root_path, options))
         {
             auto dmfile = DMFile::restore(global_context.getFileProvider(), file_id, /* ref_id= */ 0, root_path, true);
             path_delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), root_path);
