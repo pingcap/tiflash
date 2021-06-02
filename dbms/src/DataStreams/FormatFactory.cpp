@@ -23,16 +23,12 @@
 #include <DataStreams/XMLRowOutputStream.h>
 #include <DataStreams/TSKVRowOutputStream.h>
 #include <DataStreams/TSKVRowInputStream.h>
-#include <DataStreams/ODBCDriverBlockOutputStream.h>
 #include <DataStreams/CSVRowInputStream.h>
 #include <DataStreams/CSVRowOutputStream.h>
 #include <DataStreams/MaterializingBlockOutputStream.h>
 #include <DataStreams/FormatFactory.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataTypes/FormatSettingsJSON.h>
-#if USE_CAPNP
-#include <DataStreams/CapnProtoRowInputStream.h>
-#endif
 
 #include <boost/algorithm/string.hpp>
 
@@ -97,19 +93,6 @@ BlockInputStreamPtr FormatFactory::getInput(const String & name, ReadBuffer & bu
     {
         return wrap_row_stream(std::make_shared<JSONEachRowRowInputStream>(buf, sample, settings.input_format_skip_unknown_fields));
     }
-#if USE_CAPNP
-    else if (name == "CapnProto")
-    {
-        std::vector<String> tokens;
-        auto schema_and_root = settings.format_schema.toString();
-        boost::split(tokens, schema_and_root, boost::is_any_of(":"));
-        if (tokens.size() != 2)
-            throw Exception("Format CapnProto requires 'format_schema' setting to have a schema_file:root_object format, e.g. 'schema.capnp:Message'");
-
-        const String & schema_dir = context.getFormatSchemaPath();
-        return wrap_row_stream(std::make_shared<CapnProtoRowInputStream>(buf, sample, schema_dir, tokens[0], tokens[1]));
-    }
-#endif
     else if (name == "TabSeparatedRaw"
         || name == "TSVRaw"
         || name == "Pretty"
@@ -124,8 +107,7 @@ BlockInputStreamPtr FormatFactory::getInput(const String & name, ReadBuffer & bu
         || name == "Null"
         || name == "JSON"
         || name == "JSONCompact"
-        || name == "XML"
-        || name == "ODBCDriver")
+        || name == "XML")
     {
         throw Exception("Format " + name + " is not suitable for input", ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT);
     }
@@ -197,8 +179,6 @@ static BlockOutputStreamPtr getOutputImpl(const String & name, WriteBuffer & buf
             settings.output_format_write_statistics), sample);
     else if (name == "TSKV")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(std::make_shared<TSKVRowOutputStream>(buf, sample), sample);
-    else if (name == "ODBCDriver")
-        return std::make_shared<ODBCDriverBlockOutputStream>(buf, sample);
     else if (name == "Null")
         return std::make_shared<NullBlockOutputStream>(sample);
     else
