@@ -14,6 +14,7 @@ set -ueox pipefail
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
 CI_CCACHE_USED_SRCPATH="/build/tics"
+export INSTALL_DIR=${INSTALL_DIR:-"$SRCPATH/release-centos7/tiflash"}
 
 if [[ ${CI_CCACHE_USED_SRCPATH} != ${SRCPATH} ]]; then
   rm -rf "${CI_CCACHE_USED_SRCPATH}"
@@ -44,8 +45,8 @@ if [[ "${BUILD_UPDATE_DEBUG_CI_CCACHE}" != "false" ]]; then
   echo "======  finish build & upload ccache for ci debug build  ======"
 fi
 
-install_dir="$SRCPATH/release-centos7/tiflash"
-if [ -d "$install_dir" ]; then rm -rf "$install_dir"/*; else mkdir -p "$install_dir"; fi
+rm -rf "${INSTALL_DIR}"
+mkdir -p "${INSTALL_DIR}"
 
 USE_CCACHE=ON
 rm -rf "${SRCPATH}/.ccache"
@@ -134,8 +135,8 @@ make -j $NPROC tiflash
 if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST} -ne 0 ]]; then
     #ctest -V -j $(nproc || grep -c ^processor /proc/cpuinfo)
     make -j ${NPROC} gtests_dbms gtests_libcommon
-    cp -f "$build_dir/dbms/gtests_dbms" "$install_dir/"
-    cp -f "$build_dir/libs/libcommon/src/tests/gtests_libcommon" "$install_dir/"
+    cp -f "$build_dir/dbms/gtests_dbms" "${INSTALL_DIR}/"
+    cp -f "$build_dir/libs/libcommon/src/tests/gtests_libcommon" "${INSTALL_DIR}/"
 fi
 
 ccache -s
@@ -149,11 +150,11 @@ fi
 
 # Reduce binary size by compressing.
 objcopy --compress-debug-sections=zlib-gnu "$build_dir/dbms/src/Server/tiflash"
-cp -r "${SRCPATH}/cluster_manage/dist/flash_cluster_manager" "$install_dir"/flash_cluster_manager
-cp -f "$build_dir/dbms/src/Server/tiflash" "$install_dir/tiflash"
-cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "$install_dir/libtiflash_proxy.so"
-ldd "$install_dir/tiflash"
-cd "$install_dir"
-chrpath -d libtiflash_proxy.so "$install_dir/tiflash"
-ldd "$install_dir/tiflash"
-ls -lh "$install_dir"
+cp -r "${SRCPATH}/cluster_manage/dist/flash_cluster_manager" "${INSTALL_DIR}"/flash_cluster_manager
+cp -f "$build_dir/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
+cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
+ldd "${INSTALL_DIR}/tiflash"
+cd "${INSTALL_DIR}"
+chrpath -d libtiflash_proxy.so "${INSTALL_DIR}/tiflash"
+ldd "${INSTALL_DIR}/tiflash"
+ls -lh "${INSTALL_DIR}"
