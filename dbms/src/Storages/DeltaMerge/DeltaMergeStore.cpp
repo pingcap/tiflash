@@ -66,6 +66,8 @@ extern const char pause_when_ingesting_to_dt_store[];
 extern const char pause_when_altering_dt_store[];
 extern const char force_triggle_background_merge_delta[];
 extern const char force_triggle_foreground_flush[];
+extern const char force_set_segment_ingest_packs_fail[];
+extern const char segment_merge_after_ingest_packs[];
 } // namespace FailPoints
 
 namespace DM
@@ -547,10 +549,10 @@ void DeltaMergeStore::preIngestFile(const String & parent_path, const PageId fil
     delegator.addDTFile(file_id, file_size, parent_path);
 }
 
-void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
-                                  const RowKeyRange &  range,
-                                  std::vector<PageId>  file_ids,
-                                  bool                 clear_data_in_range)
+void DeltaMergeStore::ingestFiles(const DMContextPtr &        dm_context,
+                                  const RowKeyRange &         range,
+                                  const std::vector<PageId> & file_ids,
+                                  bool                        clear_data_in_range)
 {
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
     {
@@ -560,8 +562,6 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
         LOG_WARNING(log, __FUNCTION__ << msg);
         throw Exception(msg);
     }
-
-    LOG_INFO(log, __FUNCTION__ << " table: " << db_name << "." << table_name << ", region range:" << range.toDebugString());
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);
 
@@ -585,9 +585,9 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
         bytes_on_disk += file->getBytesOnDisk();
     }
 
-    LOG_DEBUG(log,
-              __FUNCTION__ << " table: " << db_name << "." << table_name << ", rows: " << rows << ", bytes: " << bytes << ", bytes on disk"
-                           << bytes_on_disk);
+    LOG_INFO(log,
+             __FUNCTION__ << " table: " << db_name << "." << table_name << ", rows: " << rows << ", bytes: " << bytes
+                          << ", bytes on disk: " << bytes_on_disk << ", region range: " << range.toDebugString());
 
     Segments    updated_segments;
     RowKeyRange cur_range = range;
@@ -664,17 +664,18 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
             // they are visible for readers who require file_ids to be found in PageStorage.
             wbs.writeLogAndData();
 
-            if (segment->ingestPacks(*dm_context, range.shrink(segment_range), packs, clear_data_in_range))
+            bool ingest_success = segment->ingestPacks(*dm_context, range.shrink(segment_range), packs, clear_data_in_range);
+            fiu_do_on(FailPoints::force_set_segment_ingest_packs_fail, { ingest_success = false; });
+            if (ingest_success)
             {
                 updated_segments.push_back(segment);
-                // Enable gc for DTFile once it has been committed.
-                for (size_t index = 0; index < my_file_used.size(); ++index)
-                {
-                    auto & file = files[index];
-                    if (my_file_used[index])
-                        file->enableGC();
-                }
+                // only update `file_used` after ingest_success
                 file_used.swap(my_file_used);
+                fiu_do_on(FailPoints::segment_merge_after_ingest_packs, {
+                    segment->flushCache(*dm_context);
+                    segmentMergeDelta(*dm_context, segment, TaskRunThread::Thread_BG_Thread_Pool);
+                    storage_pool.gc(global_context.getSettingsRef(), StoragePool::Seconds(0));
+                });
                 break;
             }
             else
@@ -685,6 +686,40 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
 
         cur_range.setStart(segment_range.end);
         cur_range.setEnd(range.end);
+    }
+
+    // Enable gc for DTFile after all segment applied.
+    // Note that we can not enable gc for them once they have applied to any segments.
+    // Assume that one segment (call `s0`) get compacted after file ingested, `gc_handle`
+    // gc the DTFiles before they get applied to all segments. Then we will apply some
+    // deleted DTFiles to other segments.
+    for (size_t index = 0; index < file_used.size(); ++index)
+    {
+        auto & file = files[index];
+        if (file_used[index])
+            file->enableGC();
+    }
+
+    {
+        // Add some logging about the ingested file ids and updated segments
+        std::stringstream ss;
+        // "ingest dmf_1001,1002,1003 into segment [1,3,5]"
+        ss << "ingest dmf_";
+        for (size_t i = 0; i < file_ids.size(); ++i)
+        {
+            if (i != 0)
+                ss << ",";
+            ss << file_ids[i];
+        }
+        ss << " into segment [";
+        for (size_t i = 0; i < updated_segments.size(); ++i)
+        {
+            if (i != 0)
+                ss << ",";
+            ss << updated_segments[i]->segmentId();
+        }
+        ss << "]";
+        LOG_INFO(log, __FUNCTION__ << " table: " << db_name << "." << table_name << ", " << ss.str());
     }
 
     GET_METRIC(dm_context->metrics, tiflash_storage_throughput_bytes, type_ingest).Increment(bytes);
@@ -1282,7 +1317,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     {
         /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
         task.dm_context->min_version = latest_gc_safe_point.load(std::memory_order_relaxed);
-        LOG_DEBUG(log, "Task" << toString(task.type) << " GC safe point: " << task.dm_context->min_version);
+        LOG_DEBUG(log, "Task " << toString(task.type) << " GC safe point: " << task.dm_context->min_version);
     }
 
     SegmentPtr left, right;
