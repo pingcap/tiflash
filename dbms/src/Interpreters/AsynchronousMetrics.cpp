@@ -229,7 +229,7 @@ void AsynchronousMetrics::update()
 
 
     /// Add more metrics as you wish.
-    set("mmap.alive", static_cast<double>(DB::allocator_mmap_counter.load(std::memory_order_relaxed)));
+    set("mmap.alive", DB::allocator_mmap_counter.load(std::memory_order_relaxed));
 }
 
 
