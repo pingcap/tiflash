@@ -554,11 +554,18 @@
               "refId": "G"
             },
             {
+              "expr": "sum(tiflash_system_asynchronous_metric_mmap_alive{tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"})",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "refId": "H"
+            },
+            {
               "expr": "tiflash_proxy_process_resident_memory_bytes{tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{instance}}",
-              "refId": "H"
+              "refId": "I"
             }
           ],
           "thresholds": [],
