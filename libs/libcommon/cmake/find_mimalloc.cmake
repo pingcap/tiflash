@@ -1,4 +1,4 @@
-option (ENABLE_MIMALLOC "Set to ON to use mimalloc" ON)
+option (ENABLE_MIMALLOC "Set to ON to use mimalloc" OFF)
 
 if (ENABLE_MIMALLOC)
     set (MIMALLOC_LIBRARIES "mimalloc-obj")
