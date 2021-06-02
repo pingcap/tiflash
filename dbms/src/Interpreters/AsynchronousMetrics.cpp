@@ -222,6 +222,7 @@ void AsynchronousMetrics::update()
         MI_STATS_SET(peak_commit);
         MI_STATS_SET(page_faults);
     };
+#undef MI_STATS_SET
 #endif
 
 #if USE_JEMALLOC

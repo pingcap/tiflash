@@ -358,6 +358,7 @@ void UpdateMallocConfig([[maybe_unused]] Logger * log)
     MI_OPTION_SHOW(mi_option_reset_decommits);
     MI_OPTION_SHOW(mi_option_eager_commit_delay);
     MI_OPTION_SHOW(mi_option_os_tag);
+#undef MI_OPTION_SHOW
 #endif
 #undef RUN_FAIL_RETURN
 }
