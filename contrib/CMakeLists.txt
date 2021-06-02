@@ -113,43 +113,6 @@ if (USE_INTERNAL_SSL_LIBRARY)
     target_include_directories(${OPENSSL_SSL_LIBRARY} PUBLIC ${OPENSSL_INCLUDE_DIR})
 endif ()
 
-if (USE_INTERNAL_RDKAFKA_LIBRARY)
-    set (RDKAFKA_BUILD_EXAMPLES OFF CACHE INTERNAL "")
-    set (RDKAFKA_BUILD_TESTS OFF CACHE INTERNAL "")
-    set (RDKAFKA_BUILD_STATIC ${MAKE_STATIC_LIBRARIES} CACHE INTERNAL "")
-    mark_as_advanced (ZLIB_INCLUDE_DIR)
-
-    if (USE_INTERNAL_SSL_LIBRARY)
-        if (MAKE_STATIC_LIBRARIES)
-            add_library(bundled-ssl ALIAS ${OPENSSL_SSL_LIBRARY})
-            set (WITH_BUNDLED_SSL 1 CACHE INTERNAL "")
-        else ()
-            set (WITH_SSL 0 CACHE INTERNAL "")
-        endif ()
-    endif ()
-
-    add_subdirectory (librdkafka)
-
-    if (USE_INTERNAL_SSL_LIBRARY AND MAKE_STATIC_LIBRARIES)
-        target_include_directories(rdkafka PRIVATE BEFORE ${OPENSSL_INCLUDE_DIR})
-    endif ()
-    target_include_directories(rdkafka PRIVATE BEFORE ${ZLIB_INCLUDE_DIR})
-endif ()
-
-if (USE_INTERNAL_CAPNP_LIBRARY)
-    if (APPLE) # tests never end
-        set (BUILD_TESTING 0 CACHE INTERNAL "")
-    else ()
-        set (BUILD_TESTING ${ENABLE_TESTS} CACHE INTERNAL "")
-    endif ()
-    set (_save ${CMAKE_CXX_EXTENSIONS})
-    set (CMAKE_CXX_EXTENSIONS)
-    add_subdirectory (capnproto/c++)
-    set (CMAKE_CXX_EXTENSIONS ${_save})
-    target_include_directories(${CAPNP_LIBRARY} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/capnproto/c++/src>)
-endif ()
-
-
 if (USE_INTERNAL_POCO_LIBRARY)
     set (save_CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
     set (save_CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
