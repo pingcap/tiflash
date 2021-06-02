@@ -2,8 +2,9 @@
 
 set -ueox pipefail
 
-SRCPATH="/build/tics"
-source ${SRCPATH}/release-centos7/build/env.sh
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
+source ${SCRIPTPATH}/env.sh
 TAR_BIN_URI="${TIFLASH_CI_BUILD_URI_PREFIX}/${PULL_ID}/tiflash.tar.gz"
 COMMIT_HASH_FILE_URI="${TIFLASH_CI_BUILD_URI_PREFIX}/${PULL_ID}/commit-hash"
 
