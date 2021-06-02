@@ -184,15 +184,12 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             // partition each row
             IColumn::Selector partition_selector;
             partition_selector.resize_fill(rows, 0);
-            std::vector<UInt64> partition_size(partition_num, 0);
             for (size_t row_index = 0; row_index < rows; ++row_index)
             {
                 UInt128 key;
                 hash_values[row_index].get128(key.low, key.high);
 
-                auto part_id = (key.low % partition_num);
-                partition_selector[row_index] = part_id;
-                partition_size[part_id]++;
+                partition_selector[row_index] = key.low % partition_num;
             }
 
             for (size_t col_id = 0; col_id < block.columns(); ++col_id)
