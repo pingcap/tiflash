@@ -171,7 +171,8 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             }
 
             size_t rows = block.rows();
-            IColumn::HashValues hash_values(rows);
+            IColumn::HashValues hash_values;
+            hash_values.resize_fill(rows);
 
             // get hash values by all partition key columns
             for (auto i : partition_col_ids)
