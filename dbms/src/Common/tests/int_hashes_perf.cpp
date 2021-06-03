@@ -14,7 +14,7 @@
 
 
 #ifdef __APPLE__
-#include <common/apple_rt.h>
+#include <Common/apple_rt.h>
 #endif
 
 void setAffinity()

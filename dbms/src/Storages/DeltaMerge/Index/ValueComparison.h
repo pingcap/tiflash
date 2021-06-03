@@ -101,7 +101,7 @@ private:
     template <typename T>
     static constexpr ValueGroupType getGroupType()
     {
-        if constexpr (DB::IsNumber<T>)
+        if constexpr (DB::is_arithmetic_v<T>)
             return Number;
         else if constexpr (
             // clang-format off
