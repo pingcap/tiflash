@@ -1,6 +1,3 @@
-#TODO: tidb not supported yet
-#RETURN
-
 # Preparation.
 => DBGInvoke __init_fail_point()
 
