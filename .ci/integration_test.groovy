@@ -9,18 +9,8 @@ catchError {
         return params.ghprbTargetBranch ?: 'master'
     }).call()
 
-    echo "ticsTag=${params.ghprbActualCommit} tidbBranch=${tidbBranch}"
-
-    stage("Wait for images") {
-        util.runClosure("wait-for-images") {
-            timeout(time: 60, unit: 'MINUTES') {
-                container("docker") {
-                    sh  """
-                        while ! docker pull hub.pingcap.net/tiflash/tics:${params.ghprbActualCommit}; do sleep 60; done
-                        """
-                }
-            }
-        }
+    stage("Wait for ci build") {
+        echo "ticsTag=${params.ghprbActualCommit} tidbBranch=${tidbBranch}"
     }
 
     node("${GO_BUILD_SLAVE}") {
@@ -33,12 +23,19 @@ catchError {
                         cp -R /nfs/cache/git/src-tics.tar.gz*  ./
                         mkdir -p ${curws}/tics
                         tar -xzf src-tics.tar.gz -C ${curws}/tics --strip-components=1
-                    """
+                        """
                     }
                 }
             }
             dir("${curws}/tics") {
                 util.checkoutTiCS("${params.ghprbActualCommit}", "${params.ghprbPullId}")
+            }
+            timeout(time: 60, unit: 'MINUTES') {
+                container("golang") {
+                    sh  """
+                        COMMIT_HASH=${params.ghprbActualCommit} PULL_ID=${params.ghprbPullId} TAR_PATH=${curws}/tics/tests/.build bash -e ${curws}/tics/release-centos7/build/fetch-ci-build.sh
+                        """
+                }
             }
         }
         stash includes: "tics/**", name: "git-code-tics", useDefaultExcludes: false
@@ -74,10 +71,9 @@ catchError {
 
 stage('Summary') {
     def duration = ((System.currentTimeMillis() - currentBuild.startTimeInMillis) / 1000 / 60).setScale(2, BigDecimal.ROUND_HALF_UP)
-    def msg = "Build Result: `${currentBuild.currentResult}`" + "\n" +
+    def msg = "Result: `${currentBuild.currentResult}`" + "\n" +
             "Elapsed Time: `${duration} mins`" + "\n" +
             "${env.RUN_DISPLAY_URL}"
 
     echo "${msg}"
-
 }

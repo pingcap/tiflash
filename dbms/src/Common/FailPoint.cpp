@@ -40,7 +40,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_during_write_to_storage)                          \
     M(force_set_sst_to_dtfile_block_size)                         \
     M(force_set_sst_decode_rand)                                  \
-    M(exception_before_page_file_write_sync)
+    M(exception_before_page_file_write_sync)                      \
+    M(force_set_segment_ingest_packs_fail)                        \
+    M(segment_merge_after_ingest_packs)
 
 #define APPLY_FOR_FAILPOINTS(M) M(force_set_page_file_write_errno)
 
