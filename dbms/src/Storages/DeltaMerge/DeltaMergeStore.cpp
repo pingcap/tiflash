@@ -3,6 +3,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/typeid_cast.h>
 #include <Core/SortDescription.h>
+#include <Functions/FunctionsConversion.h>
 #include <Interpreters/sortBlock.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>

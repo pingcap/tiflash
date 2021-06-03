@@ -1,3 +1,4 @@
+#include <Functions/FunctionsConversion.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 
 namespace DB
