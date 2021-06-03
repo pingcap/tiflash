@@ -18,6 +18,7 @@
 #include <Storages/MergeTree/MergeTreeDataPart.h>
 
 #pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #pragma GCC diagnostic ignored "-Wdeprecated-copy"
 #include <boost/multi_index_container.hpp>
