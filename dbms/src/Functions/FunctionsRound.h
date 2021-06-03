@@ -731,11 +731,11 @@ public:
             ||    executeForType<Int32>(block, arguments, result)
             ||    executeForType<Int64>(block, arguments, result)
             ||    executeForType<Float32>(block, arguments, result)
-            ||    executeForType<Float64>(block, arguments, result))
+            ||    executeForType<Float64>(block, arguments, result)
             ||    executeForType<Decimal32>(block, arguments, result)
             ||    executeForType<Decimal64>(block, arguments, result)
             ||    executeForType<Decimal128>(block, arguments, result)
-            ||    executeForType<Decimal256>(block, arguments, result))
+            ||    executeForType<Decimal256>(block, arguments, result)))
         {
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
                     + " of argument of function " + getName(),
