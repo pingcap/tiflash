@@ -440,7 +440,8 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
     old_ngc_file.remove();
 }
 
-std::set<UInt64> DMFile::listAllInPath(const FileProviderPtr & file_provider, const String & parent_path, bool can_gc)
+std::set<UInt64>
+DMFile::listAllInPath(const FileProviderPtr & file_provider, const String & parent_path, const DMFile::ListOptions & options)
 {
     Poco::File folder(parent_path);
     if (!folder.exists())
@@ -463,24 +464,40 @@ std::set<UInt64> DMFile::listAllInPath(const FileProviderPtr & file_provider, co
 
     for (const auto & name : file_names)
     {
-
-        // clear deleted (maybe broken) DMFiles
-        if (startsWith(name, details::FOLDER_PREFIX_DROPPED))
+        // Clean up temporary files and files should be deleted
+        // Note that you should not do clean up if some DTFiles are writing,
+        // or you may delete some writing files
+        if (options.clean_up)
         {
-            auto res = try_parse_file_id(name);
-            if (!res)
+            if (startsWith(name, details::FOLDER_PREFIX_WRITABLE))
             {
-                LOG_INFO(log, "Unrecognized dropped DM file, ignored: " + name);
+                // Clear temporary files
+                const auto full_path = parent_path + "/" + name;
+                if (Poco::File temp_file(full_path); temp_file.exists())
+                    temp_file.remove(true);
+                LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing temporary dmfile, removed: " << full_path);
                 continue;
             }
-            UInt64 file_id = *res;
-            // The encryption info use readable path. We are not sure the encryption info is deleted or not.
-            // Try to delete and ignore if it is already deleted.
-            const String readable_path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
-            file_provider->deleteEncryptionInfo(EncryptionPath(readable_path, ""), /* throw_on_error= */ false);
-            if (Poco::File del_file(parent_path + "/" + name); del_file.exists())
-                del_file.remove(true);
-            continue;
+            else if (startsWith(name, details::FOLDER_PREFIX_DROPPED))
+            {
+                // Clear deleted (maybe broken) DTFiles
+                auto res = try_parse_file_id(name);
+                if (!res)
+                {
+                    LOG_INFO(log, "Unrecognized dropped DM file, ignored: " + name);
+                    continue;
+                }
+                UInt64 file_id = *res;
+                // The encryption info use readable path. We are not sure the encryption info is deleted or not.
+                // Try to delete and ignore if it is already deleted.
+                const String readable_path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
+                file_provider->deleteEncryptionInfo(EncryptionPath(readable_path, ""), /* throw_on_error= */ false);
+                const auto full_path = parent_path + "/" + name;
+                if (Poco::File del_file(full_path); del_file.exists())
+                    del_file.remove(true);
+                LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dropped dmfile, removed: " << full_path);
+                continue;
+            }
         }
 
         if (!startsWith(name, details::FOLDER_PREFIX_READABLE))
@@ -496,7 +513,7 @@ std::set<UInt64> DMFile::listAllInPath(const FileProviderPtr & file_provider, co
         }
         UInt64 file_id = *res;
 
-        if (can_gc)
+        if (options.only_list_can_gc)
         {
             // Only return the ID if the file is able to be GC-ed.
             const auto file_path = parent_path + "/" + name;
