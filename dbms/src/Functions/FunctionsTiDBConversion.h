@@ -48,7 +48,7 @@
 namespace DB
 {
 
-StringRef trim(const StringRef & value);
+String trim(const StringRef & value);
 
 enum CastError
 {
@@ -392,14 +392,14 @@ struct TiDBConvertToInteger
     static T strToInt(const StringRef & value, const Context & context)
     {
         // trim space
-        StringRef trim_string = trim(value);
-        if (trim_string.size == 0)
+        String trim_string = trim(value);
+        if (trim_string.size() == 0)
         {
             if (value.size != 0)
                 context.getDAGContext()->handleTruncateError("cast str as int");
             return static_cast<T>(0);
         }
-        StringRef int_string = getValidIntPrefix(trim_string);
+        StringRef int_string = getValidIntPrefix(StringRef(trim_string));
         if (int_string.size == 0)
         {
             if (value.size != 0)
@@ -588,8 +588,7 @@ struct TiDBConvertToFloat
     }
 
     template <typename T>
-    static std::enable_if_t<std::is_floating_point_v<T> || std::is_integral_v<T>, Float64> toFloat(
-        const T & value)
+    static std::enable_if_t<std::is_floating_point_v<T> || std::is_integral_v<T>, Float64> toFloat(const T & value)
     {
         return static_cast<Float64>(value);
     }
@@ -650,14 +649,24 @@ struct TiDBConvertToFloat
 
     static Float64 strToFloat(const StringRef & value, bool need_truncate, Float64 shift, Float64 max_f, const Context & context)
     {
-        StringRef trim_string = trim(value);
-        StringRef float_string = getValidFloatPrefix(trim_string);
-        if (trim_string.size == 0 && value.size != 0)
+        String trim_string = trim(value);
+        StringRef float_string = getValidFloatPrefix(StringRef(trim_string));
+        if (trim_string.size() == 0 && value.size != 0)
         {
-            context.getDAGContext()->handleTruncateError("cast str as real");
+            context.getDAGContext()->handleTruncateError("Truncated incorrect DOUBLE value");
             return 0.0;
         }
         Float64 f = strtod(float_string.data, nullptr);
+        if (f == std::numeric_limits<Float64>::infinity())
+        {
+            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value", Errors::Types::Truncated);
+            return std::numeric_limits<Float64>::max();
+        }
+        if (f == -std::numeric_limits<double>::infinity())
+        {
+            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value", Errors::Types::Truncated);
+            return -std::numeric_limits<Float64>::max();
+        }
         return produceTargetFloat64(f, need_truncate, shift, max_f, context);
     }
 
@@ -711,17 +720,16 @@ struct TiDBConvertToFloat
                     MyDateTime date_time(vec_from[i]);
                     if (type.getFraction() > 0)
                         vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
+                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
                     else
                         vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second);
+                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second);
                 }
             }
         }
         else if constexpr (std::is_same_v<FromDataType, DataTypeString>)
         {
             /// cast string as real
-            /// the implementation is quite different from TiDB/TiKV, so cast string as float will not be pushed to TiFlash
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
             const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
             const ColumnString::Chars_t * chars = &col_from_string->getChars();
@@ -1315,7 +1323,8 @@ struct TiDBConvertToTime
                 {
                     // Cannot cast, fill with NULL
                     (*vec_null_map_to)[i] = 1;
-                    context.getDAGContext()->handleInvalidTime("Invalid time value: '" + toString(vec_from[i]) + "'", Errors::Types::WrongValue);
+                    context.getDAGContext()->handleInvalidTime(
+                        "Invalid time value: '" + toString(vec_from[i]) + "'", Errors::Types::WrongValue);
                 }
             }
         }
