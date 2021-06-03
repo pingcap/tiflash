@@ -146,12 +146,13 @@ TEST(ConvertColumnType_test, CastNumeric)
         disk_col->insert(Float32(3.14));
         disk_col->insert(Float32(3.141));
         disk_col->insert(Float32(3.1415));
+        disk_col->insert(Float32(3.14151415141514151415141));
         disk_col->insert(Float32(-3.0));
         disk_col->insert(Float32(-3.1));
         disk_col->insert(Float32(-3.14));
         disk_col->insert(Float32(-3.141));
         disk_col->insert(Float32(-3.1415));
-        
+        disk_col->insert(Float32(-3.14151415141514151415141));
         for (const String & to_type : to_types)
         {
             ColumnDefine read_define(0, "c", typeFromString(to_type));
