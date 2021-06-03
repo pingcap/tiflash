@@ -653,7 +653,7 @@ struct TiDBConvertToFloat
         StringRef float_string = getValidFloatPrefix(StringRef(trim_string));
         if (trim_string.size() == 0 && value.size != 0)
         {
-            context.getDAGContext()->handleTruncateError("Truncated incorrect DOUBLE value", Errors::Types::Truncated);
+            context.getDAGContext()->handleTruncateError("Truncated incorrect DOUBLE value");
             return 0.0;
         }
         Float64 f = strtod(float_string.data, nullptr);
