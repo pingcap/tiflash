@@ -498,12 +498,23 @@ void PageStorage::write(WriteBatch && wb, const RateLimiterPtr & rate_limiter)
     }
 
     PageEntriesEdit edit;
-    wb.setSequence(++write_batch_seq); // Set sequence number to keep ordering between writers.
-    size_t bytes_written = file_to_write->write(wb, edit, rate_limiter);
-    delegator->addPageFileUsedSize(file_to_write->fileIdLevel(),
-                                   bytes_written,
-                                   file_to_write->parentPath(),
-                                   /*need_insert_location*/ false);
+    try
+    {
+        wb.setSequence(++write_batch_seq); // Set sequence number to keep ordering between writers.
+        size_t bytes_written = file_to_write->write(wb, edit, rate_limiter);
+        delegator->addPageFileUsedSize(file_to_write->fileIdLevel(),
+                                       bytes_written,
+                                       file_to_write->parentPath(),
+                                       /*need_insert_location*/ false);
+    }
+    catch (...)
+    {
+        // Return writer into idle queue if exception thrown
+        std::unique_lock lock(write_mutex);
+        idle_writers.emplace_back(std::move(file_to_write));
+        write_mutex_cv.notify_one(); // wake up any paused thread for write
+        throw;
+    }
 
     {
         // Return writer to idle queue

@@ -93,10 +93,12 @@ public:
     using SubstreamPath = std::vector<Substream>;
 
     using StreamCallback = std::function<void(const SubstreamPath &)>;
-    virtual void enumerateStreams(StreamCallback callback, SubstreamPath path) const
+    virtual void enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
     {
         callback(path);
     }
+    void enumerateStreams(const StreamCallback & callback, SubstreamPath && path) const { enumerateStreams(callback, path); }
+    void enumerateStreams(const StreamCallback & callback) const { enumerateStreams(callback, {}); }
 
     using OutputStreamGetter = std::function<WriteBuffer*(const SubstreamPath &)>;
     using InputStreamGetter = std::function<ReadBuffer*(const SubstreamPath &)>;
