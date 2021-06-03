@@ -88,6 +88,9 @@ struct ASTTableJoin : public IAST
         Cross,    /// Direct product. Strictness and condition doesn't matter.
         Comma,   /// Same as direct product. Intended to be converted to INNER JOIN with conditions from WHERE.
         Anti,   /// anti join, return un-joined rows of the left table
+        Cross_Left, /// cartesian left out join, used by TiFlash
+        Cross_Right, /// cartesian right out join, used by TiFlash, in the implementation, it will be converted to cartesian left out join
+        Cross_Anti, /// cartesian anti join, used by TiFlash
     };
 
     Locality locality = Locality::Unspecified;
