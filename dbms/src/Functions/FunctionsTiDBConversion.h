@@ -659,12 +659,12 @@ struct TiDBConvertToFloat
         Float64 f = strtod(float_string.data, nullptr);
         if (f == std::numeric_limits<Float64>::infinity())
         {
-            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value");
             return std::numeric_limits<Float64>::max();
         }
         if (f == -std::numeric_limits<double>::infinity())
         {
-            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value");
             return -std::numeric_limits<Float64>::max();
         }
         return produceTargetFloat64(f, need_truncate, shift, max_f, context);
@@ -1323,12 +1323,7 @@ struct TiDBConvertToTime
                 {
                     // Cannot cast, fill with NULL
                     (*vec_null_map_to)[i] = 1;
-<<<<<<< HEAD
                     context.getDAGContext()->handleInvalidTime("Invalid time value: '" + toString(vec_from[i]) + "'");
-=======
-                    context.getDAGContext()->handleInvalidTime(
-                        "Invalid time value: '" + toString(vec_from[i]) + "'", Errors::Types::WrongValue);
->>>>>>> 65f39201d... Support cast string as double push down (#2038)
                 }
             }
         }
