@@ -134,15 +134,15 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
         {
             if (encode_type == tipb::EncodeType::TypeDefault)
             {
-                chunk_codec_stream[i] = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
+                chunk_codec_stream[i] = DefaultChunkCodec().newCodecStream(result_field_types);
             }
             else if (encode_type == tipb::EncodeType::TypeChunk)
             {
-                chunk_codec_stream[i] = std::make_unique<ArrowChunkCodec>()->newCodecStream(result_field_types);
+                chunk_codec_stream[i] = ArrowChunkCodec().newCodecStream(result_field_types);
             }
             else if (encode_type == tipb::EncodeType::TypeCHBlock)
             {
-                chunk_codec_stream[i] = std::make_unique<CHBlockChunkCodec>()->newCodecStream(result_field_types);
+                chunk_codec_stream[i] = CHBlockChunkCodec().newCodecStream(result_field_types);
             }
             responses[i] = response;
             responses[i].set_encode_type(encode_type);
