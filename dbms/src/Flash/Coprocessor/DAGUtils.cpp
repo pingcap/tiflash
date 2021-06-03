@@ -887,8 +887,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SubDateAndString, "cast"},
 
     //{tipb::ScalarFuncSig::UnixTimestampCurrent, "cast"},
-    {tipb::ScalarFuncSig::UnixTimestampInt, "toUnixTimestamp"},
-    //{tipb::ScalarFuncSig::UnixTimestampDec, "cast"},
+    {tipb::ScalarFuncSig::UnixTimestampInt, "tidbUnixTimeStampInt"}, {tipb::ScalarFuncSig::UnixTimestampDec, "tidbUnixTimeStampDec"},
 
     //{tipb::ScalarFuncSig::ConvertTz, "cast"},
     //{tipb::ScalarFuncSig::MakeDate, "cast"},
