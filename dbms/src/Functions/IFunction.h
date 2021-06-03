@@ -253,7 +253,7 @@ public:
     /// TODO: make const
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override = 0;
 
-    /// Override this functions to change default implementation behavior. See details in IMyFunction.
+    /// Override this functions to change default implementation behavior. See details in IPreparedFunction.
     bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return false; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {}; }
