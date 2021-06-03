@@ -966,7 +966,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::InstrUTF8, "cast"},
     //{tipb::ScalarFuncSig::Instr, "cast"},
 
-    {tipb::ScalarFuncSig::LTrim, "ltrim"}, {tipb::ScalarFuncSig::LeftUTF8, "LeftUTF8"},
+    {tipb::ScalarFuncSig::LTrim, "ltrim"}, {tipb::ScalarFuncSig::LeftUTF8, "leftUTF8"},
     //{tipb::ScalarFuncSig::Left, "cast"},
     {tipb::ScalarFuncSig::Length, "length"},
     //{tipb::ScalarFuncSig::Locate2ArgsUTF8, "cast"},
