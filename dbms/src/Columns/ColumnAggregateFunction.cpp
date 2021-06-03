@@ -169,6 +169,16 @@ void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash, std:
     hash.update(wbuf.str().c_str(), wbuf.str().size());
 }
 
+void ColumnAggregateFunction::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+{
+    for (size_t i = 0, size = getData().size(); i < size; ++i)
+    {
+        WriteBufferFromOwnString wbuf;
+        func->serialize(getData()[i], wbuf);
+        hash_values[i].update(wbuf.str().c_str(), wbuf.str().size());
+    }
+}
+
 /// NOTE: Highly overestimates size of a column if it was produced in AggregatingBlockInputStream (it contains size of other columns)
 size_t ColumnAggregateFunction::byteSize() const
 {

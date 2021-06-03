@@ -1,3 +1,4 @@
+#include <Common/Allocator.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
@@ -228,6 +229,7 @@ void AsynchronousMetrics::update()
 
 
     /// Add more metrics as you wish.
+    set("mmap.alive", DB::allocator_mmap_counter.load(std::memory_order_relaxed));
 }
 
 
