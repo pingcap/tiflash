@@ -76,6 +76,24 @@ public:
 
         bool return_type_is_nullable = can_output_be_null && nested_function->getReturnType()->canBeInsideNullable();
 
+        if (nested_function && nested_function->getName() == "first_row")
+        {
+            if (return_type_is_nullable)
+            {
+                if (has_nullable_types)
+                    return std::make_shared<AggregateFunctionFirstRowNull<true, true>>(nested_function);
+                else
+                    return std::make_shared<AggregateFunctionFirstRowNull<true, false>>(nested_function);
+            }
+            else
+            {
+                if (has_nullable_types)
+                    return std::make_shared<AggregateFunctionFirstRowNull<false, true>>(nested_function);
+                else
+                    return std::make_shared<AggregateFunctionFirstRowNull<false, false>>(nested_function);
+            }
+        }
+
         if (arguments.size() == 1)
         {
             if (return_type_is_nullable)
