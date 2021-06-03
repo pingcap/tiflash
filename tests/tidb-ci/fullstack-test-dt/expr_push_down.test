@@ -48,54 +48,54 @@ mysql> analyze table test.f;
 func> wait_table test f
 
 mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,1) c1,right(b,1) c2, a, b, 1 as id from test.f) t group by t.c1, t.c2,a,b,id;
-+------+------+---------+------+------+----------+
-| c1   | c2   | a       | b    | id   | count(*) |
-+------+------+---------+------+------+----------+
-| 平   | NULL | 平凯xingchen公司  | NULL |    1 |        1 |
-| p    | b    | pingcap | tidb |    1 |        1 |
-| a    | h    | abc     | fzh  |    1 |        1 |
-| NULL | NULL | NULL    | NULL | 1 |        1 |
-| NULL | NULL | NULL    | std  | 1 |        1 |
-+------+------+---------+------+------+----------+
++------+------+----------------------+------+----+----------+
+| c1   | c2   | a                    | b    | id | count(*) |
++------+------+----------------------+------+----+----------+
+| NULL | d    | NULL                 | std  |  1 |        1 |
+| 平   | NULL | 平凯xingchen公司     | NULL |  1 |        1 |
+| p    | b    | pingcap              | tidb |  1 |        1 |
+| NULL | NULL | NULL                 | NULL |  1 |        1 |
+| a    | h    | abc                  | fzh  |  1 |        1 |
++------+------+----------------------+------+----+----------+
 
 mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,21) c1,right(b,21) c2, a, b, 11 as id from test.f) t group by t.c1, t.c2,a,b,id;
-+---------+------+---------+------+----+----------+
-| c1      | c2   | a       | b    | id | count(*) |
-+---------+------+---------+------+----+----------+
-| abc     | fzh  | abc     | fzh  | 11 |        1 |
-| NULL    | NULL | NULL    | NULL | 11 |        1 |
-| pingcap | tidb | pingcap | tidb | 11 |        1 |
-| NULL    | NULL | NULL    | std  | 11 |        1 |
-| 平凯xingchen公  | NULL | 平凯xingchen公司  | NULL | 11 |        1 |
-+---------+------+---------+------+----+----------+
++----------------------+------+----------------------+------+----+----------+
+| c1                   | c2   | a                    | b    | id | count(*) |
++----------------------+------+----------------------+------+----+----------+
+| pingcap              | tidb | pingcap              | tidb | 11 |        1 |
+| NULL                 | std  | NULL                 | std  | 11 |        1 |
+| abc                  | fzh  | abc                  | fzh  | 11 |        1 |
+| NULL                 | NULL | NULL                 | NULL | 11 |        1 |
+| 平凯xingchen公司     | NULL | 平凯xingchen公司     | NULL | 11 |        1 |
++----------------------+------+----------------------+------+----+----------+
 
 mysql> use test; select t.c1,t.c2,a,b,id, count(*) from (select left(a,-1) c1,right(b,-1) c2, a, b, 0 as id from test.f) t group by t.c1, t.c2,a,b,id;
-+------+------+---------+------+----+----------+
-| c1   | c2   | a       | b    | id | count(*) |
-+------+------+---------+------+----+----------+
-|      | NULL | 平凯xingchen公司  | NULL |  0 |        1 |
-|      |      | pingcap | tidb |  0 |        1 |
-|      |      | abc     | fzh  |  0 |        1 |
-| NULL | NULL | NULL    | NULL |  0 |        1 |
-| NULL | NULL | NULL    | std  |  0 |        1 |
-+------+------+---------+------+----+—————+
++------+------+----------------------+------+----+----------+
+| c1   | c2   | a                    | b    | id | count(*) |
++------+------+----------------------+------+----+----------+
+| NULL |      | NULL                 | std  |  0 |        1 |
+|      |      | pingcap              | tidb |  0 |        1 |
+|      | NULL | 平凯xingchen公司     | NULL |  0 |        1 |
+|      |      | abc                  | fzh  |  0 |        1 |
+| NULL | NULL | NULL                 | NULL |  0 |        1 |
++------+------+----------------------+------+----+----------+
 
 mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; select a,t.c0,t.c1,t.c2,t.c3,t.c4,t.c5, count(*) from (select right(a,0) c0 ,right(a,1) c1,right(a,-1) c2, right(a,100) c3, right(a,null) c4, right(null,0) c5,a from test.f) t group by c0, c1,c2,c3,c4,c5,a;
-+---------+------+------+------+---------+------+------+----------+
-| a       | c0   | c1   | c2   | c3      | c4   | c5   | count(*) |
-+---------+------+------+------+---------+------+------+----------+
-| abc     |      | c    |      | abc     | NULL | NULL |        1 |
-| 平凯xingchen公司  |      | 司    |      | 平凯xingchen公司  | NULL | NULL |        1 |
-| pingcap |      | p    |      | pingcap | NULL | NULL |        1 |
-| NULL    | NULL | NULL | NULL | NULL    | NULL | NULL |        2 |
-+---------+------+------+------+---------+------+------+----------+
++----------------------+------+------+------+----------------------+------+------------+----------+
+| a                    | c0   | c1   | c2   | c3                   | c4   | c5         | count(*) |
++----------------------+------+------+------+----------------------+------+------------+----------+
+| NULL                 | NULL | NULL | NULL | NULL                 | NULL | NULL       |        2 |
+| pingcap              |      | p    |      | pingcap              | NULL | NULL       |        1 |
+| 平凯xingchen公司     |      | 司   |      | 平凯xingchen公司     | NULL | NULL       |        1 |
+| abc                  |      | c    |      | abc                  | NULL | NULL       |        1 |
++----------------------+------+------+------+----------------------+------+------------+----------+
 
 mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; select a, t.c0,t.c1,t.c2,t.c3,t.c4,t.c5, count(*) from (select left(a,0) c0 ,left(a,1) c1,left(a,-1) c2, left(a,100) c3,left(a,null)c4,left(null,0)c5, a from test.f) t group by c0, c1,c2,c3,c4,c5,a;
-+---------+------+------+------+---------+------+------+----------+
-| a       | c0   | c1   | c2   | c3      | c4   | c5   | count(*) |
-+---------+------+------+------+---------+------+------+----------+
-| pingcap |      | p    |      | pingcap | NULL | NULL |        1 |
-| abc     |      | a    |      | abc     | NULL | NULL |        1 |
-| NULL    | NULL | NULL | NULL | NULL    | NULL | NULL |        2 |
-| 平凯xingchen公司  |      | 平    |      | 平凯xingchen公司  | NULL | NULL |        1 |
-+---------+------+------+------+---------+------+------+----------+
++----------------------+------+------+------+----------------------+------+------------+----------+
+| a                    | c0   | c1   | c2   | c3                   | c4   | c5         | count(*) |
++----------------------+------+------+------+----------------------+------+------------+----------+
+| abc                  |      | a    |      | abc                  | NULL | NULL       |        1 |
+| pingcap              |      | p    |      | pingcap              | NULL | NULL       |        1 |
+| NULL                 | NULL | NULL | NULL | NULL                 | NULL | NULL       |        2 |
+| 平凯xingchen公司     |      | 平   |      | 平凯xingchen公司     | NULL | NULL       |        1 |
++----------------------+------+------+------+----------------------+------+------------+----------+
