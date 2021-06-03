@@ -971,7 +971,7 @@ void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & fi
             if (filter_column[i] == 0)
                 continue;
             if (nullable_column->isNullAt(i))
-                filter_column[i] = null_as_true ? 1 : 0;
+                filter_column[i] = null_as_true;
             else
                 filter_column[i] = filter_column[i] && nested_column_data[i];
         }
