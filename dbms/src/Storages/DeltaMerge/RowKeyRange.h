@@ -10,6 +10,7 @@
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/Types.h>
+#include <Columns/ColumnString.h>
 
 namespace DB::DM
 {
