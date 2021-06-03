@@ -4,7 +4,7 @@
 namespace DB
 {
 
-StringRef trim(const StringRef & value)
+String trim(const StringRef & value)
 {
     StringRef ret;
     ret.size = 0;
@@ -22,10 +22,10 @@ StringRef trim(const StringRef & value)
             break;
     }
     if (start >= end)
-        return ret;
+        return ret.toString();
     ret.data = value.data + start;
     ret.size = end - start;
-    return ret;
+    return ret.toString();
 }
 
 void registerFunctionsTiDBConversion(FunctionFactory & factory) { factory.registerFunction<FunctionBuilderTiDBCast>(); }
