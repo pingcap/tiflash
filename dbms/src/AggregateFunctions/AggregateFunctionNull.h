@@ -184,6 +184,206 @@ public:
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
+template <bool result_is_nullable, bool input_is_nullable>
+class AggregateFunctionFirstRowNull : public IAggregateFunctionHelper<AggregateFunctionFirstRowNull<result_is_nullable, input_is_nullable>>
+{
+protected:
+    AggregateFunctionPtr nested_function;
+    size_t prefix_size;
+
+    /** In addition to data for nested aggregate function, we keep a flag
+      *  indicating - was there at least one non-NULL value accumulated.
+      * In case of no not-NULL values, the function will return NULL.
+      *
+      * We use prefix_size bytes for flag to satisfy the alignment requirement of nested state.
+      */
+
+    AggregateDataPtr nestedPlace(AggregateDataPtr place) const noexcept
+    {
+        return place + prefix_size;
+    }
+
+    ConstAggregateDataPtr nestedPlace(ConstAggregateDataPtr place) const noexcept
+    {
+        return place + prefix_size;
+    }
+
+    static void initFlag(AggregateDataPtr place) noexcept
+    {
+        if (result_is_nullable)
+            place[0] = 0;
+    }
+
+    static void setFlag(AggregateDataPtr place, UInt8 status) noexcept
+    {
+        if (result_is_nullable)
+            place[0] = status;
+    }
+
+    /// 0 means there is no input yet
+    /// 1 meas there is a not-null input
+    /// 2 means there is a null input
+    static UInt8 getFlag(ConstAggregateDataPtr place) noexcept
+    {
+        return result_is_nullable ? place[0] : 1;
+    }
+
+public:
+    AggregateFunctionFirstRowNull(AggregateFunctionPtr nested_function_)
+        : nested_function{nested_function_}
+    {
+        if (result_is_nullable)
+            prefix_size = nested_function->alignOfData();
+        else
+            prefix_size = 0;
+    }
+
+    String getName() const override
+    {
+        /// This is just a wrapper. The function for Nullable arguments is named the same as the nested function itself.
+        return nested_function->getName();
+    }
+
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator) override
+    {
+        nested_function->setCollator(collator);
+    }
+
+    DataTypePtr getReturnType() const override
+    {
+        return result_is_nullable
+               ? makeNullable(nested_function->getReturnType())
+               : nested_function->getReturnType();
+    }
+
+    void create(AggregateDataPtr place) const override
+    {
+        initFlag(place);
+        nested_function->create(nestedPlace(place));
+    }
+
+    void destroy(AggregateDataPtr place) const noexcept override
+    {
+        nested_function->destroy(nestedPlace(place));
+    }
+
+    bool hasTrivialDestructor() const override
+    {
+        return nested_function->hasTrivialDestructor();
+    }
+
+    size_t sizeOfData() const override
+    {
+        return prefix_size + nested_function->sizeOfData();
+    }
+
+    size_t alignOfData() const override
+    {
+        return nested_function->alignOfData();
+    }
+
+    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    {
+        if constexpr (input_is_nullable)
+        {
+            if (this->getFlag(place) == 0)
+            {
+                const ColumnNullable * column = static_cast<const ColumnNullable *>(columns[0]);
+                bool is_null = column->isNullAt(row_num);
+                this->setFlag(place, is_null ? 2 : 1);
+                if (!is_null)
+                {
+                    const IColumn * nested_column = &column->getNestedColumn();
+                    this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
+                }
+            }
+        }
+        else
+        {
+            this->setFlag(place, 1);
+            this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
+        }
+    }
+
+    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena * arena) const override
+    {
+        if constexpr (result_is_nullable)
+        {
+            if (getFlag(place) == 0)
+            {
+                if (getFlag(rhs) > 0)
+                {
+                    setFlag(place, getFlag(rhs));
+                }
+                if (getFlag(rhs) == 1)
+                    nested_function->merge(nestedPlace(place), nestedPlace(rhs), arena);
+            }
+        }
+        else
+        {
+            nested_function->merge(nestedPlace(place), nestedPlace(rhs), arena);
+        }
+    }
+
+    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    {
+        UInt8 flag = getFlag(place);
+        if (result_is_nullable)
+            writeBinary(flag, buf);
+        if (flag == 1)
+            nested_function->serialize(nestedPlace(place), buf);
+    }
+
+    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena * arena) const override
+    {
+        UInt8 flag = 1;
+        if (result_is_nullable)
+            readBinary(flag, buf);
+        if (flag == 1)
+        {
+            setFlag(place, 1);
+            nested_function->deserialize(nestedPlace(place), buf, arena);
+        }
+        else if (flag == 2)
+        {
+            setFlag(place, 2);
+        }
+    }
+
+    void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
+    {
+        if (result_is_nullable)
+        {
+            ColumnNullable & to_concrete = static_cast<ColumnNullable &>(to);
+            UInt8 flag = getFlag(place);
+            if (flag == 1)
+            {
+                nested_function->insertResultInto(nestedPlace(place), to_concrete.getNestedColumn());
+                to_concrete.getNullMapData().push_back(0);
+            }
+            else
+            {
+                to_concrete.insertDefault();
+            }
+        }
+        else
+        {
+            nested_function->insertResultInto(nestedPlace(place), to);
+        }
+    }
+
+    bool allocatesMemoryInArena() const override
+    {
+        return nested_function->allocatesMemoryInArena();
+    }
+
+    bool isState() const override
+    {
+        return nested_function->isState();
+    }
+
+    const char * getHeaderFilePath() const override { return __FILE__; }
+};
 
 /** There are two cases: for single argument and variadic.
   * Code for single argument is much more efficient.
