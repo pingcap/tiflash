@@ -193,15 +193,24 @@ template <> struct is_signed<DB::UInt128>
     static constexpr bool value = false;
 };
 
+template <>
+inline constexpr bool is_signed_v<DB::UInt128> = is_signed<DB::UInt128>::value;
+
 template <> struct is_unsigned<DB::UInt128>
 {
     static constexpr bool value = true;
 };
 
+template <>
+inline constexpr bool is_unsigned_v<DB::UInt128> = is_unsigned<DB::UInt128>::value;
+
 template <> struct is_integral<DB::UInt128>
 {
     static constexpr bool value = true;
 };
+
+template <>
+inline constexpr bool is_integral_v<DB::UInt128> = is_integral<DB::UInt128>::value;
 
 // Operator +, -, /, *, % aren't implemented so it's not an arithmetic type
 template <> struct is_arithmetic<DB::UInt128>

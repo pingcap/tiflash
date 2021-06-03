@@ -15,6 +15,7 @@
 #endif
 
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
 
 #include <boost/geometry.hpp>
 
