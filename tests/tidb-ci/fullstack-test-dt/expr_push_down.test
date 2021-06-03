@@ -47,7 +47,7 @@ mysql> analyze table test.f;
 
 func> wait_table test f
 
-mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,id) c1,right(b,id) c2, a, b, 1 as id from test.f) t group by t.c1, t.c2,a,b,id;
+mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,1) c1,right(b,1) c2, a, b, 1 as id from test.f) t group by t.c1, t.c2,a,b,id;
 +------+------+---------+------+------+----------+
 | c1   | c2   | a       | b    | id   | count(*) |
 +------+------+---------+------+------+----------+
@@ -58,7 +58,7 @@ mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,id) c1,r
 | NULL | NULL | NULL    | std  | 1 |        1 |
 +------+------+---------+------+------+----------+
 
-mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,id+10) c1,right(b,id+10) c2, a, b, 11 as id from test.f) t group by t.c1, t.c2,a,b,id;
+mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,21) c1,right(b,21) c2, a, b, 11 as id from test.f) t group by t.c1, t.c2,a,b,id;
 +---------+------+---------+------+----+----------+
 | c1      | c2   | a       | b    | id | count(*) |
 +---------+------+---------+------+----+----------+
@@ -69,7 +69,7 @@ mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,id+10) c
 | 平凯xingchen公  | NULL | 平凯xingchen公司  | NULL | 11 |        1 |
 +---------+------+---------+------+----+----------+
 
-mysql> use test; select t.c1,t.c2,a,b,id, count(*) from (select left(a,id-1) c1,right(b,id-1) c2, a, b, 0 as id from test.f) t group by t.c1, t.c2,a,b,id;
+mysql> use test; select t.c1,t.c2,a,b,id, count(*) from (select left(a,-1) c1,right(b,-1) c2, a, b, 0 as id from test.f) t group by t.c1, t.c2,a,b,id;
 +------+------+---------+------+----+----------+
 | c1   | c2   | a       | b    | id | count(*) |
 +------+------+---------+------+----+----------+
