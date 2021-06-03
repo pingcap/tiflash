@@ -273,7 +273,9 @@ try
     dm_file = DMFile::create(id, parent_path, single_file_mode);
     // Right after created, the fil is not abled to GC and it is ignored by `listAllInPath`
     EXPECT_FALSE(dm_file->canGC());
-    auto scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/true);
+    DMFile::ListOptions options;
+    options.only_list_can_gc = true;
+    auto scanIds             = DMFile::listAllInPath(file_provider, parent_path, options);
     ASSERT_TRUE(scanIds.empty());
 
     {
@@ -293,20 +295,24 @@ try
 
     // The file remains not able to GC
     ASSERT_FALSE(dm_file->canGC());
+    options.only_list_can_gc = false;
     // Now the file can be scaned
-    scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/false);
+    scanIds = DMFile::listAllInPath(file_provider, parent_path, options);
     ASSERT_EQ(scanIds.size(), 1UL);
     EXPECT_EQ(*scanIds.begin(), id);
-    scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/true);
+    options.only_list_can_gc = true;
+    scanIds                  = DMFile::listAllInPath(file_provider, parent_path, options);
     EXPECT_TRUE(scanIds.empty());
 
     // After enable GC, the file can be scaned with `can_gc=true`
     dm_file->enableGC();
     ASSERT_TRUE(dm_file->canGC());
-    scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/false);
+    options.only_list_can_gc = false;
+    scanIds                  = DMFile::listAllInPath(file_provider, parent_path, options);
     ASSERT_EQ(scanIds.size(), 1UL);
     EXPECT_EQ(*scanIds.begin(), id);
-    scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/true);
+    options.only_list_can_gc = true;
+    scanIds                  = DMFile::listAllInPath(file_provider, parent_path, options);
     ASSERT_EQ(scanIds.size(), 1UL);
     EXPECT_EQ(*scanIds.begin(), id);
 }
@@ -381,7 +387,9 @@ try
     }
 
     // The broken file is ignored
-    auto res = DMFile::listAllInPath(file_provider, parent_path, true);
+    DMFile::ListOptions options;
+    options.only_list_can_gc = true;
+    auto res                 = DMFile::listAllInPath(file_provider, parent_path, options);
     EXPECT_TRUE(res.empty());
 }
 CATCH
@@ -452,7 +460,9 @@ try
     }
 
     // The broken file is ignored
-    auto res = DMFile::listAllInPath(file_provider, parent_path, true);
+    DMFile::ListOptions options;
+    options.only_list_can_gc = true;
+    auto res                 = DMFile::listAllInPath(file_provider, parent_path, options);
     EXPECT_TRUE(res.empty());
 }
 CATCH
