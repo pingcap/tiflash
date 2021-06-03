@@ -39,6 +39,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_during_mpp_root_task_run)                         \
     M(exception_during_write_to_storage)
 
+#define APPLY_FOR_FAILPOINTS(M)        \
+    M(minimum_block_size_for_cross_join)
+
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_after_learner_read)                   \
     M(hang_in_execution)                          \
@@ -58,6 +61,7 @@ namespace FailPoints
 {
 #define M(NAME) extern const char NAME[] = #NAME "";
 APPLY_FOR_FAILPOINTS_ONCE(M)
+APPLY_FOR_FAILPOINTS(M)
 APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M)
 APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
 #undef M
@@ -89,7 +93,7 @@ private:
 
 void FailPointHelper::enableFailPoint(const String & fail_point_name)
 {
-#define M(NAME)                                                                                             \
+#define SUB_M(NAME, flags)                                                                                  \
     if (fail_point_name == FailPoints::NAME)                                                                \
     {                                                                                                       \
         /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
@@ -97,8 +101,13 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
         return;                                                                                             \
     }
 
+#define M(NAME) SUB_M(NAME, FIU_ONETIME)
     APPLY_FOR_FAILPOINTS_ONCE(M)
 #undef M
+#define M(NAME) SUB_M(NAME, 0)
+    APPLY_FOR_FAILPOINTS(M)
+#undef M
+#undef SUB_M
 
 #define SUB_M(NAME, flags)                                                                                  \
     if (fail_point_name == FailPoints::NAME)                                                                \
