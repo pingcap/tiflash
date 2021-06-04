@@ -294,10 +294,12 @@ struct IntegerRoundingComputation
     {
         if constexpr (scale_mode == ScaleMode::Zero)
         {
+            (void)scale;
             return x;
         }
         else if constexpr(scale_mode == ScaleMode::Positive)
         {
+            (void)scale;
             return x;
         }
         else if constexpr(scale_mode == ScaleMode::Negative)
