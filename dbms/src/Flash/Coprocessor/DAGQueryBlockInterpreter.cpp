@@ -1433,7 +1433,7 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     {
         size_t concurrency = pipeline.streams.size();
         executeUnion(pipeline, max_streams);
-        if (concurrency > 1)
+        if (!query_block.isRootQueryBlock() && concurrency > 1)
         {
             BlockInputStreamPtr shared_query_block_input_stream
                 = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream());
