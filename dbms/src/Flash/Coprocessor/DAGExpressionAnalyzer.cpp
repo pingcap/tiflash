@@ -219,6 +219,22 @@ static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Ex
     return buildCastFunctionInternal(analyzer, {name, type_expr_name}, false, expr.field_type(), actions);
 }
 
+struct DateAdd
+{
+    static constexpr auto name = "date_add";
+    static const std::unordered_map<String, String> unit_to_func_name_map;
+};
+const std::unordered_map<String, String> DateAdd::unit_to_func_name_map = {{"DAY", "addDays"}, {"WEEK", "addWeeks"}, {"MONTH", "addMonths"},
+                                                                           {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}};
+struct DateSub
+{
+    static constexpr auto name = "date_sub";
+    static const std::unordered_map<String, String> unit_to_func_name_map;
+};
+const std::unordered_map<String, String> DateSub::unit_to_func_name_map
+    = {{"DAY", "subtractDays"}, {"WEEK", "subtractWeeks"}, {"MONTH", "subtractMonths"}, {"YEAR", "subtractYears"},
+       {"HOUR", "subtractHours"}, {"MINUTE", "subtractMinutes"}, {"SECOND", "subtractSeconds"}};
+
 template <typename Impl>
 static String buildDateAddOrSubFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
@@ -319,26 +335,13 @@ const std::unordered_map<String, String> DateSub::unit_to_func_name_map
         {"HOUR", "subtractHours"}, {"MINUTE", "subtractMinutes"}, {"SECOND", "subtractSeconds"}};
 
 static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>>
-    function_builder_map({
-        {"in", buildInFunction},
-        {"notIn", buildInFunction},
-        {"globalIn", buildInFunction},
-        {"globalNotIn", buildInFunction},
-        {"tidbIn", buildInFunction},
-        {"tidbNotIn", buildInFunction},
-        {"ifNull", buildIfNullFunction},
-        {"multiIf", buildMultiIfFunction},
-        {"tidb_cast", buildCastFunction},
-        {"and", buildLogicalFunction},
-        {"or", buildLogicalFunction},
-        {"xor", buildLogicalFunction},
-        {"not", buildLogicalFunction},
-        {"bitAnd", buildBitwiseFunction},
-        {"bitOr", buildBitwiseFunction},
-        {"bitXor", buildBitwiseFunction},
+    function_builder_map({{"in", buildInFunction}, {"notIn", buildInFunction}, {"globalIn", buildInFunction},
+        {"globalNotIn", buildInFunction}, {"tidbIn", buildInFunction}, {"tidbNotIn", buildInFunction}, {"ifNull", buildIfNullFunction},
+        {"multiIf", buildMultiIfFunction}, {"tidb_cast", buildCastFunction},
+        {"and", buildLogicalFunction}, {"or", buildLogicalFunction}, {"xor", buildLogicalFunction}, {"not", buildLogicalFunction},
+        {"bitAnd", buildBitwiseFunction}, {"bitOr", buildBitwiseFunction}, {"bitXor", buildBitwiseFunction},
         {"bitNot", buildBitwiseFunction},
-        {"date_add", buildDateAddOrSubFunction<DateAdd>},
-        {"date_sub", buildDateAddOrSubFunction<DateSub>},
+        {"date_add", buildDateAddOrSubFunction<DateAdd>}, {"date_sub", buildDateAddOrSubFunction<DateSub>}
     });
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
