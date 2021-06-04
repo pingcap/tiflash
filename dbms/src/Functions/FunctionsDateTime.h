@@ -1820,7 +1820,7 @@ private:
         Int64 days_x = calcDayNum(x.year, x.month, x.day);
         Int64 days_y = calcDayNum(y.year, y.month, y.day);
 
-        return days_y - days_x;
+        return days_x - days_y;
     }
 };
 
