@@ -98,6 +98,14 @@ void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, std::s
     hash.update(reinterpret_cast<const char *>(&chars[n * index]), n);
 }
 
+void ColumnFixedString::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+{
+    for (size_t i = 0, sz = chars.size() / n; i < sz; ++i)
+    {
+        hash_values[i].update(reinterpret_cast<const char *>(&chars[n * i]), n);
+    }
+}
+
 template <bool positive>
 struct ColumnFixedString::less
 {

@@ -145,6 +145,14 @@ public:
         data->updateHashWithValue(0, hash, collator, sort_key_container);
     }
 
+    void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const override
+    {
+        for (size_t i = 0; i < s; ++i)
+        {
+            data->updateHashWithValue(0, hash_values[i], collator, sort_key_container);
+        }
+    }
+
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
     ColumnPtr replicate(const Offsets & offsets) const override;
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;

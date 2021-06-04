@@ -90,6 +90,11 @@ public:
         throw Exception("updateHashWithValue is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    void updateHashWithValues(IColumn::HashValues &, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override
+    {
+        throw Exception("updateHashWithValues is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     int compareAt(size_t, size_t, const IColumn &, int) const override
     {
         throw Exception("compareAt is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);

@@ -64,6 +64,10 @@ public:
     {
     }
 
+    void updateHashWithValues(IColumn::HashValues &, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override
+    {
+    }
+
     void insertFrom(const IColumn &, size_t) override
     {
         ++s;
