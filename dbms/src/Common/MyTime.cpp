@@ -1281,7 +1281,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             ++temp_pos;
         return checkIfEnd();
     };
-    auto parseSep = [&temp_pos, &ctx, &checkIfEnd, &skipWhitespaces]() -> ParseState {
+    auto parseSep = [&temp_pos, &ctx, &skipWhitespaces]() -> ParseState {
         if (skipWhitespaces() == ParseState::END_OF_FILE)
             return ParseState::END_OF_FILE;
         // parse ":"
@@ -1385,7 +1385,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             ++temp_pos;
         return checkIfEnd();
     };
-    auto parseSep = [&temp_pos, &ctx, &checkIfEnd, &skipWhitespaces]() -> ParseState {
+    auto parseSep = [&temp_pos, &ctx, &skipWhitespaces]() -> ParseState {
         if (skipWhitespaces() == ParseState::END_OF_FILE)
             return ParseState::END_OF_FILE;
         // parse ":"
