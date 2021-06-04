@@ -161,7 +161,7 @@ BlockInputStreamPtr combinedNonJoinedDataStream(DAGPipeline & pipeline, size_t m
     BlockInputStreamPtr ret = nullptr;
     if (pipeline.streams_with_non_joined_data.size() == 1)
         ret = pipeline.streams_with_non_joined_data.at(0);
-    if (pipeline.streams_with_non_joined_data.size() > 0)
+    else if (pipeline.streams_with_non_joined_data.size() > 0)
         ret = std::make_shared<UnionBlockInputStream<>>(pipeline.streams_with_non_joined_data, nullptr, max_threads);
     pipeline.streams_with_non_joined_data.clear();
     return ret;
