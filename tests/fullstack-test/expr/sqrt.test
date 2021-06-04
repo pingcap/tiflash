@@ -1,0 +1,16 @@
+mysql> drop table if exists test.t
+mysql> create table test.t(ld decimal(10,2), bd decimal(50, 25), f float, i integer)
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values(1.21, 1.44, 0.25, 4)
+
+func> wait_table test t
+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(sqrt(ld)), sum(sqrt(bd)), sum(sqrt(f)), sum(sqrt(i)) from test.t;
++---------------+---------------+--------------+--------------+
+| sum(sqrt(ld)) | sum(sqrt(bd)) | sum(sqrt(f)) | sum(sqrt(i)) |
++---------------+---------------+--------------+--------------+
+|           1.1 |           1.2 |          0.5 |            2 |
++---------------+---------------+--------------+--------------+
+
+mysql> drop table if exists test.t
