@@ -79,8 +79,9 @@
 #endif
 
 #if USE_MIMALLOC
-#include <mimalloc.h>
 #include <Poco/JSON/Parser.h>
+#include <mimalloc.h>
+
 #include <fstream>
 #endif
 
@@ -92,20 +93,26 @@
 
 
 #if USE_MIMALLOC
-#define TRY_LOAD_CONF(NAME)                                      \
-    {                                                            \
-        try {                                                    \
-            auto value = obj->getValue<long>(#NAME);             \
-            mi_option_set(NAME,  value);                         \
-        } catch (...) { }                                        \
+#define TRY_LOAD_CONF(NAME)                          \
+    {                                                \
+        try                                          \
+        {                                            \
+            auto value = obj->getValue<long>(#NAME); \
+            mi_option_set(NAME, value);              \
+        }                                            \
+        catch (...)                                  \
+        {                                            \
+        }                                            \
     }
 
-void loadMiConfig(Logger * log) {
+void loadMiConfig(Logger * log)
+{
     auto config = getenv("MIMALLOC_CONF");
-    if (config) {
+    if (config)
+    {
         LOG_INFO(log, "Got environment variable MIMALLOC_CONF: " << config);
         Poco::JSON::Parser parser;
-        std::ifstream data { config };
+        std::ifstream data{config};
         Poco::Dynamic::Var result = parser.parse(data);
         auto obj = result.extract<Poco::JSON::Object::Ptr>();
         TRY_LOAD_CONF(mi_option_show_errors);
@@ -125,6 +132,7 @@ void loadMiConfig(Logger * log) {
         TRY_LOAD_CONF(mi_option_os_tag);
     }
 }
+#undef TRY_LOAD_CONF
 #endif
 namespace CurrentMetrics
 {
@@ -337,8 +345,7 @@ void UpdateMallocConfig([[maybe_unused]] Logger * log)
 #endif
 
 #if USE_MIMALLOC
-#define MI_OPTION_SHOW(OPTION) \
-    LOG_INFO(log, "mimalloc." #OPTION ": " << mi_option_get(OPTION));
+#define MI_OPTION_SHOW(OPTION) LOG_INFO(log, "mimalloc." #OPTION ": " << mi_option_get(OPTION));
 
     int version = mi_version();
     LOG_INFO(log, "Got mimalloc version: " << (version / 100) << "." << ((version % 100) / 10) << "." << (version % 10));
