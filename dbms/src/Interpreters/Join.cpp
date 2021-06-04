@@ -242,7 +242,7 @@ void Join::init(Type type_)
 {
     type = type_;
 
-    if (kind == ASTTableJoin::Kind::Cross)
+    if (isCrossJoin(kind))
         return;
 
     if (!getFullness(kind))
