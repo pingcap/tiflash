@@ -800,7 +800,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     {tipb::ScalarFuncSig::DateFormatSig, "dateFormat"},
     //{tipb::ScalarFuncSig::DateLiteral, "cast"},
-    //{tipb::ScalarFuncSig::DateDiff, "cast"},
+    {tipb::ScalarFuncSig::DateDiff, "tidbDateDiff"},
     //{tipb::ScalarFuncSig::NullTimeDiff, "cast"},
     //{tipb::ScalarFuncSig::TimeStringTimeDiff, "cast"},
     //{tipb::ScalarFuncSig::DurationDurationTimeDiff, "cast"},
@@ -840,7 +840,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::NowWithoutArg, "cast"},
 
     //{tipb::ScalarFuncSig::DayName, "cast"},
-    //{tipb::ScalarFuncSig::DayOfMonth, "cast"},
+    {tipb::ScalarFuncSig::DayOfMonth, "toDayOfMonth"},
     //{tipb::ScalarFuncSig::DayOfWeek, "cast"},
     //{tipb::ScalarFuncSig::DayOfYear, "cast"},
 
@@ -849,7 +849,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::WeekDay, "cast"},
     //{tipb::ScalarFuncSig::WeekOfYear, "cast"},
 
-    //{tipb::ScalarFuncSig::Year, "cast"},
+    {tipb::ScalarFuncSig::Year, "toYear"},
     //{tipb::ScalarFuncSig::YearWeekWithMode, "cast"},
     //{tipb::ScalarFuncSig::YearWeekWithoutMode, "cast"},
 
@@ -928,12 +928,12 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::AddDateDatetimeInt, "date_add"},
 
     //{tipb::ScalarFuncSig::SubDateStringString, "cast"},
-    //{tipb::ScalarFuncSig::SubDateStringInt, "cast"},
+    {tipb::ScalarFuncSig::SubDateStringInt, "date_sub"},
     //{tipb::ScalarFuncSig::SubDateStringDecimal, "cast"},
     //{tipb::ScalarFuncSig::SubDateIntString, "cast"},
     //{tipb::ScalarFuncSig::SubDateIntInt, "cast"},
     //{tipb::ScalarFuncSig::SubDateDatetimeString, "cast"},
-    //{tipb::ScalarFuncSig::SubDateDatetimeInt, "cast"},
+    {tipb::ScalarFuncSig::SubDateDatetimeInt, "date_sub"},
 
     //{tipb::ScalarFuncSig::FromDays, "cast"},
     //{tipb::ScalarFuncSig::TimeFormat, "cast"},
@@ -943,9 +943,14 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Bin, "cast"},
     //{tipb::ScalarFuncSig::ASCII, "cast"},
     //{tipb::ScalarFuncSig::Char, "cast"},
+<<<<<<< HEAD
     {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"},
     //{tipb::ScalarFuncSig::Concat, "cast"},
     //{tipb::ScalarFuncSig::ConcatWS, "cast"},
+=======
+    {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"}, {tipb::ScalarFuncSig::Concat, "tidbConcat"},
+    {tipb::ScalarFuncSig::ConcatWS, "tidbConcatWS"},
+>>>>>>> 0ed0a075d... function: Support push function year,day,datediff,datesub,castTimeAsString,concat_ws down to TiFlash. (#2084)
     //{tipb::ScalarFuncSig::Convert, "cast"},
     //{tipb::ScalarFuncSig::Elt, "cast"},
     //{tipb::ScalarFuncSig::ExportSet3Arg, "cast"},
