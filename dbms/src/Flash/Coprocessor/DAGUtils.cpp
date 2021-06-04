@@ -487,7 +487,7 @@ extern const String UniqRawResName;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"}, {tipb::ExprType::Sum, "sum"}, {tipb::ExprType::Min, "min"}, {tipb::ExprType::Max, "max"},
-    {tipb::ExprType::First, "any"}, {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
+    {tipb::ExprType::First, "first_row"}, {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
     //{tipb::ExprType::Avg, ""},
     //{tipb::ExprType::GroupConcat, ""},
     //{tipb::ExprType::Agg_BitAnd, ""},
@@ -888,8 +888,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SubDateAndString, "cast"},
 
     //{tipb::ScalarFuncSig::UnixTimestampCurrent, "cast"},
-    //{tipb::ScalarFuncSig::UnixTimestampInt, "cast"},
-    //{tipb::ScalarFuncSig::UnixTimestampDec, "cast"},
+    {tipb::ScalarFuncSig::UnixTimestampInt, "tidbUnixTimeStampInt"}, {tipb::ScalarFuncSig::UnixTimestampDec, "tidbUnixTimeStampDec"},
 
     //{tipb::ScalarFuncSig::ConvertTz, "cast"},
     //{tipb::ScalarFuncSig::MakeDate, "cast"},
@@ -941,8 +940,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Bin, "cast"},
     //{tipb::ScalarFuncSig::ASCII, "cast"},
     //{tipb::ScalarFuncSig::Char, "cast"},
-    {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"},
-    //{tipb::ScalarFuncSig::Concat, "cast"},
+    {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"}, {tipb::ScalarFuncSig::Concat, "tidbConcat"},
     //{tipb::ScalarFuncSig::ConcatWS, "cast"},
     //{tipb::ScalarFuncSig::Convert, "cast"},
     //{tipb::ScalarFuncSig::Elt, "cast"},
@@ -982,7 +980,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Quote, "cast"},
     {tipb::ScalarFuncSig::RTrim, "rtrim"},
     //{tipb::ScalarFuncSig::Repeat, "cast"},
-    //{tipb::ScalarFuncSig::Replace, "cast"},
+    {tipb::ScalarFuncSig::Replace, "replaceAll"},
     //{tipb::ScalarFuncSig::ReverseUTF8, "cast"},
     //{tipb::ScalarFuncSig::Reverse, "cast"},
     {tipb::ScalarFuncSig::RightUTF8, "rightUTF8"},

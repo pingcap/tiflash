@@ -114,6 +114,15 @@ void ColumnDecimal<T>::updateHashWithValue(size_t n, SipHash & hash, std::shared
 }
 
 template <typename T>
+void ColumnDecimal<T>::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+{
+    for (size_t i = 0; i < data.size(); ++i)
+    {
+        hash_values[i].update(data[i]);
+    }
+}
+
+template <typename T>
 void ColumnDecimal<T>::getPermutation(bool reverse, size_t limit, int , IColumn::Permutation & res) const
 {
 #if 1 /// TODO: perf test
