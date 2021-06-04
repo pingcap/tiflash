@@ -8,9 +8,9 @@
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Storages/MarkCache.h>
 #include <Storages/StorageMergeTree.h>
-#include <chrono>
-
 #include <common/config_common.h>
+
+#include <chrono>
 
 #if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
@@ -24,6 +24,10 @@ struct MallocExtensionInitializer
 
 #if USE_JEMALLOC
 #include <jemalloc/jemalloc.h>
+#endif
+
+#if USE_MIMALLOC
+#include <mimalloc.h>
 #endif
 
 namespace DB
@@ -195,6 +199,31 @@ void AsynchronousMetrics::update()
                 set(malloc_metric, value);
         }
     }
+#endif
+
+#if USE_MIMALLOC
+#define MI_STATS_SET(X) set("mimalloc." #X, X)
+
+    {
+        size_t elapsed_msecs;
+        size_t user_msecs;
+        size_t system_msecs;
+        size_t current_rss;
+        size_t peak_rss;
+        size_t current_commit;
+        size_t peak_commit;
+        size_t page_faults;
+        mi_process_info(&elapsed_msecs, &user_msecs, &system_msecs, &current_rss, &peak_rss, &current_commit, &peak_commit, &page_faults);
+        MI_STATS_SET(elapsed_msecs);
+        MI_STATS_SET(user_msecs);
+        MI_STATS_SET(system_msecs);
+        MI_STATS_SET(current_rss);
+        MI_STATS_SET(peak_rss);
+        MI_STATS_SET(current_commit);
+        MI_STATS_SET(peak_commit);
+        MI_STATS_SET(page_faults);
+    };
+#undef MI_STATS_SET
 #endif
 
 #if USE_JEMALLOC
