@@ -434,8 +434,8 @@ struct ToDayOfMonthImpl
     {
         return time_zone.toDayOfMonth(DayNum_t(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
-        throw Exception("Illegal type MyTime of argument for function toDayOfMonth", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    static inline UInt8 execute(UInt64 t, const DateLUTImpl & ) {
+        return (UInt8)((t >> 41) & 31);
     }
 
     using FactorTransform = ToStartOfMonthImpl;
