@@ -207,6 +207,21 @@ void ColumnArray::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<
         getData().updateHashWithValue(offset + i, hash, collator, sort_key_container);
 }
 
+void ColumnArray::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+{
+    for (size_t i = 0, sz = size(); i < sz; ++i)
+    {
+        size_t array_size = sizeAt(i);
+        size_t offset = offsetAt(i);
+
+        hash_values[i].update(array_size);
+        for (size_t j = 0; j < array_size; ++j)
+        {
+            /// TODO: update one hash in a batch.
+            getData().updateHashWithValue(offset + j, hash_values[i], collator, sort_key_container);
+        }
+    }
+}
 
 void ColumnArray::insert(const Field & x)
 {
