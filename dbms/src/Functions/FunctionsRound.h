@@ -196,7 +196,7 @@ struct DecimalRoundingComputation
         static_assert(std::is_same_v<T, OutputType> || std::is_same_v<OutputType, Int64>);
         Float64 val = in->template toFloat<Float64>(decimal_scale);
 
-        if (scale_mode == ScaleMode::Positive)
+        if constexpr(scale_mode == ScaleMode::Positive)
             val = val * scale;
         else if (scale_mode == ScaleMode::Negative)
             val = val / scale;
