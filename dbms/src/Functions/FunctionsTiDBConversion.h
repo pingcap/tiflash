@@ -92,9 +92,7 @@ struct TiDBConvertToString
             col_null_map_to = ColumnUInt8::create(size, 0);
             vec_null_map_to = &col_null_map_to->getData();
         }
-        bool need_padding = false;
-        if (tp.tp() == TiDB::TypeString && tp.flen() > 0 && tp.collate() == TiDB::ITiDBCollator::BINARY)
-            need_padding = true;
+        bool need_padding = tp.tp() == TiDB::TypeString && tp.flen() > 0 && tp.collate() == TiDB::ITiDBCollator::BINARY;
 
         String padding_string;
         if (need_padding)
@@ -136,7 +134,7 @@ struct TiDBConvertToString
                 if (byte_length < org_length)
                     context.getDAGContext()->handleTruncateError("Data Too Long");
                 write_buffer.write(reinterpret_cast<const char *>(&(*data_from)[current_offset]), byte_length);
-                if (need_padding && tp.tp() == TiDB::TypeString && tp.flen() > 0 && byte_length < static_cast<size_t>(tp.flen()))
+                if (need_padding && byte_length < static_cast<size_t>(tp.flen()))
                     write_buffer.write(padding_string.data(), tp.flen() - byte_length);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
@@ -166,7 +164,7 @@ struct TiDBConvertToString
                 if (byte_length < element_write_buffer.count())
                     context.getDAGContext()->handleTruncateError("Data Too Long");
                 write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), byte_length);
-                if (need_padding && tp.tp() == TiDB::TypeString && tp.flen() > 0 && byte_length < static_cast<size_t>(tp.flen()))
+                if (need_padding && byte_length < static_cast<size_t>(tp.flen()))
                     write_buffer.write(padding_string.data(), tp.flen() - byte_length);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
@@ -209,7 +207,7 @@ struct TiDBConvertToString
                 if (byte_length < element_write_buffer.count())
                     context.getDAGContext()->handleTruncateError("Data Too Long");
                 write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), byte_length);
-                if (need_padding && tp.tp() == TiDB::TypeString && tp.flen() > 0 && byte_length < static_cast<size_t>(tp.flen()))
+                if (need_padding && byte_length < static_cast<size_t>(tp.flen()))
                     write_buffer.write(padding_string.data(), tp.flen() - byte_length);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
