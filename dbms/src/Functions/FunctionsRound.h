@@ -200,7 +200,7 @@ struct DecimalRoundingComputation
         {
             val = val * scale;
         }
-        else if(scale_mode == ScaleMode::Negative)
+        else if constexpr(scale_mode == ScaleMode::Negative)
         {
             val = val / scale;
         }
@@ -209,15 +209,15 @@ struct DecimalRoundingComputation
         {
             val = round(val);
         }
-        else if(rounding_mode == RoundingMode::Floor)
+        else if constexpr(rounding_mode == RoundingMode::Floor)
         {
             val = floor(val);
         }
-        else if(rounding_mode == RoundingMode::Ceil)
+        else if constexpr(rounding_mode == RoundingMode::Ceil)
         {
             val = ceil(val);
         }
-        else if(rounding_mode == RoundingMode::Trunc)
+        else if constexpr(rounding_mode == RoundingMode::Trunc)
         {
             val = trunc(val);
         }
@@ -227,18 +227,20 @@ struct DecimalRoundingComputation
         {
             val = val / scale;
         }
-        else if(scale_mode == ScaleMode::Negative)
+        else if constexpr(scale_mode == ScaleMode::Negative)
         {
             val = val * scale;
         }
+
         if constexpr(std::is_same_v<T, OutputType>)
         {
             *out = ToDecimal<Float64, T>(val, decimal_scale);
         }
-        else if(std::is_same_v<OutputType, Int64>)
+        else if constexpr(std::is_same_v<OutputType, Int64>)
         {
             *out = static_cast<Int64>(val);
-        } else
+        }
+        else
         {
             ;   // never arrived here
         }
@@ -264,19 +266,19 @@ struct IntegerRoundingComputation
         {
             return x / scale * scale;
         }
-        else if(rounding_mode == RoundingMode::Floor)
+        else if constexpr(rounding_mode == RoundingMode::Floor)
         {
             if (x < 0)
                 x -= scale - 1;
             return x / scale * scale;
         }
-        else if(rounding_mode == RoundingMode::Ceil)
+        else if constexpr(rounding_mode == RoundingMode::Ceil)
         {
             if (x >= 0)
                 x += scale - 1;
             return x / scale * scale;
         }
-        else if(rounding_mode == RoundingMode::Round)
+        else if constexpr(rounding_mode == RoundingMode::Round)
         {
             bool negative = x < 0;
             if (negative)
@@ -294,11 +296,11 @@ struct IntegerRoundingComputation
         {
             return x;
         }
-        else if (scale_mode == ScaleMode::Positive)
+        else if constexpr(scale_mode == ScaleMode::Positive)
         {
             return x;
         }
-        else if (scale_mode == ScaleMode::Negative)
+        else if constexpr(scale_mode == ScaleMode::Negative)
         {
             return computeImpl(x, scale);
         }
