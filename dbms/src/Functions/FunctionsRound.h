@@ -217,7 +217,7 @@ struct DecimalRoundingComputation
                 break;
         }
 
-        if (scale_mode == ScaleMode::Positive)
+        if constexpr(scale_mode == ScaleMode::Positive)
             val = val / scale;
         else if (scale_mode == ScaleMode::Negative)
             val = val * scale;
