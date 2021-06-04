@@ -1,0 +1,98 @@
+mysql> drop table if exists test.t
+mysql> create table test.t(a char(20), b char(20), c char(20), d char(20));
+mysql> alter table test.t set tiflash replica 1;
+mysql> insert into test.t values('a', 'b', 'c', 'd');
+mysql> insert into test.t values('中', '文', '测', '试');
+mysql> insert into test.t values('e', 'f', null, 'h');
+mysql> insert into test.t values(null, 'j', 'k', 'l');
+func> wait_table test t
+
+mysql> select count(*), concat_ws(a, b, c, d) from test.t group by 2;
++----------+-----------------------+
+| count(*) | concat_ws(a, b, c, d) |
++----------+-----------------------+
+|        1 | feh                   |
+|        1 | NULL                  |
+|        1 | 文中测中试            |
+|        1 | bacad                 |
++----------+-----------------------+
+
+mysql> select count(*) from test.t where concat_ws(a, b, c, d)='feh' group by concat_ws(a, b, c, d);
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+
+mysql> select count(*) from test.t where concat_ws(a, b, c, d) is NULL group by concat_ws(a, b, c, d);
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+
+mysql> select count(*) from test.t where concat_ws(a, b, c, d)='文中测中试' group by concat_ws(a, b, c, d);
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+
+mysql> select count(*) from test.t where concat_ws(a, b, c, d)='bacad' group by concat_ws(a, b, c, d);
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+
+mysql> select count(*), concat_ws(a, null, c, d) from test.t group by 2;
++----------+--------------------------+
+| count(*) | concat_ws(a, null, c, d) |
++----------+--------------------------+
+|        1 | 测中试                    |
+|        1 | cad                      |
+|        1 | NULL                     |
+|        1 | h                        |
++----------+--------------------------+
+
+mysql> select count(*) from test.t where concat_ws(a, null, c, d)='测中试' group by concat_ws(a, null, c, d);
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+
+mysql> select count(*) from test.t where concat_ws(a, null, c, d)='cad' group by concat_ws(a, null, c, d);
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+
+mysql> select count(*) from test.t where concat_ws(a, null, c, d)='h' group by concat_ws(a, null, c, d);
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+
+mysql> select count(*) from test.t where concat_ws(a, null, c, d) is NULL group by concat_ws(a, null, c, d);
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+
+mysql> select count(*), concat_ws(null, b, c, d) from test.t group by 2;
++----------+--------------------------+
+| count(*) | concat_ws(null, b, c, d) |
++----------+--------------------------+
+|        4 | NULL                     |
++----------+--------------------------+
+
+mysql> select count(*) from test.t where concat_ws(null, b, c, d) is NULL group by concat_ws(null, b, c, d);
++----------+
+| count(*) |
++----------+
+|        4 |
++----------+
