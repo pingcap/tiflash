@@ -1024,15 +1024,17 @@ SortDescription DAGQueryBlockInterpreter::getSortDescription(std::vector<NameAnd
 
 void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_streams)
 {
-    if (pipeline.hasMoreThanOneStream())
+    if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.size() == 0)
+        return;
+    auto non_joined_data_stream = combinedNonJoinedDataStream(pipeline, max_streams);
+    if (pipeline.streams.size() > 0)
     {
-        pipeline.firstStream()
-            = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, combinedNonJoinedDataStream(pipeline, max_streams), max_streams);
+        pipeline.firstStream() = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, non_joined_data_stream, max_streams);
         pipeline.streams.resize(1);
     }
-    else if (pipeline.streams_with_non_joined_data.size() > 0)
+    else if (non_joined_data_stream != nullptr)
     {
-        pipeline.streams.push_back(combinedNonJoinedDataStream(pipeline, max_streams));
+        pipeline.streams.push_back(non_joined_data_stream);
     }
 }
 
