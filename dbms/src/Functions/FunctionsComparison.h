@@ -7,8 +7,6 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnArray.h>
 
-#include <Common/MyTime.h>
-
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDate.h>
