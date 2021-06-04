@@ -3,6 +3,7 @@
 #include <Functions/FunctionsArithmetic.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Common/Decimal.h>
 
 #include <cmath>
 #include <type_traits>
@@ -179,6 +180,73 @@ enum class RoundingMode
 #endif
 };
 
+/** Rounding functions for decimal values
+ */
+
+template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode, typename OutputType>
+struct DecimalRoundingComputation
+{
+    static_assert(IsDecimal<T>);
+    static const size_t data_count = 1;
+    static size_t prepare(size_t scale) {
+        return scale;
+    }
+    // compute need decimal_scale to interpret decimals
+    static inline void compute(const T * __restrict in, size_t scale, OutputType * __restrict out, ScaleType decimal_scale) {
+        static_assert(std::is_same_v<T, OutputType> || std::is_same_v<OutputType, Int64>);
+        Float64 val = in->template toFloat<Float64>(decimal_scale);
+
+        if constexpr(scale_mode == ScaleMode::Positive)
+        {
+            val = val * scale;
+        }
+        else if constexpr(scale_mode == ScaleMode::Negative)
+        {
+            val = val / scale;
+        }
+
+        if constexpr(rounding_mode == RoundingMode::Round)
+        {
+            val = round(val);
+        }
+        else if constexpr(rounding_mode == RoundingMode::Floor)
+        {
+            val = floor(val);
+        }
+        else if constexpr(rounding_mode == RoundingMode::Ceil)
+        {
+            val = ceil(val);
+        }
+        else if constexpr(rounding_mode == RoundingMode::Trunc)
+        {
+            val = trunc(val);
+        }
+        
+
+        if constexpr(scale_mode == ScaleMode::Positive)
+        {
+            val = val / scale;
+        }
+        else if constexpr(scale_mode == ScaleMode::Negative)
+        {
+            val = val * scale;
+        }
+
+        if constexpr(std::is_same_v<T, OutputType>)
+        {
+            *out = ToDecimal<Float64, T>(val, decimal_scale);
+        }
+        else if constexpr(std::is_same_v<OutputType, Int64>)
+        {
+            *out = static_cast<Int64>(val);
+        }
+        else
+        {
+            ;   // never arrived here
+        }
+    }
+};
+
 
 /** Rounding functions for integer values.
   */
@@ -194,47 +262,49 @@ struct IntegerRoundingComputation
 
     static ALWAYS_INLINE T computeImpl(T x, T scale)
     {
-        switch (rounding_mode)
+        if constexpr(rounding_mode == RoundingMode::Trunc)
         {
-            case RoundingMode::Trunc:
-            {
-                return x / scale * scale;
-            }
-            case RoundingMode::Floor:
-            {
-                if (x < 0)
-                    x -= scale - 1;
-                return x / scale * scale;
-            }
-            case RoundingMode::Ceil:
-            {
-                if (x >= 0)
-                    x += scale - 1;
-                return x / scale * scale;
-            }
-            case RoundingMode::Round:
-            {
-                bool negative = x < 0;
-                if (negative)
-                    x = -x;
-                x = (x + scale / 2) / scale * scale;
-                if (negative)
-                    x = -x;
-                return x;
-            }
+            return x / scale * scale;
+        }
+        else if constexpr(rounding_mode == RoundingMode::Floor)
+        {
+            if (x < 0)
+                x -= scale - 1;
+            return x / scale * scale;
+        }
+        else if constexpr(rounding_mode == RoundingMode::Ceil)
+        {
+            if (x >= 0)
+                x += scale - 1;
+            return x / scale * scale;
+        }
+        else if constexpr(rounding_mode == RoundingMode::Round)
+        {
+            bool negative = x < 0;
+            if (negative)
+                x = -x;
+            x = (x + scale / 2) / scale * scale;
+            if (negative)
+                x = -x;
+            return x;
         }
     }
 
     static ALWAYS_INLINE T compute(T x, T scale)
     {
-        switch (scale_mode)
+        if constexpr (scale_mode == ScaleMode::Zero)
         {
-            case ScaleMode::Zero:
-                return x;
-            case ScaleMode::Positive:
-                return x;
-            case ScaleMode::Negative:
-                return computeImpl(x, scale);
+            (void)scale;
+            return x;
+        }
+        else if constexpr(scale_mode == ScaleMode::Positive)
+        {
+            (void)scale;
+            return x;
+        }
+        else if constexpr(scale_mode == ScaleMode::Negative)
+        {
+            return computeImpl(x, scale);
         }
     }
 
@@ -475,20 +545,71 @@ public:
     }
 };
 
+template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode, typename OutputType>
+struct DecimalRoundingImpl;
+
+// We may need round decimal to other types, currently the only choice is Int64
 template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode>
+struct DecimalRoundingImpl<T, rounding_mode, scale_mode, Int64> {
+private:
+    using Op = DecimalRoundingComputation<T, rounding_mode, scale_mode, Int64>;
+    using Data = T;
+public:
+    static NO_INLINE void apply(const DecimalPaddedPODArray<T> & in, size_t scale, typename ColumnVector<Int64>::Container & out) {
+        ScaleType decimal_scale = in.getScale();
+        const T* end_in = in.data() + in.size();
+
+        const T* __restrict p_in = in.data();
+        Int64* __restrict p_out = out.data();
+
+        while (p_in < end_in)
+        {
+            Op::compute(p_in, scale, p_out, decimal_scale);
+            ++p_in;
+            ++p_out;
+        }
+    }
+};
+
+template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode>
+struct DecimalRoundingImpl<T, rounding_mode, scale_mode, T> {
+private:
+    using Op = DecimalRoundingComputation<T, rounding_mode, scale_mode, T>;
+    using Data = T;
+public:
+    static NO_INLINE void apply(const DecimalPaddedPODArray<T> & in, size_t scale, typename ColumnDecimal<T>::Container & out) {
+        ScaleType decimal_scale = in.getScale();
+        const T* end_in = in.data() + in.size();
+
+        const T* __restrict p_in = in.data();
+        T* __restrict p_out = out.data();
+
+        while (p_in < end_in)
+        {
+            Op::compute(p_in, scale, p_out, decimal_scale);
+            ++p_in;
+            ++p_out;
+        }
+    }
+};
+
+template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode, typename OutputType = T>
 using FunctionRoundingImpl = std::conditional_t<std::is_floating_point_v<T>,
     FloatRoundingImpl<T, rounding_mode, scale_mode>,
-    IntegerRoundingImpl<T, rounding_mode, scale_mode>>;
+    std::conditional_t<std::is_integral_v<T>,
+        IntegerRoundingImpl<T, rounding_mode, scale_mode>,
+        DecimalRoundingImpl<T, rounding_mode, scale_mode, OutputType>>>;
 
 
-/** Select the appropriate processing algorithm depending on the scale.
+/** Select the appropriate processing algorithm depending on the scale and OutputType
   */
-template <typename T, RoundingMode rounding_mode>
+template <typename T, RoundingMode rounding_mode, typename OutputType = T>
 struct Dispatcher
 {
-    static void apply(Block & block, const ColumnVector<T> * col, const ColumnNumbers & arguments, size_t result)
+    template <typename Col>
+    static void apply(Block & block, const Col * col, const ColumnNumbers & arguments, size_t result)
     {
-        size_t scale = 1;
+        static_assert(std::is_same_v<Col, ColumnVector<T>> || std::is_same_v<Col, ColumnDecimal<T>>);
         Int64 scale_arg = 0;
 
         if (arguments.size() == 2)
@@ -505,9 +626,24 @@ struct Dispatcher
             scale_arg = scale_field.get<Int64>();
         }
 
-        auto col_res = ColumnVector<T>::create();
 
-        typename ColumnVector<T>::Container & vec_res = col_res->getData();
+        if constexpr(IsDecimal<OutputType>)
+        {
+            auto col_res = ColumnDecimal<OutputType>::create(col->getData().size(), col->getData().getScale());
+            typename ColumnDecimal<OutputType>::Container & vec_res = col_res->getData();
+            applyInternal(col, vec_res, col_res, block, scale_arg, result);
+        }
+        else 
+        {   auto col_res = ColumnVector<OutputType>::create();
+            typename ColumnVector<OutputType>::Container & vec_res = col_res->getData();
+            applyInternal(col, vec_res, col_res, block, scale_arg, result);
+        }
+        
+    }
+private:
+    template <typename VecRes, typename ColRes, typename Col>
+    static void applyInternal(const Col * col, VecRes& vec_res, ColRes& col_res, Block& block, Int64 scale_arg, size_t result) {
+        size_t scale = 1;
         vec_res.resize(col->getData().size());
 
         if (vec_res.empty())
@@ -519,17 +655,17 @@ struct Dispatcher
         if (scale_arg == 0)
         {
             scale = 1;
-            FunctionRoundingImpl<T, rounding_mode, ScaleMode::Zero>::apply(col->getData(), scale, vec_res);
+            FunctionRoundingImpl<T, rounding_mode, ScaleMode::Zero, OutputType>::apply(col->getData(), scale, vec_res);
         }
         else if (scale_arg > 0)
         {
             scale = pow(10, scale_arg);
-            FunctionRoundingImpl<T, rounding_mode, ScaleMode::Positive>::apply(col->getData(), scale, vec_res);
+            FunctionRoundingImpl<T, rounding_mode, ScaleMode::Positive, OutputType>::apply(col->getData(), scale, vec_res);
         }
         else
         {
             scale = pow(10, -scale_arg);
-            FunctionRoundingImpl<T, rounding_mode, ScaleMode::Negative>::apply(col->getData(), scale, vec_res);
+            FunctionRoundingImpl<T, rounding_mode, ScaleMode::Negative, OutputType>::apply(col->getData(), scale, vec_res);
         }
 
         block.getByPosition(result).column = std::move(col_res);
@@ -551,12 +687,24 @@ private:
     template <typename T>
     bool executeForType(Block & block, const ColumnNumbers & arguments, size_t result)
     {
-        if (auto col = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[0]).column.get()))
+        if constexpr(IsDecimal<T>)
         {
-            Dispatcher<T, rounding_mode>::apply(block, col, arguments, result);
-            return true;
+            if (auto col = checkAndGetColumn<ColumnDecimal<T>>(block.getByPosition(arguments[0]).column.get()))
+            {
+                Dispatcher<T, rounding_mode>::apply(block, col, arguments, result);
+                return true;
+            }
+            return false;
         }
-        return false;
+        else 
+        {
+            if (auto col = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[0]).column.get()))
+            {
+                Dispatcher<T, rounding_mode>::apply(block, col, arguments, result);
+                return true;
+            }
+            return false;
+        }     
     }
 
 public:
@@ -577,7 +725,7 @@ public:
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & type : arguments)
-            if (!type->isNumber())
+            if (!type->isNumber() && !type->isDecimal())
                 throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -598,7 +746,11 @@ public:
             ||    executeForType<Int32>(block, arguments, result)
             ||    executeForType<Int64>(block, arguments, result)
             ||    executeForType<Float32>(block, arguments, result)
-            ||    executeForType<Float64>(block, arguments, result)))
+            ||    executeForType<Float64>(block, arguments, result)
+            ||    executeForType<Decimal32>(block, arguments, result)
+            ||    executeForType<Decimal64>(block, arguments, result)
+            ||    executeForType<Decimal128>(block, arguments, result)
+            ||    executeForType<Decimal256>(block, arguments, result)))
         {
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
                     + " of argument of function " + getName(),
@@ -617,6 +769,81 @@ public:
     }
 };
 
+/** FunctionRounding can only cast typeA to typeA
+ * but TiDB may push down RoundDecimalToInt 
+ * (and this is the only round function that return type is different from arg type)
+ * so we specialize RoundDecimalToInt and not use template
+*/
+
+template <typename Name, RoundingMode rounding_mode>
+class FunctionRoundingDecimalToInt : public IFunction
+{
+public:
+    static constexpr auto name = Name::name;
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionRoundingDecimalToInt>(); }
+
+private:
+    template <typename T>
+    bool executeForType(Block & block, const ColumnNumbers & arguments, size_t result)
+    {
+        static_assert(IsDecimal<T>);
+        if (auto col = checkAndGetColumn<ColumnDecimal<T>>(block.getByPosition(arguments[0]).column.get()))
+        {
+            Dispatcher<T, rounding_mode, Int64>::apply(block, col, arguments, result);
+            return true;
+        }
+        return false;    
+    }
+
+public:
+    String getName() const override
+    {
+        return name;
+    }
+
+    bool isVariadic() const override { return true; }
+    size_t getNumberOfArguments() const override { return 0; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if ((arguments.size() < 1) || (arguments.size() > 2))
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
+                + toString(arguments.size()) + ", should be 1 or 2.",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        for (const auto & type : arguments)
+            if (!type->isDecimal())
+                throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeInt64>();
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    {
+        if (!(    executeForType<Decimal32>(block, arguments, result)
+            ||    executeForType<Decimal64>(block, arguments, result)
+            ||    executeForType<Decimal128>(block, arguments, result)
+            ||    executeForType<Decimal256>(block, arguments, result)))
+        {
+            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                    + " of argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_COLUMN);
+        }
+    }
+
+    bool hasInformationAboutMonotonicity() const override
+    {
+        return true;
+    }
+
+    Monotonicity getMonotonicityForRange(const IDataType &, const Field &, const Field &) const override
+    {
+        return { true, true, true };
+    }
+};
 
 struct NameRoundToExp2 { static constexpr auto name = "roundToExp2"; };
 struct NameRoundDuration { static constexpr auto name = "roundDuration"; };
@@ -627,6 +854,11 @@ struct NameCeil { static constexpr auto name = "ceil"; };
 struct NameFloor { static constexpr auto name = "floor"; };
 struct NameTrunc { static constexpr auto name = "trunc"; };
 
+struct NameRoundDecimalToInt { static constexpr auto name = "roundDecimalToInt"; };
+struct NameCeilDecimalToInt { static constexpr auto name = "ceilDecimalToInt"; };
+struct NameFloorDecimalToInt { static constexpr auto name = "floorDecimalToInt"; };
+struct NameTruncDecimalToInt { static constexpr auto name = "truncDecimalToInt"; };
+
 using FunctionRoundToExp2 = FunctionUnaryArithmetic<RoundToExp2Impl, NameRoundToExp2, false>;
 using FunctionRoundDuration = FunctionUnaryArithmetic<RoundDurationImpl, NameRoundDuration, false>;
 using FunctionRoundAge = FunctionUnaryArithmetic<RoundAgeImpl, NameRoundAge, false>;
@@ -635,6 +867,11 @@ using FunctionRound = FunctionRounding<NameRound, RoundingMode::Round>;
 using FunctionFloor = FunctionRounding<NameFloor, RoundingMode::Floor>;
 using FunctionCeil = FunctionRounding<NameCeil, RoundingMode::Ceil>;
 using FunctionTrunc = FunctionRounding<NameTrunc, RoundingMode::Trunc>;
+
+using FunctionRoundDecimalToInt = FunctionRoundingDecimalToInt<NameRoundDecimalToInt, RoundingMode::Round>;
+using FunctionCeilDecimalToInt = FunctionRoundingDecimalToInt<NameCeilDecimalToInt, RoundingMode::Ceil>;
+using FunctionFloorDecimalToInt = FunctionRoundingDecimalToInt<NameFloorDecimalToInt, RoundingMode::Floor>;
+using FunctionTruncDecimalToInt = FunctionRoundingDecimalToInt<NameTruncDecimalToInt, RoundingMode::Trunc>;
 
 
 struct PositiveMonotonicity

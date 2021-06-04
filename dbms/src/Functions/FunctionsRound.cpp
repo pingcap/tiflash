@@ -15,6 +15,11 @@ void registerFunctionsRound(FunctionFactory & factory)
     factory.registerFunction<FunctionCeil>("ceil", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionTrunc>("trunc", FunctionFactory::CaseInsensitive);
 
+    factory.registerFunction<FunctionRoundDecimalToInt>();
+    factory.registerFunction<FunctionCeilDecimalToInt>();
+    factory.registerFunction<FunctionFloorDecimalToInt>();
+    factory.registerFunction<FunctionTruncDecimalToInt>();
+
     /// Compatibility aliases.
     factory.registerFunction<FunctionCeil>("ceiling", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionTrunc>("truncate", FunctionFactory::CaseInsensitive);
