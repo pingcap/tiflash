@@ -197,30 +197,40 @@ struct DecimalRoundingComputation
         Float64 val = in->template toFloat<Float64>(decimal_scale);
 
         if constexpr(scale_mode == ScaleMode::Positive)
-            val = val * scale;
-        else if (scale_mode == ScaleMode::Negative)
-            val = val / scale;
-
-        switch(rounding_mode)
         {
-            case RoundingMode::Round: 
-                val = round(val);
-                break;
-            case RoundingMode::Floor: 
-                val = floor(val);
-                break;
-            case RoundingMode::Ceil:
-                val = ceil(val);
-                break;
-            case RoundingMode::Trunc:
-                val = trunc(val);
-                break;
+            val = val * scale;
+        }
+        else if(scale_mode == ScaleMode::Negative)
+        {
+            val = val / scale;
         }
 
+        if constexpr(rounding_mode == RoundingMode::Round)
+        {
+            val = round(val);
+        }
+        else if(rounding_mode == RoundingMode::Floor)
+        {
+            val = floor(val);
+        }
+        else if(rounding_mode == RoundingMode::Ceil)
+        {
+            val = ceil(val);
+        }
+        else if(rounding_mode == RoundingMode::Trunc)
+        {
+            val = trunc(val);
+        }
+        
+
         if constexpr(scale_mode == ScaleMode::Positive)
+        {
             val = val / scale;
-        else if (scale_mode == ScaleMode::Negative)
+        }
+        else if(scale_mode == ScaleMode::Negative)
+        {
             val = val * scale;
+        }
         if constexpr(std::is_same_v<T, OutputType>)
         {
             *out = ToDecimal<Float64, T>(val, decimal_scale);
@@ -228,7 +238,8 @@ struct DecimalRoundingComputation
         else if(std::is_same_v<OutputType, Int64>)
         {
             *out = static_cast<Int64>(val);
-        } else {
+        } else
+        {
             ;   // never arrived here
         }
     }
@@ -249,47 +260,47 @@ struct IntegerRoundingComputation
 
     static ALWAYS_INLINE T computeImpl(T x, T scale)
     {
-        switch (rounding_mode)
+        if constexpr(rounding_mode == RoundingMode::Trunc)
         {
-            case RoundingMode::Trunc:
-            {
-                return x / scale * scale;
-            }
-            case RoundingMode::Floor:
-            {
-                if (x < 0)
-                    x -= scale - 1;
-                return x / scale * scale;
-            }
-            case RoundingMode::Ceil:
-            {
-                if (x >= 0)
-                    x += scale - 1;
-                return x / scale * scale;
-            }
-            case RoundingMode::Round:
-            {
-                bool negative = x < 0;
-                if (negative)
-                    x = -x;
-                x = (x + scale / 2) / scale * scale;
-                if (negative)
-                    x = -x;
-                return x;
-            }
+            return x / scale * scale;
+        }
+        else if(rounding_mode == RoundingMode::Floor)
+        {
+            if (x < 0)
+                x -= scale - 1;
+            return x / scale * scale;
+        }
+        else if(rounding_mode == RoundingMode::Ceil)
+        {
+            if (x >= 0)
+                x += scale - 1;
+            return x / scale * scale;
+        }
+        else if(rounding_mode == RoundingMode::Round)
+        {
+            bool negative = x < 0;
+            if (negative)
+                x = -x;
+            x = (x + scale / 2) / scale * scale;
+            if (negative)
+                x = -x;
+            return x;
         }
     }
 
     static ALWAYS_INLINE T compute(T x, T scale)
     {
-        switch (scale_mode)
+        if constexpr (scale_mode == ScaleMode::Zero)
         {
-            case ScaleMode::Zero:
-                return x;
-            case ScaleMode::Positive:
-                return x;
-            case ScaleMode::Negative:
-                return computeImpl(x, scale);
+            return x;
+        }
+        else if (scale_mode == ScaleMode::Positive)
+        {
+            return x;
+        }
+        else if (scale_mode == ScaleMode::Negative)
+        {
+            return computeImpl(x, scale);
         }
     }
 
