@@ -522,7 +522,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastRealAsJson, "cast"},
 
     {tipb::ScalarFuncSig::CastDecimalAsInt, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastDecimalAsReal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastDecimalAsReal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastDecimalAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastDecimalAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastDecimalAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsDuration, "cast"},
@@ -629,11 +629,11 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::AbsInt, "abs"}, {tipb::ScalarFuncSig::AbsUInt, "abs"}, {tipb::ScalarFuncSig::AbsReal, "abs"},
     {tipb::ScalarFuncSig::AbsDecimal, "abs"},
 
-    {tipb::ScalarFuncSig::CeilIntToDec, "ceil"}, {tipb::ScalarFuncSig::CeilIntToInt, "ceil"}, {tipb::ScalarFuncSig::CeilDecToInt, "ceil"},
+    {tipb::ScalarFuncSig::CeilIntToDec, "ceil"}, {tipb::ScalarFuncSig::CeilIntToInt, "ceil"}, {tipb::ScalarFuncSig::CeilDecToInt, "ceilDecimalToInt"},
     {tipb::ScalarFuncSig::CeilDecToDec, "ceil"}, {tipb::ScalarFuncSig::CeilReal, "ceil"},
 
     {tipb::ScalarFuncSig::FloorIntToDec, "floor"}, {tipb::ScalarFuncSig::FloorIntToInt, "floor"},
-    {tipb::ScalarFuncSig::FloorDecToInt, "floor"}, {tipb::ScalarFuncSig::FloorDecToDec, "floor"}, {tipb::ScalarFuncSig::FloorReal, "floor"},
+    {tipb::ScalarFuncSig::FloorDecToInt, "floorDecimalToInt"}, {tipb::ScalarFuncSig::FloorDecToDec, "floor"}, {tipb::ScalarFuncSig::FloorReal, "floor"},
 
     {tipb::ScalarFuncSig::RoundReal, "round"}, {tipb::ScalarFuncSig::RoundInt, "round"}, {tipb::ScalarFuncSig::RoundDec, "round"},
     //{tipb::ScalarFuncSig::RoundWithFracReal, "cast"},
