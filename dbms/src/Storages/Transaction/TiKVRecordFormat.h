@@ -107,7 +107,7 @@ inline DecodedTiKVKey genRawKey(const TableID tableId, const HandleID handleId)
     memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
     auto big_endian_handle_id = encodeInt64(handleId);
     memcpy(key.data() + RAW_KEY_NO_HANDLE_SIZE, reinterpret_cast<const char *>(&big_endian_handle_id), 8);
-    return std::move(key);
+    return key;
 }
 
 inline TiKVKey genKey(const TableID tableId, const HandleID handleId) { return encodeAsTiKVKey(genRawKey(tableId, handleId)); }

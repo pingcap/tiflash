@@ -61,7 +61,7 @@ MutableColumnPtr ColumnArray::cloneResized(size_t to_size) const
     auto res = ColumnArray::create(getData().cloneEmpty());
 
     if (to_size == 0)
-        return std::move(res);
+        return res;
 
     size_t from_size = size();
 
@@ -89,7 +89,7 @@ MutableColumnPtr ColumnArray::cloneResized(size_t to_size) const
             res->getOffsets()[i] = offset;
     }
 
-    return std::move(res);
+    return res;
 }
 
 
@@ -440,7 +440,7 @@ ColumnPtr ColumnArray::filterNumber(const Filter & filt, ssize_t result_size_hin
     Offsets & res_offsets = res->getOffsets();
 
     filterArraysImpl<T>(static_cast<const ColumnVector<T> &>(*data).getData(), getOffsets(), res_elems, res_offsets, filt, result_size_hint);
-    return std::move(res);
+    return res;
 }
 
 ColumnPtr ColumnArray::filterString(const Filter & filt, ssize_t result_size_hint) const
@@ -508,7 +508,7 @@ ColumnPtr ColumnArray::filterString(const Filter & filt, ssize_t result_size_hin
         }
     }
 
-    return std::move(res);
+    return res;
 }
 
 ColumnPtr ColumnArray::filterGeneric(const Filter & filt, ssize_t result_size_hint) const
@@ -553,7 +553,7 @@ ColumnPtr ColumnArray::filterGeneric(const Filter & filt, ssize_t result_size_hi
         }
     }
 
-    return std::move(res);
+    return res;
 }
 
 ColumnPtr ColumnArray::filterNullable(const Filter & filt, ssize_t result_size_hint) const
@@ -642,7 +642,7 @@ ColumnPtr ColumnArray::permute(const Permutation & perm, size_t limit) const
     if (current_offset != 0)
         res->data = data->permute(nested_perm, current_offset);
 
-    return std::move(res);
+    return res;
 }
 
 void ColumnArray::getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const
