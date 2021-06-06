@@ -138,7 +138,11 @@ if (CMAKE_VERSION VERSION_LESS "3.8.0")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
 else ()
     set (CMAKE_CXX_STANDARD 17)
-    set (CMAKE_CXX_EXTENSIONS 0) # https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html#prop_tgt:CXX_EXTENSIONS
+    if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 8.0)
+        set (CMAKE_CXX_EXTENSIONS ON) # however, for later gcc, we need __int128 related extension macro to be defined properly
+    else()
+        set (CMAKE_CXX_EXTENSIONS OFF) # https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html#prop_tgt:CXX_EXTENSIONS
+    endif()
     set (CMAKE_CXX_STANDARD_REQUIRED ON)
     set (CXX_FLAGS_INTERNAL_COMPILER "-std=c++1z")
     # This needs to propagate to vendored projects in contrib
