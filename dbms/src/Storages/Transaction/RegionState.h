@@ -13,7 +13,7 @@ namespace DB
 
 using ImutRegionRangePtr = std::shared_ptr<const RegionRangeKeys>;
 
-class RegionState : private raft_serverpb::RegionLocalState, private boost::noncopyable
+class RegionState : private boost::noncopyable
 {
 public:
     using Base = raft_serverpb::RegionLocalState;
@@ -42,6 +42,7 @@ public:
     raft_serverpb::MergeState & getMutMergeState();
 
 private:
+    Base base;
     void updateRegionRange();
 
 private:
