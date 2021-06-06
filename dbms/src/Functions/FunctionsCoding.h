@@ -457,16 +457,16 @@ private:
     {
         char * begin = out;
 
-        for (size_t octet = 0; octet < mask_tail_octets; ++octet)
-        {
-            if (octet > 0)
-            {
-                *out = '.';
-                ++out;
-            }
+        if constexpr(mask_tail_octets > 0) {
+            for (size_t octet = 0; octet < mask_tail_octets; ++octet) {
+                if (octet > 0) {
+                    *out = '.';
+                    ++out;
+                }
 
-            memcpy(out, "xxx", 3);  /// Strange choice, but meets the specification.
-            out += 3;
+                memcpy(out, "xxx", 3);  /// Strange choice, but meets the specification.
+                out += 3;
+            }
         }
 
         /// Write everything backwards. NOTE The loop is unrolled.
