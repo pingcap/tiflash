@@ -16,7 +16,6 @@
 #include <Core/UUID.h>
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/UInt128.h>
 #include <common/StringRef.h>
 #include <Common/Decimal.h>
 #include <Common/MyTime.h>
@@ -545,7 +544,7 @@ inline void writeDateText(const LocalDate & date, WriteBuffer & buf)
 }
 
 template <char delimiter = '-'>
-inline void writeDateText(DayNum_t date, WriteBuffer & buf)
+inline void writeDateText(DayNum date, WriteBuffer & buf)
 {
     if (unlikely(!date))
     {

@@ -20,7 +20,6 @@
 #include <Common/MyTime.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/Arena.h>
-#include <Common/UInt128.h>
 #include <Common/Decimal.h>
 
 #include <IO/ReadBuffer.h>

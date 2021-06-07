@@ -2,7 +2,6 @@
 
 #include <Parsers/IAST.h>
 #include <DataTypes/IDataType.h>
-#include <Common/UInt128.h>
 #include <unordered_map>
 
 

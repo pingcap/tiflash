@@ -40,6 +40,7 @@ public:
     bool operator==(const Self & rhs) const { return t == rhs.t; }
     bool operator<(const Self & rhs) const { return t < rhs.t; }
     bool operator>(const Self & rhs) const { return t > rhs.t; }
+    bool operator<=(const Self & rhs) const { return !(*this > rhs); }
 
     T & toUnderType() { return t; }
     const T & toUnderType() const { return t; }

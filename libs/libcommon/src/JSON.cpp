@@ -3,9 +3,9 @@
 
 #include <Poco/UTF8Encoding.h>
 #include <Poco/NumberParser.h>
-#include <Common/JSON.h>
-#include <Common/find_symbols.h>
-#include <Common/preciseExp10.h>
+#include <common/JSON.h>
+#include <common/find_symbols.h>
+#include <common/preciseExp10.h>
 
 #include <iostream>
 

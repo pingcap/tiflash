@@ -3,7 +3,6 @@
 #include <cctz/civil_time.h>
 #include <cctz/time_zone.h>
 #include <cctz/zone_info_source.h>
-#include <common/getResource.h>
 #include <Poco/Exception.h>
 
 #include <algorithm>
@@ -172,63 +171,3 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
     }
 }
 
-
-#if !defined(ARCADIA_BUILD) /// Arcadia's variant of CCTZ already has the same implementation.
-
-/// Prefer to load timezones from blobs linked to the binary.
-/// The blobs are provided by "tzdata" library.
-/// This allows to avoid dependency on system tzdata.
-namespace cctz_extension
-{
-    namespace
-    {
-        class Source : public cctz::ZoneInfoSource
-        {
-        public:
-            Source(const char * data_, size_t size_) : data(data_), size(size_) {}
-
-            size_t Read(void * buf, size_t bytes) override
-            {
-                if (bytes > size)
-                    bytes = size;
-                memcpy(buf, data, bytes);
-                data += bytes;
-                size -= bytes;
-                return bytes;
-            }
-
-            int Skip(size_t offset) override
-            {
-                if (offset <= size)
-                {
-                    data += offset;
-                    size -= offset;
-                    return 0;
-                }
-                else
-                {
-                    errno = EINVAL;
-                    return -1;
-                }
-            }
-        private:
-            const char * data;
-            size_t size;
-        };
-
-        std::unique_ptr<cctz::ZoneInfoSource> custom_factory(
-            const std::string & name,
-            const std::function<std::unique_ptr<cctz::ZoneInfoSource>(const std::string & name)> & fallback)
-        {
-            std::string_view resource = getResource(name);
-            if (!resource.empty())
-                return std::make_unique<Source>(resource.data(), resource.size());
-
-            return fallback(name);
-        }
-    }
-
-    ZoneInfoSourceFactory zone_info_source_factory = custom_factory;
-}
-
-#endif
