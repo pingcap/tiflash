@@ -42,6 +42,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <limits>
 
 #if __cplusplus > 201103L
 #define CPPTOML_DEPRECATED(reason) [[deprecated(reason)]]
