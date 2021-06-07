@@ -171,8 +171,6 @@ void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, Format
         case Kind::Anti:
             settings.ostr << "ANTI JOIN";
             break;
-        default:
-            throw Exception("Join kind not supported");
     }
 
     settings.ostr << (settings.hilite ? hilite_none : "");
