@@ -275,6 +275,7 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
 
             break;
         }
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         case raft_cmdpb::AdminCmdType::Split:
         case raft_cmdpb::AdminCmdType::BatchSplit:
         {

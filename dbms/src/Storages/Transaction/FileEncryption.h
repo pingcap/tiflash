@@ -9,6 +9,8 @@ namespace DB
 const char * IntoEncryptionMethodName(EncryptionMethod);
 struct EngineStoreServerWrap;
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
 struct FileEncryptionInfo : FileEncryptionInfoRaw
 {
     ~FileEncryptionInfo()
@@ -54,5 +56,9 @@ struct FileEncryptionInfo : FileEncryptionInfoRaw
         return *this;
     }
 };
+#pragma GCC diagnostic pop
 
 } // namespace DB
+
+
+
