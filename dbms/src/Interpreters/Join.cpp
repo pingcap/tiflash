@@ -31,7 +31,7 @@ namespace ErrorCodes
 /// Do I need to use the hash table maps_*_full, in which we remember whether the row was joined.
 static bool getFullness(ASTTableJoin::Kind kind)
 {
-    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Full;
+    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full;
 }
 static bool isLeftJoin(ASTTableJoin::Kind kind)
 {
@@ -48,11 +48,6 @@ static bool isInnerJoin(ASTTableJoin::Kind kind)
 static bool isAntiJoin(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti;
-}
-static bool isCrossJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Cross || kind == ASTTableJoin::Kind::Cross_Left
-        || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Cross_Anti;
 }
 
 
@@ -356,7 +351,7 @@ void Join::setSampleBlock(const Block & block)
     }
 
     /// In case of LEFT and FULL joins, if use_nulls, convert joined columns to Nullable.
-    if (use_nulls && (isLeftJoin(kind) || kind == ASTTableJoin::Kind::Full))
+    if (use_nulls && (kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Full || kind == ASTTableJoin::Kind::Cross_Left))
         for (size_t i = 0; i < num_columns_to_add; ++i)
             convertColumnToNullable(sample_block_with_columns_to_add.getByPosition(i));
 }
@@ -745,7 +740,7 @@ bool Join::insertFromBlockInternal(Block * stored_block, size_t block_index)
     }
 
     /// In case of LEFT and FULL joins, if use_nulls, convert joined columns to Nullable.
-    if (use_nulls && (isLeftJoin(kind) || kind == ASTTableJoin::Kind::Full))
+    if (use_nulls && (kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Full))
     {
         for (size_t i = getFullness(kind) ? keys_size : 0; i < size; ++i)
         {
@@ -753,7 +748,7 @@ bool Join::insertFromBlockInternal(Block * stored_block, size_t block_index)
         }
     }
 
-    if (!isCrossJoin(kind))
+    if (kind != ASTTableJoin::Kind::Cross)
     {
         /// Fill the hash table.
         if (!getFullness(kind))
