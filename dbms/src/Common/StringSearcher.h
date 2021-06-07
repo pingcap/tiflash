@@ -86,8 +86,8 @@ public:
         if (*needle < 0x80u)
         {
             first_needle_symbol_is_ascii = true;
-            l = static_cast<const UInt8>(std::tolower(*needle));
-            u = static_cast<const UInt8>(std::toupper(*needle));
+            l = static_cast<UInt8>(std::tolower(*needle));
+            u = static_cast<UInt8>(std::toupper(*needle));
         }
         else
         {
