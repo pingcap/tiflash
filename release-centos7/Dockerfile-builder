@@ -23,22 +23,24 @@ RUN yum makecache \
          python3-devel \
          bzip2 \
          chrpath \
+  && yum install -y centos-release-scl \
+  && yum install -y devtoolset-7 \
+  && source scl_source enable devtoolset-7 \
   && curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly  \
-  && pip3 install \
-          pybind11 \
-          pyinstaller \
-          dnspython \
-          uri \
-          requests \
-          urllib3 \
-          toml \
-          setuptools \
-          etcd3 \
   && cd /prepare-environments \
   && ./install-cmake.sh \
-  && ./install-gcc.sh \
   && ./install-openssl.sh \
   && ./install-libcurl.sh \
   && ./install-grpc.sh \
-  && yum remove openssl-devel \
+  && pip3 install \
+        pybind11 \
+        pyinstaller \
+        dnspython \
+        uri \
+        requests \
+        urllib3 \
+        toml \
+        setuptools \
+        etcd3 \
+  && yum remove -y openssl-devel \
   && yum clean all

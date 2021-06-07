@@ -2,24 +2,17 @@
 
 set -e
 
-VERSION="v1.26.0"
+VERSION="v1.38.0"
 THREADS=$(nproc || grep -c ^processor /proc/cpuinfo)
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 source ${SCRIPTPATH}/util.sh
-is_arm=$(check_arm_arch)
 CMAKE_FLAGS_ADD=""
 
 cd ~
 git clone https://github.com/grpc/grpc.git -b ${VERSION}
 cd grpc
 git submodule update --init
-
-if [[ ${is_arm} == 1 ]]; then
-    CMAKE_FLAGS_ADD="-DRUN_HAVE_STD_REGEX=0 -DRUN_HAVE_POSIX_REGEX=0 -DCOMPILE_HAVE_GNU_POSIX_REGEX=0"
-    cd third_party/boringssl
-    git apply ${SCRIPTPATH}/grpc-arm-compile.patch
-fi
 
 cd ~/grpc
 mkdir .build

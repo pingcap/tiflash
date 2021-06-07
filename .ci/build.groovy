@@ -20,7 +20,7 @@ catchError {
                             alwaysPullImage: true, envVars: [
                             envVar(key: 'DOCKER_HOST', value: 'tcp://localhost:2375'),
                     ], ttyEnabled: true, command: 'cat'),
-                    containerTemplate(name: 'builder', image: 'hub.pingcap.net/tiflash/tiflash-builder-ci',
+                    containerTemplate(name: 'builder', image: 'hub.pingcap.net/tiflash-new/tiflash-builder',
                             alwaysPullImage: true, ttyEnabled: true, command: 'cat',
                             resourceRequestCpu: '4000m', resourceRequestMemory: '8Gi',
                             resourceLimitCpu: '10000m', resourceLimitMemory: '30Gi'),

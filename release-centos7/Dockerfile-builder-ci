@@ -1,4 +1,4 @@
-FROM hub.pingcap.net/tiflash/tiflash-builder:latest
+FROM hub.pingcap.net/tiflash-new/tiflash-builder:latest
 
 USER root
 WORKDIR /root/
