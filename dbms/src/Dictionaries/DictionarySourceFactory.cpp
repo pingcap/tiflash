@@ -16,19 +16,6 @@
 #include <mutex>
 
 #include <Common/config.h>
-#if Poco_MongoDB_FOUND
-    #include <Dictionaries/MongoDBDictionarySource.h>
-#endif
-#if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-    #include <Poco/Data/ODBC/Connector.h>
-#pragma GCC diagnostic pop
-    #include <Dictionaries/ODBCDictionarySource.h>
-#endif
-#if USE_MYSQL
-    #include <Dictionaries/MySQLDictionarySource.h>
-#endif
 
 #include <Poco/Logger.h>
 
@@ -89,9 +76,6 @@ Block createSampleBlock(const DictionaryStructure & dict_struct)
 DictionarySourceFactory::DictionarySourceFactory()
     : log(&Poco::Logger::get("DictionarySourceFactory"))
 {
-#if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
-    Poco::Data::ODBC::Connector::registerConnector();
-#endif
 }
 
 void DictionarySourceFactory::registerSource(const std::string & source_type, Creator create_source)
@@ -129,37 +113,10 @@ DictionarySourcePtr DictionarySourceFactory::create(
         const auto format = config.getString(config_prefix + ".file.format");
         return std::make_unique<FileDictionarySource>(filename, format, sample_block, context);
     }
-    else if ("mysql" == source_type)
-    {
-#if USE_MYSQL
-        return std::make_unique<MySQLDictionarySource>(dict_struct, config, config_prefix + ".mysql", sample_block);
-#else
-        throw Exception{"Dictionary source of type `mysql` is disabled because ClickHouse was built without mysql support.",
-            ErrorCodes::SUPPORT_IS_DISABLED};
-#endif
-    }
     else if ("clickhouse" == source_type)
     {
         return std::make_unique<ClickHouseDictionarySource>(dict_struct, config, config_prefix + ".clickhouse",
             sample_block, context);
-    }
-    else if ("mongodb" == source_type)
-    {
-#if Poco_MongoDB_FOUND
-        return std::make_unique<MongoDBDictionarySource>(dict_struct, config, config_prefix + ".mongodb", sample_block);
-#else
-        throw Exception{"Dictionary source of type `mongodb` is disabled because poco library was built without mongodb support.",
-            ErrorCodes::SUPPORT_IS_DISABLED};
-#endif
-    }
-    else if ("odbc" == source_type)
-    {
-#if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
-        return std::make_unique<ODBCDictionarySource>(dict_struct, config, config_prefix + ".odbc", sample_block, context);
-#else
-        throw Exception{"Dictionary source of type `odbc` is disabled because poco library was built without ODBC support.",
-            ErrorCodes::SUPPORT_IS_DISABLED};
-#endif
     }
     else if ("executable" == source_type)
     {

@@ -1,8 +1,12 @@
 #pragma once
 
 #include <string.h>
+#include <atomic>
 
-
+namespace DB
+{
+extern std::atomic_size_t allocator_mmap_counter;
+}
 /** Responsible for allocating / freeing memory. Used, for example, in PODArray, Arena.
   * Also used in hash tables.
   * The interface is different from std::allocator

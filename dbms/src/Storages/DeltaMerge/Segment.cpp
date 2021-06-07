@@ -1,4 +1,3 @@
-
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/EmptyBlockInputStream.h>
@@ -341,7 +340,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
                                             UInt64                     max_version,
                                             size_t                     expected_block_size)
 {
-    LOG_TRACE(log, "Segment [" << segment_id << "] create InputStream");
+    LOG_TRACE(log, "Segment [" << segment_id << "] [epoch=" << epoch << "] create InputStream");
 
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, max_version);
 
@@ -467,8 +466,8 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext &      
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_context,
                                                const ColumnDefines &      columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
-                                               bool   do_range_filter,
-                                               size_t expected_block_size)
+                                               bool                       do_range_filter,
+                                               size_t                     expected_block_size)
 {
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
