@@ -241,7 +241,8 @@ public:
          const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency = 1,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators, const String & left_filter_column = "",
          const String & right_filter_column = "", const String & other_filter_column = "",
-         const String & other_eq_filter_from_in_column = "", ExpressionActionsPtr other_condition_ptr = nullptr);
+         const String & other_eq_filter_from_in_column = "", ExpressionActionsPtr other_condition_ptr = nullptr,
+         size_t max_block_size = 0);
 
     bool empty() { return type == Type::EMPTY; }
 
@@ -407,6 +408,7 @@ private:
     String other_eq_filter_from_in_column;
     ExpressionActionsPtr other_condition_ptr;
     ASTTableJoin::Strictness original_strictness;
+    size_t max_block_size_for_cross_join;
     /** Blocks of "right" table.
       */
     BlocksList blocks;
@@ -479,10 +481,8 @@ private:
     void joinBlockImplCross(Block & block) const;
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
-    void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map, std::unique_ptr<IColumn::Filter> & is_row_matched,
-                                          std::unique_ptr<IColumn::Offsets> & expanded_row_size_after_join) const;
+    void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
 
-    void handleOtherConditionsForCrossJoin(Block & block, std::vector<UInt8 > & is_row_matched, std::vector<size_t> & expanded_row_size_after_join, const std::vector<size_t> & right_table_columns) const;
 };
 
 using JoinPtr = std::shared_ptr<Join>;
