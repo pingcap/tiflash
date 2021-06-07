@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <shared_mutex>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
