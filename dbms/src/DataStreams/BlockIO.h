@@ -56,6 +56,9 @@ struct BlockIO
     }
 
     ~BlockIO();
+
+    BlockIO() = default;
+    BlockIO(const BlockIO& that) = default;
 };
 
 }
