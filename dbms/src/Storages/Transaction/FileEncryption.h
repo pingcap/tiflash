@@ -10,6 +10,7 @@ const char * IntoEncryptionMethodName(EncryptionMethod);
 struct EngineStoreServerWrap;
 
 #pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpragmas"
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
 struct FileEncryptionInfo : FileEncryptionInfoRaw
 {
