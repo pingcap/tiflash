@@ -57,11 +57,20 @@ public:
     using base_type = uint64_t;
     using signed_base_type = int64_t;
 
+    template <class T>
+    using _integral_not_wide_integer_class = typename std::enable_if<std::is_arithmetic<T>::value, T>::type;
+
     // ctors
     constexpr integer() noexcept = default;
 
-    template <typename T>
+    //template <typename T>
+    //constexpr integer(T rhs) noexcept;
+
+    template <class T, class = _integral_not_wide_integer_class<T>>
     constexpr integer(T rhs) noexcept;
+
+    template <size_t Bits2, typename Signed2>
+    constexpr integer(const integer<Bits2, Signed2> & rhs) noexcept;
 
     template <typename T>
     constexpr integer(std::initializer_list<T> il) noexcept;
@@ -108,9 +117,6 @@ public:
     // observers
 
     constexpr explicit operator bool() const noexcept;
-
-    template <class T>
-    using _integral_not_wide_integer_class = typename std::enable_if<std::is_arithmetic<T>::value, T>::type;
 
     template <class T, class = _integral_not_wide_integer_class<T>>
     constexpr operator T() const noexcept;

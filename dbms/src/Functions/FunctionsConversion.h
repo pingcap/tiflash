@@ -268,7 +268,7 @@ struct ToDateTimeImpl
 
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.fromDayNum(DayNum_t(d));
+        return time_zone.fromDayNum(DayNum(d));
     }
 };
 
@@ -407,7 +407,7 @@ struct FormatImpl<DataTypeDate>
 {
     static void execute(const DataTypeDate::FieldType x, WriteBuffer & wb, const DataTypeDate *, const DateLUTImpl *)
     {
-        writeDateText(DayNum_t(x), wb);
+        writeDateText(DayNum(x), wb);
     }
 };
 
@@ -565,7 +565,7 @@ template <typename DataType> void parseImpl(typename DataType::FieldType & x, Re
 
 template <> inline void parseImpl<DataTypeDate>(DataTypeDate::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
 {
-    DayNum_t tmp(0);
+    DayNum tmp(0);
     readDateText(tmp, rb);
     x = tmp;
 }
@@ -596,7 +596,7 @@ template <> inline void parseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, Rea
 {
     UUID tmp;
     readText(tmp, rb);
-    x = tmp;
+    x = tmp.toUnderType();
 }
 
 template <typename DataType>
@@ -1407,7 +1407,7 @@ public:
             }
             else
             {
-                if (unlikely(integer_part + datelut->getOffsetAtStartEpoch() + SECONDS_PER_DAY < 0))
+                if (unlikely(integer_part + datelut->getOffsetAtStartOfEpoch() + SECONDS_PER_DAY < 0))
                     throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
             }
             MyDateTime result(datelut->toYear(integer_part), datelut->toMonth(integer_part), datelut->toDayOfMonth(integer_part),

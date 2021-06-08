@@ -2,9 +2,10 @@
 
 #include <city.h>
 #include <Core/Types.h>
-#include <Common/types.h>
-#include <Common/unaligned.h>
-#include <Common/StringRef.h>
+#include <Common/Decimal.h>
+#include <common/types.h>
+#include <common/unaligned.h>
+#include <common/StringRef.h>
 
 #include <type_traits>
 
@@ -196,7 +197,7 @@ template <typename T, typename Enable = void>
 struct DefaultHash;
 
 template <typename T>
-struct DefaultHash<T, std::enable_if_t<!DB::IsDecimalNumber<T>>>
+struct DefaultHash<T, std::enable_if_t<!DB::IsDecimal<T>>>
 {
     size_t operator() (T key) const
     {
@@ -205,7 +206,7 @@ struct DefaultHash<T, std::enable_if_t<!DB::IsDecimalNumber<T>>>
 };
 
 template <typename T>
-struct DefaultHash<T, std::enable_if_t<DB::IsDecimalNumber<T>>>
+struct DefaultHash<T, std::enable_if_t<DB::IsDecimal<T>>>
 {
     size_t operator() (T key) const
     {
@@ -263,7 +264,7 @@ DEFINE_HASH(DB::Float64)
 
 struct UInt128Hash
 {
-    size_t operator()(UInt128 x) const
+    size_t operator()(DB::UInt128 x) const
     {
         return CityHash_v1_0_2::Hash128to64({x.items[0], x.items[1]});
     }
@@ -273,7 +274,7 @@ struct UInt128Hash
 
 struct UInt128HashCRC32
 {
-    size_t operator()(UInt128 x) const
+    size_t operator()(DB::UInt128 x) const
     {
         UInt64 crc = -1ULL;
         crc = _mm_crc32_u64(crc, x.items[0]);
@@ -291,12 +292,12 @@ struct UInt128HashCRC32 : public UInt128Hash {};
 
 struct UInt128TrivialHash
 {
-    size_t operator()(UInt128 x) const { return x.items[0]; }
+    size_t operator()(DB::UInt128 x) const { return x.items[0]; }
 };
 
 struct UInt256Hash
 {
-    size_t operator()(UInt256 x) const
+    size_t operator()(DB::UInt256 x) const
     {
         /// NOTE suboptimal
         return CityHash_v1_0_2::Hash128to64({
@@ -309,7 +310,7 @@ struct UInt256Hash
 
 struct UInt256HashCRC32
 {
-    size_t operator()(UInt256 x) const
+    size_t operator()(DB::UInt256 x) const
     {
         UInt64 crc = -1ULL;
         crc = _mm_crc32_u64(crc, x.items[0]);

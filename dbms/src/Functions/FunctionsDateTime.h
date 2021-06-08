@@ -205,7 +205,7 @@ struct ToMondayImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toFirstDayNumOfWeek(DayNum_t(d));
+        return time_zone.toFirstDayNumOfWeek(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toMonday", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -224,7 +224,7 @@ struct ToStartOfMonthImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toFirstDayNumOfMonth(DayNum_t(d));
+        return time_zone.toFirstDayNumOfMonth(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toStartOfMonday", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -243,7 +243,7 @@ struct ToStartOfQuarterImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toFirstDayNumOfQuarter(DayNum_t(d));
+        return time_zone.toFirstDayNumOfQuarter(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toStartOfQuarter", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -262,7 +262,7 @@ struct ToStartOfYearImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toFirstDayNumOfYear(DayNum_t(d));
+        return time_zone.toFirstDayNumOfYear(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toStartOfYear", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -380,7 +380,7 @@ struct ToYearImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toYear(DayNum_t(d));
+        return time_zone.toYear(DayNum(d));
     }
     static inline UInt16 execute(UInt64 packed, const DateLUTImpl &) { return UInt16((packed >> 46) / 13); }
 
@@ -397,7 +397,7 @@ struct ToQuarterImpl
     }
     static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toQuarter(DayNum_t(d));
+        return time_zone.toQuarter(DayNum(d));
     }
     static inline UInt8 execute(UInt64 packed, const DateLUTImpl &) { return ((/* Month */ (packed >> 46) % 13) + 2) / 3; }
 
@@ -414,7 +414,7 @@ struct ToMonthImpl
     }
     static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toMonth(DayNum_t(d));
+        return time_zone.toMonth(DayNum(d));
     }
     // tidb date related type, ignore time_zone info
     static inline UInt8 execute(UInt64 t, const DateLUTImpl &) { return (UInt8)((t >> 46u) % 13); }
@@ -432,7 +432,7 @@ struct ToDayOfMonthImpl
     }
     static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toDayOfMonth(DayNum_t(d));
+        return time_zone.toDayOfMonth(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toDayOfMonth", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -451,7 +451,7 @@ struct ToDayOfWeekImpl
     }
     static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toDayOfWeek(DayNum_t(d));
+        return time_zone.toDayOfWeek(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toDayOfWeek", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -528,7 +528,7 @@ struct ToRelativeYearNumImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toYear(DayNum_t(d));
+        return time_zone.toYear(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeYearNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -547,7 +547,7 @@ struct ToRelativeQuarterNumImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeQuarterNum(DayNum_t(d));
+        return time_zone.toRelativeQuarterNum(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeQuarterNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -566,7 +566,7 @@ struct ToRelativeMonthNumImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeMonthNum(DayNum_t(d));
+        return time_zone.toRelativeMonthNum(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeMonthNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -585,7 +585,7 @@ struct ToRelativeWeekNumImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeWeekNum(DayNum_t(d));
+        return time_zone.toRelativeWeekNum(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeWeekNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -604,7 +604,7 @@ struct ToRelativeDayNumImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl &)
     {
-        return static_cast<DayNum_t>(d);
+        return static_cast<DayNum>(d);
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeDayNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -624,7 +624,7 @@ struct ToRelativeHourNumImpl
     }
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeHourNum(DayNum_t(d));
+        return time_zone.toRelativeHourNum(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeHourNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -643,7 +643,7 @@ struct ToRelativeMinuteNumImpl
     }
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeMinuteNum(DayNum_t(d));
+        return time_zone.toRelativeMinuteNum(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeMinuteNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -662,7 +662,7 @@ struct ToRelativeSecondNumImpl
     }
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.fromDayNum(DayNum_t(d));
+        return time_zone.fromDayNum(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeSecondNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -681,7 +681,7 @@ struct ToYYYYMMImpl
     }
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toNumYYYYMM(static_cast<DayNum_t>(d));
+        return time_zone.toNumYYYYMM(static_cast<DayNum>(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toYYYYMM", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -700,7 +700,7 @@ struct ToYYYYMMDDImpl
     }
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toNumYYYYMMDD(static_cast<DayNum_t>(d));
+        return time_zone.toNumYYYYMMDD(static_cast<DayNum>(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toYYYYMMDD", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -719,7 +719,7 @@ struct ToYYYYMMDDhhmmssImpl
     }
     static inline UInt64 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toNumYYYYMMDDhhmmss(time_zone.toDate(static_cast<DayNum_t>(d)));
+        return time_zone.toNumYYYYMMDDhhmmss(time_zone.toDate(static_cast<DayNum>(d)));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toYYYYMMDDhhmmss", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -921,7 +921,7 @@ struct AddSecondsImpl
 
     static inline UInt32 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
     {
-        return time_zone.fromDayNum(DayNum_t(d)) + delta;
+        return time_zone.fromDayNum(DayNum(d)) + delta;
     }
 
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl &)
@@ -969,7 +969,7 @@ struct AddMinutesImpl
 
     static inline UInt32 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
     {
-        return time_zone.fromDayNum(DayNum_t(d)) + delta * 60;
+        return time_zone.fromDayNum(DayNum(d)) + delta * 60;
     }
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
     {
@@ -988,7 +988,7 @@ struct AddHoursImpl
 
     static inline UInt32 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
     {
-        return time_zone.fromDayNum(DayNum_t(d)) + delta * 3600;
+        return time_zone.fromDayNum(DayNum(d)) + delta * 3600;
     }
 
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
@@ -1054,7 +1054,7 @@ struct AddMonthsImpl
 
     static inline UInt16 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
     {
-        return time_zone.addMonths(DayNum_t(d), delta);
+        return time_zone.addMonths(DayNum(d), delta);
     }
 
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl &)
@@ -1080,7 +1080,7 @@ struct AddYearsImpl
 
     static inline UInt16 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
     {
-        return time_zone.addYears(DayNum_t(d), delta);
+        return time_zone.addYears(DayNum(d), delta);
     }
 
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)

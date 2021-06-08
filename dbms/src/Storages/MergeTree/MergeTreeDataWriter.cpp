@@ -42,7 +42,7 @@ void buildScatterSelector(
     {
         Data::key_type key = hash128(i, columns.size(), columns, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
         // TODO: Better mod calculating.
-        key = UInt128(key.low % partition_mod);
+        key = UInt128(key.items[0] % partition_mod);
 
         typename Data::iterator it;
         bool inserted;
@@ -121,7 +121,7 @@ BlocksWithPartition MergeTreeDataWriter::splitBlockIntoParts(const Block & block
         if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable || data.merging_params.mode == MergeTreeData::MergingParams::Txn)
         {
             Row partition(1);
-            partition[0] = partition_num_to_key[num].low;
+            partition[0] = partition_num_to_key[num].items[0];
             return partition;
         }
 
@@ -176,13 +176,13 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(BlockWithPa
     String part_name;
     if (data.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
     {
-        DayNum_t min_date(minmax_idx.min_values[data.minmax_idx_date_column_pos].get<UInt64>());
-        DayNum_t max_date(minmax_idx.max_values[data.minmax_idx_date_column_pos].get<UInt64>());
+        DayNum min_date(minmax_idx.min_values[data.minmax_idx_date_column_pos].get<UInt64>());
+        DayNum max_date(minmax_idx.max_values[data.minmax_idx_date_column_pos].get<UInt64>());
 
         const auto & date_lut = DateLUT::instance();
 
-        DayNum_t min_month = date_lut.toFirstDayNumOfMonth(DayNum_t(min_date));
-        DayNum_t max_month = date_lut.toFirstDayNumOfMonth(DayNum_t(max_date));
+        auto min_month = date_lut.toNumYYYYMM(min_date);
+        auto max_month = date_lut.toNumYYYYMM(max_date);
 
         if (min_month != max_month)
             throw Exception("Logical error: part spans more than one month.");

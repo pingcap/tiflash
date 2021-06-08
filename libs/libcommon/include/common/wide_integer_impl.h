@@ -961,14 +961,20 @@ public:
 // Members
 
 template <size_t Bits, typename Signed>
-template <typename T>
+template <typename T, class>
 constexpr integer<Bits, Signed>::integer(T rhs) noexcept
     : items{}
 {
-    if constexpr (IsWideInteger<T>::value)
-        _impl::wide_integer_from_wide_integer(*this, rhs);
-    else
-        _impl::wide_integer_from_builtin(*this, rhs);
+    static_assert(std::is_arithmetic<T>::value);
+    _impl::wide_integer_from_builtin(*this, rhs);
+}
+
+template <size_t Bits, typename Signed>
+template <size_t Bits2, typename Signed2>
+constexpr integer<Bits, Signed>::integer(const integer<Bits2, Signed2> & rhs) noexcept
+    : items{}
+{
+    _impl::wide_integer_from_wide_integer(*this, rhs);
 }
 
 template <size_t Bits, typename Signed>

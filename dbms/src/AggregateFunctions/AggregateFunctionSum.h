@@ -129,7 +129,7 @@ public:
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         if constexpr (IsDecimal<T>)
-            this->data(place).template add<T>(static_cast<const ColumnDecimal<T> &>(*columns[0]).getData()[row_num]);
+            this->data(place).template add(static_cast<const ColumnDecimal<T> &>(*columns[0]).getData()[row_num]);
         else
             this->data(place).add(static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
     }

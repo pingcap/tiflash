@@ -69,15 +69,10 @@ namespace ZeroTraits
 {
 
 template <typename T>
-inline bool check(const T & x) { return x == 0; }
-
-template <>
-inline bool check(const DB::Int256 & x) {
-    return x == 0 || x.backend().size() == 0;
-}
+inline bool check(const T & x) { return x == T{}; }
 
 template <typename T>
-void set(T & x) { x = 0; }
+void set(T & x) { x = T{}; }
 
 };
 

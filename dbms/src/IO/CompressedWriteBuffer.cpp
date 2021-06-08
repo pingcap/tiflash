@@ -64,8 +64,8 @@ void CompressedWriteBuffer::nextImpl()
             UInt32 compressed_size_32 = compressed_size;
             UInt32 uncompressed_size_32 = uncompressed_size;
 
-            unalignedStore(&compressed_buffer[1], compressed_size_32);
-            unalignedStore(&compressed_buffer[5], uncompressed_size_32);
+            unalignedStore<UInt32>(&compressed_buffer[1], compressed_size_32);
+            unalignedStore<UInt32>(&compressed_buffer[5], uncompressed_size_32);
 
             compressed_buffer_ptr = &compressed_buffer[0];
             break;
@@ -93,8 +93,8 @@ void CompressedWriteBuffer::nextImpl()
             UInt32 compressed_size_32 = compressed_size;
             UInt32 uncompressed_size_32 = uncompressed_size;
 
-            unalignedStore(&compressed_buffer[1], compressed_size_32);
-            unalignedStore(&compressed_buffer[5], uncompressed_size_32);
+            unalignedStore<UInt32>(&compressed_buffer[1], compressed_size_32);
+            unalignedStore<UInt32>(&compressed_buffer[5], uncompressed_size_32);
 
             compressed_buffer_ptr = &compressed_buffer[0];
             break;
@@ -111,8 +111,8 @@ void CompressedWriteBuffer::nextImpl()
 
             compressed_buffer[0] = static_cast<UInt8>(CompressionMethodByte::NONE);
 
-            unalignedStore(&compressed_buffer[1], compressed_size_32);
-            unalignedStore(&compressed_buffer[5], uncompressed_size_32);
+            unalignedStore<UInt32>(&compressed_buffer[1], compressed_size_32);
+            unalignedStore<UInt32>(&compressed_buffer[5], uncompressed_size_32);
             memcpy(&compressed_buffer[9], working_buffer.begin(), uncompressed_size);
 
             compressed_buffer_ptr = &compressed_buffer[0];

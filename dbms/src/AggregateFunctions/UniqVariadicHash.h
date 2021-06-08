@@ -99,7 +99,7 @@ struct UniqVariadicHash<true, false>
         }
 
         UInt128 key;
-        hash.get128(key.low, key.high);
+        hash.get128(key);
         return key;
     }
 };
@@ -123,7 +123,7 @@ struct UniqVariadicHash<true, true>
         }
 
         UInt128 key;
-        hash.get128(key.low, key.high);
+        hash.get128(key);
         return key;
     }
 };

@@ -4,6 +4,7 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/Page/stable/PageDefines.h>
 
+#include <functional>
 #include <map>
 #include <unordered_map>
 

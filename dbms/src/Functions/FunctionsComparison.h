@@ -132,20 +132,20 @@ inline int memcmp16(const void * a, const void * b)
 
 inline time_t dateToDateTime(UInt32 date_data)
 {
-    DayNum_t day_num(date_data);
+    DayNum day_num(date_data);
     LocalDate local_date(day_num);
     // todo use timezone info
     return DateLUT::instance().makeDateTime(local_date.year(), local_date.month(), local_date.day(), 0, 0, 0);
 }
 
-inline std::tuple<DayNum_t, bool> dateTimeToDate(time_t time_data)
+inline std::tuple<DayNum, bool> dateTimeToDate(time_t time_data)
 {
     // todo use timezone info
     auto & date_lut = DateLUT::instance();
     auto truncated = date_lut.toHour(time_data) != 0 || date_lut.toMinute(time_data) != 0 || date_lut.toSecond(time_data) != 0;
     auto values = date_lut.getValues(time_data);
     auto day_num = date_lut.makeDayNum(values.year, values.month, values.day_of_month);
-    return std::make_tuple(day_num, truncated);
+    return std::make_tuple(static_cast<DayNum>(day_num), truncated);
 }
 
 
@@ -193,7 +193,7 @@ struct DateDateTimeComparisonImpl
             // date vector with datetime constant
             // first check if datetime constant can be convert to date constant
             bool truncated;
-            DayNum_t date_num;
+            DayNum date_num;
             std::tie(date_num, truncated) = dateTimeToDate((time_t) b);
             if (!truncated)
             {
@@ -232,7 +232,7 @@ struct DateDateTimeComparisonImpl
         {
             // datetime constant with date vector
             bool truncated;
-            DayNum_t date_num;
+            DayNum date_num;
             std::tie(date_num, truncated) = dateTimeToDate((time_t) a);
             if (!truncated)
             {
@@ -1128,7 +1128,7 @@ private:
 
         if (is_date)
         {
-            DayNum_t date;
+            DayNum date;
             ReadBufferFromMemory in(string_value.data, string_value.size);
             readDateText(date, in);
             if (!in.eof())

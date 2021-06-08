@@ -37,6 +37,13 @@ using UInt16 = uint16_t;
 using UInt32 = uint32_t;
 using UInt64 = uint64_t;
 
+using Int128 = wide::integer<128, signed>;
+using UInt128 = wide::integer<128, unsigned>;
+using Int256 = wide::integer<256, signed>;
+using UInt256 = wide::integer<256, unsigned>;
+using Int512 = wide::integer<512, signed>;
+using UInt512 = wide::integer<512, unsigned>;
+
 using String = std::string;
 
 namespace DB
@@ -57,17 +64,19 @@ using Float64 = double;
 
 using String = ::String;
 
-using Int128 = wide::integer<128, signed>;
-using UInt128 = wide::integer<128, unsigned>;
-using Int256 = wide::integer<256, signed>;
-using UInt256 = wide::integer<256, unsigned>;
-using Int512 = wide::integer<512, signed>;
-using UInt512 = wide::integer<512, unsigned>;
+using Int128 = ::Int128;
+using UInt128 = ::UInt128;
+using Int256 = ::Int256;
+using UInt256 = ::UInt256;
+using Int512 = ::Int512;
+using UInt512 = ::UInt512;
 
 static_assert(sizeof(Int256) == 32);
 static_assert(sizeof(UInt256) == 32);
 static_assert(sizeof(Int512) == 64);
 static_assert(sizeof(UInt512) == 64);
+
+} // namespace DB
 
 /// The standard library type traits, such as std::is_arithmetic, with one exception
 /// (std::common_type), are "set in stone". Attempting to specialize them causes undefined behavior.
@@ -179,6 +188,4 @@ template <> struct is_big_int<UInt512> { static constexpr bool value = true; };
 
 template <typename T>
 inline constexpr bool is_big_int_v = is_big_int<T>::value;
-
-}
 

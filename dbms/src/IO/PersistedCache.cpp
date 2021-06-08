@@ -452,9 +452,9 @@ bool PersistedCache::getCachePath(const std::string & origin_path, bool is_part_
     UInt128 key;
     SipHash hash;
     hash.update(part_path.data(), part_path.size());
-    hash.get128(key.low, key.high);
+    hash.get128(key);
 
-    const std::string & persisted_path = persisted_paths[key.low % persisted_paths.size()];
+    const std::string & persisted_path = persisted_paths[key.items[0] % persisted_paths.size()];
 
     cache_path = persisted_path + (origin_path.c_str() + base_path.size());
     if (strncmp(base_path.c_str(), origin_path.c_str(), base_path.size()) != 0)

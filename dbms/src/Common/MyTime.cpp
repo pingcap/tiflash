@@ -486,7 +486,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
 {
     // Since we only use DateLUTImpl as parameter placeholder of AddSecondsImpl::execute
     // and it's costly to construct a DateLUTImpl, a shared static instance is enough.
-    static const DateLUTImpl lut = DateLUT::instance("UTC");
+    static const DateLUTImpl & lut = DateLUT::instance("UTC");
 
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
 
@@ -797,7 +797,7 @@ inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & tim
     {
         /// - 3600 * 24 + my_time.hour * 3600 + my_time.minute * 60 + my_time.second is UTC based, need to adjust
         /// the epoch according to the input time_zone
-        return -3600 * 24 + my_time.hour * 3600 + my_time.minute * 60 + my_time.second - time_zone.getOffsetAtStartEpoch();
+        return -3600 * 24 + my_time.hour * 3600 + my_time.minute * 60 + my_time.second - time_zone.getOffsetAtStartOfEpoch();
     }
     else
     {
@@ -814,7 +814,7 @@ void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & tim
     }
     MyDateTime from_my_time(from_time);
     time_t epoch = getEpochSecond(from_my_time, time_zone_from);
-    if (unlikely(epoch + time_zone_to.getOffsetAtStartEpoch() + SECONDS_PER_DAY < 0))
+    if (unlikely(epoch + time_zone_to.getOffsetAtStartOfEpoch() + SECONDS_PER_DAY < 0))
         throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
     MyDateTime to_my_time(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch),
         time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), from_my_time.micro_second);
