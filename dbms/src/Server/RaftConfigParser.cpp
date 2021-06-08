@@ -98,7 +98,7 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
 
     if (config.has("raft.snapshot.method"))
     {
-        String snapshot_method = config.getString("raft.snapshot.method", "file1");
+        String snapshot_method = config.getString("raft.snapshot.method", "block");
         std::transform(snapshot_method.begin(), snapshot_method.end(), snapshot_method.begin(), [](char ch) { return std::tolower(ch); });
         if (snapshot_method == "block")
         {
