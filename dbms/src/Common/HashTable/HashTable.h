@@ -79,7 +79,7 @@ inline bool check(const DB::Int256 & x) {
 template <typename T>
 void set(T & x) { x = 0; }
 
-};
+}
 
 
 /** Compile-time interface for cell of the hash table.
