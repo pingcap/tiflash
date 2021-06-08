@@ -189,7 +189,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
                 UInt128 key;
                 hash_values[row_index].get128(key);
 
-                partition_selector[row_index] = key.low % partition_num;
+                partition_selector[row_index] = key.items[0] % partition_num;
             }
 
             for (size_t col_id = 0; col_id < block.columns(); ++col_id)
