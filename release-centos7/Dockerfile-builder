@@ -26,9 +26,11 @@ RUN yum makecache \
   && yum install -y centos-release-scl \
   && yum install -y devtoolset-7 \
   && source scl_source enable devtoolset-7 \
+  && yum remove -y openssl-devel \
   && curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly  \
   && cd /prepare-environments \
   && ./install-cmake.sh \
+  && ./install-abseil.sh \
   && ./install-openssl.sh \
   && ./install-libcurl.sh \
   && ./install-grpc.sh \
@@ -42,5 +44,4 @@ RUN yum makecache \
         toml \
         setuptools \
         etcd3 \
-  && yum remove -y openssl-devel \
   && yum clean all
