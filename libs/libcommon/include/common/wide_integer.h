@@ -127,7 +127,7 @@ public:
 
     struct _impl;
 
-    base_type items[_impl::item_count];
+    base_type items[_impl::item_count] = {};
 
 private:
     template <size_t Bits2, typename Signed2>
