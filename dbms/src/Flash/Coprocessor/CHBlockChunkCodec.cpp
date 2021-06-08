@@ -22,9 +22,9 @@ public:
 
     String getString() override
     {
-        std::stringstream ss;
-        return output->str();
+        return output->releaseStr();
     }
+
     void clear() override { output = std::make_unique<WriteBufferFromOwnString>(); }
     void encode(const Block & block, size_t start, size_t end) override;
     std::unique_ptr<WriteBufferFromOwnString> output;

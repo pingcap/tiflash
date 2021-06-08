@@ -155,11 +155,11 @@ void DataTypeArray::enumerateStreams(const StreamCallback & callback, SubstreamP
 
 void DataTypeArray::serializeBinaryBulkWithMultipleStreams(
     const IColumn & column,
-    OutputStreamGetter getter,
+    const OutputStreamGetter & getter,
     size_t offset,
     size_t limit,
     bool position_independent_encoding,
-    SubstreamPath path) const
+    SubstreamPath & path) const
 {
     const ColumnArray & column_array = typeid_cast<const ColumnArray &>(column);
 
@@ -202,11 +202,11 @@ void DataTypeArray::serializeBinaryBulkWithMultipleStreams(
 
 void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
     IColumn & column,
-    InputStreamGetter getter,
+    const InputStreamGetter & getter,
     size_t limit,
     double /*avg_value_size_hint*/,
     bool position_independent_encoding,
-    SubstreamPath path) const
+    SubstreamPath & path) const
 {
     ColumnArray & column_array = typeid_cast<ColumnArray &>(column);
 

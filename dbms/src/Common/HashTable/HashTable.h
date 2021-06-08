@@ -74,7 +74,7 @@ inline bool check(const T & x) { return x == T{}; }
 template <typename T>
 void set(T & x) { x = T{}; }
 
-};
+}
 
 
 /** Compile-time interface for cell of the hash table.
