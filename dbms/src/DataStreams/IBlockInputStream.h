@@ -121,7 +121,7 @@ public:
 
 protected:
     BlockInputStreams children;
-    mutable std::shared_mutex children_mutex;
+    std::shared_mutex children_mutex;
 
 private:
     TableLockHolders table_locks;

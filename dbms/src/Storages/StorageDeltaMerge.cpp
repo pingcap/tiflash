@@ -343,7 +343,7 @@ public:
                     write_block.insert(ColumnWithTypeAndName(std::move(col), column.type, column.name, column.column_id));
                 }
 
-                store->write(db_context, db_settings, std::move(write_block));
+                store->write(db_context, db_settings, write_block);
             }
         }
     }
@@ -428,7 +428,7 @@ void StorageDeltaMerge::write(Block && block, const Settings & settings)
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_write_to_storage);
 
-    store->write(global_context, settings, std::move(block));
+    store->write(global_context, settings, block);
 }
 
 std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
@@ -658,14 +658,6 @@ void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, con
     auto metrics = global_context.getTiFlashMetrics();
     GET_METRIC(metrics, tiflash_storage_command_count, type_delete_range).Increment();
     return store->deleteRange(global_context, settings, range_to_delete);
-}
-
-void StorageDeltaMerge::ingestFiles(
-    const DM::RowKeyRange & range, const std::vector<UInt64> & file_ids, bool clear_data_in_range, const Settings & settings)
-{
-    auto metrics = global_context.getTiFlashMetrics();
-    GET_METRIC(metrics, tiflash_storage_command_count, type_ingest).Increment();
-    return store->ingestFiles(global_context, settings, range, file_ids, clear_data_in_range);
 }
 
 size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::RowKeyRange & range)

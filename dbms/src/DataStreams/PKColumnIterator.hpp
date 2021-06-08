@@ -14,7 +14,8 @@ struct PKColumnIterator : public std::iterator<std::random_access_iterator_tag, 
 
     PKColumnIterator & operator=(const PKColumnIterator & itr)
     {
-        copy(itr);
+        pos = itr.pos;
+        column = itr.column;
         return *this;
     }
 
@@ -24,19 +25,10 @@ struct PKColumnIterator : public std::iterator<std::random_access_iterator_tag, 
 
     PKColumnIterator(const int pos_, const IColumn * column_) : pos(pos_), column(column_) {}
 
-    PKColumnIterator(const PKColumnIterator & itr) { copy(itr); }
-
     void operator+=(size_t n) { pos += n; }
 
     size_t pos;
     const IColumn * column;
-
-private:
-    inline void copy(const PKColumnIterator & itr)
-    {
-        pos = itr.pos;
-        column = itr.column;
-    }
 };
 
 template<typename HandleType>

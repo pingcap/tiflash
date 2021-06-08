@@ -50,8 +50,7 @@ cmake "$SRCPATH" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DENABLE_MYSQL=OFF \
       -DENABLE_TESTING=OFF \
       -DENABLE_TESTS=OFF \
-      -Wno-dev \
-      -DUSE_CCACHE=OFF
+      -Wno-dev
 
 make -j $NPROC tiflash
 

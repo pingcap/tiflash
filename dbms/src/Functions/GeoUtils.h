@@ -15,10 +15,6 @@
 #endif
 
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#if defined(__clang__)
-#pragma GCC diagnostic ignored "-Wunknown-warning-option"
-#pragma GCC diagnostic ignored "-Wdeprecated-copy"
-#endif
 
 #include <boost/geometry.hpp>
 

@@ -1,3 +1,6 @@
+#include <gtest/gtest-typed-test.h>
+#include <gtest/gtest.h>
+
 #include <type_traits>
 
 #define protected public
