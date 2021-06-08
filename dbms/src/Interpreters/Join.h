@@ -10,8 +10,9 @@
 #include <Common/Arena.h>
 #include <Common/HashTable/HashMap.h>
 
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
 
 #include <DataStreams/SizeLimits.h>
 #include <DataStreams/IBlockInputStream.h>
@@ -239,7 +240,9 @@ public:
     Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
          const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency = 1,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators, const String & left_filter_column = "",
-         const String & right_filter_column = "", const String & other_filter_column = "", ExpressionActionsPtr other_condition_ptr = nullptr);
+         const String & right_filter_column = "", const String & other_filter_column = "",
+         const String & other_eq_filter_from_in_column = "", ExpressionActionsPtr other_condition_ptr = nullptr,
+         size_t max_block_size = 0);
 
     bool empty() { return type == Type::EMPTY; }
 
@@ -274,7 +277,7 @@ public:
       * Use only after all calls to joinBlock was done.
       * left_sample_block is passed without account of 'use_nulls' setting (columns will be converted to Nullable inside).
       */
-    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t max_block_size) const;
+    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
 
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
@@ -287,6 +290,7 @@ public:
     const Names & getLeftJoinKeys() const { return key_names_left; }
     size_t getBuildConcurrency() const { return build_concurrency; }
     bool isBuildSetExceeded() const { return build_set_exceeded.load(); }
+    size_t getNotJoinedStreamConcurrency() const { return build_concurrency; };
 
     void setFinishBuildTable(bool);
 
@@ -307,6 +311,14 @@ public:
 
         RowRefList() {}
         RowRefList(const Block * block_, size_t row_num_) : RowRef(block_, row_num_) {}
+    };
+
+    struct RowRefListWithLock {
+        RowRefList row_ref_list;
+        /// mutex to protect concurrent insert to rows_not_inserted_to_map
+        std::mutex mutex;
+        size_t index;
+        RowRefListWithLock(size_t index_) : index(index_) {}
     };
 
 
@@ -402,8 +414,10 @@ private:
     String left_filter_column;
     String right_filter_column;
     String other_filter_column;
+    String other_eq_filter_from_in_column;
     ExpressionActionsPtr other_condition_ptr;
     ASTTableJoin::Strictness original_strictness;
+    size_t max_block_size_for_cross_join;
     /** Blocks of "right" table.
       */
     BlocksList blocks;
@@ -420,9 +434,7 @@ private:
     /// For right/full join, including
     /// 1. Rows with NULL join keys
     /// 2. Rows that are filtered by right join conditions
-    RowRefList rows_not_inserted_to_map;
-    /// mutex to protect concurrent insert to rows_not_inserted_to_map
-    std::mutex not_inserted_rows_mutex;
+    std::vector<std::unique_ptr<RowRefListWithLock>> rows_not_inserted_to_map;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arenas pools;
@@ -472,7 +484,12 @@ private:
     void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
 
 
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
     void joinBlockImplCross(Block & block) const;
+
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
+    void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
+
 };
 
 using JoinPtr = std::shared_ptr<Join>;

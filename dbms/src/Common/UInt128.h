@@ -29,23 +29,23 @@ struct UInt128
 
     UInt128() = default;
     explicit UInt128(const UInt64 rhs) : low(rhs), high() {}
-    explicit UInt128(const UInt64 low, const UInt64 high) : low(low), high(high) {}
+    UInt128(const UInt64 low, const UInt64 high) : low(low), high(high) {}
 
     auto tuple() const { return std::tie(high, low); }
 
-    bool inline operator== (const UInt128 rhs) const { return tuple() == rhs.tuple(); }
-    bool inline operator!= (const UInt128 rhs) const { return tuple() != rhs.tuple(); }
-    bool inline operator<  (const UInt128 rhs) const { return tuple() < rhs.tuple(); }
-    bool inline operator<= (const UInt128 rhs) const { return tuple() <= rhs.tuple(); }
-    bool inline operator>  (const UInt128 rhs) const { return tuple() > rhs.tuple(); }
-    bool inline operator>= (const UInt128 rhs) const { return tuple() >= rhs.tuple(); }
+    bool operator== (const UInt128 & rhs) const { return low == rhs.low && high == rhs.high; }
+    bool operator!= (const UInt128 & rhs) const { return !(*this == rhs); }
+    bool operator<  (const UInt128 & rhs) const { return high < rhs.high || (high == rhs.high && low < rhs.low); }
+    bool operator<= (const UInt128 & rhs) const { return high < rhs.high || (high == rhs.high && low <= rhs.low); }
+    bool operator>  (const UInt128 & rhs) const { return !(*this <= rhs); }
+    bool operator>= (const UInt128 & rhs) const { return !(*this < rhs); }
 
-    template <typename T> bool inline operator== (const T rhs) const { return *this == UInt128(rhs); }
-    template <typename T> bool inline operator!= (const T rhs) const { return *this != UInt128(rhs); }
-    template <typename T> bool inline operator>= (const T rhs) const { return *this >= UInt128(rhs); }
-    template <typename T> bool inline operator>  (const T rhs) const { return *this >  UInt128(rhs); }
-    template <typename T> bool inline operator<= (const T rhs) const { return *this <= UInt128(rhs); }
-    template <typename T> bool inline operator<  (const T rhs) const { return *this <  UInt128(rhs); }
+    template <typename T> bool operator== (const T rhs) const { return *this == UInt128(rhs); }
+    template <typename T> bool operator!= (const T rhs) const { return *this != UInt128(rhs); }
+    template <typename T> bool operator>= (const T rhs) const { return *this >= UInt128(rhs); }
+    template <typename T> bool operator>  (const T rhs) const { return *this >  UInt128(rhs); }
+    template <typename T> bool operator<= (const T rhs) const { return *this <= UInt128(rhs); }
+    template <typename T> bool operator<  (const T rhs) const { return *this <  UInt128(rhs); }
 
     template <typename T> explicit operator T() const { return static_cast<T>(low); }
 
@@ -58,19 +58,19 @@ struct UInt128
 
 template <> struct TypeId<UInt128>   { static constexpr const TypeIndex value = TypeIndex::UInt128;  };
 
-template <typename T> bool inline operator== (T a, const UInt128 b) { return UInt128(a) == b; }
-template <typename T> bool inline operator!= (T a, const UInt128 b) { return UInt128(a) != b; }
-template <typename T> bool inline operator>= (T a, const UInt128 b) { return UInt128(a) >= b; }
-template <typename T> bool inline operator>  (T a, const UInt128 b) { return UInt128(a) > b; }
-template <typename T> bool inline operator<= (T a, const UInt128 b) { return UInt128(a) <= b; }
-template <typename T> bool inline operator<  (T a, const UInt128 b) { return UInt128(a) < b; }
+template <typename T> bool inline operator== (T a, const UInt128 & b) { return UInt128(a) == b; }
+template <typename T> bool inline operator!= (T a, const UInt128 & b) { return UInt128(a) != b; }
+template <typename T> bool inline operator>= (T a, const UInt128 & b) { return UInt128(a) >= b; }
+template <typename T> bool inline operator>  (T a, const UInt128 & b) { return UInt128(a) > b; }
+template <typename T> bool inline operator<= (T a, const UInt128 & b) { return UInt128(a) <= b; }
+template <typename T> bool inline operator<  (T a, const UInt128 & b) { return UInt128(a) < b; }
 
 template <> inline constexpr bool IsNumber<UInt128> = true;
 template <> struct TypeName<UInt128> { static const char * get() { return "UInt128"; } };
 
 struct UInt128Hash
 {
-    size_t operator()(UInt128 x) const
+    size_t operator()(const UInt128 & x) const
     {
         return CityHash_v1_0_2::Hash128to64({x.low, x.high});
     }
@@ -80,7 +80,7 @@ struct UInt128Hash
 
 struct UInt128HashCRC32
 {
-    size_t operator()(UInt128 x) const
+    size_t operator()(const UInt128 & x) const
     {
         UInt64 crc = -1ULL;
         crc = _mm_crc32_u64(crc, x.low);
@@ -98,7 +98,7 @@ struct UInt128HashCRC32 : public UInt128Hash {};
 
 struct UInt128TrivialHash
 {
-    size_t operator()(UInt128 x) const { return x.low; }
+    size_t operator()(const UInt128 & x) const { return x.low; }
 };
 
 
@@ -119,7 +119,7 @@ struct UInt256
     UInt64 c;
     UInt64 d;
 
-    bool operator== (const UInt256 rhs) const
+    bool operator== (const UInt256 & rhs) const
     {
         return a == rhs.a && b == rhs.b && c == rhs.c && d == rhs.d;
 
@@ -133,21 +133,21 @@ struct UInt256
                 _mm_loadu_si128(reinterpret_cast<const __m128i *>(&rhs.c)))));*/
     }
 
-    bool operator!= (const UInt256 rhs) const { return !operator==(rhs); }
+    bool operator!= (const UInt256 & rhs) const { return !operator==(rhs); }
 
-    bool operator== (const UInt64 rhs) const { return a == rhs && b == 0 && c == 0 && d == 0; }
-    bool operator!= (const UInt64 rhs) const { return !operator==(rhs); }
+    bool operator== (const UInt64 & rhs) const { return a == rhs && b == 0 && c == 0 && d == 0; }
+    bool operator!= (const UInt64 & rhs) const { return !operator==(rhs); }
 
 #if !__clang__
 #pragma GCC diagnostic pop
 #endif
 
-    UInt256 & operator= (const UInt64 rhs) { a = rhs; b = 0; c = 0; d = 0; return *this; }
+    UInt256 & operator= (const UInt64 & rhs) { a = rhs; b = 0; c = 0; d = 0; return *this; }
 };
 
 struct UInt256Hash
 {
-    size_t operator()(UInt256 x) const
+    size_t operator()(const UInt256 & x) const
     {
         /// NOTE suboptimal
         return CityHash_v1_0_2::Hash128to64({CityHash_v1_0_2::Hash128to64({x.a, x.b}), CityHash_v1_0_2::Hash128to64({x.c, x.d})});
@@ -158,7 +158,7 @@ struct UInt256Hash
 
 struct UInt256HashCRC32
 {
-    size_t operator()(UInt256 x) const
+    size_t operator()(const UInt256 & x) const
     {
         UInt64 crc = -1ULL;
         crc = _mm_crc32_u64(crc, x.a);
@@ -193,15 +193,24 @@ template <> struct is_signed<DB::UInt128>
     static constexpr bool value = false;
 };
 
+template <>
+inline constexpr bool is_signed_v<DB::UInt128> = is_signed<DB::UInt128>::value;
+
 template <> struct is_unsigned<DB::UInt128>
 {
     static constexpr bool value = true;
 };
 
+template <>
+inline constexpr bool is_unsigned_v<DB::UInt128> = is_unsigned<DB::UInt128>::value;
+
 template <> struct is_integral<DB::UInt128>
 {
     static constexpr bool value = true;
 };
+
+template <>
+inline constexpr bool is_integral_v<DB::UInt128> = is_integral<DB::UInt128>::value;
 
 // Operator +, -, /, *, % aren't implemented so it's not an arithmetic type
 template <> struct is_arithmetic<DB::UInt128>

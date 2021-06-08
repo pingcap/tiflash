@@ -7,6 +7,7 @@
 #include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/Page/WriteBatch.h>
 
+#include <condition_variable>
 #include <functional>
 #include <optional>
 #include <queue>

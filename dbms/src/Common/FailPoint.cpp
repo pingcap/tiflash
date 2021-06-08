@@ -44,7 +44,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_set_segment_ingest_packs_fail)                        \
     M(segment_merge_after_ingest_packs)
 
-#define APPLY_FOR_FAILPOINTS(M) M(force_set_page_file_write_errno)
+#define APPLY_FOR_FAILPOINTS(M)        \
+    M(force_set_page_file_write_errno) \
+    M(minimum_block_size_for_cross_join)
 
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_after_learner_read)                   \

@@ -256,7 +256,8 @@ void flashEnumColToArrowCol(
 void flashColToArrowCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & flash_col, const tipb::FieldType & field_type,
     size_t start_index, size_t end_index)
 {
-    const IColumn * col = flash_col.column.get();
+    auto column = flash_col.column->isColumnConst() ? flash_col.column->convertToFullColumnIfConst() : flash_col.column;
+    const IColumn * col = column.get();
     const IDataType * type = flash_col.type.get();
     const TiDB::ColumnInfo tidb_column_info = TiDB::fieldTypeToColumnInfo(field_type);
 
@@ -407,7 +408,7 @@ const char * arrowEnumColToFlashCol(const char * pos, UInt8, UInt32 null_count, 
     {
         if (checkNull(i, null_count, null_bitmap, col))
             continue;
-        auto enum_value = (const Int64)toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos + offsets[i])));
+        const auto enum_value = (Int64)toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos + offsets[i])));
         col.column->assumeMutable()->insert(Field(enum_value));
     }
     return pos + offsets[length];

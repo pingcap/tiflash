@@ -1,0 +1,22 @@
+mysql> drop table if exists test.t
+mysql> create table test.t(a datetime, b date, c timestamp(3))
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values('2021/04/13 00:34:00.123456', '2021/04/13', '2021/04/13 00:34:00.123456')
+
+func> wait_table test t
+
+# Issue https://github.com/pingcap/tics/issues/1469
+
+mysql> select count(*), cast(a as char), cast(b as char), cast(c as char) from test.t group by cast(a as char), cast(b as char), cast(c as char);
++----------+---------------------+-----------------+-------------------------+
+| count(*) | cast(a as char)     | cast(b as char) | cast(c as char)         |
++----------+---------------------+-----------------+-------------------------+
+|        1 | 2021-04-13 00:34:00 | 2021-04-13      | 2021-04-13 00:34:00.123 |
++----------+---------------------+-----------------+-------------------------+
+
+mysql> select count(*) from test.t where cast(a as char) = '2021-04-13 00:34:00' and cast(b as char) = '2021-04-13' and cast(c as char) = '2021-04-13 00:34:00.123';
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
