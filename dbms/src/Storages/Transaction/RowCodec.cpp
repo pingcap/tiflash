@@ -393,20 +393,18 @@ void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & 
         column_in_key = 1;
     else if (table_info.is_common_handle)
         column_in_key = table_info.getPrimaryIndexInfo().idx_cols.size();
-    if (table_info.columns.size() < fields.size() + column_in_key)
+    if (table_info.columns.size() != fields.size() + column_in_key)
         throw Exception(std::string("Encoding row has ") + std::to_string(table_info.columns.size()) + " columns but "
                 + std::to_string(fields.size() + table_info.pk_is_handle) + " values: ",
             ErrorCodes::LOGICAL_ERROR);
 
-    size_t encoded_fields_idx = 0;
+    size_t index = 0;
     for (auto & column_info : table_info.columns)
     {
         if ((table_info.pk_is_handle || table_info.is_common_handle) && column_info.hasPriKeyFlag())
             continue;
         EncodeDatum(Field(column_info.id), TiDB::CodecFlagInt, ss);
-        EncodeDatumForRow(fields[encoded_fields_idx++], column_info.getCodecFlag(), ss, column_info);
-        if (encoded_fields_idx == fields.size())
-            break;
+        EncodeDatumForRow(fields[index++], column_info.getCodecFlag(), ss, column_info);
     }
 }
 
@@ -421,7 +419,7 @@ struct RowEncoderV2
             column_in_key = 1;
         else if (table_info.is_common_handle)
             column_in_key = table_info.getPrimaryIndexInfo().idx_cols.size();
-        if (table_info.columns.size() < fields.size() + column_in_key)
+        if (table_info.columns.size() != fields.size() + column_in_key)
             throw Exception(std::string("Encoding row has ") + std::to_string(table_info.columns.size()) + " columns but "
                     + std::to_string(fields.size() + table_info.pk_is_handle) + " values: ",
                 ErrorCodes::LOGICAL_ERROR);
@@ -451,9 +449,6 @@ struct RowEncoderV2
                 null_column_ids.emplace(column_info.id);
             }
             i_val++;
-
-            if (i_val == fields.size())
-                break;
         }
         is_big = is_big || value_length > std::numeric_limits<RowV2::Types<false>::ValueOffsetType>::max();
 

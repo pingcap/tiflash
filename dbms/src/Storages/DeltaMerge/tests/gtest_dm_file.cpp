@@ -22,25 +22,6 @@ namespace DM
 namespace tests
 {
 
-TEST(DMFileWriterFlags_test, SetClearFlags)
-{
-    using Flags = DMFileWriter::Flags;
-
-    Flags flags;
-
-    bool f = false;
-    flags.setRateLimit(f);
-    EXPECT_FALSE(flags.needRateLimit());
-    flags.setSingleFile(f);
-    EXPECT_FALSE(flags.isSingleFile());
-
-    f = true;
-    flags.setRateLimit(f);
-    EXPECT_TRUE(flags.needRateLimit());
-    flags.setSingleFile(f);
-    EXPECT_TRUE(flags.isSingleFile());
-}
-
 String paramToString(const ::testing::TestParamInfo<DMFile::Mode> & info)
 {
     const auto mode = info.param;

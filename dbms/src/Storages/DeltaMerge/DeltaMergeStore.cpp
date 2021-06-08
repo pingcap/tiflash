@@ -122,7 +122,7 @@ namespace
 {
 // Actually we will always store a column of `_tidb_rowid`, no matter it
 // exist in `table_columns` or not.
-ColumnDefinesPtr generateStoreColumns(const ColumnDefines & table_columns, bool is_common_handle)
+ColumnDefinesPtr getStoreColumns(const ColumnDefines & table_columns, bool is_common_handle)
 {
     auto columns = std::make_shared<ColumnDefines>();
     // First three columns are always _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
@@ -178,7 +178,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
     }
 
     original_table_header = std::make_shared<Block>(toEmptyBlock(original_table_columns));
-    store_columns         = generateStoreColumns(original_table_columns, is_common_handle);
+    store_columns         = getStoreColumns(original_table_columns, is_common_handle);
 
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
 
@@ -386,24 +386,7 @@ inline Block getSubBlock(const Block & block, size_t offset, size_t limit)
     }
 }
 
-// Add an extra handle column if handle reused the original column data.
-Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, Block && block) const
-{
-    if (pkIsHandle())
-    {
-        auto handle_pos = getPosByColumnId(block, original_table_handle_define.id);
-        addColumnToBlock(block, //
-                         EXTRA_HANDLE_COLUMN_ID,
-                         EXTRA_HANDLE_COLUMN_NAME,
-                         EXTRA_HANDLE_COLUMN_INT_TYPE,
-                         EXTRA_HANDLE_COLUMN_INT_TYPE->createColumn());
-        // Fill the new column with data in column[handle_pos]
-        FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
-    }
-    return std::move(block);
-}
-
-void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block && to_write)
+void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, const Block & to_write)
 {
     LOG_TRACE(log, __FUNCTION__ << " table: " << db_name << "." << table_name << ", rows: " << to_write.rows());
 
@@ -414,8 +397,19 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         return;
 
     auto  dm_context = newDMContext(db_context, db_settings);
-    Block block      = addExtraColumnIfNeed(db_context, std::move(to_write));
+    Block block      = to_write;
 
+    // Add an extra handle column, if handle reused the original column data.
+    if (pkIsHandle())
+    {
+        auto handle_pos = getPosByColumnId(block, original_table_handle_define.id);
+        addColumnToBlock(block, //
+                         EXTRA_HANDLE_COLUMN_ID,
+                         EXTRA_HANDLE_COLUMN_NAME,
+                         EXTRA_HANDLE_COLUMN_INT_TYPE,
+                         EXTRA_HANDLE_COLUMN_INT_TYPE->createColumn());
+        FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
+    }
     const auto bytes = block.bytes();
 
     {
@@ -524,43 +518,14 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
-std::tuple<String, PageId> DeltaMergeStore::preAllocateIngestFile()
+void DeltaMergeStore::writeRegionSnapshot(const DMContextPtr & dm_context,
+                                          const RowKeyRange &  range,
+                                          std::vector<PageId>  file_ids,
+                                          bool                 clear_data_in_range)
 {
-    if (shutdown_called.load(std::memory_order_relaxed))
-        return {};
-
-    auto delegator   = path_pool.getStableDiskDelegator();
-    auto parent_path = delegator.choosePath();
-    auto new_id      = storage_pool.newDataPageId();
-    return {parent_path, new_id};
-}
-
-void DeltaMergeStore::preIngestFile(const String & parent_path, const PageId file_id, size_t file_size)
-{
-    if (shutdown_called.load(std::memory_order_relaxed))
-        return;
-
-    auto delegator = path_pool.getStableDiskDelegator();
-    delegator.addDTFile(file_id, file_size, parent_path);
-}
-
-void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
-                                  const RowKeyRange &  range,
-                                  std::vector<PageId>  file_ids,
-                                  bool                 clear_data_in_range)
-{
-    if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
-    {
-        std::stringstream stream;
-        stream << " try to ingest files into a shutdown table: " << db_name << "." << table_name;
-        auto msg = stream.str();
-        LOG_WARNING(log, __FUNCTION__ << msg);
-        throw Exception(msg);
-    }
-
     LOG_INFO(log, __FUNCTION__ << " table: " << db_name << "." << table_name << ", region range:" << range.toDebugString());
 
-    EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);
+    EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
     auto delegate      = dm_context->path_pool.getStableDiskDelegator();
     auto file_provider = dm_context->db_context.getFileProvider();
@@ -583,8 +548,8 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
     }
 
     LOG_DEBUG(log,
-              __FUNCTION__ << " table: " << db_name << "." << table_name << ", rows: " << rows << ", bytes: " << bytes << ", bytes on disk"
-                           << bytes_on_disk);
+              "[Write Region Snapshot] table: " << db_name << "." << table_name << ", rows: " << rows << ", bytes: " << bytes
+                                                << ", bytes on disk" << bytes_on_disk);
 
     Segments    updated_segments;
     RowKeyRange cur_range = range;
@@ -661,16 +626,9 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
             // they are visible for readers who require file_ids to be found in PageStorage.
             wbs.writeLogAndData();
 
-            if (segment->ingestPacks(*dm_context, range.shrink(segment_range), packs, clear_data_in_range))
+            if (segment->writeRegionSnapshot(*dm_context, range.shrink(segment_range), packs, clear_data_in_range))
             {
                 updated_segments.push_back(segment);
-                // Enable gc for DTFile once it has been committed.
-                for (size_t index = 0; index < my_file_used.size(); ++index)
-                {
-                    auto & file = files[index];
-                    if (my_file_used[index])
-                        file->enableGC();
-                }
                 file_used.swap(my_file_used);
                 break;
             }
@@ -683,9 +641,6 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
         cur_range.setStart(segment_range.end);
         cur_range.setEnd(range.end);
     }
-
-    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_bytes, type_ingest).Increment(bytes);
-    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_rows, type_ingest).Increment(rows);
 
     flushCache(dm_context, range);
 
@@ -735,6 +690,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
             segment_range = segment->getRowKeyRange();
 
             // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
+
             if (segment->write(*dm_context, delete_range.shrink(segment_range)))
             {
                 updated_segments.push_back(segment);
@@ -1289,7 +1245,8 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             segmentMerge(*task.dm_context, task.segment, task.next_segment, false);
             type = ThreadType::BG_Merge;
             break;
-        case MergeDelta: {
+        case MergeDelta:
+        {
             FAIL_POINT_PAUSE(FailPoints::pause_before_dt_background_delta_merge);
             left = segmentMergeDelta(*task.dm_context, task.segment, false);
             type = ThreadType::BG_MergeDelta;
@@ -1772,7 +1729,7 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
         }
     }
 
-    auto new_store_columns = generateStoreColumns(new_original_table_columns, is_common_handle);
+    auto new_store_columns = getStoreColumns(new_original_table_columns, is_common_handle);
 
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);

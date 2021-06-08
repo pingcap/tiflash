@@ -16,7 +16,7 @@ namespace DB
 
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_),
-      kvstore(std::make_shared<KVStore>(context, raft_config.snapshot_apply_method)),
+      kvstore(std::make_shared<KVStore>(context)),
       region_table(context),
       background_service(nullptr),
       cluster(raft_config.pd_addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>()

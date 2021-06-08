@@ -10,23 +10,6 @@ namespace DB
 
 namespace DM
 {
-template <int MODE>
-void DMVersionFilterBlockInputStream<MODE>::readPrefix()
-{
-    forEachChild([](IBlockInputStream & child) {
-        child.readPrefix();
-        return false;
-    });
-}
-
-template <int MODE>
-void DMVersionFilterBlockInputStream<MODE>::readSuffix()
-{
-    forEachChild([](IBlockInputStream & child) {
-        child.readSuffix();
-        return false;
-    });
-}
 
 static constexpr size_t UNROLL_BATCH = 64;
 
