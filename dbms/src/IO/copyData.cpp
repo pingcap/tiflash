@@ -3,6 +3,7 @@
 #include <IO/WriteBuffer.h>
 #include <IO/copyData.h>
 
+#include <limits>
 
 namespace DB
 {
