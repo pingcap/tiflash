@@ -175,7 +175,7 @@ inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & tim
     {
         /// - 3600 * 24 + my_time.hour * 3600 + my_time.minute * 60 + my_time.second is UTC based, need to adjust
         /// the epoch according to the input time_zone
-        return -3600 * 24 + my_time.hour * 3600 + my_time.minute * 60 + my_time.second - time_zone.getOffsetAtStartEpoch();
+        return -3600 * 24 + my_time.hour * 3600 + my_time.minute * 60 + my_time.second - time_zone.getOffsetAtStartOfEpoch();
     }
     else
     {

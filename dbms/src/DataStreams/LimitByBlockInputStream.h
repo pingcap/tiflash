@@ -3,7 +3,6 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 
 #include <Common/HashTable/HashMap.h>
-#include <Common/UInt128.h>
 
 
 namespace DB

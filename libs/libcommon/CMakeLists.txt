@@ -20,7 +20,7 @@ endif ()
 add_library (common ${SPLIT_SHARED}
     src/DateLUT.cpp
     src/DateLUTImpl.cpp
-    src/preciseExp10.c
+    src/preciseExp10.cpp
     src/shift10.cpp
     src/mremap.cpp
     src/JSON.cpp

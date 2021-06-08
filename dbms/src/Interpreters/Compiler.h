@@ -13,7 +13,7 @@
 
 #include <Core/Types.h>
 #include <Common/Exception.h>
-#include <Common/UInt128.h>
+#include <Common/HashTable/Hash.h>
 #include <Common/SharedLibrary.h>
 #include <common/ThreadPool.h>
 

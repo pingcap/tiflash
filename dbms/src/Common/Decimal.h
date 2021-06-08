@@ -197,7 +197,7 @@ bool parseDecimal(const char *str, size_t len, bool negative, Field& field);
 class DecimalMaxValue final : public ext::singleton<DecimalMaxValue> {
     friend class ext::singleton<DecimalMaxValue>;
 
-    Int256 number[decimal_max_prec+1];
+    Int256 number[decimal_max_prec+1] = {0};
 
 public:
     DecimalMaxValue() {

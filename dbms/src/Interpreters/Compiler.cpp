@@ -63,7 +63,7 @@ static Compiler::HashedKey getHash(const std::string & key)
     hash.update(key.data(), key.size());
 
     Compiler::HashedKey res;
-    hash.get128(res.low, res.high);
+    hash.get128(res);
     return res;
 }
 
@@ -72,7 +72,7 @@ static Compiler::HashedKey getHash(const std::string & key)
 static std::string hashedKeyToFileName(Compiler::HashedKey hashed_key)
 {
     WriteBufferFromOwnString out;
-    out << hashed_key.low << '_' << hashed_key.high;
+    out << hashed_key.items[0] << '_' << hashed_key.items[1];
     return out.str();
 }
 

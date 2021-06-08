@@ -259,8 +259,8 @@ String MergeTreeDataPart::getNewName(const MergeTreePartInfo & new_part_info) co
         /// the merged part name be determined only by source part names.
         /// It is simpler this way when the real min and max dates for the block range can change
         /// (e.g. after an ALTER DELETE command).
-        DayNum_t min_date;
-        DayNum_t max_date;
+        DayNum min_date;
+        DayNum max_date;
         MergeTreePartInfo::parseMinMaxDatesFromPartName(name, min_date, max_date);
         return new_part_info.getPartNameV0(min_date, max_date);
     }
@@ -268,21 +268,21 @@ String MergeTreeDataPart::getNewName(const MergeTreePartInfo & new_part_info) co
         return new_part_info.getPartName();
 }
 
-DayNum_t MergeTreeDataPart::getMinDate() const
+DayNum MergeTreeDataPart::getMinDate() const
 {
     if (storage.minmax_idx_date_column_pos != -1 && minmax_idx.initialized)
-        return DayNum_t(minmax_idx.min_values[storage.minmax_idx_date_column_pos].get<UInt64>());
+        return DayNum(minmax_idx.min_values[storage.minmax_idx_date_column_pos].get<UInt64>());
     else
-        return DayNum_t();
+        return DayNum();
 }
 
 
-DayNum_t MergeTreeDataPart::getMaxDate() const
+DayNum MergeTreeDataPart::getMaxDate() const
 {
     if (storage.minmax_idx_date_column_pos != -1 && minmax_idx.initialized)
-        return DayNum_t(minmax_idx.max_values[storage.minmax_idx_date_column_pos].get<UInt64>());
+        return DayNum(minmax_idx.max_values[storage.minmax_idx_date_column_pos].get<UInt64>());
     else
-        return DayNum_t();
+        return DayNum();
 }
 
 
@@ -517,8 +517,8 @@ void MergeTreeDataPart::loadPartitionAndMinMaxIndex()
     }
     else if (storage.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
     {
-        DayNum_t min_date;
-        DayNum_t max_date;
+        DayNum min_date;
+        DayNum max_date;
         MergeTreePartInfo::parseMinMaxDatesFromPartName(name, min_date, max_date);
 
         const auto & date_lut = DateLUT::instance();
