@@ -3,7 +3,17 @@
 #include <limits>
 #include <string>
 #include <vector>
+#include <Poco/Types.h>
 #include <common/types.h>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#if defined(__clang__)
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#endif
+#include <boost/multiprecision/cpp_int.hpp>
+#pragma GCC diagnostic pop
 
 namespace DB
 {

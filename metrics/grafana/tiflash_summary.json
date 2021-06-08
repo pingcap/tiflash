@@ -554,11 +554,35 @@
               "refId": "G"
             },
             {
+              "expr": "sum(tiflash_system_asynchronous_metric_mimalloc_current_rss{tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"})",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "mimalloc_rss",
+              "refId": "H"
+            },
+            {
+              "expr": "sum(tiflash_system_asynchronous_metric_mimalloc_current_commit{tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"})",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "mimalloc_commit",
+              "refId": "I"
+            },
+            {
+              "expr": "sum(tiflash_system_asynchronous_metric_mmap_alive{tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"})",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "mmap",
+              "refId": "J"
+            },
+            {
               "expr": "tiflash_proxy_process_resident_memory_bytes{tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{instance}}",
-              "refId": "H"
+              "refId": "K"
             }
           ],
           "thresholds": [],

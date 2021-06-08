@@ -1,0 +1,77 @@
+# known issue, wait for first-row fix.
+#mysql> drop table if exists test.t
+#mysql> create table test.t(a char(5), b char(5))
+#mysql> alter table test.t set tiflash replica 1
+#mysql> insert into test.t values(null, 'y')
+#mysql> insert into test.t values('x', null)
+#func> wait_table test t
+#mysql> select concat(a, b), count(*) from test.t group by 1;
+#+-----------------+----------+
+#| concat(a, b) | count(*) |
+#+-----------------+----------+
+#| NULL       |        2 |
+#+-----------------+----------+
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int, b char(10), c varchar(10));
+mysql> alter table test.t set tiflash replica 1
+func> wait_table test t
+
+mysql> insert into test.t values(1, '次', '测test试');
+mysql> insert into test.t values(114, 'null', '112');
+mysql> insert into test.t values(null, '114', '614');
+mysql> insert into test.t values(360, null, '-0-');
+mysql> insert into test.t values(360, 124, null);
+mysql> insert into test.t values(null, null, null);
+mysql> analyze table test.t;
+
+#mysql> select concat(a, b, c), count(*) from test.t group by 1;
+#+-----------------+----------+
+#| concat(a, b, c) | count(*) |
+#+-----------------+----------+
+#| NULL       |        4 |
+#| 114null112      |        1 |
+#| 1次测test试     |        1 |
+#+-----------------+----------+
+
+
+mysql> select count(*) from test.t where concat(a, b, c) is null group by concat(a, b, c);
++----------+
+| count(*) |
++-----------+
+|        4 |
++----------+
+
+mysql> select count(*) from test.t where concat(a, b, c)='114null112' group by concat(a, b, c);
++----------+
+| count(*) |
++-----------+
+|        1 |
++----------+
+
+mysql> select count(*) from test.t where concat(a, b, c)='1次测test试' group by concat(a, b, c);
++----------+
+| count(*) |
++-----------+
+|        1 |
++----------+
+
+mysql> select concat(a, NULL), count(*) from test.t group by 1;
++-----------------+----------+
+| concat(a, NULL) | count(*) |
++-----------------+----------+
+| NULL            |        6 |
++-----------------+----------+
+
+mysql> select concat(b), count(*) from test.t group by 1;
++-----------+----------+
+| concat(b) | count(*) |
++-----------+----------+
+| null      |        1 |
+| 124       |        1 |
+| NULL      |        2 |
+| 114       |        1 |
+| 次        |        1 |
++-----------+----------+
+
+mysql> drop table test.t;

@@ -1,0 +1,139 @@
+mysql> drop table if exists test.t
+mysql> create table test.t(a datetime, b char(20), c int);
+mysql> alter table test.t set tiflash replica 1;
+mysql> insert into test.t values('2021-02-28 23:59:59', '2021-03-01', 1);
+mysql> insert into test.t values('2021-03-01', '2021-02-28 23:59:59', 2);
+mysql> insert into test.t values('2021-03-01', '2021-03-01', 3);
+mysql> insert into test.t values('2021-03-01', '2020-02-28', 4);
+mysql> insert into test.t values('2020-03-01', '2020-02-28', 5);
+mysql> insert into test.t values('2020-02-28 23:59:59', '2020-03-01', 6);
+mysql> insert into test.t values('2020-03-01', '2020-02-28 23:59:59', 7);
+mysql> insert into test.t values('2021-03-01', '2021-03-01', 8);
+mysql> insert into test.t values('2020-02-28', '2021-03-01', null);
+mysql> insert into test.t values('2020-02-28', '2020-03-01', 10);
+mysql> insert into test.t values(null, '2020-03-01', 10);
+mysql> insert into test.t values('2020-02-28', null, null);
+func> wait_table test t
+
+mysql> set @@session.tidb_isolation_read_engines = "tikv";select count(*), date_sub(a, INTERVAL c DAY) from test.t group by 2;
++----------+-----------------------------+
+| count(*) | date_sub(a, INTERVAL c DAY) |
++----------+-----------------------------+
+|        1 | 2020-02-23 00:00:00         |
+|        1 | 2021-02-21 00:00:00         |
+|        1 | 2021-02-26 00:00:00         |
+|        1 | 2021-02-27 00:00:00         |
+|        1 | 2021-02-27 23:59:59         |
+|        1 | 2021-02-25 00:00:00         |
+|        1 | 2020-02-22 23:59:59         |
+|        1 | 2020-02-25 00:00:00         |
+|        3 | NULL                        |
+|        1 | 2020-02-18 00:00:00         |
++----------+-----------------------------+
+
+mysql> set @@session.tidb_isolation_read_engines = "tiflash";select count(*), date_sub(a, INTERVAL c DAY) from test.t group by 2;
++----------+-----------------------------+
+| count(*) | date_sub(a, INTERVAL c DAY) |
++----------+-----------------------------+
+|        1 | 2020-02-23 00:00:00         |
+|        1 | 2021-02-21 00:00:00         |
+|        1 | 2021-02-26 00:00:00         |
+|        1 | 2021-02-27 00:00:00         |
+|        1 | 2021-02-27 23:59:59         |
+|        1 | 2021-02-25 00:00:00         |
+|        1 | 2020-02-22 23:59:59         |
+|        1 | 2020-02-25 00:00:00         |
+|        3 | NULL                        |
+|        1 | 2020-02-18 00:00:00         |
++----------+-----------------------------+
+
+mysql> set @@session.tidb_isolation_read_engines = "tikv";select count(*), date_sub(b, INTERVAL c SECOND) from test.t group by 2;
++----------+--------------------------------+
+| count(*) | date_sub(b, INTERVAL c SECOND) |
++----------+--------------------------------+
+|        1 | 2020-02-29 23:59:54            |
+|        2 | 2021-02-28 23:59:57            |
+|        1 | 2020-02-27 23:59:56            |
+|        1 | 2021-02-28 23:59:52            |
+|        1 | 2020-02-28 23:59:52            |
+|        2 | NULL                           |
+|        1 | 2021-02-28 23:59:59            |
+|        1 | 2020-02-27 23:59:55            |
+|        2 | 2020-02-29 23:59:50            |
++----------+--------------------------------+
+
+mysql> set @@session.tidb_isolation_read_engines = "tiflash";select count(*), date_sub(b, INTERVAL c SECOND) from test.t group by 2;
++----------+--------------------------------+
+| count(*) | date_sub(b, INTERVAL c SECOND) |
++----------+--------------------------------+
+|        1 | 2020-02-29 23:59:54            |
+|        2 | 2021-02-28 23:59:57            |
+|        1 | 2020-02-27 23:59:56            |
+|        1 | 2021-02-28 23:59:52            |
+|        1 | 2020-02-28 23:59:52            |
+|        2 | NULL                           |
+|        1 | 2021-02-28 23:59:59            |
+|        1 | 2020-02-27 23:59:55            |
+|        2 | 2020-02-29 23:59:50            |
++----------+--------------------------------+
+
+mysql> select date_sub(b, INTERVAL c SECOND) from test.t where date_sub(b, INTERVAL c SECOND)='2020-02-29 23:59:54';
++--------------------------------+
+| date_sub(b, INTERVAL c SECOND) |
++--------------------------------+
+| 2020-02-29 23:59:54            |
++--------------------------------+
+mysql> select date_sub(b, INTERVAL c SECOND) from test.t where date_sub(b, INTERVAL c SECOND)='2020-02-27 23:59:56';
++--------------------------------+
+| date_sub(b, INTERVAL c SECOND) |
++--------------------------------+
+| 2020-02-27 23:59:56            |
++--------------------------------+
+mysql> select date_sub(b, INTERVAL c SECOND) from test.t where date_sub(b, INTERVAL c SECOND)='2021-02-28 23:59:52';
++--------------------------------+
+| date_sub(b, INTERVAL c SECOND) |
++--------------------------------+
+| 2021-02-28 23:59:52            |
++--------------------------------+
+mysql> select date_sub(b, INTERVAL c SECOND) from test.t where date_sub(b, INTERVAL c SECOND)='2020-02-28 23:59:52';
++--------------------------------+
+| date_sub(b, INTERVAL c SECOND) |
++--------------------------------+
+| 2020-02-28 23:59:52            |
++--------------------------------+
+mysql> select date_sub(b, INTERVAL c SECOND) from test.t where date_sub(b, INTERVAL c SECOND)='2021-02-28 23:59:59';
++--------------------------------+
+| date_sub(b, INTERVAL c SECOND) |
++--------------------------------+
+| 2021-02-28 23:59:59            |
++--------------------------------+
+mysql> select date_sub(b, INTERVAL c SECOND) from test.t where date_sub(b, INTERVAL c SECOND)='2020-02-27 23:59:55';
++--------------------------------+
+| date_sub(b, INTERVAL c SECOND) |
++--------------------------------+
+| 2020-02-27 23:59:55            |
++--------------------------------+
+
+mysql> select date_sub(b, INTERVAL c SECOND) from test.t where date_sub(b, INTERVAL c SECOND)='2021-02-28 23:59:57';
++--------------------------------+
+| date_sub(b, INTERVAL c SECOND) |
++--------------------------------+
+|2021-02-28 23:59:57            |
+|2021-02-28 23:59:57            |
++--------------------------------+
+
+mysql> select date_sub(b, INTERVAL c SECOND) from test.t where date_sub(b, INTERVAL c SECOND)='2020-02-29 23:59:50';
++--------------------------------+
+| date_sub(b, INTERVAL c SECOND) |
++--------------------------------+
+|2020-02-29 23:59:50            |
+|2020-02-29 23:59:50            |
++--------------------------------+
+
+mysql> select date_sub(b, INTERVAL c SECOND) from test.t where date_sub(b, INTERVAL c SECOND) is NULL;
++--------------------------------+
+| date_sub(b, INTERVAL c SECOND) |
++--------------------------------+
+|NULL            |
+|NULL            |
++--------------------------------+

@@ -3,6 +3,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/typeid_cast.h>
 #include <Core/SortDescription.h>
+#include <Functions/FunctionsConversion.h>
 #include <Interpreters/sortBlock.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
@@ -1985,7 +1986,7 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);
 
-    std::atomic_store<Block>(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
+    std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
 }
 
 

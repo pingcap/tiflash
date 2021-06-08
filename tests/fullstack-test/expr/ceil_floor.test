@@ -1,0 +1,23 @@
+mysql> drop table if exists test.t
+mysql> create table test.t(ld decimal(10,2), bd decimal(50, 25), f float, i integer)
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values(1.2, 2.3, 3.4, 4)
+
+func> wait_table test t
+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(ceil(ld)), sum(ceil(bd)), sum(ceil(f)), sum(ceil(i)) from test.t;
++---------------+---------------+--------------+--------------+
+| sum(ceil(ld)) | sum(ceil(bd)) | sum(ceil(f)) | sum(ceil(i)) |
++---------------+---------------+--------------+--------------+
+|             2 |             3 |            4 |            4 |
++---------------+---------------+--------------+--------------+
+
+mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(floor(ld)), sum(floor(bd)), sum(floor(f)), sum(ceil(i)) from test.t;
++----------------+----------------+---------------+--------------+
+| sum(floor(ld)) | sum(floor(bd)) | sum(floor(f)) | sum(ceil(i)) |
++----------------+----------------+---------------+--------------+
+|              1 |              2 |             3 |            4 |
++----------------+----------------+---------------+--------------+
+
+mysql> drop table if exists test.t
