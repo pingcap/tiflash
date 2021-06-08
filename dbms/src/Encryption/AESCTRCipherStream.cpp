@@ -4,7 +4,9 @@
 #include <Encryption/KeyManager.h>
 #include <Storages/Transaction/FileEncryption.h>
 
+#include <cassert>
 #include <cstddef>
+#include <limits>
 
 namespace DB
 {
