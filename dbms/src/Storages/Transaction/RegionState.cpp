@@ -4,15 +4,15 @@
 namespace DB
 {
 
-RegionState::RegionState(RegionState && region_state) : base(std::move(region_state.base)), region_range(region_state.region_range) {}
+RegionState::RegionState(RegionState && region_state) noexcept : base(std::move(region_state.base)), region_range(std::move(region_state.region_range)) {}
 RegionState::RegionState(Base && region_state) : base(std::move(region_state)) { updateRegionRange(); }
-RegionState & RegionState::operator=(RegionState && from)
+RegionState & RegionState::operator=(RegionState && from) noexcept
 {
-    if (&from == this)
+    if (this == std::addressof(from))
         return *this;
 
-    (Base &)* this = (Base &&) from;
-    region_range = std::move(from.region_range);
+    this->base = std::move(from.base);
+    this->region_range = std::move(from.region_range);
     return *this;
 }
 
