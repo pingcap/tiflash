@@ -15,6 +15,11 @@
 #include <boost/multiprecision/cpp_int.hpp>
 #pragma GCC diagnostic pop
 
+/// Remove the population of thread_local from Poco
+#ifdef thread_local
+#   undef thread_local
+#endif
+
 namespace DB
 {
 

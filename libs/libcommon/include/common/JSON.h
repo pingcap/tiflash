@@ -38,7 +38,7 @@
   */
 
 
-POCO_DECLARE_EXCEPTION(Foundation_API, JSONException, Poco::Exception)
+POCO_DECLARE_EXCEPTION(Foundation_API, JSONException, Poco::Exception);
 
 
 class JSON

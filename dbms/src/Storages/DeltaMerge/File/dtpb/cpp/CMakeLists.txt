@@ -8,8 +8,6 @@ else ()
     set (CMAKE_CXX_STANDARD 17)
     set (CMAKE_CXX_EXTENSIONS 1) # https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html#prop_tgt:CXX_EXTENSIONS
     set (CMAKE_CXX_STANDARD_REQUIRED ON)
-    # set (CXX_FLAGS_INTERNAL_COMPILER "-std=c++1z")
-    # set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 endif ()
 
 if (NOT EXISTS "${ClickHouse_SOURCE_DIR}/dbms/src/Storages/DeltaMerge/File/dtpb/cpp/dtpb/dmfile.pb.h")

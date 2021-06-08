@@ -5,28 +5,6 @@
 
 #include "wide_integer.h"
 
-/// Remove the population of thread_local from Poco
-#ifdef thread_local
-#   undef thread_local
-#endif
-
-#if !defined(__GLIBCXX_BITSIZE_INT_N_0) && defined(__SIZEOF_INT128__)
-namespace std
-{
-template <>
-struct numeric_limits<__int128_t>
-{
-    static constexpr bool is_specialized = true;
-    static constexpr bool is_signed = true;
-    static constexpr bool is_integer = true;
-    static constexpr int radix = 2;
-    static constexpr int digits = 128;
-    static constexpr __int128_t min() { return __uint128_t(1) << 127; }               // used in boost 1.65.1+
-    static constexpr __int128_t max() { return __uint128_t(-1)>>1; } // used in boost 1.65.1+
-};
-} // namespace std
-#endif
-
 using Int8 = int8_t;
 using Int16 = int16_t;
 using Int32 = int32_t;
