@@ -37,7 +37,8 @@ cmake "$SRCPATH" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DENABLE_TESTING=OFF \
       -DENABLE_TESTS=OFF \
       -Wno-dev \
-      -DUSE_CCACHE=OFF
+      -DUSE_CCACHE=OFF \
+      -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl
 
 make -j $NPROC tiflash
 
