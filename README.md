@@ -35,6 +35,11 @@ $ popd
 $ pushd contrib/tipb
 $ ./generate-cpp.sh
 $ popd
+
+# Additionally if you want to update dtpb
+$ pushd dbms/src/Storages/DeltaMerge/File/dtpb
+$ ./generate_cpp.sh
+$ popd
 ```
 
 ### Build tiflash-proxy
