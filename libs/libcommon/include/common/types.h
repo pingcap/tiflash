@@ -15,12 +15,12 @@ using UInt16 = uint16_t;
 using UInt32 = uint32_t;
 using UInt64 = uint64_t;
 
-using Int128 = wide::integer<128, signed>;
-using UInt128 = wide::integer<128, unsigned>;
-using Int256 = wide::integer<256, signed>;
-using UInt256 = wide::integer<256, unsigned>;
-using Int512 = wide::integer<512, signed>;
-using UInt512 = wide::integer<512, unsigned>;
+using Int128 = math::wide_integer::int128_t;
+using UInt128 = math::wide_integer::uint128_t;
+using Int256 = math::wide_integer::int256_t;
+using UInt256 = math::wide_integer::uint256_t;
+using Int512 = math::wide_integer::int512_t;
+using UInt512 = math::wide_integer::uint512_t;
 
 using String = std::string;
 
