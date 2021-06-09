@@ -42,17 +42,14 @@ public:
     }
 
 protected:
-    SegmentPtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
+    SegmentPtr reload(ColumnDefinesPtr cols = {}, DB::Settings && db_settings = DB::Settings())
     {
         *db_context  = DMTestEnv::getContext(db_settings);
         path_pool    = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
         storage_pool->restore();
-        ColumnDefinesPtr cols;
-        if (!pre_define_columns)
+        if (!cols)
             cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
-        else
-            cols = pre_define_columns;
         setColumns(cols);
 
         auto segment_id = storage_pool->newMetaPageId();

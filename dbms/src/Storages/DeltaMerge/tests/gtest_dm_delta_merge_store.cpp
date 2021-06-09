@@ -45,7 +45,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, /
 namespace tests
 {
 
-// Read write test suit for DeltaMergeStore.
+// Simple test suit for DeltaMergeStore.
 class DeltaMergeStore_test : public ::testing::Test
 {
 public:
@@ -266,17 +266,22 @@ CATCH
 TEST_F(DeltaMergeStore_test, AddExtraColumn)
 try
 {
+    auto log = &Poco::Logger::get(GET_GTEST_FULL_NAME);
     for (const auto & pk_type : {
              DMTestEnv::PkType::HiddenTiDBRowID,
              DMTestEnv::PkType::CommonHandle,
-             DMTestEnv::PkType::PkIsHandle,
+             DMTestEnv::PkType::PkIsHandleInt64,
+             DMTestEnv::PkType::PkIsHandleInt32,
          })
     {
+        LOG_INFO(log, "Test case for " << DMTestEnv::PkTypeToString(pk_type) << " begin.");
+
         auto cols = DMTestEnv::getDefaultColumns(pk_type);
         store     = reload(cols, (pk_type == DMTestEnv::PkType::CommonHandle), 1);
 
-        ASSERT_EQ(store->isCommonHandle(), pk_type == DMTestEnv::PkType::CommonHandle);
-        ASSERT_EQ(store->pkIsHandle(), pk_type == DMTestEnv::PkType::PkIsHandle);
+        ASSERT_EQ(store->isCommonHandle(), pk_type == DMTestEnv::PkType::CommonHandle) << DMTestEnv::PkTypeToString(pk_type);
+        ASSERT_EQ(store->pkIsHandle(), (pk_type == DMTestEnv::PkType::PkIsHandleInt64 || pk_type == DMTestEnv::PkType::PkIsHandleInt32))
+            << DMTestEnv::PkTypeToString(pk_type);
 
         const size_t nrows  = 20;
         const auto & handle = store->getHandle();
@@ -314,7 +319,7 @@ try
 
 
         BlockInputStreamPtr stream = std::make_shared<BlocksListBlockInputStream>(BlocksList{block1, block2});
-        stream                     = std::make_shared<PKSquashingBlockInputStream<false>>(stream, handle.id, store->isCommonHandle());
+        stream = std::make_shared<PKSquashingBlockInputStream<false>>(stream, EXTRA_HANDLE_COLUMN_ID, store->isCommonHandle());
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -324,11 +329,14 @@ try
             for (auto && iter : block)
             {
                 auto c = iter.column;
-                ASSERT_EQ(c->size(), block.rows()) << "unexpected num of rows for column [name=" << iter.name << "]";
+                ASSERT_EQ(c->size(), block.rows())
+                    << "unexpected num of rows for column [name=" << iter.name << "] " << DMTestEnv::PkTypeToString(pk_type);
             }
         }
         stream->readSuffix();
         ASSERT_EQ(num_rows_read, nrows + nrows_2);
+
+        LOG_INFO(log, "Test case for " << DMTestEnv::PkTypeToString(pk_type) << " done.");
     }
 }
 CATCH
@@ -1306,7 +1314,7 @@ try
 {
     if (mode == TestMode::V1_BlockOnly)
         return;
-    
+
     /// If users create an empty table with TiFlash replica, we will apply Region
     /// snapshot without any rows, which make it ingest with an empty DTFile list.
     /// Test whether we can clean the original data if `clear_data_in_range` is true.

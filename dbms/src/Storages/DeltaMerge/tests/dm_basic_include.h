@@ -59,7 +59,7 @@ public:
         return ::DB::tests::TiFlashTestEnv::getContext(settings);
     }
 
-    static constexpr const char * pk_name              = "_tidb_rowid";
+    static constexpr const char * pk_name = "_tidb_rowid";
 
     static constexpr const char * PK_NAME_PK_IS_HANDLE = "id";
 
@@ -73,8 +73,26 @@ public:
         CommonHandle,
         // If user define the primary key that is compatibility with UInt64, use that column
         // as the handle column
-        PkIsHandle,
+        PkIsHandleInt64,
+        PkIsHandleInt32,
     };
+
+    static String PkTypeToString(PkType type)
+    {
+        switch (type)
+        {
+        case PkType::HiddenTiDBRowID:
+            return "HiddenTiDBRowID";
+        case PkType::CommonHandle:
+            return "CommonHandle";
+        case PkType::PkIsHandleInt64:
+            return "PkIsHandleInt64";
+        case PkType::PkIsHandleInt32:
+            return "PkIsHandleInt32";
+        }
+        return "<unknown>";
+    }
+
     static ColumnDefinesPtr getDefaultColumns(PkType pk_type = PkType::HiddenTiDBRowID)
     {
         // Return [handle, ver, del] column defines
@@ -87,9 +105,14 @@ public:
         case PkType::CommonHandle:
             columns->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/true));
             break;
-        case PkType::PkIsHandle:
+        case PkType::PkIsHandleInt64:
             columns->emplace_back(ColumnDefine{2, PK_NAME_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_INT_TYPE});
             break;
+        case PkType::PkIsHandleInt32:
+            columns->emplace_back(ColumnDefine{2, PK_NAME_PK_IS_HANDLE, DataTypeFactory::instance().get("Int32")});
+            break;
+        default:
+            throw Exception("Unknown pk type for test");
         }
         columns->emplace_back(getVersionColumnDefine());
         columns->emplace_back(getTagColumnDefine());
