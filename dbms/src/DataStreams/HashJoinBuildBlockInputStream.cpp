@@ -3,10 +3,11 @@
 namespace DB
 {
 
-Block HashJoinBuildBlockInputStream::readImpl() {
-
-
-    return {} ;
+Block HashJoinBuildBlockInputStream::readImpl()
+{
+    Block block = children.back()->read();
+    join->insertFromBlockASync(block);
+    return block;
 }
 
-}
+} // namespace DB

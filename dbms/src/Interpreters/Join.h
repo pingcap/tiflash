@@ -258,7 +258,7 @@ public:
 
     bool insertFromBlock(const Block & block);
 
-    void insertFromBlockASync(const Block & block, ThreadPool & thread_pool);
+    void insertFromBlockASync(const Block & block);
 
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
@@ -461,7 +461,6 @@ private:
     SizeLimits limits;
 
     Block totals;
-
     /** Protect state for concurrent use in insertFromBlock and joinBlock.
       * Note that these methods could be called simultaneously only while use of StorageJoin,
       *  and StorageJoin only calls these two methods.
