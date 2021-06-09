@@ -103,10 +103,11 @@ public:
     /// Start background threads, start work.
     void process()
     {
-        active_threads = max_threads;
+        /// start with one active threads, once the first thread get a block, more threads will be generated in the first thread.
+        active_threads = 1;
+        // must reserve here
         threads.reserve(max_threads);
-        for (size_t i = 0; i < max_threads; ++i)
-            threads.emplace_back(std::bind(&ParallelInputsProcessor::thread, this, current_memory_tracker, i));
+        threads.emplace_back(std::bind(&ParallelInputsProcessor::thread, this, current_memory_tracker, 0));
     }
 
     /// Ask all sources to stop earlier than they run out.
@@ -139,9 +140,11 @@ public:
     {
         if (joined_threads)
             return;
-
-        for (auto & thread : threads)
-            thread.join();
+        /// NOTE: the vector of threads should reserve in advance, otherwise it would cause errors.
+        /// join the first thread, then join rests.
+        threads[0].join();
+        for (unsigned long i = 1;i < threads.size(); ++i)
+            threads[i].join();
 
         threads.clear();
         joined_threads = true;
@@ -272,6 +275,12 @@ private:
             {
                 if (finish)
                     break;
+                /// generate more threads to work after the first one, only do once!
+                std::call_once(one_more,[&]() {
+                    active_threads = max_threads;
+                    for (size_t i = 1; i < max_threads; ++i)
+                        threads.emplace_back(std::bind(&ParallelInputsProcessor::thread, this, current_memory_tracker, i));
+                });
 
                 /// If this source is not run out yet, then put the resulting block in the ready queue.
                 {
@@ -348,6 +357,7 @@ private:
     std::atomic<bool> joined_threads { false };
 
     Logger * log = &Logger::get("ParallelInputsProcessor");
+    std::once_flag one_more;
 };
 
 
