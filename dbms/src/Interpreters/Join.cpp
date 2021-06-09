@@ -659,11 +659,10 @@ bool Join::insertFromBlock(const Block & block)
     return insertFromBlockInternal(stored_block, 0);
 }
 
-void Join::insertFromBlockASync(const Block & block, ThreadPool & thread_pool)
+void Join::insertFromBlockASync(const Block & block)
 {
     if (empty())
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
-    std::shared_lock lock(rwlock);
     Block * stored_block = nullptr;
     size_t block_index = 0;
     {
@@ -673,17 +672,12 @@ void Join::insertFromBlockASync(const Block & block, ThreadPool & thread_pool)
         block_index = blocks.size();
         original_blocks.push_back(block);
     }
-    auto memory_tracker = current_memory_tracker;
-    thread_pool.schedule([&, stored_block, block_index, memory_tracker]
+    if (build_set_exceeded.load())
+        return;
+    if (!insertFromBlockInternal(stored_block, block_index))
     {
-        current_memory_tracker = memory_tracker;
-        if (build_set_exceeded.load())
-            return;
-        if (!insertFromBlockInternal(stored_block, block_index))
-        {
-            build_set_exceeded.store(true);
-        }
-    });
+        build_set_exceeded.store(true);
+    }
 }
 
 bool Join::insertFromBlockInternal(Block * stored_block, size_t block_index)
