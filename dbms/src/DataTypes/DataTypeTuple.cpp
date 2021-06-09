@@ -294,11 +294,11 @@ void DataTypeTuple::enumerateStreams(const StreamCallback & callback, SubstreamP
 
 void DataTypeTuple::serializeBinaryBulkWithMultipleStreams(
     const IColumn & column,
-    OutputStreamGetter getter,
+    const OutputStreamGetter & getter,
     size_t offset,
     size_t limit,
     bool position_independent_encoding,
-    SubstreamPath path) const
+    SubstreamPath & path) const
 {
     path.push_back(Substream::TupleElement);
     for (const auto i : ext::range(0, ext::size(elems)))
@@ -311,11 +311,11 @@ void DataTypeTuple::serializeBinaryBulkWithMultipleStreams(
 
 void DataTypeTuple::deserializeBinaryBulkWithMultipleStreams(
     IColumn & column,
-    InputStreamGetter getter,
+    const InputStreamGetter & getter,
     size_t limit,
     double avg_value_size_hint,
     bool position_independent_encoding,
-    SubstreamPath path) const
+    SubstreamPath & path) const
 {
     path.push_back(Substream::TupleElement);
     for (const auto i : ext::range(0, ext::size(elems)))

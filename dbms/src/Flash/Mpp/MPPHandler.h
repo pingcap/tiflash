@@ -198,18 +198,14 @@ struct MPPTunnelSet
     // this is a broadcast writing.
     void write(tipb::SelectResponse & response)
     {
-        std::string data;
-        response.SerializeToString(&data);
         mpp::MPPDataPacket packet;
-        packet.set_data(data);
+        response.SerializeToString(packet.mutable_data());
         tunnels[0]->write(packet);
 
         if (tunnels.size() > 1)
         {
             clearExecutionSummaries(response);
-            data.clear();
-            response.SerializeToString(&data);
-            packet.set_data(data);
+            response.SerializeToString(packet.mutable_data());
             for (size_t i = 1; i < tunnels.size(); i++)
             {
                 tunnels[i]->write(packet);
@@ -224,10 +220,8 @@ struct MPPTunnelSet
         {
             clearExecutionSummaries(response);
         }
-        std::string data;
-        response.SerializeToString(&data);
         mpp::MPPDataPacket packet;
-        packet.set_data(data);
+        response.SerializeToString(packet.mutable_data());
         tunnels[partition_id]->write(packet);
     }
 
