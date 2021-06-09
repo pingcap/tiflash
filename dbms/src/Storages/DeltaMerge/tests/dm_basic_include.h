@@ -59,12 +59,38 @@ public:
         return ::DB::tests::TiFlashTestEnv::getContext(settings);
     }
 
-    static constexpr const char * pk_name = "_tidb_rowid";
+    static constexpr const char * pk_name              = "_tidb_rowid";
 
-    static ColumnDefinesPtr getDefaultColumns(bool is_common_handle = false)
+    static constexpr const char * PK_NAME_PK_IS_HANDLE = "id";
+
+    enum class PkType
     {
+        // If the primary key is composed of multiple columns and non-clustered-index,
+        // or users don't define the primary key, TiDB will add a hidden "_tidb_rowid" column
+        // as the handle column
+        HiddenTiDBRowID,
+        // Common handle for clustered-index since 5.0.0
+        CommonHandle,
+        // If user define the primary key that is compatibility with UInt64, use that column
+        // as the handle column
+        PkIsHandle,
+    };
+    static ColumnDefinesPtr getDefaultColumns(PkType pk_type = PkType::HiddenTiDBRowID)
+    {
+        // Return [handle, ver, del] column defines
         ColumnDefinesPtr columns = std::make_shared<ColumnDefines>();
-        columns->emplace_back(getExtraHandleColumnDefine(is_common_handle));
+        switch (pk_type)
+        {
+        case PkType::HiddenTiDBRowID:
+            columns->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
+            break;
+        case PkType::CommonHandle:
+            columns->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/true));
+            break;
+        case PkType::PkIsHandle:
+            columns->emplace_back(ColumnDefine{2, PK_NAME_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_INT_TYPE});
+            break;
+        }
         columns->emplace_back(getVersionColumnDefine());
         columns->emplace_back(getTagColumnDefine());
         return columns;
