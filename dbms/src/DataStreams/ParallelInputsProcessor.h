@@ -276,7 +276,7 @@ private:
                 if (finish)
                     break;
                 /// generate more threads to work after the first one, only do once!
-                std::call_once(oneMore,[&]() {
+                std::call_once(one_more,[&]() {
                     active_threads = max_threads;
                     for (size_t i = 1; i < max_threads; ++i)
                         threads.emplace_back(std::bind(&ParallelInputsProcessor::thread, this, current_memory_tracker, i));
@@ -357,7 +357,7 @@ private:
     std::atomic<bool> joined_threads { false };
 
     Logger * log = &Logger::get("ParallelInputsProcessor");
-    std::once_flag oneMore;
+    std::once_flag one_more;
 };
 
 
