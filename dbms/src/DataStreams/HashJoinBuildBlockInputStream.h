@@ -14,6 +14,7 @@ public:
     {
         children.push_back(input);
         join = join_;
+        stream_index = join_->getBuildStreamIndex();
     }
     String getName() const override { return "HashJoinBuildBlockInputStream"; }
     Block getHeader() const override { return children.back()->getHeader(); }
@@ -23,6 +24,7 @@ protected:
 
 private:
     JoinPtr join;
+    size_t stream_index;
 };
 
 } // namespace DB

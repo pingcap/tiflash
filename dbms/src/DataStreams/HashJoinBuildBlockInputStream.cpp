@@ -6,7 +6,7 @@ namespace DB
 Block HashJoinBuildBlockInputStream::readImpl()
 {
     Block block = children.back()->read();
-    join->insertFromBlockASync(block);
+    join->insertFromBlockASync(block, stream_index);
     return block;
 }
 
