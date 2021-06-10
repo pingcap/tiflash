@@ -1,8 +1,0 @@
-[submodule "contrib/boost/numeric/conversion"]
-	shallow = true
-[submodule "contrib/boost/numeric/interval"]
-	shallow = true
-[submodule "contrib/boost/numeric/odeint"]
-	shallow = true
-[submodule "contrib/boost/numeric/ublas"]
-	shallow = true
