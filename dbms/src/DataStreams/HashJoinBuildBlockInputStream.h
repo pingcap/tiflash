@@ -10,11 +10,11 @@ namespace DB
 class HashJoinBuildBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    HashJoinBuildBlockInputStream(const BlockInputStreamPtr & input, JoinPtr join_)
+    HashJoinBuildBlockInputStream(const BlockInputStreamPtr & input, JoinPtr join_,size_t stream_index_)
+        :stream_index(stream_index_)
     {
         children.push_back(input);
         join = join_;
-        stream_index = join_->getBuildStreamIndex();
     }
     String getName() const override { return "HashJoinBuildBlockInputStream"; }
     Block getHeader() const override { return children.back()->getHeader(); }
