@@ -25,9 +25,6 @@
 [submodule "contrib/ssl"]
 	path = contrib/ssl
 	url = https://github.com/ClickHouse-Extras/ssl.git
-[submodule "contrib/boost"]
-	path = contrib/boost
-	url = https://github.com/pingcap/boost-extra.git
 [submodule "contrib/kvproto"]
 	path = contrib/kvproto
 	url = https://github.com/pingcap/kvproto.git
