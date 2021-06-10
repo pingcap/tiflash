@@ -33,10 +33,10 @@ if (NOT Boost_SYSTEM_LIBRARY)
     set (Boost_INCLUDE_DIRS)
 
     # For boost from github:
-    file (GLOB Boost_INCLUDE_DIRS_ "${ClickHouse_SOURCE_DIR}/contrib/boost/libs/*/include")
+    file (GLOB Boost_INCLUDE_DIRS_ "${ClickHouse_SOURCE_DIR}/contrib/boost/*/include")
     list (APPEND Boost_INCLUDE_DIRS ${Boost_INCLUDE_DIRS_})
     # numeric has additional level
-    file (GLOB Boost_INCLUDE_DIRS_ "${ClickHouse_SOURCE_DIR}/contrib/boost/libs/numeric/*/include")
+    file (GLOB Boost_INCLUDE_DIRS_ "${ClickHouse_SOURCE_DIR}/contrib/boost/numeric/*/include")
     list (APPEND Boost_INCLUDE_DIRS ${Boost_INCLUDE_DIRS_})
 
     # For packaged version:

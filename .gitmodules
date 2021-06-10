@@ -50,3 +50,138 @@
 [submodule "contrib/mimalloc"]
 	path = contrib/mimalloc
 	url = https://github.com/microsoft/mimalloc
+[submodule "contrib/boost/algorithm"]
+	path = contrib/boost/algorithm
+	url = https://github.com/boostorg/algorithm
+[submodule "contrib/boost/align"]
+	path = contrib/boost/align
+	url = https://github.com/boostorg/align
+[submodule "contrib/boost/bind"]
+	path = contrib/boost/bind
+	url = https://github.com/boostorg/bind
+[submodule "contrib/boost/concept_check"]
+	path = contrib/boost/concept_check
+	url = https://github.com/boostorg/concept_check
+[submodule "contrib/boost/config"]
+	path = contrib/boost/config
+	url = https://github.com/boostorg/config
+[submodule "contrib/boost/container"]
+	path = contrib/boost/container
+	url = https://github.com/boostorg/container
+[submodule "contrib/boost/date_time"]
+	path = contrib/boost/date_time
+	url = https://github.com/boostorg/date_time
+[submodule "contrib/boost/detail"]
+	path = contrib/boost/detail
+	url = https://github.com/boostorg/detail
+[submodule "contrib/boost/endian"]
+	path = contrib/boost/endian
+	url = https://github.com/boostorg/endian
+[submodule "contrib/boost/exception"]
+	path = contrib/boost/exception
+	url = https://github.com/boostorg/exception
+[submodule "contrib/boost/filesystem"]
+	path = contrib/boost/filesystem
+	url = https://github.com/boostorg/filesystem
+[submodule "contrib/boost/function"]
+	path = contrib/boost/function
+	url = https://github.com/boostorg/function
+[submodule "contrib/boost/function_types"]
+	path = contrib/boost/function_types
+	url = https://github.com/boostorg/function_types
+[submodule "contrib/boost/functional"]
+	path = contrib/boost/functional
+	url = https://github.com/boostorg/functional
+[submodule "contrib/boost/geometry"]
+	path = contrib/boost/geometry
+	url = https://github.com/boostorg/geometry
+[submodule "contrib/boost/integer"]
+	path = contrib/boost/integer
+	url = https://github.com/boostorg/integer
+[submodule "contrib/boost/intrusive"]
+	path = contrib/boost/intrusive
+	url = https://github.com/boostorg/intrusive
+[submodule "contrib/boost/io"]
+	path = contrib/boost/io
+	url = https://github.com/boostorg/io
+[submodule "contrib/boost/iterator"]
+	path = contrib/boost/iterator
+	url = https://github.com/boostorg/iterator
+[submodule "contrib/boost/lexical_cast"]
+	path = contrib/boost/lexical_cast
+	url = https://github.com/boostorg/lexical_cast
+[submodule "contrib/boost/math"]
+	path = contrib/boost/math
+	url = https://github.com/boostorg/math
+[submodule "contrib/boost/move"]
+	path = contrib/boost/move
+	url = https://github.com/boostorg/move
+[submodule "contrib/boost/mpl"]
+	path = contrib/boost/mpl
+	url = https://github.com/boostorg/mpl
+[submodule "contrib/boost/multi_index"]
+	path = contrib/boost/multi_index
+	url = https://github.com/boostorg/multi_index
+[submodule "contrib/boost/core"]
+	path = contrib/boost/core
+	url = https://github.com/boostorg/core
+[submodule "contrib/boost/multiprecision"]
+	path = contrib/boost/multiprecision
+	url = https://github.com/boostorg/multiprecision
+[submodule "contrib/boost/optional"]
+	path = contrib/boost/optional
+	url = https://github.com/boostorg/optional
+[submodule "contrib/boost/predef"]
+	path = contrib/boost/predef
+	url = https://github.com/boostorg/predef
+[submodule "contrib/boost/preprocessor"]
+	path = contrib/boost/preprocessor
+	url = https://github.com/boostorg/preprocessor
+[submodule "contrib/boost/program_options"]
+	path = contrib/boost/program_options
+	url = https://github.com/boostorg/program_options
+[submodule "contrib/boost/qvm"]
+	path = contrib/boost/qvm
+	url = https://github.com/boostorg/qvm
+[submodule "contrib/boost/range"]
+	path = contrib/boost/range
+	url = https://github.com/boostorg/range
+[submodule "contrib/boost/serialization"]
+	path = contrib/boost/serialization
+	url = https://github.com/boostorg/serialization
+[submodule "contrib/boost/smart_ptr"]
+	path = contrib/boost/smart_ptr
+	url = https://github.com/boostorg/smart_ptr
+[submodule "contrib/boost/system"]
+	path = contrib/boost/system
+	url = https://github.com/boostorg/system
+[submodule "contrib/boost/tuple"]
+	path = contrib/boost/tuple
+	url = https://github.com/boostorg/tuple
+[submodule "contrib/boost/type_index"]
+	path = contrib/boost/type_index
+	url = https://github.com/boostorg/type_index
+[submodule "contrib/boost/type_traits"]
+	path = contrib/boost/type_traits
+	url = https://github.com/boostorg/type_traits
+[submodule "contrib/boost/utility"]
+	path = contrib/boost/utility
+	url = https://github.com/boostorg/utility
+[submodule "contrib/boost/variant"]
+	path = contrib/boost/variant
+	url = https://github.com/boostorg/variant
+[submodule "contrib/boost/winapi"]
+	path = contrib/boost/winapi
+	url = https://github.com/boostorg/winapi
+[submodule "contrib/boost/numeric/conversion"]
+	path = contrib/boost/numeric/conversion
+	url = https://github.com/boostorg/numeric_conversion
+[submodule "contrib/boost/numeric/interval"]
+	path = contrib/boost/numeric/interval
+	url = https://github.com/boostorg/interval
+[submodule "contrib/boost/numeric/odeint"]
+	path = contrib/boost/numeric/odeint
+	url = https://github.com/boostorg/odeint
+[submodule "contrib/boost/numeric/ublas"]
+	path = contrib/boost/numeric/ublas
+	url = https://github.com/boostorg/ublas

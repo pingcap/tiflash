@@ -196,6 +196,7 @@ config-9001.xml
 
 core
 !core/
+!contrib/boost/core
 vgcore*
 
 *.deb
