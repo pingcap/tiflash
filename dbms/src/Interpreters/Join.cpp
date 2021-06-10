@@ -64,7 +64,6 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     key_names_right(key_names_right_),
     use_nulls(use_nulls_),
     build_concurrency(std::max(1, build_concurrency_)),
-    build_stream_index(0),
     collators(collators_),
     left_filter_column(left_filter_column_),
     right_filter_column(right_filter_column_),
@@ -655,7 +654,7 @@ bool Join::insertFromBlock(const Block & block)
     return insertFromBlockInternal(stored_block, 0);
 }
 
-void Join::insertFromBlockASync(const Block & block, size_t stream_index)
+void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
     if (empty())
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);

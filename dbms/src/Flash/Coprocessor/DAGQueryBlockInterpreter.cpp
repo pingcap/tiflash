@@ -724,7 +724,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         other_eq_filter_from_in_column_name, other_condition_expr, max_block_size_for_cross_join);
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
-    right_pipeline.transform([&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr); });
+    size_t stream_index = 0;
+    right_pipeline.transform([&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++); });
     executeUnion(right_pipeline, max_streams);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;

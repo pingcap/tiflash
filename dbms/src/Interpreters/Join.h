@@ -258,7 +258,7 @@ public:
 
     bool insertFromBlock(const Block & block);
 
-    void insertFromBlockASync(const Block & block, size_t stream_index);
+    void insertFromBlock(const Block & block, size_t stream_index);
 
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
@@ -291,10 +291,7 @@ public:
     size_t getBuildConcurrency() const { return build_concurrency; }
     bool isBuildSetExceeded() const { return build_set_exceeded.load(); }
     size_t getNotJoinedStreamConcurrency() const { return build_concurrency; };
-    size_t getBuildStreamIndex() {
-        size_t index = build_stream_index++;
-        return index;
-    }
+
     void setFinishBuildTable(bool);
 
     /// Reference to the row in block.
@@ -411,7 +408,6 @@ private:
 
     size_t build_concurrency;
     std::atomic_bool build_set_exceeded;
-    std::atomic_uint build_stream_index;
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
