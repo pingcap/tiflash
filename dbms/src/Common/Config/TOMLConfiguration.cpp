@@ -31,7 +31,7 @@ bool TOMLConfiguration::getRaw(const std::string & key, std::string & value) con
         }
         return true;
     }
-    catch (std::out_of_range)
+    catch (const std::out_of_range &)
     {
         return false;
     }

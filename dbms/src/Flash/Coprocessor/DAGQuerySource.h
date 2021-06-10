@@ -32,10 +32,8 @@ struct StreamWriter
 
     void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
     {
-        std::string dag_data;
-        response.SerializeToString(&dag_data);
         ::coprocessor::BatchResponse resp;
-        resp.set_data(dag_data);
+        response.SerializeToString(resp.mutable_data());
         std::lock_guard<std::mutex> lk(write_mutex);
         writer->Write(resp);
     }

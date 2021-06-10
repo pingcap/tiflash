@@ -235,7 +235,7 @@ ColumnPtr ColumnFixedString::filter(const IColumn::Filter & filt, ssize_t result
         data_pos += n;
     }
 
-    return std::move(res);
+    return res;
 }
 
 ColumnPtr ColumnFixedString::permute(const Permutation & perm, size_t limit) const
@@ -263,7 +263,7 @@ ColumnPtr ColumnFixedString::permute(const Permutation & perm, size_t limit) con
     for (size_t i = 0; i < limit; ++i, offset += n)
         memcpySmallAllowReadWriteOverflow15(&res_chars[offset], &chars[perm[i] * n], n);
 
-    return std::move(res);
+    return res;
 }
 
 ColumnPtr ColumnFixedString::replicate(const Offsets & offsets) const
@@ -275,7 +275,7 @@ ColumnPtr ColumnFixedString::replicate(const Offsets & offsets) const
     auto res = ColumnFixedString::create(n);
 
     if (0 == col_size)
-        return std::move(res);
+        return res;
 
     Chars_t & res_chars = res->chars;
     res_chars.resize(n * offsets.back());
@@ -285,7 +285,7 @@ ColumnPtr ColumnFixedString::replicate(const Offsets & offsets) const
         for (size_t next_offset = offsets[i]; curr_offset < next_offset; ++curr_offset)
             memcpySmallAllowReadWriteOverflow15(&res->chars[curr_offset * n], &chars[i * n], n);
 
-    return std::move(res);
+    return res;
 }
 
 void ColumnFixedString::gather(ColumnGathererStream & gatherer)
