@@ -190,7 +190,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     mvcc_query_info->read_tso = settings.read_tso;
     // We need to validate regions snapshot after getting streams from storage.
     LearnerReadSnapshot learner_read_snapshot;
-    std::unordered_map<RegionID, const RegionInfo &> region_retry;
+    std::unordered_map<RegionVerID, const RegionInfo &> region_retry;
     if (!dag.isBatchCop())
     {
         if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *mvcc_query_info, table_id); info_retry)
@@ -200,7 +200,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     }
     else
     {
-        std::unordered_set<RegionID> force_retry;
+        std::unordered_set<RegionVerID> force_retry;
         for (;;)
         {
             try

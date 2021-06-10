@@ -11,14 +11,13 @@ namespace ErrorCodes
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-
 RegionException::RegionReadStatus GetRegionReadStatus(
     const RegionInfo & check_info, const RegionPtr & current_region, ImutRegionRangePtr & region_range)
 {
     if (!current_region)
         return RegionException::RegionReadStatus::NOT_FOUND;
     auto meta_snap = current_region->dumpRegionMetaSnapshot();
-    if (meta_snap.ver != check_info.region_version)
+    if (meta_snap.ver != check_info.region_ver_id.version)
         return RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
     // No need to check conf_version if its peer state is normal
     if (current_region->peerState() != raft_serverpb::PeerState::Normal)
@@ -28,19 +27,18 @@ RegionException::RegionReadStatus GetRegionReadStatus(
     return RegionException::RegionReadStatus::OK;
 }
 
-std::tuple<std::optional<std::unordered_map<RegionID, const RegionInfo &>>, RegionException::RegionReadStatus> //
-MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region_infos,
-    const std::unordered_set<RegionID> & region_force_retry, TMTContext & tmt, MvccQueryInfo & mvcc_info, TableID table_id)
+std::tuple<std::optional<std::unordered_map<RegionVerID, const RegionInfo &>>, RegionException::RegionReadStatus> //
+MakeRegionQueryInfos(const std::unordered_map<RegionVerID, RegionInfo> & dag_region_infos,
+    const std::unordered_set<RegionVerID> & region_force_retry, TMTContext & tmt, MvccQueryInfo & mvcc_info, TableID table_id)
 {
     mvcc_info.regions_query_info.clear();
-    std::unordered_map<RegionID, const RegionInfo &> region_need_retry;
+    std::unordered_map<RegionVerID, const RegionInfo &> region_need_retry;
     RegionException::RegionReadStatus status_res = RegionException::RegionReadStatus::OK;
     for (auto & [id, r] : dag_region_infos)
     {
         if (r.key_ranges.empty())
         {
-            throw TiFlashException(
-                "Income key ranges is empty for region: " + std::to_string(r.region_id), Errors::Coprocessor::BadRequest);
+            throw TiFlashException("Income key ranges is empty for region: " + r.region_ver_id.toString(), Errors::Coprocessor::BadRequest);
         }
         if (region_force_retry.count(id))
         {
@@ -49,7 +47,7 @@ MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region
             continue;
         }
         ImutRegionRangePtr region_range{nullptr};
-        if (auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id), region_range);
+        if (auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id.region_id), region_range);
             status != RegionException::RegionReadStatus::OK)
         {
             region_need_retry.emplace(id, r);
@@ -58,23 +56,21 @@ MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region
         }
         RegionQueryInfo info;
         {
-            info.region_id = id;
-            info.version = r.region_version;
-            info.conf_version = r.region_conf_version;
+            info.region_ver_id = id;
             info.range_in_table = region_range->rawKeys();
             for (const auto & p : r.key_ranges)
             {
                 TableID table_id_in_range = -1;
                 if (!computeMappedTableID(*p.first, table_id_in_range) || table_id_in_range != table_id)
                 {
-                    throw TiFlashException("Income key ranges is illegal for region: " + std::to_string(r.region_id)
+                    throw TiFlashException("Income key ranges is illegal for region: " + r.region_ver_id.toString()
                             + ", table id in key range is " + std::to_string(table_id_in_range) + ", table id in region is "
                             + std::to_string(table_id),
                         Errors::Coprocessor::BadRequest);
                 }
                 if (p.first->compare(*info.range_in_table.first) < 0 || p.second->compare(*info.range_in_table.second) > 0)
                     throw TiFlashException(
-                        "Income key ranges is illegal for region: " + std::to_string(r.region_id), Errors::Coprocessor::BadRequest);
+                        "Income key ranges is illegal for region: " + r.region_ver_id.toString(), Errors::Coprocessor::BadRequest);
             }
             info.required_handle_ranges = r.key_ranges;
             info.bypass_lock_ts = r.bypass_lock_ts;

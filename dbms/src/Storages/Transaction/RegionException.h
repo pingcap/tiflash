@@ -32,7 +32,7 @@ public:
         return "Unknown";
     };
 
-    using UnavailableRegions = std::unordered_set<RegionID>;
+    using UnavailableRegions = std::unordered_set<RegionVerID>;
 
 public:
     RegionException(UnavailableRegions && unavailable_region_, RegionReadStatus status_)

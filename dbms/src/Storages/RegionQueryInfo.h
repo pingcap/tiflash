@@ -10,9 +10,7 @@ using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 
 struct RegionQueryInfo
 {
-    RegionID region_id;
-    UInt64 version;
-    UInt64 conf_version;
+    RegionVerID region_ver_id;
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
     // required handle ranges is the handle range specified in DAG request
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> required_handle_ranges;
