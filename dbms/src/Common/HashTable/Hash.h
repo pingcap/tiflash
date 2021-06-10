@@ -76,44 +76,47 @@ inline DB::UInt64 intHashCRC32(DB::UInt64 x, DB::UInt64 updated_value)
 }
 
 template <typename T>
-inline std::enable_if_t<is_boost_number_v<T>, DB::UInt64> intHashCRC32(const T & x, DB::UInt64 updated_value)
+inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
 {
-    auto backend_value = x.backend();
-    for (size_t i = 0; i < backend_value.size(); ++i)
+    static_assert(!is_fit_register<T>);
+    if constexpr (is_boost_number_v<T>)
     {
-        updated_value = intHashCRC32(backend_value.limbs()[i], updated_value);
+        auto backend_value = x.backend();
+        for (size_t i = 0; i < backend_value.size(); ++i)
+        {
+            updated_value = intHashCRC32(backend_value.limbs()[i], updated_value);
+        }
+        return intHashCRC32(backend_value.sign(), updated_value);
     }
-    return intHashCRC32(backend_value.sign(), updated_value);
-}
-
-inline DB::UInt64 intHashCRC32(const DB::UInt128 & x, DB::UInt64 updated_value)
-{
-    updated_value = intHashCRC32(x.items[0], updated_value);
-    updated_value = intHashCRC32(x.items[1], updated_value);
-    return updated_value;
-}
-
-inline DB::UInt64 intHashCRC32(const DB::Int128 & x, DB::UInt64 updated_value)
-{
-    auto * begin = reinterpret_cast<const DB::UInt64 *>(&x);
-    updated_value = intHashCRC32(unalignedLoad<DB::UInt64>(begin), updated_value);
-    updated_value = intHashCRC32(unalignedLoad<DB::UInt64>(begin + 1), updated_value);
-    return updated_value;
-}
-
-inline DB::UInt64 intHashCRC32(const DB::UInt256 & x, DB::UInt64 updated_value)
-{
-    updated_value = intHashCRC32(x.items[0], updated_value);
-    updated_value = intHashCRC32(x.items[1], updated_value);
-    updated_value = intHashCRC32(x.items[2], updated_value);
-    updated_value = intHashCRC32(x.items[3], updated_value);
+    else if constexpr (std::is_same_v<T, DB::UInt128>)
+    {
+        updated_value = intHashCRC32(x.items[0], updated_value);
+        updated_value = intHashCRC32(x.items[1], updated_value);
+        return updated_value;
+    }
+    else if constexpr (std::is_same_v<T, DB::Int128>)
+    {
+        auto * begin = reinterpret_cast<const DB::UInt64 *>(&x);
+        updated_value = intHashCRC32(unalignedLoad<DB::UInt64>(begin), updated_value);
+        updated_value = intHashCRC32(unalignedLoad<DB::UInt64>(begin + 1), updated_value);
+        return updated_value;
+    }
+    else if constexpr (std::is_same_v<T, DB::UInt256>)
+    {
+        updated_value = intHashCRC32(x.items[0], updated_value);
+        updated_value = intHashCRC32(x.items[1], updated_value);
+        updated_value = intHashCRC32(x.items[2], updated_value);
+        updated_value = intHashCRC32(x.items[3], updated_value);
+        return updated_value;
+    }
+    __builtin_unreachable();
     return updated_value;
 }
 
 template <typename T>
-inline std::enable_if_t<!is_fit_register<T>, DB::UInt64> intHashCRC32(const T & x)
+inline DB::UInt64 wideIntHashCRC32(const T & x)
 {
-    return intHashCRC32(x, -1);
+    return wideIntHashCRC32(x, -1);
 }
 
 inline UInt32 updateWeakHash32(const DB::UInt8 * pos, size_t size, DB::UInt32 updated_value)
@@ -265,9 +268,9 @@ inline size_t hashCRC32(std::enable_if_t<is_fit_register<T>, T> key)
 }
 
 template <typename T>
-inline size_t hashCRC32(std::enable_if_t<!is_fit_register<T>, T> key)
+inline size_t hashCRC32(const std::enable_if_t<!is_fit_register<T>, T> & key)
 {
-    return intHashCRC32(key);
+    return wideIntHashCRC32(key);
 }
 
 template <typename T> struct HashCRC32;
