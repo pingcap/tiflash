@@ -52,136 +52,181 @@
 	url = https://github.com/microsoft/mimalloc
 [submodule "contrib/boost/algorithm"]
 	path = contrib/boost/algorithm
-	url = https://github.com/boostorg/algorithm
+	url = https://github.com/boostorg/algorithm.git
+	shallow = true
 [submodule "contrib/boost/align"]
 	path = contrib/boost/align
-	url = https://github.com/boostorg/align
+	url = https://github.com/boostorg/align.git
+	shallow = true
 [submodule "contrib/boost/bind"]
 	path = contrib/boost/bind
-	url = https://github.com/boostorg/bind
+	url = https://github.com/boostorg/bind.git
+	shallow = true
 [submodule "contrib/boost/concept_check"]
 	path = contrib/boost/concept_check
-	url = https://github.com/boostorg/concept_check
+	url = https://github.com/boostorg/concept_check.git
+	shallow = true
 [submodule "contrib/boost/config"]
 	path = contrib/boost/config
-	url = https://github.com/boostorg/config
+	url = https://github.com/boostorg/config.git
+	shallow = true
 [submodule "contrib/boost/container"]
 	path = contrib/boost/container
-	url = https://github.com/boostorg/container
+	url = https://github.com/boostorg/container.git
+	shallow = true
 [submodule "contrib/boost/date_time"]
 	path = contrib/boost/date_time
-	url = https://github.com/boostorg/date_time
+	url = https://github.com/boostorg/date_time.git
+	shallow = true
 [submodule "contrib/boost/detail"]
 	path = contrib/boost/detail
-	url = https://github.com/boostorg/detail
+	url = https://github.com/boostorg/detail.git
+	shallow = true
 [submodule "contrib/boost/endian"]
 	path = contrib/boost/endian
-	url = https://github.com/boostorg/endian
+	url = https://github.com/boostorg/endian.git
+	shallow = true
 [submodule "contrib/boost/exception"]
 	path = contrib/boost/exception
-	url = https://github.com/boostorg/exception
+	url = https://github.com/boostorg/exception.git
+	shallow = true
 [submodule "contrib/boost/filesystem"]
 	path = contrib/boost/filesystem
-	url = https://github.com/boostorg/filesystem
+	url = https://github.com/boostorg/filesystem.git
+	shallow = true
 [submodule "contrib/boost/function"]
 	path = contrib/boost/function
-	url = https://github.com/boostorg/function
+	url = https://github.com/boostorg/function.git
+	shallow = true
 [submodule "contrib/boost/function_types"]
 	path = contrib/boost/function_types
-	url = https://github.com/boostorg/function_types
+	url = https://github.com/boostorg/function_types.git
+	shallow = true
 [submodule "contrib/boost/functional"]
 	path = contrib/boost/functional
-	url = https://github.com/boostorg/functional
+	url = https://github.com/boostorg/functional.git
+	shallow = true
 [submodule "contrib/boost/geometry"]
 	path = contrib/boost/geometry
-	url = https://github.com/boostorg/geometry
+	url = https://github.com/boostorg/geometry.git
+	shallow = true
 [submodule "contrib/boost/integer"]
 	path = contrib/boost/integer
-	url = https://github.com/boostorg/integer
+	url = https://github.com/boostorg/integer.git
+	shallow = true
 [submodule "contrib/boost/intrusive"]
 	path = contrib/boost/intrusive
-	url = https://github.com/boostorg/intrusive
+	url = https://github.com/boostorg/intrusive.git
+	shallow = true
 [submodule "contrib/boost/io"]
 	path = contrib/boost/io
-	url = https://github.com/boostorg/io
+	url = https://github.com/boostorg/io.git
+	shallow = true
 [submodule "contrib/boost/iterator"]
 	path = contrib/boost/iterator
-	url = https://github.com/boostorg/iterator
+	url = https://github.com/boostorg/iterator.git
+	shallow = true
 [submodule "contrib/boost/lexical_cast"]
 	path = contrib/boost/lexical_cast
-	url = https://github.com/boostorg/lexical_cast
+	url = https://github.com/boostorg/lexical_cast.git
+	shallow = true
 [submodule "contrib/boost/math"]
 	path = contrib/boost/math
-	url = https://github.com/boostorg/math
+	url = https://github.com/boostorg/math.git
+	shallow = true
 [submodule "contrib/boost/move"]
 	path = contrib/boost/move
-	url = https://github.com/boostorg/move
+	url = https://github.com/boostorg/move.git
+	shallow = true
 [submodule "contrib/boost/mpl"]
 	path = contrib/boost/mpl
-	url = https://github.com/boostorg/mpl
+	url = https://github.com/boostorg/mpl.git
+	shallow = true
 [submodule "contrib/boost/multi_index"]
 	path = contrib/boost/multi_index
-	url = https://github.com/boostorg/multi_index
+	url = https://github.com/boostorg/multi_index.git
+	shallow = true
 [submodule "contrib/boost/core"]
 	path = contrib/boost/core
-	url = https://github.com/boostorg/core
+	url = https://github.com/boostorg/core.git
+	shallow = true
 [submodule "contrib/boost/multiprecision"]
 	path = contrib/boost/multiprecision
-	url = https://github.com/boostorg/multiprecision
+	url = https://github.com/boostorg/multiprecision.git
+	shallow = true
 [submodule "contrib/boost/optional"]
 	path = contrib/boost/optional
-	url = https://github.com/boostorg/optional
+	url = https://github.com/boostorg/optional.git
+	shallow = true
 [submodule "contrib/boost/predef"]
 	path = contrib/boost/predef
-	url = https://github.com/boostorg/predef
+	url = https://github.com/boostorg/predef.git
+	shallow = true
 [submodule "contrib/boost/preprocessor"]
 	path = contrib/boost/preprocessor
-	url = https://github.com/boostorg/preprocessor
+	url = https://github.com/boostorg/preprocessor.git
+	shallow = true
 [submodule "contrib/boost/program_options"]
 	path = contrib/boost/program_options
-	url = https://github.com/boostorg/program_options
+	url = https://github.com/boostorg/program_options.git
+	shallow = true
 [submodule "contrib/boost/qvm"]
 	path = contrib/boost/qvm
-	url = https://github.com/boostorg/qvm
+	url = https://github.com/boostorg/qvm.git
+	shallow = true
 [submodule "contrib/boost/range"]
 	path = contrib/boost/range
-	url = https://github.com/boostorg/range
+	url = https://github.com/boostorg/range.git
+	shallow = true
 [submodule "contrib/boost/serialization"]
 	path = contrib/boost/serialization
-	url = https://github.com/boostorg/serialization
+	url = https://github.com/boostorg/serialization.git
+	shallow = true
 [submodule "contrib/boost/smart_ptr"]
 	path = contrib/boost/smart_ptr
-	url = https://github.com/boostorg/smart_ptr
+	url = https://github.com/boostorg/smart_ptr.git
+	shallow = true
 [submodule "contrib/boost/system"]
 	path = contrib/boost/system
-	url = https://github.com/boostorg/system
+	url = https://github.com/boostorg/system.git
+	shallow = true
 [submodule "contrib/boost/tuple"]
 	path = contrib/boost/tuple
-	url = https://github.com/boostorg/tuple
+	url = https://github.com/boostorg/tuple.git
+	shallow = true
 [submodule "contrib/boost/type_index"]
 	path = contrib/boost/type_index
-	url = https://github.com/boostorg/type_index
+	url = https://github.com/boostorg/type_index.git
+	shallow = true
 [submodule "contrib/boost/type_traits"]
 	path = contrib/boost/type_traits
-	url = https://github.com/boostorg/type_traits
+	url = https://github.com/boostorg/type_traits.git
+	shallow = true
 [submodule "contrib/boost/utility"]
 	path = contrib/boost/utility
-	url = https://github.com/boostorg/utility
+	url = https://github.com/boostorg/utility.git
+	shallow = true
 [submodule "contrib/boost/variant"]
 	path = contrib/boost/variant
-	url = https://github.com/boostorg/variant
+	url = https://github.com/boostorg/variant.git
+	shallow = true
 [submodule "contrib/boost/winapi"]
 	path = contrib/boost/winapi
-	url = https://github.com/boostorg/winapi
+	url = https://github.com/boostorg/winapi.git
+	shallow = true
 [submodule "contrib/boost/numeric/conversion"]
 	path = contrib/boost/numeric/conversion
-	url = https://github.com/boostorg/numeric_conversion
+	url = https://github.com/boostorg/numeric_conversion.git
+	shallow = true
 [submodule "contrib/boost/numeric/interval"]
 	path = contrib/boost/numeric/interval
-	url = https://github.com/boostorg/interval
+	url = https://github.com/boostorg/interval.git
+	shallow = true
 [submodule "contrib/boost/numeric/odeint"]
 	path = contrib/boost/numeric/odeint
-	url = https://github.com/boostorg/odeint
+	url = https://github.com/boostorg/odeint.git
+	shallow = true
 [submodule "contrib/boost/numeric/ublas"]
 	path = contrib/boost/numeric/ublas
-	url = https://github.com/boostorg/ublas
+	url = https://github.com/boostorg/ublas.git
+	shallow = true
