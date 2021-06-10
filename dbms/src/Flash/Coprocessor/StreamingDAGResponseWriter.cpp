@@ -53,6 +53,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
     {
         ScheduleEncodeTask();
     }
+    /// add an extra response to send the execute summaries
+    ScheduleEncodeTask();
     // wait all job finishes.
     thread_pool.wait();
 }
@@ -79,6 +81,11 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
 
         response.set_encode_type(encode_type);
         Int64 current_records_num = 0;
+        if (input_blocks.empty())
+        {
+            writer->write(response);
+            return;
+        }
         if (records_per_chunk == -1)
         {
             for (auto & block : input_blocks)
@@ -146,6 +153,15 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             }
             responses[i] = response;
             responses[i].set_encode_type(encode_type);
+        }
+        if (input_blocks.empty())
+        {
+            // serialize each partitioned block and write it to its destination
+            for (auto part_id = 0; part_id < partition_num; ++part_id)
+            {
+                writer->write(responses[part_id], part_id);
+            }
+            return;
         }
 
         // partition tuples in blocks
