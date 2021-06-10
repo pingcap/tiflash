@@ -17,30 +17,30 @@ if (NOT MSVC)
 endif ()
 
 add_library(boost_program_options_internal
-${LIBRARY_DIR}/libs/program_options/src/cmdline.cpp
-${LIBRARY_DIR}/libs/program_options/src/config_file.cpp
-${LIBRARY_DIR}/libs/program_options/src/convert.cpp
-${LIBRARY_DIR}/libs/program_options/src/options_description.cpp
-${LIBRARY_DIR}/libs/program_options/src/parsers.cpp
-${LIBRARY_DIR}/libs/program_options/src/positional_options.cpp
-${LIBRARY_DIR}/libs/program_options/src/split.cpp
-${LIBRARY_DIR}/libs/program_options/src/utf8_codecvt_facet.cpp
-${LIBRARY_DIR}/libs/program_options/src/value_semantic.cpp
-${LIBRARY_DIR}/libs/program_options/src/variables_map.cpp
-${LIBRARY_DIR}/libs/program_options/src/winmain.cpp)
+${LIBRARY_DIR}/program_options/src/cmdline.cpp
+${LIBRARY_DIR}/program_options/src/config_file.cpp
+${LIBRARY_DIR}/program_options/src/convert.cpp
+${LIBRARY_DIR}/program_options/src/options_description.cpp
+${LIBRARY_DIR}/program_options/src/parsers.cpp
+${LIBRARY_DIR}/program_options/src/positional_options.cpp
+${LIBRARY_DIR}/program_options/src/split.cpp
+${LIBRARY_DIR}/program_options/src/utf8_codecvt_facet.cpp
+${LIBRARY_DIR}/program_options/src/value_semantic.cpp
+${LIBRARY_DIR}/program_options/src/variables_map.cpp
+${LIBRARY_DIR}/program_options/src/winmain.cpp)
 
 add_library(boost_filesystem_internal
-${LIBRARY_DIR}/libs/filesystem/src/codecvt_error_category.cpp
-${LIBRARY_DIR}/libs/filesystem/src/operations.cpp
-${LIBRARY_DIR}/libs/filesystem/src/path.cpp
-${LIBRARY_DIR}/libs/filesystem/src/path_traits.cpp
-${LIBRARY_DIR}/libs/filesystem/src/portability.cpp
-${LIBRARY_DIR}/libs/filesystem/src/unique_path.cpp
-${LIBRARY_DIR}/libs/filesystem/src/utf8_codecvt_facet.cpp
-${LIBRARY_DIR}/libs/filesystem/src/windows_file_codecvt.cpp)
+${LIBRARY_DIR}/filesystem/src/codecvt_error_category.cpp
+${LIBRARY_DIR}/filesystem/src/operations.cpp
+${LIBRARY_DIR}/filesystem/src/path.cpp
+${LIBRARY_DIR}/filesystem/src/path_traits.cpp
+${LIBRARY_DIR}/filesystem/src/portability.cpp
+${LIBRARY_DIR}/filesystem/src/unique_path.cpp
+${LIBRARY_DIR}/filesystem/src/utf8_codecvt_facet.cpp
+${LIBRARY_DIR}/filesystem/src/windows_file_codecvt.cpp)
 
 add_library(boost_system_internal
-${LIBRARY_DIR}/libs/system/src/error_code.cpp)
+${LIBRARY_DIR}/system/src/error_code.cpp)
 
 target_include_directories (boost_program_options_internal BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 target_include_directories (boost_filesystem_internal BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
