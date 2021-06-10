@@ -107,10 +107,10 @@ private:
     ColumnDefines          columns_to_read;
     RSOperatorPtr          filter;
     Block                  header;
-    UInt64                 max_version;
-    size_t                 expected_block_size;
-    bool                   is_raw;
-    bool                   do_range_filter_for_raw;
+    const UInt64           max_version;
+    const size_t           expected_block_size;
+    const bool             is_raw;
+    const bool             do_range_filter_for_raw;
 
     bool done = false;
 
