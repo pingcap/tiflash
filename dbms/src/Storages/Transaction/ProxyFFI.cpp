@@ -19,6 +19,8 @@ const std::string ColumnFamilyName::Lock = "lock";
 const std::string ColumnFamilyName::Default = "default";
 const std::string ColumnFamilyName::Write = "write";
 
+extern const uint64_t DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS;
+
 ColumnFamilyType NameToCF(const std::string & cf)
 {
     if (cf.empty() || cf == ColumnFamilyName::Default)
@@ -193,11 +195,11 @@ void CppStrVec::updateView()
 
 kvrpcpb::ReadIndexResponse TiFlashRaftProxyHelper::readIndex(const kvrpcpb::ReadIndexRequest & req) const
 {
-    auto res = batchReadIndex({req});
+    auto res = batchReadIndex({req}, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
     return std::move(res->at(0).first);
 }
 
-BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req) const
+BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const
 {
     std::vector<std::string> req_strs;
     req_strs.reserve(req.size());
@@ -208,7 +210,7 @@ BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpc
     CppStrVec data(std::move(req_strs));
     assert(req_strs.empty());
     auto outer_view = data.intoOuterView();
-    BatchReadIndexRes res(reinterpret_cast<BatchReadIndexRes::pointer>(fn_handle_batch_read_index(proxy_ptr, outer_view)));
+    BatchReadIndexRes res(reinterpret_cast<BatchReadIndexRes::pointer>(fn_handle_batch_read_index(proxy_ptr, outer_view, timeout_ms)));
     return res;
 }
 
