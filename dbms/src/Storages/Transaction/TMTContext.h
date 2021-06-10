@@ -75,7 +75,8 @@ public:
 
     const KVClusterPtr & getCluster() const { return cluster; }
 
-    UInt64 replicaReadMaxThread() const { return replica_read_max_thread.load(std::memory_order::memory_order_relaxed); }
+    UInt64 replicaReadMaxThread() const;
+    UInt64 batchReadIndexTimeout() const;
 
 private:
     Context & context;
@@ -100,7 +101,8 @@ private:
     bool disable_bg_flush;
 
     std::atomic_bool terminated{false};
-    std::atomic_uint64_t replica_read_max_thread{1};
+    std::atomic_uint64_t replica_read_max_thread;
+    std::atomic_uint64_t batch_read_index_timeout_ms;
 };
 
 } // namespace DB
