@@ -249,6 +249,8 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
     return res;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 static void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state)
 {
     if (response.has_split() && !(response.split().left() == region_state.getRegion()))
@@ -256,6 +258,7 @@ static void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, c
                 + "\nexpect:\n" + response.split().left().ShortDebugString() + "\nshould not happen",
             ErrorCodes::LOGICAL_ERROR);
 }
+#pragma GCC diagnostic pop
 
 void MetaRaftCommandDelegate::execRollbackMerge(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
