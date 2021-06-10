@@ -12,8 +12,6 @@
 #pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #pragma GCC diagnostic ignored "-Wdeprecated-copy"
 #endif
-#include <boost/multiprecision/cpp_int.hpp>
-#pragma GCC diagnostic pop
 
 /// Remove the population of thread_local from Poco
 #ifdef thread_local

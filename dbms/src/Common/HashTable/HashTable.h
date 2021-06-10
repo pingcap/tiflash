@@ -69,10 +69,10 @@ namespace ZeroTraits
 {
 
 template <typename T>
-inline bool check(const T & x) { return x == T{}; }
+inline bool check(const T & x) { return x == 0; }
 
 template <typename T>
-void set(T & x) { x = T{}; }
+void set(T & x) { x = 0; }
 
 }
 

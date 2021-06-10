@@ -125,7 +125,7 @@ struct AggregateFunctionUniqExactData<String>
     /// When creating, the hash table must be small.
     using Set = HashSet<
         Key,
-        UInt128TrivialHash,
+        TrivialHash,
         HashTableGrower<3>,
         HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 3)>>;
 

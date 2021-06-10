@@ -61,7 +61,7 @@ TEST(SipHash_test, test)
 
 
 #define M(TYPE)                \
-    TYPE value##TYPE{111};    \
+    TYPE value##TYPE = 111;    \
     test_siphash(value##TYPE); \
     value##TYPE = -111;        \
     test_siphash(value##TYPE); \

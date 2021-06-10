@@ -33,7 +33,7 @@ void buildScatterSelector(
         IColumn::Selector & selector)
 {
     /// Use generic hashed variant since partitioning is unlikely to be a bottleneck.
-    using Data = HashMap<UInt128, size_t, UInt128TrivialHash>;
+    using Data = HashMap<UInt128, size_t, TrivialHash>;
     Data partitions_map;
 
     size_t num_rows = columns[0]->size();

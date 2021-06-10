@@ -17,6 +17,7 @@
 #include <common/unaligned.h>
 #include <string>
 #include <type_traits>
+#include <Common/Decimal.h>
 #include <Core/Defines.h>
 
 #define ROTL(x, b) static_cast<UInt64>(((x) << (b)) | ((x) >> (64 - (b))))
@@ -137,7 +138,20 @@ public:
     template <typename T>
     void update(const T & x)
     {
-        update(reinterpret_cast<const char *>(&x), sizeof(x));
+        if constexpr (DB::IsDecimal<T>)
+        {
+            update(x.value);
+        }
+        else if constexpr (is_boost_number_v<T>)
+        {
+            auto backend_value = x.backend();
+            update(reinterpret_cast<const char *>(backend_value.limbs()), backend_value.size() * sizeof(backend_value.limbs()[0]));
+            update(backend_value.sign());
+        }
+        else
+        {
+            update(reinterpret_cast<const char *>(&x), sizeof(x));
+        }
     }
 
     void update(const std::string & x)

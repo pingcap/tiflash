@@ -34,10 +34,10 @@ struct UncompressedSizeWeightFunction
 
 /** Cache of decompressed blocks for implementation of CachedCompressedReadBuffer. thread-safe.
   */
-class UncompressedCache : public LRUCache<UInt128, UncompressedCacheCell, UInt128TrivialHash, UncompressedSizeWeightFunction>
+class UncompressedCache : public LRUCache<UInt128, UncompressedCacheCell, TrivialHash, UncompressedSizeWeightFunction>
 {
 private:
-    using Base = LRUCache<UInt128, UncompressedCacheCell, UInt128TrivialHash, UncompressedSizeWeightFunction>;
+    using Base = LRUCache<UInt128, UncompressedCacheCell, TrivialHash, UncompressedSizeWeightFunction>;
 
 public:
     UncompressedCache(size_t max_size_in_bytes)

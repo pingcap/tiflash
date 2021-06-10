@@ -63,18 +63,19 @@ namespace common
     }
 
     template <>
-    inline bool addOverflow(UInt128 x, UInt128 y, UInt128 & res)
-    {
-        res = addIgnoreOverflow(x, y);
-        return x > std::numeric_limits<UInt128>::max() - y;
-    }
-
-    template <>
     inline bool addOverflow(Int256 x, Int256 y, Int256 & res)
     {
         res = addIgnoreOverflow(x, y);
         return (y > 0 && x > std::numeric_limits<Int256>::max() - y) ||
             (y < 0 && x < std::numeric_limits<Int256>::min() - y);
+    }
+
+    /** TODO: support overflow check for UInt128 and UInt256
+    template <>
+    inline bool addOverflow(UInt128 x, UInt128 y, UInt128 & res)
+    {
+        res = addIgnoreOverflow(x, y);
+        return x > std::numeric_limits<UInt128>::max() - y;
     }
 
     template <>
@@ -83,6 +84,7 @@ namespace common
         res = addIgnoreOverflow(x, y);
         return x > std::numeric_limits<UInt256>::max() - y;
     }
+    */
 
     template <typename T>
     inline bool subOverflow(T x, T y, T & res)
@@ -117,18 +119,19 @@ namespace common
     }
 
     template <>
-    inline bool subOverflow(UInt128 x, UInt128 y, UInt128 & res)
-    {
-        res = subIgnoreOverflow(x, y);
-        return x < y;
-    }
-
-    template <>
     inline bool subOverflow(Int256 x, Int256 y, Int256 & res)
     {
         res = subIgnoreOverflow(x, y);
         return (y < 0 && x > std::numeric_limits<Int256>::max() + y) ||
             (y > 0 && x < std::numeric_limits<Int256>::min() + y);
+    }
+
+    /** TODO: support overflow check for UInt128 and UInt256
+    template <>
+    inline bool subOverflow(UInt128 x, UInt128 y, UInt128 & res)
+    {
+        res = subIgnoreOverflow(x, y);
+        return x < y;
     }
 
     template <>
@@ -137,6 +140,7 @@ namespace common
         res = subIgnoreOverflow(x, y);
         return x < y;
     }
+    */
 
     template <typename T>
     inline bool mulOverflow(T x, T y, T & res)
@@ -178,6 +182,7 @@ namespace common
         return false;
     }
 
+    /** TODO: support overflow check for UInt128 and UInt256
     template <>
     inline bool mulOverflow(UInt128 x, UInt128 y, UInt128 & res)
     {
@@ -191,4 +196,5 @@ namespace common
         res = mulIgnoreOverflow(x, y);
         return false;
     }
+    */
 }
