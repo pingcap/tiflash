@@ -22,20 +22,6 @@ ENABLE_EMBEDDED_COMPILER="FALSE"
 
 install_dir="$SRCPATH/release-centos7/tiflash"
 
-if [ -d "$SRCPATH/contrib/kvproto" ]; then
-  cd "$SRCPATH/contrib/kvproto"
-  rm -rf cpp/kvproto
-  ./scripts/generate_cpp.sh
-  cd -
-fi
-
-if [ -d "$SRCPATH/contrib/tipb" ]; then
-  cd "$SRCPATH/contrib/tipb"
-  rm -rf cpp/tipb
-  ./generate-cpp.sh
-  cd -
-fi
-
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
 mkdir -p ${SRCPATH}/libs/libtiflash-proxy
 ln -s ${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so ${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so
