@@ -735,6 +735,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
+            global_context->getIORateLimiter().updateConfig(
+                global_context->getTiFlashMetrics(), *config, log);
         },
         /* already_loaded = */ true);
 
@@ -792,7 +794,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Init Rate Limiter
     {
-        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), storage_config.bg_task_io_rate_limit);
+        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), config(), log);
     }
 
     /// Set path for format schema files

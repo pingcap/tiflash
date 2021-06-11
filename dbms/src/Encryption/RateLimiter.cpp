@@ -2,14 +2,15 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/TiFlashMetrics.h>
+#include <common/logger_useful.h>
 #include <Encryption/RateLimiter.h>
 
 namespace CurrentMetrics
 {
 extern const Metric RateLimiterPendingWriteRequest;
 }
-
-DB::RateLimiter::RateLimiter(TiFlashMetricsPtr metrics_, UInt64 rate_limit_per_sec_, UInt64 refill_period_ms_)
+namespace DB {
+RateLimiter::RateLimiter(TiFlashMetricsPtr metrics_, UInt64 rate_limit_per_sec_, UInt64 refill_period_ms_)
     : refill_period_ms{refill_period_ms_},
       refill_balance_per_period{calculateRefillBalancePerPeriod(rate_limit_per_sec_)},
       available_balance{refill_balance_per_period},
@@ -18,7 +19,7 @@ DB::RateLimiter::RateLimiter(TiFlashMetricsPtr metrics_, UInt64 rate_limit_per_s
       metrics{std::move(metrics_)}
 {}
 
-DB::RateLimiter::~RateLimiter()
+RateLimiter::~RateLimiter()
 {
     std::unique_lock<std::mutex> lock(request_mutex);
     stop = true;
@@ -29,7 +30,7 @@ DB::RateLimiter::~RateLimiter()
         exit_cv.wait(lock);
 }
 
-void DB::RateLimiter::request(UInt64 bytes)
+void RateLimiter::request(UInt64 bytes)
 {
     std::unique_lock<std::mutex> lock(request_mutex);
 
@@ -111,7 +112,7 @@ void DB::RateLimiter::request(UInt64 bytes)
     }
 }
 
-void DB::RateLimiter::refillAndAlloc()
+void RateLimiter::refillAndAlloc()
 {
     if (available_balance < refill_balance_per_period)
         available_balance += refill_balance_per_period;
@@ -140,4 +141,46 @@ void DB::RateLimiter::refillAndAlloc()
         if (next_req != head_req)
             next_req->cv.notify_one();
     }
+}
+
+extern thread_local bool is_background_thread;
+
+RateLimiterPtr IORateLimiter::getWriteLimiter()
+{
+    std::lock_guard<std::mutex> lock(mtx_);
+    return is_background_thread ? bg_write_limiter : fg_write_limiter;
+}
+
+void IORateLimiter::updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration& config_, Poco::Logger* log_)
+{
+    StorageIORateLimitConfig new_io_config;
+    if (config_.has("storage.io-rate-limit"))
+    {
+        new_io_config.parse(config_.getString("storage.io-rate-limit"), log_);
+    }
+    else
+    {
+        LOG_INFO(log_, "storage.io-rate-limit is not found in config, use default config.");
+    }
+    
+    std::lock_guard<std::mutex> lock(mtx_);
+    if (io_config == new_io_config)
+    {
+        return;  // Config is not changes.
+    }
+
+    io_config = new_io_config;
+
+    if (io_config.max_bytes_per_sec == 0)
+    {
+        bg_write_limiter = nullptr;
+        fg_write_limiter = nullptr;
+    }
+    else
+    {
+        bg_write_limiter = std::make_shared<RateLimiter>(metrics_, io_config.getBgWriteMaxBytesPerSec());
+        fg_write_limiter = std::make_shared<RateLimiter>(metrics_, io_config.getFgWriteMaxBytesPerSec());
+    }
+}
+
 }

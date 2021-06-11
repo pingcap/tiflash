@@ -1,10 +1,11 @@
+#pragma once
 #include <Core/Types.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>
-
+#include <Interpreters/Context.h>
 #include <boost/core/noncopyable.hpp>
 #include <tuple>
 
@@ -17,7 +18,7 @@ using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 class LegacyCompactor : private boost::noncopyable
 {
 public:
-    LegacyCompactor(const PageStorage & storage);
+    LegacyCompactor(const PageStorage & storage, const Context& global_ctx);
 
     std::tuple<PageFileSet, PageFileSet, size_t> //
     tryCompact(PageFileSet && page_files, const std::set<PageFileIdAndLevel> & writing_file_ids);
@@ -32,7 +33,8 @@ private:
                                                   const PageFileIdAndLevel & file_id,
                                                   WriteBatch &&              wb,
                                                   FileProviderPtr &          file_provider,
-                                                  Poco::Logger *             log);
+                                                  Poco::Logger *             log,
+                                                  const Context& global_context);
 
 private:
     const String & storage_name;
@@ -47,6 +49,8 @@ private:
 
     PageStorage::VersionedPageEntries version_set;
     PageStorage::StatisticsInfo       info;
+
+    const Context& global_context;
 };
 
 } // namespace DB

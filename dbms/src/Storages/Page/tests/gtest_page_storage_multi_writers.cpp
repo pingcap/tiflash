@@ -259,7 +259,7 @@ public:
             return;
         try
         {
-            storage->gc();
+            storage->gc(TiFlashTestEnv::getContext());
         }
         catch (DB::Exception & e)
         {

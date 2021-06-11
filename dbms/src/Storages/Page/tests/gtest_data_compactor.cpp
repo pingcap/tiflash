@@ -97,7 +97,7 @@ try
     snapshot->version()->put(6, entry);
 
     // valid_pages
-    DataCompactor<MockSnapshotPtr> compactor(storage, config);
+    DataCompactor<MockSnapshotPtr> compactor(storage, config, ctx);
     auto                           valid_pages = DataCompactor<MockSnapshotPtr>::collectValidPagesInPageFile(snapshot);
     ASSERT_EQ(valid_pages.size(), 2UL);
 

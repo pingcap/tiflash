@@ -53,7 +53,6 @@
 #include <Common/DNSCache.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
-#include <Encryption/RateLimiter.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <IO/PersistedCache.h>
@@ -168,8 +167,7 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr;               /// Path capacity metrics
     TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
     FileProviderPtr file_provider;                          /// File provider.
-    RateLimiterPtr rate_limiter;                            /// Rate Limiter.
-
+    IORateLimiter io_rate_limiter;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
     class SessionKeyHash
@@ -1577,18 +1575,14 @@ FileProviderPtr Context::getFileProvider() const
     return shared->file_provider;
 }
 
-void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, UInt64 rate_limit_per_sec)
+void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config, Poco::Logger* log)
 {
-    auto lock = getLock();
-    if (shared->rate_limiter)
-        throw Exception("RateLimiter has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->rate_limiter = std::make_shared<RateLimiter>(metrics, rate_limit_per_sec);
+    shared->io_rate_limiter.updateConfig(metrics, config, log);
 }
 
-RateLimiterPtr Context::getRateLimiter() const
+IORateLimiter& Context::getIORateLimiter() const
 {
-    auto lock = getLock();
-    return shared->rate_limiter;
+    return shared->io_rate_limiter;
 }
 
 zkutil::ZooKeeperPtr Context::getZooKeeper() const

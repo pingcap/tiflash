@@ -129,8 +129,8 @@ struct WriteBatches : private boost::noncopyable
             check(data_wb, "data_wb", logger);
         }
 
-        storage_pool.log().write(std::move(log_wb), nullptr);
-        storage_pool.data().write(std::move(data_wb), nullptr);
+        storage_pool.log().write(std::move(log_wb), rate_limiter);
+        storage_pool.data().write(std::move(data_wb), rate_limiter);
 
         writtenLog.clear();
         writtenData.clear();

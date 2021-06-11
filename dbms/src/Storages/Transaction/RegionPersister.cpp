@@ -28,7 +28,7 @@ void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
     {
         WriteBatch wb;
         wb.delPage(region_id);
-        page_storage->write(std::move(wb));
+        page_storage->write(std::move(wb), global_context.getIORateLimiter().getWriteLimiter());
     }
     else
     {
@@ -98,7 +98,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     {
         WriteBatch wb;
         wb.putPage(region_id, applied_index, read_buf, region_size);
-        page_storage->write(std::move(wb));
+        page_storage->write(std::move(wb), global_context.getIORateLimiter().getWriteLimiter());
     }
     else
     {
@@ -196,7 +196,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 bool RegionPersister::gc()
 {
     if (page_storage)
-        return page_storage->gc();
+        return page_storage->gc(global_context);
     else
         return stable_page_storage->gc();
 }

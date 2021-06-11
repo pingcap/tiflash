@@ -57,6 +57,8 @@ private:
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
     std::mutex mutex;
+
+    const Context& global_context;
 };
 
 struct StorageSnapshot : private boost::noncopyable

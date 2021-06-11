@@ -2,6 +2,7 @@
 
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
+#include <Encryption/RateLimiter.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
@@ -95,9 +96,8 @@ class KeyManager;
 using KeyManagerPtr = std::shared_ptr<KeyManager>;
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
-class RateLimiter;
-using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 struct TiFlashRaftConfig;
+class StorageIORateLimitConfig;
 
 namespace DM
 {
@@ -427,8 +427,8 @@ public:
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
-    void initializeRateLimiter(TiFlashMetricsPtr metrics, UInt64 rate_limit_per_sec);
-    RateLimiterPtr getRateLimiter() const;
+    void initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config, Poco::Logger* log);
+    IORateLimiter& getIORateLimiter() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;
