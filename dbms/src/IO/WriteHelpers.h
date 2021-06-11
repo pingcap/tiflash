@@ -10,7 +10,7 @@
 #include <common/DateLUT.h>
 #include <common/LocalDate.h>
 #include <common/LocalDateTime.h>
-#include <common/find_first_symbols.h>
+#include <common/find_symbols.h>
 
 #include <Core/Types.h>
 #include <Core/UUID.h>
@@ -124,11 +124,6 @@ inline void writeFloatText(T x, WriteBuffer & buf)
     buf.write(buffer, builder.position());
 }
 
-
-inline void writeString(const String & s, WriteBuffer & buf)
-{
-    buf.write(s.data(), s.size());
-}
 
 inline void writeString(const char * data, size_t size, WriteBuffer & buf)
 {
