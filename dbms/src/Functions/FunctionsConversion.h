@@ -597,7 +597,7 @@ template <> inline void parseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, Rea
 {
     UUID tmp;
     readText(tmp, rb);
-    x = tmp;
+    x = tmp.toUnderType();
 }
 
 template <typename DataType>
