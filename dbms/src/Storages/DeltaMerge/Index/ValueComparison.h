@@ -270,7 +270,7 @@ private:
         {
             if constexpr (std::is_same_v<DataTypeDate::FieldType, Right>)
             {
-                DayNum_t             date;
+                DayNum date;
                 ReadBufferFromMemory in(left.data(), left.size());
                 readDateText(date, in);
                 if (!in.eof())
