@@ -24,8 +24,8 @@ RUN yum makecache \
          bzip2 \
          chrpath \
   && yum install -y centos-release-scl \
-  && yum install -y devtoolset-7 \
-  && source scl_source enable devtoolset-7 \
+  && yum install -y devtoolset-8 \
+  && source scl_source enable devtoolset-8 \
   && yum remove -y openssl-devel \
   && curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly  \
   && cd /prepare-environments \

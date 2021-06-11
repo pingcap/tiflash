@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source scl_source enable devtoolset-7
+source scl_source enable devtoolset-8
 command -v ccache > /dev/null 2>&1
 if [[ $? != 0 ]]; then
   echo "try to install ccache"
