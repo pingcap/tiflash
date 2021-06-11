@@ -59,19 +59,19 @@ public:
 
     void serializeBinaryBulkWithMultipleStreams(
         const IColumn & column,
-        OutputStreamGetter getter,
+        const OutputStreamGetter & getter,
         size_t offset,
         size_t limit,
         bool position_independent_encoding,
-        SubstreamPath path) const override;
+        SubstreamPath & path) const override;
 
     void deserializeBinaryBulkWithMultipleStreams(
         IColumn & column,
-        InputStreamGetter getter,
+        const InputStreamGetter & getter,
         size_t limit,
         double avg_value_size_hint,
         bool position_independent_encoding,
-        SubstreamPath path) const override;
+        SubstreamPath & path) const override;
 
     MutableColumnPtr createColumn() const override;
 

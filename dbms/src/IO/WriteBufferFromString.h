@@ -2,9 +2,12 @@
 
 #include <string>
 
+#include <Common/BitHelpers.h>
 #include <IO/WriteBuffer.h>
 
-#define WRITE_BUFFER_FROM_STRING_INITIAL_SIZE_IF_EMPTY 32
+/// let the initial resize fits into std::string's local buffer.
+/// gcc-9 : 15 bytes.
+#define WRITE_BUFFER_FROM_STRING_INITIAL_SIZE_IF_EMPTY 15
 
 
 namespace DB
@@ -21,7 +24,7 @@ private:
     void nextImpl() override
     {
         size_t old_size = s.size();
-        s.resize(old_size * 2);
+        s.resize(roundUpToPowerOfTwoOrZero(old_size * 2));
         internal_buffer = Buffer(reinterpret_cast<Position>(&s[old_size]), reinterpret_cast<Position>(&s[s.size()]));
         working_buffer = internal_buffer;
     }
@@ -71,6 +74,13 @@ public:
     {
         finish();
         return value;
+    }
+
+    /// Can't reuse WriteBufferFromOwnString after releaseStr
+    std::string releaseStr()
+    {
+        finish();
+        return std::move(value);
     }
 };
 

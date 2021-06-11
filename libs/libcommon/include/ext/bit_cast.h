@@ -14,6 +14,9 @@ namespace ext
     std::decay_t<To> bit_cast(const From & from)
     {
         To res {};
+
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
         memcpy(&res, &from, std::min(sizeof(res), sizeof(from)));
         return res;
     };

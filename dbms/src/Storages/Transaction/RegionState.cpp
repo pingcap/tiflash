@@ -4,15 +4,15 @@
 namespace DB
 {
 
-RegionState::RegionState(RegionState && region_state) : Base(std::move(region_state)), region_range(region_state.region_range) {}
-RegionState::RegionState(Base && region_state) : Base(std::move(region_state)) { updateRegionRange(); }
-RegionState & RegionState::operator=(RegionState && from)
+RegionState::RegionState(RegionState && region_state) noexcept : base(std::move(region_state.base)), region_range(std::move(region_state.region_range)) {}
+RegionState::RegionState(Base && region_state) : base(std::move(region_state)) { updateRegionRange(); }
+RegionState & RegionState::operator=(RegionState && from) noexcept
 {
-    if (&from == this)
+    if (this == std::addressof(from))
         return *this;
 
-    (Base &)* this = (Base &&) from;
-    region_range = std::move(from.region_range);
+    this->base = std::move(from.base);
+    this->region_range = std::move(from.region_range);
     return *this;
 }
 
@@ -48,15 +48,15 @@ void RegionState::updateRegionRange()
     region_range = std::make_shared<RegionRangeKeys>(TiKVKey::copyFrom(getRegion().start_key()), TiKVKey::copyFrom(getRegion().end_key()));
 }
 
-metapb::Region & RegionState::getMutRegion() { return *mutable_region(); }
-const metapb::Region & RegionState::getRegion() const { return region(); }
-raft_serverpb::PeerState RegionState::getState() const { return state(); }
-void RegionState::setState(raft_serverpb::PeerState value) { set_state(value); }
-void RegionState::clearMergeState() { clear_merge_state(); }
+metapb::Region & RegionState::getMutRegion() { return *base.mutable_region(); }
+const metapb::Region & RegionState::getRegion() const { return base.region(); }
+raft_serverpb::PeerState RegionState::getState() const { return base.state(); }
+void RegionState::setState(raft_serverpb::PeerState value) { base.set_state(value); }
+void RegionState::clearMergeState() { base.clear_merge_state(); }
 bool RegionState::operator==(const RegionState & region_state) const { return getBase() == region_state.getBase(); }
-const RegionState::Base & RegionState::getBase() const { return *this; }
-const raft_serverpb::MergeState & RegionState::getMergeState() const { return merge_state(); }
-raft_serverpb::MergeState & RegionState::getMutMergeState() { return *mutable_merge_state(); }
+const RegionState::Base & RegionState::getBase() const { return base; }
+const raft_serverpb::MergeState & RegionState::getMergeState() const { return base.merge_state(); }
+raft_serverpb::MergeState & RegionState::getMutMergeState() { return *base.mutable_merge_state(); }
 
 bool computeMappedTableID(const DecodedTiKVKey & key, TableID & table_id)
 {

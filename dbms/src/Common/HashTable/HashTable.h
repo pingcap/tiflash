@@ -79,7 +79,7 @@ inline bool check(const DB::Int256 & x) {
 template <typename T>
 void set(T & x) { x = 0; }
 
-};
+}
 
 
 /** Compile-time interface for cell of the hash table.
@@ -419,6 +419,8 @@ protected:
 
         /// Copy to a new location and zero the old one.
         x.setHash(hash_value);
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
         memcpy(&buf[place_value], &x, sizeof(x));
         x.setZero();
 
