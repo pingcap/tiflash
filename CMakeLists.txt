@@ -266,9 +266,6 @@ if (ENABLE_ODBC)
     message (STATUS "Using odbc: ${ODBC_INCLUDE_DIRECTORIES} : ${ODBC_LIBRARIES}")
 endif()
 
-set(CMAKE_DISABLE_FIND_PACKAGE_re2 TRUE)
-set(CMAKE_DISABLE_FIND_PACKAGE_RE2 TRUE)
-
 include (cmake/find_poco.cmake)
 include (cmake/find_lz4.cmake)
 include (cmake/find_sparsehash.cmake)
@@ -276,6 +273,12 @@ include (cmake/find_rt.cmake)
 include (cmake/find_execinfo.cmake)
 include (cmake/find_readline_edit.cmake)
 include (cmake/find_re2.cmake)
+
+if (USE_INTERNAL_RE2_LIBRARY)
+    set(CMAKE_DISABLE_FIND_PACKAGE_re2 TRUE)
+    set(CMAKE_DISABLE_FIND_PACKAGE_RE2 TRUE)
+endif()
+
 include (cmake/find_llvm.cmake)
 include (cmake/find_grpc.cmake)
 include (cmake/find_kvproto.cmake)
