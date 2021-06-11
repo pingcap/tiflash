@@ -1,7 +1,7 @@
 catchError {
     def util = load('util.groovy')
 
-    def label = "build-tics"
+    def label = "build-tics-beta"
 
     def tiflashTag = ({
         def m = ghprbCommentBody =~ /tiflash\s*=\s*([^\s\\]+)(\s|\\|$)/
