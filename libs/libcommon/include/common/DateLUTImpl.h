@@ -2,7 +2,7 @@
 
 #include "DayNum.h"
 #include "defines.h"
-#include "Types.h"
+#include "types.h"
 
 #include <ctime>
 #include <cassert>

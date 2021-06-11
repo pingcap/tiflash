@@ -3,9 +3,7 @@
 #include <city.h>
 #include <Core/Defines.h>
 #include <Common/SipHash.h>
-#include <Common/UInt128.h>
 #include <Columns/ColumnTuple.h>
-
 
 namespace DB
 {
