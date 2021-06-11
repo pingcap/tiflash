@@ -29,6 +29,7 @@ if (USE_INTERNAL_RE2_LIBRARY)
     set(RE2_BUILD_TESTING 0 CACHE INTERNAL "")
     add_subdirectory (re2)
     add_subdirectory (re2_st)
+    add_library(re2::re2 ALIAS re2)
 endif ()
 
 if (USE_INTERNAL_DOUBLE_CONVERSION_LIBRARY)
