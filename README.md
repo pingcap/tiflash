@@ -24,24 +24,6 @@ You should use exact gRPC 1.26.0. Refer to gRPC [document](https://github.com/gr
 $ git clone --recursive https://github.com/pingcap/tics.git
 ```
 
-### Generate Protos
-
-```
-# WORKSPACE/tics
-$ pushd contrib/kvproto
-$ ./scripts/generate_cpp.sh
-$ popd
-
-$ pushd contrib/tipb
-$ ./generate-cpp.sh
-$ popd
-
-# Additionally if you want to update dtpb
-$ pushd dbms/src/Storages/DeltaMerge/File/dtpb
-$ ./generate_cpp.sh
-$ popd
-```
-
 ### Build tiflash-proxy
 
 ```
