@@ -27,6 +27,7 @@ add_library (common ${SPLIT_SHARED}
     src/getMemoryAmount.cpp
     src/ThreadPool.cpp
     src/demangle.cpp
+    src/StringRef.cpp
 
     include/common/Types.h
     include/common/DateLUT.h
