@@ -265,6 +265,10 @@ if (ENABLE_ODBC)
     endif ()
     message (STATUS "Using odbc: ${ODBC_INCLUDE_DIRECTORIES} : ${ODBC_LIBRARIES}")
 endif()
+
+set(CMAKE_DISABLE_FIND_PACKAGE_re2 TRUE)
+set(CMAKE_DISABLE_FIND_PACKAGE_RE2 TRUE)
+
 include (cmake/find_poco.cmake)
 include (cmake/find_lz4.cmake)
 include (cmake/find_sparsehash.cmake)
