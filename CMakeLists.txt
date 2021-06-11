@@ -44,7 +44,7 @@ if (NOT MSVC)
 endif ()
 
 if (COMPILER_GCC OR COMPILER_CLANG)
-    set (CXX_WARNING_FLAGS "${CXX_WARNING_FLAGS} -Wnon-virtual-dtor -Wno-unused-function -Wno-unused-variable")
+    set (CXX_WARNING_FLAGS "${CXX_WARNING_FLAGS} -Wnon-virtual-dtor")
 endif ()
 
 if (COMPILER_CLANG)
