@@ -61,41 +61,6 @@ template <typename T> bool inline operator>  (T a, const UInt128 & b) { return U
 template <typename T> bool inline operator<= (T a, const UInt128 & b) { return UInt128(a) <= b; }
 template <typename T> bool inline operator<  (T a, const UInt128 & b) { return UInt128(a) < b; }
 
-struct UInt128Hash
-{
-    size_t operator()(const UInt128 & x) const
-    {
-        return CityHash_v1_0_2::Hash128to64({x.low, x.high});
-    }
-};
-
-#if __SSE4_2__
-
-struct UInt128HashCRC32
-{
-    size_t operator()(const UInt128 & x) const
-    {
-        uint64_t crc = -1ULL;
-        crc = _mm_crc32_u64(crc, x.low);
-        crc = _mm_crc32_u64(crc, x.high);
-        return crc;
-    }
-};
-
-#else
-
-/// On other platforms we do not use CRC32. NOTE This can be confusing.
-struct UInt128HashCRC32 : public UInt128Hash {};
-
-#endif
-
-struct UInt128TrivialHash
-{
-    size_t operator()(const UInt128 & x) const { return x.low; }
-};
-
-
-
 /** Used for aggregation, for putting a large number of constant-length keys in a hash table.
   */
 struct UInt256
@@ -137,38 +102,6 @@ struct UInt256
 
     UInt256 & operator= (const uint64_t & rhs) { a = rhs; b = 0; c = 0; d = 0; return *this; }
 };
-
-struct UInt256Hash
-{
-    size_t operator()(const UInt256 & x) const
-    {
-        /// NOTE suboptimal
-        return CityHash_v1_0_2::Hash128to64({CityHash_v1_0_2::Hash128to64({x.a, x.b}), CityHash_v1_0_2::Hash128to64({x.c, x.d})});
-    }
-};
-
-#if __SSE4_2__
-
-struct UInt256HashCRC32
-{
-    size_t operator()(const UInt256 & x) const
-    {
-        uint64_t crc = -1ULL;
-        crc = _mm_crc32_u64(crc, x.a);
-        crc = _mm_crc32_u64(crc, x.b);
-        crc = _mm_crc32_u64(crc, x.c);
-        crc = _mm_crc32_u64(crc, x.d);
-        return crc;
-    }
-};
-
-#else
-
-/// We do not need to use CRC32 on other platforms. NOTE This can be confusing.
-struct UInt256HashCRC32 : public UInt256Hash {};
-
-#endif
-}
 
 /// Overload hash for type casting
 namespace std

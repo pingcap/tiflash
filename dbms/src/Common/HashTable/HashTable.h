@@ -69,17 +69,19 @@ namespace ZeroTraits
 {
 
 template <typename T>
-inline bool check(const T & x) { return x == 0; }
-
-template <>
-inline bool check(const DB::Int256 & x) {
-    return x == 0 || x.backend().size() == 0;
+inline bool check(const T & x)
+{
+    if constexpr (is_boost_number_v<T>)
+    {
+        return x == 0 || x.backend().size() == 0;
+    }
+    return x == 0;
 }
 
 template <typename T>
 void set(T & x) { x = 0; }
 
-}
+} // namespace ZeroTraits
 
 
 /** Compile-time interface for cell of the hash table.
