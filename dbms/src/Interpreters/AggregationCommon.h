@@ -66,12 +66,8 @@ template <typename T>
 static inline T ALWAYS_INLINE packFixed(
     size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, const Sizes & key_sizes)
 {
-    union
-    {
-        T key;
-        char bytes[sizeof(key)] = {};
-    };
-
+    T key{};
+    char * bytes = reinterpret_cast<char *>(&key);
     size_t offset = 0;
 
     for (size_t j = 0; j < keys_size; ++j)
@@ -109,12 +105,8 @@ static inline T ALWAYS_INLINE packFixed(
     size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, const Sizes & key_sizes,
     const KeysNullMap<T> & bitmap)
 {
-    union
-    {
-        T key;
-        char bytes[sizeof(key)] = {};
-    };
-
+    T key{};
+    char * bytes = reinterpret_cast<char *>(&key);
     size_t offset = 0;
 
     static constexpr auto bitmap_size = std::tuple_size<KeysNullMap<T>>::value;

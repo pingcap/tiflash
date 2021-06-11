@@ -110,12 +110,22 @@ struct Decimal {
 
     using NativeType = T;
 
-    Decimal(const Decimal<T>& d) = default;
     Decimal() = default;
-    Decimal(T v_): value(v_) {}
+    Decimal(Decimal<T> &&) = default;
+    Decimal(const Decimal<T>& d) = default;
+
+    template <typename U, std::enable_if_t<is_arithmetic_v<U>>* = nullptr>
+    Decimal(const U & value_) : value(value_) {}
 
     constexpr Decimal<T> & operator = (Decimal<T> &&) = default;
     constexpr Decimal<T> & operator = (const Decimal<T> &) = default;
+
+    template <typename U, std::enable_if_t<is_arithmetic_v<U>>* = nullptr>
+    constexpr Decimal<T> & operator = (const U & value_)
+    {
+        value = value_;
+        return *this;
+    }
 
     String toString(ScaleType) const;
 
