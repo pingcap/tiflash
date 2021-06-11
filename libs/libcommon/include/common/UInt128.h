@@ -102,6 +102,7 @@ struct UInt256
 
     UInt256 & operator= (const uint64_t & rhs) { a = rhs; b = 0; c = 0; d = 0; return *this; }
 };
+} // namespace DB
 
 /// Overload hash for type casting
 namespace std

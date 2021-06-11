@@ -90,8 +90,8 @@ inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
     }
     else if constexpr (std::is_same_v<T, DB::UInt128>)
     {
-        updated_value = intHashCRC32(x.items[0], updated_value);
-        updated_value = intHashCRC32(x.items[1], updated_value);
+        updated_value = intHashCRC32(x.low, updated_value);
+        updated_value = intHashCRC32(x.high, updated_value);
         return updated_value;
     }
     else if constexpr (std::is_same_v<T, DB::Int128>)
@@ -103,10 +103,10 @@ inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
     }
     else if constexpr (std::is_same_v<T, DB::UInt256>)
     {
-        updated_value = intHashCRC32(x.items[0], updated_value);
-        updated_value = intHashCRC32(x.items[1], updated_value);
-        updated_value = intHashCRC32(x.items[2], updated_value);
-        updated_value = intHashCRC32(x.items[3], updated_value);
+        updated_value = intHashCRC32(x.a, updated_value);
+        updated_value = intHashCRC32(x.b, updated_value);
+        updated_value = intHashCRC32(x.c, updated_value);
+        updated_value = intHashCRC32(x.d, updated_value);
         return updated_value;
     }
     __builtin_unreachable();
@@ -205,7 +205,7 @@ inline size_t defaultHash64(const std::enable_if_t<!is_fit_register<T>, T> & key
 {
     if constexpr (std::is_same_v<T, DB::UInt128>)
     {
-        return CityHash_v1_0_2::Hash128to64({key.items[0], key.items[1]});
+        return CityHash_v1_0_2::Hash128to64({key.low, key.high});
     }
     else if constexpr (std::is_same_v<T, DB::Int128>)
     {
@@ -217,8 +217,8 @@ inline size_t defaultHash64(const std::enable_if_t<!is_fit_register<T>, T> & key
     else if constexpr (std::is_same_v<T, DB::UInt256>)
     {
         return CityHash_v1_0_2::Hash128to64({
-            CityHash_v1_0_2::Hash128to64({key.items[0], key.items[1]}),
-            CityHash_v1_0_2::Hash128to64({key.items[2], key.items[3]})});
+            CityHash_v1_0_2::Hash128to64({key.a, key.b}),
+            CityHash_v1_0_2::Hash128to64({key.c, key.d})});
     }
     else if constexpr (is_boost_number_v<T>)
     {
@@ -325,7 +325,7 @@ struct TrivialHash
 
     size_t operator() (const UInt128 & key) const
     {
-        return key.items[0];
+        return key.low;
     }
 
     size_t operator() (const Int128 & key) const
@@ -335,7 +335,7 @@ struct TrivialHash
 
     size_t operator() (const UInt256 & key) const
     {
-        return key.items[0];
+        return key.a;
     }
 
     template <typename T, std::enable_if_t<is_boost_number_v<T>, int> = 0>
@@ -391,11 +391,11 @@ struct IntHash32
     {
         if constexpr (std::is_same_v<T, DB::UInt128>)
         {
-            return intHash32<salt>(key.items[0] ^ key.items[1]);
+            return intHash32<salt>(key.low ^ key.high);
         }
         else if constexpr (std::is_same_v<T, DB::UInt256>)
         {
-            return intHash32<salt>(key.items[0] ^ key.items[1] ^ key.items[2] ^ key.items[3]);
+            return intHash32<salt>(key.a ^ key.b ^ key.c ^ key.d);
         }
         else
         {

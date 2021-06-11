@@ -42,7 +42,7 @@ void buildScatterSelector(
     {
         Data::key_type key = hash128(i, columns.size(), columns, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
         // TODO: Better mod calculating.
-        key = UInt128(key.items[0] % partition_mod);
+        key = UInt128(key.low % partition_mod);
 
         typename Data::iterator it;
         bool inserted;
@@ -121,7 +121,7 @@ BlocksWithPartition MergeTreeDataWriter::splitBlockIntoParts(const Block & block
         if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable || data.merging_params.mode == MergeTreeData::MergingParams::Txn)
         {
             Row partition(1);
-            partition[0] = partition_num_to_key[num].items[0];
+            partition[0] = partition_num_to_key[num].low;
             return partition;
         }
 
