@@ -1,9 +1,10 @@
-#include <common/DateLUT.h>
+#include "common/DateLUT.h"
 
 #include <boost/filesystem.hpp>
 #include <Poco/Exception.h>
 #include <Poco/SHA1Engine.h>
 #include <Poco/DigestStream.h>
+
 #include <fstream>
 
 
@@ -151,7 +152,13 @@ const DateLUTImpl & DateLUT::getImplementation(const std::string & time_zone) co
 
     auto it = impls.emplace(time_zone, nullptr).first;
     if (!it->second)
-        it->second = std::make_unique<DateLUTImpl>(time_zone);
+        it->second = std::unique_ptr<DateLUTImpl>(new DateLUTImpl(time_zone));
 
     return *it->second;
+}
+
+DateLUT & DateLUT::getInstance()
+{
+    static DateLUT ret;
+    return ret;
 }
