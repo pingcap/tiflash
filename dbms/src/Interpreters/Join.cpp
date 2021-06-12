@@ -90,7 +90,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     if (getFullness(kind))
     {
         for (size_t i = 0; i < build_concurrency; i++)
-            rows_not_inserted_to_map.push_back(std::make_unique<RowRefListWithLock>(i));
+            rows_not_inserted_to_map.push_back(std::make_unique<RowRefList>());
     }
     if (!left_filter_column.empty() && !isLeftJoin(kind))
         throw Exception("Not supported: non left join with left conditions");
@@ -429,7 +429,7 @@ namespace
     void NO_INLINE insertFromBlockImplTypeCase(
         Map & map, size_t rows, const ColumnRawPtrs & key_columns,
         size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
-        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefListWithLock * rows_not_inserted_to_map,
+        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map,
         size_t, Arenas & pools)
     {
         KeyGetter key_getter(key_columns, collators);
@@ -444,7 +444,7 @@ namespace
                 {
                     /// for right/full out join, need to record the rows not inserted to map
                     auto elem = reinterpret_cast<Join::RowRefList *>(pools[0]->alloc(sizeof(Join::RowRefList)));
-                    insertRowToList(&rows_not_inserted_to_map->row_ref_list, elem, stored_block, i);
+                    insertRowToList(rows_not_inserted_to_map, elem, stored_block, i);
                 }
                 continue;
             }
@@ -458,7 +458,7 @@ namespace
     void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             Map & map, size_t rows, const ColumnRawPtrs & key_columns,
             size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
-            Block * stored_block, ConstNullMapPtr null_map, Join::RowRefListWithLock * rows_not_inserted_to_map,
+            Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map,
             size_t stream_index, Arenas & pools)
     {
         KeyGetter key_getter(key_columns, collators);
@@ -514,7 +514,7 @@ namespace
                 {
                     /// for right/full out join, need to record the rows not inserted to map
                     auto elem = reinterpret_cast<Join::RowRefList *>(pools[stream_index]->alloc(sizeof(Join::RowRefList)));
-                    insertRowToList(&rows_not_inserted_to_map->row_ref_list, elem, stored_block, segment_index_info[segment_index][i]);
+                    insertRowToList(rows_not_inserted_to_map, elem, stored_block, segment_index_info[segment_index][i]);
                 }
             }
             else
@@ -534,7 +534,7 @@ namespace
     void insertFromBlockImplType(
         Map & map, size_t rows, const ColumnRawPtrs & key_columns,
         size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
-        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefListWithLock * rows_not_inserted_to_map,
+        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map,
         size_t stream_index, size_t insert_concurrency, Arenas & pools)
     {
         if (null_map)
@@ -578,7 +578,7 @@ namespace
     void insertFromBlockImpl(
         Join::Type type, Maps & maps, size_t rows, const ColumnRawPtrs & key_columns,
         size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
-        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefListWithLock * rows_not_inserted_to_map,
+        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map,
         size_t stream_index, size_t insert_concurrency, Arenas & pools)
     {
         switch (type)
@@ -658,6 +658,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
     if (empty())
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
+    std::shared_lock lock(rwlock);
     Block * stored_block = nullptr;
     {
         std::lock_guard<std::mutex> lk(blocks_lock);
@@ -1732,7 +1733,7 @@ private:
     {
         while (current_not_mapped_row == nullptr && next_index < parent.rows_not_inserted_to_map.size())
         {
-            current_not_mapped_row = parent.rows_not_inserted_to_map[next_index]->row_ref_list.next;
+            current_not_mapped_row = parent.rows_not_inserted_to_map[next_index]->next;
             next_index += step;
         }
     }
