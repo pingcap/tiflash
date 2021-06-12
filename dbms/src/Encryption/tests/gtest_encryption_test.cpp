@@ -48,7 +48,6 @@ public:
         std::string random_string = test::random_string(MAX_SIZE);
         memcpy(plaintext, random_string.data(), MAX_SIZE);
 
-        int ret = 1;
         EVP_CIPHER_CTX * ctx;
         InitCipherContext(ctx);
         assert(ctx != nullptr);
@@ -71,7 +70,7 @@ public:
         }
         assert(cipher != nullptr);
 
-        ret = EVP_EncryptInit(ctx, cipher, test::KEY, iv);
+        int ret = EVP_EncryptInit(ctx, cipher, test::KEY, iv);
         assert(ret == 1);
         int output_size = 0;
         ret = EVP_EncryptUpdate(ctx, ciphertext, &output_size, plaintext, static_cast<int>(MAX_SIZE));

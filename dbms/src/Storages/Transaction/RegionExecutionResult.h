@@ -1,5 +1,6 @@
 #pragma once
 
+#include <boost/noncopyable.hpp>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/Types.h>
 
