@@ -2,7 +2,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsURL.h>
 #include <Functions/FunctionsStringSearch.h>
-#include <common/find_first_symbols.h>
+#include <common/find_symbols.h>
 
 namespace DB
 {
