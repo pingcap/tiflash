@@ -126,7 +126,7 @@ private:
 
     bool getUnixTimeStampHelper(UInt64 packed, UInt64 & ret)
     {
-        static const auto lut_utc = DateLUT::instance("UTC");
+        static const auto & lut_utc = DateLUT::instance("UTC");
 
         if (timezone_.is_name_based)
             convertTimeZone(packed, ret, *timezone_.timezone, lut_utc);
