@@ -265,13 +265,13 @@ void ColumnAggregateFunction::insertFrom(const IColumn & src, size_t n)
     insertMergeFrom(src, n);
 }
 
-void ColumnAggregateFunction::insertFrom(ConstAggregateDataPtr place)
+void ColumnAggregateFunction::insertFrom(ConstAggregateDataPtr __restrict place)
 {
     insertDefault();
     insertMergeFrom(place);
 }
 
-void ColumnAggregateFunction::insertMergeFrom(ConstAggregateDataPtr place)
+void ColumnAggregateFunction::insertMergeFrom(ConstAggregateDataPtr __restrict place)
 {
     func->merge(getData().back(), place, &createOrGetArena());
 }
