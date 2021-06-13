@@ -50,7 +50,7 @@ public:
             return std::make_shared<DataTypeFloat64>();
     }
 
-    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         if constexpr (IsDecimal<T>)
             this->data(place).sum += static_cast<const ColumnDecimal<T> &>(*columns[0]).getData()[row_num];
@@ -61,25 +61,25 @@ public:
         ++this->data(place).count;
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         this->data(place).sum += this->data(rhs).sum;
         this->data(place).count += this->data(rhs).count;
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         writeBinary(this->data(place).sum, buf);
         writeVarUInt(this->data(place).count, buf);
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena *) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena *) const override
     {
         readBinary(this->data(place).sum, buf);
         readVarUInt(this->data(place).count, buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
     {
         if constexpr (IsDecimal<TResult>)
         {
@@ -94,7 +94,7 @@ public:
         }
     }
 
-    void create(AggregateDataPtr place) const override
+    void create(AggregateDataPtr __restrict place) const override
     {
         using Data = AggregateFunctionAvgData<std::conditional_t<IsDecimal<T>, TResult, typename NearestFieldType<T>::Type>>;
         new (place) Data;

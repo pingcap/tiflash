@@ -73,7 +73,7 @@ public:
         return std::make_shared<DataTypeTuple>(types);
     }
 
-    void add(AggregateDataPtr place, const IColumn ** columns, const size_t row_num, Arena *) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, const size_t row_num, Arena *) const override
     {
         // Column 0 contains array of keys of known type
         const ColumnArray & array_column = static_cast<const ColumnArray &>(*columns[0]);
@@ -119,7 +119,7 @@ public:
         }
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         auto & merged_maps = this->data(place).merged_maps;
         const auto & rhs_maps = this->data(rhs).merged_maps;
@@ -137,7 +137,7 @@ public:
         }
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         const auto & merged_maps = this->data(place).merged_maps;
         size_t size = merged_maps.size();
@@ -151,7 +151,7 @@ public:
         }
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena *) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena *) const override
     {
         auto & merged_maps = this->data(place).merged_maps;
         size_t size = 0;
@@ -171,7 +171,7 @@ public:
         }
     }
 
-    void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
     {
         // Final step does compaction of keys that have zero values, this mutates the state
         auto & merged_maps = this->data(const_cast<AggregateDataPtr>(place)).merged_maps;
