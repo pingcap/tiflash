@@ -449,7 +449,6 @@ public:
         return res + offset_at_start_of_epoch;
     }
 
-
     inline unsigned toSecond(time_t t) const
     {
         auto res = t % 60;

@@ -153,8 +153,10 @@ public:
         {
             update(reinterpret_cast<const char *>(&x), sizeof(x));
         }
-
-        __builtin_unreachable();
+        else
+        {
+            __builtin_unreachable();
+        }
     }
 
     void update(const std::string & x)
