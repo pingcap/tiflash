@@ -9,7 +9,6 @@
 #include <Common/HashTable/HashSet.h>
 #include <Common/HashTable/ClearableHashSet.h>
 
-
 namespace DB
 {
 

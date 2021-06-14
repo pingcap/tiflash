@@ -5,8 +5,6 @@
 #include <Common/SipHash.h>
 #include <Common/Arena.h>
 #include <Common/HashTable/Hash.h>
-#include <Core/Defines.h>
-#include <common/StringRef.h>
 #include <Columns/IColumn.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnFixedString.h>

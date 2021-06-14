@@ -1,9 +1,7 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-
 #include <Common/HashTable/HashMap.h>
-
 
 namespace DB
 {
