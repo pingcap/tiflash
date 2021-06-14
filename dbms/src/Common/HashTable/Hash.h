@@ -275,7 +275,7 @@ inline size_t hashCRC32(const std::enable_if_t<!is_fit_register<T>, T> & key)
 
 template <typename T> struct HashCRC32;
 
-#define DEFINE_HASH_SMALL(T) \
+#define DEFINE_HASH(T) \
 template <> struct HashCRC32<T>\
 {\
     static_assert(is_fit_register<T>);\
@@ -285,7 +285,7 @@ template <> struct HashCRC32<T>\
     }\
 };
 
-#define DEFINE_HASH_LARGE(T) \
+#define DEFINE_HASH_WIDE(T) \
 template <> struct HashCRC32<T>\
 {\
     static_assert(!is_fit_register<T>);\
@@ -295,22 +295,22 @@ template <> struct HashCRC32<T>\
     }\
 };
 
-DEFINE_HASH_SMALL(DB::UInt8)
-DEFINE_HASH_SMALL(DB::UInt16)
-DEFINE_HASH_SMALL(DB::UInt32)
-DEFINE_HASH_SMALL(DB::UInt64)
-DEFINE_HASH_SMALL(DB::Int8)
-DEFINE_HASH_SMALL(DB::Int16)
-DEFINE_HASH_SMALL(DB::Int32)
-DEFINE_HASH_SMALL(DB::Int64)
-DEFINE_HASH_SMALL(DB::Float32)
-DEFINE_HASH_SMALL(DB::Float64)
+DEFINE_HASH(DB::UInt8)
+DEFINE_HASH(DB::UInt16)
+DEFINE_HASH(DB::UInt32)
+DEFINE_HASH(DB::UInt64)
+DEFINE_HASH(DB::Int8)
+DEFINE_HASH(DB::Int16)
+DEFINE_HASH(DB::Int32)
+DEFINE_HASH(DB::Int64)
+DEFINE_HASH(DB::Float32)
+DEFINE_HASH(DB::Float64)
 
-DEFINE_HASH_LARGE(DB::UInt128)
-DEFINE_HASH_LARGE(DB::UInt256)
-DEFINE_HASH_LARGE(DB::Int128)
-DEFINE_HASH_LARGE(DB::Int256)
-DEFINE_HASH_LARGE(DB::Int512)
+DEFINE_HASH_WIDE(DB::UInt128)
+DEFINE_HASH_WIDE(DB::UInt256)
+DEFINE_HASH_WIDE(DB::Int128)
+DEFINE_HASH_WIDE(DB::Int256)
+DEFINE_HASH_WIDE(DB::Int512)
 
 #undef DEFINE_HASH
 
