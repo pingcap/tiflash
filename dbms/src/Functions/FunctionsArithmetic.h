@@ -22,7 +22,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <common/intExp.h>
 
-#include <boost/math/common_factor.hpp>
+#include <boost/integer/common_factor.hpp>
 #include <ext/range.h>
 
 
@@ -1125,7 +1125,7 @@ struct GCDImpl<A, B, false>
     {
         throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<A>::Type(a), typename NumberTraits::ToInteger<B>::Type(b));
         throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<B>::Type(b), typename NumberTraits::ToInteger<A>::Type(a));
-        return boost::math::gcd(
+        return boost::integer::gcd(
             typename NumberTraits::ToInteger<Result>::Type(a),
             typename NumberTraits::ToInteger<Result>::Type(b));
     }
@@ -1164,7 +1164,7 @@ struct LCMImpl<A,B,false>
     {
         throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<A>::Type(a), typename NumberTraits::ToInteger<B>::Type(b));
         throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<B>::Type(b), typename NumberTraits::ToInteger<A>::Type(a));
-        return boost::math::lcm(
+        return boost::integer::lcm(
             typename NumberTraits::ToInteger<Result>::Type(a),
             typename NumberTraits::ToInteger<Result>::Type(b));
     }
