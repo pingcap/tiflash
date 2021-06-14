@@ -1,15 +1,13 @@
 #pragma once
 
+#include <cstdint>
 #include <tuple>
 
 #include <city.h>
 
-#include <Core/Types.h>
-
 #if __SSE4_2__
 #include <nmmintrin.h>
 #endif
-
 
 namespace DB
 {
@@ -24,12 +22,12 @@ struct UInt128
 #endif
 
     /// This naming assumes little endian.
-    UInt64 low;
-    UInt64 high;
+    uint64_t low;
+    uint64_t high;
 
     UInt128() = default;
-    explicit UInt128(const UInt64 rhs) : low(rhs), high() {}
-    UInt128(const UInt64 low, const UInt64 high) : low(low), high(high) {}
+    explicit UInt128(const uint64_t rhs) : low(rhs), high() {}
+    UInt128(const uint64_t low, const uint64_t high) : low(low), high(high) {}
 
     auto tuple() const { return std::tie(high, low); }
 
@@ -53,10 +51,8 @@ struct UInt128
 #pragma GCC diagnostic pop
 #endif
 
-    UInt128 & operator= (const UInt64 rhs) { low = rhs; high = 0; return *this; }
+    UInt128 & operator= (const uint64_t rhs) { low = rhs; high = 0; return *this; }
 };
-
-template <> struct TypeId<UInt128>   { static constexpr const TypeIndex value = TypeIndex::UInt128;  };
 
 template <typename T> bool inline operator== (T a, const UInt128 & b) { return UInt128(a) == b; }
 template <typename T> bool inline operator!= (T a, const UInt128 & b) { return UInt128(a) != b; }
@@ -64,9 +60,6 @@ template <typename T> bool inline operator>= (T a, const UInt128 & b) { return U
 template <typename T> bool inline operator>  (T a, const UInt128 & b) { return UInt128(a) > b; }
 template <typename T> bool inline operator<= (T a, const UInt128 & b) { return UInt128(a) <= b; }
 template <typename T> bool inline operator<  (T a, const UInt128 & b) { return UInt128(a) < b; }
-
-template <> inline constexpr bool IsNumber<UInt128> = true;
-template <> struct TypeName<UInt128> { static const char * get() { return "UInt128"; } };
 
 struct UInt128Hash
 {
@@ -82,7 +75,7 @@ struct UInt128HashCRC32
 {
     size_t operator()(const UInt128 & x) const
     {
-        UInt64 crc = -1ULL;
+        uint64_t crc = -1ULL;
         crc = _mm_crc32_u64(crc, x.low);
         crc = _mm_crc32_u64(crc, x.high);
         return crc;
@@ -114,10 +107,10 @@ struct UInt256
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
 
-    UInt64 a;
-    UInt64 b;
-    UInt64 c;
-    UInt64 d;
+    uint64_t a;
+    uint64_t b;
+    uint64_t c;
+    uint64_t d;
 
     bool operator== (const UInt256 & rhs) const
     {
@@ -135,14 +128,14 @@ struct UInt256
 
     bool operator!= (const UInt256 & rhs) const { return !operator==(rhs); }
 
-    bool operator== (const UInt64 & rhs) const { return a == rhs && b == 0 && c == 0 && d == 0; }
-    bool operator!= (const UInt64 & rhs) const { return !operator==(rhs); }
+    bool operator== (const uint64_t & rhs) const { return a == rhs && b == 0 && c == 0 && d == 0; }
+    bool operator!= (const uint64_t & rhs) const { return !operator==(rhs); }
 
 #if !__clang__
 #pragma GCC diagnostic pop
 #endif
 
-    UInt256 & operator= (const UInt64 & rhs) { a = rhs; b = 0; c = 0; d = 0; return *this; }
+    UInt256 & operator= (const uint64_t & rhs) { a = rhs; b = 0; c = 0; d = 0; return *this; }
 };
 
 struct UInt256Hash
@@ -160,7 +153,7 @@ struct UInt256HashCRC32
 {
     size_t operator()(const UInt256 & x) const
     {
-        UInt64 crc = -1ULL;
+        uint64_t crc = -1ULL;
         crc = _mm_crc32_u64(crc, x.a);
         crc = _mm_crc32_u64(crc, x.b);
         crc = _mm_crc32_u64(crc, x.c);
@@ -186,36 +179,6 @@ template <> struct hash<DB::UInt128>
     {
         return CityHash_v1_0_2::Hash128to64({u.low, u.high});
     }
-};
-
-template <> struct is_signed<DB::UInt128>
-{
-    static constexpr bool value = false;
-};
-
-template <>
-inline constexpr bool is_signed_v<DB::UInt128> = is_signed<DB::UInt128>::value;
-
-template <> struct is_unsigned<DB::UInt128>
-{
-    static constexpr bool value = true;
-};
-
-template <>
-inline constexpr bool is_unsigned_v<DB::UInt128> = is_unsigned<DB::UInt128>::value;
-
-template <> struct is_integral<DB::UInt128>
-{
-    static constexpr bool value = true;
-};
-
-template <>
-inline constexpr bool is_integral_v<DB::UInt128> = is_integral<DB::UInt128>::value;
-
-// Operator +, -, /, *, % aren't implemented so it's not an arithmetic type
-template <> struct is_arithmetic<DB::UInt128>
-{
-    static constexpr bool value = false;
 };
 
 }

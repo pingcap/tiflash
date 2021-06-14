@@ -5,9 +5,7 @@
 #include <functional>
 #include <citycrc.h>
 #include <Common/Decimal.h>
-#include <Common/UInt128.h>
 #include <boost/functional/hash/hash.hpp>
-
 
 /** Hash functions that are better than the trivial function std::hash.
   *

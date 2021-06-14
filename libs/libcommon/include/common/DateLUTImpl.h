@@ -2,7 +2,7 @@
 
 #include "DayNum.h"
 #include "defines.h"
-#include "Types.h"
+#include "types.h"
 
 #include <ctime>
 #include <cassert>
@@ -448,7 +448,6 @@ public:
 
         return res + offset_at_start_of_epoch;
     }
-
 
     inline unsigned toSecond(time_t t) const
     {

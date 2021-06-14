@@ -16,7 +16,6 @@
 #include <Core/UUID.h>
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/UInt128.h>
 #include <common/StringRef.h>
 #include <Common/Decimal.h>
 #include <Common/MyTime.h>
@@ -26,7 +25,6 @@
 #include <IO/VarInt.h>
 #include <IO/DoubleConverter.h>
 #include <IO/WriteBufferFromString.h>
-
 
 namespace DB
 {
