@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 
 #include "unwind_i.h"
 
-PROTECTED unw_addr_space_t
+unw_addr_space_t
 unw_create_addr_space (unw_accessors_t *a, int byte_order)
 {
 #ifdef UNW_LOCAL_ONLY
@@ -38,7 +38,7 @@ unw_create_addr_space (unw_accessors_t *a, int byte_order)
   /*
    * hppa supports only big-endian.
    */
-  if (byte_order != 0 && byte_order != __BIG_ENDIAN)
+  if (byte_order != 0 && byte_order != UNW_BIG_ENDIAN)
     return NULL;
 
   as = malloc (sizeof (*as));

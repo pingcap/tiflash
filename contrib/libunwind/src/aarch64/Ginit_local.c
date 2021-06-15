@@ -28,7 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 
 #ifdef UNW_REMOTE_ONLY
 
-PROTECTED int
+int
 unw_init_local (unw_cursor_t *cursor, unw_context_t *uc)
 {
   return -UNW_EINVAL;
@@ -41,25 +41,27 @@ unw_init_local_common (unw_cursor_t *cursor, unw_context_t *uc, unsigned use_pre
 {
   struct cursor *c = (struct cursor *) cursor;
 
-  if (!tdep_init_done)
+  if (!atomic_load(&tdep_init_done))
     tdep_init ();
 
   Debug (1, "(cursor=%p)\n", c);
 
   c->dwarf.as = unw_local_addr_space;
-  c->dwarf.as_arg = uc;
+  c->dwarf.as_arg = c;
+  c->uc = uc;
+  c->validate = 0;
 
   return common_init (c, use_prev_instr);
 }
 
-PROTECTED int
+int
 unw_init_local (unw_cursor_t *cursor, unw_context_t *uc)
 {
   return unw_init_local_common(cursor, uc, 1);
 }
 
-PROTECTED int
-unw_init_local2 (unw_cursor_t *cursor, ucontext_t *uc, int flag)
+int
+unw_init_local2 (unw_cursor_t *cursor, unw_tdep_context_t *uc, int flag)
 {
   if (!flag)
     {

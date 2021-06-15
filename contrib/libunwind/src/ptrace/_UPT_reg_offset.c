@@ -32,6 +32,49 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 # include <asm/ptrace_offsets.h>
 #endif
 
+#if defined(__powerpc64__) && defined(__FreeBSD__)
+#define PT_R0   0
+#define PT_R1   1
+#define PT_R2   2
+#define PT_R3   3
+#define PT_R4   4
+#define PT_R5   5
+#define PT_R6   6
+#define PT_R7   7
+#define PT_R8   8
+#define PT_R9   9
+#define PT_R10  10
+#define PT_R11  11
+#define PT_R12  12
+#define PT_R13  13
+#define PT_R14  14
+#define PT_R15  15
+#define PT_R16  16
+#define PT_R17  17
+#define PT_R18  18
+#define PT_R19  19
+#define PT_R20  20
+#define PT_R21  21
+#define PT_R22  22
+#define PT_R23  23
+#define PT_R24  24
+#define PT_R25  25
+#define PT_R26  26
+#define PT_R27  27
+#define PT_R28  28
+#define PT_R29  29
+#define PT_R30  30
+#define PT_R31  31
+#define PT_NIP  32
+#define PT_CTR  35
+#define PT_LNK  36
+#define PT_XER  37
+#define PT_FPR0  48
+#define PT_VR0  82
+#define PT_VSCR (PT_VR0 + 32*2 + 1)
+#define PT_VRSAVE (PT_VR0 + 33*2)
+#endif
+
 const int _UPT_reg_offset[UNW_REG_LAST + 1] =
   {
 #ifdef HAVE_ASM_PTRACE_OFFSETS_H
@@ -632,6 +675,40 @@ const int _UPT_reg_offset[UNW_REG_LAST + 1] =
     [UNW_TILEGX_R54]    = 0x1b0,
     [UNW_TILEGX_R55]    = 0x1b8,
     [UNW_TILEGX_PC]     = 0x1a0
+#elif defined(UNW_TARGET_S390X)
+    [UNW_S390X_R0]      = 0x10,
+    [UNW_S390X_R1]      = 0x18,
+    [UNW_S390X_R2]      = 0x20,
+    [UNW_S390X_R3]      = 0x28,
+    [UNW_S390X_R4]      = 0x30,
+    [UNW_S390X_R5]      = 0x38,
+    [UNW_S390X_R6]      = 0x40,
+    [UNW_S390X_R7]      = 0x48,
+    [UNW_S390X_R8]      = 0x50,
+    [UNW_S390X_R9]      = 0x58,
+    [UNW_S390X_R10]     = 0x60,
+    [UNW_S390X_R11]     = 0x68,
+    [UNW_S390X_R12]     = 0x70,
+    [UNW_S390X_R13]     = 0x78,
+    [UNW_S390X_R14]     = 0x80,
+    [UNW_S390X_R15]     = 0x88,
+    [UNW_S390X_F0]      = 0xe0,
+    [UNW_S390X_F1]      = 0xe8,
+    [UNW_S390X_F2]      = 0xf0,
+    [UNW_S390X_F3]      = 0xf8,
+    [UNW_S390X_F4]      = 0x100,
+    [UNW_S390X_F5]      = 0x108,
+    [UNW_S390X_F6]      = 0x110,
+    [UNW_S390X_F7]      = 0x118,
+    [UNW_S390X_F8]      = 0x120,
+    [UNW_S390X_F9]      = 0x128,
+    [UNW_S390X_F10]     = 0x130,
+    [UNW_S390X_F11]     = 0x138,
+    [UNW_S390X_F12]     = 0x140,
+    [UNW_S390X_F13]     = 0x148,
+    [UNW_S390X_F14]     = 0x150,
+    [UNW_S390X_F15]     = 0x150,
+    [UNW_S390X_IP]      = 0x08
 #else
 # error Fix me.
 #endif

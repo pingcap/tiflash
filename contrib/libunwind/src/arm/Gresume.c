@@ -50,13 +50,13 @@ arm_local_resume (unw_addr_space_t as, unw_cursor_t *cursor, void *arg)
       regs[6] = uc->regs[10];
       regs[7] = uc->regs[11]; /* FP */
       regs[8] = uc->regs[13]; /* SP */
-      regs[9] = uc->regs[14]; /* LR */
+      regs[9] = uc->regs[15]; /* PC */
 
       struct regs_overlay {
               char x[sizeof(regs)];
       };
 
-      asm __volatile__ (
+      __asm__ __volatile__ (
         "ldmia %0, {r4-r12, lr}\n"
         "mov sp, r12\n"
         "bx lr\n"
@@ -90,7 +90,7 @@ arm_local_resume (unw_addr_space_t as, unw_cursor_t *cursor, void *arg)
 
       /* Set the SP and the PC in order to continue execution at the modified
          trampoline which restores the signal mask and the registers.  */
-      asm __volatile__ (
+      __asm__ __volatile__ (
         "mov sp, %0\n"
         "bx %1\n"
         : : "r" (c->sigcontext_sp), "r" (c->sigcontext_pc)
@@ -132,7 +132,7 @@ establish_machine_state (struct cursor *c)
     }
 }
 
-PROTECTED int
+int
 unw_resume (unw_cursor_t *cursor)
 {
   struct cursor *c = (struct cursor *) cursor;

@@ -26,13 +26,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 
 #include "libunwind_i.h"
 
-PROTECTED int
+int
 unw_set_cache_size (unw_addr_space_t as, size_t size, int flag)
 {
   size_t power = 1;
   unsigned short log_size = 0;
 
-  if (!tdep_init_done)
+  if (!atomic_load(&tdep_init_done))
     tdep_init ();
 
   if (flag != 0)

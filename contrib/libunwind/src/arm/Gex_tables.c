@@ -152,12 +152,12 @@ HIDDEN int
 arm_exidx_decode (const uint8_t *buf, uint8_t len, struct dwarf_cursor *c)
 {
 #define READ_OP() *buf++
+  assert(buf != NULL);
+  assert(len > 0);
+
   const uint8_t *end = buf + len;
   int ret;
   struct arm_exbuf_data edata;
-
-  assert(buf != NULL);
-  assert(len > 0);
 
   while (buf < end)
     {
@@ -381,7 +381,7 @@ arm_exidx_extract (struct dwarf_cursor *c, uint8_t *buf)
   return nbuf;
 }
 
-PROTECTED int
+static int
 arm_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
 			 unw_dyn_info_t *di, unw_proc_info_t *pi,
 			 int need_unwind_info, void *arg)
@@ -444,7 +444,7 @@ arm_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
   return 0;
 }
 
-PROTECTED int
+int
 tdep_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
                              unw_dyn_info_t *di, unw_proc_info_t *pi,
                              int need_unwind_info, void *arg)

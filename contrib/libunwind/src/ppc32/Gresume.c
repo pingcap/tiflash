@@ -31,8 +31,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 
 #ifndef UNW_REMOTE_ONLY
 
-#include <sys/syscall.h>
-
 /* sigreturn() is a no-op on x86_64 glibc.  */
 
 static NORETURN inline long
@@ -61,7 +59,7 @@ establish_machine_state (struct cursor *c)
   return 0;
 }
 
-PROTECTED int
+int
 unw_resume (unw_cursor_t *cursor)
 {
   struct cursor *c = (struct cursor *) cursor;

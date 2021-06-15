@@ -39,7 +39,7 @@ is_plt_entry (struct dwarf_cursor *c)
   unw_accessors_t *a;
   int ret;
 
-  a = unw_get_accessors (c->as);
+  a = unw_get_accessors_int (c->as);
   if ((ret = (*a->access_mem) (c->as, c->ip, &w0, 0, c->as_arg)) < 0
       || (ret = (*a->access_mem) (c->as, c->ip + 8, &w1, 0, c->as_arg)) < 0)
     return 0;
@@ -51,8 +51,8 @@ is_plt_entry (struct dwarf_cursor *c)
   return ret;
 }
 
-PROTECTED int
-unw_handle_signal_frame (unw_cursor_t *cursor)
+static int
+aarch64_handle_signal_frame (unw_cursor_t *cursor)
 {
   struct cursor *c = (struct cursor *) cursor;
   int ret;
@@ -70,7 +70,7 @@ unw_handle_signal_frame (unw_cursor_t *cursor)
   c->sigcontext_sp = c->dwarf.cfa;
   c->sigcontext_pc = c->dwarf.ip;
 
-  if (ret)
+  if (ret > 0)
     {
       c->sigcontext_format = AARCH64_SCF_LINUX_RT_SIGFRAME;
       sc_addr = sp_addr + sizeof (siginfo_t) + LINUX_UC_MCONTEXT_OFF;
@@ -130,18 +130,34 @@ unw_handle_signal_frame (unw_cursor_t *cursor)
   return 1;
 }
 
-PROTECTED int
+int
 unw_step (unw_cursor_t *cursor)
 {
   struct cursor *c = (struct cursor *) cursor;
+  int validate = c->validate;
   int ret;
 
   Debug (1, "(cursor=%p, ip=0x%016lx, cfa=0x%016lx))\n",
          c, c->dwarf.ip, c->dwarf.cfa);
 
+  /* Validate all addresses before dereferencing. */
+  c->validate = 1;
+
   /* Check if this is a signal frame. */
-  if (unw_is_signal_frame (cursor) > 0)
-    return unw_handle_signal_frame (cursor);
+  ret = unw_is_signal_frame (cursor);
+  if (ret > 0)
+    return aarch64_handle_signal_frame (cursor);
+  else if (unlikely (ret < 0))
+    {
+      /* IP points to non-mapped memory. */
+      /* This is probably SIGBUS. */
+      /* Try to load LR in IP to recover. */
+      Debug(1, "Invalid address found in the call stack: 0x%lx\n", c->dwarf.ip);
+      dwarf_get (&c->dwarf, c->dwarf.loc[UNW_AARCH64_X30], &c->dwarf.ip);
+    }
+
+  /* Restore default memory validation state */
+  c->validate = validate;
 
   ret = dwarf_step (&c->dwarf);
   Debug(1, "dwarf_step()=%d\n", ret);

@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 #include "_UCD_lib.h"
 #include "_UCD_internal.h"
 
-#if UNW_TARGET_IA64 && defined(__linux)
+#if UNW_TARGET_IA64 && defined(__linux__)
 # include "elf64.h"
 # include "os-linux.h"
 
@@ -43,7 +43,7 @@ get_list_addr (unw_addr_space_t as, unw_word_t *dil_addr, void *arg,
   int count = 0;
 
   maps_init (&mi, ui->pid);
-  while (maps_next (&mi, &lo, &hi, &off))
+  while (maps_next (&mi, &lo, &hi, &off, NULL))
     {
       if (off)
         continue;
