@@ -333,8 +333,7 @@ void PageStorage::restore()
             size_t idx_in_delta_paths = delegator->addPageFileUsedSize(
                 page_file.fileIdLevel(), page_file.getDiskSize(), page_file.parentPath(), /*need_insert_location*/ true);
             // Try best to reuse writable page files
-            if (page_file.getLevel() == 0 && page_file.getType() == PageFile::Type::Formal && isPageFileSizeFitsWritable(page_file, config)
-                && page_file.reusableForWrite())
+            if (page_file.reusableForWrite() && isPageFileSizeFitsWritable(page_file, config))
             {
                 write_files[next_write_fill_idx[idx_in_delta_paths]] = page_file;
                 next_write_fill_idx[idx_in_delta_paths] = (next_write_fill_idx[idx_in_delta_paths] + num_delta_paths) % write_files.size();
