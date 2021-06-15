@@ -422,7 +422,9 @@ protected:
         /// Copy to a new location and zero the old one.
         x.setHash(hash_value);
 #pragma GCC diagnostic ignored "-Wpragmas"
+#ifndef __clang__
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
+#endif
         memcpy(&buf[place_value], &x, sizeof(x));
         x.setZero();
 
