@@ -34,13 +34,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 #ifdef UNW_REMOTE_ONLY
 
 /* unw_local_addr_space is a NULL pointer in this case.  */
-PROTECTED unw_addr_space_t unw_local_addr_space;
+unw_addr_space_t unw_local_addr_space;
 
 #else /* !UNW_REMOTE_ONLY */
 
 static struct unw_addr_space local_addr_space;
 
-PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
+unw_addr_space_t unw_local_addr_space = &local_addr_space;
 
 static void *
 uc_addr (ucontext_t *uc, int reg)
@@ -48,13 +48,25 @@ uc_addr (ucontext_t *uc, int reg)
   void *addr;
 
   if ((unsigned) (reg - UNW_PPC64_R0) < 32)
+#if defined(__linux__)
     addr = &uc->uc_mcontext.gp_regs[reg - UNW_PPC64_R0];
+#elif defined(__FreeBSD__)
+    addr = &uc->uc_mcontext.mc_gpr[reg - UNW_PPC64_R0];
+#endif
 
   else if ((unsigned) (reg - UNW_PPC64_F0) < 32)
+#if defined(__linux__)
     addr = &uc->uc_mcontext.fp_regs[reg - UNW_PPC64_F0];
+#elif defined(__FreeBSD__)
+    addr = &uc->uc_mcontext.mc_fpreg[reg - UNW_PPC64_F0];
+#endif
 
   else if ((unsigned) (reg - UNW_PPC64_V0) < 32)
+#if defined(__linux__)
     addr = (uc->uc_mcontext.v_regs == 0) ? NULL : &uc->uc_mcontext.v_regs->vrregs[reg - UNW_PPC64_V0][0];
+#elif defined(__FreeBSD__)
+    addr = &uc->uc_mcontext.mc_avec[(reg - UNW_PPC64_V0)*2];
+#endif
 
   else
     {
@@ -80,7 +92,11 @@ uc_addr (ucontext_t *uc, int reg)
         default:
           return NULL;
         }
+#if defined(__linux__)
       addr = &uc->uc_mcontext.gp_regs[gregs_idx];
+#elif defined(__FreeBSD__)
+      addr = &uc->uc_mcontext.mc_gpr[gregs_idx];
+#endif
     }
   return addr;
 }
@@ -95,9 +111,6 @@ tdep_uc_addr (ucontext_t *uc, int reg)
 
 # endif /* UNW_LOCAL_ONLY */
 
-HIDDEN unw_dyn_info_list_t _U_dyn_info_list;
-
-
 static void
 put_unwind_info (unw_addr_space_t as, unw_proc_info_t *proc_info, void *arg)
 {
@@ -108,7 +121,13 @@ static int
 get_dyn_info_list_addr (unw_addr_space_t as, unw_word_t *dyn_info_list_addr,
                         void *arg)
 {
-  *dyn_info_list_addr = (unw_word_t) &_U_dyn_info_list;
+#ifndef UNW_LOCAL_ONLY
+# pragma weak _U_dyn_info_list_addr
+  if (!_U_dyn_info_list_addr)
+    return -UNW_ENOINFO;
+#endif
+  // Access the `_U_dyn_info_list` from `LOCAL_ONLY` library, i.e. libunwind.so.
+  *dyn_info_list_addr = _U_dyn_info_list_addr ();
   return 0;
 }
 
@@ -208,7 +227,7 @@ HIDDEN void
 ppc64_local_addr_space_init (void)
 {
   memset (&local_addr_space, 0, sizeof (local_addr_space));
-  local_addr_space.big_endian = (__BYTE_ORDER == __BIG_ENDIAN);
+  local_addr_space.big_endian = target_is_big_endian();
 #if _CALL_ELF == 2
   local_addr_space.abi = UNW_PPC64_ABI_ELFv2;
 #else

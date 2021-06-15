@@ -80,6 +80,9 @@ dwarf_find_unwind_table (struct elf_dyn_info *edi, unw_addr_space_t as,
           break;
 
         case PT_GNU_EH_FRAME:
+#if defined __sun
+        case PT_SUNW_UNWIND:
+#endif
           peh_hdr = phdr + i;
           break;
 
@@ -138,7 +141,7 @@ dwarf_find_unwind_table (struct elf_dyn_info *edi, unw_addr_space_t as,
           return -UNW_ENOINFO;
         }
 
-      a = unw_get_accessors (unw_local_addr_space);
+      a = unw_get_accessors_int (unw_local_addr_space);
       addr = to_unw_word (&hdr->eh_frame);
 
       /* Fill in a dummy proc_info structure.  We just need to fill in
@@ -190,6 +193,7 @@ dwarf_find_unwind_table (struct elf_dyn_info *edi, unw_addr_space_t as,
 
       edi->di_cache.start_ip = start_ip;
       edi->di_cache.end_ip = end_ip;
+      edi->di_cache.load_offset = 0;
       edi->di_cache.format = UNW_INFO_FORMAT_REMOTE_TABLE;
       edi->di_cache.u.rti.name_ptr = 0;
       /* two 32-bit values (ip_offset/fde_offset) per table-entry: */

@@ -33,13 +33,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 #ifdef UNW_REMOTE_ONLY
 
 /* unw_local_addr_space is a NULL pointer in this case.  */
-PROTECTED unw_addr_space_t unw_local_addr_space;
+unw_addr_space_t unw_local_addr_space;
 
 #else /* !UNW_REMOTE_ONLY */
 
 static struct unw_addr_space local_addr_space;
 
-PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
+unw_addr_space_t unw_local_addr_space = &local_addr_space;
 
 #ifdef HAVE_SYS_UC_ACCESS_H
 
@@ -68,6 +68,7 @@ get_dyn_info_list_addr (unw_addr_space_t as, unw_word_t *dyn_info_list_addr,
   if (!_U_dyn_info_list_addr)
     return -UNW_ENOINFO;
 #endif
+  // Access the `_U_dyn_info_list` from `LOCAL_ONLY` library, i.e. libunwind.so.
   *dyn_info_list_addr = _U_dyn_info_list_addr ();
   return 0;
 }
@@ -355,8 +356,8 @@ HIDDEN void
 ia64_local_addr_space_init (void)
 {
   memset (&local_addr_space, 0, sizeof (local_addr_space));
-  local_addr_space.big_endian = (__BYTE_ORDER == __BIG_ENDIAN);
-#if defined(__linux)
+  local_addr_space.big_endian = target_is_big_endian();
+#if defined(__linux__)
   local_addr_space.abi = ABI_LINUX;
 #elif defined(__hpux)
   local_addr_space.abi = ABI_HPUX;
@@ -406,7 +407,7 @@ ia64_uc_access_reg (struct cursor *c, ia64_loc_t loc, unw_word_t *valp,
          become possible at some point in the future, the
          copy-in/copy-out needs to be adjusted to do byte-swapping if
          necessary. */
-      assert (c->as->big_endian == (__BYTE_ORDER == __BIG_ENDIAN));
+      assert (c->as->big_endian == target_is_big_endian());
 
       dst = (unw_word_t *) ucp;
       for (src = uc_addr; src < uc_addr + sizeof (ucontext_t); src += 8)
@@ -474,7 +475,7 @@ ia64_uc_access_fpreg (struct cursor *c, ia64_loc_t loc, unw_fpreg_t *valp,
          become possible at some point in the future, the
          copy-in/copy-out needs to be adjusted to do byte-swapping if
          necessary. */
-      assert (c->as->big_endian == (__BYTE_ORDER == __BIG_ENDIAN));
+      assert (c->as->big_endian == target_is_big_endian());
 
       dst = (unw_word_t *) ucp;
       for (src = uc_addr; src < uc_addr + sizeof (ucontext_t); src += 8)

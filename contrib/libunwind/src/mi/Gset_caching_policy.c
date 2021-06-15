@@ -25,10 +25,10 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 
 #include "libunwind_i.h"
 
-PROTECTED int
+int
 unw_set_caching_policy (unw_addr_space_t as, unw_caching_policy_t policy)
 {
-  if (!tdep_init_done)
+  if (!atomic_load(&tdep_init_done))
     tdep_init ();
 
 #if !(defined(HAVE___THREAD) && HAVE___THREAD)

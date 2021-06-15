@@ -26,14 +26,14 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 #include "config.h"
 #endif
 
-#include <sys/ucontext.h>
+#include <ucontext.h>
 #include <machine/sigframe.h>
 #include <signal.h>
 #include <stddef.h>
 #include "unwind_i.h"
 #include "ucontext_i.h"
 
-PROTECTED int
+int
 unw_is_signal_frame (unw_cursor_t *cursor)
 {
   /* XXXKIB */
@@ -45,7 +45,7 @@ unw_is_signal_frame (unw_cursor_t *cursor)
   int ret;
 
   as = c->dwarf.as;
-  a = unw_get_accessors (as);
+  a = unw_get_accessors_int (as);
   arg = c->dwarf.as_arg;
 
   /* Check if RIP points at sigreturn sequence.
@@ -87,8 +87,8 @@ eb fd                   jmp     0b
   return (X86_64_SCF_NONE);
 }
 
-PROTECTED int
-unw_handle_signal_frame (unw_cursor_t *cursor)
+HIDDEN int
+x86_64_handle_signal_frame (unw_cursor_t *cursor)
 {
   struct cursor *c = (struct cursor *) cursor;
   unw_word_t ucontext;

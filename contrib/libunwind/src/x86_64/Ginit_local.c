@@ -25,12 +25,13 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 
+#include "libunwind_i.h"
 #include "unwind_i.h"
 #include "init.h"
 
 #ifdef UNW_REMOTE_ONLY
 
-PROTECTED int
+int
 unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
 {
   return -UNW_EINVAL;
@@ -43,25 +44,23 @@ unw_init_local_common (unw_cursor_t *cursor, ucontext_t *uc, unsigned use_prev_i
 {
   struct cursor *c = (struct cursor *) cursor;
 
-  if (unlikely (!tdep_init_done))
+  if (unlikely (!atomic_load(&tdep_init_done)))
     tdep_init ();
 
   Debug (1, "(cursor=%p)\n", c);
 
   c->dwarf.as = unw_local_addr_space;
-  c->dwarf.as_arg = c;
-  c->uc = uc;
-  c->validate = 0;
+  c->dwarf.as_arg = dwarf_build_as_arg(uc, /*validate*/ 0);
   return common_init (c, use_prev_instr);
 }
 
-PROTECTED int
+int
 unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
 {
   return unw_init_local_common(cursor, uc, 1);
 }
 
-PROTECTED int
+int
 unw_init_local2 (unw_cursor_t *cursor, ucontext_t *uc, int flag)
 {
   if (!flag)

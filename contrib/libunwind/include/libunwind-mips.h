@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 #include <inttypes.h>
-#include <sys/ucontext.h>
+#include <ucontext.h>
 
 #ifdef mips
 # undef mips
@@ -98,7 +98,7 @@ typedef enum
     UNW_MIPS_R30,
     UNW_MIPS_R31,
 
-    UNW_MIPS_PC = 34,
+    UNW_MIPS_PC = 64,
 
     /* FIXME: Other registers!  */
 

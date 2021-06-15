@@ -33,7 +33,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 #include <libunwind-x86_64.h>
 
 #include "libunwind_i.h"
-#include <sys/ucontext.h>
+#include <ucontext.h>
 
 /* DWARF column numbers for x86_64: */
 #define RAX     0
@@ -87,5 +87,7 @@ extern dwarf_loc_t x86_64_scratch_loc (struct cursor *c, unw_regnum_t reg);
 
 extern void *x86_64_r_uc_addr (ucontext_t *uc, int reg);
 extern NORETURN void x86_64_sigreturn (unw_cursor_t *cursor);
+#define x86_64_handle_signal_frame UNW_OBJ(handle_signal_frame)
+extern int x86_64_handle_signal_frame(unw_cursor_t *cursor);
 
 #endif /* unwind_i_h */

@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 
 #include "unwind_i.h"
 
-PROTECTED unw_addr_space_t
+unw_addr_space_t
 unw_create_addr_space (unw_accessors_t *a, int byte_order)
 {
 #ifdef UNW_LOCAL_ONLY
@@ -38,9 +38,7 @@ unw_create_addr_space (unw_accessors_t *a, int byte_order)
    * MIPS supports only big or little-endian, not weird stuff like
    * PDP_ENDIAN.
    */
-  if (byte_order != 0
-      && byte_order != __LITTLE_ENDIAN
-      && byte_order != __BIG_ENDIAN)
+  if (byte_order != 0 && byte_order_is_valid(byte_order) == 0)
     return NULL;
 
   as = malloc (sizeof (*as));
@@ -53,13 +51,20 @@ unw_create_addr_space (unw_accessors_t *a, int byte_order)
 
   if (byte_order == 0)
     /* use host default: */
-    as->big_endian = (__BYTE_ORDER == __BIG_ENDIAN);
+    as->big_endian = target_is_big_endian();
   else
-    as->big_endian = (byte_order == __BIG_ENDIAN);
+    as->big_endian = (byte_order == UNW_BIG_ENDIAN);
 
   /* FIXME!  There is no way to specify the ABI.  */
+#if _MIPS_SIM == _ABIO32
   as->abi = UNW_MIPS_ABI_O32;
-  as->addr_size = 4;
+#elif _MIPS_SIM == _ABIN32
+  as->abi = UNW_MIPS_ABI_N32;
+#elif _MIPS_SIM == _ABI64
+  as->abi = UNW_MIPS_ABI_N64;
+#else
+# error Unsupported ABI
+#endif
 
   return as;
 #endif

@@ -109,12 +109,9 @@ run_cfi_program (struct dwarf_cursor *c, dwarf_state_record_t *sr,
       as = c->as;
       arg = c->as_arg;
     }
-  unw_accessors_t *a = unw_get_accessors (as);
+  unw_accessors_t *a = unw_get_accessors_int (as);
   int ret = 0;
 
-  /* Process everything up to and including the current 'end_ip',
-     including all the DW_CFA_advance_loc instructions.  See
-     'c->use_prev_instr' use in 'fetch_proc_info' for details. */
   while (*ip <= end_ip && *addr < end_addr && ret >= 0)
     {
       unw_word_t operand = 0, regnum, val, len;
@@ -278,7 +275,7 @@ run_cfi_program (struct dwarf_cursor *c, dwarf_state_record_t *sr,
               ret = -UNW_ENOMEM;
               break;
 	    }
-          memcpy (&(*rs_stack)->state, &sr->rs_current, sizeof (sr->rs_current));
+          (*rs_stack)->state = sr->rs_current;
           Debug (15, "CFA_remember_state\n");
           break;
 
@@ -289,10 +286,8 @@ run_cfi_program (struct dwarf_cursor *c, dwarf_state_record_t *sr,
               ret = -UNW_EINVAL;
               break;
             }
-          if (*ip < end_ip) {
-            memcpy (&sr->rs_current, &(*rs_stack)->state, sizeof (sr->rs_current));
-            pop_rstate_stack(rs_stack);
-          }
+          sr->rs_current = (*rs_stack)->state;
+          pop_rstate_stack(rs_stack);
           Debug (15, "CFA_restore_state\n");
           break;
 
@@ -384,11 +379,8 @@ run_cfi_program (struct dwarf_cursor *c, dwarf_state_record_t *sr,
         case DW_CFA_GNU_args_size:
           if ((ret = dwarf_read_uleb128 (as, a, addr, &val, arg)) < 0)
             break;
-          if (*ip < end_ip)
-            {
-              sr->args_size = val;
-              Debug (15, "CFA_GNU_args_size %lu\n", (long) val);
-            }
+          sr->args_size = val;
+          Debug (15, "CFA_GNU_args_size %lu\n", (long) val);
           break;
 
         case DW_CFA_GNU_negative_offset_extended:
@@ -429,7 +421,7 @@ run_cfi_program (struct dwarf_cursor *c, dwarf_state_record_t *sr,
 }
 
 static int
-fetch_proc_info (struct dwarf_cursor *c, unw_word_t ip, int need_unwind_info)
+fetch_proc_info (struct dwarf_cursor *c, unw_word_t ip)
 {
   int ret, dynamic = 1;
 
@@ -443,13 +435,20 @@ fetch_proc_info (struct dwarf_cursor *c, unw_word_t ip, int need_unwind_info)
      and b) so that run_cfi_program() runs locations up to the call
      but not more.
 
-     For execution resume, we need to do the exact opposite and look
+     For signal frame, we need to do the exact opposite and look
      up using the current 'ip' value.  That is where execution will
      continue, and it's important we get this right, as 'ip' could be
      right at the function entry and hence FDE edge, or at instruction
      that manipulates CFA (push/pop). */
+
   if (c->use_prev_instr)
-    --ip;
+    {
+#if defined(__arm__)
+      /* On arm, the least bit denotes thumb/arm mode, clear it. */
+      ip &= ~(unw_word_t)0x1;
+#endif
+      --ip;
+    }
 
   memset (&c->pi, 0, sizeof (c->pi));
 
@@ -474,14 +473,6 @@ fetch_proc_info (struct dwarf_cursor *c, unw_word_t ip, int need_unwind_info)
   /* Let system/machine-dependent code determine frame-specific attributes. */
   if (ret >= 0)
     tdep_fetch_frame (c, ip, 1);
-
-  /* Update use_prev_instr for the next frame. */
-  if (need_unwind_info)
-  {
-    assert(c->pi.unwind_info);
-    struct dwarf_cie_info *dci = c->pi.unwind_info;
-    c->use_prev_instr = ! dci->signal_frame;
-  }
 
   return ret;
 }
@@ -541,7 +532,9 @@ parse_fde (struct dwarf_cursor *c, unw_word_t ip, dwarf_state_record_t *sr)
   unw_word_t addr = dci->fde_instr_start;
   unw_word_t curr_ip = c->pi.start_ip;
   dwarf_stackable_reg_state_t *rs_stack = NULL;
-  ret = run_cfi_program (c, sr, &curr_ip, ip, &addr, dci->fde_instr_end,
+  /* Process up to current `ip` for signal frame and `ip - 1` for normal call frame
+     See `c->use_prev_instr` use in `fetch_proc_info` for details. */
+  ret = run_cfi_program (c, sr, &curr_ip, ip - c->use_prev_instr, &addr, dci->fde_instr_end,
 			 &rs_stack, dci);
   empty_rstate_stack(&rs_stack);
   if (ret < 0)
@@ -608,10 +601,10 @@ get_rs_cache (unw_addr_space_t as, intrmask_t *saved_maskp)
   if (caching == UNW_CACHE_NONE)
     return NULL;
 
-#if defined(HAVE___THREAD) && HAVE___THREAD
+#if defined(HAVE___CACHE_PER_THREAD) && HAVE___CACHE_PER_THREAD
   if (likely (caching == UNW_CACHE_PER_THREAD))
     {
-      static __thread struct dwarf_rs_cache tls_cache __attribute__((tls_model("initial-exec")));
+      static _Thread_local struct dwarf_rs_cache tls_cache __attribute__((tls_model("initial-exec")));
       Debug (16, "using TLS cache\n");
       cache = &tls_cache;
     }
@@ -624,14 +617,14 @@ get_rs_cache (unw_addr_space_t as, intrmask_t *saved_maskp)
       lock_acquire (&cache->lock, *saved_maskp);
     }
 
-  if ((atomic_read (&as->cache_generation) != atomic_read (&cache->generation))
+  if ((atomic_load (&as->cache_generation) != atomic_load (&cache->generation))
        || !cache->hash)
     {
       /* cache_size is only set in the global_cache, copy it over before flushing */
       cache->log_size = as->global_cache.log_size;
       if (dwarf_flush_rs_cache (cache) < 0)
         return NULL;
-      cache->generation = as->cache_generation;
+      atomic_store (&cache->generation, atomic_load (&as->cache_generation));
     }
 
   return cache;
@@ -748,7 +741,7 @@ create_state_record_for (struct dwarf_cursor *c, dwarf_state_record_t *sr,
 }
 
 static inline int
-eval_location_expr (struct dwarf_cursor *c, unw_addr_space_t as,
+eval_location_expr (struct dwarf_cursor *c, unw_word_t stack_val, unw_addr_space_t as,
                     unw_accessors_t *a, unw_word_t addr,
                     dwarf_loc_t *locp, void *arg)
 {
@@ -760,7 +753,7 @@ eval_location_expr (struct dwarf_cursor *c, unw_addr_space_t as,
     return ret;
 
   /* evaluate the expression: */
-  if ((ret = dwarf_eval_expr (c, &addr, len, &val, &is_register)) < 0)
+  if ((ret = dwarf_eval_expr (c, stack_val, &addr, len, &val, &is_register)) < 0)
     return ret;
 
   if (is_register)
@@ -787,7 +780,7 @@ apply_reg_state (struct dwarf_cursor *c, struct dwarf_reg_state *rs)
 
   as = c->as;
   arg = c->as_arg;
-  a = unw_get_accessors (as);
+  a = unw_get_accessors_int (as);
 
   /* Evaluate the CFA first, because it may be referred to by other
      expressions.  */
@@ -818,7 +811,10 @@ apply_reg_state (struct dwarf_cursor *c, struct dwarf_reg_state *rs)
       assert (rs->reg.where[DWARF_CFA_REG_COLUMN] == DWARF_WHERE_EXPR);
 
       addr = rs->reg.val[DWARF_CFA_REG_COLUMN];
-      if ((ret = eval_location_expr (c, as, a, addr, &cfa_loc, arg)) < 0)
+      /* The dwarf standard doesn't specify an initial value to be pushed on */
+      /* the stack before DW_CFA_def_cfa_expression evaluation. We push on a */
+      /* dummy value (0) to keep the eval_location_expr function consistent. */
+      if ((ret = eval_location_expr (c, 0, as, a, addr, &cfa_loc, arg)) < 0)
         return ret;
       /* the returned location better be a memory location... */
       if (DWARF_IS_REG_LOC (cfa_loc))
@@ -826,39 +822,56 @@ apply_reg_state (struct dwarf_cursor *c, struct dwarf_reg_state *rs)
       cfa = DWARF_GET_LOC (cfa_loc);
     }
 
+  dwarf_loc_t new_loc[DWARF_NUM_PRESERVED_REGS];
+  memcpy(new_loc, c->loc, sizeof(new_loc));
+
   for (i = 0; i < DWARF_NUM_PRESERVED_REGS; ++i)
     {
       switch ((dwarf_where_t) rs->reg.where[i])
         {
         case DWARF_WHERE_UNDEF:
-          c->loc[i] = DWARF_NULL_LOC;
+          new_loc[i] = DWARF_NULL_LOC;
           break;
 
         case DWARF_WHERE_SAME:
           break;
 
         case DWARF_WHERE_CFAREL:
-          c->loc[i] = DWARF_MEM_LOC (c, cfa + rs->reg.val[i]);
+          new_loc[i] = DWARF_MEM_LOC (c, cfa + rs->reg.val[i]);
           break;
 
         case DWARF_WHERE_REG:
-          c->loc[i] = DWARF_REG_LOC (c, dwarf_to_unw_regnum (rs->reg.val[i]));
+#ifdef __s390x__
+          /* GPRs can be saved in FPRs on s390x */
+          if (unw_is_fpreg (dwarf_to_unw_regnum (rs->reg.val[i])))
+            {
+              new_loc[i] = DWARF_FPREG_LOC (c, dwarf_to_unw_regnum (rs->reg.val[i]));
+              break;
+            }
+#endif
+          new_loc[i] = new_loc[rs->reg.val[i]];
           break;
 
         case DWARF_WHERE_EXPR:
           addr = rs->reg.val[i];
-          if ((ret = eval_location_expr (c, as, a, addr, c->loc + i, arg)) < 0)
+          /* The dwarf standard requires the current CFA to be pushed on the */
+          /* stack before DW_CFA_expression evaluation. */
+          if ((ret = eval_location_expr (c, cfa, as, a, addr, new_loc + i, arg)) < 0)
             return ret;
           break;
 
         case DWARF_WHERE_VAL_EXPR:
           addr = rs->reg.val[i];
-          if ((ret = eval_location_expr (c, as, a, addr, c->loc + i, arg)) < 0)
+          /* The dwarf standard requires the current CFA to be pushed on the */
+          /* stack before DW_CFA_val_expression evaluation. */
+          if ((ret = eval_location_expr (c, cfa, as, a, addr, new_loc + i, arg)) < 0)
             return ret;
-          c->loc[i] = DWARF_VAL_LOC (c, DWARF_GET_LOC (c->loc[i]));
+          new_loc[i] = DWARF_VAL_LOC (c, DWARF_GET_LOC (new_loc[i]));
           break;
         }
     }
+
+  memcpy(c->loc, new_loc, sizeof(new_loc));
 
   c->cfa = cfa;
   /* DWARF spec says undefined return address location means end of stack. */
@@ -909,10 +922,18 @@ find_reg_state (struct dwarf_cursor *c, dwarf_state_record_t *sr)
     }
   else
     {
-      ret = fetch_proc_info (c, c->ip, 1);
+      ret = fetch_proc_info (c, c->ip);
+      int next_use_prev_instr = c->use_prev_instr;
       if (ret >= 0)
-	ret = create_state_record_for (c, sr, c->ip);
+	{
+	  /* Update use_prev_instr for the next frame. */
+	  assert(c->pi.unwind_info);
+	  struct dwarf_cie_info *dci = c->pi.unwind_info;
+	  next_use_prev_instr = ! dci->signal_frame;
+	  ret = create_state_record_for (c, sr, c->ip);
+	}
       put_unwind_info (c, &c->pi);
+      c->use_prev_instr = next_use_prev_instr;
 
       if (cache && ret >= 0)
 	{
@@ -925,7 +946,6 @@ find_reg_state (struct dwarf_cursor *c, dwarf_state_record_t *sr)
   unsigned short index = -1;
   if (cache)
     {
-      put_rs_cache (c->as, cache, &saved_mask);
       if (rs)
 	{
 	  index = rs - cache->buckets;
@@ -933,6 +953,7 @@ find_reg_state (struct dwarf_cursor *c, dwarf_state_record_t *sr)
 	  cache->links[c->prev_rs].hint = index + 1;
 	  c->prev_rs = index;
 	}
+      put_rs_cache (c->as, cache, &saved_mask);
     }
   if (ret < 0)
       return ret;
@@ -967,7 +988,7 @@ dwarf_make_proc_info (struct dwarf_cursor *c)
   int ret;
 
   /* Lookup it up the slow way... */
-  ret = fetch_proc_info (c, c->ip, 0);
+  ret = fetch_proc_info (c, c->ip);
   if (ret >= 0)
       ret = create_state_record_for (c, &sr, c->ip);
   put_unwind_info (c, &c->pi);
@@ -1024,24 +1045,32 @@ dwarf_reg_states_iterate(struct dwarf_cursor *c,
 			 unw_reg_states_callback cb,
 			 void *token)
 {
-  int ret = fetch_proc_info (c, c->ip, 1);
+  int ret = fetch_proc_info (c, c->ip);
+  int next_use_prev_instr = c->use_prev_instr;
   if (ret >= 0)
-    switch (c->pi.format)
-      {
-      case UNW_INFO_FORMAT_TABLE:
-      case UNW_INFO_FORMAT_REMOTE_TABLE:
-	ret = dwarf_reg_states_table_iterate(c, cb, token);
-	break;
+    {
+      /* Update use_prev_instr for the next frame. */
+      assert(c->pi.unwind_info);
+      struct dwarf_cie_info *dci = c->pi.unwind_info;
+      next_use_prev_instr = ! dci->signal_frame;
+      switch (c->pi.format)
+	{
+	case UNW_INFO_FORMAT_TABLE:
+	case UNW_INFO_FORMAT_REMOTE_TABLE:
+	  ret = dwarf_reg_states_table_iterate(c, cb, token);
+	  break;
 
-      case UNW_INFO_FORMAT_DYNAMIC:
-	ret = dwarf_reg_states_dynamic_iterate (c, cb, token);
-	break;
+	case UNW_INFO_FORMAT_DYNAMIC:
+	  ret = dwarf_reg_states_dynamic_iterate (c, cb, token);
+	  break;
 
-      default:
-	Debug (1, "Unexpected unwind-info format %d\n", c->pi.format);
-	ret = -UNW_EINVAL;
-      }
+	default:
+	  Debug (1, "Unexpected unwind-info format %d\n", c->pi.format);
+	  ret = -UNW_EINVAL;
+	}
+    }
   put_unwind_info (c, &c->pi);
+  c->use_prev_instr = next_use_prev_instr;
   return ret;
 }
 
