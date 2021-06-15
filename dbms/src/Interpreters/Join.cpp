@@ -1346,7 +1346,7 @@ struct AdderNonJoined;
 template <typename Mapped>
 struct AdderNonJoined<ASTTableJoin::Strictness::Any, Mapped>
 {
-    static size_t add(const Mapped & mapped,
+    static size_t add(const Mapped & mapped, size_t key_num,
         size_t num_columns_left, MutableColumns & columns_left,
         size_t num_columns_right, MutableColumns & columns_right)
     {
@@ -1354,7 +1354,7 @@ struct AdderNonJoined<ASTTableJoin::Strictness::Any, Mapped>
             columns_left[j]->insertDefault();
 
         for (size_t j = 0; j < num_columns_right; ++j)
-            columns_right[j]->insertFrom(*mapped.block->getByPosition(j).column.get(), mapped.row_num);
+            columns_right[j]->insertFrom(*mapped.block->getByPosition(key_num + j).column.get(), mapped.row_num);
         return 1;
     }
 };
@@ -1362,7 +1362,7 @@ struct AdderNonJoined<ASTTableJoin::Strictness::Any, Mapped>
 template <typename Mapped>
 struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
 {
-    static size_t add(const Mapped & mapped,
+    static size_t add(const Mapped & mapped, size_t key_num,
         size_t num_columns_left, MutableColumns & columns_left,
         size_t num_columns_right, MutableColumns & columns_right)
     {
@@ -1373,7 +1373,7 @@ struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
                 columns_left[j]->insertDefault();
 
             for (size_t j = 0; j < num_columns_right; ++j)
-                columns_right[j]->insertFrom(*current->block->getByPosition(j).column.get(), current->row_num);
+                columns_right[j]->insertFrom(*current->block->getByPosition(key_num + j).column.get(), current->row_num);
             rows_added++;
         }
         return rows_added;
@@ -1392,8 +1392,7 @@ public:
           * result_sample_block - keys, "left" columns, and "right" columns.
           */
 
-        size_t num_keys = parent.key_names_left.size();
-        size_t num_columns_left = left_sample_block.columns() - num_keys;
+        size_t num_columns_left = left_sample_block.columns();
         size_t num_columns_right = parent.sample_block_with_columns_to_add.columns();
 
         result_sample_block = materializeBlock(left_sample_block);
@@ -1406,28 +1405,16 @@ public:
         }
 
         column_indices_left.reserve(num_columns_left);
-        column_indices_keys_and_right.reserve(num_keys + num_columns_right);
-        std::vector<bool> is_key_column_in_left_block(num_keys + num_columns_left, false);
+        column_indices_right.reserve(num_columns_right);
+        std::vector<bool> is_key_column_in_left_block(num_columns_left, false);
 
-        for (const std::string & key : parent.key_names_left)
+        for (size_t i = 0; i < num_columns_left; ++i)
         {
-            size_t key_pos = left_sample_block.getPositionByName(key);
-            is_key_column_in_left_block[key_pos] = true;
-            /// Here we establish the mapping between key columns of the left- and right-side tables.
-            /// key_pos index is inserted in the position corresponding to key column in parent.blocks
-            /// (saved blocks of the right-side table) and points to the same key column
-            /// in the left_sample_block and thus in the result_sample_block.
-            column_indices_keys_and_right.push_back(key_pos);
-        }
-
-        for (size_t i = 0; i < num_keys + num_columns_left; ++i)
-        {
-            if (!is_key_column_in_left_block[i])
-                column_indices_left.push_back(i);
+            column_indices_left.push_back(i);
         }
 
         for (size_t i = 0; i < num_columns_right; ++i)
-            column_indices_keys_and_right.push_back(num_keys + num_columns_left + i);
+            column_indices_right.push_back(num_columns_left + i);
 
         /// If use_nulls, convert left columns to Nullable.
         if (parent.use_nulls)
@@ -1439,7 +1426,12 @@ public:
         }
 
         columns_left.resize(num_columns_left);
+<<<<<<< HEAD
         columns_keys_and_right.resize(num_keys + num_columns_right);
+=======
+        columns_right.resize(num_columns_right);
+        next_index = index;
+>>>>>>> 74e5b2546... fix segment fault for right join (#2153)
     }
 
     String getName() const override { return "NonJoined"; }
@@ -1475,13 +1467,13 @@ private:
     Block result_sample_block;
     /// Indices of columns in result_sample_block that come from the left-side table (except key columns).
     ColumnNumbers column_indices_left;
-    /// Indices of key columns in result_sample_block or columns that come from the right-side table.
+    /// Indices of columns that come from the right-side table.
     /// Order is significant: it is the same as the order of columns in the blocks of the right-side table that are saved in parent.blocks.
-    ColumnNumbers column_indices_keys_and_right;
+    ColumnNumbers column_indices_right;
     /// Columns of the current output block corresponding to column_indices_left.
     MutableColumns columns_left;
-    /// Columns of the current output block corresponding to column_indices_keys_and_right.
-    MutableColumns columns_keys_and_right;
+    /// Columns of the current output block corresponding to column_indices_right.
+    MutableColumns columns_right;
 
     std::unique_ptr<void, std::function<void(void *)>> position;    /// type erasure
     size_t current_segment;
@@ -1492,7 +1484,7 @@ private:
     Block createBlock(const Maps & maps)
     {
         size_t num_columns_left = column_indices_left.size();
-        size_t num_columns_right = column_indices_keys_and_right.size();
+        size_t num_columns_right = column_indices_right.size();
 
         for (size_t i = 0; i < num_columns_left; ++i)
         {
@@ -1502,8 +1494,8 @@ private:
 
         for (size_t i = 0; i < num_columns_right; ++i)
         {
-            const auto & src_col = result_sample_block.safeGetByPosition(column_indices_keys_and_right[i]);
-            columns_keys_and_right[i] = src_col.type->createColumn();
+            const auto & src_col = result_sample_block.safeGetByPosition(column_indices_right[i]);
+            columns_right[i] = src_col.type->createColumn();
         }
 
         size_t rows_added = 0;
@@ -1512,7 +1504,7 @@ private:
         {
         #define M(TYPE) \
             case Join::Type::TYPE: \
-                rows_added = fillColumns<STRICTNESS>(*maps.TYPE, num_columns_left, columns_left, num_columns_right, columns_keys_and_right); \
+                rows_added = fillColumns<STRICTNESS>(*maps.TYPE, num_columns_left, columns_left, num_columns_right, columns_right); \
                 break;
             APPLY_FOR_JOIN_VARIANTS(M)
         #undef M
@@ -1528,7 +1520,7 @@ private:
         for (size_t i = 0; i < num_columns_left; ++i)
             res.getByPosition(column_indices_left[i]).column = std::move(columns_left[i]);
         for (size_t i = 0; i < num_columns_right; ++i)
-            res.getByPosition(column_indices_keys_and_right[i]).column = std::move(columns_keys_and_right[i]);
+            res.getByPosition(column_indices_right[i]).column = std::move(columns_right[i]);
 
         return res;
     }
@@ -1536,10 +1528,16 @@ private:
 
     template <ASTTableJoin::Strictness STRICTNESS, typename Map>
     size_t fillColumns(const Map & map,
+<<<<<<< HEAD
         size_t num_columns_left, MutableColumns & columns_left,
         size_t num_columns_right, MutableColumns & columns_right)
+=======
+        size_t num_columns_left, MutableColumns & mutable_columns_left,
+        size_t num_columns_right, MutableColumns & mutable_columns_right)
+>>>>>>> 74e5b2546... fix segment fault for right join (#2153)
     {
         size_t rows_added = 0;
+        size_t key_num = parent.key_names_right.size();
         while (current_not_mapped_row != nullptr)
         {
             rows_added++;
@@ -1547,7 +1545,7 @@ private:
                 columns_left[j]->insertDefault();
 
             for (size_t j = 0; j < num_columns_right; ++j)
-                columns_right[j]->insertFrom(*current_not_mapped_row->block->getByPosition(j).column.get(),
+                mutable_columns_right[j]->insertFrom(*current_not_mapped_row->block->getByPosition(key_num + j).column.get(),
                                              current_not_mapped_row->row_num);
 
             current_not_mapped_row = current_not_mapped_row->next;
@@ -1590,7 +1588,11 @@ private:
             if ((*it)->second.getUsed())
                 continue;
 
+<<<<<<< HEAD
             rows_added += AdderNonJoined<STRICTNESS, typename Map::mapped_type>::add((*it)->second, num_columns_left, columns_left, num_columns_right, columns_right);
+=======
+            rows_added += AdderNonJoined<STRICTNESS, typename Map::mapped_type>::add((*it)->second, key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right);
+>>>>>>> 74e5b2546... fix segment fault for right join (#2153)
 
             if (rows_added >= max_block_size)
             {
