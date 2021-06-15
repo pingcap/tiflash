@@ -4,7 +4,7 @@
 
 #include <vector>
 #include <boost/noncopyable.hpp>
-#include <common/Types.h>
+#include <common/types.h>
 
 
 class IRegionsHierarchyDataProvider;
