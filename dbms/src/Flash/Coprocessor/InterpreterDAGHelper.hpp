@@ -17,7 +17,7 @@ RegionException::RegionReadStatus GetRegionReadStatus(
     if (!current_region)
         return RegionException::RegionReadStatus::NOT_FOUND;
     auto meta_snap = current_region->dumpRegionMetaSnapshot();
-    if (meta_snap.ver != check_info.region_ver_id.version)
+    if (meta_snap.ver != check_info.region_ver_id.ver)
         return RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
     // No need to check conf_version if its peer state is normal
     if (current_region->peerState() != raft_serverpb::PeerState::Normal)
@@ -47,7 +47,7 @@ MakeRegionQueryInfos(const std::unordered_map<RegionVerID, RegionInfo> & dag_reg
             continue;
         }
         ImutRegionRangePtr region_range{nullptr};
-        if (auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id.region_id), region_range);
+        if (auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id.id), region_range);
             status != RegionException::RegionReadStatus::OK)
         {
             region_need_retry.emplace(id, r);

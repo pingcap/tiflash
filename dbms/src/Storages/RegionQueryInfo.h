@@ -3,10 +3,16 @@
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <pingcap/kv/RegionCache.h>
+#pragma GCC diagnostic pop
+
 namespace DB
 {
 
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
+using RegionVerID = pingcap::kv::RegionVerID;
 
 struct RegionQueryInfo
 {

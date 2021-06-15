@@ -37,6 +37,7 @@ class IManageableStorage;
 using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
 using NameWithAlias = std::pair<std::string, std::string>;
 using NamesWithAliases = std::vector<NameWithAlias>;
+using RegionVerID = pingcap::kv::RegionVerID;
 
 struct DAGPipeline
 {
