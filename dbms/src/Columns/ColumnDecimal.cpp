@@ -159,7 +159,9 @@ ColumnPtr ColumnDecimal<T>::permute(const IColumn::Permutation & perm, size_t li
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpragmas"
+#ifndef __clang__
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
+#endif
 template <typename T>
 MutableColumnPtr ColumnDecimal<T>::cloneResized(size_t size) const
 {
