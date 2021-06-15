@@ -11,6 +11,9 @@ COPY prepare-environments /prepare-environments
 
 RUN yum remove -y epel-release
 
+ENV CC=/opt/rh/devtoolset-10/root/usr/bin/gcc
+ENV CXX=/opt/rh/devtoolset-10/root/usr/bin/g++
+
 RUN yum makecache \
   && yum install -y \
          ccache \
@@ -24,8 +27,8 @@ RUN yum makecache \
          bzip2 \
          chrpath \
   && yum install -y centos-release-scl \
-  && yum install -y devtoolset-8 \
-  && source scl_source enable devtoolset-8 \
+  && yum install -y devtoolset-10 \
+  && source scl_source enable devtoolset-10 \
   && yum remove -y openssl-devel \
   && curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly  \
   && cd /prepare-environments \
