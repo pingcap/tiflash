@@ -20,7 +20,7 @@
 #include <Poco/FileChannel.h>
 #include <Poco/SyslogChannel.h>
 #include <Poco/Version.h>
-#include <common/Types.h>
+#include <common/types.h>
 #include <common/logger_useful.h>
 #include <daemon/GraphiteWriter.h>
 #include <Common/Config/ConfigProcessor.h>

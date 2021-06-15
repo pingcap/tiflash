@@ -81,7 +81,7 @@ std::string ClickHouseDictionarySource::getUpdateFieldAndDate()
         auto tmp_time = update_time;
         update_time = std::chrono::system_clock::now();
         time_t hr_time = std::chrono::system_clock::to_time_t(tmp_time) - 1;
-        std::string str_time = std::to_string(LocalDateTime(hr_time));
+        std::string str_time = LocalDateTime(hr_time).toString();
         return query_builder.composeUpdateQuery(update_field, str_time);
     }
     else

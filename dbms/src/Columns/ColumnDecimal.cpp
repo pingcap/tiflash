@@ -154,9 +154,12 @@ ColumnPtr ColumnDecimal<T>::permute(const IColumn::Permutation & perm, size_t li
     for (size_t i = 0; i < size; ++i)
         res_data[i] = data[perm[i]];
 
-    return std::move(res);
+    return res;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
 template <typename T>
 MutableColumnPtr ColumnDecimal<T>::cloneResized(size_t size) const
 {
@@ -177,7 +180,7 @@ MutableColumnPtr ColumnDecimal<T>::cloneResized(size_t size) const
         }
     }
 
-    return std::move(res);
+    return res;
 }
 
 template <typename T>
@@ -202,6 +205,8 @@ void ColumnDecimal<T>::insertRangeFrom(const IColumn & src, size_t start, size_t
     data.resize(old_size + length);
     memcpy(data.data() + old_size, &src_vec.data[start], length * sizeof(data[0]));
 }
+
+#pragma GCC diagnostic pop
 
 template <typename T>
 ColumnPtr ColumnDecimal<T>::filter(const IColumn::Filter & filt, ssize_t result_size_hint) const
@@ -229,7 +234,7 @@ ColumnPtr ColumnDecimal<T>::filter(const IColumn::Filter & filt, ssize_t result_
         ++data_pos;
     }
 
-    return std::move(res);
+    return res;
 }
 
 template <typename T>
@@ -256,7 +261,7 @@ ColumnPtr ColumnDecimal<T>::replicate(const IColumn::Offsets & offsets) const
             res_data.push_back(data[i]);
     }
 
-    return std::move(res);
+    return res;
 }
 
 template <typename T>

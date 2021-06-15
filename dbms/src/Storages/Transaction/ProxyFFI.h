@@ -53,7 +53,7 @@ struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
     FileEncryptionInfo deleteFile(const std::string &) const;
     FileEncryptionInfo linkFile(const std::string &, const std::string &) const;
     kvrpcpb::ReadIndexResponse readIndex(const kvrpcpb::ReadIndexRequest &) const;
-    BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> &) const;
+    BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> &, uint64_t) const;
 };
 
 RawCppPtr GenCppRawString(BaseBuffView);

@@ -134,15 +134,15 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
         {
             if (encode_type == tipb::EncodeType::TypeDefault)
             {
-                chunk_codec_stream[i] = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
+                chunk_codec_stream[i] = DefaultChunkCodec().newCodecStream(result_field_types);
             }
             else if (encode_type == tipb::EncodeType::TypeChunk)
             {
-                chunk_codec_stream[i] = std::make_unique<ArrowChunkCodec>()->newCodecStream(result_field_types);
+                chunk_codec_stream[i] = ArrowChunkCodec().newCodecStream(result_field_types);
             }
             else if (encode_type == tipb::EncodeType::TypeCHBlock)
             {
-                chunk_codec_stream[i] = std::make_unique<CHBlockChunkCodec>()->newCodecStream(result_field_types);
+                chunk_codec_stream[i] = CHBlockChunkCodec().newCodecStream(result_field_types);
             }
             responses[i] = response;
             responses[i].set_encode_type(encode_type);
@@ -187,7 +187,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             for (size_t row_index = 0; row_index < rows; ++row_index)
             {
                 UInt128 key;
-                hash_values[row_index].get128(key.low, key.high);
+                hash_values[row_index].get128(key);
 
                 partition_selector[row_index] = key.low % partition_num;
             }
