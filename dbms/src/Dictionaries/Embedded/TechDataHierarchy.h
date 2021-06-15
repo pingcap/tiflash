@@ -3,7 +3,7 @@
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Poco/Exception.h>
 
-#include <common/Types.h>
+#include <common/types.h>
 
 #include <ext/singleton.h>
 
