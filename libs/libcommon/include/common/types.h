@@ -172,3 +172,29 @@ inline constexpr bool is_boost_number_v = is_boost_number<T>::value;
 
 template <typename T>
 inline constexpr bool is_fit_register = sizeof(T) <= sizeof(UInt64);
+
+/** This is not the best way to overcome an issue of different definitions
+  * of uint64_t and size_t on Linux and Mac OS X (both 64 bit).
+  *
+  * Note that on both platforms, long and long long are 64 bit types.
+  * But they are always different types (with the same physical representation).
+  */
+namespace std
+{
+inline UInt64 max(unsigned long x, unsigned long long y) { return x > y ? x : y; }
+inline UInt64 max(unsigned long long x, unsigned long y) { return x > y ? x : y; }
+inline UInt64 min(unsigned long x, unsigned long long y) { return x < y ? x : y; }
+inline UInt64 min(unsigned long long x, unsigned long y) { return x < y ? x : y; }
+
+inline Int64 max(long x, long long y) { return x > y ? x : y; }
+inline Int64 max(long long x, long y) { return x > y ? x : y; }
+inline Int64 min(long x, long long y) { return x < y ? x : y; }
+inline Int64 min(long long x, long y) { return x < y ? x : y; }
+} // namespace std
+
+
+/// Workaround for the issue, that KDevelop doesn't see time_t and size_t types (for syntax highlight).
+#ifdef IN_KDEVELOP_PARSER
+    using time_t = Int64;
+    using size_t = UInt64;
+#endif

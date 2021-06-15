@@ -29,7 +29,7 @@ add_library (common ${SPLIT_SHARED}
     src/demangle.cpp
     src/StringRef.cpp
 
-    include/common/Types.h
+    include/common/types.h
     include/common/DateLUT.h
     include/common/DateLUTImpl.h
     include/common/LocalDate.h

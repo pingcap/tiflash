@@ -4,7 +4,7 @@
 
 #include <Poco/Exception.h>
 
-#include <common/Types.h>
+#include <common/types.h>
 #include <common/StringRef.h>
 
 #include <string>
