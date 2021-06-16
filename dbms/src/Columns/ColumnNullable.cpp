@@ -81,6 +81,27 @@ void ColumnNullable::updateHashWithValues(
     }
 }
 
+void ColumnNullable::updateWeakHash32(WeakHash32 & hash) const
+{
+    auto s = size();
+
+    if (hash.getData().size() != s)
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
+                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+
+    WeakHash32 old_hash = hash;
+    nested_column->updateWeakHash32(hash);
+
+    const auto & null_map_data = getNullMapData();
+    auto & hash_data = hash.getData();
+    auto & old_hash_data = old_hash.getData();
+
+    /// Use old data for nulls.
+    for (size_t row = 0; row < s; ++row)
+        if (null_map_data[row])
+            hash_data[row] = old_hash_data[row];
+}
+
 MutableColumnPtr ColumnNullable::cloneResized(size_t new_size) const
 {
     MutableColumnPtr new_nested_col = getNestedColumn().cloneResized(new_size);
