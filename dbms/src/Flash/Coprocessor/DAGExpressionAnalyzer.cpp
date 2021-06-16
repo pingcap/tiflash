@@ -317,23 +317,6 @@ static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr &
     }
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
-
-struct DateAdd
-{
-    static constexpr auto name = "date_add";
-    static const std::unordered_map<String, String> unit_to_func_name_map;
-};
-const std::unordered_map<String, String> DateAdd::unit_to_func_name_map = {{"DAY", "addDays"}, {"WEEK", "addWeeks"}, {"MONTH", "addMonths"},
-    {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}};
-struct DateSub
-{
-    static constexpr auto name = "date_sub";
-    static const std::unordered_map<String, String> unit_to_func_name_map;
-};
-const std::unordered_map<String, String> DateSub::unit_to_func_name_map
-    = {{"DAY", "subtractDays"}, {"WEEK", "subtractWeeks"}, {"MONTH", "subtractMonths"}, {"YEAR", "subtractYears"},
-        {"HOUR", "subtractHours"}, {"MINUTE", "subtractMinutes"}, {"SECOND", "subtractSeconds"}};
-
 static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>>
     function_builder_map({{"in", buildInFunction}, {"notIn", buildInFunction}, {"globalIn", buildInFunction},
         {"globalNotIn", buildInFunction}, {"tidbIn", buildInFunction}, {"tidbNotIn", buildInFunction}, {"ifNull", buildIfNullFunction},

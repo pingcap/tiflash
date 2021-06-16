@@ -139,6 +139,7 @@ int calcDayNum(int year, int month, int day);
 
 size_t maxFormattedDateTimeStringLength(const String & format);
 
+MyDateTime numberToDateTime(Int64 number);
 
 inline bool supportedByDateLUT(const MyDateTime & my_time) { return my_time.year >= 1970; }
 
