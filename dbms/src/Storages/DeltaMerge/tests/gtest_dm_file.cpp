@@ -1079,8 +1079,11 @@ public:
     }
 
     // Update dm_context.
-    void reload(const ColumnDefinesPtr & cols = DMTestEnv::getDefaultColumns(true))
+    void reload(ColumnDefinesPtr cols = {})
     {
+        if (!cols)
+            cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
+
         *table_columns_ = *cols;
 
         dm_context = std::make_unique<DMContext>( //
@@ -1120,7 +1123,7 @@ protected:
 TEST_P(DMFile_Clustered_Index_Test, WriteRead)
 try
 {
-    auto cols = DMTestEnv::getDefaultColumns(is_common_handle);
+    auto cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
 
     const size_t num_rows_write = 128;
 
@@ -1188,7 +1191,7 @@ CATCH
 TEST_P(DMFile_Clustered_Index_Test, ReadFilteredByHandle)
 try
 {
-    auto cols = DMTestEnv::getDefaultColumns(is_common_handle);
+    auto cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
 
     const Int64 num_rows_write = 1024;
     const Int64 nparts         = 5;

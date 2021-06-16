@@ -24,7 +24,7 @@ public:
     String getName() const override { return "Debug"; }
     Block  getHeader() const override
     {
-        auto cds = DMTestEnv::getDefaultColumns(is_common_handle);
+        auto cds = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
         cds->push_back(ColumnDefine(100, str_col_name, DataTypeFactory::instance().get("String")));
         return toEmptyBlock(*cds);
     }
