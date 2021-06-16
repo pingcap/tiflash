@@ -212,7 +212,7 @@ size_t backtraceLibUnwind(void ** out_frames, size_t max_frames, ucontext_t & co
     unw_context.uc_link = context.uc_link;
     unw_context.uc_stack = context.uc_stack;
     unw_context.uc_sigmask = context.uc_sigmask;
-    unw_context.uc_mcontext = context.uc_mcontext;
+    std::memcpy(&unw_context.uc_mcontext, &context.uc_mcontext, sizeof(unw_context.uc_mcontext));
     unw_context_t* context_ptr = &unw_context;
 #else
     ucontext_t* context_ptr = &context;
