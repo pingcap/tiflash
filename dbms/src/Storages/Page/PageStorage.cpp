@@ -1137,7 +1137,6 @@ PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_file
         {
             /// The page file is not used by any version, remove the page file's data in disk.
             /// Page file's meta is left and will be compacted later.
-            // LOG_INFO(log, storage_name << " remove data " << page_file.toString());
             size_t bytes_removed = const_cast<PageFile &>(page_file).setLegacy();
             delegator->removePageFile(page_id_and_lvl, bytes_removed);
             num_data_removed += 1;

@@ -147,9 +147,11 @@ DataCompactor<SnapshotPtr>::migratePages( //
     auto [largest_file_id, level] = candidates.rbegin()->fileIdLevel();
     const PageFileIdAndLevel migrate_file_id{largest_file_id, level + 1};
 
-    // In case that those files are hold by snapshot and do migratePages to same PageFile again, we need to check if gc_file is already exist.
+    // In case that those files are hold by snapshot and do migratePages to same PageFile again, we need to check whether
+    // gc_file (and its legacy file) is already exist.
     const String pf_parent_path = delegator->choosePath(migrate_file_id);
-    if (PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log))
+    if (PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log)
+        || PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Legacy, page_file_log))
     {
         LOG_INFO(log,
                  storage_name << " GC migration to PageFile_" //

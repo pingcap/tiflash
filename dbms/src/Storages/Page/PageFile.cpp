@@ -34,6 +34,8 @@ namespace DB
 namespace FailPoints
 {
 extern const char exception_before_page_file_write_sync[];
+extern const char force_formal_page_file_not_exists[];
+extern const char force_legacy_or_checkpoint_page_file_exists[];
 } // namespace FailPoints
 
 static constexpr bool PAGE_CHECKSUM_ON_READ = true;
@@ -857,6 +859,12 @@ PageFile PageFile::newPageFile(PageFileId              file_id,
                                PageFile::Type          type,
                                Logger *                log)
 {
+#ifndef NDEBUG
+    // PageStorage may create a "Formal" PageFile for writing,
+    // or a "Temp" PageFile for gc data.
+    if (type != PageFile::Type::Temp && type != PageFile::Type::Formal)
+        throw Exception("Should not create page file with type: " + typeToString(type));
+#endif
     return PageFile(file_id, level, parent_path, file_provider_, type, true, log);
 }
 
@@ -982,13 +990,19 @@ void PageFile::destroy() const
 
 bool PageFile::isExist() const
 {
-    Poco::File file(folderPath());
+    Poco::File folder(folderPath());
     Poco::File data_file(dataPath());
     Poco::File meta_file(metaPath());
     if (likely(type == Type::Formal))
-        return (file.exists() && data_file.exists() && meta_file.exists());
+    {
+        fiu_do_on(FailPoints::force_formal_page_file_not_exists, { return false; });
+        return (folder.exists() && data_file.exists() && meta_file.exists());
+    }
     else if (type == Type::Legacy || type == Type::Checkpoint)
-        return file.exists() && meta_file.exists();
+    {
+        fiu_do_on(FailPoints::force_legacy_or_checkpoint_page_file_exists, { return true; });
+        return folder.exists() && meta_file.exists();
+    }
     else
         throw Exception("Should not call isExist for " + toString());
 }
