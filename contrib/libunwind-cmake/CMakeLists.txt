@@ -2,13 +2,29 @@ enable_language(ASM)
 
 set(LIBUNWIND_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/libunwind")
 
+if(ARCH_AARCH64)
+    set(UNWIND_ARCH "aarch64")
+elseif(ARCH_ARM)
+    set(UNWIND_ARCH "arm")
+elseif(ARCH_I386)
+    set(UNWIND_ARCH "x86")
+else()
+    set(UNWIND_ARCH "x86_64")
+endif()
+
+if(ARCH_LINUX)
+    set(UNWIND_OS "linux")
+elseif(ARCH_FREEBSD)
+    set(UNWIND_OS "freebsd")
+endif()
+
 add_library(unwind
 ${LIBUNWIND_SOURCE_DIR}/src/mi/init.c
 ${LIBUNWIND_SOURCE_DIR}/src/mi/flush_cache.c
 ${LIBUNWIND_SOURCE_DIR}/src/mi/mempool.c
 ${LIBUNWIND_SOURCE_DIR}/src/mi/strerror.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/is_fpreg.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/regname.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/is_fpreg.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/regname.c
 ${LIBUNWIND_SOURCE_DIR}/src/mi/_ReadULEB.c
 ${LIBUNWIND_SOURCE_DIR}/src/mi/_ReadSLEB.c
 ${LIBUNWIND_SOURCE_DIR}/src/mi/backtrace.c
@@ -27,20 +43,20 @@ ${LIBUNWIND_SOURCE_DIR}/src/mi/Lset_reg.c
 ${LIBUNWIND_SOURCE_DIR}/src/mi/Lget_fpreg.c
 ${LIBUNWIND_SOURCE_DIR}/src/mi/Lset_fpreg.c
 ${LIBUNWIND_SOURCE_DIR}/src/mi/Lset_caching_policy.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/setcontext.S
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/Lcreate_addr_space.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/Lget_save_loc.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/Lglobal.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/Linit.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/Linit_local.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/Linit_remote.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/Lget_proc_info.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/Lregs.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/Lresume.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/Lstash_frame.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/Lstep.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/Ltrace.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/getcontext.S
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/setcontext.S
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/Lcreate_addr_space.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/Lget_save_loc.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/Lglobal.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/Linit.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/Linit_local.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/Linit_remote.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/Lget_proc_info.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/Lregs.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/Lresume.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/Lstash_frame.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/Lstep.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/Ltrace.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/getcontext.S
 ${LIBUNWIND_SOURCE_DIR}/src/dwarf/Lexpr.c
 ${LIBUNWIND_SOURCE_DIR}/src/dwarf/Lfde.c
 ${LIBUNWIND_SOURCE_DIR}/src/dwarf/Lfind_proc_info-lsb.c
@@ -49,8 +65,8 @@ ${LIBUNWIND_SOURCE_DIR}/src/dwarf/Lpe.c
 ${LIBUNWIND_SOURCE_DIR}/src/dwarf/global.c
 ${LIBUNWIND_SOURCE_DIR}/src/elf64.c
 
-${LIBUNWIND_SOURCE_DIR}/src/os-linux.c
-${LIBUNWIND_SOURCE_DIR}/src/x86_64/Los-linux.c
+${LIBUNWIND_SOURCE_DIR}/src/os-${UNWIND_OS}.c
+${LIBUNWIND_SOURCE_DIR}/src/${UNWIND_ARCH}/Los-${UNWIND_OS}.c
 )
 
 add_definitions(-DHAVE_CONFIG_H -DHAVE_LINK_H -D_GNU_SOURCE)
