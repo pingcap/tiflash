@@ -16,7 +16,7 @@ namespace ErrorCodes
 }
 
 
-namespace
+namespace _UnionBlockInputStreamImpl
 {
 
 template <StreamUnionMode mode>
@@ -146,7 +146,7 @@ protected:
             /** Let's read everything up to the end, so that ParallelInputsProcessor is not blocked when trying to insert into the queue.
               * Maybe there is an exception in the queue.
               */
-            OutputData<mode> res;
+            _UnionBlockInputStreamImpl::OutputData<mode> res;
             while (true)
             {
                 //std::cerr << "popping\n";
@@ -240,7 +240,7 @@ private:
     }
 
 private:
-    using Payload = OutputData<mode>;
+    using Payload = _UnionBlockInputStreamImpl::OutputData<mode>;
     using OutputQueue = ConcurrentBoundedQueue<Payload>;
 
 private:
