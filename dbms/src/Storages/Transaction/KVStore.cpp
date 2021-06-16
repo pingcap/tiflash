@@ -21,11 +21,8 @@ extern const int LOGICAL_ERROR;
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
-KVStore::KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_)
-    : region_persister(context, region_manager),
-      raft_cmd_res(std::make_unique<RaftCommandResult>()),
-      snapshot_apply_method(snapshot_apply_method_),
-      log(&Logger::get("KVStore"))
+KVStore::KVStore(Context & context)
+    : region_persister(context, region_manager), raft_cmd_res(std::make_unique<RaftCommandResult>()), log(&Logger::get("KVStore"))
 {}
 
 void KVStore::restore(const TiFlashRaftProxyHelper * proxy_helper)

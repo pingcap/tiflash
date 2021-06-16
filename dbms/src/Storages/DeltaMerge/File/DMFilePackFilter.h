@@ -163,11 +163,15 @@ private:
 
         Float64 filter_rate = (Float64)(after_read_packs - after_filter) * 100 / after_read_packs;
         LOG_DEBUG(log,
-                  "RSFilter exclude rate: " << ((after_read_packs == 0) ? "nan" : DB::toString(filter_rate, 2))
-                                            << ", after_pk: " << after_pk << ", after_read_packs: " << after_read_packs
-                                            << ", after_filter: " << after_filter << ", handle_range: " << rowkey_range.toDebugString()
-                                            << ", read_packs: " << ((!read_packs) ? 0 : read_packs->size())
-                                            << ", pack_count: " << pack_count);
+                  "RSFilter exclude rate is nan, after_pk: " << after_pk << ", after_read_packs: " << after_read_packs << ", after_filter: "
+                                                             << after_filter << ", handle_range: " << rowkey_range.toDebugString()
+                                                             << ", read_packs: " << ((!read_packs) ? 0 : read_packs->size())
+                                                             << ", pack_count: " << pack_count);
+
+        if (isnan(filter_rate))
+            LOG_DEBUG(log, "RSFilter exclude rate: nan");
+        else
+            LOG_DEBUG(log, "RSFilter exclude rate: " << DB::toString(filter_rate, 2));
     }
 
     friend class DMFileReader;

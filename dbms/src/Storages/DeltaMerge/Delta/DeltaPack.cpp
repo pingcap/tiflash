@@ -8,6 +8,11 @@
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 
+namespace ProfileEvents
+{
+extern const Event DMWriteBytes;
+}
+
 namespace DB
 {
 namespace DM
@@ -196,7 +201,7 @@ String packsToString(const DeltaPacks & packs)
             packs_info += "F_" + DB::toString(p->getRows());
         else if (auto dp_delete = p->tryToDeleteRange(); dp_delete)
             packs_info += "D_" + dp_delete->getDeleteRange().toString();
-        packs_info += (p->isSaved() ? "_S," : "_N,");
+        packs_info += + (p->isSaved() ? "_S," : "_N,");
     }
     if (!packs.empty())
         packs_info.erase(packs_info.size() - 1);
