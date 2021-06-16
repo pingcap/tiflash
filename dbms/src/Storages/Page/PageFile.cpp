@@ -915,7 +915,14 @@ void PageFile::setFormal()
     type = Type::Formal;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
     file_provider->linkEncryptionInfo(old_data_encryption_path, dataEncryptionPath());
-    file.renameTo(folderPath());
+    try
+    {
+        file.renameTo(folderPath());
+    }
+    catch (Poco::Exception & e)
+    {
+        throw DB::Exception(e); // wrap Poco::Exception as DB::Exception for better stack backtrace
+    }
     file_provider->deleteEncryptionInfo(old_meta_encryption_path);
     file_provider->deleteEncryptionInfo(old_data_encryption_path);
 }
@@ -931,7 +938,14 @@ size_t PageFile::setLegacy()
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
-    formal_dir.renameTo(folderPath());
+    try
+    {
+        formal_dir.renameTo(folderPath());
+    }
+    catch (Poco::Exception & e)
+    {
+        throw DB::Exception(e); // wrap Poco::Exception as DB::Exception for better stack backtrace
+    }
     file_provider->deleteEncryptionInfo(old_meta_encryption_path);
     file_provider->deleteEncryptionInfo(old_data_encryption_path);
     // remove the data part
@@ -956,7 +970,14 @@ size_t PageFile::setCheckpoint()
     Poco::File file(folderPath());
     type = Type::Checkpoint;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
-    file.renameTo(folderPath());
+    try
+    {
+        file.renameTo(folderPath());
+    }
+    catch (Poco::Exception & e)
+    {
+        throw DB::Exception(e); // wrap Poco::Exception as DB::Exception for better stack backtrace
+    }
     file_provider->deleteEncryptionInfo(old_meta_encryption_path);
     // Remove the data part, should be an emtpy file.
     return removeDataIfExists();
