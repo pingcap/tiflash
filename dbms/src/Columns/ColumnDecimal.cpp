@@ -138,10 +138,7 @@ void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash) const
 
     while (begin < end)
     {
-        if constexpr (is_fit_register<T>)
-            *hash_data = intHashCRC32(*begin, *hash_data);
-        else
-            *hash_data = wideIntHashCRC32(*begin, *hash_data);
+        *hash_data = wideIntHashCRC32(*begin, *hash_data);
 
         ++begin;
         ++hash_data;
