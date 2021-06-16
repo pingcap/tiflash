@@ -83,7 +83,6 @@ private:
         case Field::Types::Which::UInt64:
         case Field::Types::Which::Int64:
         case Field::Types::Which::Float64:
-        case Field::Types::Which::UInt128:
         case Field::Types::Which::Int128:
             return Number;
         case Field::Types::Which::Decimal32:
@@ -127,7 +126,6 @@ private:
             if (!(compareNumberLeftType<Field::Types::Which::UInt64, UInt64>(left_field, right, res)
                   || compareNumberLeftType<Field::Types::Which::Int64, Int64>(left_field, right, res)
                   || compareNumberLeftType<Field::Types::Which::Float64, Float64>(left_field, right, res)
-                  || compareNumberLeftType<Field::Types::Which::UInt128, UInt128>(left_field, right, res)
                   || compareNumberLeftType<Field::Types::Which::Int128, Int128>(left_field, right, res)))
                 throw Exception("Illegal compare " + std::string(left_field.getTypeName()) + " with " + compareTypeToString(right));
             return true;
@@ -139,7 +137,6 @@ private:
 //            if (!(compareDecimalLeftType<Field::Types::Which::UInt64, UInt64, Number>(left_field, right, res)
 //                  || compareDecimalLeftType<Field::Types::Which::Int64, Int64, Number>(left_field, right, res)
 //                  || compareDecimalLeftType<Field::Types::Which::Float64, Float64, Number>(left_field, right, res)
-//                  || compareDecimalLeftType<Field::Types::Which::UInt128, UInt128, Number>(left_field, right, res)
 //                  || compareDecimalLeftType<Field::Types::Which::Int128, Int128, Number>(left_field, right, res)
 //                  || compareDecimalLeftType<Field::Types::Which::Int256, Int256, Number>(left_field, right, res)
 //                  || compareDecimalLeftType<Field::Types::Which::Decimal32, DecimalField<Decimal32>, Decimal>(left_field, right, res)
