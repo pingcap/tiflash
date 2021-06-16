@@ -146,7 +146,7 @@ configure_file(${LIBUNWIND_SOURCE_DIR}/include/libunwind.h.in ${CMAKE_CURRENT_BI
 configure_file(${LIBUNWIND_SOURCE_DIR}/include/tdep/libunwind_i.h.in ${CMAKE_CURRENT_BINARY_DIR}/include/tdep/libunwind_i.h)
 
 target_compile_definitions (unwind PRIVATE HAVE_CONFIG_H=1 _XOPEN_SOURCE _GNU_SOURCE)
-target_compile_options (unwind PRIVATE -Wno-visibility -Wno-header-guard)
+target_compile_options (unwind PRIVATE -Wno-visibility -Wno-header-guard -Wno-incompatible-pointer-types -Wno-format)
 
 target_include_directories (unwind PUBLIC ${LIBUNWIND_SOURCE_DIR}/include)
 target_include_directories (unwind PRIVATE ${LIBUNWIND_SOURCE_DIR}/include/tdep)
