@@ -39,7 +39,7 @@ if (ENABLE_UNWIND)
         set (USE_INTERNAL_UNWIND_LIBRARY 1)
         set (UNWIND_INCLUDE_DIR "${ClickHouse_SOURCE_DIR}/contrib/libunwind/include")
         set (UNWIND_INCREMENTAL_DIR "${PROJECT_BINARY_DIR}/contrib/libunwind-cmake/include")
-        set (UNWIND_LIBRARY un  wind)
+        set (UNWIND_LIBRARY unwind)
         set (USE_UNWIND 1)
     endif ()
 
