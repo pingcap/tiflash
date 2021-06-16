@@ -172,30 +172,29 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             }
 
             size_t rows = block.rows();
-            IColumn::HashValues hash_values;
-            hash_values.resize_fill(rows, SipHash());
+            WeakHash32 hash(rows);
 
             // get hash values by all partition key columns
             for (auto i : partition_col_ids)
             {
-                block.getByPosition(i).column->updateHashWithValues(hash_values, nullptr, TiDB::dummy_sort_key_contaner);
+                block.getByPosition(i).column->updateWeakHash32(hash);
             }
+            const auto & hash_data = hash.getData();
 
             // partition each row
-            IColumn::Selector partition_selector;
-            partition_selector.resize_fill(rows, 0);
-            for (size_t row_index = 0; row_index < rows; ++row_index)
+            IColumn::Selector selector(rows);
+            for (size_t row = 0; row < rows; ++row)
             {
-                UInt128 key;
-                hash_values[row_index].get128(key);
-
-                partition_selector[row_index] = key.low % partition_num;
+                /// Row from interval [(2^32 / partition_num) * i, (2^32 / partition_num) * (i + 1)) goes to bucket with number i.
+                selector[row] = hash_data[row]; /// [0, 2^32)
+                selector[row] *= partition_num; /// [0, partition_num * 2^32), selector stores 64 bit values.
+                selector[row] >>= 32u; /// [0, partition_num)
             }
 
             for (size_t col_id = 0; col_id < block.columns(); ++col_id)
             {
                 // Scatter columns to different partitions
-                auto scattered_columns = block.getByPosition(col_id).column->scatter(partition_num, partition_selector);
+                auto scattered_columns = block.getByPosition(col_id).column->scatter(partition_num, selector);
                 for (size_t part_id = 0; part_id < partition_num; ++part_id)
                 {
                     dest_tbl_cols[part_id][col_id] = std::move(scattered_columns[part_id]);

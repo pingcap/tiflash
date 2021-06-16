@@ -4,6 +4,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsCommon.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <Common/HashTable/Hash.h>
 
 /// Used in the `reserve` method, when the number of rows is known, but sizes of elements are not.
 #define APPROX_STRING_SIZE 64
@@ -345,5 +346,30 @@ void ColumnString::getPermutationWithCollationImpl(const ICollator & collator, b
             std::sort(res.begin(), res.end(), lessWithCollation<true>(*this, collator));
     }
 }
+
+void ColumnString::updateWeakHash32(WeakHash32 & hash) const
+{
+    auto s = offsets.size();
+
+    if (hash.getData().size() != s)
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
+                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+
+    const UInt8 * pos = chars.data();
+    UInt32 * hash_data = hash.getData().data();
+    Offset prev_offset = 0;
+
+    for (const auto & offset : offsets)
+    {
+        auto str_size = offset - prev_offset;
+        /// Skip last zero byte.
+        *hash_data = ::updateWeakHash32(pos, str_size - 1, *hash_data);
+
+        pos += str_size;
+        prev_offset = offset;
+        ++hash_data;
+    }
+}
+
 
 }

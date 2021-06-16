@@ -10,12 +10,11 @@
 
 #include <DataStreams/ColumnGathererStream.h>
 
-#include <Common/Exception.h>
 #include <Common/Arena.h>
+#include <Common/Exception.h>
+#include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
-
-
 
 namespace DB
 {
@@ -220,6 +219,37 @@ void ColumnArray::updateHashWithValues(IColumn::HashValues & hash_values, const 
             /// TODO: update one hash in a batch.
             getData().updateHashWithValue(offset + j, hash_values[i], collator, sort_key_container);
         }
+    }
+}
+
+void ColumnArray::updateWeakHash32(WeakHash32 & hash) const
+{
+    auto s = offsets->size();
+    if (hash.getData().size() != s)
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
+                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+
+    WeakHash32 internal_hash(data->size());
+    data->updateWeakHash32(internal_hash);
+
+    Offset prev_offset = 0;
+    const auto & offsets_data = getOffsets();
+    auto & hash_data = hash.getData();
+    auto & internal_hash_data = internal_hash.getData();
+
+    for (size_t i = 0; i < s; ++i)
+    {
+        /// This row improves hash a little bit according to integration tests.
+        /// It is the same as to use previous hash value as the first element of array.
+        hash_data[i] = intHashCRC32(hash_data[i]);
+
+        for (size_t row = prev_offset; row < offsets_data[i]; ++row)
+            /// It is probably not the best way to combine hashes.
+            /// But much better then xor which lead to similar hash for arrays like [1], [1, 1, 1], [1, 1, 1, 1, 1], ...
+            /// Much better implementation - to add offsets as an optional argument to updateWeakHash32.
+            hash_data[i] = intHashCRC32(internal_hash_data[row], hash_data[i]);
+
+        prev_offset = offsets_data[i];
     }
 }
 
