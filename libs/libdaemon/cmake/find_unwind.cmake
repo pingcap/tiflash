@@ -1,7 +1,11 @@
 include (CMakePushCheckState)
 cmake_push_check_state ()
 
-option (ENABLE_UNWIND "Enable libunwind (better stacktraces)" ON)
+if (CMAKE_SYSTEM MATCHES "Linux")
+    option (USE_INTERNAL_UNWIND_LIBRARY "Set to FALSE to use system unwind library instead of bundled" ${NOT_UNBUNDLED})
+else ()
+    option (USE_INTERNAL_UNWIND_LIBRARY "Set to FALSE to use system unwind library instead of bundled" OFF)
+endif ()
 
 if (ENABLE_UNWIND)
 
@@ -19,7 +23,7 @@ if (ENABLE_UNWIND)
         #define UNW_LOCAL_ONLY
         #include <libunwind.h>
         int main () {
-        ucontext_t context;
+        unw_context_t context;
         unw_cursor_t cursor;
         unw_init_local2(&cursor, &context, UNW_INIT_SIGNAL_FRAME);
         return 0;
@@ -35,7 +39,7 @@ if (ENABLE_UNWIND)
 
     if (UNWIND_LIBRARY AND UNWIND_INCLUDE_DIR)
         set (USE_UNWIND 1)
-    else()
+    elseif (CMAKE_SYSTEM MATCHES "Linux")
         set (USE_INTERNAL_UNWIND_LIBRARY 1)
         set (UNWIND_INCLUDE_DIR "${ClickHouse_SOURCE_DIR}/contrib/libunwind/include")
         set (UNWIND_INCREMENTAL_DIR "${PROJECT_BINARY_DIR}/contrib/libunwind-cmake/include")
