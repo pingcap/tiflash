@@ -975,7 +975,6 @@ size_t PageFile::removeDataIfExists() const
 
 void PageFile::destroy() const
 {
-    // TODO: delay remove.
     Poco::File file(folderPath());
     if (file.exists())
     {

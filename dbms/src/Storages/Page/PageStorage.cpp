@@ -1075,40 +1075,37 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
         LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
     } while (0);
 
-    do
+    // Maybe there are a large number of files left on disk by TiFlash version v4.0.0~v4.0.11, or some files left on disk
+    // by unexpected crash in the middle of archiving PageFiles.
+    // In order not to block the GC thread for a long time and make the IO smooth, only remove
+    // `MAX_NUM_OF_FILE_TO_REMOVED` files at maximum.
+    Strings archive_page_files;
+    if (!archive_dir.exists())
+        return;
+
+    archive_dir.list(archive_page_files);
+    if (archive_page_files.empty())
+        return;
+
+    const size_t MAX_NUM_OF_FILE_TO_REMOVED = 30;
+    size_t       num_removed                = 0;
+    for (const auto & pf_dir : archive_page_files)
     {
-        // Maybe there are a large number of files left on disk by TiFlash version v4.0.0~v4.0.11, or some files left on disk
-        // by unexpected crash in the middle of archiving PageFiles.
-        // In order not to block the GC thread for a long time and make the IO smooth, only remove
-        // `MAX_NUM_OF_FILE_TO_REMOVED` files at maximum.
-        Strings archive_page_files;
-        if (!archive_dir.exists())
-            break;
-
-        archive_dir.list(archive_page_files);
-        if (archive_page_files.empty())
-            break;
-
-        const size_t MAX_NUM_OF_FILE_TO_REMOVED = 30;
-        size_t       num_removed                = 0;
-        for (const auto & pf_dir : archive_page_files)
+        if (Poco::File file(Poco::Path(archive_path, pf_dir)); file.exists())
         {
-            if (Poco::File file(Poco::Path(archive_path, pf_dir)); file.exists())
-            {
-                file.remove(true);
-                ++num_removed;
-            }
-
-            if (num_removed >= MAX_NUM_OF_FILE_TO_REMOVED)
-            {
-                break;
-            }
+            file.remove(true);
+            ++num_removed;
         }
-        size_t num_left = archive_page_files.size() > num_removed ? (archive_page_files.size() - num_removed) : 0;
-        LOG_INFO(log,
-                 storage_name << " clean " << num_removed << " files in archive dir, " << num_left
-                              << " files are left to be clean in the next round.");
-    } while (0);
+
+        if (num_removed >= MAX_NUM_OF_FILE_TO_REMOVED)
+        {
+            break;
+        }
+    }
+    size_t num_left = archive_page_files.size() > num_removed ? (archive_page_files.size() - num_removed) : 0;
+    LOG_INFO(log,
+             storage_name << " clean " << num_removed << " files in archive dir, " << num_left
+                          << " files are left to be clean in the next round.");
 }
 
 /**
@@ -1137,6 +1134,9 @@ PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_file
         {
             /// The page file is not used by any version, remove the page file's data in disk.
             /// Page file's meta is left and will be compacted later.
+            // https://stackoverflow.com/questions/9726375/stdset-iterator-automatically-const
+            // Don't touch the <file_id, level> that are used for the sorting then you could
+            // work around by using a const_cast
             size_t bytes_removed = const_cast<PageFile &>(page_file).setLegacy();
             delegator->removePageFile(page_id_and_lvl, bytes_removed);
             num_data_removed += 1;
