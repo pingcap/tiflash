@@ -98,7 +98,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     std::unordered_map<RegionVerID, RegionInfo> regions;
     for (auto & r : task_request.regions())
     {
-        RegionVerID region_ver_id(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver());
+        RegionVerID region_ver_id(r.region_id(), r.region_epoch().conf_ver(), r.region_epoch().version());
         auto res = regions.emplace(region_ver_id, RegionInfo(region_ver_id, CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
         if (!res.second)
             throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + region_ver_id.toString(),
