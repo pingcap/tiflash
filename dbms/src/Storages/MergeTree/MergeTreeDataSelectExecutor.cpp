@@ -425,11 +425,11 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         {
             auto regions = tmt.getRegionTable().getRegionsByTable(data.table_info->id);
             regions_executor_data.reserve(regions.size());
-            for (const auto & [id, region] : regions)
+            for (const auto & region_info : regions)
             {
                 regions_executor_data.emplace_back(
-                    RegionQueryInfo{region->verID(), region->getRange()->rawKeys(), {}},
-                    getHandleRangeByTable(region->getRange()->rawKeys(), data.table_info->id));
+                    RegionQueryInfo{region_info.second->verID(), region_info.second->getRange()->rawKeys(), {}},
+                    getHandleRangeByTable(region_info.second->getRange()->rawKeys(), data.table_info->id));
             }
         }
 
