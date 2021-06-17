@@ -87,11 +87,11 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
         // Only for test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
         auto regions = tmt.getRegionTable().getRegionsByTable(table_id);
         regions_info.reserve(regions.size());
-        for (const auto & [id, region] : regions)
+        for (const auto & region_info : regions)
         {
-            if (region == nullptr)
+            if (region_info.second == nullptr)
                 continue;
-            regions_info.emplace_back(RegionQueryInfo{region->verID(), region->getRange()->rawKeys(), {}});
+            regions_info.emplace_back(RegionQueryInfo{region_info.second->verID(), region_info.second->getRange()->rawKeys(), {}});
         }
     }
 
