@@ -1,5 +1,6 @@
-#include <Common/Exception.h>
 #include <Common/Arena.h>
+#include <Common/Exception.h>
+#include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 
 #include <common/unaligned.h>
@@ -123,6 +124,28 @@ void ColumnDecimal<T>::updateHashWithValues(IColumn::HashValues & hash_values, c
 }
 
 template <typename T>
+void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash) const
+{
+    auto s = data.size();
+
+    if (hash.getData().size() != s)
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
+                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+
+    const T * begin = data.data();
+    const T * end = begin + s;
+    UInt32 * hash_data = hash.getData().data();
+
+    while (begin < end)
+    {
+        *hash_data = wideIntHashCRC32(*begin, *hash_data);
+
+        ++begin;
+        ++hash_data;
+    }
+}
+
+template <typename T>
 void ColumnDecimal<T>::getPermutation(bool reverse, size_t limit, int , IColumn::Permutation & res) const
 {
 #if 1 /// TODO: perf test
@@ -159,7 +182,9 @@ ColumnPtr ColumnDecimal<T>::permute(const IColumn::Permutation & perm, size_t li
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpragmas"
+#ifndef __clang__
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
+#endif
 template <typename T>
 MutableColumnPtr ColumnDecimal<T>::cloneResized(size_t size) const
 {

@@ -76,27 +76,6 @@ rm -rf ./dist
 ./release.sh
 popd
 
-if [ -d "$SRCPATH/contrib/kvproto" ]; then
-  cd "$SRCPATH/contrib/kvproto"
-  rm -rf cpp/kvproto
-  ./scripts/generate_cpp.sh
-  cd -
-fi
-
-if [ -d "$SRCPATH/contrib/tipb" ]; then
-  cd "$SRCPATH/contrib/tipb"
-  rm -rf cpp/tipb
-  ./generate-cpp.sh
-  cd -
-fi
-
-if [ -d "$SRCPATH/dbms/src/Storages/DeltaMerge/File/dtpb" ]; then
-  cd "$SRCPATH/dbms/src/Storages/DeltaMerge/File/dtpb"
-  rm -rf cpp/dtpb
-  ./generate_cpp.sh
-  cd -
-fi
-
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
 mkdir -p ${SRCPATH}/libs/libtiflash-proxy
 

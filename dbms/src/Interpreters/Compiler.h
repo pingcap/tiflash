@@ -13,7 +13,7 @@
 
 #include <Core/Types.h>
 #include <Common/Exception.h>
-#include <Common/UInt128.h>
+#include <Common/HashTable/Hash.h>
 #include <Common/SharedLibrary.h>
 #include <common/ThreadPool.h>
 
@@ -56,8 +56,8 @@ public:
         ReadyCallback on_ready);
 
 private:
-    using Counts = std::unordered_map<HashedKey, UInt32, UInt128Hash>;
-    using Libraries = std::unordered_map<HashedKey, SharedLibraryPtr, UInt128Hash>;
+    using Counts = std::unordered_map<HashedKey, UInt32, DefaultHash<UInt128>>;
+    using Libraries = std::unordered_map<HashedKey, SharedLibraryPtr, DefaultHash<UInt128>>;
     using Files = std::unordered_set<std::string>;
 
     const std::string path;

@@ -8,10 +8,10 @@ mysql> set @@global.tidb_enable_async_commit=1; set @@global.tidb_allow_batch_co
 curl_tidb> get fail/github.com/pingcap/tidb/server/enableTestAPI
 return
 
-curl_tidb> put fail/github.com/pingcap/tidb/store/tikv/asyncCommitDoNothing return
-curl_tidb> put fail/github.com/pingcap/tidb/store/tikv/commitFailedSkipCleanup return
-curl_tidb> put fail/github.com/pingcap/tidb/store/tikv/prewritePrimaryFail 0%return
-curl_tidb> put fail/github.com/pingcap/tidb/store/tikv/prewriteSecondaryFail 0%return
+curl_tidb> put fail/tikvclient/asyncCommitDoNothing return
+curl_tidb> put fail/tikvclient/commitFailedSkipCleanup return
+curl_tidb> put fail/tikvclient/prewritePrimaryFail 0%return
+curl_tidb> put fail/tikvclient/prewriteSecondaryFail 0%return
 
 mysql> insert into test.t values (1), (101);
 
@@ -51,7 +51,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t order b
 |  103 |
 +------+
 
-curl_tidb> put fail/github.com/pingcap/tidb/store/tikv/prewritePrimaryFail return
+curl_tidb> put fail/tikvclient/prewritePrimaryFail return
 
 mysql> set @@tidb_isolation_read_engines='tikv'; update test.t set id=id+1;
 ERROR 1105 (HY000) at line 1: injected error on prewriting primary batch
@@ -66,9 +66,9 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t order b
 |  103 |
 +------+
 
-curl_tidb> delete fail/github.com/pingcap/tidb/store/tikv/prewritePrimaryFail
+curl_tidb> delete fail/tikvclient/prewritePrimaryFail
 
-curl_tidb> put fail/github.com/pingcap/tidb/store/tikv/prewriteSecondaryFail return
+curl_tidb> put fail/tikvclient/prewriteSecondaryFail return
 
 mysql> set @@tidb_isolation_read_engines='tikv'; update test.t set id=id+1;
 ERROR 1105 (HY000) at line 1: injected error on prewriting secondary batch
@@ -83,8 +83,8 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t order b
 |  103 |
 +------+
 
-curl_tidb> delete fail/github.com/pingcap/tidb/store/tikv/asyncCommitDoNothing
-curl_tidb> delete fail/github.com/pingcap/tidb/store/tikv/commitFailedSkipCleanup
-curl_tidb> delete fail/github.com/pingcap/tidb/store/tikv/prewriteSecondaryFail
+curl_tidb> delete fail/tikvclient/asyncCommitDoNothing
+curl_tidb> delete fail/tikvclient/commitFailedSkipCleanup
+curl_tidb> delete fail/tikvclient/prewriteSecondaryFail
 
 mysql> drop table if exists test.t;

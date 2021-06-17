@@ -20,7 +20,6 @@
 #include <Common/MyTime.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/Arena.h>
-#include <Common/UInt128.h>
 #include <Common/Decimal.h>
 
 #include <IO/ReadBuffer.h>
@@ -30,7 +29,6 @@
 #include <double-conversion/double-conversion.h>
 
 #define DEFAULT_MAX_STRING_SIZE 0x00FFFFFFULL
-
 
 namespace DB
 {
@@ -631,7 +629,7 @@ inline void readDateText(LocalDate & date, ReadBuffer & buf)
         readDateTextFallback(date, buf);
 }
 
-inline void readDateText(DayNum_t & date, ReadBuffer & buf)
+inline void readDateText(DayNum & date, ReadBuffer & buf)
 {
     LocalDate local_date;
     readDateText(local_date, buf);

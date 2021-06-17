@@ -1,12 +1,14 @@
 #pragma once
 
-#include <functional>
-//#include <city.h>
-#include <functional>
-#include <citycrc.h>
+#include <city.h>
+#include <Core/Types.h>
 #include <Common/Decimal.h>
-#include <Common/UInt128.h>
+#include <common/types.h>
+#include <common/unaligned.h>
+#include <common/StringRef.h>
 #include <boost/functional/hash/hash.hpp>
+
+#include <type_traits>
 
 
 /** Hash functions that are better than the trivial function std::hash.
@@ -17,7 +19,7 @@
   * - in typical implementation of standard library, hash function for integers is trivial and just use lower bits;
   * - traffic is non-uniformly distributed across a day;
   * - we are using open-addressing linear probing hash tables that are most critical to hash function quality,
-  *   and trivial hash function gives disasterous results.
+  *   and trivial hash function gives disastrous results.
   */
 
 /** Taken from MurmurHash. This is Murmur finalizer.
@@ -40,25 +42,163 @@ inline DB::UInt64 intHash64(DB::UInt64 x)
   *  due to high speed (latency 3 + 1 clock cycle, throughput 1 clock cycle).
   * Works only with SSE 4.2 support.
   */
-#if __SSE4_2__
+#ifdef __SSE4_2__
 #include <nmmintrin.h>
+#endif
+
+#if defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
+#include <arm_acle.h>
+#include <arm_neon.h>
 #endif
 
 inline DB::UInt64 intHashCRC32(DB::UInt64 x)
 {
-#if __SSE4_2__
+#ifdef __SSE4_2__
     return _mm_crc32_u64(-1ULL, x);
+#elif defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
+    return __crc32cd(-1U, x);
 #else
     /// On other platforms we do not have CRC32. NOTE This can be confusing.
     return intHash64(x);
 #endif
 }
 
-
-template <typename T> struct DefaultHash;
+inline DB::UInt64 intHashCRC32(DB::UInt64 x, DB::UInt64 updated_value)
+{
+#ifdef __SSE4_2__
+    return _mm_crc32_u64(updated_value, x);
+#elif defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
+    return  __crc32cd(updated_value, x);
+#else
+    /// On other platforms we do not have CRC32. NOTE This can be confusing.
+    return intHash64(x) ^ updated_value;
+#endif
+}
 
 template <typename T>
-inline size_t DefaultHash64(T key)
+inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
+{
+    if constexpr (DB::IsDecimal<T>)
+    {
+        if constexpr (is_fit_register<typename T::NativeType>)
+            return intHashCRC32(x.value, updated_value);
+        else
+            return wideIntHashCRC32(x.value, updated_value);
+    }
+    else if constexpr (is_boost_number_v<T>)
+    {
+        auto backend_value = x.backend();
+        for (size_t i = 0; i < backend_value.size(); ++i)
+        {
+            updated_value = intHashCRC32(backend_value.limbs()[i], updated_value);
+        }
+        return intHashCRC32(backend_value.sign(), updated_value);
+    }
+    else if constexpr (std::is_same_v<T, DB::UInt128>)
+    {
+        updated_value = intHashCRC32(x.low, updated_value);
+        updated_value = intHashCRC32(x.high, updated_value);
+        return updated_value;
+    }
+    else if constexpr (std::is_same_v<T, DB::Int128>)
+    {
+        auto * begin = reinterpret_cast<const DB::UInt64 *>(&x);
+        updated_value = intHashCRC32(unalignedLoad<DB::UInt64>(begin), updated_value);
+        updated_value = intHashCRC32(unalignedLoad<DB::UInt64>(begin + 1), updated_value);
+        return updated_value;
+    }
+    else if constexpr (std::is_same_v<T, DB::UInt256>)
+    {
+        updated_value = intHashCRC32(x.a, updated_value);
+        updated_value = intHashCRC32(x.b, updated_value);
+        updated_value = intHashCRC32(x.c, updated_value);
+        updated_value = intHashCRC32(x.d, updated_value);
+        return updated_value;
+    }
+    static_assert(
+        DB::IsDecimal<T> ||
+        is_boost_number_v<T> ||
+        std::is_same_v<T, DB::UInt128> ||
+        std::is_same_v<T, DB::Int128> ||
+        std::is_same_v<T, DB::UInt256>);
+    __builtin_unreachable();
+}
+
+template <typename T>
+inline DB::UInt64 wideIntHashCRC32(const T & x)
+{
+    return wideIntHashCRC32(x, -1);
+}
+
+inline UInt32 updateWeakHash32(const DB::UInt8 * pos, size_t size, DB::UInt32 updated_value)
+{
+    if (size < 8)
+    {
+        UInt64 value = 0;
+
+        switch (size)
+        {
+            case 0:
+                break;
+            case 1:
+                __builtin_memcpy(&value, pos, 1);
+                break;
+            case 2:
+                __builtin_memcpy(&value, pos, 2);
+                break;
+            case 3:
+                __builtin_memcpy(&value, pos, 3);
+                break;
+            case 4:
+                __builtin_memcpy(&value, pos, 4);
+                break;
+            case 5:
+                __builtin_memcpy(&value, pos, 5);
+                break;
+            case 6:
+                __builtin_memcpy(&value, pos, 6);
+                break;
+            case 7:
+                __builtin_memcpy(&value, pos, 7);
+                break;
+            default:
+                __builtin_unreachable();
+        }
+
+        reinterpret_cast<unsigned char *>(&value)[7] = size;
+        return intHashCRC32(value, updated_value);
+    }
+
+    const auto * end = pos + size;
+    while (pos + 8 <= end)
+    {
+        auto word = unalignedLoad<UInt64>(pos);
+        updated_value = intHashCRC32(word, updated_value);
+
+        pos += 8;
+    }
+
+    if (pos < end)
+    {
+        /// If string size is not divisible by 8.
+        /// Lets' assume the string was 'abcdefghXYZ', so it's tail is 'XYZ'.
+        DB::UInt8 tail_size = end - pos;
+        /// Load tailing 8 bytes. Word is 'defghXYZ'.
+        auto word = unalignedLoad<UInt64>(end - 8);
+        /// Prepare mask which will set other 5 bytes to 0. It is 0xFFFFFFFFFFFFFFFF << 5 = 0xFFFFFF0000000000.
+        /// word & mask = '\0\0\0\0\0XYZ' (bytes are reversed because of little ending)
+        word &= (~UInt64(0)) << DB::UInt8(8 * (8 - tail_size));
+        /// Use least byte to store tail length.
+        word |= tail_size;
+        /// Now word is '\3\0\0\0\0XYZ'
+        updated_value = intHashCRC32(word, updated_value);
+    }
+
+    return updated_value;
+}
+
+template <typename T>
+inline size_t defaultHash64(std::enable_if_t<is_fit_register<T>, T> key)
 {
     union
     {
@@ -70,32 +210,74 @@ inline size_t DefaultHash64(T key)
     return intHash64(u.out);
 }
 
-#define DEFINE_HASH(T) \
-template <> struct DefaultHash<T>\
-{\
-    size_t operator() (T key) const\
-    {\
-        return DefaultHash64<T>(key);\
-    }\
-};
-
-DEFINE_HASH(DB::UInt8)
-DEFINE_HASH(DB::UInt16)
-DEFINE_HASH(DB::UInt32)
-DEFINE_HASH(DB::UInt64)
-DEFINE_HASH(DB::Int8)
-DEFINE_HASH(DB::Int16)
-DEFINE_HASH(DB::Int32)
-DEFINE_HASH(DB::Int64)
-DEFINE_HASH(DB::Float32)
-DEFINE_HASH(DB::Float64)
-
-#undef DEFINE_HASH
-
-template <typename T> struct HashCRC32;
 
 template <typename T>
-inline size_t hashCRC32(T key)
+inline size_t defaultHash64(const std::enable_if_t<!is_fit_register<T>, T> & key)
+{
+    if constexpr (std::is_same_v<T, DB::UInt128>)
+    {
+        return CityHash_v1_0_2::Hash128to64({key.low, key.high});
+    }
+    else if constexpr (std::is_same_v<T, DB::Int128>)
+    {
+        auto * begin = reinterpret_cast<const DB::UInt64 *>(&key);
+        return CityHash_v1_0_2::Hash128to64({
+                unalignedLoad<DB::UInt64>(begin),
+                unalignedLoad<DB::UInt64>(begin + 1)});
+    }
+    else if constexpr (std::is_same_v<T, DB::UInt256>)
+    {
+        return CityHash_v1_0_2::Hash128to64({
+            CityHash_v1_0_2::Hash128to64({key.a, key.b}),
+            CityHash_v1_0_2::Hash128to64({key.c, key.d})});
+    }
+    else if constexpr (is_boost_number_v<T>)
+    {
+        return boost::multiprecision::hash_value(key);
+    }
+    static_assert(
+        is_boost_number_v<T> ||
+        std::is_same_v<T, DB::UInt128> ||
+        std::is_same_v<T, DB::Int128> ||
+        std::is_same_v<T, DB::UInt256>);
+    __builtin_unreachable();
+}
+
+template <typename T, typename Enable = void>
+struct DefaultHash;
+
+template <typename T>
+struct DefaultHash<T, std::enable_if_t<!DB::IsDecimal<T> && is_fit_register<T>, void>>
+{
+    std::enable_if_t<is_fit_register<T>, size_t> operator() (T key) const
+    {
+        return defaultHash64<T>(key);
+    }
+};
+
+template <typename T>
+struct DefaultHash<T, std::enable_if_t<!DB::IsDecimal<T> && !is_fit_register<T>, void>>
+{
+    size_t operator() (const T & key) const
+    {
+        return defaultHash64<T>(key);
+    }
+};
+
+template <typename T>
+struct DefaultHash<T, std::enable_if_t<DB::IsDecimal<T>>>
+{
+    size_t operator() (const T & key) const
+    {
+        return defaultHash64<typename T::NativeType>(key.value);
+    }
+};
+
+template <>
+struct DefaultHash<StringRef> : public StringRefHash {};
+
+template <typename T>
+inline size_t hashCRC32(std::enable_if_t<is_fit_register<T>, T> key)
 {
     union
     {
@@ -107,29 +289,38 @@ inline size_t hashCRC32(T key)
     return intHashCRC32(u.out);
 }
 
+template <typename T>
+inline size_t hashCRC32(const std::enable_if_t<!is_fit_register<T>, T> & key)
+{
+    return wideIntHashCRC32(key);
+}
+
+template <typename T> struct HashCRC32;
+
 #define DEFINE_HASH(T) \
 template <> struct HashCRC32<T>\
 {\
+    static_assert(is_fit_register<T>);\
     size_t operator() (T key) const\
     {\
         return hashCRC32<T>(key);\
     }\
 };
 
-template <> struct HashCRC32<DB::Int256>
-{
-    size_t operator() (DB::Int256 v) const
-    {
-        return boost::multiprecision::hash_value(v);
-    }
+#define DEFINE_HASH_WIDE(T) \
+template <> struct HashCRC32<T>\
+{\
+    static_assert(!is_fit_register<T>);\
+    size_t operator() (const T & key) const\
+    {\
+        return hashCRC32<T>(key);\
+    }\
 };
 
 DEFINE_HASH(DB::UInt8)
 DEFINE_HASH(DB::UInt16)
 DEFINE_HASH(DB::UInt32)
 DEFINE_HASH(DB::UInt64)
-DEFINE_HASH(DB::UInt128)
-DEFINE_HASH(DB::Int128)
 DEFINE_HASH(DB::Int8)
 DEFINE_HASH(DB::Int16)
 DEFINE_HASH(DB::Int32)
@@ -137,14 +328,40 @@ DEFINE_HASH(DB::Int64)
 DEFINE_HASH(DB::Float32)
 DEFINE_HASH(DB::Float64)
 
-#undef DEFINE_HASH
+DEFINE_HASH_WIDE(DB::UInt128)
+DEFINE_HASH_WIDE(DB::UInt256)
+DEFINE_HASH_WIDE(DB::Int128)
+DEFINE_HASH_WIDE(DB::Int256)
+DEFINE_HASH_WIDE(DB::Int512)
 
+#undef DEFINE_HASH
 
 /// It is reasonable to use for UInt8, UInt16 with sufficient hash table size.
 struct TrivialHash
 {
-    template <typename T>
+    template <typename T, std::enable_if_t<is_fit_register<T>, int> = 0>
     size_t operator() (T key) const
+    {
+        return key;
+    }
+
+    size_t operator() (const UInt128 & key) const
+    {
+        return key.low;
+    }
+
+    size_t operator() (const Int128 & key) const
+    {
+        return key;
+    }
+
+    size_t operator() (const UInt256 & key) const
+    {
+        return key.a;
+    }
+
+    template <typename T, std::enable_if_t<is_boost_number_v<T>, int> = 0>
+    size_t operator() (const T & key) const
     {
         return key;
     }
@@ -166,7 +383,7 @@ struct TrivialHash
   * NOTE Salting is far from perfect, because it commutes with first steps of calculation.
   *
   * NOTE As mentioned, this function is slower than intHash64.
-  * But occasionaly, it is faster, when written in a loop and loop is vectorized.
+  * But occasionally, it is faster, when written in a loop and loop is vectorized.
   */
 template <DB::UInt64 salt>
 inline DB::UInt32 intHash32(DB::UInt64 key)
@@ -183,13 +400,36 @@ inline DB::UInt32 intHash32(DB::UInt64 key)
     return key;
 }
 
-
 /// For containers.
-template <typename T, DB::UInt64 salt = 0>
-struct IntHash32
+template <typename T, DB::UInt64 salt = 0, typename E = void>
+struct IntHash32;
+
+template <typename T, DB::UInt64 salt>
+struct IntHash32<T, salt, std::enable_if_t<is_fit_register<T>, void>>
 {
-    size_t operator() (const T & key) const
+    size_t operator() (T key) const
     {
         return intHash32<salt>(key);
     }
 };
+
+template <typename T, DB::UInt64 salt>
+struct IntHash32<T, salt, std::enable_if_t<!is_fit_register<T>, void>>
+{
+    size_t operator() (const T & key) const
+    {
+        if constexpr (std::is_same_v<T, DB::UInt128>)
+        {
+            return intHash32<salt>(key.low ^ key.high);
+        }
+        else if constexpr (std::is_same_v<T, DB::UInt256>)
+        {
+            return intHash32<salt>(key.a ^ key.b ^ key.c ^ key.d);
+        }
+        else
+        {
+            return intHash32<salt>(defaultHash64(key));
+        }
+    }
+};
+
