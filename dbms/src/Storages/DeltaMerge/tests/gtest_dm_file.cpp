@@ -22,25 +22,6 @@ namespace DM
 namespace tests
 {
 
-TEST(DMFileWriterFlags_test, SetClearFlags)
-{
-    using Flags = DMFileWriter::Flags;
-
-    Flags flags;
-
-    bool f = false;
-    flags.setRateLimit(f);
-    EXPECT_FALSE(flags.needRateLimit());
-    flags.setSingleFile(f);
-    EXPECT_FALSE(flags.isSingleFile());
-
-    f = true;
-    flags.setRateLimit(f);
-    EXPECT_TRUE(flags.needRateLimit());
-    flags.setSingleFile(f);
-    EXPECT_TRUE(flags.isSingleFile());
-}
-
 String paramToString(const ::testing::TestParamInfo<DMFile::Mode> & info)
 {
     const auto mode = info.param;
@@ -252,9 +233,7 @@ try
     dm_file = DMFile::create(id, parent_path, single_file_mode);
     // Right after created, the fil is not abled to GC and it is ignored by `listAllInPath`
     EXPECT_FALSE(dm_file->canGC());
-    DMFile::ListOptions options;
-    options.only_list_can_gc = true;
-    auto scanIds             = DMFile::listAllInPath(file_provider, parent_path, options);
+    auto scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/true);
     ASSERT_TRUE(scanIds.empty());
 
     {
@@ -272,24 +251,20 @@ try
 
     // The file remains not able to GC
     ASSERT_FALSE(dm_file->canGC());
-    options.only_list_can_gc = false;
     // Now the file can be scaned
-    scanIds = DMFile::listAllInPath(file_provider, parent_path, options);
+    scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/false);
     ASSERT_EQ(scanIds.size(), 1UL);
     EXPECT_EQ(*scanIds.begin(), id);
-    options.only_list_can_gc = true;
-    scanIds                  = DMFile::listAllInPath(file_provider, parent_path, options);
+    scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/true);
     EXPECT_TRUE(scanIds.empty());
 
     // After enable GC, the file can be scaned with `can_gc=true`
     dm_file->enableGC();
     ASSERT_TRUE(dm_file->canGC());
-    options.only_list_can_gc = false;
-    scanIds                  = DMFile::listAllInPath(file_provider, parent_path, options);
+    scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/false);
     ASSERT_EQ(scanIds.size(), 1UL);
     EXPECT_EQ(*scanIds.begin(), id);
-    options.only_list_can_gc = true;
-    scanIds                  = DMFile::listAllInPath(file_provider, parent_path, options);
+    scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/true);
     ASSERT_EQ(scanIds.size(), 1UL);
     EXPECT_EQ(*scanIds.begin(), id);
 }
@@ -361,9 +336,7 @@ try
     }
 
     // The broken file is ignored
-    DMFile::ListOptions options;
-    options.only_list_can_gc = true;
-    auto res                 = DMFile::listAllInPath(file_provider, parent_path, options);
+    auto res = DMFile::listAllInPath(file_provider, parent_path, true);
     EXPECT_TRUE(res.empty());
 }
 CATCH
@@ -431,9 +404,7 @@ try
     }
 
     // The broken file is ignored
-    DMFile::ListOptions options;
-    options.only_list_can_gc = true;
-    auto res                 = DMFile::listAllInPath(file_provider, parent_path, options);
+    auto res = DMFile::listAllInPath(file_provider, parent_path, true);
     EXPECT_TRUE(res.empty());
 }
 CATCH
@@ -1108,8 +1079,11 @@ public:
     }
 
     // Update dm_context.
-    void reload(const ColumnDefinesPtr & cols = DMTestEnv::getDefaultColumns(true))
+    void reload(ColumnDefinesPtr cols = {})
     {
+        if (!cols)
+            cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
+
         *table_columns_ = *cols;
 
         dm_context = std::make_unique<DMContext>( //
@@ -1149,7 +1123,7 @@ protected:
 TEST_P(DMFile_Clustered_Index_Test, WriteRead)
 try
 {
-    auto cols = DMTestEnv::getDefaultColumns(is_common_handle);
+    auto cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
 
     const size_t num_rows_write = 128;
 
@@ -1217,7 +1191,7 @@ CATCH
 TEST_P(DMFile_Clustered_Index_Test, ReadFilteredByHandle)
 try
 {
-    auto cols = DMTestEnv::getDefaultColumns(is_common_handle);
+    auto cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
 
     const Int64 num_rows_write = 1024;
     const Int64 nparts         = 5;

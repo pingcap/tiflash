@@ -108,14 +108,7 @@ public:
     static DMFilePtr
     restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
 
-    struct ListOptions
-    {
-        // Only return the DTFiles id list that can be GC
-        bool only_list_can_gc = true;
-        // Try to clean up temporary / dropped files
-        bool clean_up = false;
-    };
-    static std::set<UInt64> listAllInPath(const FileProviderPtr & file_provider, const String & parent_path, const ListOptions & options);
+    static std::set<UInt64> listAllInPath(const FileProviderPtr & file_provider, const String & parent_path, bool can_gc);
 
     // static helper function for getting path
     static String getPathByStatus(const String & parent_path, UInt64 file_id, DMFile::Status status);
