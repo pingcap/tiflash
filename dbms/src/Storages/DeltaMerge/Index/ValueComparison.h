@@ -101,7 +101,7 @@ private:
     template <typename T>
     static constexpr ValueGroupType getGroupType()
     {
-        if constexpr (DB::IsNumber<T>)
+        if constexpr (is_arithmetic_v<T>)
             return Number;
         else if constexpr (
             // clang-format off
@@ -270,7 +270,7 @@ private:
         {
             if constexpr (std::is_same_v<DataTypeDate::FieldType, Right>)
             {
-                DayNum_t             date;
+                DayNum date;
                 ReadBufferFromMemory in(left.data(), left.size());
                 readDateText(date, in);
                 if (!in.eof())

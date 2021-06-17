@@ -34,6 +34,8 @@ namespace DB
 namespace FailPoints
 {
 extern const char exception_before_page_file_write_sync[];
+extern const char force_formal_page_file_not_exists[];
+extern const char force_legacy_or_checkpoint_page_file_exists[];
 } // namespace FailPoints
 
 static constexpr bool PAGE_CHECKSUM_ON_READ = true;
@@ -857,6 +859,12 @@ PageFile PageFile::newPageFile(PageFileId              file_id,
                                PageFile::Type          type,
                                Logger *                log)
 {
+#ifndef NDEBUG
+    // PageStorage may create a "Formal" PageFile for writing,
+    // or a "Temp" PageFile for gc data.
+    if (type != PageFile::Type::Temp && type != PageFile::Type::Formal)
+        throw Exception("Should not create page file with type: " + typeToString(type));
+#endif
     return PageFile(file_id, level, parent_path, file_provider_, type, true, log);
 }
 
@@ -907,7 +915,14 @@ void PageFile::setFormal()
     type = Type::Formal;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
     file_provider->linkEncryptionInfo(old_data_encryption_path, dataEncryptionPath());
-    file.renameTo(folderPath());
+    try
+    {
+        file.renameTo(folderPath());
+    }
+    catch (Poco::Exception & e)
+    {
+        throw DB::Exception(e); // wrap Poco::Exception as DB::Exception for better stack backtrace
+    }
     file_provider->deleteEncryptionInfo(old_meta_encryption_path);
     file_provider->deleteEncryptionInfo(old_data_encryption_path);
 }
@@ -923,7 +938,14 @@ size_t PageFile::setLegacy()
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
-    formal_dir.renameTo(folderPath());
+    try
+    {
+        formal_dir.renameTo(folderPath());
+    }
+    catch (Poco::Exception & e)
+    {
+        throw DB::Exception(e); // wrap Poco::Exception as DB::Exception for better stack backtrace
+    }
     file_provider->deleteEncryptionInfo(old_meta_encryption_path);
     file_provider->deleteEncryptionInfo(old_data_encryption_path);
     // remove the data part
@@ -948,7 +970,14 @@ size_t PageFile::setCheckpoint()
     Poco::File file(folderPath());
     type = Type::Checkpoint;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
-    file.renameTo(folderPath());
+    try
+    {
+        file.renameTo(folderPath());
+    }
+    catch (Poco::Exception & e)
+    {
+        throw DB::Exception(e); // wrap Poco::Exception as DB::Exception for better stack backtrace
+    }
     file_provider->deleteEncryptionInfo(old_meta_encryption_path);
     // Remove the data part, should be an emtpy file.
     return removeDataIfExists();
@@ -967,7 +996,6 @@ size_t PageFile::removeDataIfExists() const
 
 void PageFile::destroy() const
 {
-    // TODO: delay remove.
     Poco::File file(folderPath());
     if (file.exists())
     {
@@ -982,13 +1010,19 @@ void PageFile::destroy() const
 
 bool PageFile::isExist() const
 {
-    Poco::File file(folderPath());
+    Poco::File folder(folderPath());
     Poco::File data_file(dataPath());
     Poco::File meta_file(metaPath());
     if (likely(type == Type::Formal))
-        return (file.exists() && data_file.exists() && meta_file.exists());
+    {
+        fiu_do_on(FailPoints::force_formal_page_file_not_exists, { return false; });
+        return (folder.exists() && data_file.exists() && meta_file.exists());
+    }
     else if (type == Type::Legacy || type == Type::Checkpoint)
-        return file.exists() && meta_file.exists();
+    {
+        fiu_do_on(FailPoints::force_legacy_or_checkpoint_page_file_exists, { return true; });
+        return folder.exists() && meta_file.exists();
+    }
     else
         throw Exception("Should not call isExist for " + toString());
 }

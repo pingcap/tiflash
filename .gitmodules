@@ -53,3 +53,6 @@
 [submodule "contrib/mimalloc"]
 	path = contrib/mimalloc
 	url = https://github.com/microsoft/mimalloc
+[submodule "contrib/libunwind"]
+	path = contrib/libunwind
+	url = https://github.com/libunwind/libunwind

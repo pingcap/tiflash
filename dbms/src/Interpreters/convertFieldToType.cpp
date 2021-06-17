@@ -156,10 +156,10 @@ static Field convertDecimalType(const Field & from, const To & type)
         ErrorCodes::TYPE_MISMATCH);
 }
 
-DayNum_t stringToDate(const String & s)
+DayNum stringToDate(const String & s)
 {
     ReadBufferFromString in(s);
-    DayNum_t date{};
+    DayNum date{};
 
     readDateText(date, in);
     if (!in.eof())

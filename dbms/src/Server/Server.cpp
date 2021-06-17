@@ -1253,7 +1253,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 tiflash_instance_wrap.tmt->getKVStore()->traverseRegions([&batch_read_index_req](RegionID, const RegionPtr & region) {
                     batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region));
                 });
-                tiflash_instance_wrap.proxy_helper->batchReadIndex(batch_read_index_req);
+                tiflash_instance_wrap.proxy_helper->batchReadIndex(
+                    batch_read_index_req, tiflash_instance_wrap.tmt->batchReadIndexTimeout());
             }
             LOG_INFO(log, "start to wait for terminal signal");
         }

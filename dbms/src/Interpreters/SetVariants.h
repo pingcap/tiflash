@@ -8,8 +8,6 @@
 #include <Common/Arena.h>
 #include <Common/HashTable/HashSet.h>
 #include <Common/HashTable/ClearableHashSet.h>
-#include <Common/UInt128.h>
-
 
 namespace DB
 {
@@ -350,13 +348,13 @@ struct NonClearableSet
     std::unique_ptr<SetMethodOneNumber<UInt64, HashSet<UInt64, HashCRC32<UInt64>>>>                             key64;
     std::unique_ptr<SetMethodString<HashSetWithSavedHash<StringRef>>>                                           key_string;
     std::unique_ptr<SetMethodFixedString<HashSetWithSavedHash<StringRef>>>                                      key_fixed_string;
-    std::unique_ptr<SetMethodKeysFixed<HashSet<UInt128, UInt128HashCRC32>>>                                     keys128;
-    std::unique_ptr<SetMethodKeysFixed<HashSet<UInt256, UInt256HashCRC32>>>                                     keys256;
-    std::unique_ptr<SetMethodHashed<HashSet<UInt128, UInt128TrivialHash>>>                                      hashed;
+    std::unique_ptr<SetMethodKeysFixed<HashSet<UInt128, HashCRC32<UInt128>>>>                                     keys128;
+    std::unique_ptr<SetMethodKeysFixed<HashSet<UInt256, HashCRC32<UInt256>>>>                                     keys256;
+    std::unique_ptr<SetMethodHashed<HashSet<UInt128, TrivialHash>>>                                      hashed;
 
     /// Support for nullable keys (for DISTINCT implementation).
-    std::unique_ptr<SetMethodKeysFixed<HashSet<UInt128, UInt128HashCRC32>, true>>                               nullable_keys128;
-    std::unique_ptr<SetMethodKeysFixed<HashSet<UInt256, UInt256HashCRC32>, true>>                               nullable_keys256;
+    std::unique_ptr<SetMethodKeysFixed<HashSet<UInt128, HashCRC32<UInt128>>, true>>                               nullable_keys128;
+    std::unique_ptr<SetMethodKeysFixed<HashSet<UInt256, HashCRC32<UInt256>>, true>>                               nullable_keys256;
     /** Unlike Aggregator, `concat` method is not used here.
       * This is done because `hashed` method, although slower, but in this case, uses less RAM.
       *  since when you use it, the key values themselves are not stored.
@@ -373,13 +371,13 @@ struct ClearableSet
     std::unique_ptr<SetMethodOneNumber<UInt64, ClearableHashSet<UInt64, HashCRC32<UInt64>>>>                        key64;
     std::unique_ptr<SetMethodString<ClearableHashSetWithSavedHash<StringRef>>>                                      key_string;
     std::unique_ptr<SetMethodFixedString<ClearableHashSetWithSavedHash<StringRef>>>                                 key_fixed_string;
-    std::unique_ptr<SetMethodKeysFixed<ClearableHashSet<UInt128, UInt128HashCRC32>>>                                keys128;
-    std::unique_ptr<SetMethodKeysFixed<ClearableHashSet<UInt256, UInt256HashCRC32>>>                                keys256;
-    std::unique_ptr<SetMethodHashed<ClearableHashSet<UInt128, UInt128TrivialHash>>>                                 hashed;
+    std::unique_ptr<SetMethodKeysFixed<ClearableHashSet<UInt128, HashCRC32<UInt128>>>>                                keys128;
+    std::unique_ptr<SetMethodKeysFixed<ClearableHashSet<UInt256, HashCRC32<UInt256>>>>                                keys256;
+    std::unique_ptr<SetMethodHashed<ClearableHashSet<UInt128, TrivialHash>>>                                 hashed;
 
     /// Support for nullable keys (for DISTINCT implementation).
-    std::unique_ptr<SetMethodKeysFixed<ClearableHashSet<UInt128, UInt128HashCRC32>, true>>                          nullable_keys128;
-    std::unique_ptr<SetMethodKeysFixed<ClearableHashSet<UInt256, UInt256HashCRC32>, true>>                          nullable_keys256;
+    std::unique_ptr<SetMethodKeysFixed<ClearableHashSet<UInt128, HashCRC32<UInt128>>, true>>                          nullable_keys128;
+    std::unique_ptr<SetMethodKeysFixed<ClearableHashSet<UInt256, HashCRC32<UInt256>>, true>>                          nullable_keys256;
     /** Unlike Aggregator, `concat` method is not used here.
       * This is done because `hashed` method, although slower, but in this case, uses less RAM.
       *  since when you use it, the key values themselves are not stored.

@@ -382,9 +382,9 @@ public:
         std::unique_ptr<ConcurrentHashMap<UInt64, Mapped, HashCRC32<UInt64>>>                     key64;
         std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>>                        key_string;
         std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>>                        key_fixed_string;
-        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, UInt128HashCRC32>>                     keys128;
-        std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, UInt256HashCRC32>>                     keys256;
-        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, UInt128TrivialHash>>                   hashed;
+        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>>                     keys128;
+        std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>>                     keys256;
+        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, TrivialHash>>                   hashed;
     };
 
     using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;

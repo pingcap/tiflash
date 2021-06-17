@@ -400,14 +400,30 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, Block &&
 {
     if (pkIsHandle())
     {
-        auto handle_pos = getPosByColumnId(block, original_table_handle_define.id);
-        addColumnToBlock(block, //
-                         EXTRA_HANDLE_COLUMN_ID,
-                         EXTRA_HANDLE_COLUMN_NAME,
-                         EXTRA_HANDLE_COLUMN_INT_TYPE,
-                         EXTRA_HANDLE_COLUMN_INT_TYPE->createColumn());
-        // Fill the new column with data in column[handle_pos]
-        FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
+        if (!EXTRA_HANDLE_COLUMN_INT_TYPE->equals(*original_table_handle_define.type))
+        {
+            auto handle_pos = getPosByColumnId(block, original_table_handle_define.id);
+            addColumnToBlock(block, //
+                             EXTRA_HANDLE_COLUMN_ID,
+                             EXTRA_HANDLE_COLUMN_NAME,
+                             EXTRA_HANDLE_COLUMN_INT_TYPE,
+                             EXTRA_HANDLE_COLUMN_INT_TYPE->createColumn());
+            // Fill the new handle column with data in column[handle_pos] by applying cast.
+            FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
+        }
+        else
+        {
+            // If types are identical, `FunctionToInt64` just take reference to the original column.
+            // We need a deep copy for the pk column or it will make trobule for later processing.
+            auto      pk_col_with_name = getByColumnId(block, original_table_handle_define.id);
+            auto      pk_column        = pk_col_with_name.column;
+            ColumnPtr handle_column    = pk_column->cloneResized(pk_column->size());
+            addColumnToBlock(block, //
+                             EXTRA_HANDLE_COLUMN_ID,
+                             EXTRA_HANDLE_COLUMN_NAME,
+                             EXTRA_HANDLE_COLUMN_INT_TYPE,
+                             handle_column);
+        }
     }
     return std::move(block);
 }
