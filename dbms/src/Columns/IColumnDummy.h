@@ -68,6 +68,10 @@ public:
     {
     }
 
+    void updateWeakHash32(WeakHash32 &) const override
+    {
+    }
+
     void insertFrom(const IColumn &, size_t) override
     {
         ++s;
