@@ -458,8 +458,34 @@ struct PiImpl
     static const double value;
 };
 
+
+double log2args(double b, double e)
+{
+    return log(e) / log(b);
+}
+
+double sign(double x)
+{
+    return (x > 0) - (x < 0);
+}
+
+double degrees(double x)
+{
+    return x / PiImpl::value * 180.0;
+}
+
+double radians(double x)
+{
+    return x / 180.0 * PiImpl::value;
+}
+
+
+struct RadiansName { static constexpr auto name = "radians"; };
+struct DegreesName { static constexpr auto name = "degrees"; };
+struct SignName { static constexpr auto name = "sign"; };
 struct ExpName { static constexpr auto name = "exp"; };
 struct LogName { static constexpr auto name = "log"; };
+struct Log2ArgsName { static constexpr auto name = "log2args"; };
 struct Exp2Name { static constexpr auto name = "exp2"; };
 struct Log2Name { static constexpr auto name = "log2"; };
 struct Exp10Name { static constexpr auto name = "exp10"; };
@@ -478,10 +504,14 @@ struct LGammaName { static constexpr auto name = "lgamma"; };
 struct TGammaName { static constexpr auto name = "tgamma"; };
 struct PowName { static constexpr auto name = "pow"; };
 
+using FunctionRadians = FunctionMathUnaryFloat64<UnaryFunctionPlain<RadiansName, DB::radians>>;
+using FunctionDegrees = FunctionMathUnaryFloat64<UnaryFunctionPlain<DegreesName, DB::degrees>>;
+using FunctionSign = FunctionMathUnaryFloat64<UnaryFunctionPlain<SignName, DB::sign>>;
 using FunctionE = FunctionMathNullaryConstFloat64<EImpl>;
 using FunctionPi = FunctionMathNullaryConstFloat64<PiImpl>;
 using FunctionExp = FunctionMathUnaryFloat64<UnaryFunctionVectorized<ExpName, exp>>;
 using FunctionLog = FunctionMathUnaryFloat64<UnaryFunctionVectorized<LogName, log>>;
+using FunctionLog2Args = FunctionMathBinaryFloat64<BinaryFunctionPlain<Log2ArgsName, DB::log2args>>;
 using FunctionExp2 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Exp2Name, exp2>>;
 using FunctionLog2 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Log2Name, log2>>;
 using FunctionExp10 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Exp10Name, preciseExp10>>;
