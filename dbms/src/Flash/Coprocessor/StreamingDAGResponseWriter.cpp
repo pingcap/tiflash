@@ -53,7 +53,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
     {
         ScheduleEncodeTask();
     }
-    /// add an extra response to send the execute summaries
+    /// add an extra response to send the final execute summaries
     ScheduleEncodeTask();
     // wait all job finishes.
     thread_pool.wait();
