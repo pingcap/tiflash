@@ -48,10 +48,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
-    if (rows_in_blocks > 0)
-    {
-        ScheduleEncodeTask();
-    }
+    /// always send a response back to send the final execute summaries
+    ScheduleEncodeTask();
     // wait all job finishes.
     thread_pool.wait();
 }
@@ -78,6 +76,11 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
 
         response.set_encode_type(encode_type);
         Int64 current_records_num = 0;
+        if (input_blocks.empty())
+        {
+            writer->write(response);
+            return;
+        }
         if (records_per_chunk == -1)
         {
             for (auto & block : input_blocks)
@@ -146,6 +149,14 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             responses[i] = response;
             responses[i].set_encode_type(encode_type);
         }
+        if (input_blocks.empty())
+        {
+            for (auto part_id = 0; part_id < partition_num; ++part_id)
+            {
+                writer->write(responses[part_id], part_id);
+            }
+            return;
+        }
 
         // partition tuples in blocks
         // 1) compute partition id
@@ -176,8 +187,21 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
                 key_col_ptrs.emplace_back(block.getByPosition(i).column.get());
             }
             // partition each row
+<<<<<<< HEAD
             size_t rows = block.rows();
             for (size_t row_index = 0; row_index < rows; ++row_index)
+=======
+            IColumn::Selector selector(rows);
+            for (size_t row = 0; row < rows; ++row)
+            {
+                /// Row from interval [(2^32 / partition_num) * i, (2^32 / partition_num) * (i + 1)) goes to bucket with number i.
+                selector[row] = hash_data[row]; /// [0, 2^32)
+                selector[row] *= partition_num; /// [0, partition_num * 2^32), selector stores 64 bit values.
+                selector[row] >>= 32u;          /// [0, partition_num)
+            }
+
+            for (size_t col_id = 0; col_id < block.columns(); ++col_id)
+>>>>>>> 20100ca79... Always send the final execution summaries for streaming dag request (#2189)
             {
                 // TODO: add specific collators
                 UInt128 key = hash128(row_index, key_col_ptrs.size(), key_col_ptrs, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
@@ -212,8 +236,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
     if (block.columns() != result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
-    rows_in_blocks += block.rows();
-    blocks.push_back(block);
+    size_t rows = block.rows();
+    rows_in_blocks += rows;
+    if (rows > 0)
+    {
+        blocks.push_back(block);
+    }
     if ((Int64)rows_in_blocks > records_per_chunk)
     {
         ScheduleEncodeTask();
