@@ -38,11 +38,17 @@ public:
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;
     static void computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     void doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock & lock, const Region & region);
     void doPersist(const Region & region, const RegionTaskLock * lock);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     Context & global_context;
     std::shared_ptr<DB::PageStorage> page_storage;
     std::shared_ptr<DB::stable::PageStorage> stable_page_storage;

@@ -5,10 +5,7 @@
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Server/StorageConfigParser.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-#define private public // hack for test
 #include <Storages/PathCapacityMetrics.h>
-#undef private
 
 namespace DB
 {
@@ -313,7 +310,7 @@ ip = "::/0"
 [profiles]
 [profiles.default]
 load_balancing = "random"
-max_memory_usage = 0 
+max_memory_usage = 0
 use_uncompressed_cache = 1
 [profiles.readonly]
 readonly = 1

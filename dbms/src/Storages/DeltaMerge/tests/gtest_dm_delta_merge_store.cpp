@@ -6,10 +6,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
-
-#define private public
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#undef private
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
