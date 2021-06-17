@@ -49,11 +49,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
-    if (rows_in_blocks > 0)
-    {
-        ScheduleEncodeTask();
-    }
-    /// add an extra response to send the final execute summaries
+    /// always send a response back to send the final execute summaries
     ScheduleEncodeTask();
     // wait all job finishes.
     thread_pool.wait();
@@ -240,8 +236,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
     if (block.columns() != result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
-    rows_in_blocks += block.rows();
-    blocks.push_back(block);
+    size_t rows = block.rows();
+    rows_in_blocks += rows;
+    if (rows > 0)
+    {
+        blocks.push_back(block);
+    }
     if ((Int64)rows_in_blocks > records_per_chunk)
     {
         ScheduleEncodeTask();
