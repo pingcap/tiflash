@@ -127,7 +127,6 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         }
     }
     context.getTimezoneInfo().resetByDAGRequest(*dag_req);
-    context.setProgressCallback([this](const Progress & progress) { this->updateProgress(progress); });
 
     dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
     context.setDAGContext(dag_context.get());
@@ -390,52 +389,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
     return grpc::Status::OK;
 }
 
-MPPTaskManager::MPPTaskManager(BackgroundProcessingPool & background_pool_)
-    : log(&Logger::get("TaskManager")), background_pool(background_pool_)
-{
-    handle = background_pool.addTask(
-        [&, this] {
-            bool has_hanging_query = false;
-            try
-            {
-                /// get a snapshot of current queries
-                auto current_query = this->getCurrentQueries();
-                for (auto query_id : current_query)
-                {
-                    /// get a snapshot of current tasks
-                    auto current_tasks = this->getCurrentTasksForQuery(query_id);
-                    bool has_hanging_task = false;
-                    for (auto & task : current_tasks)
-                    {
-                        if (task->isTaskHanging())
-                        {
-                            has_hanging_task = true;
-                            break;
-                        }
-                    }
-                    if (has_hanging_task)
-                    {
-                        has_hanging_query = true;
-                        this->cancelMPPQuery(query_id, "MPP Task canceled because it seems hangs");
-                    }
-                }
-            }
-            catch (const Exception & e)
-            {
-                LOG_ERROR(log, "MPPTaskMonitor failed by " << e.displayText() << " \n stack : " << e.getStackTrace().toString());
-            }
-            catch (const Poco::Exception & e)
-            {
-                LOG_ERROR(log, "MPPTaskMonitor failed by " << e.displayText());
-            }
-            catch (const std::exception & e)
-            {
-                LOG_ERROR(log, "MPPTaskMonitor failed by " << e.what());
-            }
-            return has_hanging_query;
-        },
-        false);
-}
+MPPTaskManager::MPPTaskManager() : log(&Logger::get("TaskManager")) {}
 
 MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg)
 {
@@ -562,6 +516,6 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
     LOG_ERROR(log, "The task " + task->id.toString() + " cannot be found and fail to unregister");
 }
 
-MPPTaskManager::~MPPTaskManager() { background_pool.removeTask(handle); }
+MPPTaskManager::~MPPTaskManager() {}
 
 } // namespace DB

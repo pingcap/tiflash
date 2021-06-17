@@ -7,6 +7,7 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/registerStorages.h>
+#include <gtest/gtest.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 
