@@ -11,6 +11,7 @@ add_library (daemon ${SPLIT_SHARED}
 if (USE_UNWIND)
     target_compile_definitions (daemon PRIVATE USE_UNWIND=1)
     target_include_directories (daemon BEFORE PRIVATE ${UNWIND_INCLUDE_DIR})
+    target_include_directories (daemon BEFORE PRIVATE ${UNWIND_INCREMENTAL_DIR})
     target_link_libraries (daemon ${UNWIND_LIBRARY})
 endif ()
 
