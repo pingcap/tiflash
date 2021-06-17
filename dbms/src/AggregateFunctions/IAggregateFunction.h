@@ -14,6 +14,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int NOT_IMPLEMENTED;
+}
+
 class Arena;
 class ReadBuffer;
 class WriteBuffer;
@@ -44,7 +49,7 @@ public:
     /// Get the result type.
     virtual DataTypePtr getReturnType() const = 0;
 
-    virtual ~IAggregateFunction() {};
+    virtual ~IAggregateFunction() = default;
 
     /** Data manipulating functions. */
 
@@ -64,6 +69,12 @@ public:
 
     /// How the data structure should be aligned. NOTE: Currently not used (structures with aggregation state are put without alignment).
     virtual size_t alignOfData() const = 0;
+
+    /// TODO: remove this function after all aggregate functions support batch operations
+    virtual bool supportBatchOperations() const
+    {
+        return false;
+    }
 
     /** Adds a value into aggregation data on which place points to.
      *  columns points to columns containing arguments of aggregation function.
@@ -103,6 +114,88 @@ public:
       */
     using AddFunc = void (*)(const IAggregateFunction *, AggregateDataPtr, const IColumn **, size_t, Arena *);
     virtual AddFunc getAddressOfAddFunction() const = 0;
+
+/// TODO: remove this function after all aggregate functions support batch operations
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+    /** Contains a loop with calls to "add" function. You can collect arguments into array "places"
+      *  and do a single call to "addBatch" for devirtualization and inlining.
+      */
+    virtual void addBatch(
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const
+    {
+    }
+
+    virtual void mergeBatch(
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        const AggregateDataPtr * rhs,
+        Arena * arena) const
+    {
+    }
+
+    /** The same for single place.
+      */
+    virtual void addBatchSinglePlace(
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1) const
+    {
+    }
+
+    /** The same for single place when need to aggregate only filtered data.
+      */
+    virtual void addBatchSinglePlaceNotNull(
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        const UInt8 * null_map,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const
+    {
+        if (!supportBatchOperations())
+            throw Exception("addBatchSinglePlaceNotNull is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    virtual void addBatchSinglePlaceFromInterval(
+        size_t batch_begin, size_t batch_end, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1)
+        const
+    {
+    }
+
+    /** In addition to addBatch, this method collects multiple rows of arguments into array "places"
+      *  as long as they are between offsets[i-1] and offsets[i]. This is used for arrayReduce and
+      *  -Array combinator. It might also be used generally to break data dependency when array
+      *  "places" contains a large number of same values consecutively.
+      */
+    virtual void addBatchArray(
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        const IColumn ** columns,
+        const UInt64 * offsets,
+        Arena * arena) const
+    {
+    }
+
+    /** The case when the aggregation key is UInt8
+      * and pointers to aggregation states are stored in AggregateDataPtr[256] lookup table.
+      */
+    virtual void addBatchLookupTable8(
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        std::function<void(AggregateDataPtr &)> init,
+        const UInt8 * key,
+        const IColumn ** columns,
+        Arena * arena) const
+    {
+    }
+#pragma GCC diagnostic pop
 
     /** This is used for runtime code generation to determine, which header files to include in generated source.
       * Always implement it as
