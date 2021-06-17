@@ -1,11 +1,17 @@
 #pragma once
 
+#include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char pause_when_reading_from_dt_stream[];
+} // namespace FailPoints
+
 namespace DM
 {
 
@@ -80,6 +86,7 @@ protected:
                 }
                 LOG_TRACE(log, "Start to read segment [" + DB::toString(cur_segment->segmentId()) + "]");
             }
+            FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
 
             Block res = cur_stream->read(res_filter, return_filter);
 
@@ -107,10 +114,10 @@ private:
     ColumnDefines          columns_to_read;
     RSOperatorPtr          filter;
     Block                  header;
-    UInt64                 max_version;
-    size_t                 expected_block_size;
-    bool                   is_raw;
-    bool                   do_range_filter_for_raw;
+    const UInt64           max_version;
+    const size_t           expected_block_size;
+    const bool             is_raw;
+    const bool             do_range_filter_for_raw;
 
     bool done = false;
 

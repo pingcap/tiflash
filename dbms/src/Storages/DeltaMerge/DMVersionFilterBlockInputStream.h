@@ -48,12 +48,8 @@ public:
                   "Total rows: " << total_rows << ", pass: " << DB::toString((Float64)passed_rows * 100 / total_rows, 2)
                                  << "%, complete pass: " << DB::toString((Float64)complete_passed * 100 / total_blocks, 2)
                                  << "%, complete not pass: " << DB::toString((Float64)complete_not_passed * 100 / total_blocks, 2)
-                                 << "%, not clean: " << DB::toString((Float64)not_clean_rows * 100 / passed_rows, 2)
-                                 << "%, effective: " << DB::toString((Float64)effective_num_rows * 100 / passed_rows, 2) << "%");
+                                 << "%, not clean: " << DB::toString((Float64)not_clean_rows * 100 / passed_rows, 2) << "%");
     }
-
-    void readPrefix() override;
-    void readSuffix() override;
 
     String getName() const override { return "DeltaMergeVersionFilter"; }
     Block  getHeader() const override { return header; }
@@ -66,9 +62,7 @@ public:
 
     Block read(FilterPtr & res_filter, bool return_filter) override;
 
-    size_t getEffectiveNumRows() const { return effective_num_rows; }
     size_t getNotCleanRows() const { return not_clean_rows; }
-    UInt64 getGCHintVersion() const { return gc_hint_version; }
 
 private:
     inline void checkWithNextIndex(size_t i)
@@ -87,10 +81,6 @@ private:
             filter[i]
                 = cur_version >= version_limit || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
             not_clean[i] = filter[i] && (compare(cur_handle, next_handle) == 0 || deleted);
-            effective[i] = filter[i] && (compare(cur_handle, next_handle) != 0);
-            if (filter[i])
-                gc_hint_version
-                    = std::min(gc_hint_version, calculateRowGcHintVersion(cur_handle, cur_version, next_handle, true, deleted));
         }
         else
         {
@@ -123,50 +113,6 @@ private:
     }
 
 private:
-    inline UInt64 calculateRowGcHintVersion(
-        const RowKeyValueRef & cur_handle, UInt64 cur_version, const RowKeyValueRef & next_handle, bool next_handle_valid, bool deleted)
-    {
-        // The rules to calculate gc_hint_version of every pk,
-        //     1. If the oldest version is delete, then the result is the oldest version.
-        //     2. Otherwise, if the pk has just a single version, the result is UInt64_MAX(means just ignore this kind of pk).
-        //     3. Otherwise, the result is the second oldest version.
-        bool matched = false;
-        if (is_first_oldest_version && deleted)
-        {
-            // rule 1
-            matched = true;
-        }
-        else if (is_second_oldest_version && gc_hint_version_pending)
-        {
-            // rule 3
-            matched = true;
-        }
-        gc_hint_version_pending = !matched;
-
-        // update status variable for next row if need
-        if (next_handle_valid)
-        {
-            if (compare(cur_handle, next_handle) != 0)
-            {
-                is_first_oldest_version  = true;
-                is_second_oldest_version = false;
-            }
-            else if (is_first_oldest_version && (compare(cur_handle, next_handle) == 0))
-            {
-                is_first_oldest_version  = false;
-                is_second_oldest_version = true;
-            }
-            else
-            {
-                is_first_oldest_version  = false;
-                is_second_oldest_version = false;
-            }
-        }
-
-        return matched ? cur_version : UINT64_MAX;
-    }
-
-private:
     UInt64 version_limit;
     bool   is_common_handle;
     Block  header;
@@ -176,21 +122,8 @@ private:
     size_t delete_col_pos;
 
     IColumn::Filter filter{};
-    // effective = selected & handle not equals with next
-    IColumn::Filter effective{};
     // not_clean = selected & (handle equals with next || deleted)
     IColumn::Filter not_clean{};
-
-    // Calculate per block, when gc_safe_point exceed this version, there must be some data obsolete in this block
-    // First calculate the gc_hint_version of every pk according to the following rules,
-    //     see the comments in `calculateRowGcHintVersion` to see how to calculate it for every pk
-    // Then the block's gc_hint_version is the minimum value of all pk's gc_hint_version
-    UInt64 gc_hint_version;
-
-    // auxiliary variable for the calculation of gc_hint_version
-    bool is_first_oldest_version  = true;
-    bool is_second_oldest_version = false;
-    bool gc_hint_version_pending  = true;
 
     Block raw_block;
 
@@ -205,7 +138,6 @@ private:
     size_t complete_passed     = 0;
     size_t complete_not_passed = 0;
     size_t not_clean_rows      = 0;
-    size_t effective_num_rows  = 0;
 
     Logger * log;
 };

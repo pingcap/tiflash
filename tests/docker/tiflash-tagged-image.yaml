@@ -1,0 +1,27 @@
+version: '2.3'
+
+services:
+  # for tests under fullstack-test directory
+  # (engine DeltaTree)
+  tiflash0:
+    image: hub.pingcap.net/tiflash/tics:${TAG:-master}
+    volumes:
+      - ./config/tiflash_dt.toml:/config.toml:ro
+      - ./config/tiflash-users.toml:/users.toml:ro
+      - ./data/tiflash:/tmp/tiflash/data
+      - ./log/tiflash:/tmp/tiflash/log
+      - ..:/tests
+      - ../docker/_env.sh:/tests/_env.sh
+      - ./log/tiflash-cluster-manager:/tmp/tiflash/data/tmp
+      - ./config/proxy.toml:/proxy.toml:ro
+      - ./config/cipher-file-256:/cipher-file-256:ro
+      - ./data/proxy:/data
+      - ./log/proxy:/log
+    command:
+      - --config-file
+      - /config.toml
+    restart: on-failure
+    depends_on:
+      - "pd0"
+      - "tikv0"
+

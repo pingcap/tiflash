@@ -8,6 +8,7 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/FieldVisitors.h>
+#include <Common/MyTime.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -587,10 +588,16 @@ struct TiDBConvertToFloat
     }
 
     template <typename T>
-    static Float64 toFloat(const DecimalField<T> & value, bool need_truncate, Float64 shift, Float64 max_f, const Context & context)
+    static std::enable_if_t<std::is_floating_point_v<T> || std::is_integral_v<T>, Float64> toFloat(
+        const T & value)
     {
-        Float64 float_value = static_cast<Float64>(value);
-        return produceTargetFloat64(float_value, need_truncate, shift, max_f, context);
+        return static_cast<Float64>(value);
+    }
+
+    template <typename T>
+    static Float64 toFloat(const DecimalField<T> & value)
+    {
+        return static_cast<Float64>(value);
     }
 
     static StringRef getValidFloatPrefix(const StringRef & value)
@@ -672,15 +679,6 @@ struct TiDBConvertToFloat
             vec_null_map_to = &col_null_map_to->getData();
         }
 
-        bool need_truncate = tp.flen() != -1 && tp.decimal() != -1 && tp.flen() >= tp.decimal();
-        Float64 shift = 0;
-        Float64 max_f = 0;
-        if (need_truncate)
-        {
-            shift = std::pow((Float64)10, tp.flen());
-            max_f = std::pow((Float64)10, tp.flen() - tp.decimal()) - 1.0 / shift;
-        }
-
         if constexpr (IsDecimal<FromFieldType>)
         {
             /// cast decimal as real
@@ -689,7 +687,7 @@ struct TiDBConvertToFloat
             for (size_t i = 0; i < size; ++i)
             {
                 auto & field = (*col_from)[i].template safeGet<DecimalField<FromFieldType>>();
-                vec_to[i] = toFloat(field, need_truncate, shift, max_f, context);
+                vec_to[i] = toFloat(field);
             }
         }
         else if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime> || std::is_same_v<FromDataType, DataTypeMyDate>)
@@ -706,19 +704,17 @@ struct TiDBConvertToFloat
                 if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
                 {
                     MyDate date(vec_from[i]);
-                    vec_to[i] = toFloat(date.year * 10000 + date.month * 100 + date.day, need_truncate, shift, max_f, context);
+                    vec_to[i] = toFloat(date.year * 10000 + date.month * 100 + date.day);
                 }
                 else
                 {
                     MyDateTime date_time(vec_from[i]);
                     if (type.getFraction() > 0)
                         vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0,
-                            need_truncate, shift, max_f, context);
+                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
                     else
                         vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second,
-                            need_truncate, shift, max_f, context);
+                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second);
                 }
             }
         }
@@ -731,6 +727,14 @@ struct TiDBConvertToFloat
             const ColumnString::Chars_t * chars = &col_from_string->getChars();
             const IColumn::Offsets * offsets = &col_from_string->getOffsets();
             size_t current_offset = 0;
+            bool need_truncate = tp.flen() != -1 && tp.decimal() != -1 && tp.flen() >= tp.decimal();
+            Float64 shift = 0;
+            Float64 max_f = 0;
+            if (need_truncate)
+            {
+                shift = std::pow((Float64)10, tp.flen());
+                max_f = std::pow((Float64)10, tp.flen() - tp.decimal()) - 1.0 / shift;
+            }
             for (size_t i = 0; i < size; i++)
             {
                 size_t next_offset = (*offsets)[i];
@@ -747,7 +751,7 @@ struct TiDBConvertToFloat
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
             for (size_t i = 0; i < size; i++)
-                vec_to[i] = toFloat(vec_from[i], need_truncate, shift, max_f, context);
+                vec_to[i] = toFloat(vec_from[i]);
         }
         else
         {
@@ -1294,7 +1298,8 @@ struct TiDBConvertToTime
             {
                 try
                 {
-                    MyDateTime datetime = numberToDateTime(vec_from[i]);
+                    MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
+                    bool is_null = numberToDateTime(vec_from[i], datetime, context.getDAGContext());
                     if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                     {
                         MyDate date(datetime.year, datetime.month, datetime.day);
@@ -1304,8 +1309,9 @@ struct TiDBConvertToTime
                     {
                         vec_to[i] = datetime.toPackedUInt();
                     }
+                    (*vec_null_map_to)[i] = is_null;
                 }
-                catch (const Exception &)
+                catch (const TiFlashException & e)
                 {
                     // Cannot cast, fill with NULL
                     (*vec_null_map_to)[i] = 1;
@@ -1402,6 +1408,115 @@ struct TiDBConvertToTime
             block.getByPosition(result).column = std::move(col_to);
     }
 };
+
+inline bool getDatetime(const Int64 & num, MyDateTime & result, DAGContext * ctx)
+{
+    UInt64 ymd = num / 1000000;
+    UInt64 hms = num - ymd * 1000000;
+
+    UInt64 year = ymd / 10000;
+    ymd %= 10000;
+    UInt64 month = ymd / 100;
+    UInt64 day = ymd % 100;
+
+    UInt64 hour = hms / 10000;
+    hms %= 10000;
+    UInt64 minute = hms / 100;
+    UInt64 second = hms % 100;
+
+    if (toCoreTimeChecked(year, month, day, hour, minute, second, 0, result))
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+    if (ctx)
+    {
+        result.check(ctx->allowZeroInDate(), ctx->allowInvalidDate());
+    }
+    else
+    {
+        result.check(false, false);
+    }
+    return false;
+}
+
+// Convert a integer number to DateTime and return true if the result is NULL.
+// If number is invalid(according to SQL_MODE), return NULL and handle the error with DAGContext.
+// This function may throw exception.
+inline bool numberToDateTime(Int64 number, MyDateTime & result, DAGContext * ctx)
+{
+    MyDateTime datetime(0);
+    if (number == 0)
+    {
+        result = datetime;
+        return false;
+    }
+
+    // datetime type
+    if (number >= 10000101000000)
+    {
+        return getDatetime(number, result, ctx);
+    }
+
+    // check MMDD
+    if (number < 101)
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDD: 2000-2069
+    if (number <= 69 * 10000 + 1231)
+    {
+        number = (number + 20000000) * 1000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    if (number < 70 * 10000 + 101)
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDD
+    if (number <= 991231)
+    {
+        number = (number + 19000000) * 1000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    // check hour/min/second
+    if (number <= 99991231)
+    {
+        number *= 1000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    // check MMDDHHMMSS
+    if (number < 101000000)
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDDhhmmss: 2000-2069
+    if (number <= 69 * 10000000000 + 1231235959)
+    {
+        number += 20000000000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    // check YYYYMMDDhhmmss
+    if (number < 70 * 10000000000 + 101000000)
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDDHHMMSS
+    if (number <= 991231235959)
+    {
+        number += 19000000000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    return getDatetime(number, result, ctx);
+}
 
 class PreparedFunctionTiDBCast : public PreparedFunctionImpl
 {
@@ -1537,20 +1652,6 @@ private:
                 else
                 {
                     TiDBConvertToFloat<FromDataType, DataTypeFloat64, return_nullable, false>::execute(
-                        block, arguments, result, in_union_, tidb_tp_, context_);
-                }
-            };
-        if (checkDataType<DataTypeFloat32>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
-                       const Context & context_) {
-                if (hasUnsignedFlag(tidb_tp_))
-                {
-                    TiDBConvertToFloat<FromDataType, DataTypeFloat32, return_nullable, true>::execute(
-                        block, arguments, result, in_union_, tidb_tp_, context_);
-                }
-                else
-                {
-                    TiDBConvertToFloat<FromDataType, DataTypeFloat32, return_nullable, false>::execute(
                         block, arguments, result, in_union_, tidb_tp_, context_);
                 }
             };

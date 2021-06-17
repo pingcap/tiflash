@@ -4,7 +4,7 @@ services:
   # for tests under fullstack-test directory
   # (engine DeltaTree)
   tiflash0:
-    image: hub.pingcap.net/tiflash/tics:${TAG:-master}
+    image: hub.pingcap.net/tiflash/tiflash-ci-base
     volumes:
       - ./config/tiflash_dt.toml:/config.toml:ro
       - ./config/tiflash-users.toml:/users.toml:ro
@@ -17,7 +17,10 @@ services:
       - ./config/cipher-file-256:/cipher-file-256:ro
       - ./data/proxy:/data
       - ./log/proxy:/log
-    command:
+      - ../.build/tiflash:/tiflash
+    entrypoint:
+      - /tiflash/tiflash
+      - server
       - --config-file
       - /config.toml
     restart: on-failure
