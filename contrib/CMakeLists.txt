@@ -53,7 +53,7 @@ if (USE_INTERNAL_BTRIE_LIBRARY)
 endif ()
 
 if (USE_INTERNAL_UNWIND_LIBRARY)
-    add_subdirectory (libunwind)
+    add_subdirectory (libunwind-cmake)
 endif ()
 
 if (USE_INTERNAL_ZLIB_LIBRARY)
