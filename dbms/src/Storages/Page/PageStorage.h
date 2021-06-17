@@ -166,7 +166,10 @@ public:
 
     static PageFormat::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     WriterPtr checkAndRenewWriter(PageFile &     page_file,
                                   const String & parent_path_hint,
                                   WriterPtr &&   old_writer  = nullptr,
@@ -187,7 +190,10 @@ private:
     template <typename SnapshotPtr>
     friend class DataCompactor;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     String             storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator;    // Get paths for storing data
     Config             config;
@@ -242,7 +248,10 @@ public:
     UInt64    getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }
     PageEntry getPageEntry(PageId page_id) const { return storage.getEntry(page_id, snap); }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     PageStorage &            storage;
     PageStorage::SnapshotPtr snap;
 };

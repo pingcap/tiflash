@@ -18,10 +18,7 @@
 #include <common/logger_useful.h>
 
 #include "gtest/gtest.h"
-
-#define private public
 #include <Storages/Page/PageStorage.h>
-#undef private
 
 namespace DB
 {

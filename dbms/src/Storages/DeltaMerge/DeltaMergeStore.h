@@ -247,7 +247,13 @@ public:
 
     class MergeDeltaTaskPool
     {
+
+#ifndef DBMS_PUBLIC_GTEST
     private:
+#else
+    public:
+#endif
+
         using TaskQueue = std::queue<BackgroundTask, std::list<BackgroundTask>>;
         TaskQueue light_tasks;
         TaskQueue heavy_tasks;
@@ -382,7 +388,10 @@ public:
 
     RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
 
     bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
@@ -409,7 +418,10 @@ private:
                                           size_t               expected_tasks_count = 1,
                                           const SegmentIdSet & read_segments        = {});
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     Context &       global_context;
     StoragePathPool path_pool;
     Settings        settings;
