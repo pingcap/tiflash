@@ -617,7 +617,7 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr &        dm_context,
     // Check https://github.com/pingcap/tics/issues/2040 for more details.
     // TODO: If tiflash crash during the middle of ingesting, we may leave some DTFiles on disk and
     // they can not be deleted. We should find a way to cleanup those files.
-    WriteBatches ingest_wbs(storage_pool, dm_context->db_context.getWriteLimiter());
+    WriteBatches ingest_wbs(storage_pool, dm_context->getWriteLimiter());
     if (files.size() > 0)
     {
         for (const auto & file : files)
@@ -657,7 +657,7 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr &        dm_context,
 
             // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
             DeltaPacks   packs;
-            WriteBatches wbs(storage_pool, dm_context->db_context.getWriteLimiter());
+            WriteBatches wbs(storage_pool, dm_context->getWriteLimiter());
 
             for (const auto & file : files)
             {
