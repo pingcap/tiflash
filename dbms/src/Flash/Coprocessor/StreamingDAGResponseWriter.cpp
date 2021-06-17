@@ -197,17 +197,10 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             partition_selector.resize_fill(rows, 0);
             for (size_t row_index = 0; row_index < rows; ++row_index)
             {
-<<<<<<< HEAD
                 UInt128 key;
                 hash_values[row_index].get128(key.low, key.high);
 
                 partition_selector[row_index] = key.low % partition_num;
-=======
-                /// Row from interval [(2^32 / partition_num) * i, (2^32 / partition_num) * (i + 1)) goes to bucket with number i.
-                selector[row] = hash_data[row]; /// [0, 2^32)
-                selector[row] *= partition_num; /// [0, partition_num * 2^32), selector stores 64 bit values.
-                selector[row] >>= 32u;          /// [0, partition_num)
->>>>>>> 20100ca79... Always send the final execution summaries for streaming dag request (#2189)
             }
 
             for (size_t col_id = 0; col_id < block.columns(); ++col_id)
