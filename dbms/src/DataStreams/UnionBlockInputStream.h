@@ -47,7 +47,7 @@ struct OutputData<StreamUnionMode::ExtraInfo>
     OutputData(std::exception_ptr & exception_) : exception(exception_) {}
 };
 
-}
+} // namespace _UnionBlockInputStreamImpl
 
 /** Merges several sources into one.
   * Blocks from different sources are interleaved with each other in an arbitrary way.
