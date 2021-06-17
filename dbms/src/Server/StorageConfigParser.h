@@ -34,7 +34,7 @@ public:
     
     void parse(const String& storage_io_rate_limit, Poco::Logger* log);
 
-    std::string ToString() const;
+    std::string toString() const;
 
     UInt64 getFgWriteMaxBytesPerSec() const;
     UInt64 getBgWriteMaxBytesPerSec() const;
