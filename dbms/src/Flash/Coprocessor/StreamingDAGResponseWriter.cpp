@@ -187,21 +187,8 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
                 key_col_ptrs.emplace_back(block.getByPosition(i).column.get());
             }
             // partition each row
-<<<<<<< HEAD
             size_t rows = block.rows();
             for (size_t row_index = 0; row_index < rows; ++row_index)
-=======
-            IColumn::Selector selector(rows);
-            for (size_t row = 0; row < rows; ++row)
-            {
-                /// Row from interval [(2^32 / partition_num) * i, (2^32 / partition_num) * (i + 1)) goes to bucket with number i.
-                selector[row] = hash_data[row]; /// [0, 2^32)
-                selector[row] *= partition_num; /// [0, partition_num * 2^32), selector stores 64 bit values.
-                selector[row] >>= 32u;          /// [0, partition_num)
-            }
-
-            for (size_t col_id = 0; col_id < block.columns(); ++col_id)
->>>>>>> 20100ca79... Always send the final execution summaries for streaming dag request (#2189)
             {
                 // TODO: add specific collators
                 UInt128 key = hash128(row_index, key_col_ptrs.size(), key_col_ptrs, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
