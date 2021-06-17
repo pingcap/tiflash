@@ -352,23 +352,29 @@ bool MPPTask::isTaskHanging()
 
 void MPPTask::cancel(const String & reason)
 {
-    auto current_status = status.load();
+    auto current_status = status.exchange(CANCELLED);
     if (current_status == FINISHED || current_status == CANCELLED)
-        return;
-    LOG_WARNING(log, "Begin cancel task: " + id.toString());
-    /// step 1. cancel query streams
-    status = CANCELLED;
-    auto process_list_element = context.getProcessListElement();
-    if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
     {
-        BlockInputStreamPtr input_stream;
-        BlockOutputStreamPtr output_stream;
-        if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
+        if (current_status == FINISHED)
+            status = FINISHED;
+        return;
+    }
+    LOG_WARNING(log, "Begin cancel task: " + id.toString());
+    /// step 1. cancel query streams if it is running
+    if (current_status == RUNNING)
+    {
+        auto process_list_element = context.getProcessListElement();
+        if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
         {
-            IProfilingBlockInputStream * input_stream_casted;
-            if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
+            BlockInputStreamPtr input_stream;
+            BlockOutputStreamPtr output_stream;
+            if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
             {
-                input_stream_casted->cancel(true);
+                IProfilingBlockInputStream * input_stream_casted;
+                if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
+                {
+                    input_stream_casted->cancel(true);
+                }
             }
         }
     }
