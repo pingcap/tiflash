@@ -4,6 +4,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <common/logger_useful.h>
 #include <Encryption/RateLimiter.h>
+#include <Poco/Util/AbstractConfiguration.h>
 
 namespace CurrentMetrics
 {

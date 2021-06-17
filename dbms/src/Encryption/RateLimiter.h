@@ -7,8 +7,12 @@
 
 #include <Common/Stopwatch.h>
 #include <Server/StorageConfigParser.h>
-#include <Poco/Util/AbstractConfiguration.h>
+
 // TODO: separate IO utility(i.e. FileProvider, RateLimiter) from Encryption directory
+namespace Poco::Util
+{
+class AbstractConfiguration;
+}
 namespace DB
 {
 

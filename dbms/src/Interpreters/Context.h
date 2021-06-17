@@ -428,7 +428,7 @@ public:
     FileProviderPtr getFileProvider() const;
 
     void initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config, Poco::Logger* log);
-    IORateLimiter& getIORateLimiter() const;
+    RateLimiterPtr getWriteLimiter() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;

@@ -1580,9 +1580,9 @@ void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::Abstr
     shared->io_rate_limiter.updateConfig(metrics, config, log);
 }
 
-IORateLimiter& Context::getIORateLimiter() const
+RateLimiterPtr Context::getWriteLimiter() const
 {
-    return shared->io_rate_limiter;
+    return shared->io_rate_limiter.getWriteLimiter();
 }
 
 zkutil::ZooKeeperPtr Context::getZooKeeper() const

@@ -329,10 +329,10 @@ void StorageIORateLimitConfig::parse(const String& storage_io_rate_limit, Poco::
     readWeightConfig("foreground-write-weight", fg_write_weight);
     readWeightConfig("background-write-weight", bg_write_weight);
 
-    LOG_INFO(log, "storage.io-rate-limit " << ToString());
+    LOG_INFO(log, "storage.io-rate-limit " << toString());
 }
 
-std::string StorageIORateLimitConfig::ToString() const
+std::string StorageIORateLimitConfig::toString() const
 {
     return " max_bytes_per_sec: " + std::to_string(max_bytes_per_sec) +
         " mode: " + std::to_string(static_cast<UInt32>(mode)) +

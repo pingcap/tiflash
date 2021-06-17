@@ -60,6 +60,12 @@ http_port = 8123
     ## The path(s) to store Raft data.
     ## If not set, it will be the paths in `storage.latest.dir` appended with "/kvstore".
     # dir = [ ]
+
+    # [storage.io-rate-limit]
+    ## The max I/O bandwith. Default value is 0 and I/O rate limit is disabled.
+    # max-bytes-per-sec = 268435456
+    ## The I/O rate limit mode. Currently, only write-only mode is supported. 
+    # mode = write-only
 [flash]
 	tidb_status_addr = "tidb0:10080"
 	service_addr = "0.0.0.0:3930"

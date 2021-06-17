@@ -301,7 +301,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
                               page.data.size(),
                               entry.field_offsets);
             }
-            bytes_written += gc_file_writer->write(wb, gc_file_edit, global_context.getIORateLimiter().getWriteLimiter());
+            bytes_written += gc_file_writer->write(wb, gc_file_edit, global_context.getWriteLimiter());
         }
 
         migrate_infos.emplace_back(file_id_level, page_id_and_entries.size());

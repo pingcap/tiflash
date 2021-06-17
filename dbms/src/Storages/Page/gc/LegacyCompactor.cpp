@@ -235,7 +235,7 @@ size_t LegacyCompactor::writeToCheckpoint(
         auto checkpoint_writer = checkpoint_file.createWriter(false, true);
 
         PageEntriesEdit edit;
-        bytes_written += checkpoint_writer->write(wb, edit, global_context.getIORateLimiter().getWriteLimiter());
+        bytes_written += checkpoint_writer->write(wb, edit, global_context.getWriteLimiter());
     }
     // drop "data" part for checkpoint file.
     bytes_written -= checkpoint_file.setCheckpoint();

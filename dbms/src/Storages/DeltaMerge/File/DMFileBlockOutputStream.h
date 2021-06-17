@@ -29,7 +29,7 @@ public:
             dmfile,
             write_columns,
             context.getFileProvider(),
-            context.getIORateLimiter().getWriteLimiter(),
+            context.getWriteLimiter(),
             DMFileWriter::Options{
                 CompressionMethod::LZ4, // context.chooseCompressionSettings(0, 0), TODO: should enable this, and make unit testes work.
                 context.getSettingsRef().min_compress_block_size,
