@@ -659,6 +659,10 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
     if (empty())
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
     std::shared_lock lock(rwlock);
+    if (!block)
+    {
+        return;
+    }
     Block * stored_block = nullptr;
     {
         std::lock_guard<std::mutex> lk(blocks_lock);
