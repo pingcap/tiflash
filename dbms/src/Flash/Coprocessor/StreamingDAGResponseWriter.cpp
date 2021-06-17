@@ -53,6 +53,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
     {
         ScheduleEncodeTask();
     }
+    /// add an extra response to send the execute summaries
+    ScheduleEncodeTask();
     // wait all job finishes.
     thread_pool.wait();
 }
@@ -79,6 +81,11 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
 
         response.set_encode_type(encode_type);
         Int64 current_records_num = 0;
+        if (input_blocks.empty())
+        {
+            writer->write(response);
+            return;
+        }
         if (records_per_chunk == -1)
         {
             for (auto & block : input_blocks)
@@ -147,6 +154,14 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             responses[i] = response;
             responses[i].set_encode_type(encode_type);
         }
+        if (input_blocks.empty())
+        {
+            for (auto part_id = 0; part_id < partition_num; ++part_id)
+            {
+                writer->write(responses[part_id], part_id);
+            }
+            return;
+        }
 
         // partition tuples in blocks
         // 1) compute partition id
@@ -188,7 +203,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
                 /// Row from interval [(2^32 / partition_num) * i, (2^32 / partition_num) * (i + 1)) goes to bucket with number i.
                 selector[row] = hash_data[row]; /// [0, 2^32)
                 selector[row] *= partition_num; /// [0, partition_num * 2^32), selector stores 64 bit values.
-                selector[row] >>= 32u; /// [0, partition_num)
+                selector[row] >>= 32u;          /// [0, partition_num)
             }
 
             for (size_t col_id = 0; col_id < block.columns(); ++col_id)
