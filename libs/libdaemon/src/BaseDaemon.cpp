@@ -205,7 +205,20 @@ size_t backtraceLibUnwind(void ** out_frames, size_t max_frames, ucontext_t & co
 
     unw_cursor_t cursor;
 
-    if (unw_init_local2(&cursor, &context, UNW_INIT_SIGNAL_FRAME) < 0)
+#ifdef __aarch64__
+    // translate context for aarch64
+    unw_context_t unw_context;
+    unw_context.uc_flags = context.uc_flags;
+    unw_context.uc_link = context.uc_link;
+    unw_context.uc_stack = context.uc_stack;
+    unw_context.uc_sigmask = context.uc_sigmask;
+    std::memcpy(&unw_context.uc_mcontext, &context.uc_mcontext, sizeof(unw_context.uc_mcontext));
+    unw_context_t* context_ptr = &unw_context;
+#else
+    ucontext_t* context_ptr = &context;
+#endif
+
+    if (unw_init_local2(&cursor, context_ptr, UNW_INIT_SIGNAL_FRAME) < 0)
         return 0;
 
     size_t i = 0;

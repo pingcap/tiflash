@@ -78,8 +78,14 @@ inline DB::UInt64 intHashCRC32(DB::UInt64 x, DB::UInt64 updated_value)
 template <typename T>
 inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
 {
-    static_assert(!is_fit_register<T>);
-    if constexpr (is_boost_number_v<T>)
+    if constexpr (DB::IsDecimal<T>)
+    {
+        if constexpr (is_fit_register<typename T::NativeType>)
+            return intHashCRC32(x.value, updated_value);
+        else
+            return wideIntHashCRC32(x.value, updated_value);
+    }
+    else if constexpr (is_boost_number_v<T>)
     {
         auto backend_value = x.backend();
         for (size_t i = 0; i < backend_value.size(); ++i)
@@ -109,8 +115,13 @@ inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
         updated_value = intHashCRC32(x.d, updated_value);
         return updated_value;
     }
+    static_assert(
+        DB::IsDecimal<T> ||
+        is_boost_number_v<T> ||
+        std::is_same_v<T, DB::UInt128> ||
+        std::is_same_v<T, DB::Int128> ||
+        std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
-    return updated_value;
 }
 
 template <typename T>
@@ -224,7 +235,11 @@ inline size_t defaultHash64(const std::enable_if_t<!is_fit_register<T>, T> & key
     {
         return boost::multiprecision::hash_value(key);
     }
-
+    static_assert(
+        is_boost_number_v<T> ||
+        std::is_same_v<T, DB::UInt128> ||
+        std::is_same_v<T, DB::Int128> ||
+        std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
 }
 
