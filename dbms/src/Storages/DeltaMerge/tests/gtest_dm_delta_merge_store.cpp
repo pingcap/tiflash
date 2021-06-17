@@ -1,12 +1,18 @@
 #include <Common/FailPoint.h>
+#include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Poco/File.h>
+
+#define private public
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
+#undef private
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/ReorganizeBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
@@ -30,6 +36,57 @@ namespace DM
 {
 namespace tests
 {
+
+// Simple test suit for DeltaMergeStore.
+class DeltaMergeStore_test : public ::testing::Test
+{
+public:
+    DeltaMergeStore_test() : name("DeltaMergeStore_test") {}
+
+    void cleanUp()
+    {
+        // drop former-gen table's data in disk
+        const String p = DB::tests::TiFlashTestEnv::getTemporaryPath();
+        if (Poco::File f{p}; f.exists())
+        {
+            f.remove(true);
+            f.createDirectories();
+        }
+    }
+
+    void SetUp() override
+    {
+
+        cleanUp();
+        context = std::make_unique<Context>(DMTestEnv::getContext());
+        store   = reload();
+    }
+
+    DeltaMergeStorePtr
+    reload(const ColumnDefinesPtr & pre_define_columns = {}, bool is_common_handle = false, size_t rowkey_column_size = 1)
+    {
+        ColumnDefinesPtr cols;
+        if (!pre_define_columns)
+            cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
+        else
+            cols = pre_define_columns;
+
+        ColumnDefine handle_column_define = (*cols)[0];
+
+        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
+            *context, false, "test", name, *cols, handle_column_define, is_common_handle, rowkey_column_size, DeltaMergeStore::Settings());
+        return s;
+    }
+
+private:
+    // the table name
+    String name;
+
+protected:
+    // a ptr to context, we can reload context with different settings if need.
+    std::unique_ptr<Context> context;
+    DeltaMergeStorePtr       store;
+};
 
 enum TestMode
 {
@@ -57,12 +114,13 @@ String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
     }
 }
 
-class DeltaMergeStore_test : public ::testing::Test, public testing::WithParamInterface<TestMode>
+// Read write test suit for DeltaMergeStore.
+// We will instantiate test cases for different `TestMode`
+// to test with different pack types.
+class DeltaMergeStore_RWTest : public ::testing::Test, public testing::WithParamInterface<TestMode>
 {
 public:
-    DeltaMergeStore_test() : name("DeltaMergeStore_test") {}
-
-    static void SetUpTestCase() {}
+    DeltaMergeStore_RWTest() : name("DeltaMergeStore_RWTest") {}
 
     void cleanUp()
     {
@@ -101,7 +159,12 @@ public:
     DeltaMergeStorePtr
     reload(const ColumnDefinesPtr & pre_define_columns = {}, bool is_common_handle = false, size_t rowkey_column_size = 1)
     {
-        auto         cols                 = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle) : pre_define_columns;
+        ColumnDefinesPtr cols;
+        if (!pre_define_columns)
+            cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
+        else
+            cols = pre_define_columns;
+
         ColumnDefine handle_column_define = (*cols)[0];
 
         DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
@@ -139,7 +202,7 @@ protected:
     DeltaMergeStorePtr       store;
 };
 
-TEST_P(DeltaMergeStore_test, Create)
+TEST_F(DeltaMergeStore_test, Create)
 try
 {
     // create table
@@ -161,7 +224,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, OpenWithExtraColumns)
+TEST_F(DeltaMergeStore_test, OpenWithExtraColumns)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -189,7 +252,86 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, SimpleWriteRead)
+TEST_F(DeltaMergeStore_test, AddExtraColumn)
+try
+{
+    auto log = &Poco::Logger::get(GET_GTEST_FULL_NAME);
+    for (const auto & pk_type : {
+             DMTestEnv::PkType::HiddenTiDBRowID,
+             DMTestEnv::PkType::CommonHandle,
+             DMTestEnv::PkType::PkIsHandleInt64,
+             DMTestEnv::PkType::PkIsHandleInt32,
+         })
+    {
+        LOG_INFO(log, "Test case for " << DMTestEnv::PkTypeToString(pk_type) << " begin.");
+
+        auto cols = DMTestEnv::getDefaultColumns(pk_type);
+        store     = reload(cols, (pk_type == DMTestEnv::PkType::CommonHandle), 1);
+
+        ASSERT_EQ(store->isCommonHandle(), pk_type == DMTestEnv::PkType::CommonHandle) << DMTestEnv::PkTypeToString(pk_type);
+        ASSERT_EQ(store->pkIsHandle(), (pk_type == DMTestEnv::PkType::PkIsHandleInt64 || pk_type == DMTestEnv::PkType::PkIsHandleInt32))
+            << DMTestEnv::PkTypeToString(pk_type);
+
+        const size_t nrows  = 20;
+        const auto & handle = store->getHandle();
+        auto         block1 = DMTestEnv::prepareSimpleWriteBlock(0,
+                                                         nrows,
+                                                         false,
+                                                         /*tso*/ 2,
+                                                         /*pk_name*/ handle.name,
+                                                         handle.id,
+                                                         handle.type,
+                                                         store->isCommonHandle(),
+                                                         store->getRowKeyColumnSize());
+        block1              = store->addExtraColumnIfNeed(*context, std::move(block1));
+        ASSERT_EQ(block1.rows(), nrows);
+        ASSERT_TRUE(block1.has(EXTRA_HANDLE_COLUMN_NAME));
+        for (const auto & c : block1)
+            ASSERT_EQ(c.column->size(), nrows);
+
+        // Make a block that is overlapped with `block1` and it should be squashed by `PKSquashingBlockInputStream`
+        size_t nrows_2 = 2;
+        auto   block2  = DMTestEnv::prepareSimpleWriteBlock(nrows - 1,
+                                                         nrows - 1 + nrows_2,
+                                                         false,
+                                                         /*tso*/ 4,
+                                                         /*pk_name*/ handle.name,
+                                                         handle.id,
+                                                         handle.type,
+                                                         store->isCommonHandle(),
+                                                         store->getRowKeyColumnSize());
+        block2         = store->addExtraColumnIfNeed(*context, std::move(block2));
+        ASSERT_EQ(block2.rows(), nrows_2);
+        ASSERT_TRUE(block2.has(EXTRA_HANDLE_COLUMN_NAME));
+        for (const auto & c : block2)
+            ASSERT_EQ(c.column->size(), nrows_2);
+
+
+        BlockInputStreamPtr stream = std::make_shared<BlocksListBlockInputStream>(BlocksList{block1, block2});
+        stream                     = std::make_shared<ReorganizeBlockInputStream>(stream, EXTRA_HANDLE_COLUMN_NAME);
+
+        size_t num_rows_read = 0;
+        stream->readPrefix();
+        while (Block block = stream->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                ASSERT_EQ(c->size(), block.rows())
+                    << "unexpected num of rows for column [name=" << iter.name << "] " << DMTestEnv::PkTypeToString(pk_type);
+            }
+        }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, nrows + nrows_2);
+
+        LOG_INFO(log, "Test case for " << DMTestEnv::PkTypeToString(pk_type) << " done.");
+    }
+}
+CATCH
+
+
+TEST_P(DeltaMergeStore_RWTest, SimpleWriteRead)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -352,7 +494,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, DeleteRead)
+TEST_P(DeltaMergeStore_RWTest, DeleteRead)
 try
 {
     const size_t num_rows_write = 128;
@@ -444,7 +586,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, WriteMultipleBlock)
+TEST_P(DeltaMergeStore_RWTest, WriteMultipleBlock)
 try
 {
     const size_t num_write_rows = 32;
@@ -638,7 +780,7 @@ CATCH
 // DEPRECATED:
 //   This test case strongly depends on implementation of `shouldSplit()` and `shouldMerge()`.
 //   The machanism of them may be changed one day. So uncomment the test if need.
-TEST_P(DeltaMergeStore_test, DISABLED_WriteLargeBlock)
+TEST_P(DeltaMergeStore_RWTest, DISABLED_WriteLargeBlock)
 try
 {
     DB::Settings settings = context->getSettings();
@@ -733,7 +875,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, ReadWithSpecifyTso)
+TEST_P(DeltaMergeStore_RWTest, ReadWithSpecifyTso)
 try
 {
     const UInt64 tso1          = 4;
@@ -842,7 +984,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, Split)
+TEST_P(DeltaMergeStore_RWTest, Split)
 try
 {
     // set some params to smaller threshold so that we can trigger split faster
@@ -957,7 +1099,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, DDLChangeInt8ToInt32)
+TEST_P(DeltaMergeStore_RWTest, DDLChangeInt8ToInt32)
 try
 {
     const String      col_name_ddl        = "i8";
@@ -1071,7 +1213,7 @@ try
 CATCH
 
 
-TEST_P(DeltaMergeStore_test, DDLDropColumn)
+TEST_P(DeltaMergeStore_RWTest, DDLDropColumn)
 try
 {
     const String      col_name_to_drop = "i8";
@@ -1172,7 +1314,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, DDLAddColumn)
+TEST_P(DeltaMergeStore_RWTest, DDLAddColumn)
 try
 {
     const String      col_name_c1 = "i8";
@@ -1287,7 +1429,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, DDLAddColumnFloat32)
+TEST_P(DeltaMergeStore_RWTest, DDLAddColumnFloat32)
 try
 {
     const String      col_name_to_add = "f32";
@@ -1362,7 +1504,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, DDLAddColumnDateTime)
+TEST_P(DeltaMergeStore_RWTest, DDLAddColumnDateTime)
 try
 {
     const String      col_name_to_add = "dt";
@@ -1434,7 +1576,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, DDLRenameColumn)
+TEST_P(DeltaMergeStore_RWTest, DDLRenameColumn)
 try
 {
     const String      col_name_before_ddl = "i8";
@@ -1551,7 +1693,7 @@ try
 CATCH
 
 // Test rename pk column when pk_is_handle = true.
-TEST_P(DeltaMergeStore_test, DDLRenamePKColumn)
+TEST_P(DeltaMergeStore_RWTest, DDLRenamePKColumn)
 try
 {
     const String      col_name_before_ddl = "pk1";
@@ -1725,7 +1867,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, DDL_issue1341)
+TEST_P(DeltaMergeStore_RWTest, DDL_issue1341)
 try
 {
     // issue 1341: Background task may use a wrong schema to compact data
@@ -1860,10 +2002,10 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, CreateWithCommonHandle)
+TEST_F(DeltaMergeStore_test, CreateWithCommonHandle)
 try
 {
-    auto table_column_defines = DMTestEnv::getDefaultColumns(true);
+    auto table_column_defines = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
     cleanUp();
     store = reload(table_column_defines, true, 2);
     {
@@ -1882,14 +2024,14 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, SimpleWriteReadCommonHandle)
+TEST_P(DeltaMergeStore_RWTest, SimpleWriteReadCommonHandle)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
     const ColumnDefine col_i8_define(3, "i8", std::make_shared<DataTypeInt8>());
     size_t             rowkey_column_size = 2;
     {
-        auto table_column_defines = DMTestEnv::getDefaultColumns(true);
+        auto table_column_defines = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
         table_column_defines->emplace_back(col_str_define);
         table_column_defines->emplace_back(col_i8_define);
 
@@ -2041,12 +2183,12 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, WriteMultipleBlockWithCommonHandle)
+TEST_P(DeltaMergeStore_RWTest, WriteMultipleBlockWithCommonHandle)
 try
 {
     const size_t num_write_rows       = 32;
     const size_t rowkey_column_size   = 2;
-    auto         table_column_defines = DMTestEnv::getDefaultColumns(true);
+    auto         table_column_defines = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
 
     {
         cleanUp();
@@ -2224,14 +2366,14 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_test, DeleteReadWithCommonHandle)
+TEST_P(DeltaMergeStore_RWTest, DeleteReadWithCommonHandle)
 try
 {
     const size_t num_rows_write     = 128;
     size_t       rowkey_column_size = 2;
     {
         // Create a block with sequential Int64 handle in range [0, 128)
-        auto table_column_difines = DMTestEnv::getDefaultColumns(true);
+        auto table_column_difines = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
 
         cleanUp();
         store = reload(table_column_difines, true, rowkey_column_size);
@@ -2324,7 +2466,7 @@ try
 CATCH
 
 INSTANTIATE_TEST_CASE_P(TestMode, //
-                        DeltaMergeStore_test,
+                        DeltaMergeStore_RWTest,
                         testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix),
                         testModeToString);
 
