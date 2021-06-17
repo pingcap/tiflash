@@ -206,4 +206,16 @@ private:
     IServer & server;
 };
 
+using MemoryInfo = std::unordered_map<std::string, uint64_t>;
+
+DiagnosticsService::AvgLoad getAvgLoad();
+MemoryInfo getMemoryInfo();
+DiagnosticsService::NICInfo getNICInfo();
+DiagnosticsService::IOInfo getIOInfo();
+size_t getPhysicalCoreNumber();
+uint64_t getCPUFrequency();
+void getCacheSize(const uint & level, size_t & size, size_t & line_size);
+std::vector<DiagnosticsService::Disk> getAllDisksLinux();
+std::vector<DiagnosticsService::Disk> getAllDisks();
+
 } // namespace DB

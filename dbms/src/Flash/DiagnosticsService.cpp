@@ -23,15 +23,11 @@ using diagnosticspb::ServerInfoPair;
 using diagnosticspb::ServerInfoResponse;
 using diagnosticspb::ServerInfoType;
 
-using MemoryInfo = std::unordered_map<std::string, uint64_t>;
-
 namespace ErrorCodes
 {
 extern const int UNKNOWN_EXCEPTION;
 }
 
-namespace
-{
 
 static constexpr uint KB = 1024;
 // static constexpr uint MB = 1024 * 1024;
@@ -55,14 +51,15 @@ DiagnosticsService::AvgLoad getAvgLoad()
     return DiagnosticsService::AvgLoad{std::stod(values[0]), std::stod(values[1]), std::stod(values[2])};
 }
 
-void getMemoryInfo(MemoryInfo & memory_info)
+MemoryInfo getMemoryInfo()
 {
+    MemoryInfo memory_info;
     {
         Poco::File meminfo_file("/proc/meminfo");
         if (!meminfo_file.exists())
         {
             LOG_WARNING(&Logger::get("DiagnosticsService"), "/proc/meminfo doesn't exist");
-            return;
+            return memory_info;
         }
     }
     std::ifstream file("/proc/meminfo");
@@ -77,6 +74,7 @@ void getMemoryInfo(MemoryInfo & memory_info)
             memory_info.emplace(name, kb);
         }
     }
+    return memory_info;
 }
 
 DiagnosticsService::NICInfo getNICInfo()
@@ -274,10 +272,77 @@ void getCacheSize(const uint & level, size_t & size, size_t & line_size)
     line_size = std::stoul(line_size_str);
 }
 
-std::vector<DiagnosticsService::Disk> getAllDisks()
+#ifdef __linux__
+static DiagnosticsService::Disk::DiskType getDiskTypeByNameLinux(const std::string & name)
+{
+    // Reference: https://github.com/GuillaumeGomez/sysinfo/blob/28c9e1071eb26c02154d584759f3ddd1e1da4ddf/src/linux/disk.rs#L101-L110
+    // The format of devices are as follows:
+    //  - name_path is symbolic link in the case of /dev/mapper/
+    //     and /dev/root, and the target is corresponding device under
+    //     /sys/block/
+    //  - In the case of /dev/sd, the format is /dev/sd[a-z][1-9],
+    //     corresponding to /sys/block/sd[a-z]
+    //  - In the case of /dev/nvme, the format is /dev/nvme[0-9]n[0-9]p[0-9],
+    //     corresponding to /sys/block/nvme[0-9]n[0-9]
+    //  - In the case of /dev/mmcblk, the format is /dev/mmcblk[0-9]p[0-9],
+    //     corresponding to /sys/block/mmcblk[0-9]
+    std::string real_path = Poco::Path(name).absolute().toString();
+    if (boost::starts_with(name, "/dev/mapper/"))
+    {
+        // Recursively solve, for example /dev/dm-0
+        if (real_path != name)
+            return getDiskTypeByNameLinux(real_path);
+    }
+    else if (boost::starts_with(name, "/dev/sd") || boost::starts_with(name, "/dev/vd"))
+    {
+        // Turn "sda1" into "sda"
+        if (boost::starts_with(real_path, "/dev/"))
+            real_path = real_path.substr(5);
+        boost::trim_right_if(real_path, boost::is_digit());
+    }
+    else if (boost::starts_with(name, "/dev/nvme"))
+    {
+        // Turn "nvme0n1p1" into "nvme0n1"
+        if (boost::starts_with(real_path, "/dev/"))
+            real_path = real_path.substr(5);
+        boost::trim_right_if(real_path, boost::is_digit());
+        boost::trim_right_if(real_path, boost::is_any_of("p"));
+    }
+    else if (boost::starts_with(name, "/dev/root"))
+    {
+        // Recursively solve, for example /dev/mmcblk0p1
+        if (real_path != name)
+            return getDiskTypeByNameLinux(real_path);
+    }
+    else if (boost::starts_with(name, "/dev/mmcblk"))
+    {
+        // Recursively solve, for example /dev/dm-0
+        if (boost::starts_with(real_path, "/dev/"))
+            real_path = real_path.substr(5);
+        boost::trim_right_if(real_path, boost::is_digit());
+        boost::trim_right_if(real_path, boost::is_any_of("p"));
+    }
+    else
+    {
+        // Trim /dev/ by default
+        if (boost::starts_with(real_path, "/dev/"))
+            real_path = real_path.substr(5);
+    }
+    Poco::Path rotational_file_path("/sys/block/" + real_path + "/queue/rotational");
+    if (Poco::File(rotational_file_path).exists())
+    {
+        std::ifstream rotational_file(rotational_file_path.toString());
+        std::string rotational_buffer;
+        std::getline(rotational_file, rotational_buffer);
+        int rotational = std::stoi(rotational_buffer);
+        return rotational == 1 ? DiagnosticsService::Disk::DiskType::HDD : DiagnosticsService::Disk::DiskType::SSD;
+    }
+    return DiagnosticsService::Disk::DiskType::UNKNOWN;
+}
+
+std::vector<DiagnosticsService::Disk> getAllDisksLinux()
 {
     std::vector<DiagnosticsService::Disk> disks;
-#ifdef __linux__
     {
         Poco::File mount_file("/proc/mounts");
         if (!mount_file.exists())
@@ -287,52 +352,66 @@ std::vector<DiagnosticsService::Disk> getAllDisks()
         }
     }
 
+    // http://man7.org/linux/man-pages/man5/fstab.5.html
+    // /proc/mounts fields(from left to right):
+    // - fs_spec: Device specification(e.g. /dev/sda)
+    // - fs_file: Mount point
+    // - fs_vfstype: File system
+    // - fs_mntops: Read-only(ro), Read-write(rw) or else
+    // - fs_freq
+    // - fs_passno
     std::ifstream mount_file("/proc/mounts");
-    std::string line;
-    while (std::getline(mount_file, line))
+    std::string mount_info;
+    while (std::getline(mount_file, mount_info))
     {
-        boost::trim_left(line);
-        if (boost::starts_with(line, "/dev/sd") || boost::starts_with(line, "/dev/nvme") || boost::starts_with(line, "/dev/mapper")
-            || boost::starts_with(line, "/dev/root") || boost::starts_with(line, "/dev/mmcblk") || boost::starts_with(line, "/dev-mapper"))
+        // TODO: use string_view instead
+        std::vector<std::string> values;
+        DiagnosticsService::Disk disk;
+        boost::split(values, mount_info, boost::is_any_of("\t "), boost::token_compress_on);
+
+        static std::vector<std::string> fs_filter{
+            "sysfs", // pseudo file system for kernel objects
+            "proc",  // another pseudo file system
+            "tmpfs", "devtmpfs", "cgroup", "cgroup2",
+            "pstore",     // https://www.kernel.org/doc/Documentation/ABI/testing/pstore
+            "squashfs",   // squashfs is a compressed read-only file system (for snaps)
+            "rpc_pipefs", // The pipefs pseudo file system service
+            "iso9660"     // optical media
+        };
+        if (std::find(fs_filter.begin(), fs_filter.end(), values[2]) != fs_filter.end() || boost::starts_with(values[1], "/sys")
+            || boost::starts_with(values[1], "/proc")
+            || (boost::starts_with(values[1], "/run") && !boost::starts_with(values[1], "/run/media"))
+            || boost::starts_with(values[1], "sunrpc"))
         {
-            std::vector<std::string> values;
-            boost::split(values, line, boost::is_any_of(" "), boost::token_compress_on);
-            DiagnosticsService::Disk disk;
-
-            disk.name = values[0].substr(5, values[0].size() - 5); // trim '/dev/' prefix
-            boost::trim_if(disk.name, boost::is_digit());          // trim partition number
-
-            disk.mount_point = values[1];
-
-            Poco::Path rotational_file_path("/sys/block/" + disk.name + "/queue/rotational");
-            if (Poco::File(rotational_file_path).exists())
-            {
-                std::ifstream rotational_file(rotational_file_path.toString());
-                std::string line;
-                std::getline(rotational_file, line);
-                int rotational = std::stoi(line);
-                disk.disk_type = rotational == 1 ? DiagnosticsService::Disk::DiskType::HDD : DiagnosticsService::Disk::DiskType::SSD;
-            }
-            else
-            {
-                disk.disk_type = DiagnosticsService::Disk::DiskType::UNKNOWN;
-            }
-
-            disk.fs_type = values[2];
-
-            struct statvfs stat;
-            statvfs(disk.mount_point.data(), &stat);
-            size_t total = static_cast<size_t>(stat.f_blocks) * static_cast<size_t>(stat.f_bsize);
-            size_t available = static_cast<size_t>(stat.f_bavail) * static_cast<size_t>(stat.f_bsize);
-
-            disk.total_space = total;
-            disk.available_space = available;
-
-            disks.emplace_back(std::move(disk));
+            // Ignore unsupported fs type
+            continue;
         }
+
+        disk.name = values[0];
+        disk.mount_point = values[1];
+        disk.disk_type = getDiskTypeByNameLinux(disk.name);
+        disk.fs_type = values[2];
+
+        struct statvfs stat;
+        statvfs(disk.mount_point.data(), &stat);
+        size_t total = static_cast<size_t>(stat.f_blocks) * static_cast<size_t>(stat.f_bsize);
+        size_t available = static_cast<size_t>(stat.f_bavail) * static_cast<size_t>(stat.f_bsize);
+
+        disk.total_space = total;
+        disk.available_space = available;
+
+        disks.emplace_back(std::move(disk));
     }
-#endif
     return disks;
+}
+#endif
+
+std::vector<DiagnosticsService::Disk> getAllDisks()
+{
+#ifdef __linux__
+    return getAllDisksLinux();
+#endif
+    return {};
 }
 
 // std::vector<DiagnosticsService::NetworkInterface> getNetworkInterfaces()
@@ -381,7 +460,6 @@ std::vector<DiagnosticsService::Disk> getAllDisks()
 //     return interfaces;
 // }
 
-} // namespace
 
 void DiagnosticsService::cpuLoadInfo(
     std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
@@ -480,8 +558,7 @@ void DiagnosticsService::cpuLoadInfo(
 /// TODO: wrap MemoryInfo with struct
 void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
-    MemoryInfo meminfo;
-    getMemoryInfo(meminfo);
+    auto meminfo = getMemoryInfo();
 
     /// TODO: we should check both cgroup quota and MemTotal, then pick the less one
 
@@ -702,8 +779,7 @@ void DiagnosticsService::cpuHardwareInfo(std::vector<diagnosticspb::ServerInfoIt
 
 void DiagnosticsService::memHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
-    MemoryInfo mem_info;
-    getMemoryInfo(mem_info);
+    auto mem_info = getMemoryInfo();
     size_t total_mem = mem_info.at("MemTotal");
 
     ServerInfoItem item;
