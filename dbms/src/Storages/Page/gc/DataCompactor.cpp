@@ -147,8 +147,24 @@ DataCompactor<SnapshotPtr>::migratePages( //
     auto [largest_file_id, level] = candidates.rbegin()->fileIdLevel();
     const PageFileIdAndLevel migrate_file_id{largest_file_id, level + 1};
 
-    // In case that those files are hold by snapshot and do migratePages to same PageFile again, we need to check whether
-    // gc_file (and its legacy file) is already exist.
+    // In case that those files are hold by snapshot and do migratePages to same `migrate_file_id` again, we need to check
+    // whether gc_file (and its legacy file) is already exist.
+    //
+    // For example:
+    //   First round:
+    //     PageFile_998_0, PageFile_999_0, PageFile_1000_0
+    //        ^                                ^
+    //        └────────────────────────────────┘
+    //   Only PageFile_998_0 and PageFile_1000_0 are picked as candidates, it will generate PageFile_1000_1 for storing
+    //   GC data in this round.
+    //
+    //   Second round:
+    //     PageFile_998_0, PageFile_999_0, PageFile_1000_0
+    //        ^                ^               ^
+    //        └────────────────┵───────────────┘
+    //   Some how PageFile_1000_0 don't get deleted (maybe there is a snapshot that need to read Pages inside it) and
+    //   we start a new round of GC. PageFile_998_0(again), PageFile_999_0(new), PageFile_1000_0(again) are picked into
+    //   candidates and 1000_0 is the largest file_id.
     const String pf_parent_path = delegator->choosePath(migrate_file_id);
     if (PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log)
         || PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Legacy, page_file_log))
