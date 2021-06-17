@@ -1,8 +1,10 @@
+#pragma once
 #ifndef NDEBUG
 
 #include <Storages/Page/Page.h>
 
-namespace DB::tests {
+namespace DB::tests
+{
 class MockEntries
 {
 private:
@@ -39,6 +41,6 @@ public:
 };
 using MockSnapshotPtr = std::shared_ptr<MockSnapshot>;
 
-}
+} // namespace DB::tests
 
 #endif // NDEBUG
