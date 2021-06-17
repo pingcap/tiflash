@@ -2,6 +2,7 @@
 
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/AggregateFunctionState.h>
 #include <AggregateFunctions/parseAggregateFunctionParameters.h>
 #include <Functions/FunctionFactory.h>
 #include <DataTypes/getLeastSupertype.h>
@@ -22,6 +23,7 @@
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/getMostSubtype.h>
 #include <Core/TypeListNumber.h>
+#include <ext/scope_guard.h>
 
 
 namespace DB
@@ -2406,8 +2408,6 @@ void FunctionArrayReduce::executeImpl(Block & block, const ColumnNumbers & argum
     std::unique_ptr<char[]> place_holder { new char[agg_func.sizeOfData()] };
     AggregateDataPtr place = place_holder.get();
 
-    std::unique_ptr<Arena> arena = agg_func.allocatesMemoryInArena() ? std::make_unique<Arena>() : nullptr;
-
     size_t rows = block.rows();
 
     /// Aggregate functions do not support constant columns. Therefore, we materialize them.
@@ -2458,30 +2458,77 @@ void FunctionArrayReduce::executeImpl(Block & block, const ColumnNumbers & argum
         throw Exception("State function " + agg_func.getName() + " inserts results into non-state column "
                         + block.getByPosition(result).type->getName(), ErrorCodes::ILLEGAL_COLUMN);
 
-    ColumnArray::Offset current_offset = 0;
-    for (size_t i = 0; i < rows; ++i)
+    if (agg_func.supportBatchOperations())
     {
-        agg_func.create(place);
-        ColumnArray::Offset next_offset = (*offsets)[i];
+        std::unique_ptr<Arena> arena = std::make_unique<Arena>();
 
-        try
+        PODArray<AggregateDataPtr> places(rows);
+        for (size_t i = 0; i < rows; ++i)
         {
-            for (size_t j = current_offset; j < next_offset; ++j)
-                agg_func.add(place, aggregate_arguments, j, arena.get());
+            places[i] = arena->alignedAlloc(agg_func.sizeOfData(), agg_func.alignOfData());
+            try
+            {
+                agg_func.create(places[i]);
+            }
+            catch (...)
+            {
+                for (size_t j = 0; j < i; ++j)
+                    agg_func.destroy(places[j]);
+                throw;
+            }
+        }
 
+        SCOPE_EXIT({
+            for (size_t i = 0; i < rows; ++i)
+                agg_func.destroy(places[i]);
+        });
+
+        {
+            auto * that = &agg_func;
+            /// Unnest consecutive trailing -State combinators
+            while (auto * func = typeid_cast<AggregateFunctionState *>(that))
+                that = func->getNestedFunction().get();
+
+            that->addBatchArray(rows, places.data(), 0, aggregate_arguments, offsets->data(), arena.get());
+        }
+
+        for (size_t i = 0; i < rows; ++i)
+        {
             if (!res_col_aggregate_function)
-                agg_func.insertResultInto(place, res_col);
+                agg_func.insertResultInto(places[i], res_col);
             else
-                res_col_aggregate_function->insertFrom(place);
+                res_col_aggregate_function->insertFrom(places[i]);
         }
-        catch (...)
-        {
-            agg_func.destroy(place);
-            throw;
-        }
+    }
+    else
+    {
+        std::unique_ptr<Arena> arena = agg_func.allocatesMemoryInArena() ? std::make_unique<Arena>() : nullptr;
 
-        agg_func.destroy(place);
-        current_offset = next_offset;
+        ColumnArray::Offset current_offset = 0;
+        for (size_t i = 0; i < rows; ++i)
+        {
+            agg_func.create(place);
+            ColumnArray::Offset next_offset = (*offsets)[i];
+
+            try
+            {
+                for (size_t j = current_offset; j < next_offset; ++j)
+                    agg_func.add(place, aggregate_arguments, j, arena.get());
+
+                if (!res_col_aggregate_function)
+                    agg_func.insertResultInto(place, res_col);
+                else
+                    res_col_aggregate_function->insertFrom(place);
+            }
+            catch (...)
+            {
+                agg_func.destroy(place);
+                throw;
+            }
+
+            agg_func.destroy(place);
+            current_offset = next_offset;
+        }
     }
 
     if (!is_const)
