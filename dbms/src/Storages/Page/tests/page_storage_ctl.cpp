@@ -1,11 +1,7 @@
 #include <Encryption/MockKeyManager.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
-
-#define private public
 #include <Storages/Page/gc/DataCompactor.h>
-#undef private
-
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
