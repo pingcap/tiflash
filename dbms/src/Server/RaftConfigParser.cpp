@@ -68,6 +68,7 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         else
             res.engine = DEFAULT_ENGINE;
     }
+    LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(res.engine));
 
     /// "tmt" engine ONLY support disable_bg_flush = false.
     /// "dt" engine ONLY support disable_bg_flush = true.
@@ -95,50 +96,6 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
     {
         res.enable_compatible_mode = config.getBool("raft.enable_compatible_mode");
     }
-
-    if (config.has("raft.snapshot.method"))
-    {
-        String snapshot_method = config.getString("raft.snapshot.method", "file1");
-        std::transform(snapshot_method.begin(), snapshot_method.end(), snapshot_method.begin(), [](char ch) { return std::tolower(ch); });
-        if (snapshot_method == "block")
-        {
-            res.snapshot_apply_method = TiDB::SnapshotApplyMethod::Block;
-        }
-        else if (snapshot_method == "file1")
-        {
-            res.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Directory;
-        }
-#if 0
-        else if (snapshot_method == "file2")
-        {
-            res.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
-        }
-#endif
-        else
-        {
-            throw Exception("Illegal arguments: unknown snapshot apply method: " + snapshot_method, ErrorCodes::INVALID_CONFIG_PARAMETER);
-        }
-    }
-    switch (res.snapshot_apply_method)
-    {
-        case TiDB::SnapshotApplyMethod::DTFile_Directory:
-        case TiDB::SnapshotApplyMethod::DTFile_Single:
-            if (res.engine != TiDB::StorageEngine::DT)
-            {
-                throw Exception(
-                    "Illegal arguments: can not use DTFile to store snapshot data when the storage engine is not DeltaTree, [engine="
-                        + DB::toString(static_cast<Int32>(res.engine))
-                        + "] [snapshot method=" + applyMethodToString(res.snapshot_apply_method) + "]",
-                    ErrorCodes::INVALID_CONFIG_PARAMETER);
-            }
-            break;
-        default:
-            break;
-    }
-
-    LOG_INFO(log,
-        "Default storage engine [type=" << static_cast<Int64>(res.engine)
-                                        << "] [snapshot.method=" << applyMethodToString(res.snapshot_apply_method) << "]");
 
     return res;
 }

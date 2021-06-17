@@ -61,10 +61,59 @@ public:
 
     static constexpr const char * pk_name = "_tidb_rowid";
 
-    static ColumnDefinesPtr getDefaultColumns(bool is_common_handle = false)
+    static constexpr const char * PK_NAME_PK_IS_HANDLE = "id";
+
+    enum class PkType
     {
+        // If the primary key is composed of multiple columns and non-clustered-index,
+        // or users don't define the primary key, TiDB will add a hidden "_tidb_rowid" column
+        // as the handle column
+        HiddenTiDBRowID,
+        // Common handle for clustered-index since 5.0.0
+        CommonHandle,
+        // If user define the primary key that is compatibility with UInt64, use that column
+        // as the handle column
+        PkIsHandleInt64,
+        PkIsHandleInt32,
+    };
+
+    static String PkTypeToString(PkType type)
+    {
+        switch (type)
+        {
+        case PkType::HiddenTiDBRowID:
+            return "HiddenTiDBRowID";
+        case PkType::CommonHandle:
+            return "CommonHandle";
+        case PkType::PkIsHandleInt64:
+            return "PkIsHandleInt64";
+        case PkType::PkIsHandleInt32:
+            return "PkIsHandleInt32";
+        }
+        return "<unknown>";
+    }
+
+    static ColumnDefinesPtr getDefaultColumns(PkType pk_type = PkType::HiddenTiDBRowID)
+    {
+        // Return [handle, ver, del] column defines
         ColumnDefinesPtr columns = std::make_shared<ColumnDefines>();
-        columns->emplace_back(getExtraHandleColumnDefine(is_common_handle));
+        switch (pk_type)
+        {
+        case PkType::HiddenTiDBRowID:
+            columns->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
+            break;
+        case PkType::CommonHandle:
+            columns->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/true));
+            break;
+        case PkType::PkIsHandleInt64:
+            columns->emplace_back(ColumnDefine{2, PK_NAME_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_INT_TYPE});
+            break;
+        case PkType::PkIsHandleInt32:
+            columns->emplace_back(ColumnDefine{2, PK_NAME_PK_IS_HANDLE, DataTypeFactory::instance().get("Int32")});
+            break;
+        default:
+            throw Exception("Unknown pk type for test");
+        }
         columns->emplace_back(getVersionColumnDefine());
         columns->emplace_back(getTagColumnDefine());
         return columns;
@@ -111,7 +160,14 @@ public:
                     }
                     else
                     {
-                        field = reversed ? Int64(end - 1 - i) : Int64(beg + i);
+                        if (!reversed)
+                        {
+                            field = Int64(beg + i);
+                        }
+                        else
+                        {
+                            field = Int64(end - 1 - i);
+                        }
                     }
                     m_col->insert(field);
                 }
@@ -151,17 +207,16 @@ public:
      * Create a simple block with 3 columns:
      *   * `pk` - Int64 / `version` / `tag`
      * @param pk        `pk`'s value
-     * @param ts_beg    `timestamp`'s value begin
-     * @param ts_end    `timestamp`'s value end (not included)
-     * @param reversed  increasing/decreasing insert `timestamp`'s value
+     * @param tso_beg   `tso`'s value begin
+     * @param tso_end   `tso`'s value end (not included)
      * @return
      */
-    static Block prepareBlockWithTso(Int64 pk, size_t ts_beg, size_t ts_end, bool reversed = false)
+    static Block prepareBlockWithIncreasingTso(Int64 pk, size_t tso_beg, size_t tso_end)
     {
         Block        block;
-        const size_t num_rows = (ts_end - ts_beg);
+        const size_t num_rows = (tso_end - tso_beg);
         {
-            ColumnWithTypeAndName col1(nullptr, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID);
+            ColumnWithTypeAndName col1(std::make_shared<DataTypeInt64>(), pk_name);
             {
                 IColumn::MutablePtr m_col = col1.type->createColumn();
                 // insert form large to small
@@ -174,19 +229,19 @@ public:
             }
             block.insert(col1);
 
-            ColumnWithTypeAndName version_col(nullptr, VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME, VERSION_COLUMN_ID);
+            ColumnWithTypeAndName version_col(VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME);
             {
                 IColumn::MutablePtr m_col = version_col.type->createColumn();
                 for (size_t i = 0; i < num_rows; ++i)
                 {
-                    Field field = reversed ? Int64(ts_end - 1 - i) : Int64(ts_beg + i);
+                    Field field = Int64(tso_beg + i);
                     m_col->insert(field);
                 }
                 version_col.column = std::move(m_col);
             }
             block.insert(version_col);
 
-            ColumnWithTypeAndName tag_col(nullptr, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID);
+            ColumnWithTypeAndName tag_col(TAG_COLUMN_TYPE, TAG_COLUMN_NAME);
             {
                 IColumn::MutablePtr m_col       = tag_col.type->createColumn();
                 auto &              column_data = typeid_cast<ColumnVector<UInt8> &>(*m_col).getData();
@@ -210,10 +265,7 @@ public:
         Block        block;
         const size_t num_rows = 1;
         {
-            ColumnWithTypeAndName col1(nullptr,
-                                       is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE,
-                                       pk_name,
-                                       EXTRA_HANDLE_COLUMN_ID);
+            ColumnWithTypeAndName col1(is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, pk_name);
             {
                 IColumn::MutablePtr m_col = col1.type->createColumn();
                 // insert form large to small
@@ -235,7 +287,7 @@ public:
             }
             block.insert(col1);
 
-            ColumnWithTypeAndName version_col(nullptr, VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME, VERSION_COLUMN_ID);
+            ColumnWithTypeAndName version_col(VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME);
             {
                 IColumn::MutablePtr m_col = version_col.type->createColumn();
                 m_col->insert(tso);
@@ -243,7 +295,7 @@ public:
             }
             block.insert(version_col);
 
-            ColumnWithTypeAndName tag_col(nullptr, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID);
+            ColumnWithTypeAndName tag_col(TAG_COLUMN_TYPE, TAG_COLUMN_NAME);
             {
                 IColumn::MutablePtr m_col       = tag_col.type->createColumn();
                 auto &              column_data = typeid_cast<ColumnVector<UInt8> &>(*m_col).getData();
@@ -253,7 +305,7 @@ public:
             }
             block.insert(tag_col);
 
-            ColumnWithTypeAndName str_col(nullptr, DataTypeFactory::instance().get("String"), colname);
+            ColumnWithTypeAndName str_col(DataTypeFactory::instance().get("String"), colname);
             {
                 IColumn::MutablePtr m_col = str_col.type->createColumn();
                 m_col->insert(value);
@@ -326,12 +378,6 @@ public:
             }
         }
         return block;
-    }
-
-    static int getPseudoRandomNumber()
-    {
-        static int num = 0;
-        return num++;
     }
 };
 

@@ -17,7 +17,7 @@ public:
         : list(std::move(list_)), it(list.begin()), end(list.end()) {}
 
     /// Uses a list of blocks lying somewhere else.
-    BlocksListBlockInputStream(const BlocksList::iterator & begin_, const BlocksList::iterator & end_)
+    BlocksListBlockInputStream(BlocksList::iterator & begin_, BlocksList::iterator & end_)
         : it(begin_), end(end_) {}
 
     String getName() const override { return "BlocksList"; }
@@ -27,7 +27,7 @@ public:
         Block res;
         if (!list.empty())
             for (const auto & elem : list.front())
-                res.insert({elem.column->cloneEmpty(), elem.type, elem.name, elem.column_id});
+                res.insert({ elem.column->cloneEmpty(), elem.type, elem.name });
         return res;
     }
 

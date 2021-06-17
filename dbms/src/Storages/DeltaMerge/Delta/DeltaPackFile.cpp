@@ -42,7 +42,8 @@ void DeltaPackFile::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) c
 
 DeltaPackPtr DeltaPackFile::deserializeMetadata(DMContext &         context, //
                                                 const RowKeyRange & segment_range,
-                                                ReadBuffer &        buf)
+                                                ReadBuffer &        buf,
+                                                const BlockPtr & /*last_schema*/)
 {
     UInt64 file_ref_id;
     size_t valid_rows, valid_bytes;
@@ -152,34 +153,28 @@ size_t DPFileReader::readRowsOnce(MutableColumns &    output_cols, //
 
     size_t rows_end    = rows_offset + rows_limit;
     size_t actual_read = 0;
-    size_t read_offset = rows_offset;
-    while (read_offset < rows_end)
+    while (rows_offset < rows_end)
     {
         if (!cur_block || cur_block_offset == cur_block.rows())
         {
-            if (unlikely(!read_next_block()))
-                throw Exception("Not enough delta data to read [offset=" + DB::toString(rows_offset)
-                                    + "] [limit=" + DB::toString(rows_limit) + "] [read_offset=" + DB::toString(read_offset) + "]",
-                                ErrorCodes::LOGICAL_ERROR);
+            if (!read_next_block())
+                throw Exception("Not enough delta data to read", ErrorCodes::LOGICAL_ERROR);
         }
-        if (unlikely(read_offset < rows_before_cur_block + cur_block_offset))
-            throw Exception("read_offset is too small [offset=" + DB::toString(rows_offset) + "] [limit=" + DB::toString(rows_limit)
-                                + "] [read_offset=" + DB::toString(read_offset)
-                                + "] [min_offset=" + DB::toString(rows_before_cur_block + cur_block_offset) + "]",
-                            ErrorCodes::LOGICAL_ERROR);
+        if (rows_offset < rows_before_cur_block + cur_block_offset)
+            throw Exception("rows_offset is too small", ErrorCodes::LOGICAL_ERROR);
 
-        if (read_offset >= rows_before_cur_block + cur_block.rows())
+        if (rows_offset >= rows_before_cur_block + cur_block.rows())
         {
             cur_block_offset = cur_block.rows();
             continue;
         }
         auto read_end_for_cur_block = std::min(rows_end, rows_before_cur_block + cur_block.rows());
 
-        auto read_start_in_block = read_offset - rows_before_cur_block;
-        auto read_limit_in_block = read_end_for_cur_block - read_offset;
+        auto read_start_in_block = rows_offset - rows_before_cur_block;
+        auto read_limit_in_block = read_end_for_cur_block - rows_offset;
 
         actual_read += copyColumnsData(cur_block_data, cur_block_data[0], output_cols, read_start_in_block, read_limit_in_block, range);
-        read_offset += read_limit_in_block;
+        rows_offset += read_limit_in_block;
         cur_block_offset += read_limit_in_block;
     }
     return actual_read;
@@ -189,18 +184,10 @@ size_t DPFileReader::readRows(MutableColumns & output_cols, size_t rows_offset, 
 {
     initStream();
 
-    try
-    {
-        if (pk_ver_only)
-            return readRowsRepeatedly(output_cols, rows_offset, rows_limit, range);
-        else
-            return readRowsOnce(output_cols, rows_offset, rows_limit, range);
-    }
-    catch (DB::Exception & e)
-    {
-        e.addMessage(" while reading DTFile " + pack.getFile()->path());
-        throw;
-    }
+    if (pk_ver_only)
+        return readRowsRepeatedly(output_cols, rows_offset, rows_limit, range);
+    else
+        return readRowsOnce(output_cols, rows_offset, rows_limit, range);
 }
 
 Block DPFileReader::readNextBlock()
