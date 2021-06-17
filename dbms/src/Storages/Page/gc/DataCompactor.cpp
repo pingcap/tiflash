@@ -261,14 +261,15 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
         const auto & [_valid_bytes, valid_page_ids_in_file] = iter->second;
         (void)_valid_bytes;
 
-        if (auto reader_iter = data_readers.find(file_id_level); reader_iter == data_readers.end())
+        auto reader_iter = data_readers.find(file_id_level);
+        if (reader_iter == data_readers.end())
             continue;
 
         // One WriteBatch for one candidate.
         auto page_id_and_entries = collectValidEntries(valid_page_ids_in_file, snapshot);
         if (!page_id_and_entries.empty())
         {
-            auto          data_reader = data_readers.at(file_id_level);
+            auto &        data_reader = reader_iter->second;
             const PageMap pages       = data_reader->read(page_id_and_entries);
             WriteBatch    wb;
             wb.setSequence(compact_sequence);
