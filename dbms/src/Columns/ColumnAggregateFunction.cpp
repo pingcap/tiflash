@@ -2,6 +2,7 @@
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteBufferFromArena.h>
+#include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
 
@@ -176,6 +177,25 @@ void ColumnAggregateFunction::updateHashWithValues(IColumn::HashValues & hash_va
         WriteBufferFromOwnString wbuf;
         func->serialize(getData()[i], wbuf);
         hash_values[i].update(wbuf.str().c_str(), wbuf.str().size());
+    }
+}
+
+void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash) const
+{
+    auto s = data.size();
+    if (hash.getData().size() != data.size())
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
+                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+
+    auto & hash_data = hash.getData();
+
+    std::vector<UInt8> v;
+    for (size_t i = 0; i < s; ++i)
+    {
+        WriteBufferFromVector<std::vector<UInt8>> wbuf(v);
+        func->serialize(data[i], wbuf);
+        wbuf.finalize();
+        hash_data[i] = ::updateWeakHash32(v.data(), v.size(), hash_data[i]);
     }
 }
 

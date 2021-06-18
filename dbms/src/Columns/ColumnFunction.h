@@ -95,6 +95,11 @@ public:
         throw Exception("updateHashWithValues is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    void updateWeakHash32(WeakHash32 &) const override
+    {
+        throw Exception("updateWeakHash32 is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     int compareAt(size_t, size_t, const IColumn &, int) const override
     {
         throw Exception("compareAt is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);

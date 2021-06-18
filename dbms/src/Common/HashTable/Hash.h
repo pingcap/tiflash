@@ -78,8 +78,14 @@ inline DB::UInt64 intHashCRC32(DB::UInt64 x, DB::UInt64 updated_value)
 template <typename T>
 inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
 {
-    static_assert(!is_fit_register<T>);
-    if constexpr (is_boost_number_v<T>)
+    if constexpr (DB::IsDecimal<T>)
+    {
+        if constexpr (is_fit_register<typename T::NativeType>)
+            return intHashCRC32(x.value, updated_value);
+        else
+            return wideIntHashCRC32(x.value, updated_value);
+    }
+    else if constexpr (is_boost_number_v<T>)
     {
         auto backend_value = x.backend();
         for (size_t i = 0; i < backend_value.size(); ++i)
@@ -109,8 +115,13 @@ inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
         updated_value = intHashCRC32(x.d, updated_value);
         return updated_value;
     }
+    static_assert(
+        DB::IsDecimal<T> ||
+        is_boost_number_v<T> ||
+        std::is_same_v<T, DB::UInt128> ||
+        std::is_same_v<T, DB::Int128> ||
+        std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
-    return updated_value;
 }
 
 template <typename T>
@@ -224,7 +235,11 @@ inline size_t defaultHash64(const std::enable_if_t<!is_fit_register<T>, T> & key
     {
         return boost::multiprecision::hash_value(key);
     }
-
+    static_assert(
+        is_boost_number_v<T> ||
+        std::is_same_v<T, DB::UInt128> ||
+        std::is_same_v<T, DB::Int128> ||
+        std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
 }
 
@@ -232,14 +247,18 @@ template <typename T, typename Enable = void>
 struct DefaultHash;
 
 template <typename T>
-struct DefaultHash<T, std::enable_if_t<!DB::IsDecimal<T>>>
+struct DefaultHash<T, std::enable_if_t<!DB::IsDecimal<T> && is_fit_register<T>, void>>
 {
     std::enable_if_t<is_fit_register<T>, size_t> operator() (T key) const
     {
         return defaultHash64<T>(key);
     }
+};
 
-    std::enable_if_t<!is_fit_register<T>, size_t> operator() (const T & key) const
+template <typename T>
+struct DefaultHash<T, std::enable_if_t<!DB::IsDecimal<T> && !is_fit_register<T>, void>>
+{
+    size_t operator() (const T & key) const
     {
         return defaultHash64<T>(key);
     }
@@ -253,6 +272,9 @@ struct DefaultHash<T, std::enable_if_t<DB::IsDecimal<T>>>
         return defaultHash64<typename T::NativeType>(key.value);
     }
 };
+
+template <>
+struct DefaultHash<StringRef> : public StringRefHash {};
 
 template <typename T>
 inline size_t hashCRC32(std::enable_if_t<is_fit_register<T>, T> key)
@@ -379,15 +401,22 @@ inline DB::UInt32 intHash32(DB::UInt64 key)
 }
 
 /// For containers.
-template <typename T, DB::UInt64 salt = 0>
-struct IntHash32
+template <typename T, DB::UInt64 salt = 0, typename E = void>
+struct IntHash32;
+
+template <typename T, DB::UInt64 salt>
+struct IntHash32<T, salt, std::enable_if_t<is_fit_register<T>, void>>
 {
-    size_t operator() (std::enable_if_t<is_fit_register<T>, T> key) const
+    size_t operator() (T key) const
     {
         return intHash32<salt>(key);
     }
+};
 
-    size_t operator() (const std::enable_if_t<!is_fit_register<T>, T> & key) const
+template <typename T, DB::UInt64 salt>
+struct IntHash32<T, salt, std::enable_if_t<!is_fit_register<T>, void>>
+{
+    size_t operator() (const T & key) const
     {
         if constexpr (std::is_same_v<T, DB::UInt128>)
         {
@@ -404,5 +433,3 @@ struct IntHash32
     }
 };
 
-template <>
-struct DefaultHash<StringRef> : public StringRefHash {};

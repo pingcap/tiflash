@@ -11,7 +11,9 @@ struct EngineStoreServerWrap;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpragmas"
+#ifndef __clang__
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
+#endif
 struct FileEncryptionInfo : FileEncryptionInfoRaw
 {
     ~FileEncryptionInfo()
