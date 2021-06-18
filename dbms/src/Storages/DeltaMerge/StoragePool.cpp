@@ -105,22 +105,22 @@ bool StoragePool::gc(const Settings & /*settings*/, const Seconds & try_gc_perio
         last_try_gc_time = now;
     }
 
-    bool done_anything = false;
+    bool ok = false;
 
     // FIXME: The global_context.settings is mutable, we need a way to reload thses settings.
     // auto config = extractConfig(settings, StorageType::Meta);
     // meta_storage.reloadSettings(config);
-    done_anything |= meta_storage.gc();
+    ok |= meta_storage.gc();
 
     // config = extractConfig(settings, StorageType::Data);
     // data_storage.reloadSettings(config);
-    done_anything |= data_storage.gc();
+    ok |= data_storage.gc();
 
     // config = extractConfig(settings, StorageType::Log);
     // log_storage.reloadSettings(config);
-    done_anything |= log_storage.gc();
+    ok |= log_storage.gc();
 
-    return done_anything;
+    return ok;
 }
 
 } // namespace DM
