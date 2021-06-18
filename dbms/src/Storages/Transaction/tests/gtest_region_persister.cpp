@@ -1,9 +1,7 @@
 #include <sstream>
 
-#define private public
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
-#undef private
 
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>

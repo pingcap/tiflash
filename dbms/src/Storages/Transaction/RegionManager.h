@@ -22,7 +22,10 @@ public:
     /// Encapsulate the task lock for region
     RegionTaskLock genRegionTaskLock(const RegionID region_id) const;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     friend class KVStore;
 
     struct RegionTaskElement : private boost::noncopyable
@@ -36,7 +39,10 @@ private:
     /// RegionManager can only be constructed by KVStore.
     RegionManager() = default;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     mutable std::unordered_map<RegionID, RegionTaskElement> regions_ctrl;
     RegionMap regions;
     mutable std::mutex mutex;

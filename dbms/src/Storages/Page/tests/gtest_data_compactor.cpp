@@ -3,11 +3,7 @@
 
 #include <Common/FailPoint.h>
 #include <IO/WriteHelpers.h>
-
-#define private public
 #include <Storages/Page/gc/DataCompactor.h>
-#undef private
-
 #include <Interpreters/Context.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/mock/MockUtils.h>
