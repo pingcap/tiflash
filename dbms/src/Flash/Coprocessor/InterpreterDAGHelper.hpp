@@ -34,6 +34,7 @@ MakeRegionQueryInfos(const std::unordered_map<RegionVerID, RegionInfo> & dag_reg
     mvcc_info.regions_query_info.clear();
     std::unordered_map<RegionVerID, const RegionInfo &> region_need_retry;
     RegionException::RegionReadStatus status_res = RegionException::RegionReadStatus::OK;
+    std::unordered_set<RegionID> local_region_ids;
     for (auto & [id, r] : dag_region_infos)
     {
         if (r.key_ranges.empty())
@@ -44,6 +45,16 @@ MakeRegionQueryInfos(const std::unordered_map<RegionVerID, RegionInfo> & dag_reg
         {
             region_need_retry.emplace(id, r);
             status_res = RegionException::RegionReadStatus::NOT_FOUND;
+            continue;
+        }
+        /// this is a double check: in GetRegionReadStatus, it only checks the region id and region version, and region conf version
+        /// is ignored, so if there are two regions with the same region id and region version, but different region conf version,
+        /// GetRegionReadStatus will return OK for both regions, however, in learner read, it use region id as the key, so we need
+        /// to make sure that if there are two regions with the same region id, at most one region will be treated as local region.
+        if (local_region_ids.count(id.id))
+        {
+            region_need_retry.emplace(id, r);
+            status_res = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
             continue;
         }
         ImutRegionRangePtr region_range{nullptr};
@@ -76,6 +87,7 @@ MakeRegionQueryInfos(const std::unordered_map<RegionVerID, RegionInfo> & dag_reg
             info.bypass_lock_ts = r.bypass_lock_ts;
         }
         mvcc_info.regions_query_info.emplace_back(std::move(info));
+        local_region_ids.insert(id.id);
     }
     mvcc_info.concurrent = mvcc_info.regions_query_info.size() > 1 ? 1.0 : 0.0;
 
