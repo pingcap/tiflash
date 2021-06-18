@@ -28,11 +28,12 @@ namespace ErrorCodes
 extern const int UNKNOWN_EXCEPTION;
 }
 
+using MemoryInfo = std::map<std::string, uint64_t>;
 
 static constexpr uint KB = 1024;
 // static constexpr uint MB = 1024 * 1024;
 
-DiagnosticsService::AvgLoad getAvgLoad()
+static DiagnosticsService::AvgLoad getAvgLoad()
 {
     {
         Poco::File avg_load_file("/proc/loadavg");
@@ -51,7 +52,7 @@ DiagnosticsService::AvgLoad getAvgLoad()
     return DiagnosticsService::AvgLoad{std::stod(values[0]), std::stod(values[1]), std::stod(values[2])};
 }
 
-MemoryInfo getMemoryInfo()
+static MemoryInfo getMemoryInfo()
 {
     MemoryInfo memory_info;
     {
@@ -77,7 +78,7 @@ MemoryInfo getMemoryInfo()
     return memory_info;
 }
 
-DiagnosticsService::NICInfo getNICInfo()
+static DiagnosticsService::NICInfo getNICInfo()
 {
     DiagnosticsService::NICInfo nic_info;
     Poco::File net_dir("/sys/class/net");
@@ -130,7 +131,7 @@ DiagnosticsService::NICInfo getNICInfo()
     return nic_info;
 }
 
-DiagnosticsService::IOInfo getIOInfo()
+static DiagnosticsService::IOInfo getIOInfo()
 {
     DiagnosticsService::IOInfo io_info;
     Poco::File io_dir("/sys/block");
@@ -163,7 +164,7 @@ DiagnosticsService::IOInfo getIOInfo()
     return io_info;
 }
 
-size_t getPhysicalCoreNumber()
+static size_t getPhysicalCoreNumber()
 {
     {
         Poco::File info_file("/proc/cpuinfo");
@@ -219,7 +220,7 @@ size_t getPhysicalCoreNumber()
     return count;
 }
 
-uint64_t getCPUFrequency()
+static uint64_t getCPUFrequency()
 {
     {
         Poco::File info_file("/proc/cpuinfo");
@@ -251,7 +252,7 @@ uint64_t getCPUFrequency()
     return 0;
 }
 
-void getCacheSize(const uint & level, size_t & size, size_t & line_size)
+static void getCacheSize(const uint & level, size_t & size, size_t & line_size)
 {
     Poco::Path cache_dir("/sys/devices/system/cpu/cpu0/cache/index" + std::to_string(level));
     Poco::Path size_path = cache_dir;
@@ -340,7 +341,7 @@ static DiagnosticsService::Disk::DiskType getDiskTypeByNameLinux(const std::stri
     return DiagnosticsService::Disk::DiskType::UNKNOWN;
 }
 
-std::vector<DiagnosticsService::Disk> getAllDisksLinux()
+static std::vector<DiagnosticsService::Disk> getAllDisksLinux()
 {
     std::vector<DiagnosticsService::Disk> disks;
     {
@@ -406,7 +407,7 @@ std::vector<DiagnosticsService::Disk> getAllDisksLinux()
 }
 #endif
 
-std::vector<DiagnosticsService::Disk> getAllDisks()
+static std::vector<DiagnosticsService::Disk> getAllDisks()
 {
 #ifdef __linux__
     return getAllDisksLinux();
@@ -459,7 +460,6 @@ std::vector<DiagnosticsService::Disk> getAllDisks()
 
 //     return interfaces;
 // }
-
 
 void DiagnosticsService::cpuLoadInfo(
     std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, std::vector<diagnosticspb::ServerInfoItem> & server_info_items)

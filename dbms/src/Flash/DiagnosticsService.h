@@ -1,14 +1,13 @@
 #pragma once
 
-#include <fstream>
-
-#include <Server/IServer.h>
-
 #include <Poco/File.h>
+#include <Server/IServer.h>
 #include <common/logger_useful.h>
+
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/noncopyable.hpp>
+#include <fstream>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -205,17 +204,5 @@ private:
 
     IServer & server;
 };
-
-using MemoryInfo = std::unordered_map<std::string, uint64_t>;
-
-DiagnosticsService::AvgLoad getAvgLoad();
-MemoryInfo getMemoryInfo();
-DiagnosticsService::NICInfo getNICInfo();
-DiagnosticsService::IOInfo getIOInfo();
-size_t getPhysicalCoreNumber();
-uint64_t getCPUFrequency();
-void getCacheSize(const uint & level, size_t & size, size_t & line_size);
-std::vector<DiagnosticsService::Disk> getAllDisksLinux();
-std::vector<DiagnosticsService::Disk> getAllDisks();
 
 } // namespace DB
