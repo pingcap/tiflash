@@ -106,15 +106,11 @@ buildRemoteTS(const std::unordered_map<RegionID, const RegionInfo &> & region_re
     if (region_retry.empty())
         return std::make_tuple(std::nullopt, std::nullopt);
 
-#if 0
-    // FIXME: Should resolve this conflict in #1877
     for (auto it : region_retry)
     {
         context.getQueryContext().getDAGContext()->retry_regions.push_back(it.second);
     }
-#else
-    (void) context;
-#endif
+
     LOG_DEBUG(log, ({
         std::stringstream ss;
         ss << "Start to retry " << region_retry.size() << " regions (";
@@ -160,7 +156,6 @@ buildRemoteTS(const std::unordered_map<RegionID, const RegionInfo &> & region_re
     /// will be collected by CoprocessorBlockInputStream
     dag_req.set_collect_execution_summaries(false);
     return std::make_tuple(dag_req, schema);
-
 }
 
 BlockInputStreamPtr combinedNonJoinedDataStream(DAGPipeline & pipeline, size_t max_threads)
