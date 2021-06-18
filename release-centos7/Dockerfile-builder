@@ -33,7 +33,6 @@ RUN yum makecache \
   && curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly  \
   && cd /prepare-environments \
   && ./install-cmake.sh \
-  && ./install-abseil.sh \
   && ./install-openssl.sh \
   && ./install-libcurl.sh \
   && ./install-grpc.sh \
