@@ -2,7 +2,6 @@
 
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
-#include <Encryption/RateLimiter.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
@@ -96,6 +95,8 @@ class KeyManager;
 using KeyManagerPtr = std::shared_ptr<KeyManager>;
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
+class RateLimiter;
+using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 struct TiFlashRaftConfig;
 
 namespace DM
