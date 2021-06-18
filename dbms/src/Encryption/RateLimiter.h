@@ -1,12 +1,12 @@
 #pragma once
 
+#include <Common/Stopwatch.h>
+#include <Server/StorageConfigParser.h>
+
 #include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <queue>
-
-#include <Common/Stopwatch.h>
-#include <Server/StorageConfigParser.h>
 
 // TODO: separate IO utility(i.e. FileProvider, RateLimiter) from Encryption directory
 namespace Poco::Util
@@ -84,13 +84,15 @@ private:
 
 using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 
-class IORateLimiter {
+class IORateLimiter
+{
 public:
     IORateLimiter() = default;
 
     RateLimiterPtr getWriteLimiter();
 
-    void updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration& config_, Poco::Logger* log_);
+    void updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_, Poco::Logger * log_);
+
 private:
     StorageIORateLimitConfig io_config;
     RateLimiterPtr bg_write_limiter;
@@ -98,9 +100,9 @@ private:
     std::mutex mtx_;
 
     // Noncopyable and nonmovable.
-    IORateLimiter(const IORateLimiter& limiter) = delete;
-    IORateLimiter& operator=(const IORateLimiter& limiter) = delete;
-    IORateLimiter(IORateLimiter&& limiter) = delete;
-    IORateLimiter&& operator=(IORateLimiter&& limiter) = delete;
+    IORateLimiter(const IORateLimiter & limiter) = delete;
+    IORateLimiter & operator=(const IORateLimiter & limiter) = delete;
+    IORateLimiter(IORateLimiter && limiter) = delete;
+    IORateLimiter && operator=(IORateLimiter && limiter) = delete;
 };
 } // namespace DB

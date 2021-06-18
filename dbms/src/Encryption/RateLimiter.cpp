@@ -1,16 +1,17 @@
-#include <cassert>
-
 #include <Common/CurrentMetrics.h>
 #include <Common/TiFlashMetrics.h>
-#include <common/logger_useful.h>
 #include <Encryption/RateLimiter.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <common/logger_useful.h>
+
+#include <cassert>
 
 namespace CurrentMetrics
 {
 extern const Metric RateLimiterPendingWriteRequest;
 }
-namespace DB {
+namespace DB
+{
 RateLimiter::RateLimiter(TiFlashMetricsPtr metrics_, UInt64 rate_limit_per_sec_, UInt64 refill_period_ms_)
     : refill_period_ms{refill_period_ms_},
       refill_balance_per_period{calculateRefillBalancePerPeriod(rate_limit_per_sec_)},
@@ -152,7 +153,7 @@ RateLimiterPtr IORateLimiter::getWriteLimiter()
     return is_background_thread ? bg_write_limiter : fg_write_limiter;
 }
 
-void IORateLimiter::updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration& config_, Poco::Logger* log_)
+void IORateLimiter::updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_, Poco::Logger * log_)
 {
     StorageIORateLimitConfig new_io_config;
     if (config_.has("storage.io-rate-limit"))
@@ -163,11 +164,11 @@ void IORateLimiter::updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::Abstrac
     {
         LOG_INFO(log_, "storage.io-rate-limit is not found in config, use default config.");
     }
-    
+
     std::lock_guard<std::mutex> lock(mtx_);
     if (io_config == new_io_config)
     {
-        return;  // Config is not changes.
+        return; // Config is not changes.
     }
 
     io_config = new_io_config;
@@ -184,4 +185,4 @@ void IORateLimiter::updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::Abstrac
     }
 }
 
-}
+} // namespace DB
