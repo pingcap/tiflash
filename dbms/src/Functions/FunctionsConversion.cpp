@@ -209,13 +209,10 @@ void registerFunctionsConversion(FunctionFactory & factory)
 
     factory.registerFunction<FunctionFromUnixTime>();
     factory.registerFunction<FunctionDateFormat>();
-<<<<<<< HEAD
-=======
     factory.registerFunction<FunctionTiDBUnixTimeStamp<NameTiDBUnixTimeStampInt>>();
     factory.registerFunction<FunctionTiDBUnixTimeStamp<NameTiDBUnixTimeStampDec>>();
     factory.registerFunction<FunctionStrToDate<NameStrToDateDate>>();
     factory.registerFunction<FunctionStrToDate<NameStrToDateDatetime>>();
->>>>>>> 7e4d1bd87... expression: push unix_timestamp, concat to TiFlash (#2059)
 }
 
 }

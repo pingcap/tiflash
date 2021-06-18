@@ -21,5 +21,3 @@ http_port = 8123
 [raft]
 	# specify which storage engine we use. tmt or dt
 	storage_engine = "tmt"
-[raft.snapshot]
-	method = "block"

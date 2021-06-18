@@ -38,14 +38,14 @@ using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
 using NameWithAlias = std::pair<std::string, std::string>;
 using NamesWithAliases = std::vector<NameWithAlias>;
 
-struct Pipeline
+struct DAGPipeline
 {
     BlockInputStreams streams;
     /** When executing FULL or RIGHT JOIN, there will be a data stream from which you can read "not joined" rows.
       * It has a special meaning, since reading from it should be done after reading from the main streams.
       * It is appended to the main streams in UnionBlockInputStream or ParallelAggregatingBlockInputStream.
       */
-    BlockInputStreamPtr stream_with_non_joined_data;
+    BlockInputStreams streams_with_non_joined_data;
 
     BlockInputStreamPtr & firstStream() { return streams.at(0); }
 
@@ -54,11 +54,11 @@ struct Pipeline
     {
         for (auto & stream : streams)
             transform(stream);
-        if (stream_with_non_joined_data)
-            transform(stream_with_non_joined_data);
+        for (auto & stream : streams_with_non_joined_data)
+            transform(stream);
     }
 
-    bool hasMoreThanOneStream() const { return streams.size() + (stream_with_non_joined_data ? 1 : 0) > 1; }
+    bool hasMoreThanOneStream() const { return streams.size() + streams_with_non_joined_data.size() > 1; }
 };
 
 struct AnalysisResult
@@ -97,39 +97,39 @@ public:
 
     BlockInputStreams execute();
 
-    static void executeUnion(Pipeline & pipeline, size_t max_streams);
+    static void executeUnion(DAGPipeline & pipeline, size_t max_streams);
 
 private:
-    void executeRemoteQuery(Pipeline & pipeline);
-    void executeImpl(Pipeline & pipeline);
-    void executeTS(const tipb::TableScan & ts, Pipeline & pipeline);
-    void executeJoin(const tipb::Join & join, Pipeline & pipeline, SubqueryForSet & right_query);
-    void prepareJoin(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, Pipeline & pipeline,
+    void executeRemoteQuery(DAGPipeline & pipeline);
+    void executeImpl(DAGPipeline & pipeline);
+    void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
+    void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
+    void prepareJoin(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, DAGPipeline & pipeline,
         Names & key_names, bool left, bool is_right_out_join, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
-    ExpressionActionsPtr genJoinOtherConditionAction(const google::protobuf::RepeatedPtrField<tipb::Expr> & other_conditions,
-        std::vector<NameAndTypePair> & source_columns, String & filter_column);
-    void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
-    void executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
-    void executeOrder(Pipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
-    void executeLimit(Pipeline & pipeline);
-    void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
+    ExpressionActionsPtr genJoinOtherConditionAction(const tipb::Join & join, std::vector<NameAndTypePair> & source_columns,
+        String & filter_column_for_other_condition, String & filter_column_for_other_eq_condition);
+    void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
+    void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
+    void executeOrder(DAGPipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
+    void executeLimit(DAGPipeline & pipeline);
+    void executeAggregation(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
         TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
-    void executeProject(Pipeline & pipeline, NamesWithAliases & project_cols);
+    void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
 
     void readFromLocalStorage(            //
         const TableStructureLockHolder &, //
         const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
         const LearnerReadSnapshot & learner_read_snapshot, //
-        Pipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry);
+        DAGPipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry);
     std::tuple<ManageableStoragePtr, TableStructureLockHolder> getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
     AnalysisResult analyzeExpressions();
-    void recordProfileStreams(Pipeline & pipeline, const String & key);
+    void recordProfileStreams(DAGPipeline & pipeline, const String & key);
     bool addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, ExpressionActionsChain & chain);
 
 private:
-    void executeRemoteQueryImpl(Pipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
+    void executeRemoteQueryImpl(DAGPipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
         ::tipb::DAGRequest & dag_req, const DAGSchema & schema);
 
     Context & context;

@@ -36,7 +36,7 @@ using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
  *
  * This class is multi-threads safe. Support single thread write, and multi threads read.
  */
-class PageStorage : private boost::noncopyable
+class PageStorage
 {
 public:
     struct Config
@@ -222,7 +222,7 @@ private:
     TiFlashMetricsPtr metrics;
 };
 
-class PageReader : private boost::noncopyable
+class PageReader
 {
 public:
     /// Not snapshot read.
