@@ -59,7 +59,7 @@ private:
     std::mutex mutex;
 };
 
-struct StorageSnapshot : private boost::noncopyable
+struct StorageSnapshot
 {
     StorageSnapshot(StoragePool & storage, bool snapshot_read = true)
         : log_reader(storage.log(), snapshot_read ? storage.log().getSnapshot() : nullptr),
