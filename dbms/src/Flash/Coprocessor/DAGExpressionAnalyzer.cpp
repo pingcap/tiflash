@@ -694,7 +694,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(ExpressionActionsChain &
             /// In ClickHouse, it returns id,t1_value,t2_value
             /// In TiDB, it returns t1_id,t1_value,t2_id,t2_value
             /// So in order to make the join compatible with TiDB, if the join key is a columnRef, for inner/left
-            /// join, add a new key for right join key, for right join, add new key for both left and right join key
+            /// join, add a new key as right join key, for right join, add a new key as left join key
             String updated_key_name = unique_name_generator.toUniqueName((left ? "_l_k_" : "_r_k_") + key_name);
             /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
             /// key names, so just copy a key with new name
