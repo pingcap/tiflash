@@ -33,7 +33,8 @@ using MemoryInfo = std::map<std::string, uint64_t>;
 static constexpr uint KB = 1024;
 // static constexpr uint MB = 1024 * 1024;
 
-static DiagnosticsService::AvgLoad getAvgLoad()
+#ifdef __linux__
+static DiagnosticsService::AvgLoad getAvgLoadLinux()
 {
     {
         Poco::File avg_load_file("/proc/loadavg");
@@ -51,8 +52,18 @@ static DiagnosticsService::AvgLoad getAvgLoad()
     boost::split(values, str, boost::is_any_of(" "));
     return DiagnosticsService::AvgLoad{std::stod(values[0]), std::stod(values[1]), std::stod(values[2])};
 }
+#endif
 
-static MemoryInfo getMemoryInfo()
+static DiagnosticsService::AvgLoad getAvgLoad()
+{
+#ifdef __linux__
+    return getAvgLoadLinux();
+#endif
+    return {};
+}
+
+#ifdef __linux__
+static MemoryInfo getMemoryInfoLinux()
 {
     MemoryInfo memory_info;
     {
@@ -77,8 +88,18 @@ static MemoryInfo getMemoryInfo()
     }
     return memory_info;
 }
+#endif
 
-static DiagnosticsService::NICInfo getNICInfo()
+static MemoryInfo getMemoryInfo()
+{
+#ifdef __linux__
+    return getMemoryInfoLinux();
+#endif
+    return {};
+}
+
+#ifdef __linux__
+static DiagnosticsService::NICInfo getNICInfoLinux()
 {
     DiagnosticsService::NICInfo nic_info;
     Poco::File net_dir("/sys/class/net");
@@ -130,8 +151,18 @@ static DiagnosticsService::NICInfo getNICInfo()
     }
     return nic_info;
 }
+#endif
 
-static DiagnosticsService::IOInfo getIOInfo()
+static DiagnosticsService::NICInfo getNICInfo()
+{
+#ifdef __linux__
+    return getNICInfoLinux();
+#endif
+    return {};
+}
+
+#ifdef __linux__
+static DiagnosticsService::IOInfo getIOInfoLinux()
 {
     DiagnosticsService::IOInfo io_info;
     Poco::File io_dir("/sys/block");
@@ -163,8 +194,18 @@ static DiagnosticsService::IOInfo getIOInfo()
     }
     return io_info;
 }
+#endif
 
-static size_t getPhysicalCoreNumber()
+static DiagnosticsService::IOInfo getIOInfo()
+{
+#ifdef __linux__
+    return getIOInfoLinux();
+#endif
+    return {};
+}
+
+#ifdef __linux__
+static size_t getPhysicalCoreNumberLinux()
 {
     {
         Poco::File info_file("/proc/cpuinfo");
@@ -219,8 +260,18 @@ static size_t getPhysicalCoreNumber()
     }
     return count;
 }
+#endif
 
-static uint64_t getCPUFrequency()
+static size_t getPhysicalCoreNumber()
+{
+#ifdef __linux__
+    return getPhysicalCoreNumberLinux();
+#endif
+    return 0;
+}
+
+#ifdef __linux__
+static uint64_t getCPUFrequencyLinux()
 {
     {
         Poco::File info_file("/proc/cpuinfo");
@@ -251,8 +302,18 @@ static uint64_t getCPUFrequency()
     }
     return 0;
 }
+#endif
 
-static void getCacheSize(const uint & level, size_t & size, size_t & line_size)
+static uint64_t getCPUFrequency()
+{
+#ifdef __linux__
+    return getCPUFrequencyLinux();
+#endif
+    return 0;
+}
+
+#ifdef __linux__
+static void getCacheSizeLinux(const uint & level, size_t & size, size_t & line_size)
 {
     Poco::Path cache_dir("/sys/devices/system/cpu/cpu0/cache/index" + std::to_string(level));
     Poco::Path size_path = cache_dir;
@@ -271,6 +332,18 @@ static void getCacheSize(const uint & level, size_t & size, size_t & line_size)
     std::string line_size_str;
     std::getline(line_size_file, line_size_str);
     line_size = std::stoul(line_size_str);
+}
+#endif
+
+static void getCacheSize(const uint & level, size_t & size, size_t & line_size)
+{
+#ifdef __linux__
+    getCacheSizeLinux(level, size, line_size);
+#else
+    size = 0;
+    line_size = 0;
+#endif
+    return;
 }
 
 #ifdef __linux__
