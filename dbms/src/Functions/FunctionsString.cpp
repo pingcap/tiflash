@@ -454,19 +454,18 @@ void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyr
         toCase(src, src_end, dst);
 }
 
-
 /** If the string is encoded in UTF-8, then it selects a substring of code points in it.
   * Otherwise, the behavior is undefined.
   */
 struct SubstringUTF8Impl
 {
     static void vector(const ColumnString::Chars_t & data,
-        const ColumnString::Offsets & offsets,
-        Int64 original_start,
-        size_t length,
-        bool implicit_length,
-        ColumnString::Chars_t & res_data,
-        ColumnString::Offsets & res_offsets)
+                       const ColumnString::Offsets & offsets,
+                       Int64 original_start,
+                       size_t length,
+                       bool implicit_length,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size());
         size_t size = offsets.size();
@@ -556,6 +555,66 @@ struct SubstringUTF8Impl
                 memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], &data[prev_offset + bytes_start - 1], bytes_to_copy);
                 res_offset += bytes_to_copy + 1;
                 res_data[res_offset - 1] = 0;
+            }
+            res_offsets[i] = res_offset;
+            prev_offset = offsets[i];
+        }
+    }
+};
+
+
+/** If the string is encoded in UTF-8, then it selects a right of code points in it.
+  * Otherwise, the behavior is undefined.
+  */
+struct RightUTF8Impl
+{
+    static void vector(const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        size_t length,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            std::vector<ColumnString::Offset> start_offsets;
+            ColumnString::Offset current = prev_offset;
+            // TODO: break this loop in advance
+            // NOTE: data[offsets[i] -1] = 0, so ignore it
+            while (current < offsets[i] -1)
+            {
+                start_offsets.push_back(current);
+                if (data[current] < 0xBF)
+                    current += 1;
+                else if (data[current] < 0xE0)
+                    current += 2;
+                else if (data[current] < 0xF0)
+                    current += 3;
+                else
+                    current += 1;
+            }
+            if (start_offsets.size() == 0 )
+            {
+                // null
+                res_data.resize(res_data.size() + 1);
+                res_data[res_offset] = 0;
+                ++res_offset;
+            }
+            else
+            {
+                // not null
+                // if(string_length > length, string_length - length, 0)
+                auto start_index = start_offsets.size() > length ? start_offsets.size() - length: 0;
+                // copy data from start to end of this string
+                size_t bytes_to_copy = offsets[i] - start_offsets[start_index];
+                res_data.resize(res_data.size() + bytes_to_copy );
+                memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], &data[start_offsets[start_index]], bytes_to_copy);
+                res_offset += bytes_to_copy;
             }
             res_offsets[i] = res_offset;
             prev_offset = offsets[i];
@@ -1185,6 +1244,89 @@ public:
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };
+
+
+class FunctionRightUTF8 : public IFunction
+{
+public:
+    static constexpr auto name = "rightUTF8";
+    static FunctionPtr create(const Context &)
+    {
+        return std::make_shared<FunctionRightUTF8>();
+    }
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    size_t getNumberOfArguments() const override
+    {
+        return 2;
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        size_t arguments_size = arguments.size();
+        if(arguments_size != 2 )
+            throw Exception("Function " + getName()
+                            + " requires from 2 parameters: string, length. Passed "
+                            + toString(arguments.size()) + ".",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        if (!arguments[0]->isString())
+            throw Exception(
+                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if (!arguments[1]->isNumber())
+            throw Exception("Illegal type " + arguments[1]->getName()
+                            + " of argument of function "
+                            + getName(),
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    {
+        const ColumnPtr column_string = block.getByPosition(arguments[0]).column;
+
+        const ColumnPtr column_length = block.getByPosition(arguments[1]).column;
+        if (!column_length->isColumnConst())
+            throw Exception("2nd arguments of function " + getName() + " must be constants.");
+        Field length_field = (*block.getByPosition(arguments[1]).column)[0];
+        if (length_field.getType() != Field::Types::UInt64 && length_field.getType() != Field::Types::Int64)
+            throw Exception("2nd argument of function " + getName() + " must have UInt/Int type.");
+        Int64 length;
+        if(length_field.getType() == Field::Types::Int64) {
+            length = length_field.get<Int64>();
+        } else {
+            UInt64 u_start = length_field.get<UInt64>();
+            if (u_start >= 0x8000000000000000ULL)
+                throw Exception("Too large values of 2nd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            length = (Int64)u_start;
+        }
+
+        if (length <= 0 ) {
+            block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
+            return;
+        }
+
+        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
+        {
+            auto col_res = ColumnString::create();
+            RightUTF8Impl::vector(col->getChars(), col->getOffsets(), length,col_res->getChars(), col_res->getOffsets());
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
+
 
 
 class FunctionAppendTrailingCharIfAbsent : public IFunction
@@ -2675,5 +2817,6 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionSubstringUTF8>();
     factory.registerFunction<FunctionAppendTrailingCharIfAbsent>();
     factory.registerFunction<FunctionJsonLength>();
+    factory.registerFunction<FunctionRightUTF8>();
 }
 }
