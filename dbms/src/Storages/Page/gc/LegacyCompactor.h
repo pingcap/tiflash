@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Core/Types.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
@@ -22,7 +24,10 @@ public:
     std::tuple<PageFileSet, PageFileSet, size_t> //
     tryCompact(PageFileSet && page_files, const std::set<PageFileIdAndLevel> & writing_file_ids);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     // Return values: [files to remove, files to compact, compact sequence id]
     std::tuple<PageFileSet, PageFileSet, WriteBatch::SequenceID, std::optional<PageFile>> //
     collectPageFilesToCompact(const PageFileSet & page_files, const std::set<PageFileIdAndLevel> & writing_fiel_ids);
@@ -33,8 +38,10 @@ private:
                                                   WriteBatch &&              wb,
                                                   FileProviderPtr &          file_provider,
                                                   Poco::Logger *             log);
-
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     const String & storage_name;
 
     PSDiskDelegatorPtr delegator;

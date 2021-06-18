@@ -1,3 +1,4 @@
+#pragma once
 #include <Storages/Page/PageStorage.h>
 
 #include <boost/core/noncopyable.hpp>
@@ -35,17 +36,19 @@ public:
      * All migrated data will be written as multiple WriteBatches with same sequence. To keep the
      * order of all PageFiles' meta, the sequence of WriteBatch should be maximum of all candidates'
      * WriteBatches. No matter we merge valid page(s) from that WriteBatch or not.
-     * 
+     *
      * Note that all types of PageFile in `page_files` should be `Formal`.
      * Those PageFile whose id in `writing_file_ids`, theirs data will not be migrate.
-     * 
+     *
      * Return DataCompactor::Result and entries edit should be applied to PageStorage's entries.
      */
     std::tuple<Result, PageEntriesEdit>
     tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapshot, const std::set<PageFileIdAndLevel> & writing_file_ids);
 
-
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     /**
      * Collect valid page of snapshot.
      * Return {
@@ -78,7 +81,10 @@ private:
 
     void logMigrationDetails(const MigrateInfos & infos, const PageFileIdAndLevel & migrate_file_id) const;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     const String & storage_name;
 
     PSDiskDelegatorPtr delegator;

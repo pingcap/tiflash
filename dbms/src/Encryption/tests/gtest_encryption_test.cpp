@@ -8,6 +8,13 @@
 
 #include <random>
 
+#ifdef NDEBUG
+#define DBMS_ASSERT(X) \
+    { if (!(X)) std::abort(); }
+#else
+#define DBMS_ASSERT assert
+#endif
+
 namespace DB
 {
 namespace test
@@ -50,7 +57,7 @@ public:
 
         EVP_CIPHER_CTX * ctx;
         InitCipherContext(ctx);
-        assert(ctx != nullptr);
+        DBMS_ASSERT(ctx != nullptr);
 
         const EVP_CIPHER * cipher = nullptr;
         EncryptionMethod method = std::get<1>(GetParam());
@@ -66,25 +73,25 @@ public:
                 cipher = EVP_aes_256_ctr();
                 break;
             default:
-                assert(false);
+                DBMS_ASSERT(false);
         }
-        assert(cipher != nullptr);
+        DBMS_ASSERT(cipher != nullptr);
 
         int ret = EVP_EncryptInit(ctx, cipher, test::KEY, iv);
-        assert(ret == 1);
+        DBMS_ASSERT(ret == 1);
         int output_size = 0;
         ret = EVP_EncryptUpdate(ctx, ciphertext, &output_size, plaintext, static_cast<int>(MAX_SIZE));
-        assert(ret == 1);
+        DBMS_ASSERT(ret == 1);
         int final_output_size = 0;
         ret = EVP_EncryptFinal(ctx, ciphertext + output_size, &final_output_size);
-        assert(ret == 1);
-        assert(output_size + final_output_size == MAX_SIZE);
+        DBMS_ASSERT(ret == 1);
+        DBMS_ASSERT(output_size + final_output_size == MAX_SIZE);
         FreeCipherContext(ctx);
     }
 
     void TestEncryptionImpl(size_t start, size_t end, const unsigned char * iv, bool * success)
     {
-        assert(start < end && end <= MAX_SIZE);
+        DBMS_ASSERT(start < end && end <= MAX_SIZE);
         generateCiphertext(iv);
 
         EncryptionMethod method = std::get<1>(GetParam());
