@@ -57,11 +57,6 @@ public:
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 
-    void ingestFiles(
-        const DM::RowKeyRange & range, const std::vector<UInt64> & file_ids, bool clear_data_in_range, const Settings & settings);
-
-    UInt64 onSyncGc(Int64) override;
-
     void rename(const String & new_path_to_db,
         const String & new_database_name,
         const String & new_table_name,
@@ -104,16 +99,12 @@ public:
     void checkStatus(const Context & context) override;
     void deleteRows(const Context &, size_t rows) override;
 
-    const DM::DeltaMergeStorePtr & getStore() 
-    {
-         return getAndMaybeInitStore();
-    }
+    const DM::DeltaMergeStorePtr & getStore() { return store; }
 
     bool isCommonHandle() const override { return is_common_handle; }
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
-    
-    bool initStoreIfDataDirExist() override;
+
 
 protected:
     StorageDeltaMerge( //
@@ -137,30 +128,11 @@ private:
 
     DataTypePtr getPKTypeImpl() const override;
 
-    DM::DeltaMergeStorePtr& getAndMaybeInitStore();
-    bool storeInited() const { return store_inited.load(); }
-    void updateTableColumnInfo();
-    DM::ColumnDefines getStoreColumnDefines() const;
-
-    bool dataDirExist();
 private:
-    struct TableColumnInfo 
-    {
-        TableColumnInfo(const String& db, const String& table, const ASTPtr& pk)
-            : db_name(db), table_name(table), pk_expr_ast(pk) {}
-        String db_name;
-        String table_name;
-        ASTPtr pk_expr_ast;
-        DM::ColumnDefines table_column_defines;
-        DM::ColumnDefine handle_column_define;
-    };
+    using ColumnIdMap = std::unordered_map<String, size_t>;
     const bool data_path_contains_database_name = false;
 
-    std::mutex store_mutex;
-    
-    std::unique_ptr<TableColumnInfo> table_column_info;  // After create DeltaMergeStore object, it is deprecated.
-    std::atomic<bool> store_inited;
-    DM::DeltaMergeStorePtr _store;
+    DM::DeltaMergeStorePtr store;
 
     Strings pk_column_names; // TODO: remove it. Only use for debug from ch-client.
     bool is_common_handle;
@@ -179,6 +151,7 @@ private:
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
 
     Context & global_context;
+
     Logger * log;
 };
 

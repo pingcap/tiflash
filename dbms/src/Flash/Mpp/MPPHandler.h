@@ -414,11 +414,8 @@ class MPPTaskManager : private boost::noncopyable
 
     std::condition_variable cv;
 
-    BackgroundProcessingPool & background_pool;
-    BackgroundProcessingPool::TaskHandle handle;
-
 public:
-    explicit MPPTaskManager(BackgroundProcessingPool & background_pool_);
+    MPPTaskManager();
     ~MPPTaskManager();
 
     std::vector<UInt64> getCurrentQueries()

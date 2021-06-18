@@ -118,7 +118,7 @@ public:
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    static std::tuple<DeltaPackPtr, BlockPtr> deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema);
+    static DeltaPackPtr deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema);
 
     String toString() const override
     {

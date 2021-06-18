@@ -153,8 +153,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                            size_t                      aio_threshold,
                            size_t                      max_read_buffer_size,
                            const FileProviderPtr &     file_provider_,
-                           size_t                      rows_threshold_per_read_,
-                           bool                        read_one_pack_every_time_)
+                           size_t                      rows_threshold_per_read_)
     : dmfile(dmfile_),
       read_columns(read_columns_),
       enable_clean_read(enable_clean_read_),
@@ -169,7 +168,6 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
       column_cache(column_cache_),
       rows_threshold_per_read(rows_threshold_per_read_),
       file_provider(file_provider_),
-      read_one_pack_every_time(read_one_pack_every_time_),
       single_file_mode(dmfile_->isSingleFileMode()),
       log(&Logger::get("DMFileReader"))
 {
@@ -240,9 +238,9 @@ Block DMFileReader::read()
 
     // Find max continuing rows we can read.
     size_t start_pack_id = next_pack_id;
-    // When single_file_mode is true, or read_one_pack_every_time is true, we can just read one pack every time.
+    // When single_file_mode is true, we can just read one pack every time.
     // 0 means no limit
-    size_t read_pack_limit = (single_file_mode || read_one_pack_every_time) ? 1 : 0;
+    size_t read_pack_limit = single_file_mode ? 1 : 0;
 
     auto & pack_stats     = dmfile->getPackStats();
     size_t read_rows      = 0;

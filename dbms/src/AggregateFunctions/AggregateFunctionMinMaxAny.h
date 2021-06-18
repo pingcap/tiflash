@@ -638,6 +638,17 @@ struct AggregateFunctionAnyData : Data
 };
 
 template <typename Data>
+struct AggregateFunctionFirstRowData : Data
+{
+    using Self = AggregateFunctionFirstRowData<Data>;
+
+    bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena) { return this->changeFirstTime(column, row_num, arena); }
+    bool changeIfBetter(const Self & to, Arena * arena)                        { return this->changeFirstTime(to, arena); }
+
+    static const char * name() { return "first_row"; }
+};
+
+template <typename Data>
 struct AggregateFunctionAnyLastData : Data
 {
     using Self = AggregateFunctionAnyLastData<Data>;

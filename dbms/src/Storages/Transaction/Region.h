@@ -40,6 +40,8 @@ class Region : public std::enable_shared_from_this<Region>
 public:
     const static UInt32 CURRENT_VERSION;
 
+    const static std::string log_name;
+
     static const auto PutFlag = RecordKVFormat::CFModifyFlag::PutFlag;
     static const auto DelFlag = RecordKVFormat::CFModifyFlag::DelFlag;
 
@@ -103,9 +105,6 @@ public:
     void insert(const std::string & cf, TiKVKey && key, TiKVValue && value);
     void insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value);
     void remove(const std::string & cf, const TiKVKey & key);
-
-    // Directly drop all data in this Region object.
-    void clearAllData();
 
     CommittedScanner createCommittedScanner(bool use_lock = true);
     CommittedRemover createCommittedRemover(bool use_lock = true);
@@ -171,10 +170,13 @@ public:
 
     TableID getMappedTableID() const;
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
-    void handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt);
-    void finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term);
+    void handleIngestSST(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt);
 
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
+
+    /// get approx rows, bytes info about mem cache.
+    std::pair<size_t, size_t> getApproxMemCacheInfo() const;
+    void cleanApproxMemCacheInfo() const;
 
 private:
     Region() = delete;
@@ -201,14 +203,15 @@ private:
 
     RegionMeta meta;
 
-    mutable std::atomic<Timepoint> last_compact_log_time = Timepoint::min();
-
     Logger * log;
 
     const TableID mapped_table_id;
 
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
+    mutable std::atomic<Timepoint> last_compact_log_time = Timepoint::min();
+    mutable std::atomic<size_t> approx_mem_cache_rows{0};
+    mutable std::atomic<size_t> approx_mem_cache_bytes{0};
 };
 
 class RegionRaftCommandDelegate : public Region, private boost::noncopyable
