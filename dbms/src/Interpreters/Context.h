@@ -97,7 +97,6 @@ using KeyManagerPtr = std::shared_ptr<KeyManager>;
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 struct TiFlashRaftConfig;
-class StorageIORateLimitConfig;
 
 namespace DM
 {
