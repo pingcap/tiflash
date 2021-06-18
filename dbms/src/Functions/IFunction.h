@@ -86,6 +86,7 @@ public:
     virtual PreparedFunctionPtr prepare(const Block & sample_block) const = 0;
 
     /// TODO: make const
+    /// both arguments and result are column positions in block.
     virtual void execute(Block & block, const ColumnNumbers & arguments, size_t result)
     {
         return prepare(block)->execute(block, arguments, result);
