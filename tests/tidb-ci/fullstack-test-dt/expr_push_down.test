@@ -1,0 +1,98 @@
+## abs()
+mysql> drop table if exists test.t;
+mysql> create table test.t (int_8 tinyint,uint_8 tinyint unsigned, int_16 smallint, uint_16 smallint unsigned,int_32 int, uint_32 int unsigned, int_64 bigint, uint_64 bigint unsigned, float_32 float, double_64 double, dec_3_2 decimal(3,2),dec_1_0 decimal(1,0), dec_65_30 decimal(65,30));
+mysql> insert into test.t values (-128, 255, -32768, 65535, -2147483648, 4294967295, -9223372036854775807, 18446744073709551615,-12345,-123456789, -9.99,-9,-12345678910111213141512547896547856.987654321012345678900123456789);
+mysql> insert into test.t values (127,0,32767,0,2147483647,0,9223372036854775807,0,-0.0,-0.0,9.99,9,-99999999999999999999999999999999999.999999999999999999999999999999);
+mysql> insert into test.t values (-128, null, -32768, null, -2147483648, null, -9223372036854775807, null, null, null,null,null,null);
+mysql> insert into test.t values (null, 255, null, 65535, null, 4294967295, null, 18446744073709551615,null, -123456789, 9.99,9,99999999999999999999999999999999999.999999999999999999999999999999);
+
+mysql> alter table test.t set tiflash replica 1;
+
+mysql> analyze table test.t;
+func> wait_table test t
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; select t.* from (select * from test.t)tt join test.t on abs(t.int_8)=abs(tt.int_8) and abs(t.uint_8)=abs(tt.uint_8) and abs(t.int_16)=abs(tt.int_16) and abs(t.uint_16)=abs(tt.uint_16) and abs(t.int_32)=abs(tt.int_32) and abs(t.uint_32)=abs(tt.uint_32) and abs(t.int_64)=abs(tt.int_64) and abs(t.uint_64)=abs(tt.uint_64);
++-------+--------+--------+---------+-------------+------------+----------------------+----------------------+----------+------------+---------+---------+---------------------------------------------------------------------+
+| int_8 | uint_8 | int_16 | uint_16 | int_32      | uint_32    | int_64               | uint_64              | float_32 | double_64  | dec_3_2 | dec_1_0 | dec_65_30                                                           |
++-------+--------+--------+---------+-------------+------------+----------------------+----------------------+----------+------------+---------+---------+---------------------------------------------------------------------+
+|  -128 |    255 | -32768 |   65535 | -2147483648 | 4294967295 | -9223372036854775807 | 18446744073709551615 |   -12345 | -123456789 |   -9.99 |      -9 | -12345678910111213141512547896547856.987654321012345678900123456789 |
+|   127 |      0 |  32767 |       0 |  2147483647 |          0 |  9223372036854775807 |                    0 |        0 |          0 |    9.99 |       9 | -99999999999999999999999999999999999.999999999999999999999999999999 |
++-------+--------+--------+---------+-------------+------------+----------------------+----------------------+----------+------------+---------+---------+---------------------------------------------------------------------+
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; select abs(int_8) a,abs(uint_8) b, abs(int_16) c, abs(uint_16) d, abs(int_32) e, abs(uint_32)f, abs(int_64)g, abs(uint_64)h, abs(float_32)i,abs(double_64)j,abs(dec_3_2)k,abs(dec_1_0)l,abs(dec_65_30)m,abs(null)n, count(*) from test.t group by a,b,c,d,e,f,g,h,i,j,k,l,m,n;
++-----+-----+-------+-------+------------+------------+---+----------------------+-------+-----------+------+---+--------------------------------------------------------------------+---+----------+
+| a   | b   | c     | d     | e          | f          | g | h                    | i     | j         | k    | l | m                                                                  | n | count(*) |
++-----+-----+-------+-------+------------+------------+---+----------------------+-------+-----------+------+---+--------------------------------------------------------------------+---+----------+
+| 128 | NULL | 32768 |  NULL | 2147483648 |       NULL | 9223372036854775807 |                 NULL |  NULL |      NULL | NULL | NULL |                                                               NULL | NULL |        1 |
+| NULL | 255 |  NULL | 65535 |       NULL | 4294967295 | NULL | 18446744073709551615 |  NULL | 123456789 | 9.99 | 9 | 99999999999999999999999999999999999.999999999999999999999999999999 | NULL |        1 |
+| 127 |   0 | 32767 |     0 | 2147483647 |          0 | 9223372036854775807 |                    0 |     0 |         0 | 9.99 | 9 | 99999999999999999999999999999999999.999999999999999999999999999999 | NULL |        1 |
+| 128 | 255 | 32768 | 65535 | 2147483648 | 4294967295 | 9223372036854775807 | 18446744073709551615 | 12345 | 123456789 | 9.99 | 9 | 12345678910111213141512547896547856.987654321012345678900123456789 | NULL |        1 |
++-----+-----+-------+-------+------------+------------+---+----------------------+-------+-----------+------+---+--------------------------------------------------------------------+---+----------+
+
+mysql> drop table if exists test.t;
+
+mysql> drop table if exists test.f;
+mysql> CREATE TABLE test.f (a char(20),b varchar(20), id int);
+mysql> insert into test.f values('abc','fzh',1);
+mysql> insert into test.f values('pingcap','tidb',1);
+mysql> insert into test.f values(null,null,null);
+mysql> insert into test.f values(null,'std',null);
+mysql> insert into test.f values('平凯xingchen公司',null,1);
+mysql> alter table test.f set tiflash replica 1;
+
+mysql> analyze table test.f;
+
+func> wait_table test f
+
+mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,1) c1,right(b,1) c2, a, b, 1 as id from test.f) t group by t.c1, t.c2,a,b,id;
++------+------+----------------------+------+----+----------+
+| c1   | c2   | a                    | b    | id | count(*) |
++------+------+----------------------+------+----+----------+
+| NULL | d    | NULL                 | std  |  1 |        1 |
+| 平   | NULL | 平凯xingchen公司     | NULL |  1 |        1 |
+| p    | b    | pingcap              | tidb |  1 |        1 |
+| NULL | NULL | NULL                 | NULL |  1 |        1 |
+| a    | h    | abc                  | fzh  |  1 |        1 |
++------+------+----------------------+------+----+----------+
+
+mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,21) c1,right(b,21) c2, a, b, 11 as id from test.f) t group by t.c1, t.c2,a,b,id;
++----------------------+------+----------------------+------+----+----------+
+| c1                   | c2   | a                    | b    | id | count(*) |
++----------------------+------+----------------------+------+----+----------+
+| pingcap              | tidb | pingcap              | tidb | 11 |        1 |
+| NULL                 | std  | NULL                 | std  | 11 |        1 |
+| abc                  | fzh  | abc                  | fzh  | 11 |        1 |
+| NULL                 | NULL | NULL                 | NULL | 11 |        1 |
+| 平凯xingchen公司     | NULL | 平凯xingchen公司     | NULL | 11 |        1 |
++----------------------+------+----------------------+------+----+----------+
+
+mysql> use test; select t.c1,t.c2,a,b,id, count(*) from (select left(a,-1) c1,right(b,-1) c2, a, b, 0 as id from test.f) t group by t.c1, t.c2,a,b,id;
++------+------+----------------------+------+----+----------+
+| c1   | c2   | a                    | b    | id | count(*) |
++------+------+----------------------+------+----+----------+
+| NULL |      | NULL                 | std  |  0 |        1 |
+|      |      | pingcap              | tidb |  0 |        1 |
+|      | NULL | 平凯xingchen公司     | NULL |  0 |        1 |
+|      |      | abc                  | fzh  |  0 |        1 |
+| NULL | NULL | NULL                 | NULL |  0 |        1 |
++------+------+----------------------+------+----+----------+
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; select a,t.c0,t.c1,t.c2,t.c3,t.c4,t.c5, count(*) from (select right(a,0) c0 ,right(a,1) c1,right(a,-1) c2, right(a,100) c3, right(a,null) c4, right(null,0) c5,a from test.f) t group by c0, c1,c2,c3,c4,c5,a;
++----------------------+------+------+------+----------------------+------+------------+----------+
+| a                    | c0   | c1   | c2   | c3                   | c4   | c5         | count(*) |
++----------------------+------+------+------+----------------------+------+------------+----------+
+| NULL                 | NULL | NULL | NULL | NULL                 | NULL | NULL       |        2 |
+| pingcap              |      | p    |      | pingcap              | NULL | NULL       |        1 |
+| 平凯xingchen公司     |      | 司   |      | 平凯xingchen公司     | NULL | NULL       |        1 |
+| abc                  |      | c    |      | abc                  | NULL | NULL       |        1 |
++----------------------+------+------+------+----------------------+------+------------+----------+
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; select a, t.c0,t.c1,t.c2,t.c3,t.c4,t.c5, count(*) from (select left(a,0) c0 ,left(a,1) c1,left(a,-1) c2, left(a,100) c3,left(a,null)c4,left(null,0)c5, a from test.f) t group by c0, c1,c2,c3,c4,c5,a;
++----------------------+------+------+------+----------------------+------+------------+----------+
+| a                    | c0   | c1   | c2   | c3                   | c4   | c5         | count(*) |
++----------------------+------+------+------+----------------------+------+------------+----------+
+| abc                  |      | a    |      | abc                  | NULL | NULL       |        1 |
+| pingcap              |      | p    |      | pingcap              | NULL | NULL       |        1 |
+| NULL                 | NULL | NULL | NULL | NULL                 | NULL | NULL       |        2 |
+| 平凯xingchen公司     |      | 平   |      | 平凯xingchen公司     | NULL | NULL       |        1 |
++----------------------+------+------+------+----------------------+------+------------+----------+

@@ -888,8 +888,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SubDateAndString, "cast"},
 
     //{tipb::ScalarFuncSig::UnixTimestampCurrent, "cast"},
-    //{tipb::ScalarFuncSig::UnixTimestampInt, "cast"},
-    //{tipb::ScalarFuncSig::UnixTimestampDec, "cast"},
+    {tipb::ScalarFuncSig::UnixTimestampInt, "tidbUnixTimeStampInt"}, {tipb::ScalarFuncSig::UnixTimestampDec, "tidbUnixTimeStampDec"},
 
     //{tipb::ScalarFuncSig::ConvertTz, "cast"},
     //{tipb::ScalarFuncSig::MakeDate, "cast"},
@@ -941,14 +940,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Bin, "cast"},
     //{tipb::ScalarFuncSig::ASCII, "cast"},
     //{tipb::ScalarFuncSig::Char, "cast"},
-<<<<<<< HEAD
-    {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"},
-    //{tipb::ScalarFuncSig::Concat, "cast"},
-    //{tipb::ScalarFuncSig::ConcatWS, "cast"},
-=======
     {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"}, {tipb::ScalarFuncSig::Concat, "tidbConcat"},
     {tipb::ScalarFuncSig::ConcatWS, "tidbConcatWS"},
->>>>>>> 0ed0a075d... function: Support push function year,day,datediff,datesub,castTimeAsString,concat_ws down to TiFlash. (#2084)
     //{tipb::ScalarFuncSig::Convert, "cast"},
     //{tipb::ScalarFuncSig::Elt, "cast"},
     //{tipb::ScalarFuncSig::ExportSet3Arg, "cast"},
@@ -969,8 +962,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::InstrUTF8, "cast"},
     //{tipb::ScalarFuncSig::Instr, "cast"},
 
-    {tipb::ScalarFuncSig::LTrim, "ltrim"},
-    //{tipb::ScalarFuncSig::LeftUTF8, "cast"},
+    {tipb::ScalarFuncSig::LTrim, "ltrim"}, {tipb::ScalarFuncSig::LeftUTF8, "leftUTF8"},
     //{tipb::ScalarFuncSig::Left, "cast"},
     {tipb::ScalarFuncSig::Length, "length"},
     //{tipb::ScalarFuncSig::Locate2ArgsUTF8, "cast"},
@@ -988,10 +980,10 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Quote, "cast"},
     {tipb::ScalarFuncSig::RTrim, "rtrim"},
     //{tipb::ScalarFuncSig::Repeat, "cast"},
-    //{tipb::ScalarFuncSig::Replace, "cast"},
+    {tipb::ScalarFuncSig::Replace, "replaceAll"},
     //{tipb::ScalarFuncSig::ReverseUTF8, "cast"},
     //{tipb::ScalarFuncSig::Reverse, "cast"},
-    //{tipb::ScalarFuncSig::RightUTF8, "cast"},
+    {tipb::ScalarFuncSig::RightUTF8, "rightUTF8"},
     //{tipb::ScalarFuncSig::Right, "cast"},
     //{tipb::ScalarFuncSig::RpadUTF8, "cast"},
     //{tipb::ScalarFuncSig::Rpad, "cast"},
