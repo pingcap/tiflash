@@ -109,7 +109,7 @@ try
         size_t step = rand() % 1000;
         LOG_DEBUG(log, "step " << step);
         auto block = DMTestEnv::prepareBlockWithIncreasingPKAndTs(step, cur_rows, cur_rows);
-        store->write(*context, settings, std::move(block));
+        store->write(*context, settings, block);
         cur_rows += step;
 
         check_exact(RowKeyRange::fromHandleRange({0, (Int64)(cur_rows)}), cur_rows, cur_rows * bytes_per_rows);
@@ -184,7 +184,7 @@ try
         size_t step = rand() % 1000;
         LOG_DEBUG(log, "step " << step);
         auto block = DMTestEnv::prepareBlockWithIncreasingPKAndTs(step, cur_rows, cur_rows);
-        store->write(*context, settings, std::move(block));
+        store->write(*context, settings, block);
         cur_rows += step;
 
         check_split_point(random_range(cur_rows));

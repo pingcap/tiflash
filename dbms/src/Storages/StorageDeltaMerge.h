@@ -57,9 +57,6 @@ public:
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 
-    void ingestFiles(
-        const DM::RowKeyRange & range, const std::vector<UInt64> & file_ids, bool clear_data_in_range, const Settings & settings);
-
     void rename(const String & new_path_to_db,
         const String & new_database_name,
         const String & new_table_name,
@@ -133,7 +130,6 @@ private:
 
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
-
     const bool data_path_contains_database_name = false;
 
     DM::DeltaMergeStorePtr store;
