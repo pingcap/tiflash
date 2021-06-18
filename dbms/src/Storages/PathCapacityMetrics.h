@@ -29,12 +29,18 @@ public:
 
     FsStats getFsStatsOfPath(std::string_view file_path) const;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     static constexpr ssize_t INVALID_INDEX = -1;
     // Return the index of the longest prefix matching path in `path_info`
     ssize_t locatePath(std::string_view file_path) const;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     struct CapacityInfo
     {
         std::string path;
