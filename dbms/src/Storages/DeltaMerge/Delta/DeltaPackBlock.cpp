@@ -235,7 +235,7 @@ void DeltaPackBlock::serializeMetadata(WriteBuffer & buf, bool save_schema) cons
     writeIntBinary(bytes, buf);
 }
 
-std::tuple<DeltaPackPtr, BlockPtr> DeltaPackBlock::deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema)
+DeltaPackPtr DeltaPackBlock::deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema)
 {
     auto schema = deserializeSchema(buf);
     if (!schema)
@@ -250,7 +250,7 @@ std::tuple<DeltaPackPtr, BlockPtr> DeltaPackBlock::deserializeMetadata(ReadBuffe
     readIntBinary(rows, buf);
     readIntBinary(bytes, buf);
 
-    return {createPackWithDataPage(schema, rows, bytes, data_page_id), std::move(schema)};
+    return createPackWithDataPage(schema, rows, bytes, data_page_id);
 }
 
 ColumnPtr DPBlockReader::getPKColumn()

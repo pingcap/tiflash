@@ -92,8 +92,3 @@ http_port = 8123
   # Deprecated Raft data storage path setting style. Check [storage.raft] section for new style.
   # If it is not set, it will be the first path of "path" appended with "/kvstore".
   # kvstore_path = ""
-
-  [raft.snapshot]
-    # The way to apply snapshot data
-    # The value is one of "block" / "file1" / "file2".
-    method = "file1"

@@ -216,21 +216,8 @@ bool RegionData::isEqual(const RegionData & r2) const
 }
 
 RegionData::RegionData(RegionData && data)
-    : write_cf(std::move(data.write_cf)),
-      default_cf(std::move(data.default_cf)),
-      lock_cf(std::move(data.lock_cf)),
-      cf_data_size(data.cf_data_size.load())
+    : write_cf(std::move(data.write_cf)), default_cf(std::move(data.default_cf)), lock_cf(std::move(data.lock_cf))
 {}
-
-RegionData & RegionData::operator=(RegionData && rhs)
-{
-    write_cf = std::move(rhs.write_cf);
-    default_cf = std::move(rhs.default_cf);
-    lock_cf = std::move(rhs.lock_cf);
-    cf_data_size = rhs.cf_data_size.load();
-    return *this;
-}
-
 
 UInt8 RegionData::getWriteType(const ConstWriteCFIter & write_it) { return RegionWriteCFDataTrait::getWriteType(write_it->second); }
 
