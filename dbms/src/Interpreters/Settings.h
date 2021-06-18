@@ -268,6 +268,8 @@ struct Settings
     M(SettingBool, dt_enable_skippable_place, true, "Enable skippable place or not in DeltaTree Engine.")\
     M(SettingBool, dt_enable_stable_column_cache, true, "Enable column cache for StorageDeltaMerge.") \
     M(SettingUInt64, dt_open_file_max_idle_seconds, 15, "Max idle time of opening files, 0 means infinite.") \
+    M(SettingUInt64, dt_page_num_max_expect_legacy_files, 100, "Max number of legacy file expected") \
+    M(SettingFloat, dt_page_num_max_gc_valid_rate, 0.95, "Max valid rate of deciding a page file can be compact when exising legacy files are more over than `dt_stroage_num_max_expect_legacy_files`") \
     M(SettingFloat, dt_page_gc_low_write_prob, 0.10, "Probability to run gc when write there is few writes.") \
     \
     M(SettingUInt64, dt_storage_pool_log_write_slots, 4, "Max write concurrency for each StoragePool.log.") \
