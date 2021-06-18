@@ -1,5 +1,3 @@
-#include <utility>
-
 #pragma once
 
 #include <Storages/Page/PageEntries.h>
@@ -8,6 +6,8 @@
 #include <Storages/Page/VersionSet/PageEntriesView.h>
 #include <Storages/Page/mvcc/VersionSet.h>
 #include <Storages/Page/mvcc/VersionSetWithDelta.h>
+
+#include <utility>
 
 namespace DB
 {
