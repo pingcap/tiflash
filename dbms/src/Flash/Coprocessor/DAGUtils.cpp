@@ -515,8 +515,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastIntAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastIntAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastRealAsInt, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastRealAsReal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastRealAsInt, "tidb_cast"}, {tipb::ScalarFuncSig::CastRealAsReal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastRealAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastRealAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastRealAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastRealAsDuration, "cast"},
@@ -529,8 +528,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastDecimalAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastStringAsInt, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastStringAsReal, "cast"},
+    {tipb::ScalarFuncSig::CastStringAsInt, "tidb_cast"}, {tipb::ScalarFuncSig::CastStringAsReal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastStringAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastStringAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastStringAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastStringAsDuration, "cast"},
@@ -538,8 +536,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     {tipb::ScalarFuncSig::CastTimeAsInt, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastTimeAsReal, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastTimeAsString, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastTimeAsDecimal, "tidb_cast"}, {tipb::ScalarFuncSig::CastTimeAsTime, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastTimeAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastTimeAsDecimal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastTimeAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastTimeAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastTimeAsJson, "cast"},
 
@@ -912,9 +910,9 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::TimestampLiteral, "cast"},
 
     //{tipb::ScalarFuncSig::LastDay, "cast"},
-    //{tipb::ScalarFuncSig::StrToDateDate, "cast"},
-    //{tipb::ScalarFuncSig::StrToDateDatetime, "cast"},
-    //{tipb::ScalarFuncSig::StrToDateDuration, "cast"},
+    {tipb::ScalarFuncSig::StrToDateDate, "strToDateDate"},
+    {tipb::ScalarFuncSig::StrToDateDatetime, "strToDateDatetime"},
+    // {tipb::ScalarFuncSig::StrToDateDuration, "cast"},
     {tipb::ScalarFuncSig::FromUnixTime1Arg, "fromUnixTime"}, {tipb::ScalarFuncSig::FromUnixTime2Arg, "fromUnixTime"},
     {tipb::ScalarFuncSig::ExtractDatetime, "extractMyDateTime"},
     //{tipb::ScalarFuncSig::ExtractDuration, "cast"},
