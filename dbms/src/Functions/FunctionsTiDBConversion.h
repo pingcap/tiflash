@@ -140,6 +140,8 @@ struct TiDBConvertToString
                 offsets_to[i] = write_buffer.count();
                 current_offset = next_offset;
             }
+
+            data_to.resize(write_buffer.count());
         }
         else if constexpr (IsDecimal<FromFieldType>)
         {
@@ -169,6 +171,8 @@ struct TiDBConvertToString
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
             }
+
+            data_to.resize(write_buffer.count());
         }
         else if (const auto col_from = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get()))
         {
@@ -212,6 +216,8 @@ struct TiDBConvertToString
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
             }
+
+            data_to.resize(write_buffer.count());
         }
         else
             throw Exception(
