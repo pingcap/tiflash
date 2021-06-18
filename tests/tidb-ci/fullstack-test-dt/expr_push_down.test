@@ -41,7 +41,6 @@ mysql> insert into test.f values('平凯xingchen公司',null,1);
 mysql> alter table test.f set tiflash replica 1;
 
 mysql> analyze table test.f;
-
 func> wait_table test f
 mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,1) c1,right(b,1) c2, a, b, 1 as id from test.f) t group by t.c1, t.c2,a,b,id;
 +------+------+----------------------+------+----+----------+
@@ -95,4 +94,3 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_al
 | NULL                 | NULL | NULL | NULL | NULL                 | NULL | NULL       |        2 |
 | 平凯xingchen公司     |      | 平   |      | 平凯xingchen公司     | NULL | NULL       |        1 |
 +----------------------+------+------+------+----------------------+------+------------+----------+
-
