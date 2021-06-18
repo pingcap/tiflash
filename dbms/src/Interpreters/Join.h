@@ -254,11 +254,11 @@ public:
     /** Add block of data from right hand of JOIN to the map.
       * Returns false, if some limit was exceeded and you should not insert more data.
       */
-    bool insertFromBlockInternal(Block * stored_block, size_t block_index);
+    bool insertFromBlockInternal(Block * stored_block, size_t stream_index);
 
     bool insertFromBlock(const Block & block);
 
-    void insertFromBlockASync(const Block & block, ThreadPool & thread_pool);
+    void insertFromBlock(const Block & block, size_t stream_index);
 
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
@@ -313,13 +313,6 @@ public:
         RowRefList(const Block * block_, size_t row_num_) : RowRef(block_, row_num_) {}
     };
 
-    struct RowRefListWithLock {
-        RowRefList row_ref_list;
-        /// mutex to protect concurrent insert to rows_not_inserted_to_map
-        std::mutex mutex;
-        size_t index;
-        RowRefListWithLock(size_t index_) : index(index_) {}
-    };
 
 
     /** Depending on template parameter, adds or doesn't add a flag, that element was used (row was joined).
@@ -434,7 +427,7 @@ private:
     /// For right/full join, including
     /// 1. Rows with NULL join keys
     /// 2. Rows that are filtered by right join conditions
-    std::vector<std::unique_ptr<RowRefListWithLock>> rows_not_inserted_to_map;
+    std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arenas pools;
@@ -461,7 +454,6 @@ private:
     SizeLimits limits;
 
     Block totals;
-
     /** Protect state for concurrent use in insertFromBlock and joinBlock.
       * Note that these methods could be called simultaneously only while use of StorageJoin,
       *  and StorageJoin only calls these two methods.
