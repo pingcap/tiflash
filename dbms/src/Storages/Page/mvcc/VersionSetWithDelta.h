@@ -28,6 +28,7 @@ extern const Event PSMVCCApplyOnNewDelta;
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCNumSnapshots;
+extern const Metric PSMVCCSnapshotsList;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -165,6 +166,7 @@ public:
         auto s = std::make_shared<Snapshot>(this, current);
         // Register snapshot to VersionSet
         snapshots.emplace_back(SnapshotWeakPtr(s));
+        CurrentMetrics::add(CurrentMetrics::PSMVCCSnapshotsList);
         return s;
     }
 
@@ -293,18 +295,21 @@ protected:
 private:
     void removeExpiredSnapshots(const std::unique_lock<std::shared_mutex> &) const
     {
+        DB::Int64 num_snapshots_removed = 0;
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
         {
             if (iter->expired())
             {
                 // Clear free snapshots
                 iter = snapshots.erase(iter);
+                num_snapshots_removed += 1;
             }
             else
             {
                 iter++;
             }
         }
+        CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_snapshots_removed);
     }
 
 public:

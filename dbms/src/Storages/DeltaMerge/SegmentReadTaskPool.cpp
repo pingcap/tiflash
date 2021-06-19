@@ -1,5 +1,11 @@
+#include <Common/CurrentMetrics.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+
+namespace CurrentMetrics
+{
+extern const Metric DT_SegmentReadTasks;
+}
 
 namespace DB::DM
 {
@@ -9,6 +15,7 @@ SegmentReadTask::SegmentReadTask(const SegmentPtr &         segment_, //
                                  const RowKeyRanges &       ranges_)
     : segment(segment_), read_snapshot(read_snapshot_), ranges(ranges_)
 {
+    CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks);
 }
 
 SegmentReadTask::SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshotPtr & read_snapshot_)
@@ -18,7 +25,7 @@ SegmentReadTask::SegmentReadTask(const SegmentPtr & segment_, const SegmentSnaps
 
 SegmentReadTask::~SegmentReadTask()
 {
-    //
+    CurrentMetrics::sub(CurrentMetrics::DT_SegmentReadTasks);
 }
 
 std::pair<size_t, size_t> SegmentReadTask::getRowsAndBytes() const

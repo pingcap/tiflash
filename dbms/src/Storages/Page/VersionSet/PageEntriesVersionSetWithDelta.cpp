@@ -1,7 +1,13 @@
+#include <Common/CurrentMetrics.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 
 #include <stack>
+
+namespace CurrentMetrics
+{
+extern const Metric PSMVCCSnapshotsList;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -69,9 +75,10 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
     const size_t num_invalid_snapshot_to_clean = snapshots_size_before_clean + 1 - valid_snapshots.size();
     if (num_invalid_snapshot_to_clean > 0)
     {
+        CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_invalid_snapshot_to_clean);
         LOG_DEBUG(log,
-                  name << " gcApply remove " + DB::toString(snapshots_size_before_clean + 1 - valid_snapshots.size())
-                          + " invalid snapshots.");
+                  name << " gcApply remove " << num_invalid_snapshot_to_clean << " invalid snapshots, " << valid_snapshots.size()
+                       << " snapshots left.");
     }
     // Iterate all snapshots to collect all PageFile in used.
     std::set<PageFileIdAndLevel> live_files;
