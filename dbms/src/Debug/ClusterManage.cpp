@@ -30,7 +30,7 @@ uint8_t CheckHttpUriAvailable(BaseBuffView path_)
 
 HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView path_)
 {
-    HttpRequestStatus status = HttpRequestStatus::Ok;
+    HttpRequestStatus status = HttpRequestStatusOk;
     TableID table_id = 0;
     {
         std::string_view path(path_.data, path_.len);
@@ -43,14 +43,14 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
             }
             catch (...)
             {
-                status = HttpRequestStatus::ErrorParam;
+                status = HttpRequestStatusErrorParam;
             }
         }
         else
         {
-            status = HttpRequestStatus::ErrorParam;
+            status = HttpRequestStatusErrorParam;
         }
-        if (status != HttpRequestStatus::Ok)
+        if (status != HttpRequestStatusOk)
             return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
     }
 
