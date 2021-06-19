@@ -56,21 +56,6 @@ struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
     BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> &, uint64_t) const;
 };
 
-template <typename T>
-constexpr bool IsNonTrivialCalling
-    = (!std::is_trivially_copy_constructible_v<T> || !std::is_trivially_move_constructible_v<T> || !std::is_trivially_destructible_v<T>)
-    || (!std::is_copy_constructible_v<T> && !std::is_move_constructible_v<T>);
-
-static_assert(IsNonTrivialCalling<EngineStoreServerWrap>);
-//static_assert(IsNonTrivialCalling<FileEncryptionInfo>);
-//static_assert(IsNonTrivialCalling<BaseBuffView>);
-//static_assert(IsNonTrivialCalling<WriteCmdsView>);
-//static_assert(IsNonTrivialCalling<RaftCmdHeader>);
-//static_assert(IsNonTrivialCalling<SSTViewVec>);
-//static_assert(IsNonTrivialCalling<RaftStoreProxyFFIHelper>);
-//static_assert(IsNonTrivialCalling<RawCppPtr>);
-//static_assert(IsNonTrivialCalling<RawVoidPtr>);
-
 extern "C" {
 RawCppPtr GenCppRawString(BaseBuffView);
 EngineStoreApplyRes HandleAdminRaftCmd(
