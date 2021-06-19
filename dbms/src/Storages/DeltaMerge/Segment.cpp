@@ -756,9 +756,13 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
     stream->readSuffix();
 
     if (!rowkey_range.check(split_point.toRowKeyValueRef()))
-        throw Exception("getSplitPointSlow unexpected split_handle: " + split_point.toRowKeyValueRef().toDebugString()
-                        + ", should be in range " + rowkey_range.toDebugString() + ", exact_rows: " + DB::toString(exact_rows)
-                        + ", cur count:" + DB::toString(count));
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << " unexpected split_handle: " << split_point.toRowKeyValueRef().toDebugString()
+                                 << ", should be in range " << rowkey_range.toDebugString() << ", exact_rows: " << DB::toString(exact_rows)
+                                 << ", cur count:" + DB::toString(count));
+        return {};
+    }
 
     return {split_point};
 }
@@ -808,8 +812,12 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     RowKeyRange other_range(split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
 
     if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitLogical: unexpected range! my_range: " + my_range.toDebugString()
-                        + ", other_range: " + other_range.toDebugString());
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << ": unexpected range! my_range: " << my_range.toDebugString()
+                                 << ", other_range: " << other_range.toDebugString() << ", aborted");
+        return {};
+    }
 
     GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &storage_pool);
 
@@ -872,8 +880,12 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
     RowKeyRange other_range(split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
 
     if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitPhysical: unexpected range! my_range: " + my_range.toDebugString()
-                        + ", other_range: " + other_range.toDebugString());
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << ": unexpected range! my_range: " << my_range.toDebugString()
+                                 << ", other_range: " << other_range.toDebugString() << ", aborted");
+        return {};
+    }
 
     StableValueSpacePtr my_new_stable;
     StableValueSpacePtr other_stable;
