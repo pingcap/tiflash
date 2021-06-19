@@ -48,6 +48,12 @@ extern const Metric DT_SegmentSplit;
 extern const Metric DT_SegmentMerge;
 extern const Metric DT_DeltaMergeTotalBytes;
 extern const Metric DT_DeltaMergeTotalRows;
+extern const Metric DT_SnapshotOfRead;
+extern const Metric DT_SnapshotOfReadRaw;
+extern const Metric DT_SnapshotOfSegmentSplit;
+extern const Metric DT_SnapshotOfSegmentMerge;
+extern const Metric DT_SnapshotOfMergeDelta;
+extern const Metric DT_SnapshotOfPlaceIndex;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -917,7 +923,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
             (void)handle;
             if (read_segments.empty() || read_segments.count(segment->segmentId()))
             {
-                auto segment_snap = segment->createSnapshot(*dm_context);
+                auto segment_snap = segment->createSnapshot(*dm_context, false, CurrentMetrics::DT_SnapshotOfReadRaw);
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap, RowKeyRanges{segment->getRowKeyRange()}));
@@ -1561,7 +1567,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
             return {};
         }
 
-        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true);
+        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
         if (!segment_snap || !segment_snap->getRows())
         {
             LOG_DEBUG(log, "Give up segment [" << segment->segmentId() << "] split");
@@ -1689,8 +1695,8 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
             return;
         }
 
-        left_snap  = left->createSnapshot(dm_context, /* for_update */ true);
-        right_snap = right->createSnapshot(dm_context, /* for_update */ true);
+        left_snap  = left->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+        right_snap = right->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
 
         if (!left_snap || !right_snap)
         {
@@ -1780,7 +1786,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
             return {};
         }
 
-        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true);
+        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfMergeDelta);
         if (!segment_snap)
         {
             LOG_DEBUG(log, "Give up merge delta, segment [" << segment->segmentId() << "]");
@@ -2207,7 +2213,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext &          dm_c
             if (tasks.empty() || tasks.back()->segment != seg_it->second)
             {
                 auto segment      = seg_it->second;
-                auto segment_snap = segment->createSnapshot(dm_context);
+                auto segment_snap = segment->createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap));
