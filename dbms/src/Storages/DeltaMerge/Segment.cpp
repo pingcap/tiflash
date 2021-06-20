@@ -702,7 +702,21 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     stream.readSuffix();
 
     RowKeyColumnContainer rowkey_column(block.getByPosition(0).column, is_common_handle);
-    return {RowKeyValue(rowkey_column.getRowKeyValue(read_row_in_pack))};
+    RowKeyValue           split_point(rowkey_column.getRowKeyValue(read_row_in_pack));
+
+
+    if (!rowkey_range.check(split_point.toRowKeyValueRef())
+        || RowKeyRange(rowkey_range.start, split_point, is_common_handle, rowkey_column_size).none()
+        || RowKeyRange(split_point, rowkey_range.end, is_common_handle, rowkey_column_size).none())
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << " unexpected split_handle: " << split_point.toRowKeyValueRef().toDebugString()
+                                 << ", should be in range " << rowkey_range.toDebugString() << ", cur_rows: " << cur_rows
+                                 << ", read_row_in_pack: " << read_row_in_pack << ", file_index: " << file_index);
+        return {};
+    }
+
+    return {split_point};
 }
 
 std::optional<RowKeyValue>
@@ -776,12 +790,14 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
     }
     stream->readSuffix();
 
-    if (!rowkey_range.check(split_point.toRowKeyValueRef()))
+    if (!rowkey_range.check(split_point.toRowKeyValueRef())
+        || RowKeyRange(rowkey_range.start, split_point, is_common_handle, rowkey_column_size).none()
+        || RowKeyRange(split_point, rowkey_range.end, is_common_handle, rowkey_column_size).none())
     {
         LOG_WARNING(log,
                     __FUNCTION__ << " unexpected split_handle: " << split_point.toRowKeyValueRef().toDebugString()
                                  << ", should be in range " << rowkey_range.toDebugString() << ", exact_rows: " << DB::toString(exact_rows)
-                                 << ", cur count:" + DB::toString(count));
+                                 << ", cur count: " << DB::toString(count) << ", split_row_index: " << split_row_index);
         return {};
     }
 
@@ -797,7 +813,9 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext &             
     if (!dm_context.enable_logical_split         //
         || segment_snap->stable->getPacks() <= 3 //
         || segment_snap->delta->getRows() > segment_snap->stable->getRows())
+    {
         return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs, need_rate_limit);
+    }
     else
     {
         auto split_point_opt = getSplitPointFast(dm_context, segment_snap->stable);
