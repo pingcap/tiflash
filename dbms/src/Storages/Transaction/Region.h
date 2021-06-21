@@ -114,6 +114,7 @@ public:
 
     std::string getDebugString(std::stringstream & ss) const;
     RegionID id() const;
+    pingcap::kv::RegionVerID verID() const;
     ImutRegionRangePtr getRange() const;
 
     std::string toString(bool dump_status = true) const;

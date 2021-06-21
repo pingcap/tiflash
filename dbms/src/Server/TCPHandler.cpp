@@ -844,11 +844,11 @@ void TCPHandler::sendException(const Exception & e)
     out->next();
 }
 
-void TCPHandler::sendRegionException(const std::vector<UInt64> & region_ids) {
+void TCPHandler::sendRegionException(const std::vector<RegionVerID> & region_ver_ids) {
     writeVarUInt(Protocol::Server::RegionException, *out);
-    writeVarUInt(region_ids.size(), *out);
-    for (size_t i = 0; i < region_ids.size(); i++)
-        writeVarUInt(region_ids[i], *out);
+    writeVarUInt(region_ver_ids.size(), *out);
+    for (size_t i = 0; i < region_ver_ids.size(); i++)
+        writeVarUInt(region_ver_ids[i].id, *out);
     out->next();
 }
 
