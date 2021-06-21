@@ -120,7 +120,7 @@ public:
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
     bool ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
 
-    SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
+    SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update = false) const;
 
     BlockInputStreamPtr getInputStream(const DMContext &          dm_context,
                                        const ColumnDefines &      columns_to_read,
