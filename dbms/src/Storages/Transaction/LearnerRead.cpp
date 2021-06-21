@@ -124,6 +124,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
     const size_t batch_size = num_regions / concurrent_num;
     UnavailableRegions unavailable_regions;
     const auto batch_wait_index = [&](const size_t region_begin_idx) -> void {
+        Stopwatch batch_wait_data_watch;
         Stopwatch batch_wait_index_watch;
 
         const size_t region_end_idx = std::min(region_begin_idx + batch_size, num_regions);
@@ -232,6 +233,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
                     res);
             }
         }
+        GET_METRIC(metrics, tiflash_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds());
         LOG_DEBUG(log,
             "Finish wait index | resolve locks | check memory cache for " << batch_read_index_req.size() << " regions, cost "
                                                                           << batch_wait_index_watch.elapsedMilliseconds() << "ms");

@@ -67,6 +67,31 @@ extern const char pause_after_learner_read[];
 extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
 
+void collectTableScanMetricInfo(Context & context, DAGPipeline & pipeline)
+{
+    UInt64 time_processed_ns = 0;
+    UInt64 num_produced_bytes = 0;
+    for (auto & stream : pipeline.streams)
+    {
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
+        {
+            time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
+            num_produced_bytes += p_stream->getProfileInfo().bytes;
+        }
+    }
+    for (auto & stream : pipeline.streams_with_non_joined_data)
+    {
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
+        {
+            time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
+            num_produced_bytes += p_stream->getProfileInfo().bytes;
+        }
+    }
+    // convert to bytes per second
+    double logical_throughput = num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL);
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_storage_logical_throughput_bytes).Observe(logical_throughput);
+}
+
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
     const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_, ASTPtr dummy_query_,
     const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
@@ -1347,6 +1372,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         executeTS(query_block.source->tbl_scan(), pipeline);
         recordProfileStreams(pipeline, query_block.source_name);
+        collectTableScanMetricInfo(context, pipeline);
     }
 
     auto res = analyzeExpressions();
