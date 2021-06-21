@@ -13,7 +13,6 @@
 #if __GNUC__ > 7
 #include <charconv>
 #endif
-#include <boost/crc.hpp>
 #include <zlib.h>
 
 namespace DB
@@ -374,6 +373,5 @@ public:
     }
 };
 
-
-
 }
+
