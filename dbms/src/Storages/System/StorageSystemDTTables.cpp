@@ -69,16 +69,22 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_) : name(n
         {"avg_pack_size_in_stable", std::make_shared<DataTypeFloat64>()},
 
         {"storage_stable_num_snapshots", std::make_shared<DataTypeUInt64>()},
+        {"storage_stable_oldest_snapshot", std::make_shared<DataTypeFloat64>()},
+        {"storage_stable_oldest_from_thread", std::make_shared<DataTypeUInt64>()},
         {"storage_stable_num_pages", std::make_shared<DataTypeUInt64>()},
         {"storage_stable_num_normal_pages", std::make_shared<DataTypeUInt64>()},
         {"storage_stable_max_page_id", std::make_shared<DataTypeUInt64>()},
 
         {"storage_delta_num_snapshots", std::make_shared<DataTypeUInt64>()},
+        {"storage_delta_oldest_snapshot", std::make_shared<DataTypeFloat64>()},
+        {"storage_delta_oldest_from_thread", std::make_shared<DataTypeUInt64>()},
         {"storage_delta_num_pages", std::make_shared<DataTypeUInt64>()},
         {"storage_delta_num_normal_pages", std::make_shared<DataTypeUInt64>()},
         {"storage_delta_max_page_id", std::make_shared<DataTypeUInt64>()},
 
         {"storage_meta_num_snapshots", std::make_shared<DataTypeUInt64>()},
+        {"storage_meta_oldest_snapshot", std::make_shared<DataTypeFloat64>()},
+        {"storage_meta_oldest_from_thread", std::make_shared<DataTypeUInt64>()},
         {"storage_meta_num_pages", std::make_shared<DataTypeUInt64>()},
         {"storage_meta_num_normal_pages", std::make_shared<DataTypeUInt64>()},
         {"storage_meta_max_page_id", std::make_shared<DataTypeUInt64>()},
@@ -179,16 +185,22 @@ BlockInputStreams StorageSystemDTTables::read(const Names & column_names,
             res_columns[j++]->insert(stat.avg_pack_size_in_stable);
 
             res_columns[j++]->insert(stat.storage_stable_num_snapshots);
+            res_columns[j++]->insert(stat.storage_stable_oldest_snapshot);
+            res_columns[j++]->insert(stat.storage_stable_oldest_from_thread);
             res_columns[j++]->insert(stat.storage_stable_num_pages);
             res_columns[j++]->insert(stat.storage_stable_num_normal_pages);
             res_columns[j++]->insert(stat.storage_stable_max_page_id);
 
             res_columns[j++]->insert(stat.storage_delta_num_snapshots);
+            res_columns[j++]->insert(stat.storage_delta_oldest_snapshot);
+            res_columns[j++]->insert(stat.storage_delta_oldest_from_thread);
             res_columns[j++]->insert(stat.storage_delta_num_pages);
             res_columns[j++]->insert(stat.storage_delta_num_normal_pages);
             res_columns[j++]->insert(stat.storage_delta_max_page_id);
 
             res_columns[j++]->insert(stat.storage_meta_num_snapshots);
+            res_columns[j++]->insert(stat.storage_meta_oldest_snapshot);
+            res_columns[j++]->insert(stat.storage_meta_oldest_from_thread);
             res_columns[j++]->insert(stat.storage_meta_num_pages);
             res_columns[j++]->insert(stat.storage_meta_num_normal_pages);
             res_columns[j++]->insert(stat.storage_meta_max_page_id);

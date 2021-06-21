@@ -101,20 +101,26 @@ struct DeltaMergeStoreStat
     Float64 avg_pack_rows_in_stable    = 0;
     Float64 avg_pack_size_in_stable    = 0;
 
-    UInt64 storage_stable_num_snapshots    = 0;
-    UInt64 storage_stable_num_pages        = 0;
-    UInt64 storage_stable_num_normal_pages = 0;
-    UInt64 storage_stable_max_page_id      = 0;
+    UInt64  storage_stable_num_snapshots      = 0;
+    Float64 storage_stable_oldest_snapshot    = 0.0;
+    UInt64  storage_stable_oldest_from_thread = 0;
+    UInt64  storage_stable_num_pages          = 0;
+    UInt64  storage_stable_num_normal_pages   = 0;
+    UInt64  storage_stable_max_page_id        = 0;
 
-    UInt64 storage_delta_num_snapshots    = 0;
-    UInt64 storage_delta_num_pages        = 0;
-    UInt64 storage_delta_num_normal_pages = 0;
-    UInt64 storage_delta_max_page_id      = 0;
+    UInt64  storage_delta_num_snapshots      = 0;
+    Float64 storage_delta_oldest_snapshot    = 0.0;
+    UInt64  storage_delta_oldest_from_thread = 0;
+    UInt64  storage_delta_num_pages          = 0;
+    UInt64  storage_delta_num_normal_pages   = 0;
+    UInt64  storage_delta_max_page_id        = 0;
 
-    UInt64 storage_meta_num_snapshots    = 0;
-    UInt64 storage_meta_num_pages        = 0;
-    UInt64 storage_meta_num_normal_pages = 0;
-    UInt64 storage_meta_max_page_id      = 0;
+    UInt64  storage_meta_num_snapshots      = 0;
+    Float64 storage_meta_oldest_snapshot    = 0.0;
+    UInt64  storage_meta_oldest_from_thread = 0;
+    UInt64  storage_meta_num_pages          = 0;
+    UInt64  storage_meta_num_normal_pages   = 0;
+    UInt64  storage_meta_max_page_id        = 0;
 
     UInt64 background_tasks_length = 0;
 };
