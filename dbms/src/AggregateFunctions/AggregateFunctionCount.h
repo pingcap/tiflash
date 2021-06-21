@@ -4,6 +4,7 @@
 
 #include <array>
 #include <DataTypes/DataTypesNumber.h>
+#include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnNullable.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <IO/WriteHelpers.h>
