@@ -623,26 +623,17 @@ std::optional<Handle> Segment::getSplitPointFast(DMContext & dm_context, const S
         throw Exception("Unexpected empty block");
     stream.readSuffix();
 
-<<<<<<< HEAD
-    return {block.getByPosition(0).column->getInt(read_row_in_pack)};
-=======
-    RowKeyColumnContainer rowkey_column(block.getByPosition(0).column, is_common_handle);
-    RowKeyValue           split_point(rowkey_column.getRowKeyValue(read_row_in_pack));
-
-
-    if (!rowkey_range.check(split_point.toRowKeyValueRef())
-        || RowKeyRange(rowkey_range.start, split_point, is_common_handle, rowkey_column_size).none()
-        || RowKeyRange(split_point, rowkey_range.end, is_common_handle, rowkey_column_size).none())
+    Handle split_point = block.getByPosition(0).column->getInt(read_row_in_pack);
+    if (!range.check(split_point) || HandleRange(range.start, split_point).none() || Range(split_point, range.end).none())
     {
         LOG_WARNING(log,
-                    __FUNCTION__ << " unexpected split_handle: " << split_point.toRowKeyValueRef().toDebugString()
-                                 << ", should be in range " << rowkey_range.toDebugString() << ", cur_rows: " << cur_rows
-                                 << ", read_row_in_pack: " << read_row_in_pack << ", file_index: " << file_index);
+                    __FUNCTION__ << " unexpected split_handle: " << split_point << ", should be in range " << range.toDebugString()
+                                 << ", cur_rows: " << cur_rows << ", read_row_in_pack: " << read_row_in_pack
+                                 << ", file_index: " << file_index);
         return {};
     }
 
     return {split_point};
->>>>>>> 7a63da895... Abort the current split and forbid later split under illegal split point, instead of exception (#2214)
 }
 
 std::optional<Handle>
@@ -711,22 +702,14 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
     }
     stream->readSuffix();
 
-<<<<<<< HEAD
-    if (!range.check(split_handle))
-        throw Exception("getSplitPointSlow unexpected split_handle: " + Redact::handleToDebugString(split_handle) + ", should be in range "
-                        + range.toDebugString() + ", exact_rows: " + DB::toString(exact_rows) + ", cur count:" + DB::toString(count));
-=======
-    if (!rowkey_range.check(split_point.toRowKeyValueRef())
-        || RowKeyRange(rowkey_range.start, split_point, is_common_handle, rowkey_column_size).none()
-        || RowKeyRange(split_point, rowkey_range.end, is_common_handle, rowkey_column_size).none())
+    if (!range.check(split_handle) || HandleRange(range.start, split_handle).none() || HandleRange(split_handle, range.end).none())
     {
         LOG_WARNING(log,
-                    __FUNCTION__ << " unexpected split_handle: " << split_point.toRowKeyValueRef().toDebugString()
-                                 << ", should be in range " << rowkey_range.toDebugString() << ", exact_rows: " << DB::toString(exact_rows)
-                                 << ", cur count: " << DB::toString(count) << ", split_row_index: " << split_row_index);
+                    __FUNCTION__ << " unexpected split_handle: " << split_handle << ", should be in range " << split_handle
+                                 << ", exact_rows: " << DB::toString(exact_rows) << ", cur count: " << DB::toString(count)
+                                 << ", split_row_index: " << split_row_index);
         return {};
     }
->>>>>>> 7a63da895... Abort the current split and forbid later split under illegal split point, instead of exception (#2214)
 
     return {split_handle};
 }
@@ -740,11 +723,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext &             
         || segment_snap->stable->getPacks() <= 3 //
         || segment_snap->delta->getRows() > segment_snap->stable->getRows())
     {
-<<<<<<< HEAD
         return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
-=======
-        return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs, need_rate_limit);
->>>>>>> 7a63da895... Abort the current split and forbid later split under illegal split point, instead of exception (#2214)
     }
     else
     {
