@@ -30,7 +30,7 @@ uint8_t CheckHttpUriAvailable(BaseBuffView path_)
 
 HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView path_)
 {
-    HttpRequestStatus status = HttpRequestStatusOk;
+    HttpRequestStatus status = HttpRequestStatus::Ok;
     TableID table_id = 0;
     {
         std::string_view path(path_.data, path_.len);
@@ -43,14 +43,14 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
             }
             catch (...)
             {
-                status = HttpRequestStatusErrorParam;
+                status = HttpRequestStatus::ErrorParam;
             }
         }
         else
         {
-            status = HttpRequestStatusErrorParam;
+            status = HttpRequestStatus::ErrorParam;
         }
-        if (status != HttpRequestStatusOk)
+        if (status != HttpRequestStatus::Ok)
             return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
     }
 
@@ -77,7 +77,7 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
 
     auto s = RawCppString::New(ss.str());
     return HttpRequestRes{.status = status,
-        .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView(s->data(), s->size())}};
+        .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}}};
 }
 
 inline std::string ToPdKey(const char * key, const size_t len)
