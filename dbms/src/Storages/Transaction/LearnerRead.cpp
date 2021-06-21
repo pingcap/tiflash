@@ -53,7 +53,7 @@ struct UnavailableRegions
             throw RegionException(std::move(ids), status);
     }
 
-    bool contains(RegionVerID region_ver_id) const
+    bool contains(const RegionVerID & region_ver_id) const
     {
         auto _lock = genLockGuard();
         return ids.count(region_ver_id);
