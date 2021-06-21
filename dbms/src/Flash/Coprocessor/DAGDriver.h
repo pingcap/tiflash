@@ -26,7 +26,7 @@ public:
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
     const std::unordered_set<UInt64> * bypass_lock_ts;
 
-    RegionInfo(RegionVerID & region_ver_id_, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> && key_ranges_,
+    RegionInfo(const RegionVerID & region_ver_id_, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> && key_ranges_,
         const std::unordered_set<UInt64> * bypass_lock_ts_)
         : region_ver_id(region_ver_id_), key_ranges(std::move(key_ranges_)), bypass_lock_ts(bypass_lock_ts_)
     {}
