@@ -1186,7 +1186,7 @@ protected:
 
     Params params;
 
-    AggregatedDataVariants::Type method;
+    AggregatedDataVariants::Type method_chosen;
     Sizes key_sizes;
 
     AggregateFunctionsPlainPtrs aggregate_functions;
