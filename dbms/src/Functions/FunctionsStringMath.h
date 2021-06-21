@@ -14,6 +14,7 @@
 #include <charconv>
 #endif
 #include <boost/crc.hpp>
+#include <zlib.h>
 
 namespace DB
 {
@@ -27,9 +28,8 @@ struct CRC32Impl
 {
     static void execute(const String& s, Int64& res)
     {
-        boost::crc_32_type result;
-        result.process_bytes(s.data(), s.size());
-        res = static_cast<Int64>(result.checksum());
+        // zlib crc32
+        res = crc32(0, reinterpret_cast<const unsigned char*>(s.data()), s.size());
     }
     static void execute(const ColumnString* arg_col, PaddedPODArray<Int64> & res)
     {
