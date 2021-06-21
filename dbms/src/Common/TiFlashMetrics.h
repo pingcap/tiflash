@@ -123,7 +123,7 @@ namespace DB
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
         F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}), F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_storage_logical_throughput_bytes, "The logical throughput of read tasks of storage in bytes", Histogram,                    \
-        F(type_read, {{"type", "read"}}, ReadthroughputBuckets{}))                                                                        \
+        F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 100 * 1024 * 1024}))                                                                        \
     M(tiflash_storage_rate_limiter_total_request_bytes, "RateLimiter total requested bytes", Counter)                                     \
     M(tiflash_storage_rate_limiter_total_alloc_bytes, "RateLimiter total allocated bytes", Counter)                                       \
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                   \
@@ -159,20 +159,20 @@ struct ExpBuckets
 };
 
 // Buckets with same width
-struct ReadthroughputBuckets
+struct EqualWidthBuckets
 {
+    const size_t start;
+    const int num_buckets;
+    const size_t step;
     inline operator prometheus::Histogram::BucketBoundaries() const &&
     {
         // up to `num_buckets` * `step`
-        size_t num_buckets = 60;
-        size_t step = 50;
         assert(step > 1);
         prometheus::Histogram::BucketBoundaries buckets(num_buckets);
         size_t idx = 0;
         for (auto & e : buckets)
         {
-            // The minimun set to 1 for catching abnormal scan speed under 1 MB/s
-            e = std::max(1UL, step * idx) * 1024 * 1024;
+            e = start + step * idx;
             idx++;
         }
         return buckets;
