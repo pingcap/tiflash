@@ -181,7 +181,7 @@ SegmentPtr Segment::newSegment(DMContext &              context,
                                PageId                   delta_id,
                                PageId                   stable_id)
 {
-    WriteBatches wbs(context.storage_pool);
+    WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
 
     auto delta  = std::make_shared<DeltaValueSpace>(delta_id);
     auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs, false);
@@ -284,7 +284,7 @@ bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t o
 bool Segment::write(DMContext & dm_context, const Block & block)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] write to disk rows: " << block.rows());
-    WriteBatches wbs(dm_context.storage_pool);
+    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
     auto pack = DeltaPackBlock::writePack(dm_context, block, 0, block.rows(), wbs);
     wbs.writeAll();
@@ -532,7 +532,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, con
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
-    WriteBatches wbs(dm_context.storage_pool);
+    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
     auto         segment_snap = createSnapshot(dm_context, true);
     if (!segment_snap)
         return {};
@@ -611,7 +611,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
 
 SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
-    WriteBatches wbs(dm_context.storage_pool);
+    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
     auto         segment_snap = createSnapshot(dm_context, true);
     if (!segment_snap)
         return {};
@@ -1053,7 +1053,7 @@ SegmentPair Segment::applySplit(DMContext &                dm_context, //
 
 SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const SegmentPtr & left, const SegmentPtr & right)
 {
-    WriteBatches wbs(dm_context.storage_pool);
+    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
     auto left_snap  = left->createSnapshot(dm_context, true);
     auto right_snap = right->createSnapshot(dm_context, true);

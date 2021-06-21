@@ -171,7 +171,7 @@ try
     opt.remove_tmp_files  = false;
     auto page_files       = PageStorage::listAllPageFiles(file_provider, delegator, storage.page_file_log, opt);
 
-    LegacyCompactor compactor(storage);
+    LegacyCompactor compactor(storage, ctx);
     auto && [page_files_left, page_files_compacted, bytes_written] = compactor.tryCompact(std::move(page_files), {});
     (void)page_files_left;
     (void)bytes_written;
