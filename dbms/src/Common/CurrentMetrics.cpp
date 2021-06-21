@@ -57,8 +57,7 @@
     M(DT_DeltaIndexCacheSize)                   \
     M(RaftNumSnapshotsPendingApply)             \
     M(RateLimiterPendingWriteRequest)           \
-    M(DT_SegmentReadTasks)                      \
-    M(DT_SnapshotOfRead)
+    M(DT_SegmentReadTasks)
 
 
 namespace CurrentMetrics
