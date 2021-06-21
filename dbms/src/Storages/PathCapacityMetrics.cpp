@@ -101,7 +101,7 @@ FsStats PathCapacityMetrics::getFsStats() const
     /// and we limit available size by first path. It is good enough for now.
 
     // Now we assume the size of `path_infos` will not change, don't acquire heavy lock on `path_infos`.
-    FsStats total_stat;
+    FsStats total_stat{};
     for (size_t i = 0; i < path_infos.size(); ++i)
     {
         FsStats path_stat = path_infos[i].getStats(log);
@@ -190,7 +190,7 @@ ssize_t PathCapacityMetrics::locatePath(std::string_view file_path) const
 
 FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
 {
-    FsStats res;
+    FsStats res{};
     /// Get capacity, used, available size for one path.
     /// Similar to `handle_store_heartbeat` in TiKV release-4.0 branch
     /// https://github.com/tikv/tikv/blob/f14e8288f3/components/raftstore/src/store/worker/pd.rs#L593

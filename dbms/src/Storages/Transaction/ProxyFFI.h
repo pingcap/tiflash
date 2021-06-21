@@ -56,6 +56,7 @@ struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
     BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> &, uint64_t) const;
 };
 
+extern "C" {
 RawCppPtr GenCppRawString(BaseBuffView);
 EngineStoreApplyRes HandleAdminRaftCmd(
     const EngineStoreServerWrap * server, BaseBuffView req_buff, BaseBuffView resp_buff, RaftCmdHeader header);
@@ -74,4 +75,5 @@ uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(EngineStoreServerWrap *, void * ptr, RawCppPtrType type);
 RawVoidPtr GenBatchReadIndexRes(uint64_t cap);
 void InsertBatchReadIndexResp(RawVoidPtr, BaseBuffView, uint64_t);
+}
 } // namespace DB
