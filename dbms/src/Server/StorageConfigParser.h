@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Core/Types.h>
 
 #include <tuple>
@@ -14,6 +16,31 @@ class LayeredConfiguration;
 
 namespace DB
 {
+
+struct StorageIORateLimitConfig
+{
+public:
+    enum class IORateLimitMode
+    {
+        WRITE_ONLY = 1,
+    };
+    UInt64 max_bytes_per_sec;
+    IORateLimitMode mode;
+    UInt32 fg_write_weight;
+    UInt32 bg_write_weight;
+    
+    StorageIORateLimitConfig() : max_bytes_per_sec(0), mode(IORateLimitMode::WRITE_ONLY), 
+        fg_write_weight(1), bg_write_weight(5) {}
+    
+    void parse(const String& storage_io_rate_limit, Poco::Logger* log);
+
+    std::string toString() const;
+
+    UInt64 getFgWriteMaxBytesPerSec() const;
+    UInt64 getBgWriteMaxBytesPerSec() const;
+
+    bool operator ==(const StorageIORateLimitConfig& config) const;
+};
 
 struct TiFlashStorageConfig
 {
