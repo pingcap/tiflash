@@ -29,7 +29,8 @@ RegionException::RegionReadStatus GetRegionReadStatus(
 
 std::tuple<std::optional<std::unordered_map<RegionVerID, const RegionInfo &>>, RegionException::RegionReadStatus> //
 MakeRegionQueryInfos(const std::unordered_map<RegionVerID, RegionInfo> & dag_region_infos,
-    const std::unordered_set<RegionVerID> & region_force_retry, TMTContext & tmt, MvccQueryInfo & mvcc_info, TableID table_id)
+    const std::unordered_set<RegionVerID> & region_force_retry, TMTContext & tmt, MvccQueryInfo & mvcc_info, TableID table_id,
+    Poco::Logger * log)
 {
     mvcc_info.regions_query_info.clear();
     std::unordered_map<RegionVerID, const RegionInfo &> region_need_retry;
@@ -53,6 +54,8 @@ MakeRegionQueryInfos(const std::unordered_map<RegionVerID, RegionInfo> & dag_reg
         /// to make sure that if there are two regions with the same region id, at most one region will be treated as local region.
         if (local_region_ids.count(id.id))
         {
+            LOG_WARNING(
+                log, "Found duplicated region id in DAGRequest for region id: " << std::to_string(id.id) << ", will read it from remote");
             region_need_retry.emplace(id, r);
             status_res = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
             continue;

@@ -194,7 +194,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     std::unordered_map<RegionVerID, const RegionInfo &> region_retry;
     if (!dag.isBatchCop())
     {
-        if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *mvcc_query_info, table_id); info_retry)
+        if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *mvcc_query_info, table_id, log); info_retry)
             throw RegionException({(*info_retry).begin()->first}, status);
 
         learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
@@ -207,7 +207,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             try
             {
                 region_retry.clear();
-                auto [retry, status] = MakeRegionQueryInfos(dag.getRegions(), force_retry, tmt, *mvcc_query_info, table_id);
+                auto [retry, status] = MakeRegionQueryInfos(dag.getRegions(), force_retry, tmt, *mvcc_query_info, table_id, log);
                 std::ignore = status;
                 if (retry)
                 {
@@ -720,7 +720,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
-    right_pipeline.transform([&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++); });
+    right_pipeline.transform(
+        [&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++); });
     executeUnion(right_pipeline, max_streams);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
