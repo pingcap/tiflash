@@ -10,13 +10,14 @@ namespace DB
 {
 
 template <typename SnapshotPtr>
-DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStorage::Config gc_config)
+DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const Context& global_ctx)
     : storage_name(storage.storage_name),
       delegator(storage.delegator),
       file_provider(storage.getFileProvider()),
       config(std::move(gc_config)),
       log(storage.log),
-      page_file_log(storage.page_file_log)
+      page_file_log(storage.page_file_log),
+      global_context(global_ctx)
 {
 }
 
@@ -300,7 +301,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
                               page.data.size(),
                               entry.field_offsets);
             }
-            bytes_written += gc_file_writer->write(wb, gc_file_edit);
+            bytes_written += gc_file_writer->write(wb, gc_file_edit, global_context.getWriteLimiter());
         }
 
         migrate_infos.emplace_back(file_id_level, page_id_and_entries.size());

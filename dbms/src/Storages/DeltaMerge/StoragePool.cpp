@@ -66,7 +66,8 @@ StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const
                    global_ctx.getTiFlashMetrics()),
       max_log_page_id(0),
       max_data_page_id(0),
-      max_meta_page_id(0)
+      max_meta_page_id(0),
+      global_context(global_ctx)
 {
 }
 
@@ -105,15 +106,15 @@ bool StoragePool::gc(const Settings & /*settings*/, const Seconds & try_gc_perio
     // FIXME: The global_context.settings is mutable, we need a way to reload thses settings.
     // auto config = extractConfig(settings, StorageType::Meta);
     // meta_storage.reloadSettings(config);
-    done_anything |= meta_storage.gc();
+    done_anything |= meta_storage.gc(global_context);
 
     // config = extractConfig(settings, StorageType::Data);
     // data_storage.reloadSettings(config);
-    done_anything |= data_storage.gc();
+    done_anything |= data_storage.gc(global_context);
 
     // config = extractConfig(settings, StorageType::Log);
     // log_storage.reloadSettings(config);
-    done_anything |= log_storage.gc();
+    done_anything |= log_storage.gc(global_context);
 
     return done_anything;
 }

@@ -1,13 +1,18 @@
 #pragma once
 
+#include <Common/Stopwatch.h>
+#include <Server/StorageConfigParser.h>
+
 #include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <queue>
 
-#include <Common/Stopwatch.h>
-
 // TODO: separate IO utility(i.e. FileProvider, RateLimiter) from Encryption directory
+namespace Poco::Util
+{
+class AbstractConfiguration;
+}
 namespace DB
 {
 
@@ -79,4 +84,25 @@ private:
 
 using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 
+class IORateLimiter
+{
+public:
+    IORateLimiter() = default;
+
+    RateLimiterPtr getWriteLimiter();
+
+    void updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_, Poco::Logger * log_);
+
+private:
+    StorageIORateLimitConfig io_config;
+    RateLimiterPtr bg_write_limiter;
+    RateLimiterPtr fg_write_limiter;
+    std::mutex mtx_;
+
+    // Noncopyable and nonmovable.
+    IORateLimiter(const IORateLimiter & limiter) = delete;
+    IORateLimiter & operator=(const IORateLimiter & limiter) = delete;
+    IORateLimiter(IORateLimiter && limiter) = delete;
+    IORateLimiter && operator=(IORateLimiter && limiter) = delete;
+};
 } // namespace DB
