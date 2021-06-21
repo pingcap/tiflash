@@ -7,6 +7,7 @@
 
 #include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnVector.h>
+#include <Common/assert_cast.h>
 
 #include <AggregateFunctions/IAggregateFunction.h>
 
@@ -15,26 +16,119 @@ namespace DB
 {
 
 template <typename T>
+struct AggregateFunctionSumAddImpl
+{
+    static void NO_SANITIZE_UNDEFINED ALWAYS_INLINE add(T & lhs, const T & rhs)
+    {
+        lhs += rhs;
+    }
+};
+
+template <typename T>
+struct AggregateFunctionSumAddImpl<Decimal<T>>
+{
+    template <typename U>
+    static void NO_SANITIZE_UNDEFINED ALWAYS_INLINE add(Decimal<T> & lhs, const Decimal<U> & rhs)
+    {
+        lhs.value += static_cast<T>(rhs.value);
+    }
+};
+
+template <typename T>
 struct AggregateFunctionSumData
 {
+    using Impl = AggregateFunctionSumAddImpl<T>;
     T sum{};
 
     AggregateFunctionSumData(){}
 
-    void add(T value)
+    template <typename U>
+    void NO_SANITIZE_UNDEFINED ALWAYS_INLINE add(U value)
     {
-        sum += value;
+        Impl::add(sum, value);
     }
 
-    template <typename U>
-    void add(Decimal<U> v [[maybe_unused]]) {
-        if constexpr(IsDecimal<T>)
-            sum.value += static_cast<typename T::NativeType>(v.value);
+    /// Vectorized version
+    template <typename Value>
+    void NO_SANITIZE_UNDEFINED NO_INLINE addMany(const Value * __restrict ptr, size_t count)
+    {
+        const auto * end = ptr + count;
+
+        if constexpr (std::is_floating_point_v<T>)
+        {
+            /// Compiler cannot unroll this loop, do it manually.
+            /// (at least for floats, most likely due to the lack of -fassociative-math)
+
+            /// Something around the number of SSE registers * the number of elements fit in register.
+            constexpr size_t unroll_count = 128 / sizeof(T);
+            T partial_sums[unroll_count]{};
+
+            const auto * unrolled_end = ptr + (count / unroll_count * unroll_count);
+
+            while (ptr < unrolled_end)
+            {
+                for (size_t i = 0; i < unroll_count; ++i)
+                    Impl::add(partial_sums[i], ptr[i]);
+                ptr += unroll_count;
+            }
+
+            for (size_t i = 0; i < unroll_count; ++i)
+                Impl::add(sum, partial_sums[i]);
+        }
+
+        /// clang cannot vectorize the loop if accumulator is class member instead of local variable.
+        T local_sum{};
+        while (ptr < end)
+        {
+            Impl::add(local_sum, *ptr);
+            ++ptr;
+        }
+        Impl::add(sum, local_sum);
+    }
+
+    template <typename Value>
+    void NO_SANITIZE_UNDEFINED NO_INLINE addManyNotNull(const Value * __restrict ptr, const UInt8 * __restrict null_map, size_t count)
+    {
+        const auto * end = ptr + count;
+
+        if constexpr (std::is_floating_point_v<T>)
+        {
+            constexpr size_t unroll_count = 128 / sizeof(T);
+            T partial_sums[unroll_count]{};
+
+            const auto * unrolled_end = ptr + (count / unroll_count * unroll_count);
+
+            while (ptr < unrolled_end)
+            {
+                for (size_t i = 0; i < unroll_count; ++i)
+                {
+                    if (!null_map[i])
+                    {
+                        Impl::add(partial_sums[i], ptr[i]);
+                    }
+                }
+                ptr += unroll_count;
+                null_map += unroll_count;
+            }
+
+            for (size_t i = 0; i < unroll_count; ++i)
+                Impl::add(sum, partial_sums[i]);
+        }
+
+        T local_sum{};
+        while (ptr < end)
+        {
+            if (!*null_map)
+                Impl::add(local_sum, *ptr);
+            ++ptr;
+            ++null_map;
+        }
+        Impl::add(sum, local_sum);
     }
 
     void merge(const AggregateFunctionSumData & rhs)
     {
-        sum += rhs.sum;
+        Impl::add(sum, rhs.sum);
     }
 
     void write(WriteBuffer & buf) const
@@ -62,21 +156,95 @@ struct AggregateFunctionSumKahanData
     T sum{};
     T compensation{};
 
-    void add(T value)
+    template <typename Value>
+    void ALWAYS_INLINE addImpl(Value value, T & out_sum, T & out_compensation)
     {
-        auto compensated_value = value - compensation;
-        auto new_sum = sum + compensated_value;
-        compensation = (new_sum - sum) - compensated_value;
-        sum = new_sum;
+        auto compensated_value = static_cast<T>(value) - out_compensation;
+        auto new_sum = out_sum + compensated_value;
+        out_compensation = (new_sum - out_sum) - compensated_value;
+        out_sum = new_sum;
+    }
+
+    void ALWAYS_INLINE add(T value)
+    {
+        addImpl(value, sum, compensation);
+    }
+
+    /// Vectorized version
+    template <typename Value>
+    void NO_INLINE addMany(const Value * __restrict ptr, size_t count)
+    {
+        /// Less than in ordinary sum, because the algorithm is more complicated and too large loop unrolling is questionable.
+        /// But this is just a guess.
+        constexpr size_t unroll_count = 4;
+        T partial_sums[unroll_count]{};
+        T partial_compensations[unroll_count]{};
+
+        const auto * end = ptr + count;
+        const auto * unrolled_end = ptr + (count / unroll_count * unroll_count);
+
+        while (ptr < unrolled_end)
+        {
+            for (size_t i = 0; i < unroll_count; ++i)
+                addImpl(ptr[i], partial_sums[i], partial_compensations[i]);
+            ptr += unroll_count;
+        }
+
+        for (size_t i = 0; i < unroll_count; ++i)
+            mergeImpl(sum, compensation, partial_sums[i], partial_compensations[i]);
+
+        while (ptr < end)
+        {
+            addImpl(*ptr, sum, compensation);
+            ++ptr;
+        }
+    }
+
+    template <typename Value>
+    void NO_INLINE addManyNotNull(const Value * __restrict ptr, const UInt8 * __restrict null_map, size_t count)
+    {
+        constexpr size_t unroll_count = 4;
+        T partial_sums[unroll_count]{};
+        T partial_compensations[unroll_count]{};
+
+        const auto * end = ptr + count;
+        const auto * unrolled_end = ptr + (count / unroll_count * unroll_count);
+
+        while (ptr < unrolled_end)
+        {
+            for (size_t i = 0; i < unroll_count; ++i)
+                if (!null_map[i])
+                    addImpl(ptr[i], partial_sums[i], partial_compensations[i]);
+            ptr += unroll_count;
+            null_map += unroll_count;
+        }
+
+        for (size_t i = 0; i < unroll_count; ++i)
+            mergeImpl(sum, compensation, partial_sums[i], partial_compensations[i]);
+
+        while (ptr < end)
+        {
+            if (!*null_map)
+                addImpl(*ptr, sum, compensation);
+            ++ptr;
+            ++null_map;
+        }
+    }
+
+    void ALWAYS_INLINE mergeImpl(T & to_sum, T & to_compensation, T from_sum, T from_compensation)
+    {
+        auto raw_sum = to_sum + from_sum;
+        auto rhs_compensated = raw_sum - to_sum;
+        /// Kahan summation is tricky because it depends on non-associativity of float arithmetic.
+        /// Do not simplify this expression if you are not sure.
+        auto compensations = ((from_sum - rhs_compensated) + (to_sum - (raw_sum - rhs_compensated))) + compensation + from_compensation;
+        to_sum = raw_sum + compensations;
+        to_compensation = compensations - (to_sum - raw_sum);
     }
 
     void merge(const AggregateFunctionSumKahanData & rhs)
     {
-        auto raw_sum = sum + rhs.sum;
-        auto rhs_compensated = raw_sum - sum;
-        auto compensations = ((rhs.sum - rhs_compensated) + (sum - (raw_sum - rhs_compensated))) + compensation + rhs.compensation;
-        sum = raw_sum + compensations;
-        compensation = compensations - (sum - raw_sum);
+        mergeImpl(sum, compensation, rhs.sum, rhs.compensation);
     }
 
     void write(WriteBuffer & buf) const
@@ -102,7 +270,12 @@ struct AggregateFunctionSumKahanData
 template <typename T, typename TResult, typename Data>
 class AggregateFunctionSum final : public IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data>>
 {
+    static_assert(IsDecimal<T> == IsDecimal<TResult>);
 public:
+    using ResultDataType = std::conditional_t<IsDecimal<T>, DataTypeDecimal<TResult>, DataTypeNumber<TResult>>;
+    using ColVecType = std::conditional_t<IsDecimal<T>, ColumnDecimal<T>, ColumnVector<T>>;
+    using ColVecResult = std::conditional_t<IsDecimal<T>, ColumnDecimal<TResult>, ColumnVector<TResult>>;
+
     String getName() const override { return "sum"; }
 
     ScaleType result_scale;
@@ -116,9 +289,9 @@ public:
 
     DataTypePtr getReturnType() const override {
         if constexpr (IsDecimal<TResult>) {
-            return std::make_shared<DataTypeDecimal<TResult>>(result_prec, result_scale);
+            return std::make_shared<ResultDataType>(result_prec, result_scale);
         } else {
-            return std::make_shared<DataTypeNumber<TResult>>();
+            return std::make_shared<ResultDataType>();
         }
     }
 
@@ -128,10 +301,8 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        if constexpr (IsDecimal<T>)
-            this->data(place).template add<T>(static_cast<const ColumnDecimal<T> &>(*columns[0]).getData()[row_num]);
-        else
-            this->data(place).add(static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
+        const auto & column = assert_cast<const ColVecType &>(*columns[0]);
+        this->data(place).add(column.getData()[row_num]);
     }
 
     /// Vectorized version when there is no GROUP BY keys.
