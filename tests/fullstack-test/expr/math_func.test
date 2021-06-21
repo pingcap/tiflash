@@ -6,13 +6,6 @@ mysql> insert into test.t values(-2.5, 2.5, 0.25, 4, 'af', 'bc')
 func> wait_table test t
 
 
-mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(sqrt(ld)), sum(sqrt(bd)), sum(sqrt(f)), sum(sqrt(i)) from test.t;
-+---------------+---------------+--------------+--------------+
-| sum(sqrt(ld)) | sum(sqrt(bd)) | sum(sqrt(f)) | sum(sqrt(i)) |
-+---------------+---------------+--------------+--------------+
-|           1.1 |           1.2 |          0.5 |            2 |
-+---------------+---------------+--------------+--------------+
-
 mysql> select /*+ AGG_TO_COP(), READ_FROM_STORAGE(TIFLASH[t]) */ sum(sign(ld)), sum(sign(bd)), sum(sign(f)), sum(sign(i)) from test.t;
 +---------------+---------------+--------------+--------------+
 | sum(sign(ld)) | sum(sign(bd)) | sum(sign(f)) | sum(sign(i)) |
