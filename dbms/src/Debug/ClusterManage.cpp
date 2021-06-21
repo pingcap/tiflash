@@ -77,7 +77,7 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
 
     auto s = RawCppString::New(ss.str());
     return HttpRequestRes{.status = status,
-        .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView(s->data(), s->size())}};
+        .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}}};
 }
 
 inline std::string ToPdKey(const char * key, const size_t len)
