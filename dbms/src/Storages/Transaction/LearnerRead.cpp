@@ -135,7 +135,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
         for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
         {
             RegionQueryInfo & region_to_query = regions_info[region_idx];
-            const RegionVerID region_ver_id = region_to_query.region_ver_id;
+            const RegionVerID & region_ver_id = region_to_query.region_ver_id;
             auto & region = regions_snapshot.find(region_ver_id.id)->second;
             batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region, start_ts));
         }
