@@ -94,14 +94,13 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
                 Errors::Coprocessor::BadRequest);
         }
     }
-    std::unordered_map<RegionID, RegionInfo> regions;
+    std::unordered_map<RegionVerID, RegionInfo> regions;
     for (auto & r : task_request.regions())
     {
-        auto res = regions.emplace(r.region_id(),
-            RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
-                CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+        RegionVerID region_ver_id(r.region_id(), r.region_epoch().conf_ver(), r.region_epoch().version());
+        auto res = regions.emplace(region_ver_id, RegionInfo(region_ver_id, CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
         if (!res.second)
-            throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + std::to_string(r.region_id()),
+            throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + region_ver_id.toString(),
                 Errors::Coprocessor::BadRequest);
     }
     // set schema ver and start ts.

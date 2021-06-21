@@ -342,7 +342,7 @@ RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::Tab
                           },
                           [&](LockInfoPtr & lock_value) -> ReadBlockByRegionRes {
                               assert(lock_value);
-                              throw LockException(region->id(), std::move(lock_value));
+                              throw LockException(region->verID(), std::move(lock_value));
                           },
                           [](RegionException::RegionReadStatus & s) -> ReadBlockByRegionRes { return s; },
                       },

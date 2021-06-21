@@ -37,6 +37,7 @@ class IManageableStorage;
 using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
 using NameWithAlias = std::pair<std::string, std::string>;
 using NamesWithAliases = std::vector<NameWithAlias>;
+using RegionVerID = pingcap::kv::RegionVerID;
 
 struct Pipeline
 {
@@ -121,7 +122,7 @@ private:
         const TableStructureLockHolder &, //
         const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
         const LearnerReadSnapshot & learner_read_snapshot, //
-        Pipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry);
+        Pipeline & pipeline, std::unordered_map<RegionVerID, const RegionInfo &> & region_retry);
     std::tuple<ManageableStoragePtr, TableStructureLockHolder> getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
     AnalysisResult analyzeExpressions();
