@@ -18,7 +18,7 @@ struct UnavailableRegions
 {
     using Result = RegionException::UnavailableRegions;
 
-    void add(RegionVerID id, RegionException::RegionReadStatus status_)
+    void add(const RegionVerID & id, RegionException::RegionReadStatus status_)
     {
         status = status_;
         auto _lock = genLockGuard();
