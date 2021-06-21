@@ -326,9 +326,10 @@ private:
             }
             else
             {
-                if (snapshot_or_invalid->elapsedSeconds() > longest_living_seconds)
+                const auto snapshot_lifetime = snapshot_or_invalid->elapsedSeconds();
+                if (snapshot_lifetime > longest_living_seconds)
                 {
-                    longest_living_seconds        = snapshot_or_invalid->elapsedSeconds();
+                    longest_living_seconds        = snapshot_lifetime;
                     longest_living_from_thread_id = snapshot_or_invalid->t_id;
                 }
                 iter++;

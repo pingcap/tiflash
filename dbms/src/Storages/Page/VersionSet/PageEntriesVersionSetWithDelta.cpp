@@ -63,9 +63,10 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
         }
         else
         {
-            if (snapshot_or_invalid->elapsedSeconds() > longest_living_seconds)
+            const auto snapshot_lifetime = snapshot_or_invalid->elapsedSeconds();
+            if (snapshot_lifetime > longest_living_seconds)
             {
-                longest_living_seconds        = snapshot_or_invalid->elapsedSeconds();
+                longest_living_seconds        = snapshot_lifetime;
                 longest_living_from_thread_id = snapshot_or_invalid->t_id;
             }
             // Save valid snapshot.
@@ -83,10 +84,15 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
     if (num_invalid_snapshot_to_clean > 0)
     {
         CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_invalid_snapshot_to_clean);
-        LOG_DEBUG(log,
-                  name << " gcApply remove " << num_invalid_snapshot_to_clean << " invalid snapshots, " << valid_snapshots.size()
-                       << " snapshots left, longest lifetime " << DB::toString(longest_living_seconds, 3)
-                       << " seconds, created from thread_id " << longest_living_from_thread_id);
+        std::stringstream ss;
+        ss << name << " gcApply remove " << num_invalid_snapshot_to_clean << " invalid snapshots, " << valid_snapshots.size()
+           << " snapshots left, longest lifetime " << DB::toString(longest_living_seconds, 3) << " seconds, created from thread_id "
+           << longest_living_from_thread_id;
+        constexpr double EXIST_STALE_SNAPSHOT = 60.0;
+        if (longest_living_seconds > EXIST_STALE_SNAPSHOT)
+            LOG_WARNING(log, ss.str());
+        else
+            LOG_DEBUG(log, ss.str());
     }
     // Iterate all snapshots to collect all PageFile in used.
     std::set<PageFileIdAndLevel> live_files;
