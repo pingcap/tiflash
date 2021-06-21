@@ -83,8 +83,8 @@ namespace DB
         F(type_raft_read_index_duration, {{"type", "tmt_raft_read_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                          \
     M(tiflash_raft_wait_index_duration_seconds, "Bucketed histogram of raft wait index duration", Histogram,                              \
         F(type_raft_wait_index_duration, {{"type", "tmt_raft_wait_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                          \
-    M(tiflash_data_freshness, "The freshness of tiflash data with tikv data", Histogram,                                                  \
-        F(type_raft_wait_index_duration, {{"type", "data_freshness"}}, ReadthroughputBuckets{}))                                          \
+    M(tiflash_syncing_data_freshness, "The freshness of tiflash data with tikv data", Histogram,                                          \
+        F(type_syncing_data_freshness, {{"type", "data_freshness"}}, ExpBuckets{0.0005, 2, 20}))                                          \
     M(tiflash_storage_write_amplification, "The data write amplification in storage engine", Gauge)                                       \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                             \
     M(tiflash_storage_command_count, "Total number of storage's command, such as delete range / shutdown /startup", Counter,              \
@@ -164,7 +164,7 @@ struct ReadthroughputBuckets
     inline operator prometheus::Histogram::BucketBoundaries() const &&
     {
         // up to `num_buckets` * `step`
-        size_t num_buckets = 30;
+        size_t num_buckets = 60;
         size_t step = 50;
         assert(step > 1);
         prometheus::Histogram::BucketBoundaries buckets(num_buckets);
