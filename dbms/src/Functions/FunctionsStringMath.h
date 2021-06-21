@@ -10,7 +10,9 @@
 
 #include <string>
 #include <cstdlib>
-//#include <charconv>
+#if __GNUC__ > 7
+#include <charconv>
+#endif
 #include <boost/crc.hpp>
 
 namespace DB
@@ -23,40 +25,26 @@ namespace ErrorCodes
 
 struct CRC32Impl
 {
-    static void execute(const char* s, size_t len, Int64& res)
+    static void execute(const String& s, Int64& res)
     {
         boost::crc_32_type result;
-        result.process_bytes(s, len);
+        result.process_bytes(s.data(), s.size());
         res = static_cast<Int64>(result.checksum());
     }
     static void execute(const ColumnString* arg_col, PaddedPODArray<Int64> & res)
     {
         res.resize(arg_col->size());
-        auto data = reinterpret_cast<const char*>(arg_col->getChars().data());
-        auto& offsets = arg_col->getOffsets();
         for(size_t i = 0;i < arg_col->size();++i)
         {
-            const char* s = reinterpret_cast<const char*>(data + offsets[i]);
-            execute(s, (i == 0 ? offsets[0] : (offsets[i] - offsets[i - 1])) - 1, res[i]);
+            execute((*arg_col)[i].get<String>(), res[i]);
         }
     }
     static void execute(const ColumnFixedString* arg_col, PaddedPODArray<Int64> & res)
     {
         res.resize(arg_col->size());
-        auto data = reinterpret_cast<const char*>(arg_col->getChars().data());
-        const size_t N = arg_col->getN();
-        auto get_fixed_string_len = [N](const char* const s) -> size_t {
-            const char* s_end = s + N - 1;
-            while(s_end != s && *s_end == '\0') {
-                s_end--;
-            }
-            return s_end - s + 1;
-        };
-
         for(size_t i = 0;i < arg_col->size();++i)
         {
-            const char* s = reinterpret_cast<const char*>(data + i * N);
-            execute(s, get_fixed_string_len(s), res[i]);
+            execute((*arg_col)[i].get<String>(), res[i]);
         }
     }
 };
@@ -66,7 +54,7 @@ class FunctionCRC32 : public IFunction
 public:
     static constexpr auto name = "crc32";
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionCRC32>(); }
-    std::string getName() const override { return name; }
+    String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -102,7 +90,7 @@ public:
 
 struct ConvImpl
 {
-    static std::string execute(const std::string& arg, int from_base, int to_base)
+    static String execute(const String& arg, int from_base, int to_base)
     {
         bool is_signed = false, is_negative = false, ignore_sign = false;
         if(from_base < 0)
@@ -120,6 +108,14 @@ struct ConvImpl
             return arg;
         }
 
+        #if __GNUC__ > 7
+        UInt64 value;
+        auto from_chars_res = std::from_chars(arg.data(), arg.data() + arg.size(), value, from_base);
+        if(from_chars_res.ec != 0)
+        {
+            throw Exception(String("Int too big to conv: ") + (arg.c_str() + begin_pos));
+        }
+        #else
         auto begin_pos_iter = std::find_if_not(arg.begin(), arg.end(), isspace);
         if(begin_pos_iter == arg.end())
         {
@@ -130,14 +126,14 @@ struct ConvImpl
             is_negative = true;
             ++begin_pos_iter;
         }
-
         auto begin_pos = begin_pos_iter - arg.begin();
         UInt64 value = strtoull(arg.c_str() + begin_pos, nullptr, from_base);
         if(errno)
         {
             errno = 0;
-            throw Exception(std::string("Int too big to conv: ") + (arg.c_str() + begin_pos));
+            throw Exception(String("Int too big to conv: ") + (arg.c_str() + begin_pos));
         }
+        #endif
 
 
         if(is_signed)
@@ -168,40 +164,41 @@ struct ConvImpl
             value = 0 - value;
         }
 
-        std::string result;
+        #if __GNUC__ > 7
+        char buf[100] = {0};
+        std::to_chars(buf, std::end(buf), value, to_base);
+        String result(buf);
+        #else
+        String result;
         while (value != 0) {
             int digit = value % to_base;
             result += (digit > 9 ? 'A' + digit - 10 : digit +'0');
             value /= to_base;
         }
         std::reverse(result.begin(), result.end());
+        #endif
 
         if(is_negative && ignore_sign) {
             result = "-" + result;
         }
         return result;
     }
+
     template <typename T1, typename T2>
-    static void execute(const ColumnString* arg_col0, const ColumnVector<T1>* arg_col1, const ColumnVector<T2>* arg_col2, ColumnString& res_col)
+    static void execute(const ColumnString* arg_col0, const std::vector<T1>* arg_col1, const std::vector<T2>* arg_col2, ColumnString& res_col)
     {
-        auto data = reinterpret_cast<const char*>(arg_col0->getChars().data());
-        auto& offsets = arg_col0->getOffsets();
         for(size_t i = 0;i < arg_col0->size();++i)
         {
-            const char* s = reinterpret_cast<const char*>(data + offsets[i]);
-            std::string result = execute(std::string(s), arg_col1->getData()[i], arg_col2->getData()[i]);
+            String result = execute((*arg_col0)[i].get<String>(), (*arg_col1)[i], (*arg_col2)[i]);
             res_col.insertData(result.c_str(), result.size());
         }
     }
     template <typename T1, typename T2>
-    static void execute(const ColumnFixedString* arg_col0, const ColumnVector<T1>* arg_col1, const ColumnVector<T2>* arg_col2, ColumnString& res_col)
+    static void executeFixed(const ColumnFixedString* arg_col0, const std::vector<T1>* arg_col1, const std::vector<T2>* arg_col2, ColumnString& res_col)
     {
-        auto data = reinterpret_cast<const char*>(arg_col0->getChars().data());
-        const size_t N = arg_col0->getN();
         for(size_t i = 0;i < arg_col0->size();++i)
         {
-            const char* s = reinterpret_cast<const char*>(data + i * N);
-            std::string result = execute(std::string(s, N), arg_col1->getData()[i], arg_col2->getData()[i]);
+            String result = execute((*arg_col0)[i].get<String>(), (*arg_col1)[i], (*arg_col2)[i]);
             res_col.insertData(result.c_str(), result.size());
         }
     }
@@ -209,90 +206,135 @@ struct ConvImpl
 
 class FunctionConv : public IFunction
 {   
-    template <typename T1, typename T2>
-    void executeWithBothType(Block & block, const ColumnNumbers & arguments, size_t result)
+    template <typename IntType>
+    struct GetIntVecHelper
     {
-        auto type1 = block.getByPosition(arguments[1]).type;
-        const auto arg1 = block.getByPosition(arguments[1]).column.get();
-
-        auto type2 = block.getByPosition(arguments[2]).type;
-        const auto arg2 = block.getByPosition(arguments[2]).column.get();
-
-        const auto col1 = checkAndGetColumn<ColumnVector<T1>>(arg1);
-        if(!col1)
+        static std::vector<IntType> GetVec(const ColumnConst* int_arg_typed, size_t N)
         {
-            throw Exception{
-                "Illegal type " + arg1->getName() + " of second argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
-        }
-        const auto col2 = checkAndGetColumn<ColumnVector<T2>>(arg2);
-        if(!col2)
-        {
-            throw Exception{
-                "Illegal type " + arg2->getName() + " of third argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            return std::vector<IntType>(N, int_arg_typed->getValue<IntType>());
         }
 
-        const auto arg0 = block.getByPosition(arguments[0]).column.get();
+        static std::vector<IntType> GetVec(const ColumnVector<IntType>* int_arg_typed, size_t N)
+        {
+            std::vector<IntType> result;
+            result.reserve(N);
+            for(size_t i = 0;i < int_arg_typed->size();++i) {
+                result.push_back(int_arg_typed->getElement(i));
+            }
+            return result;
+        }
+    };
+
+
+
+
+    template <typename FirstIntType, typename SecondIntType, typename FirstIntColumn, typename SecondIntColumn>
+    void executeWithIntTypes(Block & block, const ColumnNumbers & arguments, const size_t result, const FirstIntColumn * first_int_arg_typed,
+        const SecondIntColumn * second_int_arg_typed)
+    {
+        const auto string_arg = block.getByPosition(arguments[0]).column.get();
+
         auto col_res = ColumnString::create();
-        if (const auto col0 = checkAndGetColumn<ColumnString>(arg0))
+
+        if (const auto string_col = checkAndGetColumn<ColumnString>(string_arg))
         {
-            ConvImpl::execute<T1, T2>(col0, col1, col2, *col_res);
+            const size_t N = string_col->size();
+            std::vector<FirstIntType> first_vec = GetIntVecHelper<FirstIntType>::GetVec(first_int_arg_typed, N);
+            std::vector<SecondIntType> second_vec = GetIntVecHelper<SecondIntType>::GetVec(second_int_arg_typed, N);
+            ConvImpl::execute(string_col, &first_vec, &second_vec, *col_res);
+            block.getByPosition(result).column = std::move(col_res);
         }
-        else if(const auto col0 = checkAndGetColumn<ColumnFixedString>(arg0))
+        else if(const auto string_col = checkAndGetColumn<ColumnFixedString>(string_arg))
         {
-            ConvImpl::execute<T1, T2>(col0, col1, col2, *col_res);
+            const size_t N = string_col->size();
+            std::vector<FirstIntType> first_vec = GetIntVecHelper<FirstIntType>::GetVec(first_int_arg_typed, N);
+            std::vector<SecondIntType> second_vec = GetIntVecHelper<SecondIntType>::GetVec(second_int_arg_typed, N);
+            ConvImpl::executeFixed(string_col, &first_vec, &second_vec, *col_res);
+            block.getByPosition(result).column = std::move(col_res);
         }
         else
         {
             throw Exception{
-                "Illegal column " + arg0->getName() + " of argument of function " + getName(),
+                "Illegal column " + string_arg->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_COLUMN};
         }
-        block.getByPosition(result).column = std::move(col_res);
     }
 
-    template <typename T>
-    void executeWithType1(Block & block, const ColumnNumbers & arguments, size_t result)
+    template <typename FirstIntType, typename SecondIntType, typename FirstIntColumn>
+    bool executeIntRight(Block & block, const ColumnNumbers & arguments, const size_t result, const FirstIntColumn * first_int_arg_typed,
+        const IColumn * second_int_arg)
     {
-        const auto arg2 = block.getByPosition(arguments[2]).column.get();
-        auto type2 = block.getByPosition(arguments[2]).type;
-        switch(type2->getTypeId())
+        if (const auto second_int_arg_typed = checkAndGetColumn<ColumnVector<SecondIntType>>(second_int_arg))
         {
-            case TypeIndex::UInt8:
-                executeWithBothType<T, Id2Type<TypeIndex::UInt8>::type>(block, arguments, result);
-                break;
-            case TypeIndex::UInt16:
-                executeWithBothType<T, Id2Type<TypeIndex::UInt16>::type>(block, arguments, result);
-                break;
-            case TypeIndex::UInt32:
-                executeWithBothType<T, Id2Type<TypeIndex::UInt32>::type>(block, arguments, result);
-                break;
-            case TypeIndex::UInt64:
-                executeWithBothType<T, Id2Type<TypeIndex::UInt64>::type>(block, arguments, result);
-                break;
-            case TypeIndex::Int8:
-                executeWithBothType<T, Id2Type<TypeIndex::Int8>::type>(block, arguments, result);
-                break;
-            case TypeIndex::Int16:
-                executeWithBothType<T, Id2Type<TypeIndex::Int16>::type>(block, arguments, result);
-                break;
-            case TypeIndex::Int32:
-                executeWithBothType<T, Id2Type<TypeIndex::Int32>::type>(block, arguments, result);
-                break;
-            case TypeIndex::Int64:
-                executeWithBothType<T, Id2Type<TypeIndex::Int64>::type>(block, arguments, result);
-                break;
-            default:
-                throw Exception{
-                    "Illegal type " + arg2->getName() + " of second argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            executeWithIntTypes<FirstIntType, SecondIntType>(block, arguments, result, first_int_arg_typed, second_int_arg_typed);
+            return true;
         }
+        else if (const auto second_int_arg_typed = checkAndGetColumnConst<ColumnVector<SecondIntType>>(second_int_arg))
+        {
+            executeWithIntTypes<FirstIntType, SecondIntType>(block, arguments, result, first_int_arg_typed, second_int_arg_typed);
+            return true;
+        }
+
+        return false;
+    }
+
+    template <typename FirstIntType>
+    bool executeIntLeft(Block & block, const ColumnNumbers & arguments, const size_t result,
+        const IColumn * first_int_arg)
+    {
+        if (const auto first_int_arg_typed = checkAndGetColumn<ColumnVector<FirstIntType>>(first_int_arg))
+        {
+            const auto second_int_arg = block.getByPosition(arguments[2]).column.get();
+
+            if (executeIntRight<FirstIntType, UInt8>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, UInt16>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, UInt32>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, UInt64>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, Int8>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, Int16>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, Int32>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, Int64>(block, arguments, result, first_int_arg_typed, second_int_arg))
+            {
+                return true;
+            }
+            else
+            {
+                throw Exception{
+                    "Illegal column " + block.getByPosition(arguments[1]).column->getName() +
+                    " of second argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_COLUMN};
+            }
+        }
+        else if (const auto first_int_arg_typed = checkAndGetColumnConst<ColumnVector<FirstIntType>>(first_int_arg))
+        {
+            const auto second_int_arg = block.getByPosition(arguments[2]).column.get();
+
+            if (executeIntRight<FirstIntType, UInt8>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, UInt16>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, UInt32>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, UInt64>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, Int8>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, Int16>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, Int32>(block, arguments, result, first_int_arg_typed, second_int_arg) ||
+                executeIntRight<FirstIntType, Int64>(block, arguments, result, first_int_arg_typed, second_int_arg))
+            {
+                return true;
+            }
+            else
+            {
+                throw Exception{
+                    "Illegal column " + block.getByPosition(arguments[1]).column->getName() +
+                    " of second argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_COLUMN};
+            }
+        }
+
+        return false;
     }
 public:
     static constexpr auto name = "conv";
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionConv>(); }
-    std::string getName() const override { return name; }
+    String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 3; }
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -311,40 +353,23 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
     {
-        const auto arg1 = block.getByPosition(arguments[1]).column.get();
-        auto type1 = block.getByPosition(arguments[1]).type;
-        switch(type1->getTypeId())
+
+        const auto first_int_arg = block.getByPosition(arguments[1]).column.get();
+
+        if (!executeIntLeft<UInt8>(block, arguments, result, first_int_arg) &&
+            !executeIntLeft<UInt16>(block, arguments, result, first_int_arg) &&
+            !executeIntLeft<UInt32>(block, arguments, result, first_int_arg) &&
+            !executeIntLeft<UInt64>(block, arguments, result, first_int_arg) &&
+            !executeIntLeft<Int8>(block, arguments, result, first_int_arg) &&
+            !executeIntLeft<Int16>(block, arguments, result, first_int_arg) &&
+            !executeIntLeft<Int32>(block, arguments, result, first_int_arg) &&
+            !executeIntLeft<Int64>(block, arguments, result, first_int_arg))
         {
-            case TypeIndex::UInt8:
-                executeWithType1<Id2Type<TypeIndex::UInt8>::type>(block, arguments, result);
-                break;
-            case TypeIndex::UInt16:
-                executeWithType1<Id2Type<TypeIndex::UInt16>::type>(block, arguments, result);
-                break;
-            case TypeIndex::UInt32:
-                executeWithType1<Id2Type<TypeIndex::UInt32>::type>(block, arguments, result);
-                break;
-            case TypeIndex::UInt64:
-                executeWithType1<Id2Type<TypeIndex::UInt64>::type>(block, arguments, result);
-                break;
-            case TypeIndex::Int8:
-                executeWithType1<Id2Type<TypeIndex::Int8>::type>(block, arguments, result);
-                break;
-            case TypeIndex::Int16:
-                executeWithType1<Id2Type<TypeIndex::Int16>::type>(block, arguments, result);
-                break;
-            case TypeIndex::Int32:
-                executeWithType1<Id2Type<TypeIndex::Int32>::type>(block, arguments, result);
-                break;
-            case TypeIndex::Int64:
-                executeWithType1<Id2Type<TypeIndex::Int64>::type>(block, arguments, result);
-                break;
-            default:
-                throw Exception{
-                    "Illegal type " + arg1->getName() + " of second argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception{
+                "Illegal column " + first_int_arg->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN};
         }
     }
 };
