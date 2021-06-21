@@ -33,7 +33,7 @@ struct UnavailableRegions
 
     bool empty() const { return size() == 0; }
 
-    void setRegionLock(RegionVerID region_id_, LockInfoPtr && region_lock_)
+    void setRegionLock(const RegionVerID & region_id_, LockInfoPtr && region_lock_)
     {
         auto _lock = genLockGuard();
         region_lock = std::pair(region_id_, std::move(region_lock_));
