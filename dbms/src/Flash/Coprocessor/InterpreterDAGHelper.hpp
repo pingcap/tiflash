@@ -55,7 +55,7 @@ MakeRegionQueryInfos(const std::unordered_map<RegionVerID, RegionInfo> & dag_reg
         if (local_region_ids.count(id.id))
         {
             LOG_WARNING(
-                log, "Found duplicated region id in DAGRequest for region id: " << std::to_string(id.id) << ", will read it from remote");
+                log, "Found duplicated region id in DAGRequest for region id: " << id.toString() << ", will read it from remote");
             region_need_retry.emplace(id, r);
             status_res = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
             continue;
