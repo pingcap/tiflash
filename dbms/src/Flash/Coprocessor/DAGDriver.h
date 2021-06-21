@@ -22,7 +22,7 @@ class Context;
 class RegionInfo
 {
 public:
-    RegionVerID region_ver_id;
+    const RegionVerID region_ver_id;
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
     const std::unordered_set<UInt64> * bypass_lock_ts;
 
