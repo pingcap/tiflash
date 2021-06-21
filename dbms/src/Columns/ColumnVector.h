@@ -145,7 +145,7 @@ private:
     ColumnVector(std::initializer_list<T> il) : data{il} {}
 
 public:
-    bool isNumeric() const override { return IsNumber<T>; }
+    bool isNumeric() const override { return is_arithmetic_v<T>; }
 
     size_t size() const override
     {
@@ -182,6 +182,8 @@ public:
     const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
 
     void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
+    void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash) const override;
 
     size_t byteSize() const override
     {

@@ -2,6 +2,7 @@
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteBufferFromArena.h>
+#include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
 
@@ -65,7 +66,7 @@ MutableColumnPtr ColumnAggregateFunction::convertToValues() const
         auto res = createView();
         res->set(function_state->getNestedFunction());
         res->getData().assign(getData().begin(), getData().end());
-        return std::move(res);
+        return res;
     }
 
     MutableColumnPtr res = function->getReturnType()->createColumn();
@@ -136,7 +137,7 @@ ColumnPtr ColumnAggregateFunction::filter(const Filter & filter, ssize_t result_
     if (res_data.size() * 2 < res_data.capacity())
         res_data = Container(res_data.cbegin(), res_data.cend());
 
-    return std::move(res);
+    return res;
 }
 
 
@@ -158,7 +159,7 @@ ColumnPtr ColumnAggregateFunction::permute(const Permutation & perm, size_t limi
     for (size_t i = 0; i < limit; ++i)
         res->getData()[i] = getData()[perm[i]];
 
-    return std::move(res);
+    return res;
 }
 
 /// Is required to support operations with Set
@@ -167,6 +168,35 @@ void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash, std:
     WriteBufferFromOwnString wbuf;
     func->serialize(getData()[n], wbuf);
     hash.update(wbuf.str().c_str(), wbuf.str().size());
+}
+
+void ColumnAggregateFunction::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+{
+    for (size_t i = 0, size = getData().size(); i < size; ++i)
+    {
+        WriteBufferFromOwnString wbuf;
+        func->serialize(getData()[i], wbuf);
+        hash_values[i].update(wbuf.str().c_str(), wbuf.str().size());
+    }
+}
+
+void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash) const
+{
+    auto s = data.size();
+    if (hash.getData().size() != data.size())
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
+                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+
+    auto & hash_data = hash.getData();
+
+    std::vector<UInt8> v;
+    for (size_t i = 0; i < s; ++i)
+    {
+        WriteBufferFromVector<std::vector<UInt8>> wbuf(v);
+        func->serialize(data[i], wbuf);
+        wbuf.finalize();
+        hash_data[i] = ::updateWeakHash32(v.data(), v.size(), hash_data[i]);
+    }
 }
 
 /// NOTE: Highly overestimates size of a column if it was produced in AggregatingBlockInputStream (it contains size of other columns)
@@ -348,7 +378,7 @@ ColumnPtr ColumnAggregateFunction::replicate(const IColumn::Offsets & offsets) c
             res_data.push_back(data[i]);
     }
 
-    return std::move(res);
+    return res;
 }
 
 MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector) const

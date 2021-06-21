@@ -8,11 +8,9 @@
 #include <Common/Decimal.h>
 #include <Common/Exception.h>
 #include <Common/TiFlashException.h>
-#include <Common/UInt128.h>
 #include <Core/Defines.h>
 #include <Core/Types.h>
 #include <common/strong_typedef.h>
-
 
 namespace DB
 {

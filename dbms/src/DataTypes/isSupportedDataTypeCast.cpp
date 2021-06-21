@@ -56,7 +56,12 @@ bool isSupportedDataTypeCast(const DataTypePtr & from, const DataTypePtr & to)
     /// For numeric types (integer, floats)
     if (from->isNumber() && to->isNumber())
     {
-        /// int <-> float, or float32 <-> float64, is not supported
+        // float32 -> float64 is supported
+        if (from->getTypeId() == TypeIndex::Float32 && to->getTypeId() == TypeIndex::Float64)
+        {
+            return true;
+        }
+        /// int <-> float, is not supported
         if (!from->isInteger() || !to->isInteger())
         {
             return false;

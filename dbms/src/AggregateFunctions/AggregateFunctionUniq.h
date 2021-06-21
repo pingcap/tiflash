@@ -125,7 +125,7 @@ struct AggregateFunctionUniqExactData<String>
     /// When creating, the hash table must be small.
     using Set = HashSet<
         Key,
-        UInt128TrivialHash,
+        TrivialHash,
         HashTableGrower<3>,
         HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 3)>>;
 
@@ -297,7 +297,7 @@ struct OneAdder
                 UInt128 key;
                 SipHash hash;
                 hash.update(value.data, value.size);
-                hash.get128(key.low, key.high);
+                hash.get128(key);
 
                 data.set.insert(key);
             }

@@ -7,6 +7,7 @@
 #include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/Page/WriteBatch.h>
 
+#include <condition_variable>
 #include <functional>
 #include <optional>
 #include <queue>
@@ -57,6 +58,8 @@ public:
         // Minimum number of legacy files to be selected for compaction
         size_t gc_min_legacy_num = 3;
 
+        size_t  gc_max_expect_legacy_files = 100;
+        Float64 gc_max_valid_rate_bound    = 0.95;
 
         // Maximum write concurrency. Must not be changed once the PageStorage object is created.
         size_t num_write_slots = 1;
@@ -165,7 +168,10 @@ public:
 
     static PageFormat::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     WriterPtr checkAndRenewWriter(PageFile &     page_file,
                                   const String & parent_path_hint,
                                   WriterPtr &&   old_writer  = nullptr,
@@ -186,7 +192,10 @@ private:
     template <typename SnapshotPtr>
     friend class DataCompactor;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     String             storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator;    // Get paths for storing data
     Config             config;
@@ -241,7 +250,10 @@ public:
     UInt64    getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }
     PageEntry getPageEntry(PageId page_id) const { return storage.getEntry(page_id, snap); }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     PageStorage &            storage;
     PageStorage::SnapshotPtr snap;
 };

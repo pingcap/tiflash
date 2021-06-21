@@ -299,9 +299,14 @@ public:
         file_provider->deleteEncryptionInfo(metaEncryptionPath());
     }
 
-    // Encryption can be turned on / turned off for existing cluster, we should take care of it when trying to reuse PageFile.
+    // Check whether this PageFile is resuable for writing after restart
     bool reusableForWrite() const
     {
+        // If the file is created by gc thread (level != 0)
+        // or ready for gc, then it is not resuable.
+        if (level != 0 || type != PageFile::Type::Formal)
+            return false;
+        // Encryption can be turned on / turned off for existing cluster, we should take care of it when trying to reuse PageFile.
         auto file_encrypted     = file_provider->isFileEncrypted(dataEncryptionPath());
         auto encryption_enabled = file_provider->isEncryptionEnabled();
         return (file_encrypted && encryption_enabled) || (!file_encrypted && !encryption_enabled);

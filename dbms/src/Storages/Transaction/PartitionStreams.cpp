@@ -221,7 +221,7 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
         {
             // Shortcut for empty region.
             if (!scanner.hasNext())
-                return std::move(data_list_read);
+                return data_list_read;
 
             data_list_read.reserve(scanner.writeMapSize());
 
@@ -236,7 +236,7 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     if (lock_value)
         return lock_value->intoLockInfo();
 
-    return std::move(data_list_read);
+    return data_list_read;
 }
 
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region = true)
@@ -262,7 +262,7 @@ std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & re
         {
             data_list_read.emplace_back(scanner.next());
         } while (scanner.hasNext());
-        return std::move(data_list_read);
+        return data_list_read;
     }
 }
 

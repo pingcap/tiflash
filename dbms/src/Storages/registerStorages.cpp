@@ -24,18 +24,6 @@ void registerStorageJoin(StorageFactory & factory);
 void registerStorageView(StorageFactory & factory);
 void registerStorageMaterializedView(StorageFactory & factory);
 
-#if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
-void registerStorageODBC(StorageFactory & factory);
-#endif
-
-#if USE_MYSQL
-void registerStorageMySQL(StorageFactory & factory);
-#endif
-
-#if USE_RDKAFKA
-void registerStorageKafka(StorageFactory & factory);
-#endif
-
 
 void registerStorages()
 {
@@ -57,18 +45,6 @@ void registerStorages()
     registerStorageJoin(factory);
     registerStorageView(factory);
     registerStorageMaterializedView(factory);
-
-    #if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
-    registerStorageODBC(factory);
-    #endif
-
-    #if USE_MYSQL
-    registerStorageMySQL(factory);
-    #endif
-
-    #if USE_RDKAFKA
-    registerStorageKafka(factory);
-    #endif
 }
 
 }

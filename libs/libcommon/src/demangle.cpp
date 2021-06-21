@@ -1,28 +1,44 @@
 #include <common/demangle.h>
-#include <cxxabi.h>
-#include <stdlib.h>
 
+#if defined(_MSC_VER)
+
+DemangleResult tryDemangle(const char *)
+{
+    return DemangleResult{};
+}
 
 std::string demangle(const char * name, int & status)
 {
-    std::string res;
-
-    char * demangled_str = abi::__cxa_demangle(name, 0, 0, &status);
-    if (demangled_str)
-    {
-        try
-        {
-            res = demangled_str;
-        }
-        catch (...)
-        {
-            free(demangled_str);
-            throw;
-        }
-        free(demangled_str);
-    }
-    else
-        res = name;
-
-    return res;
+    status = 0;
+    return name;
 }
+
+#else
+
+#include <stdlib.h>
+#include <cxxabi.h>
+
+static DemangleResult tryDemangle(const char * name, int & status)
+{
+    return DemangleResult(abi::__cxa_demangle(name, nullptr, nullptr, &status));
+}
+
+DemangleResult tryDemangle(const char * name)
+{
+    int status = 0;
+    return tryDemangle(name, status);
+}
+
+std::string demangle(const char * name, int & status)
+{
+    auto result = tryDemangle(name, status);
+    if (result)
+    {
+        return std::string(result.get());
+    }
+
+    return name;
+}
+
+
+#endif

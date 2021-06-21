@@ -1193,7 +1193,7 @@ bool FunctionArrayUniq::execute128bit(
     if (keys_bytes > 16)
         return false;
 
-    using Set = ClearableHashSet<UInt128, UInt128HashCRC32, HashTableGrower<INITIAL_SIZE_DEGREE>,
+    using Set = ClearableHashSet<UInt128, HashCRC32<UInt128>, HashTableGrower<INITIAL_SIZE_DEGREE>,
         HashTableAllocatorWithStackMemory<(1ULL << INITIAL_SIZE_DEGREE) * sizeof(UInt128)>>;
 
     /// Suppose that, for a given row, each of the N columns has an array whose length is M.
@@ -1254,7 +1254,7 @@ void FunctionArrayUniq::executeHashed(
 {
     size_t count = columns.size();
 
-    using Set = ClearableHashSet<UInt128, UInt128TrivialHash, HashTableGrower<INITIAL_SIZE_DEGREE>,
+    using Set = ClearableHashSet<UInt128, TrivialHash, HashTableGrower<INITIAL_SIZE_DEGREE>,
         HashTableAllocatorWithStackMemory<(1ULL << INITIAL_SIZE_DEGREE) * sizeof(UInt128)>>;
 
     Set set;
@@ -1497,7 +1497,7 @@ bool FunctionArrayEnumerateUniq::execute128bit(
     if (keys_bytes > 16)
         return false;
 
-    using ValuesToIndices = ClearableHashMap<UInt128, UInt32, UInt128HashCRC32, HashTableGrower<INITIAL_SIZE_DEGREE>,
+    using ValuesToIndices = ClearableHashMap<UInt128, UInt32, HashCRC32<UInt128>, HashTableGrower<INITIAL_SIZE_DEGREE>,
         HashTableAllocatorWithStackMemory<(1ULL << INITIAL_SIZE_DEGREE) * sizeof(UInt128)>>;
 
     ValuesToIndices indices;
@@ -1543,7 +1543,7 @@ void FunctionArrayEnumerateUniq::executeHashed(
 {
     size_t count = columns.size();
 
-    using ValuesToIndices = ClearableHashMap<UInt128, UInt32, UInt128TrivialHash, HashTableGrower<INITIAL_SIZE_DEGREE>,
+    using ValuesToIndices = ClearableHashMap<UInt128, UInt32, TrivialHash, HashTableGrower<INITIAL_SIZE_DEGREE>,
         HashTableAllocatorWithStackMemory<(1ULL << INITIAL_SIZE_DEGREE) * sizeof(UInt128)>>;
 
     ValuesToIndices indices;

@@ -144,6 +144,10 @@ public:
 
     void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
 
+    void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
+
+    void updateWeakHash32(WeakHash32 & hash) const override;
+
     size_t byteSize() const override;
 
     size_t allocatedBytes() const override;

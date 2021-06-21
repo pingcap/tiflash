@@ -20,15 +20,16 @@ endif ()
 add_library (common ${SPLIT_SHARED}
     src/DateLUT.cpp
     src/DateLUTImpl.cpp
-    src/preciseExp10.c
+    src/preciseExp10.cpp
     src/shift10.cpp
     src/mremap.cpp
     src/JSON.cpp
     src/getMemoryAmount.cpp
     src/ThreadPool.cpp
     src/demangle.cpp
+    src/StringRef.cpp
 
-    include/common/Types.h
+    include/common/types.h
     include/common/DateLUT.h
     include/common/DateLUTImpl.h
     include/common/LocalDate.h
@@ -80,6 +81,9 @@ elseif (USE_TCMALLOC)
         message (STATUS "Link libtcmalloc_minimal: ${GPERFTOOLS_TCMALLOC_MINIMAL}")
         set (MALLOC_LIBRARIES ${GPERFTOOLS_TCMALLOC_MINIMAL})
     endif ()
+elseif(USE_MIMALLOC)
+    message (STATUS "Link mimalloc: ${MIMALLOC_LIBRARIES}")
+    set (MALLOC_LIBRARIES ${MIMALLOC_LIBRARIES})
 else ()
     message (WARNING "Non default allocator is disabled. This is not recommended for production Linux builds.")
 endif ()

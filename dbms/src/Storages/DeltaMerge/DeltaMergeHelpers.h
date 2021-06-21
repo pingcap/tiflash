@@ -7,9 +7,7 @@
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsConversion.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/sortBlock.h>
 #include <Storages/ColumnsDescription.h>

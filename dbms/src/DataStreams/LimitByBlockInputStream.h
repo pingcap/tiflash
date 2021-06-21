@@ -1,10 +1,7 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-
 #include <Common/HashTable/HashMap.h>
-#include <Common/UInt128.h>
-
 
 namespace DB
 {
@@ -31,7 +28,7 @@ private:
     ColumnRawPtrs getKeyColumns(Block & block) const;
 
 private:
-    using MapHashed = HashMap<UInt128, UInt64, UInt128TrivialHash>;
+    using MapHashed = HashMap<UInt128, UInt64, TrivialHash>;
 
     const Names columns_names;
     const size_t group_size;

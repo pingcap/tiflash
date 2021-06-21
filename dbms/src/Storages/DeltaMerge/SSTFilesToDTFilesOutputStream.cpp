@@ -120,7 +120,9 @@ bool SSTFilesToDTFilesOutputStream::newDTFileStream()
         return false;
     }
     auto dt_file = DMFile::create(file_id, parent_path, flags.isSingleFile());
-    LOG_INFO(log, "Create file for snapshot data [file=" << dt_file->path() << "] [single_file_mode=" << flags.isSingleFile() << "]");
+    LOG_INFO(log,
+             "Create file for snapshot data " << child->getRegion()->toString(true) << " [file=" << dt_file->path()
+                                              << "] [single_file_mode=" << flags.isSingleFile() << "]");
     dt_stream = std::make_unique<DMFileBlockOutputStream>(tmt.getContext(), dt_file, *schema_snap, flags);
     dt_stream->writePrefix();
     ingest_files.emplace_back(dt_file);

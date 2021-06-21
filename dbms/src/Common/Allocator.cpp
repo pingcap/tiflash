@@ -20,8 +20,10 @@
 #endif
 
 
+
 namespace DB
 {
+std::atomic_size_t allocator_mmap_counter;
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
@@ -42,7 +44,7 @@ namespace ErrorCodes
   *
   * PS. This is also required, because tcmalloc can not allocate a chunk of memory greater than 16 GB.
   */
-static constexpr size_t MMAP_THRESHOLD = 64 * (1ULL << 20);
+static constexpr size_t MMAP_THRESHOLD = 64 * (1ULL << 30);
 static constexpr size_t MMAP_MIN_ALIGNMENT = 4096;
 static constexpr size_t MALLOC_MIN_ALIGNMENT = 8;
 
@@ -65,6 +67,8 @@ void * Allocator<clear_memory_>::alloc(size_t size, size_t alignment)
             DB::throwFromErrno("Allocator: Cannot mmap " + formatReadableSizeWithBinarySuffix(size) + ".", DB::ErrorCodes::CANNOT_ALLOCATE_MEMORY);
 
         /// No need for zero-fill, because mmap guarantees it.
+
+        DB::allocator_mmap_counter.fetch_add(size, std::memory_order_acq_rel);
     }
     else
     {
@@ -102,6 +106,7 @@ void Allocator<clear_memory_>::free(void * buf, size_t size)
     {
         if (0 != munmap(buf, size))
             DB::throwFromErrno("Allocator: Cannot munmap " + formatReadableSizeWithBinarySuffix(size) + ".", DB::ErrorCodes::CANNOT_MUNMAP);
+        DB::allocator_mmap_counter.fetch_sub(size, std::memory_order_acq_rel);
     }
     else
     {
@@ -141,6 +146,7 @@ void * Allocator<clear_memory_>::realloc(void * buf, size_t old_size, size_t new
             DB::throwFromErrno("Allocator: Cannot mremap memory chunk from " + formatReadableSizeWithBinarySuffix(old_size) + " to " + formatReadableSizeWithBinarySuffix(new_size) + ".", DB::ErrorCodes::CANNOT_MREMAP);
 
         /// No need for zero-fill, because mmap guarantees it.
+        DB::allocator_mmap_counter.fetch_add(new_size - old_size, std::memory_order_acq_rel); // should be true even if overflow
     }
     else if (old_size >= MMAP_THRESHOLD && new_size < MMAP_THRESHOLD)
     {
@@ -152,6 +158,8 @@ void * Allocator<clear_memory_>::realloc(void * buf, size_t old_size, size_t new
             DB::throwFromErrno("Allocator: Cannot munmap " + formatReadableSizeWithBinarySuffix(old_size) + ".", DB::ErrorCodes::CANNOT_MUNMAP);
         }
         buf = new_buf;
+
+        DB::allocator_mmap_counter.fetch_sub(old_size, std::memory_order_acq_rel);
     }
     else
     {

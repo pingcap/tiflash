@@ -205,7 +205,7 @@ struct ToMondayImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toFirstDayNumOfWeek(DayNum_t(d));
+        return time_zone.toFirstDayNumOfWeek(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toMonday", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -224,7 +224,7 @@ struct ToStartOfMonthImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toFirstDayNumOfMonth(DayNum_t(d));
+        return time_zone.toFirstDayNumOfMonth(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toStartOfMonday", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -243,7 +243,7 @@ struct ToStartOfQuarterImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toFirstDayNumOfQuarter(DayNum_t(d));
+        return time_zone.toFirstDayNumOfQuarter(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toStartOfQuarter", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -262,7 +262,7 @@ struct ToStartOfYearImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toFirstDayNumOfYear(DayNum_t(d));
+        return time_zone.toFirstDayNumOfYear(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toStartOfYear", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -380,7 +380,7 @@ struct ToYearImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toYear(DayNum_t(d));
+        return time_zone.toYear(DayNum(d));
     }
     static inline UInt16 execute(UInt64 packed, const DateLUTImpl &) { return UInt16((packed >> 46) / 13); }
 
@@ -397,7 +397,7 @@ struct ToQuarterImpl
     }
     static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toQuarter(DayNum_t(d));
+        return time_zone.toQuarter(DayNum(d));
     }
     static inline UInt8 execute(UInt64 packed, const DateLUTImpl &) { return ((/* Month */ (packed >> 46) % 13) + 2) / 3; }
 
@@ -414,7 +414,7 @@ struct ToMonthImpl
     }
     static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toMonth(DayNum_t(d));
+        return time_zone.toMonth(DayNum(d));
     }
     // tidb date related type, ignore time_zone info
     static inline UInt8 execute(UInt64 t, const DateLUTImpl &) { return (UInt8)((t >> 46u) % 13); }
@@ -432,10 +432,10 @@ struct ToDayOfMonthImpl
     }
     static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toDayOfMonth(DayNum_t(d));
+        return time_zone.toDayOfMonth(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
-        throw Exception("Illegal type MyTime of argument for function toDayOfMonth", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    static inline UInt8 execute(UInt64 t, const DateLUTImpl & ) {
+        return (UInt8)((t >> 41) & 31);
     }
 
     using FactorTransform = ToStartOfMonthImpl;
@@ -451,7 +451,7 @@ struct ToDayOfWeekImpl
     }
     static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toDayOfWeek(DayNum_t(d));
+        return time_zone.toDayOfWeek(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toDayOfWeek", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -528,7 +528,7 @@ struct ToRelativeYearNumImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toYear(DayNum_t(d));
+        return time_zone.toYear(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeYearNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -547,7 +547,7 @@ struct ToRelativeQuarterNumImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeQuarterNum(DayNum_t(d));
+        return time_zone.toRelativeQuarterNum(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeQuarterNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -566,7 +566,7 @@ struct ToRelativeMonthNumImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeMonthNum(DayNum_t(d));
+        return time_zone.toRelativeMonthNum(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeMonthNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -585,7 +585,7 @@ struct ToRelativeWeekNumImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeWeekNum(DayNum_t(d));
+        return time_zone.toRelativeWeekNum(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeWeekNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -604,7 +604,7 @@ struct ToRelativeDayNumImpl
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl &)
     {
-        return static_cast<DayNum_t>(d);
+        return static_cast<DayNum>(d);
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeDayNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -624,7 +624,7 @@ struct ToRelativeHourNumImpl
     }
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeHourNum(DayNum_t(d));
+        return time_zone.toRelativeHourNum(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeHourNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -643,7 +643,7 @@ struct ToRelativeMinuteNumImpl
     }
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeMinuteNum(DayNum_t(d));
+        return time_zone.toRelativeMinuteNum(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeMinuteNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -662,7 +662,7 @@ struct ToRelativeSecondNumImpl
     }
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.fromDayNum(DayNum_t(d));
+        return time_zone.fromDayNum(DayNum(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toRelativeSecondNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -681,7 +681,7 @@ struct ToYYYYMMImpl
     }
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toNumYYYYMM(static_cast<DayNum_t>(d));
+        return time_zone.toNumYYYYMM(static_cast<DayNum>(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toYYYYMM", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -700,7 +700,7 @@ struct ToYYYYMMDDImpl
     }
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toNumYYYYMMDD(static_cast<DayNum_t>(d));
+        return time_zone.toNumYYYYMMDD(static_cast<DayNum>(d));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toYYYYMMDD", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -719,7 +719,7 @@ struct ToYYYYMMDDhhmmssImpl
     }
     static inline UInt64 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toNumYYYYMMDDhhmmss(time_zone.toDate(static_cast<DayNum_t>(d)));
+        return time_zone.toNumYYYYMMDDhhmmss(time_zone.toDate(static_cast<DayNum>(d)));
     }
     static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
         throw Exception("Illegal type MyTime of argument for function toYYYYMMDDhhmmss", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -921,7 +921,7 @@ struct AddSecondsImpl
 
     static inline UInt32 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
     {
-        return time_zone.fromDayNum(DayNum_t(d)) + delta;
+        return time_zone.fromDayNum(DayNum(d)) + delta;
     }
 
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl &)
@@ -969,7 +969,7 @@ struct AddMinutesImpl
 
     static inline UInt32 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
     {
-        return time_zone.fromDayNum(DayNum_t(d)) + delta * 60;
+        return time_zone.fromDayNum(DayNum(d)) + delta * 60;
     }
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
     {
@@ -988,7 +988,7 @@ struct AddHoursImpl
 
     static inline UInt32 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
     {
-        return time_zone.fromDayNum(DayNum_t(d)) + delta * 3600;
+        return time_zone.fromDayNum(DayNum(d)) + delta * 3600;
     }
 
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
@@ -1054,7 +1054,7 @@ struct AddMonthsImpl
 
     static inline UInt16 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
     {
-        return time_zone.addMonths(DayNum_t(d), delta);
+        return time_zone.addMonths(DayNum(d), delta);
     }
 
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl &)
@@ -1080,7 +1080,7 @@ struct AddYearsImpl
 
     static inline UInt16 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
     {
-        return time_zone.addYears(DayNum_t(d), delta);
+        return time_zone.addYears(DayNum(d), delta);
     }
 
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
@@ -1651,6 +1651,176 @@ private:
         calculateTimeDiff(x_time, y_time, seconds, micro_seconds, neg);
         UInt32 months = MonthDiffCalculator::execute(x_time, y_time, neg);
         return ResultCalculator::execute(seconds, micro_seconds, months, neg ? -1 : 1);
+    }
+};
+
+/** TiDBDateDiff(t1, t2)
+ *  Supports for tidb's dateDiff,
+ *  returns t1 − t2 expressed as a value in days from one date to the other.
+ *  Only the date parts of the values are used in the calculation.
+ */
+class FunctionTiDBDateDiff : public IFunction
+{
+public:
+    static constexpr auto name = "tidbDateDiff";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionTiDBDateDiff>(); };
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    bool isVariadic() const override { return false; }
+    size_t getNumberOfArguments() const override { return 2; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if(!removeNullable(arguments[0]).get()->isDateOrDateTime())
+            throw Exception("First argument for function " + getName() + " must be MyDate or MyDateTime",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if(!removeNullable(arguments[1]).get()->isDateOrDateTime())
+            throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        // to align with tidb, dateDiff with zeroDate input should return null, so always return nullable type
+        return makeNullable(std::make_shared<DataTypeInt64>());
+    }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    {
+        bool has_nullable = false;
+        bool has_null_constant = false;
+        for(const auto & arg : arguments)
+        {
+            const auto & elem = block.getByPosition(arg);
+            has_nullable |= elem.type->isNullable();
+            has_null_constant |= elem.type->onlyNull();
+        }
+
+        if (has_null_constant)
+        {
+            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            return;
+        }
+
+        ColumnPtr x_p = block.getByPosition(arguments[0]).column;
+        ColumnPtr y_p = block.getByPosition(arguments[1]).column;
+        if (has_nullable)
+        {
+            Block temporary_block = createBlockWithNestedColumns(block, arguments, result);
+            x_p = temporary_block.getByPosition(arguments[0]).column;
+            y_p = temporary_block.getByPosition(arguments[1]).column;
+        }
+
+        const IColumn & x = *x_p;
+        const IColumn & y = *y_p;
+
+        size_t rows = block.rows();
+        auto res = ColumnInt64::create(rows);
+        auto result_null_map = ColumnUInt8::create(rows);
+
+        dispatch(x, y, res->getData(), result_null_map->getData());
+
+        if (block.getByPosition(arguments[0]).type->isNullable()
+            || block.getByPosition(arguments[1]).type->isNullable())
+        {
+            ColumnUInt8::Container &vec_result_null_map = result_null_map->getData();
+            ColumnPtr x_p = block.getByPosition(arguments[0]).column;
+            ColumnPtr y_p = block.getByPosition(arguments[1]).column;
+            for (size_t i = 0; i < rows; i++) {
+                vec_result_null_map[i] |= (x_p->isNullAt(i) || y_p->isNullAt(i));
+            }
+        }
+        block.getByPosition(result).column = ColumnNullable::create(std::move(res), std::move(result_null_map));
+    }
+private:
+    void dispatch(const IColumn & x, const IColumn & y, ColumnInt64::Container & res, ColumnUInt8::Container & res_null_map)
+    {
+        auto * x_const = checkAndGetColumnConst<ColumnUInt64>(&x);
+        auto * y_const = checkAndGetColumnConst<ColumnUInt64>(&y);
+        if(x_const)
+        {
+            auto * y_vec = checkAndGetColumn<ColumnUInt64>(&y);
+            constant_vector(x_const->getValue<UInt64>(), *y_vec, res, res_null_map);
+        }
+        else if (y_const)
+        {
+            auto * x_vec = checkAndGetColumn<ColumnUInt64>(&x);
+            vector_constant(*x_vec, y_const->getValue<UInt64>(), res, res_null_map);
+        }
+        else
+        {
+            auto * x_vec = checkAndGetColumn<ColumnUInt64>(&x);
+            auto * y_vec = checkAndGetColumn<ColumnUInt64>(&y);
+            vector_vector(*x_vec, *y_vec, res, res_null_map);
+        }
+    }
+
+    void vector_vector(const ColumnVector<UInt64> & x, const ColumnVector<UInt64> & y,
+                       ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
+    {
+        const auto & x_data = x.getData();
+        const auto & y_data = y.getData();
+        for (size_t i = 0, size = x.size(); i < size; ++i)
+        {
+            result_null_map[i] = (x_data[i] == 0 || y_data[i] == 0);
+            if (!result_null_map[i])
+                result[i] = calculate(x_data[i], y_data[i]);
+        }
+    }
+
+    void vector_constant(const ColumnVector<UInt64> & x, UInt64 y,
+                         ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
+    {
+        const auto & x_data = x.getData();
+        if (y == 0)
+        {
+            for (size_t i = 0, size = x.size(); i < size; ++i)
+                result_null_map[i] = 1;
+        }
+        else
+        {
+            for (size_t i = 0, size = x.size(); i < size; ++i)
+            {
+                result_null_map[i] = (x_data[i] == 0);
+                if (!result_null_map[i])
+                    result[i] = calculate(x_data[i], y);
+            }
+        }
+    }
+
+    void constant_vector(UInt64 x, const ColumnVector<UInt64> & y,
+                         ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
+    {
+        const auto & y_data = y.getData();
+        if (x == 0)
+        {
+            for (size_t i = 0, size = y.size(); i < size; ++i)
+                result_null_map[i] = 1;
+        }
+        else
+        {
+            for (size_t i = 0, size = y.size(); i < size; ++i) {
+                result_null_map[i] = (y_data[i] == 0);
+                if (!result_null_map[i])
+                    result[i] = calculate(x, y_data[i]);
+            }
+        }
+    }
+
+    Int64 calculate(UInt64 x_packed, UInt64 y_packed)
+    {
+        MyDateTime x(x_packed);
+        MyDateTime y(y_packed);
+
+        Int64 days_x = calcDayNum(x.year, x.month, x.day);
+        Int64 days_y = calcDayNum(y.year, y.month, y.day);
+
+        return days_x - days_y;
     }
 };
 

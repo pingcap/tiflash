@@ -22,7 +22,7 @@ endif ()
 # Write compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
-option (USE_CCACHE "Set to FALSE to disable ccache" ON)
+option (USE_CCACHE "Set to OFF to disable ccache" ON)
 include (cmake/find_ccache.cmake)
 
 if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "None")
@@ -138,11 +138,8 @@ if (CMAKE_VERSION VERSION_LESS "3.8.0")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
 else ()
     set (CMAKE_CXX_STANDARD 17)
-    set (CMAKE_CXX_EXTENSIONS 0) # https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html#prop_tgt:CXX_EXTENSIONS
+    set (CMAKE_CXX_EXTENSIONS 1) # https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html#prop_tgt:CXX_EXTENSIONS
     set (CMAKE_CXX_STANDARD_REQUIRED ON)
-    set (CXX_FLAGS_INTERNAL_COMPILER "-std=c++1z")
-    # This needs to propagate to vendored projects in contrib
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 endif ()
 
 if (NOT ARCH_ARM)
@@ -150,14 +147,24 @@ if (NOT ARCH_ARM)
     set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} -O3")
 endif ()
 
+option (DEBUG_WITHOUT_DEBUG_INFO "Set to ON to build dev target without debug info (remove flag `-g` in order to accelerate compiling speed and reduce target binary size)" OFF)
+if (DEBUG_WITHOUT_DEBUG_INFO)
+    string(REPLACE "-g" "" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+    string(REPLACE "-g" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+    message (STATUS "Build debug target without debug info")
+else ()
+    set (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g3 -ggdb3")
+    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g3 -ggdb3")
+endif ()
+
 set (CMAKE_BUILD_COLOR_MAKEFILE          ON)
 set (CMAKE_CXX_FLAGS                     "${CMAKE_CXX_FLAGS} ${COMPILER_FLAGS} ${PLATFORM_EXTRA_CXX_FLAG} -fno-omit-frame-pointer ${COMMON_WARNING_FLAGS} ${CXX_WARNING_FLAGS} ${GLIBC_COMPATIBILITY_COMPILE_FLAGS}")
 set (CMAKE_CXX_FLAGS_RELWITHDEBINFO      "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${CMAKE_CXX_FLAGS_ADD}")
-set (CMAKE_CXX_FLAGS_DEBUG               "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g3 -ggdb3 -fno-inline ${CMAKE_CXX_FLAGS_ADD}")
+set (CMAKE_CXX_FLAGS_DEBUG               "${CMAKE_CXX_FLAGS_DEBUG} -O0 -fno-inline ${CMAKE_CXX_FLAGS_ADD}")
 
 set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} ${COMPILER_FLAGS} -fno-omit-frame-pointer ${COMMON_WARNING_FLAGS} ${GLIBC_COMPATIBILITY_COMPILE_FLAGS} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} ${CMAKE_C_FLAGS_ADD}")
-set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} -O0 -g3 -ggdb3 -fno-inline ${CMAKE_C_FLAGS_ADD}")
+set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} -O0 -fno-inline ${CMAKE_C_FLAGS_ADD}")
 
 if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND ARCH_FREEBSD))
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
@@ -244,18 +251,8 @@ include (cmake/lib_name.cmake)
 include (cmake/find_icu4c.cmake)
 include (cmake/find_boost.cmake)
 
-# Clickhouse wants to use internal zlib (contrib/zlib-ng) to speed up by default. But it will conflict with `find_package(ZLIB REQUIRED)` from cmake.
-# If `ENABLE_RDKAFKA` is true, librdkafka will fix the conflict by using the standard one.
-# librdkafka is useless for tiflash, need to set `USE_INTERNAL_ZLIB_LIBRARY` and `ENABLE_RDKAFKA` to OFF.
-set (ENABLE_RDKAFKA OFF CACHE BOOL "" FORCE)
 set (USE_INTERNAL_ZLIB_LIBRARY OFF CACHE BOOL "" FORCE)
-option (ENABLE_ODBC "Set to ON to link odbc libraries if exists" OFF)
-option (ENABLE_CAPNP "Set to ON to link capnp" OFF)
-option (ENABLE_MONGODB "Enable MongoDB" OFF)
 option (ENABLE_CPPUNIT "Enable CppUnit" OFF)
-option (POCO_ENABLE_MONGODB "Enable MongoDB in Poco" OFF)
-option (ENABLE_MYSQL_STORAGE "Set to ON to enable mysql storage" OFF)
-message(STATUS "feature odbc: ${ENABLE_ODBC} capnp: ${ENABLE_CAPNP} mysql-storage: ${ENABLE_MYSQL_STORAGE} ")
 
 include (cmake/find_zlib.cmake)
 include (cmake/find_zstd.cmake)
@@ -275,12 +272,6 @@ include (cmake/find_rt.cmake)
 include (cmake/find_execinfo.cmake)
 include (cmake/find_readline_edit.cmake)
 include (cmake/find_re2.cmake)
-if (ENABLE_RDKAFKA)
-    include (cmake/find_rdkafka.cmake)
-endif()
-if (ENABLE_CAPNP)
-    include (cmake/find_capnp.cmake)
-endif()
 include (cmake/find_llvm.cmake)
 include (cmake/find_grpc.cmake)
 include (cmake/find_kvproto.cmake)
@@ -299,6 +290,7 @@ find_contrib_lib(double-conversion)
 # Need to process before "contrib" dir:
 include (libs/libcommon/cmake/find_gperftools.cmake)
 include (libs/libcommon/cmake/find_jemalloc.cmake)
+include (libs/libcommon/cmake/find_mimalloc.cmake)
 include (libs/libcommon/cmake/find_cctz.cmake)
 if (ENABLE_MYSQL_STORAGE)
     include (libs/libmysqlxx/cmake/find_mysqlclient.cmake)

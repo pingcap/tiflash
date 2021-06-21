@@ -22,7 +22,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <common/intExp.h>
 
-#include <boost/math/common_factor.hpp>
+#include <boost/integer/common_factor.hpp>
 #include <ext/range.h>
 
 
@@ -1097,7 +1097,14 @@ struct AbsImpl
     static inline ResultType apply(A a)
     {
         if constexpr (std::is_integral_v<A> && std::is_signed_v<A>)
+        {
+            // keep the same behavior as mysql and tidb, even though error no is not the same.
+            if unlikely(a == INT64_MIN)
+            {
+                throw Exception("BIGINT value is out of range in 'abs(-9223372036854775808)'");
+            }
             return a < 0 ? static_cast<ResultType>(~a) + 1 : a;
+        }
         else if constexpr (std::is_integral_v<A> && std::is_unsigned_v<A>)
             return static_cast<ResultType>(a);
         else if constexpr (std::is_floating_point_v<A>)
@@ -1118,7 +1125,7 @@ struct GCDImpl<A, B, false>
     {
         throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<A>::Type(a), typename NumberTraits::ToInteger<B>::Type(b));
         throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<B>::Type(b), typename NumberTraits::ToInteger<A>::Type(a));
-        return boost::math::gcd(
+        return boost::integer::gcd(
             typename NumberTraits::ToInteger<Result>::Type(a),
             typename NumberTraits::ToInteger<Result>::Type(b));
     }
@@ -1157,7 +1164,7 @@ struct LCMImpl<A,B,false>
     {
         throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<A>::Type(a), typename NumberTraits::ToInteger<B>::Type(b));
         throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<B>::Type(b), typename NumberTraits::ToInteger<A>::Type(a));
-        return boost::math::lcm(
+        return boost::integer::lcm(
             typename NumberTraits::ToInteger<Result>::Type(a),
             typename NumberTraits::ToInteger<Result>::Type(b));
     }
@@ -2583,7 +2590,7 @@ template <> struct FunctionUnaryArithmeticMonotonicity<NameIntExp10>
 /// Optimizations for integer division by a constant.
 
 #if __SSE2__
-    #define LIBDIVIDE_USE_SSE2 1
+    #define LIBDIVIDE_SSE2 1
 #endif
 
 #include <libdivide.h>

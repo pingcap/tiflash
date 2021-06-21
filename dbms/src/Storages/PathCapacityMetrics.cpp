@@ -121,7 +121,7 @@ FsStats PathCapacityMetrics::getFsStats() const
         total_stat.capacity_size = capacity_quota;
 
     // PD get weird if used_size == 0, make it 1 byte at least
-    total_stat.used_size = std::max(1, total_stat.used_size);
+    total_stat.used_size = std::max<UInt64>(1, total_stat.used_size);
 
     // avail size
     total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;

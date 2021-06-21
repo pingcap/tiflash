@@ -14,18 +14,20 @@
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
 
+#pragma GCC diagnostic ignored "-Wpragmas"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
 
 #include <boost/geometry.hpp>
-
-#pragma GCC diagnostic pop
-
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
 #include <boost/geometry/geometries/multi_polygon.hpp>
 #include <boost/geometry/geometries/segment.hpp>
 #include <boost/geometry/algorithms/comparable_distance.hpp>
 #include <boost/geometry/strategies/cartesian/distance_pythagoras.hpp>
+
+#pragma GCC diagnostic pop
 
 #include <array>
 #include <vector>
@@ -528,7 +530,7 @@ ColumnPtr pointInPolygon(const ColumnVector<T> & x, const ColumnVector<U> & y, P
         data[i] = static_cast<UInt8>(impl.contains(x_data[i], y_data[i]));
     }
 
-    return std::move(result);
+    return result;
 }
 
 template <typename ... Types>

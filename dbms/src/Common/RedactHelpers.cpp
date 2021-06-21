@@ -1,7 +1,7 @@
 #include <Common/RedactHelpers.h>
 #include <Common/hex.h>
 #include <IO/WriteHelpers.h>
-#include <common/Types.h>
+#include <common/types.h>
 #include <pingcap/RedactHelpers.h>
 
 #include <iomanip>

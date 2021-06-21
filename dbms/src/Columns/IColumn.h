@@ -5,12 +5,10 @@
 #include <Common/COWPtr.h>
 #include <Common/PODArray.h>
 #include <Common/Exception.h>
+#include <Common/SipHash.h>
+#include <Common/WeakHash.h>
 #include <common/StringRef.h>
 #include <Storages/Transaction/Collator.h>
-
-
-class SipHash;
-
 
 namespace DB
 {
@@ -110,7 +108,7 @@ public:
     {
         MutablePtr res = cloneEmpty();
         res->insertRangeFrom(*this, start, length);
-        return std::move(res);
+        return res;
     }
 
     /// Appends new value at the end of column (column's size is increased by 1).
@@ -176,6 +174,14 @@ public:
     /// On subsequent calls of this method for sequence of column values of arbitary types,
     ///  passed bytes to hash must identify sequence of values unambiguously.
     virtual void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
+
+    using HashValues = PaddedPODArray<SipHash>;
+    virtual void updateHashWithValues(HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
+
+    /// Update hash function value. Hash is calculated for each element.
+    /// It's a fast weak hash function. Mainly need to scatter data between threads.
+    /// WeakHash32 must have the same size as column.
+    virtual void updateWeakHash32(WeakHash32 & hash) const = 0;
 
     /** Removes elements that don't match the filter.
       * Is used in WHERE and HAVING operations.

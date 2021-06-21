@@ -78,12 +78,62 @@
 #include <jemalloc/jemalloc.h>
 #endif
 
+#if USE_MIMALLOC
+#include <Poco/JSON/Parser.h>
+#include <mimalloc.h>
+
+#include <fstream>
+#endif
+
 #ifndef NDEBUG
 #ifdef FIU_ENABLE
 #include <fiu.h>
 #endif
 #endif
 
+
+#if USE_MIMALLOC
+#define TRY_LOAD_CONF(NAME)                          \
+    {                                                \
+        try                                          \
+        {                                            \
+            auto value = obj->getValue<long>(#NAME); \
+            mi_option_set(NAME, value);              \
+        }                                            \
+        catch (...)                                  \
+        {                                            \
+        }                                            \
+    }
+
+void loadMiConfig(Logger * log)
+{
+    auto config = getenv("MIMALLOC_CONF");
+    if (config)
+    {
+        LOG_INFO(log, "Got environment variable MIMALLOC_CONF: " << config);
+        Poco::JSON::Parser parser;
+        std::ifstream data{config};
+        Poco::Dynamic::Var result = parser.parse(data);
+        auto obj = result.extract<Poco::JSON::Object::Ptr>();
+        TRY_LOAD_CONF(mi_option_show_errors);
+        TRY_LOAD_CONF(mi_option_show_stats);
+        TRY_LOAD_CONF(mi_option_verbose);
+        TRY_LOAD_CONF(mi_option_eager_commit);
+        TRY_LOAD_CONF(mi_option_eager_region_commit);
+        TRY_LOAD_CONF(mi_option_large_os_pages);
+        TRY_LOAD_CONF(mi_option_reserve_huge_os_pages);
+        TRY_LOAD_CONF(mi_option_segment_cache);
+        TRY_LOAD_CONF(mi_option_page_reset);
+        TRY_LOAD_CONF(mi_option_segment_reset);
+        TRY_LOAD_CONF(mi_option_reset_delay);
+        TRY_LOAD_CONF(mi_option_use_numa_nodes);
+        TRY_LOAD_CONF(mi_option_reset_decommits);
+        TRY_LOAD_CONF(mi_option_eager_commit_delay);
+        TRY_LOAD_CONF(mi_option_os_tag);
+    }
+}
+#undef TRY_LOAD_CONF
+#endif
 namespace CurrentMetrics
 {
 extern const Metric Revision;
@@ -292,6 +342,30 @@ void UpdateMallocConfig([[maybe_unused]] Logger * log)
         RUN_FAIL_RETURN(je_mallctl("background_thread", nullptr, nullptr, (void *)&new_b, sz_b));
         LOG_INFO(log, "Set jemalloc.background_thread " << new_b);
     }
+#endif
+
+#if USE_MIMALLOC
+#define MI_OPTION_SHOW(OPTION) LOG_INFO(log, "mimalloc." #OPTION ": " << mi_option_get(OPTION));
+
+    int version = mi_version();
+    LOG_INFO(log, "Got mimalloc version: " << (version / 100) << "." << ((version % 100) / 10) << "." << (version % 10));
+    loadMiConfig(log);
+    MI_OPTION_SHOW(mi_option_show_errors);
+    MI_OPTION_SHOW(mi_option_show_stats);
+    MI_OPTION_SHOW(mi_option_verbose);
+    MI_OPTION_SHOW(mi_option_eager_commit);
+    MI_OPTION_SHOW(mi_option_eager_region_commit);
+    MI_OPTION_SHOW(mi_option_large_os_pages);
+    MI_OPTION_SHOW(mi_option_reserve_huge_os_pages);
+    MI_OPTION_SHOW(mi_option_segment_cache);
+    MI_OPTION_SHOW(mi_option_page_reset);
+    MI_OPTION_SHOW(mi_option_segment_reset);
+    MI_OPTION_SHOW(mi_option_reset_delay);
+    MI_OPTION_SHOW(mi_option_use_numa_nodes);
+    MI_OPTION_SHOW(mi_option_reset_decommits);
+    MI_OPTION_SHOW(mi_option_eager_commit_delay);
+    MI_OPTION_SHOW(mi_option_os_tag);
+#undef MI_OPTION_SHOW
 #endif
 #undef RUN_FAIL_RETURN
 }
@@ -1177,7 +1251,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 tiflash_instance_wrap.tmt->getKVStore()->traverseRegions([&batch_read_index_req](RegionID, const RegionPtr & region) {
                     batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region));
                 });
-                tiflash_instance_wrap.proxy_helper->batchReadIndex(batch_read_index_req);
+                tiflash_instance_wrap.proxy_helper->batchReadIndex(
+                    batch_read_index_req, tiflash_instance_wrap.tmt->batchReadIndexTimeout());
             }
             LOG_INFO(log, "start to wait for terminal signal");
         }

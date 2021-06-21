@@ -1,5 +1,6 @@
-#include <Common/Exception.h>
 #include <Common/Arena.h>
+#include <Common/Exception.h>
+#include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 
 #include <common/unaligned.h>
@@ -114,6 +115,37 @@ void ColumnDecimal<T>::updateHashWithValue(size_t n, SipHash & hash, std::shared
 }
 
 template <typename T>
+void ColumnDecimal<T>::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+{
+    for (size_t i = 0; i < data.size(); ++i)
+    {
+        hash_values[i].update(data[i]);
+    }
+}
+
+template <typename T>
+void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash) const
+{
+    auto s = data.size();
+
+    if (hash.getData().size() != s)
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
+                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+
+    const T * begin = data.data();
+    const T * end = begin + s;
+    UInt32 * hash_data = hash.getData().data();
+
+    while (begin < end)
+    {
+        *hash_data = wideIntHashCRC32(*begin, *hash_data);
+
+        ++begin;
+        ++hash_data;
+    }
+}
+
+template <typename T>
 void ColumnDecimal<T>::getPermutation(bool reverse, size_t limit, int , IColumn::Permutation & res) const
 {
 #if 1 /// TODO: perf test
@@ -145,9 +177,14 @@ ColumnPtr ColumnDecimal<T>::permute(const IColumn::Permutation & perm, size_t li
     for (size_t i = 0; i < size; ++i)
         res_data[i] = data[perm[i]];
 
-    return std::move(res);
+    return res;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpragmas"
+#ifndef __clang__
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
+#endif
 template <typename T>
 MutableColumnPtr ColumnDecimal<T>::cloneResized(size_t size) const
 {
@@ -168,7 +205,7 @@ MutableColumnPtr ColumnDecimal<T>::cloneResized(size_t size) const
         }
     }
 
-    return std::move(res);
+    return res;
 }
 
 template <typename T>
@@ -193,6 +230,8 @@ void ColumnDecimal<T>::insertRangeFrom(const IColumn & src, size_t start, size_t
     data.resize(old_size + length);
     memcpy(data.data() + old_size, &src_vec.data[start], length * sizeof(data[0]));
 }
+
+#pragma GCC diagnostic pop
 
 template <typename T>
 ColumnPtr ColumnDecimal<T>::filter(const IColumn::Filter & filt, ssize_t result_size_hint) const
@@ -220,7 +259,7 @@ ColumnPtr ColumnDecimal<T>::filter(const IColumn::Filter & filt, ssize_t result_
         ++data_pos;
     }
 
-    return std::move(res);
+    return res;
 }
 
 template <typename T>
@@ -247,7 +286,7 @@ ColumnPtr ColumnDecimal<T>::replicate(const IColumn::Offsets & offsets) const
             res_data.push_back(data[i]);
     }
 
-    return std::move(res);
+    return res;
 }
 
 template <typename T>

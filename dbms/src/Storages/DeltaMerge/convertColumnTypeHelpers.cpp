@@ -1,6 +1,7 @@
 #include <Columns/ColumnNullable.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDecimal.h>
+#include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeString.h>
@@ -12,6 +13,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int BAD_ARGUMENTS;
+}
+
 namespace DM
 {
 
@@ -29,11 +35,11 @@ void insertRangeFromWithNumericTypeCast(const ColumnPtr &    from_col, //
                                         size_t               rows_limit)
 {
     // Caller should ensure that both from_col / to_col
-    // * is numeric
+    // * are both integer or float32 -> float64
     // * no nullable wrapper
     // * both signed or unsigned
-    static_assert(std::is_integral_v<TypeFrom>);
-    static_assert(std::is_integral_v<TypeTo>);
+    static_assert((std::is_integral_v<TypeFrom> && std::is_integral_v<TypeTo>)
+                  || (std::is_same<TypeFrom, Float32>::value && std::is_same<TypeTo, Float64>::value));
     constexpr bool is_both_signed_or_unsigned = !(std::is_unsigned_v<TypeFrom> ^ std::is_unsigned_v<TypeTo>);
     static_assert(is_both_signed_or_unsigned);
     assert(from_col != nullptr);
@@ -70,6 +76,10 @@ void insertRangeFromWithNumericTypeCast(const ColumnPtr &    from_col, //
         else if (read_define.default_value.getType() == Field::Types::UInt64)
         {
             default_value = read_define.default_value.safeGet<UInt64>();
+        }
+        else if (read_define.default_value.getType() == Field::Types::Float64)
+        {
+            default_value = read_define.default_value.safeGet<Float64>();
         }
         else
         {
@@ -221,7 +231,12 @@ bool castNonNullNumericColumn(const DataTypePtr &  disk_type_not_null_,
         memory_col_not_null->insertRangeFrom(*disk_col_not_null, rows_offset, rows_limit);
         return true;
     }
-
+    else if (checkDataType<DataTypeFloat32>(disk_type_not_null) && checkDataType<DataTypeFloat64>(read_type_not_null))
+    {
+        insertRangeFromWithNumericTypeCast<Float32, Float64>(
+            disk_col_not_null, null_map, read_define, memory_col_not_null, rows_offset, rows_limit);
+        return true;
+    }
     // else is not support
     return false;
 }

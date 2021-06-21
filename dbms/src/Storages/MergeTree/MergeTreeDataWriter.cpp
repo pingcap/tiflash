@@ -33,7 +33,7 @@ void buildScatterSelector(
         IColumn::Selector & selector)
 {
     /// Use generic hashed variant since partitioning is unlikely to be a bottleneck.
-    using Data = HashMap<UInt128, size_t, UInt128TrivialHash>;
+    using Data = HashMap<UInt128, size_t, TrivialHash>;
     Data partitions_map;
 
     size_t num_rows = columns[0]->size();
@@ -176,13 +176,13 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(BlockWithPa
     String part_name;
     if (data.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
     {
-        DayNum_t min_date(minmax_idx.min_values[data.minmax_idx_date_column_pos].get<UInt64>());
-        DayNum_t max_date(minmax_idx.max_values[data.minmax_idx_date_column_pos].get<UInt64>());
+        DayNum min_date(minmax_idx.min_values[data.minmax_idx_date_column_pos].get<UInt64>());
+        DayNum max_date(minmax_idx.max_values[data.minmax_idx_date_column_pos].get<UInt64>());
 
         const auto & date_lut = DateLUT::instance();
 
-        DayNum_t min_month = date_lut.toFirstDayNumOfMonth(DayNum_t(min_date));
-        DayNum_t max_month = date_lut.toFirstDayNumOfMonth(DayNum_t(max_date));
+        auto min_month = date_lut.toNumYYYYMM(min_date);
+        auto max_month = date_lut.toNumYYYYMM(max_date);
 
         if (min_month != max_month)
             throw Exception("Logical error: part spans more than one month.");

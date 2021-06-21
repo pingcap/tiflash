@@ -10,13 +10,12 @@
 #include <common/DateLUT.h>
 #include <common/LocalDate.h>
 #include <common/LocalDateTime.h>
-#include <common/find_first_symbols.h>
+#include <common/find_symbols.h>
 
 #include <Core/Types.h>
 #include <Core/UUID.h>
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/UInt128.h>
 #include <common/StringRef.h>
 #include <Common/Decimal.h>
 #include <Common/MyTime.h>
@@ -26,7 +25,6 @@
 #include <IO/VarInt.h>
 #include <IO/DoubleConverter.h>
 #include <IO/WriteBufferFromString.h>
-
 
 namespace DB
 {
@@ -124,11 +122,6 @@ inline void writeFloatText(T x, WriteBuffer & buf)
     buf.write(buffer, builder.position());
 }
 
-
-inline void writeString(const String & s, WriteBuffer & buf)
-{
-    buf.write(s.data(), s.size());
-}
 
 inline void writeString(const char * data, size_t size, WriteBuffer & buf)
 {
@@ -545,7 +538,7 @@ inline void writeDateText(const LocalDate & date, WriteBuffer & buf)
 }
 
 template <char delimiter = '-'>
-inline void writeDateText(DayNum_t date, WriteBuffer & buf)
+inline void writeDateText(DayNum date, WriteBuffer & buf)
 {
     if (unlikely(!date))
     {

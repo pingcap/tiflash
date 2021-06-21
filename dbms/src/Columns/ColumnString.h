@@ -231,6 +231,36 @@ public:
         }
     }
 
+    void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const override
+    {
+        if (collator != nullptr)
+        {
+            for (size_t i = 0; i < offsets.size(); ++i)
+            {
+                size_t string_size = sizeAt(i);
+                size_t offset = offsetAt(i);
+
+                auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size, sort_key_container);
+                string_size = sort_key.size;
+                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+                hash_values[i].update(sort_key.data, sort_key.size);
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < offsets.size(); ++i)
+            {
+                size_t string_size = sizeAt(i);
+                size_t offset = offsetAt(i);
+
+                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+                hash_values[i].update(reinterpret_cast<const char *>(&chars[offset]), string_size);
+            }
+        }
+    }
+
+    void updateWeakHash32(WeakHash32 & hash) const override;
+
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;

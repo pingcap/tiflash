@@ -7,9 +7,6 @@
 [submodule "contrib/lz4"]
 	path = contrib/lz4
 	url = https://github.com/lz4/lz4.git
-[submodule "contrib/librdkafka"]
-	path = contrib/librdkafka
-	url = https://github.com/edenhill/librdkafka.git
 [submodule "contrib/cctz"]
 	path = contrib/cctz
 	url = https://github.com/google/cctz.git
@@ -53,3 +50,9 @@
 [submodule "contrib/jemalloc"]
 	path = contrib/jemalloc
 	url = https://github.com/jemalloc/jemalloc.git
+[submodule "contrib/mimalloc"]
+	path = contrib/mimalloc
+	url = https://github.com/microsoft/mimalloc
+[submodule "contrib/libunwind"]
+	path = contrib/libunwind
+	url = https://github.com/libunwind/libunwind

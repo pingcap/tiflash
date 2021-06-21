@@ -10,12 +10,11 @@
 
 #include <DataStreams/ColumnGathererStream.h>
 
-#include <Common/Exception.h>
 #include <Common/Arena.h>
+#include <Common/Exception.h>
+#include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
-
-
 
 namespace DB
 {
@@ -61,7 +60,7 @@ MutableColumnPtr ColumnArray::cloneResized(size_t to_size) const
     auto res = ColumnArray::create(getData().cloneEmpty());
 
     if (to_size == 0)
-        return std::move(res);
+        return res;
 
     size_t from_size = size();
 
@@ -89,7 +88,7 @@ MutableColumnPtr ColumnArray::cloneResized(size_t to_size) const
             res->getOffsets()[i] = offset;
     }
 
-    return std::move(res);
+    return res;
 }
 
 
@@ -207,6 +206,52 @@ void ColumnArray::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<
         getData().updateHashWithValue(offset + i, hash, collator, sort_key_container);
 }
 
+void ColumnArray::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+{
+    for (size_t i = 0, sz = size(); i < sz; ++i)
+    {
+        size_t array_size = sizeAt(i);
+        size_t offset = offsetAt(i);
+
+        hash_values[i].update(array_size);
+        for (size_t j = 0; j < array_size; ++j)
+        {
+            /// TODO: update one hash in a batch.
+            getData().updateHashWithValue(offset + j, hash_values[i], collator, sort_key_container);
+        }
+    }
+}
+
+void ColumnArray::updateWeakHash32(WeakHash32 & hash) const
+{
+    auto s = offsets->size();
+    if (hash.getData().size() != s)
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
+                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+
+    WeakHash32 internal_hash(data->size());
+    data->updateWeakHash32(internal_hash);
+
+    Offset prev_offset = 0;
+    const auto & offsets_data = getOffsets();
+    auto & hash_data = hash.getData();
+    auto & internal_hash_data = internal_hash.getData();
+
+    for (size_t i = 0; i < s; ++i)
+    {
+        /// This row improves hash a little bit according to integration tests.
+        /// It is the same as to use previous hash value as the first element of array.
+        hash_data[i] = intHashCRC32(hash_data[i]);
+
+        for (size_t row = prev_offset; row < offsets_data[i]; ++row)
+            /// It is probably not the best way to combine hashes.
+            /// But much better then xor which lead to similar hash for arrays like [1], [1, 1, 1], [1, 1, 1, 1, 1], ...
+            /// Much better implementation - to add offsets as an optional argument to updateWeakHash32.
+            hash_data[i] = intHashCRC32(internal_hash_data[row], hash_data[i]);
+
+        prev_offset = offsets_data[i];
+    }
+}
 
 void ColumnArray::insert(const Field & x)
 {
@@ -425,7 +470,7 @@ ColumnPtr ColumnArray::filterNumber(const Filter & filt, ssize_t result_size_hin
     Offsets & res_offsets = res->getOffsets();
 
     filterArraysImpl<T>(static_cast<const ColumnVector<T> &>(*data).getData(), getOffsets(), res_elems, res_offsets, filt, result_size_hint);
-    return std::move(res);
+    return res;
 }
 
 ColumnPtr ColumnArray::filterString(const Filter & filt, ssize_t result_size_hint) const
@@ -493,7 +538,7 @@ ColumnPtr ColumnArray::filterString(const Filter & filt, ssize_t result_size_hin
         }
     }
 
-    return std::move(res);
+    return res;
 }
 
 ColumnPtr ColumnArray::filterGeneric(const Filter & filt, ssize_t result_size_hint) const
@@ -538,7 +583,7 @@ ColumnPtr ColumnArray::filterGeneric(const Filter & filt, ssize_t result_size_hi
         }
     }
 
-    return std::move(res);
+    return res;
 }
 
 ColumnPtr ColumnArray::filterNullable(const Filter & filt, ssize_t result_size_hint) const
@@ -627,7 +672,7 @@ ColumnPtr ColumnArray::permute(const Permutation & perm, size_t limit) const
     if (current_offset != 0)
         res->data = data->permute(nested_perm, current_offset);
 
-    return std::move(res);
+    return res;
 }
 
 void ColumnArray::getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const

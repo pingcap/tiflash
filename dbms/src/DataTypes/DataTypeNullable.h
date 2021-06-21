@@ -23,35 +23,35 @@ public:
 
     void serializeBinaryBulkWithMultipleStreams(
         const IColumn & column,
-        OutputStreamGetter getter,
+        const OutputStreamGetter & getter,
         size_t offset,
         size_t limit,
         bool position_independent_encoding,
-        SubstreamPath path) const override;
+        SubstreamPath & path) const override;
 
     void deserializeBinaryBulkWithMultipleStreams(
         IColumn & column,
-        InputStreamGetter getter,
+        const InputStreamGetter & getter,
         size_t limit,
         double avg_value_size_hint,
         bool position_independent_encoding,
-        SubstreamPath path) const override;
+        SubstreamPath & path) const override;
 
     void serializeWidenBinaryBulkWithMultipleStreams(
         const IColumn & column,
-        OutputStreamGetter getter,
+        const OutputStreamGetter & getter,
         size_t offset,
         size_t limit,
         bool position_independent_encoding,
-        SubstreamPath path) const override;
+        SubstreamPath & path) const override;
 
     void deserializeWidenBinaryBulkWithMultipleStreams(
         IColumn & column,
-        InputStreamGetter getter,
+        const InputStreamGetter & getter,
         size_t limit,
         double avg_value_size_hint,
         bool position_independent_encoding,
-        SubstreamPath path) const override;
+        SubstreamPath & path) const override;
 
     void serializeBinary(const Field & field, WriteBuffer & ostr) const override { nested_data_type->serializeBinary(field, ostr); }
     void deserializeBinary(Field & field, ReadBuffer & istr) const override { nested_data_type->deserializeBinary(field, istr); }

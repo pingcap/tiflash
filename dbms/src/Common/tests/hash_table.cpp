@@ -38,7 +38,7 @@ int main(int, char **)
     {
         using Cont = HashSet<
             DB::UInt128,
-            DB::UInt128TrivialHash>;
+            DB::TrivialHash>;
         Cont cont;
 
         DB::WriteBufferFromOwnString wb;

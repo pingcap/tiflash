@@ -1,6 +1,6 @@
 #pragma once
 
-#include <common/Types.h>
+#include <common/types.h>
 
 #define IPV4_BINARY_LENGTH 4
 #define IPV6_BINARY_LENGTH 16

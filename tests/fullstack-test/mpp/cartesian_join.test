@@ -1,0 +1,753 @@
+# Preparation.
+=> DBGInvoke __init_fail_point()
+
+mysql> drop table if exists test.a
+mysql> create table test.a (id int, value varchar(64))
+mysql> insert into test.a values(1,'a'),(2,'b'),(3,'c'),(null,'d')
+
+mysql> drop table if exists test.b
+mysql> create table test.b (id int, value varchar(64))
+
+mysql> alter table test.a set tiflash replica 1
+mysql> alter table test.b set tiflash replica 1
+
+func> wait_table test a
+func> wait_table test b
+
+
+# test inner cartesian join
+# without any condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 join a as t2 on 1 = 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | d     |
+|    1 | a     |    3 | c     |
+|    1 | a     |    2 | b     |
+|    1 | a     |    1 | a     |
+|    2 | b     | NULL | d     |
+|    2 | b     |    3 | c     |
+|    2 | b     |    2 | b     |
+|    2 | b     |    1 | a     |
+|    3 | c     | NULL | d     |
+|    3 | c     |    3 | c     |
+|    3 | c     |    2 | b     |
+|    3 | c     |    1 | a     |
+| NULL | d     | NULL | d     |
+| NULL | d     |    3 | c     |
+| NULL | d     |    2 | b     |
+| NULL | d     |    1 | a     |
++------+-------+------+-------+
+# with other condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 join a as t2 on t1.id > t2.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    2 | b     |    1 | a     |
+|    3 | c     |    1 | a     |
+|    3 | c     |    2 | b     |
++------+-------+------+-------+
+
+# without any condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 join b as t2 on 1 = 1;
+# with other condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 join b as t2 on t1.id > t2.id;
+
+# without any condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 join a as t2 on 1 = 1;
+# with other condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 join a as t2 on t1.id > t2.id;
+
+# without any condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 join b as t2 on 1 = 1;
+# with other condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 join b as t2 on t1.id > t2.id;
+
+# test left out cartesian join
+# without any condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on 1 = 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | d     |
+|    1 | a     |    3 | c     |
+|    1 | a     |    2 | b     |
+|    1 | a     |    1 | a     |
+|    2 | b     | NULL | d     |
+|    2 | b     |    3 | c     |
+|    2 | b     |    2 | b     |
+|    2 | b     |    1 | a     |
+|    3 | c     | NULL | d     |
+|    3 | c     |    3 | c     |
+|    3 | c     |    2 | b     |
+|    3 | c     |    1 | a     |
+| NULL | d     | NULL | d     |
+| NULL | d     |    3 | c     |
+| NULL | d     |    2 | b     |
+| NULL | d     |    1 | a     |
++------+-------+------+-------+
+# with left condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id > 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     | NULL | d     |
+|    2 | b     |    3 | c     |
+|    2 | b     |    2 | b     |
+|    2 | b     |    1 | a     |
+|    3 | c     | NULL | d     |
+|    3 | c     |    3 | c     |
+|    3 | c     |    2 | b     |
+|    3 | c     |    1 | a     |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+# with other condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id > t2.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     |    1 | a     |
+|    3 | c     |    2 | b     |
+|    3 | c     |    1 | a     |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+# with left condition and other condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id > t2.id and t1.id < 3;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     |    1 | a     |
+|    3 | c     | NULL | NULL  |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+
+# without any condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join b as t2 on 1 = 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     | NULL | NULL  |
+|    3 | c     | NULL | NULL  |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+# with left condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join b as t2 on t1.id > 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     | NULL | NULL  |
+|    3 | c     | NULL | NULL  |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+# with other condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join b as t2 on t1.id > t2.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     | NULL | NULL  |
+|    3 | c     | NULL | NULL  |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+# with left condition and other condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join b as t2 on t1.id > t2.id and t1.id < 3;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     | NULL | NULL  |
+|    3 | c     | NULL | NULL  |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+
+# without any condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join a as t2 on 1 = 1;
+# with left condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join a as t2 on t1.id > 1;
+# with other condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join a as t2 on t1.id > t2.id;
+# with left condition and other condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join a as t2 on t1.id > t2.id and t1.id < 3;
+
+# without any condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join b as t2 on 1 = 1;
+# with left condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join b as t2 on t1.id > 1;
+# with other condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join b as t2 on t1.id > t2.id;
+# with left condition and other condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join b as t2 on t1.id > t2.id and t1.id < 3;
+
+# test right out cartesian join
+# without any condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join a as t2 on 1 = 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+| NULL | d     |    1 | a     |
+|    3 | c     |    1 | a     |
+|    2 | b     |    1 | a     |
+|    1 | a     |    1 | a     |
+| NULL | d     |    2 | b     |
+|    3 | c     |    2 | b     |
+|    2 | b     |    2 | b     |
+|    1 | a     |    2 | b     |
+| NULL | d     |    3 | c     |
+|    3 | c     |    3 | c     |
+|    2 | b     |    3 | c     |
+|    1 | a     |    3 | c     |
+| NULL | d     | NULL | d     |
+|    3 | c     | NULL | d     |
+|    2 | b     | NULL | d     |
+|    1 | a     | NULL | d     |
++------+-------+------+-------+
+# with right condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join a as t2 on t2.id > 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+| NULL | NULL  |    1 | a     |
+| NULL | d     |    2 | b     |
+|    3 | c     |    2 | b     |
+|    2 | b     |    2 | b     |
+|    1 | a     |    2 | b     |
+| NULL | d     |    3 | c     |
+|    3 | c     |    3 | c     |
+|    2 | b     |    3 | c     |
+|    1 | a     |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+# with other condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join a as t2 on t1.id > t2.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    3 | c     |    1 | a     |
+|    2 | b     |    1 | a     |
+|    3 | c     |    2 | b     |
+| NULL | NULL  |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+# with right condition and other condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join a as t2 on t1.id > t2.id and t2.id < 3;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    3 | c     |    1 | a     |
+|    2 | b     |    1 | a     |
+|    3 | c     |    2 | b     |
+| NULL | NULL  |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+
+# without any condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join b as t2 on 1 = 1;
+# with right condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join b as t2 on t2.id > 1;
+# with other condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join b as t2 on t1.id > t2.id;
+# with right condition and other condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join b as t2 on t1.id > t2.id and t2.id < 3;
+
+# without any condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join a as t2 on 1 = 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+| NULL | NULL  |    1 | a     |
+| NULL | NULL  |    2 | b     |
+| NULL | NULL  |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+# with right condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join a as t2 on t2.id > 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+| NULL | NULL  |    1 | a     |
+| NULL | NULL  |    2 | b     |
+| NULL | NULL  |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+# with other condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join a as t2 on t1.id > t2.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+| NULL | NULL  |    1 | a     |
+| NULL | NULL  |    2 | b     |
+| NULL | NULL  |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+# with right condition and other condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join a as t2 on t1.id > t2.id and t2.id < 3;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+| NULL | NULL  |    1 | a     |
+| NULL | NULL  |    2 | b     |
+| NULL | NULL  |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+
+# without any condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join b as t2 on 1 = 1;
+# with right condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join b as t2 on t2.id > 1;
+# with other condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join b as t2 on t1.id > t2.id;
+# with right condition and other condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join b as t2 on t1.id > t2.id and t2.id < 3;
+
+# test anti semi cartesian join, one column not in
+# non-empty join non-empty, include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where id not in (select id from a as t where t.id is null or t.id > 1);
+# non-empty join non-empty, not include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where id not in (select id from a as t where t.id > 1);
++------+-------+
+| id   | value |
++------+-------+
+|    1 | a     |
++------+-------+
+# non-empty join non-empty, only null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where id not in (select id from a as t where t.id is null);
+# non-empty join empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where id not in (select id from b as t where t.id > 1);
++------+-------+
+| id   | value |
++------+-------+
+|    1 | a     |
+|    2 | b     |
+|    3 | c     |
+| NULL | d     |
++------+-------+
+# empty join non-empty, include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where id not in (select id from a as t);
+# empty join non-empty, not include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where id not in (select id from a as t where t.id is not null);
+# empty join non-empty, only null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where id not in (select id from a as t where t.id is null);
+# empty join empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where id not in (select id from b as t);
+
+# test anti semi cartesian join, multi column not in
+# non-empty join non-empty, include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where (id,value) not in (select id,value from a as t where t.id is null or t.id > 1);
++------+-------+
+| id   | value |
++------+-------+
+|    1 | a     |
++------+-------+
+# non-empty join non-empty, not include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where (id,value) not in (select id,value from a as t where t.id > 1);
++------+-------+
+| id   | value |
++------+-------+
+|    1 | a     |
+| NULL | d     |
++------+-------+
+# non-empty join non-empty, only null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where (id,value) not in (select id,value from a as t where t.id is null);
++------+-------+
+| id   | value |
++------+-------+
+|    1 | a     |
+|    2 | b     |
+|    3 | c     |
++------+-------+
+# non-empty join empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where (id,value) not in (select id,value from b as t where t.id > 1);
++------+-------+
+| id   | value |
++------+-------+
+|    1 | a     |
+|    2 | b     |
+|    3 | c     |
+| NULL | d     |
++------+-------+
+# empty join non-empty, include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where (id,value) not in (select id,value from a as t);
+# empty join non-empty, not include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where (id,value) not in (select id,value from a as t where t.id is not null);
+# empty join non-empty, only null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where (id,value) not in (select id,value from a as t where t.id is null);
+# empty join empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where (id,value) not in (select id,value from b as t);
+
+
+=> DBGInvoke __enable_fail_point(minimum_block_size_for_cross_join)
+# test inner cartesian join
+# without any condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 join a as t2 on 1 = 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | d     |
+|    1 | a     |    3 | c     |
+|    1 | a     |    2 | b     |
+|    1 | a     |    1 | a     |
+|    2 | b     | NULL | d     |
+|    2 | b     |    3 | c     |
+|    2 | b     |    2 | b     |
+|    2 | b     |    1 | a     |
+|    3 | c     | NULL | d     |
+|    3 | c     |    3 | c     |
+|    3 | c     |    2 | b     |
+|    3 | c     |    1 | a     |
+| NULL | d     | NULL | d     |
+| NULL | d     |    3 | c     |
+| NULL | d     |    2 | b     |
+| NULL | d     |    1 | a     |
++------+-------+------+-------+
+# with other condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 join a as t2 on t1.id > t2.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    2 | b     |    1 | a     |
+|    3 | c     |    1 | a     |
+|    3 | c     |    2 | b     |
++------+-------+------+-------+
+
+# without any condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 join b as t2 on 1 = 1;
+# with other condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 join b as t2 on t1.id > t2.id;
+
+# without any condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 join a as t2 on 1 = 1;
+# with other condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 join a as t2 on t1.id > t2.id;
+
+# without any condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 join b as t2 on 1 = 1;
+# with other condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 join b as t2 on t1.id > t2.id;
+
+# test left out cartesian join
+# without any condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on 1 = 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | d     |
+|    1 | a     |    3 | c     |
+|    1 | a     |    2 | b     |
+|    1 | a     |    1 | a     |
+|    2 | b     | NULL | d     |
+|    2 | b     |    3 | c     |
+|    2 | b     |    2 | b     |
+|    2 | b     |    1 | a     |
+|    3 | c     | NULL | d     |
+|    3 | c     |    3 | c     |
+|    3 | c     |    2 | b     |
+|    3 | c     |    1 | a     |
+| NULL | d     | NULL | d     |
+| NULL | d     |    3 | c     |
+| NULL | d     |    2 | b     |
+| NULL | d     |    1 | a     |
++------+-------+------+-------+
+# with left condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id > 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     | NULL | d     |
+|    2 | b     |    3 | c     |
+|    2 | b     |    2 | b     |
+|    2 | b     |    1 | a     |
+|    3 | c     | NULL | d     |
+|    3 | c     |    3 | c     |
+|    3 | c     |    2 | b     |
+|    3 | c     |    1 | a     |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+# with other condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id > t2.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     |    1 | a     |
+|    3 | c     |    2 | b     |
+|    3 | c     |    1 | a     |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+# with left condition and other condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id > t2.id and t1.id < 3;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     |    1 | a     |
+|    3 | c     | NULL | NULL  |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+
+# without any condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join b as t2 on 1 = 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     | NULL | NULL  |
+|    3 | c     | NULL | NULL  |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+# with left condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join b as t2 on t1.id > 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     | NULL | NULL  |
+|    3 | c     | NULL | NULL  |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+# with other condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join b as t2 on t1.id > t2.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     | NULL | NULL  |
+|    3 | c     | NULL | NULL  |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+# with left condition and other condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join b as t2 on t1.id > t2.id and t1.id < 3;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 | a     | NULL | NULL  |
+|    2 | b     | NULL | NULL  |
+|    3 | c     | NULL | NULL  |
+| NULL | d     | NULL | NULL  |
++------+-------+------+-------+
+
+# without any condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join a as t2 on 1 = 1;
+# with left condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join a as t2 on t1.id > 1;
+# with other condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join a as t2 on t1.id > t2.id;
+# with left condition and other condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join a as t2 on t1.id > t2.id and t1.id < 3;
+
+# without any condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join b as t2 on 1 = 1;
+# with left condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join b as t2 on t1.id > 1;
+# with other condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join b as t2 on t1.id > t2.id;
+# with left condition and other condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 left join b as t2 on t1.id > t2.id and t1.id < 3;
+
+# test right out cartesian join
+# without any condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join a as t2 on 1 = 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+| NULL | d     |    1 | a     |
+|    3 | c     |    1 | a     |
+|    2 | b     |    1 | a     |
+|    1 | a     |    1 | a     |
+| NULL | d     |    2 | b     |
+|    3 | c     |    2 | b     |
+|    2 | b     |    2 | b     |
+|    1 | a     |    2 | b     |
+| NULL | d     |    3 | c     |
+|    3 | c     |    3 | c     |
+|    2 | b     |    3 | c     |
+|    1 | a     |    3 | c     |
+| NULL | d     | NULL | d     |
+|    3 | c     | NULL | d     |
+|    2 | b     | NULL | d     |
+|    1 | a     | NULL | d     |
++------+-------+------+-------+
+# with right condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join a as t2 on t2.id > 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+| NULL | NULL  |    1 | a     |
+| NULL | d     |    2 | b     |
+|    3 | c     |    2 | b     |
+|    2 | b     |    2 | b     |
+|    1 | a     |    2 | b     |
+| NULL | d     |    3 | c     |
+|    3 | c     |    3 | c     |
+|    2 | b     |    3 | c     |
+|    1 | a     |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+# with other condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join a as t2 on t1.id > t2.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    3 | c     |    1 | a     |
+|    2 | b     |    1 | a     |
+|    3 | c     |    2 | b     |
+| NULL | NULL  |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+# with right condition and other condition, non-empty join non-empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join a as t2 on t1.id > t2.id and t2.id < 3;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    3 | c     |    1 | a     |
+|    2 | b     |    1 | a     |
+|    3 | c     |    2 | b     |
+| NULL | NULL  |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+
+# without any condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join b as t2 on 1 = 1;
+# with right condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join b as t2 on t2.id > 1;
+# with other condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join b as t2 on t1.id > t2.id;
+# with right condition and other condition, non-empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 right join b as t2 on t1.id > t2.id and t2.id < 3;
+
+# without any condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join a as t2 on 1 = 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+| NULL | NULL  |    1 | a     |
+| NULL | NULL  |    2 | b     |
+| NULL | NULL  |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+# with right condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join a as t2 on t2.id > 1;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+| NULL | NULL  |    1 | a     |
+| NULL | NULL  |    2 | b     |
+| NULL | NULL  |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+# with other condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join a as t2 on t1.id > t2.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+| NULL | NULL  |    1 | a     |
+| NULL | NULL  |    2 | b     |
+| NULL | NULL  |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+# with right condition and other condition, empty join with non-empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join a as t2 on t1.id > t2.id and t2.id < 3;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+| NULL | NULL  |    1 | a     |
+| NULL | NULL  |    2 | b     |
+| NULL | NULL  |    3 | c     |
+| NULL | NULL  | NULL | d     |
++------+-------+------+-------+
+
+# without any condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join b as t2 on 1 = 1;
+# with right condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join b as t2 on t2.id > 1;
+# with other condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join b as t2 on t1.id > t2.id;
+# with right condition and other condition, empty join with empty 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b as t1 right join b as t2 on t1.id > t2.id and t2.id < 3;
+
+# test anti semi cartesian join, one column not in
+# non-empty join non-empty, include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where id not in (select id from a as t where t.id is null or t.id > 1);
+# non-empty join non-empty, not include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where id not in (select id from a as t where t.id > 1);
++------+-------+
+| id   | value |
++------+-------+
+|    1 | a     |
++------+-------+
+# non-empty join non-empty, only null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where id not in (select id from a as t where t.id is null);
+# non-empty join empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where id not in (select id from b as t where t.id > 1);
++------+-------+
+| id   | value |
++------+-------+
+|    1 | a     |
+|    2 | b     |
+|    3 | c     |
+| NULL | d     |
++------+-------+
+# empty join non-empty, include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where id not in (select id from a as t);
+# empty join non-empty, not include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where id not in (select id from a as t where t.id is not null);
+# empty join non-empty, only null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where id not in (select id from a as t where t.id is null);
+# empty join empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where id not in (select id from b as t);
+
+# test anti semi cartesian join, multi column not in
+# non-empty join non-empty, include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where (id,value) not in (select id,value from a as t where t.id is null or t.id > 1);
++------+-------+
+| id   | value |
++------+-------+
+|    1 | a     |
++------+-------+
+# non-empty join non-empty, not include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where (id,value) not in (select id,value from a as t where t.id > 1);
++------+-------+
+| id   | value |
++------+-------+
+|    1 | a     |
+| NULL | d     |
++------+-------+
+# non-empty join non-empty, only null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where (id,value) not in (select id,value from a as t where t.id is null);
++------+-------+
+| id   | value |
++------+-------+
+|    1 | a     |
+|    2 | b     |
+|    3 | c     |
++------+-------+
+# non-empty join empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a where (id,value) not in (select id,value from b as t where t.id > 1);
++------+-------+
+| id   | value |
++------+-------+
+|    1 | a     |
+|    2 | b     |
+|    3 | c     |
+| NULL | d     |
++------+-------+
+# empty join non-empty, include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where (id,value) not in (select id,value from a as t);
+# empty join non-empty, not include null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where (id,value) not in (select id,value from a as t where t.id is not null);
+# empty join non-empty, only null
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where (id,value) not in (select id,value from a as t where t.id is null);
+# empty join empty
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from b where (id,value) not in (select id,value from b as t);
+
+=> DBGInvoke __disable_fail_point(minimum_block_size_for_cross_join)
+
+
+# Clean up.
+mysql> drop table if exists test.a
+mysql> drop table if exists test.b

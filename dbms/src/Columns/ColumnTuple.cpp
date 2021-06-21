@@ -52,7 +52,7 @@ ColumnTuple::Ptr ColumnTuple::create(const Columns & columns)
     auto column_tuple = ColumnTuple::create(MutableColumns());
     column_tuple->columns = columns;
 
-    return std::move(column_tuple);
+    return column_tuple;
 }
 
 MutableColumnPtr ColumnTuple::cloneEmpty() const
@@ -74,7 +74,7 @@ void ColumnTuple::get(size_t n, Field & res) const
 {
     const size_t tuple_size = columns.size();
     res = Tuple(TupleBackend(tuple_size));
-    TupleBackend & res_arr = DB::get<Tuple &>(res).t;
+    TupleBackend & res_arr = DB::get<Tuple &>(res).toUnderType();
     for (const auto i : ext::range(0, tuple_size))
         columns[i]->get(n, res_arr[i]);
 }
@@ -91,7 +91,7 @@ void ColumnTuple::insertData(const char *, size_t)
 
 void ColumnTuple::insert(const Field & x)
 {
-    const TupleBackend & tuple = DB::get<const Tuple &>(x).t;
+    const TupleBackend & tuple = DB::get<const Tuple &>(x).toUnderType();
 
     const size_t tuple_size = columns.size();
     if (tuple.size() != tuple_size)
@@ -146,6 +146,24 @@ void ColumnTuple::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<
 {
     for (auto & column : columns)
         column->updateHashWithValue(n, hash, collator, sort_key_container);
+}
+
+void ColumnTuple::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+{
+    for (auto & column : columns)
+        column->updateHashWithValues(hash_values, collator, sort_key_container);
+}
+
+void ColumnTuple::updateWeakHash32(WeakHash32 & hash) const
+{
+    auto s = size();
+
+    if (hash.getData().size() != s)
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
+                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+
+    for (const auto & column : columns)
+        column->updateWeakHash32(hash);
 }
 
 void ColumnTuple::insertRangeFrom(const IColumn & src, size_t start, size_t length)
@@ -317,8 +335,8 @@ void ColumnTuple::getExtremes(Field & min, Field & max) const
     min = Tuple(TupleBackend(tuple_size));
     max = Tuple(TupleBackend(tuple_size));
 
-    auto & min_backend = min.get<Tuple &>().t;
-    auto & max_backend = max.get<Tuple &>().t;
+    auto & min_backend = min.get<Tuple &>().toUnderType();
+    auto & max_backend = max.get<Tuple &>().toUnderType();
 
     for (const auto i : ext::range(0, tuple_size))
         columns[i]->getExtremes(min_backend[i], max_backend[i]);

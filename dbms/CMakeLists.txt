@@ -138,7 +138,6 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELW
         src/Dictionaries/ComplexKeyCacheDictionary_generate1.cpp
         src/Dictionaries/ComplexKeyCacheDictionary_generate2.cpp
         src/Dictionaries/ComplexKeyCacheDictionary_generate3.cpp
-        src/Dictionaries/ODBCBlockInputStream.cpp
         src/Dictionaries/HTTPDictionarySource.cpp
         src/Dictionaries/LibraryDictionarySource.cpp
         src/Dictionaries/ExecutableDictionarySource.cpp
@@ -182,7 +181,6 @@ target_link_libraries (dbms
     ${Protobuf_LIBRARIES}
     gRPC::grpc++_unsecure
     ${CURL_LIBRARIES}
-    ${MYSQLXX_LIBRARY}
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
@@ -195,31 +193,9 @@ endif ()
 
 target_include_directories (clickhouse_common_io BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
-if (Poco_SQLODBC_FOUND)
-    target_link_libraries (clickhouse_common_io ${Poco_SQL_LIBRARY})
-    target_link_libraries (dbms ${Poco_SQLODBC_LIBRARY} ${Poco_SQL_LIBRARY})
-    if (NOT USE_INTERNAL_POCO_LIBRARY)
-        target_include_directories (clickhouse_common_io PRIVATE ${ODBC_INCLUDE_DIRECTORIES} ${Poco_SQL_INCLUDE_DIRS})
-        target_include_directories (dbms PRIVATE ${ODBC_INCLUDE_DIRECTORIES} ${Poco_SQLODBC_INCLUDE_DIRS} PUBLIC ${Poco_SQL_INCLUDE_DIRS})
-    endif()
-endif()
-
 if (Poco_Data_FOUND AND NOT USE_INTERNAL_POCO_LIBRARY)
     target_include_directories (clickhouse_common_io PRIVATE ${Poco_Data_INCLUDE_DIRS})
     target_include_directories (dbms PRIVATE ${Poco_Data_INCLUDE_DIRS})
-endif()
-
-if (Poco_DataODBC_FOUND)
-    target_link_libraries (clickhouse_common_io ${Poco_Data_LIBRARY})
-    target_link_libraries (dbms ${Poco_DataODBC_LIBRARY})
-    if (NOT USE_INTERNAL_POCO_LIBRARY)
-        target_include_directories (dbms PRIVATE ${ODBC_INCLUDE_DIRECTORIES} ${Poco_DataODBC_INCLUDE_DIRS})
-    endif()
-endif()
-
-
-if (Poco_MongoDB_FOUND)
-    target_link_libraries (dbms ${Poco_MongoDB_LIBRARY})
 endif()
 
 if (Poco_NetSSL_FOUND)
@@ -231,20 +207,6 @@ target_link_libraries (dbms ${Poco_Foundation_LIBRARY})
 if (USE_ICU)
     target_link_libraries (dbms ${ICU_LIBS})
     target_include_directories (dbms PRIVATE ${ICU_INCLUDE_DIR})
-endif ()
-
-if (USE_CAPNP)
-    target_link_libraries (dbms ${CAPNP_LIBRARY})
-    if (NOT USE_INTERNAL_CAPNP_LIBRARY)
-        target_include_directories (dbms BEFORE PRIVATE ${CAPNP_INCLUDE_DIR})
-    endif ()
-endif ()
-
-if (USE_RDKAFKA)
-    target_link_libraries (dbms ${RDKAFKA_LIBRARY})
-    if (NOT USE_INTERNAL_RDKAFKA_LIBRARY)
-        target_include_directories (dbms BEFORE PRIVATE ${RDKAFKA_INCLUDE_DIR})
-    endif ()
 endif ()
 
 target_link_libraries (dbms
@@ -264,7 +226,6 @@ endif ()
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})
-target_include_directories (clickhouse_common_io PUBLIC ${Poco_DataODBC_INCLUDE_DIRS})
 target_include_directories (clickhouse_common_io BEFORE PUBLIC ${DOUBLE_CONVERSION_INCLUDE_DIR})
 
 # also for copy_headers.sh:
@@ -297,8 +258,9 @@ if (ENABLE_TESTS)
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
+    target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
     target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions)
-    target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas)
+    target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
 endif ()
 

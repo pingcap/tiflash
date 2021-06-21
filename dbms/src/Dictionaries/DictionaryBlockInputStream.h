@@ -349,7 +349,7 @@ ColumnPtr DictionaryBlockInputStream<DictionaryType, Key>::getColumnFromAttribut
         size = keys.front()->size();
     auto column_vector = ColumnVector<AttributeType>::create(size);
     callGetter(getter, ids, keys, data_types, column_vector->getData(), attribute, dictionary);
-    return std::move(column_vector);
+    return column_vector;
 }
 
 template <typename DictionaryType, typename Key>
@@ -362,7 +362,7 @@ ColumnPtr DictionaryBlockInputStream<DictionaryType, Key>::getColumnFromStringAt
     auto column_string = ColumnString::create();
     auto ptr = column_string.get();
     callGetter(getter, ids, keys, data_types, ptr, attribute, dictionary);
-    return std::move(column_string);
+    return column_string;
 }
 
 template <typename DictionaryType, typename Key>
@@ -372,7 +372,7 @@ ColumnPtr DictionaryBlockInputStream<DictionaryType, Key>::getColumnFromIds(cons
     column_vector->getData().reserve(ids.size());
     for (UInt64 id : ids)
         column_vector->insert(id);
-    return std::move(column_vector);
+    return column_vector;
 }
 
 template <typename DictionaryType, typename Key>

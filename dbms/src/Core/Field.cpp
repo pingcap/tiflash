@@ -144,7 +144,7 @@ namespace DB
 {
     inline void readBinary(Tuple & x_def, ReadBuffer & buf)
     {
-        auto & x = x_def.t;
+        auto & x = x_def.toUnderType();
         size_t size;
         DB::readBinary(size, buf);
 
@@ -215,7 +215,7 @@ namespace DB
 
     void writeBinary(const Tuple & x_def, WriteBuffer & buf)
     {
-        auto & x = x_def.t;
+        auto & x = x_def.toUnderType();
         const size_t size = x.size();
         DB::writeBinary(size, buf);
 

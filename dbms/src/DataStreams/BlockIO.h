@@ -32,7 +32,7 @@ struct BlockIO
             finish_callback(in.get(), out.get());
     }
 
-    void onException()
+    void onException() const
     {
         if (exception_callback)
             exception_callback();
@@ -40,6 +40,10 @@ struct BlockIO
 
     BlockIO & operator= (const BlockIO & rhs)
     {
+        if (this == std::addressof(rhs)) {
+            return *this;
+        }
+
         /// We provide the correct order of destruction.
         out                     = nullptr;
         in                      = nullptr;
@@ -55,7 +59,9 @@ struct BlockIO
         return *this;
     }
 
-    ~BlockIO();
+    BlockIO() = default;
+    BlockIO(const BlockIO& that) = default;
+    ~BlockIO() = default;
 };
 
 }

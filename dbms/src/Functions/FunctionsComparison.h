@@ -7,8 +7,6 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnArray.h>
 
-#include <Common/MyTime.h>
-
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDate.h>
@@ -16,7 +14,6 @@
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyTimeBase.h>
 #include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeEnum.h>
@@ -132,20 +129,20 @@ inline int memcmp16(const void * a, const void * b)
 
 inline time_t dateToDateTime(UInt32 date_data)
 {
-    DayNum_t day_num(date_data);
+    DayNum day_num(date_data);
     LocalDate local_date(day_num);
     // todo use timezone info
     return DateLUT::instance().makeDateTime(local_date.year(), local_date.month(), local_date.day(), 0, 0, 0);
 }
 
-inline std::tuple<DayNum_t, bool> dateTimeToDate(time_t time_data)
+inline std::tuple<DayNum, bool> dateTimeToDate(time_t time_data)
 {
     // todo use timezone info
     auto & date_lut = DateLUT::instance();
     auto truncated = date_lut.toHour(time_data) != 0 || date_lut.toMinute(time_data) != 0 || date_lut.toSecond(time_data) != 0;
     auto values = date_lut.getValues(time_data);
     auto day_num = date_lut.makeDayNum(values.year, values.month, values.day_of_month);
-    return std::make_tuple(day_num, truncated);
+    return std::make_tuple(static_cast<DayNum>(day_num), truncated);
 }
 
 
@@ -193,7 +190,7 @@ struct DateDateTimeComparisonImpl
             // date vector with datetime constant
             // first check if datetime constant can be convert to date constant
             bool truncated;
-            DayNum_t date_num;
+            DayNum date_num;
             std::tie(date_num, truncated) = dateTimeToDate((time_t) b);
             if (!truncated)
             {
@@ -232,7 +229,7 @@ struct DateDateTimeComparisonImpl
         {
             // datetime constant with date vector
             bool truncated;
-            DayNum_t date_num;
+            DayNum date_num;
             std::tie(date_num, truncated) = dateTimeToDate((time_t) a);
             if (!truncated)
             {
@@ -899,7 +896,6 @@ private:
                 || executeNumRightType<T0, UInt16>(block, result, col_left, col_right_untyped)
                 || executeNumRightType<T0, UInt32>(block, result, col_left, col_right_untyped)
                 || executeNumRightType<T0, UInt64>(block, result, col_left, col_right_untyped)
-                || executeNumRightType<T0, UInt128>(block, result, col_left, col_right_untyped)
                 || executeNumRightType<T0, Int8>(block, result, col_left, col_right_untyped)
                 || executeNumRightType<T0, Int16>(block, result, col_left, col_right_untyped)
                 || executeNumRightType<T0, Int32>(block, result, col_left, col_right_untyped)
@@ -918,7 +914,6 @@ private:
                 || executeNumConstRightType<T0, UInt16>(block, result, col_left, col_right_untyped)
                 || executeNumConstRightType<T0, UInt32>(block, result, col_left, col_right_untyped)
                 || executeNumConstRightType<T0, UInt64>(block, result, col_left, col_right_untyped)
-                || executeNumConstRightType<T0, UInt128>(block, result, col_left, col_right_untyped)
                 || executeNumConstRightType<T0, Int8>(block, result, col_left, col_right_untyped)
                 || executeNumConstRightType<T0, Int16>(block, result, col_left, col_right_untyped)
                 || executeNumConstRightType<T0, Int32>(block, result, col_left, col_right_untyped)
@@ -1105,7 +1100,6 @@ private:
         bool is_date_time = false;
         bool is_my_date = false;
         bool is_my_datetime = false;
-        bool is_uuid = false;
         bool is_enum8 = false;
         bool is_enum16 = false;
 
@@ -1113,7 +1107,6 @@ private:
             || (is_date_time = checkAndGetDataType<DataTypeDateTime>(number_type))
             || (is_my_datetime = checkAndGetDataType<DataTypeMyDateTime>(number_type))
             || (is_my_date = checkAndGetDataType<DataTypeMyDate>(number_type))
-            || (is_uuid = checkAndGetDataType<DataTypeUUID>(number_type))
             || (is_enum8 = checkAndGetDataType<DataTypeEnum8>(number_type))
             || (is_enum16 = checkAndGetDataType<DataTypeEnum16>(number_type));
 
@@ -1128,7 +1121,7 @@ private:
 
         if (is_date)
         {
-            DayNum_t date;
+            DayNum date;
             ReadBufferFromMemory in(string_value.data, string_value.size);
             readDateText(date, in);
             if (!in.eof())
@@ -1163,20 +1156,6 @@ private:
             executeNumLeftType<DataTypeDateTime::FieldType>(block, result,
                 left_is_num ? col_left_untyped : parsed_const_date_time,
                 left_is_num ? parsed_const_date_time : col_right_untyped);
-        }
-        else if (is_uuid)
-        {
-            UUID uuid;
-            ReadBufferFromMemory in(string_value.data, string_value.size);
-            readText(uuid, in);
-            if (!in.eof())
-                throw Exception("String is too long for UUID: " + string_value.toString());
-
-            ColumnPtr parsed_const_uuid_holder = DataTypeUUID().createColumnConst(block.rows(), UInt128(uuid));
-            const ColumnConst * parsed_const_uuid = static_cast<const ColumnConst *>(parsed_const_uuid_holder.get());
-            executeNumLeftType<DataTypeUUID::FieldType>(block, result,
-                left_is_num ? col_left_untyped : parsed_const_uuid,
-                left_is_num ? parsed_const_uuid : col_right_untyped);
         }
 
         else if (is_enum8)
@@ -1440,7 +1419,6 @@ public:
     {
         bool left_is_date = false;
         bool left_is_date_time = false;
-        bool left_is_uuid = false;
         bool left_is_enum8 = false;
         bool left_is_enum16 = false;
         bool left_is_string = false;
@@ -1451,7 +1429,6 @@ public:
             || (left_is_date         = checkAndGetDataType<DataTypeDate>(arguments[0].get()) || checkAndGetDataType<DataTypeMyDate>(arguments[0].get()))
             || (left_is_date_time    = checkAndGetDataType<DataTypeDateTime>(arguments[0].get()) || checkAndGetDataType<DataTypeMyDateTime>(arguments[0].get()))
             || (left_is_enum8        = checkAndGetDataType<DataTypeEnum8>(arguments[0].get()))
-            || (left_is_uuid         = checkAndGetDataType<DataTypeUUID>(arguments[0].get()))
             || (left_is_enum16       = checkAndGetDataType<DataTypeEnum16>(arguments[0].get()))
             || (left_is_string       = checkAndGetDataType<DataTypeString>(arguments[0].get()))
             || (left_is_fixed_string = checkAndGetDataType<DataTypeFixedString>(arguments[0].get()))
@@ -1461,7 +1438,6 @@ public:
 
         bool right_is_date = false;
         bool right_is_date_time = false;
-        bool right_is_uuid = false;
         bool right_is_enum8 = false;
         bool right_is_enum16 = false;
         bool right_is_string = false;
@@ -1471,7 +1447,6 @@ public:
         false
             || (right_is_date = checkAndGetDataType<DataTypeDate>(arguments[1].get()) || checkAndGetDataType<DataTypeMyDate>(arguments[1].get()))
             || (right_is_date_time = checkAndGetDataType<DataTypeDateTime>(arguments[1].get()) || checkAndGetDataType<DataTypeMyDateTime>(arguments[1].get()))
-            || (right_is_uuid = checkAndGetDataType<DataTypeUUID>(arguments[1].get()))
             || (right_is_enum8 = checkAndGetDataType<DataTypeEnum8>(arguments[1].get()))
             || (right_is_enum16 = checkAndGetDataType<DataTypeEnum16>(arguments[1].get()))
             || (right_is_string = checkAndGetDataType<DataTypeString>(arguments[1].get()))
@@ -1488,9 +1463,6 @@ public:
             || (left_is_date_time && right_is_date_time)
             || (left_is_date_time && right_is_string)
             || (left_is_string && right_is_date_time)
-            || (left_is_uuid && right_is_uuid)
-            || (left_is_uuid && right_is_string)
-            || (left_is_string && right_is_uuid)
             || (left_is_enum && right_is_enum && arguments[0]->getName() == arguments[1]->getName()) /// only equivalent enum type values can be compared against
             || (left_is_enum && right_is_string)
             || (left_is_string && right_is_enum)
@@ -1550,7 +1522,6 @@ public:
                 || executeNumLeftType<UInt16>(block, result, col_left_untyped, col_right_untyped)
                 || executeNumLeftType<UInt32>(block, result, col_left_untyped, col_right_untyped)
                 || executeNumLeftType<UInt64>(block, result, col_left_untyped, col_right_untyped)
-                || executeNumLeftType<UInt128>(block, result, col_left_untyped, col_right_untyped)
                 || executeNumLeftType<Int8>(block, result, col_left_untyped, col_right_untyped)
                 || executeNumLeftType<Int16>(block, result, col_left_untyped, col_right_untyped)
                 || executeNumLeftType<Int32>(block, result, col_left_untyped, col_right_untyped)

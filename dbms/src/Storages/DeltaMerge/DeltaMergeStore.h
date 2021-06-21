@@ -247,7 +247,13 @@ public:
 
     class MergeDeltaTaskPool
     {
+
+#ifndef DBMS_PUBLIC_GTEST
     private:
+#else
+    public:
+#endif
+
         using TaskQueue = std::queue<BackgroundTask, std::list<BackgroundTask>>;
         TaskQueue light_tasks;
         TaskQueue heavy_tasks;
@@ -295,16 +301,16 @@ public:
 
     void preIngestFile(const String & parent_path, const PageId file_id, size_t file_size);
 
-    void ingestFiles(const DMContextPtr & dm_context, //
-                     const RowKeyRange &  range,
-                     std::vector<PageId>  file_ids,
-                     bool                 clear_data_in_range);
+    void ingestFiles(const DMContextPtr &        dm_context, //
+                     const RowKeyRange &         range,
+                     const std::vector<PageId> & file_ids,
+                     bool                        clear_data_in_range);
 
-    void ingestFiles(const Context &      db_context, //
-                     const DB::Settings & db_settings,
-                     const RowKeyRange &  range,
-                     std::vector<PageId>  file_ids,
-                     bool                 clear_data_in_range)
+    void ingestFiles(const Context &             db_context, //
+                     const DB::Settings &        db_settings,
+                     const RowKeyRange &         range,
+                     const std::vector<PageId> & file_ids,
+                     bool                        clear_data_in_range)
     {
         auto dm_context = newDMContext(db_context, db_settings);
         return ingestFiles(dm_context, range, file_ids, clear_data_in_range);
@@ -382,7 +388,10 @@ public:
 
     RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
 
     bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
@@ -409,7 +418,10 @@ private:
                                           size_t               expected_tasks_count = 1,
                                           const SegmentIdSet & read_segments        = {});
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     Context &       global_context;
     StoragePathPool path_pool;
     Settings        settings;

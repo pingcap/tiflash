@@ -14,11 +14,7 @@
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-#define private public
 #include <Storages/Page/gc/LegacyCompactor.h>
-#undef private
-
 #include <Storages/Page/gc/restoreFromCheckpoints.h>
 
 namespace DB

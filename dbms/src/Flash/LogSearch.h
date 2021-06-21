@@ -4,6 +4,7 @@
 #include <istream>
 #include <memory>
 #include <variant>
+#include <optional>
 
 #include <Poco/File.h>
 #include <common/logger_useful.h>

@@ -28,16 +28,11 @@ const char * auto_config_build[]
     "USE_GLIBC_COMPATIBILITY", "@GLIBC_COMPATIBILITY@",
     "USE_JEMALLOC", "@USE_JEMALLOC@",
     "USE_TCMALLOC", "@USE_TCMALLOC@",
+    "USE_MIMALLOC", "@USE_MIMALLOC@",
     "USE_UNWIND", "@USE_UNWIND@",
     "USE_ICU", "@USE_ICU@",
-    "USE_MYSQL", "@USE_MYSQL@",
     "USE_RE2_ST", "@USE_RE2_ST@",
     "USE_VECTORCLASS", "@USE_VECTORCLASS@",
-    "USE_RDKAFKA", "@USE_RDKAFKA@",
-    "USE_CAPNP", "@USE_CAPNP@",
-    "USE_Poco_SQLODBC", "@Poco_SQLODBC_FOUND@",
-    "USE_Poco_DataODBC", "@Poco_DataODBC_FOUND@",
-    "USE_Poco_MongoDB", "@Poco_MongoDB_FOUND@",
     "USE_Poco_NetSSL", "@Poco_NetSSL_FOUND@",
 
     nullptr, nullptr

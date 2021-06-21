@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -193,7 +194,8 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     std::unique_ptr<DAGResponseWriter> response_writer
         = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, exchangeSender.tp(),
             context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), *dag_context);
-    io.out = std::make_shared<DAGBlockOutputStream>(io.in->getHeader(), std::move(response_writer));
+    BlockOutputStreamPtr squash_stream = std::make_shared<DAGBlockOutputStream>(io.in->getHeader(), std::move(response_writer));
+    io.out = std::make_shared<SquashingBlockOutputStream>(squash_stream, 20000, 0);
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context->compile_time_ns = compile_time_ns;
@@ -303,23 +305,29 @@ bool MPPTask::isTaskHanging()
 
 void MPPTask::cancel(const String & reason)
 {
-    auto current_status = status.load();
+    auto current_status = status.exchange(CANCELLED);
     if (current_status == FINISHED || current_status == CANCELLED)
-        return;
-    LOG_WARNING(log, "Begin cancel task: " + id.toString());
-    /// step 1. cancel query streams
-    status = CANCELLED;
-    auto process_list_element = context.getProcessListElement();
-    if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
     {
-        BlockInputStreamPtr input_stream;
-        BlockOutputStreamPtr output_stream;
-        if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
+        if (current_status == FINISHED)
+            status = FINISHED;
+        return;
+    }
+    LOG_WARNING(log, "Begin cancel task: " + id.toString());
+    /// step 1. cancel query streams if it is running
+    if (current_status == RUNNING)
+    {
+        auto process_list_element = context.getProcessListElement();
+        if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
         {
-            IProfilingBlockInputStream * input_stream_casted;
-            if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
+            BlockInputStreamPtr input_stream;
+            BlockOutputStreamPtr output_stream;
+            if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
             {
-                input_stream_casted->cancel(true);
+                IProfilingBlockInputStream * input_stream_casted;
+                if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
+                {
+                    input_stream_casted->cancel(true);
+                }
             }
         }
     }

@@ -4,18 +4,10 @@
 
 #include <Common/SipHash.h>
 #include <Common/Arena.h>
-#include <Common/UInt128.h>
 #include <Common/HashTable/Hash.h>
-#include <Core/Defines.h>
-#include <common/StringRef.h>
 #include <Columns/IColumn.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnFixedString.h>
-
-
-template <>
-struct DefaultHash<StringRef> : public StringRefHash {};
-
 
 namespace DB
 {
@@ -193,7 +185,7 @@ static inline UInt128 ALWAYS_INLINE hash128(
         hash.update(keys[j].data, keys[j].size);
     }
 
-    hash.get128(key.low, key.high);
+    hash.get128(key);
 
     return key;
 }
@@ -217,7 +209,7 @@ static inline UInt128 ALWAYS_INLINE hash128(
             key_columns[j]->updateHashWithValue(i, hash, collators[j], sort_key_containers[j]);
     }
 
-    hash.get128(key.low, key.high);
+    hash.get128(key);
 
     return key;
 }

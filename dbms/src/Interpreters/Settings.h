@@ -194,7 +194,6 @@ struct Settings
     \
     M(SettingBool, empty_result_for_aggregation_by_empty_set, false, "Return empty result when aggregating without keys on empty set.") \
     M(SettingBool, allow_distributed_ddl, true, "If it is set to true, then a user is allowed to executed distributed DDL queries.") \
-    M(SettingUInt64, odbc_max_field_size, 1024, "Max size of filed can be read from ODBC dictionary. Long strings are truncated.") \
     \
     \
     /** Limits during query execution are part of the settings. \
@@ -274,6 +273,8 @@ struct Settings
     M(SettingBool, dt_enable_stable_column_cache, true, "Enable column cache for StorageDeltaMerge.") \
     M(SettingBool, dt_enable_single_file_mode_dmfile, false, "Enable write DMFile in single file mode.") \
     M(SettingUInt64, dt_open_file_max_idle_seconds, 15, "Max idle time of opening files, 0 means infinite.") \
+    M(SettingUInt64, dt_page_num_max_expect_legacy_files, 100, "Max number of legacy file expected") \
+    M(SettingFloat, dt_page_num_max_gc_valid_rate, 0.95, "Max valid rate of deciding a page file can be compact when exising legacy files are more over than `dt_stroage_num_max_expect_legacy_files`") \
     M(SettingFloat, dt_page_gc_low_write_prob, 0.10, "Probability to run gc when write there is few writes.") \
     \
     M(SettingUInt64, dt_storage_pool_log_write_slots, 4, "Max write concurrency for each StoragePool.log.") \

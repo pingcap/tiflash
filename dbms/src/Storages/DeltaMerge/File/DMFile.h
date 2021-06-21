@@ -2,7 +2,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <dtpb/dmfile.pb.h>
+#include <dmfile.pb.h>
 #pragma GCC diagnostic pop
 
 #include <Core/Types.h>
@@ -120,7 +120,14 @@ public:
     static DMFilePtr
     restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
 
-    static std::set<UInt64> listAllInPath(const FileProviderPtr & file_provider, const String & parent_path, bool can_gc);
+    struct ListOptions
+    {
+        // Only return the DTFiles id list that can be GC
+        bool only_list_can_gc = true;
+        // Try to clean up temporary / dropped files
+        bool clean_up = false;
+    };
+    static std::set<UInt64> listAllInPath(const FileProviderPtr & file_provider, const String & parent_path, const ListOptions & options);
 
     // static helper function for getting path
     static String getPathByStatus(const String & parent_path, UInt64 file_id, DMFile::Status status);

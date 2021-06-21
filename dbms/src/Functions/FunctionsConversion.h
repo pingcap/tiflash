@@ -1,44 +1,45 @@
 #pragma once
 
-#include <ext/enumerate.h>
-#include <ext/collection_cast.h>
-#include <ext/range.h>
-#include <type_traits>
-
-#include <IO/WriteBufferFromVector.h>
-#include <IO/ReadBufferFromMemory.h>
-#include <IO/Operators.h>
-#include <IO/parseDateTimeBestEffort.h>
-#include <DataTypes/DataTypeFactory.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeFixedString.h>
-#include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeMyDate.h>
-#include <DataTypes/DataTypeMyDateTime.h>
-#include <DataTypes/DataTypeEnum.h>
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeNothing.h>
-#include <DataTypes/DataTypeUUID.h>
-#include <DataTypes/DataTypeInterval.h>
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnConst.h>
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnConst.h>
+#include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/FieldVisitors.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Functions/IFunction.h>
-#include <Functions/FunctionsMiscellaneous.h>
-#include <Functions/FunctionsDateTime.h>
-#include <Functions/FunctionHelpers.h>
+#include <Common/MyTime.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeEnum.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeInterval.h>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsDateTime.h>
+#include <Functions/FunctionsMiscellaneous.h>
+#include <Functions/IFunction.h>
+#include <IO/Operators.h>
+#include <IO/ReadBufferFromMemory.h>
+#include <IO/WriteBufferFromVector.h>
+#include <IO/parseDateTimeBestEffort.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/ExpressionActions.h>
+
+#include <ext/collection_cast.h>
+#include <ext/enumerate.h>
+#include <ext/range.h>
+#include <type_traits>
 
 
 namespace DB
@@ -268,7 +269,7 @@ struct ToDateTimeImpl
 
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.fromDayNum(DayNum_t(d));
+        return time_zone.fromDayNum(DayNum(d));
     }
 };
 
@@ -407,7 +408,7 @@ struct FormatImpl<DataTypeDate>
 {
     static void execute(const DataTypeDate::FieldType x, WriteBuffer & wb, const DataTypeDate *, const DateLUTImpl *)
     {
-        writeDateText(DayNum_t(x), wb);
+        writeDateText(DayNum(x), wb);
     }
 };
 
@@ -565,7 +566,7 @@ template <typename DataType> void parseImpl(typename DataType::FieldType & x, Re
 
 template <> inline void parseImpl<DataTypeDate>(DataTypeDate::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
 {
-    DayNum_t tmp(0);
+    DayNum tmp(0);
     readDateText(tmp, rb);
     x = tmp;
 }
@@ -596,7 +597,7 @@ template <> inline void parseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, Rea
 {
     UUID tmp;
     readText(tmp, rb);
-    x = tmp;
+    x = tmp.toUnderType();
 }
 
 template <typename DataType>
@@ -1407,7 +1408,7 @@ public:
             }
             else
             {
-                if (unlikely(integer_part + datelut->getOffsetAtStartEpoch() + SECONDS_PER_DAY < 0))
+                if (unlikely(integer_part + datelut->getOffsetAtStartOfEpoch() + SECONDS_PER_DAY < 0))
                     throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
             }
             MyDateTime result(datelut->toYear(integer_part), datelut->toMonth(integer_part), datelut->toDayOfMonth(integer_part),
@@ -1588,9 +1589,167 @@ public:
             throw Exception("Second argument for function " + getName() + " must be String constant", ErrorCodes::ILLEGAL_COLUMN);
         }
     }
-
 };
 
+struct NameStrToDateDate
+{
+    static constexpr auto name = "strToDateDate";
+};
+struct NameStrToDateDatetime
+{
+    static constexpr auto name = "strToDateDatetime";
+};
+template <typename Name>
+class FunctionStrToDate : public IFunction
+{
+public:
+    static constexpr auto name = Name::name;
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionStrToDate>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 2; }
+    bool isInjective(const Block &) override { return false; }
+
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        if (arguments.size() != 2)
+            throw Exception("Function " + getName() + " only accept 2 arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        // TODO: Maybe FixedString?
+        if (!removeNullable(arguments[0].type)->isString())
+            throw Exception("First argument for function " + getName() + " must be String, but get " + arguments[0].type->getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+        if (!removeNullable(arguments[1].type)->isString())
+            throw Exception(
+                "Second argument for function " + getName() + " must be String, but get " + arguments[1].type->getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+
+        if constexpr (std::is_same_v<Name, NameStrToDateDatetime>)
+        {
+            // Return null for invalid result
+            // FIXME: set fraction for DataTypeMyDateTime
+            return makeNullable(std::make_shared<DataTypeMyDateTime>());
+        }
+        else if constexpr (std::is_same_v<Name, NameStrToDateDate>)
+        {
+            // Return null for invalid result
+            return makeNullable(std::make_shared<DataTypeMyDate>());
+        }
+        else
+        {
+            throw Exception("Unknown name for FunctionStrToDate:" + getName(), ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
+    // FIXME: Should we override other method?
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    {
+        const auto & input_column = block.getByPosition(arguments[0]).column;
+        const size_t num_rows = input_column->size();
+        const ColumnString * input_raw_col = nullptr;
+        if (input_column->isColumnNullable())
+        {
+            auto null_input_column = checkAndGetColumn<ColumnNullable>(input_column.get());
+            input_raw_col = checkAndGetColumn<ColumnString>(null_input_column->getNestedColumnPtr().get());
+        }
+        else
+        {
+            input_raw_col = checkAndGetColumn<ColumnString>(input_column.get());
+        }
+
+        auto datetime_column = ColumnVector<DataTypeMyDateTime::FieldType>::create(num_rows);
+        auto & datetime_res = datetime_column->getData();
+        auto null_column = ColumnUInt8::create(num_rows);
+        auto & null_res = null_column->getData();
+
+        const auto & format_column = block.getByPosition(arguments[1]).column;
+        if (format_column->isColumnConst())
+        {
+            // Precomplie format parser
+            const auto & col_const = checkAndGetColumnConst<ColumnString>(format_column.get());
+            auto format = col_const->getValue<String>();
+            auto parser = MyDateTimeParser(format);
+            for (size_t i = 0; i < num_rows; ++i)
+            {
+                if (input_column->isColumnNullable())
+                {
+                    // For null input, just set the result as null
+                    if (bool is_null = input_column->isNullAt(i); is_null)
+                    {
+                        null_res[i] = is_null;
+                        continue;
+                    }
+                    // else fallthrough to parsing
+                }
+                const auto str_ref = input_raw_col->getDataAt(i);
+                if (auto parse_res = parser.parseAsPackedUInt(str_ref); parse_res)
+                {
+                    datetime_res[i] = *parse_res;
+                    null_res[i] = 0;
+                }
+                else
+                {
+                    datetime_res[i] = 0;
+                    null_res[i] = 1;
+                }
+            }
+        } // end of format_column->isColumnConst()
+        else
+        {
+            const ColumnString * format_raw_col = nullptr;
+            if (format_column->isColumnNullable())
+            {
+                auto null_format_column = checkAndGetColumn<ColumnNullable>(format_column.get());
+                format_raw_col = checkAndGetColumn<ColumnString>(null_format_column->getNestedColumnPtr().get());
+            }
+            else
+            {
+                format_raw_col = checkAndGetColumn<ColumnString>(format_column.get());
+            }
+
+            for (size_t i = 0; i < num_rows; ++i)
+            {
+                // Set null for either null input or null format
+                if (input_column->isColumnNullable())
+                {
+                    if (bool is_null = input_column->isNullAt(i); is_null)
+                    {
+                        null_res[i] = is_null;
+                        continue;
+                    }
+                    // else fallthrough to parsing
+                }
+                if (format_column->isColumnNullable())
+                {
+                    if (bool is_null = format_column->isNullAt(i); is_null)
+                    {
+                        null_res[i] = is_null;
+                        continue;
+                    }
+                    // else fallthrough to parsing
+                }
+
+                const auto format_ref = format_raw_col->getDataAt(i);
+                auto parser = MyDateTimeParser(format_ref.toString());
+                const auto str_ref = input_raw_col->getDataAt(i);
+                if (auto parse_res = parser.parseAsPackedUInt(str_ref); parse_res)
+                {
+                    datetime_res[i] = *parse_res;
+                    null_res[i] = 0;
+                }
+                else
+                {
+                    datetime_res[i] = 0;
+                    null_res[i] = 1;
+                }
+            }
+        } // end of !format_column->isColumnConst()
+        block.getByPosition(result).column = ColumnNullable::create(std::move(datetime_column), std::move(null_column));
+    }
+};
 
 /// Monotonicity.
 

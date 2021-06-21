@@ -16,7 +16,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 
-#include <common/Types.h>
+#include <common/types.h>
 
 #define SMALL_READ_WRITE_BUFFER_SIZE 16
 
