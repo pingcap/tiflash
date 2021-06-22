@@ -95,17 +95,5 @@ template <> struct TypeId<Int256>   { static constexpr const TypeIndex value = T
 template <> struct TypeId<Float32>  { static constexpr const TypeIndex value = TypeIndex::Float32; };
 template <> struct TypeId<Float64>  { static constexpr const TypeIndex value = TypeIndex::Float64; };
 
-template <TypeIndex T> struct Id2Type;
-template <> struct Id2Type<TypeIndex::UInt8>    { using type = UInt8;  };
-template <> struct Id2Type<TypeIndex::UInt16>    { using type = UInt16;  };
-template <> struct Id2Type<TypeIndex::UInt32>    { using type = UInt32;  };
-template <> struct Id2Type<TypeIndex::UInt64>    { using type = UInt64;  };
-template <> struct Id2Type<TypeIndex::Int8>    { using type = Int8;  };
-template <> struct Id2Type<TypeIndex::Int16>    { using type = Int16;  };
-template <> struct Id2Type<TypeIndex::Int32>    { using type = Int32;  };
-template <> struct Id2Type<TypeIndex::Int64>    { using type = Int64;  };
-template <> struct Id2Type<TypeIndex::Int128>    { using type = Int128;  };
-template <> struct Id2Type<TypeIndex::Int256>    { using type = Int256;  };
-template <> struct Id2Type<TypeIndex::Float32>    { using type = Float32;  };
-template <> struct Id2Type<TypeIndex::Float64>    { using type = Float64;  };
+
 }
