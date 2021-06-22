@@ -240,7 +240,7 @@ try
     // Thread A
     write_rows(100);
     check_rows(100);
-    auto snap = segment->createSnapshot(dmContext());
+    auto snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
 
     // Thread B
     write_rows(100);
@@ -1118,7 +1118,7 @@ try
     SegmentPtr other_segment;
     {
         WriteBatches wbs(dmContext().storage_pool);
-        auto         segment_snap = segment->createSnapshot(dmContext(), true);
+        auto         segment_snap = segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
         ASSERT_FALSE(!segment_snap);
 
         write_100_rows(segment);
@@ -1147,8 +1147,8 @@ try
     {
         WriteBatches wbs(dmContext().storage_pool);
 
-        auto left_snap  = segment->createSnapshot(dmContext(), true);
-        auto right_snap = other_segment->createSnapshot(dmContext(), true);
+        auto left_snap  = segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+        auto right_snap = other_segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
         ASSERT_FALSE(!left_snap || !right_snap);
 
         write_100_rows(other_segment);
