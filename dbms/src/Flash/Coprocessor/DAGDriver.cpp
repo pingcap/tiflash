@@ -108,7 +108,9 @@ try
     }
 
     auto metrics = context.getTiFlashMetrics();
-    GET_METRIC(metrics, tiflash_storage_logical_throughput_bytes).Observe(dag_context.getTableScanThroughput());
+    auto throughput = dag_context.getTableScanThroughput();
+    if (throughput.first)
+        GET_METRIC(metrics, tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
 
     auto process_info = context.getProcessListElement()->getInfo();
     auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;

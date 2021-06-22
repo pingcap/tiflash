@@ -97,7 +97,7 @@ public:
 
     BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
 
-    double getTableScanThroughput();
+    std::pair<bool, double> getTableScanThroughput();
 
     size_t final_concurrency;
     Int64 compile_time_ns;

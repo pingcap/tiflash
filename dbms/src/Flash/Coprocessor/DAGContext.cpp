@@ -140,10 +140,10 @@ void DAGContext::handleInvalidTime(const String & msg, const TiFlashError & erro
 
 bool DAGContext::shouldClipToZero() { return flags & Flag::IN_INSERT_STMT || flags & Flag::IN_LOAD_DATA_STMT; }
 
-double DAGContext::getTableScanThroughput()
+std::pair<bool, double> DAGContext::getTableScanThroughput()
 {
     if (table_scan_executor_id.empty())
-        return 0.0;
+        return std::make_pair(false, 0.0);
 
     // collect table scan metrics
     UInt64 time_processed_ns = 0;
@@ -165,7 +165,7 @@ double DAGContext::getTableScanThroughput()
     }
 
     // convert to bytes per second
-    return num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL);
+    return std::make_pair(true, num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL));
 }
 
 } // namespace DB
