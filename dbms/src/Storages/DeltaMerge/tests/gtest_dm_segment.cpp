@@ -1,3 +1,4 @@
+#include <Common/CurrentMetrics.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -9,6 +10,16 @@
 #include <memory>
 
 #include "dm_basic_include.h"
+
+namespace CurrentMetrics
+{
+extern const Metric DT_SnapshotOfRead;
+extern const Metric DT_SnapshotOfReadRaw;
+extern const Metric DT_SnapshotOfSegmentSplit;
+extern const Metric DT_SnapshotOfSegmentMerge;
+extern const Metric DT_SnapshotOfMergeDelta;
+extern const Metric DT_SnapshotOfPlaceIndex;
+} // namespace CurrentMetrics
 
 namespace DB
 {
