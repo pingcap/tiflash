@@ -1206,6 +1206,9 @@ protected:
         IAggregateFunction::AddFunc func;
         size_t state_offset;
         const IColumn ** arguments;
+        const IAggregateFunction * batch_that;
+        const IColumn ** batch_arguments;
+        const UInt64 * offsets = nullptr;
     };
 
     using AggregateFunctionInstructions = std::vector<AggregateFunctionInstruction>;
@@ -1271,6 +1274,17 @@ protected:
         const Sizes & key_sizes,
         StringRefs & keys,
         AggregateDataPtr overflow_row) const;
+
+    template <typename Method>
+    void executeImplBatch(
+        Method & method,
+        typename Method::State & state,
+        Arena * aggregates_pool,
+        size_t rows,
+        ColumnRawPtrs & key_columns,
+        AggregateFunctionInstruction * aggregate_instructions,
+        const Sizes & key_sizes,
+        StringRefs & keys) const;
 
     /// For case when there are no keys (all aggregate into one row).
     void executeWithoutKeyImpl(

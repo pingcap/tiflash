@@ -10,7 +10,9 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
+#include <AggregateFunctions/AggregateFunctionArray.h>
 #include <AggregateFunctions/AggregateFunctionCount.h>
+#include <AggregateFunctions/AggregateFunctionState.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
@@ -356,7 +358,7 @@ void NO_INLINE Aggregator::executeImpl(
     state.init(key_columns, collators);
 
     if (!no_more_keys)
-        executeImplCase<false>(method, state, aggregates_pool, rows, key_columns, aggregate_instructions, key_sizes, keys, overflow_row);
+        executeImplBatch(method, state, aggregates_pool, rows, key_columns, aggregate_instructions, key_sizes, keys);
     else
         executeImplCase<true>(method, state, aggregates_pool, rows, key_columns, aggregate_instructions, key_sizes, keys, overflow_row);
 }
@@ -459,27 +461,76 @@ void NO_INLINE Aggregator::executeImplCase(
 #pragma GCC diagnostic pop
 #endif
 
+template <typename Method>
+void NO_INLINE Aggregator::executeImplBatch(
+    Method & method,
+    typename Method::State & state,
+    Arena * aggregates_pool,
+    size_t rows,
+    ColumnRawPtrs & key_columns,
+    AggregateFunctionInstruction * aggregate_instructions,
+    const Sizes & key_sizes,
+    StringRefs & keys) const
+{
+    PODArray<AggregateDataPtr> places(rows);
+
+    typename Method::iterator it;
+    std::vector<std::string> sort_key_containers;
+    sort_key_containers.resize(key_columns.size(), "");
+    for (size_t i = 0; i < rows; ++i)
+    {
+        /// Get the key to insert into the hash table.
+        typename Method::Key key = state.getKey(key_columns, params.keys_size, i, key_sizes, keys, *aggregates_pool, sort_key_containers);
+
+        /// Ignore optimization for consecutive identical keys in batch mode.
+        bool inserted = false;
+        method.data.emplace(key, it, inserted);
+
+        /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
+        if (inserted)
+        {
+            AggregateDataPtr & aggregate_data = Method::getAggregateData(it->second);
+
+            /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+            aggregate_data = nullptr;
+
+            method.onNewKey(*it, params.keys_size, keys, *aggregates_pool);
+
+            AggregateDataPtr place = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+            createAggregateStates(place);
+            aggregate_data = place;
+        }
+        else
+            method.onExistingKey(key, keys, *aggregates_pool);
+
+        places[i] = Method::getAggregateData(it->second);
+        assert(places[i] != nullptr);
+    }
+
+    /// Add values to the aggregate functions.
+    for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
+    {
+        if (inst->offsets)
+            inst->batch_that->addBatchArray(rows, places.data(), inst->state_offset, inst->batch_arguments, inst->offsets, aggregates_pool);
+        else
+            inst->batch_that->addBatch(rows, places.data(), inst->state_offset, inst->batch_arguments, aggregates_pool);
+    }
+}
+
 void NO_INLINE Aggregator::executeWithoutKeyImpl(
     AggregatedDataWithoutKey & res,
     size_t rows,
     AggregateFunctionInstruction * aggregate_instructions,
     Arena * arena) const
 {
-    /// Optimization in the case of a single aggregate function `count`.
-    AggregateFunctionCount * agg_count = params.aggregates_size == 1
-        ? typeid_cast<AggregateFunctionCount *>(aggregate_functions[0])
-        : nullptr;
-
-    if (agg_count)
-        agg_count->addDelta(res, rows);
-    else
+    /// Adding values
+    for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
     {
-        for (size_t i = 0; i < rows; ++i)
-        {
-            /// Adding values
-            for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
-                (*inst->func)(inst->that, res + inst->state_offset, inst->arguments, i, arena);
-        }
+        if (inst->offsets)
+            inst->batch_that->addBatchSinglePlace(
+                inst->offsets[static_cast<ssize_t>(rows - 1)], res + inst->state_offset, inst->batch_arguments, arena);
+        else
+            inst->batch_that->addBatchSinglePlace(rows, res + inst->state_offset, inst->batch_arguments, arena);
     }
 }
 
@@ -493,6 +544,19 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
 
     /// `result` will destroy the states of aggregate functions in the destructor
     result.aggregator = this;
+
+    /// How to perform the aggregation?
+    if (result.empty())
+    {
+        result.init(method_chosen);
+        result.keys_size = params.keys_size;
+        result.key_sizes = key_sizes;
+        result.collators = params.collators;
+        LOG_TRACE(log, "Aggregation method: " << result.getMethodName());
+    }
+
+    if (isCancelled())
+        return true;
 
     for (size_t i = 0; i < params.aggregates_size; ++i)
         aggregate_columns[i].resize(params.aggregates[i].arguments.size());
@@ -517,6 +581,7 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
     AggregateFunctionInstructions aggregate_functions_instructions(params.aggregates_size + 1);
     aggregate_functions_instructions[params.aggregates_size].that = nullptr;
 
+    std::vector<std::vector<const IColumn *>> nested_columns_holder;
     for (size_t i = 0; i < params.aggregates_size; ++i)
     {
         for (size_t j = 0; j < aggregate_columns[i].size(); ++j)
@@ -530,29 +595,31 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
             }
         }
 
-        aggregate_functions_instructions[i].that = aggregate_functions[i];
-        aggregate_functions_instructions[i].func = aggregate_functions[i]->getAddressOfAddFunction();
-        aggregate_functions_instructions[i].state_offset = offsets_of_aggregate_states[i];
         aggregate_functions_instructions[i].arguments = aggregate_columns[i].data();
+        aggregate_functions_instructions[i].state_offset = offsets_of_aggregate_states[i];
+        auto that = aggregate_functions[i];
+        /// Unnest consecutive trailing -State combinators
+        while (auto func = typeid_cast<const AggregateFunctionState *>(that))
+            that = func->getNestedFunction().get();
+        aggregate_functions_instructions[i].that = that;
+        aggregate_functions_instructions[i].func = that->getAddressOfAddFunction();
+
+        if (auto func = typeid_cast<const AggregateFunctionArray *>(that))
+        {
+            UNUSED(func);
+            throw Exception("Not support AggregateFunctionArray", ErrorCodes::NOT_IMPLEMENTED);
+        }
+        else
+        {
+            aggregate_functions_instructions[i].batch_arguments = aggregate_columns[i].data();
+            aggregate_functions_instructions[i].batch_that = that;
+        }
     }
 
     if (isCancelled())
         return true;
 
     size_t rows = block.rows();
-
-    /// How to perform the aggregation?
-    if (result.empty())
-    {
-        result.init(method_chosen);
-        result.keys_size = params.keys_size;
-        result.key_sizes = key_sizes;
-        result.collators = params.collators;
-        LOG_TRACE(log, "Aggregation method: " << result.getMethodName());
-    }
-
-    if (isCancelled())
-        return true;
 
     if ((params.overflow_row || result.type == AggregatedDataVariants::Type::without_key) && !result.without_key)
     {
@@ -575,7 +642,7 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
 
         #define M(NAME, IS_TWO_LEVEL) \
         else if (result.type == AggregatedDataVariants::Type::NAME) \
-            executeImpl(*result.NAME, result.aggregates_pool, rows, key_columns, result.collators, &aggregate_functions_instructions[0], \
+            executeImpl(*result.NAME, result.aggregates_pool, rows, key_columns, result.collators, aggregate_functions_instructions.data(), \
                 result.key_sizes, key, no_more_keys, overflow_row_ptr);
 
         if (false) {}
