@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -9,8 +10,6 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
-
-#include <DataStreams/SquashingBlockOutputStream.h>
 
 namespace DB
 {
@@ -96,14 +95,13 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
                 Errors::Coprocessor::BadRequest);
         }
     }
-    std::unordered_map<RegionID, RegionInfo> regions;
+    std::unordered_map<RegionVerID, RegionInfo> regions;
     for (auto & r : task_request.regions())
     {
-        auto res = regions.emplace(r.region_id(),
-            RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
-                CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+        RegionVerID region_ver_id(r.region_id(), r.region_epoch().conf_ver(), r.region_epoch().version());
+        auto res = regions.emplace(region_ver_id, RegionInfo(region_ver_id, CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
         if (!res.second)
-            throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + std::to_string(r.region_id()),
+            throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + region_ver_id.toString(),
                 Errors::Coprocessor::BadRequest);
     }
     // set schema ver and start ts.
@@ -306,23 +304,29 @@ bool MPPTask::isTaskHanging()
 
 void MPPTask::cancel(const String & reason)
 {
-    auto current_status = status.load();
+    auto current_status = status.exchange(CANCELLED);
     if (current_status == FINISHED || current_status == CANCELLED)
-        return;
-    LOG_WARNING(log, "Begin cancel task: " + id.toString());
-    /// step 1. cancel query streams
-    status = CANCELLED;
-    auto process_list_element = context.getProcessListElement();
-    if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
     {
-        BlockInputStreamPtr input_stream;
-        BlockOutputStreamPtr output_stream;
-        if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
+        if (current_status == FINISHED)
+            status = FINISHED;
+        return;
+    }
+    LOG_WARNING(log, "Begin cancel task: " + id.toString());
+    /// step 1. cancel query streams if it is running
+    if (current_status == RUNNING)
+    {
+        auto process_list_element = context.getProcessListElement();
+        if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
         {
-            IProfilingBlockInputStream * input_stream_casted;
-            if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
+            BlockInputStreamPtr input_stream;
+            BlockOutputStreamPtr output_stream;
+            if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
             {
-                input_stream_casted->cancel(true);
+                IProfilingBlockInputStream * input_stream_casted;
+                if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
+                {
+                    input_stream_casted->cancel(true);
+                }
             }
         }
     }
@@ -362,9 +366,9 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         for (auto region : retry_regions)
         {
             auto * retry_region = response->add_retry_regions();
-            retry_region->set_id(region.region_id);
-            retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
-            retry_region->mutable_region_epoch()->set_version(region.region_version);
+            retry_region->set_id(region.region_ver_id.id);
+            retry_region->mutable_region_epoch()->set_conf_ver(region.region_ver_id.conf_ver);
+            retry_region->mutable_region_epoch()->set_version(region.region_ver_id.ver);
         }
         if (task->dag_context->isRootMPPTask())
         {

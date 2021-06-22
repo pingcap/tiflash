@@ -259,6 +259,8 @@ public:
         }
     }
 
+    void updateWeakHash32(WeakHash32 & hash) const override;
+
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;

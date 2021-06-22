@@ -181,7 +181,7 @@ SegmentPtr Segment::newSegment(DMContext &              context,
                                PageId                   delta_id,
                                PageId                   stable_id)
 {
-    WriteBatches wbs(context.storage_pool);
+    WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
 
     auto delta  = std::make_shared<DeltaValueSpace>(delta_id);
     auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs, false);
@@ -284,7 +284,7 @@ bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t o
 bool Segment::write(DMContext & dm_context, const Block & block)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] write to disk rows: " << block.rows());
-    WriteBatches wbs(dm_context.storage_pool);
+    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
     auto pack = DeltaPackBlock::writePack(dm_context, block, 0, block.rows(), wbs);
     wbs.writeAll();
@@ -532,7 +532,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, con
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
-    WriteBatches wbs(dm_context.storage_pool);
+    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
     auto         segment_snap = createSnapshot(dm_context, true);
     if (!segment_snap)
         return {};
@@ -611,7 +611,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
 
 SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
-    WriteBatches wbs(dm_context.storage_pool);
+    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
     auto         segment_snap = createSnapshot(dm_context, true);
     if (!segment_snap)
         return {};
@@ -701,7 +701,21 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     stream.readSuffix();
 
     RowKeyColumnContainer rowkey_column(block.getByPosition(0).column, is_common_handle);
-    return {RowKeyValue(rowkey_column.getRowKeyValue(read_row_in_pack))};
+    RowKeyValue           split_point(rowkey_column.getRowKeyValue(read_row_in_pack));
+
+
+    if (!rowkey_range.check(split_point.toRowKeyValueRef())
+        || RowKeyRange(rowkey_range.start, split_point, is_common_handle, rowkey_column_size).none()
+        || RowKeyRange(split_point, rowkey_range.end, is_common_handle, rowkey_column_size).none())
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << " unexpected split_handle: " << split_point.toRowKeyValueRef().toDebugString()
+                                 << ", should be in range " << rowkey_range.toDebugString() << ", cur_rows: " << cur_rows
+                                 << ", read_row_in_pack: " << read_row_in_pack << ", file_index: " << file_index);
+        return {};
+    }
+
+    return {split_point};
 }
 
 std::optional<RowKeyValue>
@@ -775,10 +789,16 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
     }
     stream->readSuffix();
 
-    if (!rowkey_range.check(split_point.toRowKeyValueRef()))
-        throw Exception("getSplitPointSlow unexpected split_handle: " + split_point.toRowKeyValueRef().toDebugString()
-                        + ", should be in range " + rowkey_range.toDebugString() + ", exact_rows: " + DB::toString(exact_rows)
-                        + ", cur count:" + DB::toString(count));
+    if (!rowkey_range.check(split_point.toRowKeyValueRef())
+        || RowKeyRange(rowkey_range.start, split_point, is_common_handle, rowkey_column_size).none()
+        || RowKeyRange(split_point, rowkey_range.end, is_common_handle, rowkey_column_size).none())
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << " unexpected split_handle: " << split_point.toRowKeyValueRef().toDebugString()
+                                 << ", should be in range " << rowkey_range.toDebugString() << ", exact_rows: " << DB::toString(exact_rows)
+                                 << ", cur count: " << DB::toString(count) << ", split_row_index: " << split_row_index);
+        return {};
+    }
 
     return {split_point};
 }
@@ -792,7 +812,9 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext &             
     if (!dm_context.enable_logical_split         //
         || segment_snap->stable->getPacks() <= 3 //
         || segment_snap->delta->getRows() > segment_snap->stable->getRows())
+    {
         return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs, need_rate_limit);
+    }
     else
     {
         auto split_point_opt = getSplitPointFast(dm_context, segment_snap->stable);
@@ -828,8 +850,12 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     RowKeyRange other_range(split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
 
     if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitLogical: unexpected range! my_range: " + my_range.toDebugString()
-                        + ", other_range: " + other_range.toDebugString());
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << ": unexpected range! my_range: " << my_range.toDebugString()
+                                 << ", other_range: " << other_range.toDebugString() << ", aborted");
+        return {};
+    }
 
     GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &storage_pool);
 
@@ -892,8 +918,12 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
     RowKeyRange other_range(split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
 
     if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitPhysical: unexpected range! my_range: " + my_range.toDebugString()
-                        + ", other_range: " + other_range.toDebugString());
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << ": unexpected range! my_range: " << my_range.toDebugString()
+                                 << ", other_range: " << other_range.toDebugString() << ", aborted");
+        return {};
+    }
 
     StableValueSpacePtr my_new_stable;
     StableValueSpacePtr other_stable;
@@ -1023,7 +1053,7 @@ SegmentPair Segment::applySplit(DMContext &                dm_context, //
 
 SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const SegmentPtr & left, const SegmentPtr & right)
 {
-    WriteBatches wbs(dm_context.storage_pool);
+    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
     auto left_snap  = left->createSnapshot(dm_context, true);
     auto right_snap = right->createSnapshot(dm_context, true);

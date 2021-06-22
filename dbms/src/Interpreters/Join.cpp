@@ -79,11 +79,6 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     build_set_exceeded.store(false);
     for (size_t i = 0; i < build_concurrency; i++)
         pools.emplace_back(std::make_shared<Arena>());
-    if (build_concurrency > 1 && getFullness(kind))
-    {
-        for (size_t i = 0; i < build_concurrency; i++)
-            pools.emplace_back(std::make_shared<Arena>());
-    }
     if (other_condition_ptr != nullptr)
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
@@ -95,7 +90,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     if (getFullness(kind))
     {
         for (size_t i = 0; i < build_concurrency; i++)
-            rows_not_inserted_to_map.push_back(std::make_unique<RowRefListWithLock>(i));
+            rows_not_inserted_to_map.push_back(std::make_unique<RowRefList>());
     }
     if (!left_filter_column.empty() && !isLeftJoin(kind))
         throw Exception("Not supported: non left join with left conditions");
@@ -434,8 +429,8 @@ namespace
     void NO_INLINE insertFromBlockImplTypeCase(
         Map & map, size_t rows, const ColumnRawPtrs & key_columns,
         size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
-        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefListWithLock * rows_not_inserted_to_map,
-        size_t, Arenas & pools)
+        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map,
+        size_t, Arena & pool)
     {
         KeyGetter key_getter(key_columns, collators);
         std::vector<std::string> sort_key_containers;
@@ -448,14 +443,14 @@ namespace
                 if (rows_not_inserted_to_map)
                 {
                     /// for right/full out join, need to record the rows not inserted to map
-                    auto elem = reinterpret_cast<Join::RowRefList *>(pools[0]->alloc(sizeof(Join::RowRefList)));
-                    insertRowToList(&rows_not_inserted_to_map->row_ref_list, elem, stored_block, i);
+                    auto elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
+                    insertRowToList(rows_not_inserted_to_map, elem, stored_block, i);
                 }
                 continue;
             }
 
             auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
-            Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(map.getSegmentTable(0), key, stored_block, i, *pools[0]);
+            Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(map.getSegmentTable(0), key, stored_block, i, pool);
         }
     }
 
@@ -463,8 +458,8 @@ namespace
     void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             Map & map, size_t rows, const ColumnRawPtrs & key_columns,
             size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
-            Block * stored_block, ConstNullMapPtr null_map, Join::RowRefListWithLock * rows_not_inserted_to_map,
-            size_t block_index, Arenas & pools)
+            Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map,
+            size_t stream_index, Arena & pool)
     {
         KeyGetter key_getter(key_columns, collators);
         std::vector<std::string> sort_key_containers;
@@ -510,16 +505,16 @@ namespace
         }
         for (size_t insert_index = 0; insert_index < segment_index_info.size(); insert_index++)
         {
-            size_t segment_index = (insert_index + block_index) % segment_index_info.size();
+            size_t segment_index = (insert_index + stream_index) % segment_index_info.size();
             if (segment_index == segment_size)
             {
                 /// null value
-                std::lock_guard<std::mutex> lk(rows_not_inserted_to_map->mutex);
+                /// here ignore mutex because rows_not_inserted_to_map is privately owned by each stream thread
                 for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
                 {
                     /// for right/full out join, need to record the rows not inserted to map
-                    auto elem = reinterpret_cast<Join::RowRefList *>(pools[segment_index + rows_not_inserted_to_map->index]->alloc(sizeof(Join::RowRefList)));
-                    insertRowToList(&rows_not_inserted_to_map->row_ref_list, elem, stored_block, segment_index_info[segment_index][i]);
+                    auto elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
+                    insertRowToList(rows_not_inserted_to_map, elem, stored_block, segment_index_info[segment_index][i]);
                 }
             }
             else
@@ -528,7 +523,7 @@ namespace
                 for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
                 {
                     auto key = key_getter.getKey(key_columns, keys_size, segment_index_info[segment_index][i], key_sizes, sort_key_containers);
-                    Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(map.getSegmentTable(segment_index), key, stored_block, segment_index_info[segment_index][i], *pools[segment_index]);
+                    Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(map.getSegmentTable(segment_index), key, stored_block, segment_index_info[segment_index][i], pool);
                 }
             }
         }
@@ -539,8 +534,8 @@ namespace
     void insertFromBlockImplType(
         Map & map, size_t rows, const ColumnRawPtrs & key_columns,
         size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
-        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefListWithLock * rows_not_inserted_to_map,
-        size_t block_index, size_t insert_concurrency, Arenas & pools)
+        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map,
+        size_t stream_index, size_t insert_concurrency, Arena & pool)
     {
         if (null_map)
         {
@@ -549,14 +544,14 @@ namespace
                 insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, keys_size, key_sizes,
                                                                               collators,
                                                                               stored_block, null_map,
-                                                                              rows_not_inserted_to_map, block_index, pools);
+                                                                              rows_not_inserted_to_map, stream_index, pool);
             }
             else
             {
                 insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, keys_size, key_sizes,
                                                                               collators,
                                                                               stored_block, null_map,
-                                                                              rows_not_inserted_to_map, block_index, pools);
+                                                                              rows_not_inserted_to_map, stream_index, pool);
             }
         }
         else
@@ -566,14 +561,14 @@ namespace
                 insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, keys_size, key_sizes,
                                                                                collators,
                                                                                stored_block, null_map,
-                                                                               rows_not_inserted_to_map, block_index, pools);
+                                                                               rows_not_inserted_to_map, stream_index, pool);
             }
             else
             {
                 insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, keys_size, key_sizes,
                                                                                collators,
                                                                                stored_block, null_map,
-                                                                               rows_not_inserted_to_map, block_index, pools);
+                                                                               rows_not_inserted_to_map, stream_index, pool);
             }
         }
     }
@@ -583,8 +578,8 @@ namespace
     void insertFromBlockImpl(
         Join::Type type, Maps & maps, size_t rows, const ColumnRawPtrs & key_columns,
         size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
-        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefListWithLock * rows_not_inserted_to_map,
-        size_t block_index, size_t insert_concurrency, Arenas & pools)
+        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map,
+        size_t stream_index, size_t insert_concurrency, Arena & pool)
     {
         switch (type)
         {
@@ -595,7 +590,7 @@ namespace
             case Join::Type::TYPE: \
                 insertFromBlockImplType<STRICTNESS, typename KeyGetterForType<Join::Type::TYPE>::Type>(\
                     *maps.TYPE, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map,\
-                    rows_not_inserted_to_map, block_index, insert_concurrency, pools); \
+                    rows_not_inserted_to_map, stream_index, insert_concurrency, pool); \
                     break;
             APPLY_FOR_JOIN_VARIANTS(M)
         #undef M
@@ -659,34 +654,28 @@ bool Join::insertFromBlock(const Block & block)
     return insertFromBlockInternal(stored_block, 0);
 }
 
-void Join::insertFromBlockASync(const Block & block, ThreadPool & thread_pool)
+/// the block should be valid.
+void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
     if (empty())
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
     std::shared_lock lock(rwlock);
     Block * stored_block = nullptr;
-    size_t block_index = 0;
     {
         std::lock_guard<std::mutex> lk(blocks_lock);
         blocks.push_back(block);
         stored_block = &blocks.back();
-        block_index = blocks.size();
         original_blocks.push_back(block);
     }
-    auto memory_tracker = current_memory_tracker;
-    thread_pool.schedule([&, stored_block, block_index, memory_tracker]
+    if (build_set_exceeded.load())
+        return;
+    if (!insertFromBlockInternal(stored_block, stream_index))
     {
-        current_memory_tracker = memory_tracker;
-        if (build_set_exceeded.load())
-            return;
-        if (!insertFromBlockInternal(stored_block, block_index))
-        {
-            build_set_exceeded.store(true);
-        }
-    });
+        build_set_exceeded.store(true);
+    }
 }
 
-bool Join::insertFromBlockInternal(Block * stored_block, size_t block_index)
+bool Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
 {
     size_t keys_size = key_names_right.size();
     ColumnRawPtrs key_columns(keys_size);
@@ -766,23 +755,19 @@ bool Join::insertFromBlockInternal(Block * stored_block, size_t block_index)
         {
             if (strictness == ASTTableJoin::Strictness::Any)
                 insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, keys_size,
-                        key_sizes, collators, stored_block, null_map, nullptr,
-                        block_index, build_concurrency, pools);
+                        key_sizes, collators, stored_block, null_map, nullptr, stream_index, build_concurrency, *pools[stream_index]);
             else
                 insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, keys_size,
-                        key_sizes, collators, stored_block, null_map, nullptr,
-                        block_index, build_concurrency, pools);
+                        key_sizes, collators, stored_block, null_map, nullptr, stream_index, build_concurrency, *pools[stream_index]);
         }
         else
         {
             if (strictness == ASTTableJoin::Strictness::Any)
                 insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any_full, rows, key_columns, keys_size,
-                        key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[block_index % build_concurrency].get(),
-                        block_index, build_concurrency, pools);
+                        key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, build_concurrency, *pools[stream_index]);
             else
                 insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, keys_size,
-                        key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[block_index % build_concurrency].get(),
-                        block_index, build_concurrency, pools);
+                        key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, build_concurrency, *pools[stream_index]);
         }
     }
 
@@ -1749,7 +1734,7 @@ private:
     {
         while (current_not_mapped_row == nullptr && next_index < parent.rows_not_inserted_to_map.size())
         {
-            current_not_mapped_row = parent.rows_not_inserted_to_map[next_index]->row_ref_list.next;
+            current_not_mapped_row = parent.rows_not_inserted_to_map[next_index]->next;
             next_index += step;
         }
     }

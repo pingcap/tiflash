@@ -42,7 +42,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     ///  2. The serialized metadata of packs in DeltaValueSpace
 
     FlushPackTasks tasks;
-    WriteBatches   wbs(context.storage_pool);
+    WriteBatches   wbs(context.storage_pool, context.getWriteLimiter());
 
     size_t flush_rows    = 0;
     size_t flush_bytes   = 0;

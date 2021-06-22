@@ -1,5 +1,6 @@
+#pragma once
 #include <Storages/Page/PageStorage.h>
-
+#include <Interpreters/Context.h>
 #include <boost/core/noncopyable.hpp>
 #include <map>
 #include <tuple>
@@ -26,7 +27,7 @@ public:
     };
 
 public:
-    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config);
+    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const Context& global_ctx);
 
     /**
      * Take a snapshot from PageStorage and try to migrate data if some PageFiles used rate is low.
@@ -35,17 +36,19 @@ public:
      * All migrated data will be written as multiple WriteBatches with same sequence. To keep the
      * order of all PageFiles' meta, the sequence of WriteBatch should be maximum of all candidates'
      * WriteBatches. No matter we merge valid page(s) from that WriteBatch or not.
-     * 
+     *
      * Note that all types of PageFile in `page_files` should be `Formal`.
      * Those PageFile whose id in `writing_file_ids`, theirs data will not be migrate.
-     * 
+     *
      * Return DataCompactor::Result and entries edit should be applied to PageStorage's entries.
      */
     std::tuple<Result, PageEntriesEdit>
     tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapshot, const std::set<PageFileIdAndLevel> & writing_file_ids);
 
-
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     /**
      * Collect valid page of snapshot.
      * Return {
@@ -78,7 +81,10 @@ private:
 
     void logMigrationDetails(const MigrateInfos & infos, const PageFileIdAndLevel & migrate_file_id) const;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     const String & storage_name;
 
     PSDiskDelegatorPtr delegator;
@@ -88,6 +94,8 @@ private:
 
     Poco::Logger * log;
     Poco::Logger * page_file_log;
+
+    const Context& global_context;
 };
 
 } // namespace DB
