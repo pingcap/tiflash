@@ -427,8 +427,8 @@ public:
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
-    void initializeRateLimiter(TiFlashMetricsPtr metrics, UInt64 rate_limit_per_sec);
-    RateLimiterPtr getRateLimiter() const;
+    void initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config, Poco::Logger* log);
+    RateLimiterPtr getWriteLimiter() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;
