@@ -1,3 +1,4 @@
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 
 namespace DB
@@ -138,5 +139,33 @@ void DAGContext::handleInvalidTime(const String & msg, const TiFlashError & erro
 }
 
 bool DAGContext::shouldClipToZero() { return flags & Flag::IN_INSERT_STMT || flags & Flag::IN_LOAD_DATA_STMT; }
+
+double DAGContext::getTableScanThroughput()
+{
+    if (table_scan_executor_id.empty())
+        return 0.0;
+
+    // collect table scan metrics
+    UInt64 time_processed_ns = 0;
+    UInt64 num_produced_bytes = 0;
+    for (auto & p : getProfileStreamsMap())
+    {
+        if (p.first == table_scan_executor_id)
+        {
+            for (auto & streamPtr : p.second.input_streams)
+            {
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
+                {
+                    time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
+                    num_produced_bytes += p_stream->getProfileInfo().bytes;
+                }
+            }
+            break;
+        }
+    }
+
+    // convert to bytes per second
+    return num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL);
+}
 
 } // namespace DB

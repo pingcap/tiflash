@@ -97,8 +97,11 @@ public:
 
     BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
 
+    double getTableScanThroughput();
+
     size_t final_concurrency;
     Int64 compile_time_ns;
+    String table_scan_executor_id = "";
     String exchange_sender_executor_id = "";
     String exchange_sender_execution_summary_key = "";
     bool collect_execution_summaries;

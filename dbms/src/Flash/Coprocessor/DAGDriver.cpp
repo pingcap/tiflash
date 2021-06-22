@@ -107,6 +107,8 @@ try
         copyData(*streams.in, *dag_output_stream);
     }
 
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_storage_logical_throughput_bytes).Observe(dag_context.getTableScanThroughput());
+
     auto process_info = context.getProcessListElement()->getInfo();
     auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
     if constexpr (!batch)

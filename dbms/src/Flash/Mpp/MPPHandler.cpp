@@ -288,6 +288,7 @@ void MPPTask::runImpl()
         LOG_ERROR(log, "unrecovered error");
         writeErrToAllTunnel("unrecovered fatal error");
     }
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_storage_logical_throughput_bytes).Observe(dag_context->getTableScanThroughput());
     LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     auto process_info = context.getProcessListElement()->getInfo();
     auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
