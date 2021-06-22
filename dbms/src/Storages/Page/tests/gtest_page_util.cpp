@@ -20,7 +20,7 @@ TEST(PageUtils_test, ReadWriteFile)
     std::string data_to_write = "123";
 #ifndef NDEBUG
     PageUtil::writeFile(file, 0, data_to_write.data(), 3, nullptr, true);
-#elif
+#else
     PageUtil::writeFile(file, 0, data_to_write.data(), 3, nullptr);
 #endif
     PageUtil::syncFile(file);

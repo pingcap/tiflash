@@ -14,11 +14,7 @@
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-#define private public
 #include <Storages/Page/gc/LegacyCompactor.h>
-#undef private
-
 #include <Storages/Page/gc/restoreFromCheckpoints.h>
 
 namespace DB
@@ -175,7 +171,7 @@ try
     opt.remove_tmp_files  = false;
     auto page_files       = PageStorage::listAllPageFiles(file_provider, delegator, storage.page_file_log, opt);
 
-    LegacyCompactor compactor(storage);
+    LegacyCompactor compactor(storage, ctx);
     auto && [page_files_left, page_files_compacted, bytes_written] = compactor.tryCompact(std::move(page_files), {});
     (void)page_files_left;
     (void)bytes_written;

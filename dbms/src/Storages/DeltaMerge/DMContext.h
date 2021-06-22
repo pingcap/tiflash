@@ -106,6 +106,10 @@ public:
           enable_skippable_place(settings.dt_enable_skippable_place)
     {
     }
+    RateLimiterPtr getWriteLimiter() const
+    {
+        return db_context.getWriteLimiter();
+    }
 };
 
 } // namespace DM

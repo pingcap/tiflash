@@ -1,6 +1,7 @@
 #include <Common/FailPoint.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
+#include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/stable/PageStorage.h>
 #include <Storages/PathPool.h>
@@ -28,7 +29,7 @@ void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
     {
         WriteBatch wb;
         wb.delPage(region_id);
-        page_storage->write(std::move(wb));
+        page_storage->write(std::move(wb), global_context.getWriteLimiter());
     }
     else
     {
@@ -98,7 +99,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     {
         WriteBatch wb;
         wb.putPage(region_id, applied_index, read_buf, region_size);
-        page_storage->write(std::move(wb));
+        page_storage->write(std::move(wb), global_context.getWriteLimiter());
     }
     else
     {
@@ -147,7 +148,9 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 
         if (!run_in_compatible_mode)
         {
+            mergeConfigFromSettings(global_context.getSettingsRef(), config);
             config.num_write_slots = 4; // extend write slots to 4 at least
+
             LOG_INFO(log, "RegionPersister running in normal mode");
             page_storage = std::make_unique<DB::PageStorage>( //
                 "RegionPersister",
@@ -196,7 +199,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 bool RegionPersister::gc()
 {
     if (page_storage)
-        return page_storage->gc();
+        return page_storage->gc(global_context);
     else
         return stable_page_storage->gc();
 }

@@ -124,7 +124,7 @@ bool DeltaValueSpace::compact(DMContext & context)
     size_t total_compact_packs = 0;
     size_t total_compact_rows  = 0;
 
-    WriteBatches wbs(context.storage_pool);
+    WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
     PageReader   reader(context.storage_pool.log(), log_storage_snap);
     for (auto & task : tasks)
     {

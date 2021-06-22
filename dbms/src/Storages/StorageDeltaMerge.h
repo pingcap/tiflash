@@ -104,7 +104,7 @@ public:
     void checkStatus(const Context & context) override;
     void deleteRows(const Context &, size_t rows) override;
 
-    const DM::DeltaMergeStorePtr & getStore() 
+    const DM::DeltaMergeStorePtr & getStore()
     {
          return getAndMaybeInitStore();
     }
@@ -112,9 +112,13 @@ public:
     bool isCommonHandle() const override { return is_common_handle; }
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
-    
+
     bool initStoreIfDataDirExist() override;
+
+#ifndef DBMS_PUBLIC_GTEST
 protected:
+#endif
+
     StorageDeltaMerge( //
         const String & db_engine,
         const String & db_name_,
@@ -127,7 +131,10 @@ protected:
 
     Block buildInsertBlock(bool is_import, bool is_delete, const Block & block);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     void alterImpl(const AlterCommands & commands,
         const String & database_name,
         const String & table_name,
@@ -141,8 +148,12 @@ private:
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
     bool dataDirExist();
+
+#ifndef DBMS_PUBLIC_GTEST
 private:
-    struct TableColumnInfo 
+#endif
+
+    struct TableColumnInfo
     {
         TableColumnInfo(const String& db, const String& table, const ASTPtr& pk)
             : db_name(db), table_name(table), pk_expr_ast(pk) {}
@@ -155,7 +166,7 @@ private:
     const bool data_path_contains_database_name = false;
 
     std::mutex store_mutex;
-    
+
     std::unique_ptr<TableColumnInfo> table_column_info;  // After create DeltaMergeStore object, it is deprecated.
     std::atomic<bool> store_inited;
     DM::DeltaMergeStorePtr _store;

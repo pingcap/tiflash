@@ -4,14 +4,15 @@
 
 namespace DB
 {
-LegacyCompactor::LegacyCompactor(const PageStorage & storage)
+LegacyCompactor::LegacyCompactor(const PageStorage & storage, const Context& global_ctx)
     : storage_name(storage.storage_name),
       delegator(storage.delegator),
       file_provider(storage.getFileProvider()),
       config(storage.config),
       log(storage.log),
       page_file_log(storage.page_file_log),
-      version_set(storage.storage_name + ".legacy_compactor", config.version_set_config, log)
+      version_set(storage.storage_name + ".legacy_compactor", config.version_set_config, log),
+      global_context(global_ctx)
 {
 }
 
@@ -81,7 +82,7 @@ LegacyCompactor::tryCompact(                 //
     size_t bytes_written = 0;
     if (!info.empty())
     {
-        bytes_written = writeToCheckpoint(storage_path, checkpoint_id, std::move(wb), file_provider, page_file_log);
+        bytes_written = writeToCheckpoint(storage_path, checkpoint_id, std::move(wb), file_provider, page_file_log, global_context);
         // Don't need to insert location since Checkpoint PageFile won't be read except using listAllPageFiles in `PageStorage::restore`
         delegator->addPageFileUsedSize(checkpoint_id, bytes_written, storage_path, /*need_insert_location=*/false);
     }
@@ -225,7 +226,8 @@ WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::Snaps
 }
 
 size_t LegacyCompactor::writeToCheckpoint(
-    const String & storage_path, const PageFileIdAndLevel & file_id, WriteBatch && wb, FileProviderPtr & file_provider, Poco::Logger * log)
+    const String & storage_path, const PageFileIdAndLevel & file_id, WriteBatch && wb,
+    FileProviderPtr & file_provider, Poco::Logger * log, const Context& global_context)
 {
     size_t bytes_written   = 0;
     auto   checkpoint_file = PageFile::newPageFile(file_id.first, file_id.second, storage_path, file_provider, PageFile::Type::Temp, log);
@@ -233,7 +235,7 @@ size_t LegacyCompactor::writeToCheckpoint(
         auto checkpoint_writer = checkpoint_file.createWriter(false, true);
 
         PageEntriesEdit edit;
-        bytes_written += checkpoint_writer->write(wb, edit);
+        bytes_written += checkpoint_writer->write(wb, edit, global_context.getWriteLimiter());
     }
     // drop "data" part for checkpoint file.
     bytes_written -= checkpoint_file.setCheckpoint();

@@ -3,83 +3,46 @@
 #include <string>
 
 #include <Common/BitHelpers.h>
-#include <IO/WriteBuffer.h>
-
-/// let the initial resize fits into std::string's local buffer.
-/// gcc-9 : 15 bytes.
-#define WRITE_BUFFER_FROM_STRING_INITIAL_SIZE_IF_EMPTY 15
-
+#include <IO/WriteBufferFromVector.h>
+#include <common/StringRef.h>
 
 namespace DB
 {
 
 /** Writes the data to a string.
   * Note: before using the resulting string, destroy this object.
+  * Use 15 as initial_size to fit the local buffer of gcc's std::string.
   */
-class WriteBufferFromString : public WriteBuffer
-{
-private:
-    std::string & s;
-
-    void nextImpl() override
-    {
-        size_t old_size = s.size();
-        s.resize(roundUpToPowerOfTwoOrZero(old_size * 2));
-        internal_buffer = Buffer(reinterpret_cast<Position>(&s[old_size]), reinterpret_cast<Position>(&s[s.size()]));
-        working_buffer = internal_buffer;
-    }
-
-protected:
-    void finish()
-    {
-        s.resize(count());
-    }
-
-public:
-    WriteBufferFromString(std::string & s_)
-        : WriteBuffer(reinterpret_cast<Position>(&s_[0]), s_.size()), s(s_)
-    {
-        if (s.empty())
-        {
-            s.resize(WRITE_BUFFER_FROM_STRING_INITIAL_SIZE_IF_EMPTY);
-            set(reinterpret_cast<Position>(&s[0]), s.size());
-        }
-    }
-
-    ~WriteBufferFromString() override
-    {
-        finish();
-    }
-};
-
+using WriteBufferFromString = WriteBufferFromVector<std::string, 15>;
 
 namespace detail
 {
-    /// For correct order of initialization.
-    class StringHolder
-    {
-    protected:
-        std::string value;
-    };
+/// For correct order of initialization.
+class StringHolder
+{
+protected:
+    std::string value;
+};
 }
 
 /// Creates the string by itself and allows to get it.
 class WriteBufferFromOwnString : public detail::StringHolder, public WriteBufferFromString
 {
-
 public:
     WriteBufferFromOwnString() : WriteBufferFromString(value) {}
 
+    StringRef stringRef() const { return isFinished() ? StringRef(value) : StringRef(value.data(), pos - value.data()); }
+
     std::string & str()
     {
-        finish();
+        finalize();
         return value;
     }
 
     /// Can't reuse WriteBufferFromOwnString after releaseStr
     std::string releaseStr()
     {
-        finish();
+        finalize();
         return std::move(value);
     }
 };

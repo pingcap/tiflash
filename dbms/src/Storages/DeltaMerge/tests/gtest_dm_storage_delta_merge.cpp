@@ -17,9 +17,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
-#define private public
 #include <Storages/StorageDeltaMerge.h>
-#undef private
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/TiKVRange.h>
@@ -258,7 +256,7 @@ try
         output->writeSuffix();
         ASSERT_TRUE(storage->storeInited());
     }
-    
+
     // Rename table name
     String new_table_name = "new_" + storage->getTableName();
     storage->rename(path_name, new_db_name, new_table_name, new_table_name);
