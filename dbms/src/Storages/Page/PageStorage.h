@@ -27,7 +27,7 @@ class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class PSDiskDelegator;
 using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
-
+class Context;
 
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageId. Store Page with the same PageId
@@ -58,6 +58,8 @@ public:
         // Minimum number of legacy files to be selected for compaction
         size_t gc_min_legacy_num = 3;
 
+        size_t  gc_max_expect_legacy_files = 100;
+        Float64 gc_max_valid_rate_bound    = 0.95;
 
         // Maximum write concurrency. Must not be changed once the PageStorage object is created.
         size_t num_write_slots = 1;
@@ -148,7 +150,7 @@ public:
     void reloadSettings(const Config & new_config) { config.reload(new_config); }
 
     // We may skip the GC to reduce useless reading by default.
-    bool gc(bool not_skip = false);
+    bool gc(const Context& global_context, bool not_skip = false);
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
 
@@ -166,7 +168,10 @@ public:
 
     static PageFormat::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     WriterPtr checkAndRenewWriter(PageFile &     page_file,
                                   const String & parent_path_hint,
                                   WriterPtr &&   old_writer  = nullptr,
@@ -187,7 +192,10 @@ private:
     template <typename SnapshotPtr>
     friend class DataCompactor;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     String             storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator;    // Get paths for storing data
     Config             config;
@@ -242,7 +250,10 @@ public:
     UInt64    getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }
     PageEntry getPageEntry(PageId page_id) const { return storage.getEntry(page_id, snap); }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     PageStorage &            storage;
     PageStorage::SnapshotPtr snap;
 };

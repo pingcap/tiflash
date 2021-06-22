@@ -12,12 +12,33 @@ namespace tests
 
 TEST(PageFile_test, Compare)
 {
-    const FileProviderPtr file_provider = TiFlashTestEnv::getContext().getFileProvider();
-    PageFile              checkpoint_pf
-        = PageFile::openPageFileForRead(55, 0, ".", file_provider, PageFile::Type::Checkpoint, &Poco::Logger::get("PageFile"));
+    // clean up
+    const String path = TiFlashTestEnv::getTemporaryPath() + "/page_file_test";
+    {
+        if (Poco::File p(path); p.exists())
+        {
+            Poco::File file(Poco::Path(path).parent());
+            file.remove(true);
+        }
+    }
 
-    PageFile pf0 = PageFile::openPageFileForRead(2, 0, ".", file_provider, PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
-    PageFile pf1 = PageFile::openPageFileForRead(55, 1, ".", file_provider, PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
+    const auto     file_provider = TiFlashTestEnv::getContext().getFileProvider();
+    Poco::Logger * log           = &Poco::Logger::get("PageFile");
+
+    {
+        // Create files for tests
+        PageFile checkpoint_pf = PageFile::newPageFile(55, 0, path, file_provider, PageFile::Type::Temp, log);
+        auto     writer        = checkpoint_pf.createWriter(false, true);
+        checkpoint_pf.setCheckpoint();
+        PageFile pf0 = PageFile::newPageFile(2, 0, path, file_provider, PageFile::Type::Formal, log);
+        writer       = pf0.createWriter(false, true);
+        PageFile pf1 = PageFile::newPageFile(55, 1, path, file_provider, PageFile::Type::Formal, log);
+        writer       = pf1.createWriter(false, true);
+    }
+
+    PageFile checkpoint_pf = PageFile::openPageFileForRead(55, 0, path, file_provider, PageFile::Type::Checkpoint, log);
+    PageFile pf0           = PageFile::openPageFileForRead(2, 0, path, file_provider, PageFile::Type::Formal, log);
+    PageFile pf1           = PageFile::openPageFileForRead(55, 1, path, file_provider, PageFile::Type::Formal, log);
 
     PageFile::Comparator comp;
     ASSERT_EQ(comp(pf0, pf1), true);
@@ -27,6 +48,7 @@ TEST(PageFile_test, Compare)
     ASSERT_EQ(comp(checkpoint_pf, pf0), true);
     ASSERT_EQ(comp(pf0, checkpoint_pf), false);
 
+    // Test compare in `PageFileSet`
     PageFileSet pf_set;
     pf_set.emplace(pf0);
     pf_set.emplace(pf1);
@@ -34,8 +56,20 @@ TEST(PageFile_test, Compare)
 
     ASSERT_EQ(pf_set.begin()->getType(), PageFile::Type::Checkpoint);
     ASSERT_EQ(pf_set.begin()->fileIdLevel(), checkpoint_pf.fileIdLevel());
+    ASSERT_TRUE(pf_set.begin()->isExist());
     ASSERT_EQ(pf_set.rbegin()->getType(), PageFile::Type::Formal);
     ASSERT_EQ(pf_set.rbegin()->fileIdLevel(), pf1.fileIdLevel());
+    ASSERT_TRUE(pf_set.rbegin()->isExist());
+
+    // Test `isPageFileExist`
+    ASSERT_TRUE(PageFile::isPageFileExist(checkpoint_pf.fileIdLevel(), path, file_provider, PageFile::Type::Checkpoint, log));
+    ASSERT_TRUE(PageFile::isPageFileExist(pf0.fileIdLevel(), path, file_provider, PageFile::Type::Formal, log));
+    ASSERT_TRUE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Formal, log));
+    ASSERT_FALSE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Legacy, log));
+    // set pf1 to legacy and check exist
+    pf1.setLegacy();
+    ASSERT_FALSE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Formal, log));
+    ASSERT_TRUE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Legacy, log));
 }
 
 TEST(Page_test, GetField)

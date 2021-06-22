@@ -154,6 +154,18 @@ void ColumnTuple::updateHashWithValues(IColumn::HashValues & hash_values, const 
         column->updateHashWithValues(hash_values, collator, sort_key_container);
 }
 
+void ColumnTuple::updateWeakHash32(WeakHash32 & hash) const
+{
+    auto s = size();
+
+    if (hash.getData().size() != s)
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
+                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+
+    for (const auto & column : columns)
+        column->updateWeakHash32(hash);
+}
+
 void ColumnTuple::insertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
     const size_t tuple_size = columns.size();

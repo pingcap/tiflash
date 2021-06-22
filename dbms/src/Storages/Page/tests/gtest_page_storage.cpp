@@ -18,10 +18,7 @@
 #include <common/logger_useful.h>
 
 #include "gtest/gtest.h"
-
-#define private public
 #include <Storages/Page/PageStorage.h>
-#undef private
 
 namespace DB
 {
@@ -211,7 +208,7 @@ try
         }
     }
 
-    storage->gc();
+    storage->gc(TiFlashTestEnv::getContext());
 
     {
         Page page0 = storage->read(0);
@@ -257,7 +254,7 @@ try
     storage->registerExternalPagesCallbacks(scanner, remover);
     {
         SCOPED_TRACE("fist gc");
-        storage->gc();
+        storage->gc(TiFlashTestEnv::getContext());
         EXPECT_EQ(times_remover_called, 1UL);
     }
 
@@ -273,7 +270,7 @@ try
 
     {
         SCOPED_TRACE("gc with snapshot");
-        storage->gc();
+        storage->gc(TiFlashTestEnv::getContext());
         EXPECT_EQ(times_remover_called, 2UL);
     }
 
@@ -296,7 +293,7 @@ try
     storage->registerExternalPagesCallbacks(scanner, remover);
     {
         SCOPED_TRACE("gc with snapshot released");
-        storage->gc();
+        storage->gc(TiFlashTestEnv::getContext());
         EXPECT_EQ(times_remover_called, 3UL);
     }
 }

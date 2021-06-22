@@ -1,6 +1,7 @@
 #include <Columns/ColumnFixedString.h>
 
 #include <Common/Arena.h>
+#include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
 
@@ -105,6 +106,27 @@ void ColumnFixedString::updateHashWithValues(IColumn::HashValues & hash_values, 
         hash_values[i].update(reinterpret_cast<const char *>(&chars[n * i]), n);
     }
 }
+
+void ColumnFixedString::updateWeakHash32(WeakHash32 & hash) const
+{
+    auto s = size();
+
+    if (hash.getData().size() != s)
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
+                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+
+    const UInt8 * pos = chars.data();
+    UInt32 * hash_data = hash.getData().data();
+
+    for (size_t row = 0; row < s; ++row)
+    {
+        *hash_data = ::updateWeakHash32(pos, n, *hash_data);
+
+        pos += n;
+        ++hash_data;
+    }
+}
+
 
 template <bool positive>
 struct ColumnFixedString::less

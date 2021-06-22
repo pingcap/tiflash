@@ -80,6 +80,8 @@ String PageStorage::Config::toDebugString() const
     std::stringstream ss;
     ss << "PageStorage::Config {gc_min_files:" << gc_min_files << ", gc_min_bytes:" << gc_min_bytes
        << ", gc_max_valid_rate:" << DB::toString(gc_max_valid_rate, 3) << ", gc_min_legacy_num:" << gc_min_legacy_num
+       << ", gc_max_expect_legacy: " << DB::toString(gc_max_expect_legacy_files)
+       << ", gc_max_valid_rate_bound: " << DB::toString(gc_max_valid_rate_bound, 3)
        << ", prob_do_gc_when_write_is_low:" << prob_do_gc_when_write_is_low
        << ", open_file_max_idle_time:" << open_file_max_idle_time.count() << "}";
     return ss.str();
@@ -333,8 +335,7 @@ void PageStorage::restore()
             size_t idx_in_delta_paths = delegator->addPageFileUsedSize(
                 page_file.fileIdLevel(), page_file.getDiskSize(), page_file.parentPath(), /*need_insert_location*/ true);
             // Try best to reuse writable page files
-            if (page_file.getLevel() == 0 && page_file.getType() == PageFile::Type::Formal && isPageFileSizeFitsWritable(page_file, config)
-                && page_file.reusableForWrite())
+            if (page_file.reusableForWrite() && isPageFileSizeFitsWritable(page_file, config))
             {
                 write_files[next_write_fill_idx[idx_in_delta_paths]] = page_file;
                 next_write_fill_idx[idx_in_delta_paths] = (next_write_fill_idx[idx_in_delta_paths] + num_delta_paths) % write_files.size();
@@ -816,10 +817,10 @@ struct GcContext
         // Do more agressive GC if there are too many Legacy files
         if (num_legacy_files > 50)
         {
-            if (num_legacy_files > 100)
+            if (num_legacy_files > config.gc_max_expect_legacy_files)
             {
-                // All files can be selected to migrate data to a new PageFile
-                res.gc_max_valid_rate = 1.0;
+                // Hope that almost all files can be selected to migrate data to a new PageFile
+                res.gc_max_valid_rate = config.gc_max_valid_rate_bound;
             }
             else
             {
@@ -845,7 +846,7 @@ enum class GCType
     LowWrite,
 };
 
-bool PageStorage::gc(bool not_skip)
+bool PageStorage::gc(const Context& global_context, bool not_skip)
 {
     // If another thread is running gc, just return;
     bool v = false;
@@ -1004,7 +1005,7 @@ bool PageStorage::gc(bool not_skip)
     {
         // Try to compact consecutive Legacy PageFiles into a snapshot.
         // Legacy and checkpoint files will be removed from `page_files` after `tryCompact`.
-        LegacyCompactor compactor(*this);
+        LegacyCompactor compactor(*this, global_context);
         PageFileSet     page_files_to_archive;
         std::tie(page_files, page_files_to_archive, gc_context.num_bytes_written_in_compact_legacy)
             = compactor.tryCompact(std::move(page_files), writing_file_id_levels);
@@ -1021,7 +1022,7 @@ bool PageStorage::gc(bool not_skip)
         Stopwatch watch_migrate;
 
         // Calculate a config by the gc context, maybe do a more aggressive GC
-        DataCompactor<PageStorage::SnapshotPtr> compactor(*this, gc_context.calculateGcConfig(config));
+        DataCompactor<PageStorage::SnapshotPtr> compactor(*this, gc_context.calculateGcConfig(config), global_context);
         std::tie(gc_context.compact_result, gc_file_entries_edit) = compactor.tryMigrate(page_files, getSnapshot(), writing_file_id_levels);
 
         // We only care about those time cost in actually doing compaction on page data.
@@ -1076,40 +1077,37 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
         LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
     } while (0);
 
-    do
+    // Maybe there are a large number of files left on disk by TiFlash version v4.0.0~v4.0.11, or some files left on disk
+    // by unexpected crash in the middle of archiving PageFiles.
+    // In order not to block the GC thread for a long time and make the IO smooth, only remove
+    // `MAX_NUM_OF_FILE_TO_REMOVED` files at maximum.
+    Strings archive_page_files;
+    if (!archive_dir.exists())
+        return;
+
+    archive_dir.list(archive_page_files);
+    if (archive_page_files.empty())
+        return;
+
+    const size_t MAX_NUM_OF_FILE_TO_REMOVED = 30;
+    size_t       num_removed                = 0;
+    for (const auto & pf_dir : archive_page_files)
     {
-        // Maybe there are a large number of files left on disk by TiFlash version v4.0.0~v4.0.11, or some files left on disk
-        // by unexpected crash in the middle of archiving PageFiles.
-        // In order not to block the GC thread for a long time and make the IO smooth, only remove
-        // `MAX_NUM_OF_FILE_TO_REMOVED` files at maximum.
-        Strings archive_page_files;
-        if (!archive_dir.exists())
-            break;
-
-        archive_dir.list(archive_page_files);
-        if (archive_page_files.empty())
-            break;
-
-        const size_t MAX_NUM_OF_FILE_TO_REMOVED = 30;
-        size_t       num_removed                = 0;
-        for (const auto & pf_dir : archive_page_files)
+        if (Poco::File file(Poco::Path(archive_path, pf_dir)); file.exists())
         {
-            if (Poco::File file(Poco::Path(archive_path, pf_dir)); file.exists())
-            {
-                file.remove(true);
-                ++num_removed;
-            }
-
-            if (num_removed >= MAX_NUM_OF_FILE_TO_REMOVED)
-            {
-                break;
-            }
+            file.remove(true);
+            ++num_removed;
         }
-        size_t num_left = archive_page_files.size() > num_removed ? (archive_page_files.size() - num_removed) : 0;
-        LOG_INFO(log,
-                 storage_name << " clean " << num_removed << " files in archive dir, " << num_left
-                              << " files are left to be clean in the next round.");
-    } while (0);
+
+        if (num_removed >= MAX_NUM_OF_FILE_TO_REMOVED)
+        {
+            break;
+        }
+    }
+    size_t num_left = archive_page_files.size() > num_removed ? (archive_page_files.size() - num_removed) : 0;
+    LOG_INFO(log,
+             storage_name << " clean " << num_removed << " files in archive dir, " << num_left
+                          << " files are left to be clean in the next round.");
 }
 
 /**
@@ -1138,7 +1136,9 @@ PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_file
         {
             /// The page file is not used by any version, remove the page file's data in disk.
             /// Page file's meta is left and will be compacted later.
-            // LOG_INFO(log, storage_name << " remove data " << page_file.toString());
+            // https://stackoverflow.com/questions/9726375/stdset-iterator-automatically-const
+            // Don't touch the <file_id, level> that are used for the sorting then you could
+            // work around by using a const_cast
             size_t bytes_removed = const_cast<PageFile &>(page_file).setLegacy();
             delegator->removePageFile(page_id_and_lvl, bytes_removed);
             num_data_removed += 1;
