@@ -27,7 +27,7 @@ class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class PSDiskDelegator;
 using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
-
+class Context;
 
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageId. Store Page with the same PageId
@@ -150,7 +150,7 @@ public:
     void reloadSettings(const Config & new_config) { config.reload(new_config); }
 
     // We may skip the GC to reduce useless reading by default.
-    bool gc(bool not_skip = false);
+    bool gc(const Context& global_context, bool not_skip = false);
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
 

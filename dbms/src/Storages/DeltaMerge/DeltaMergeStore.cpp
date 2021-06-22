@@ -463,7 +463,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     while (offset != rows)
     {
         RowKeyValueRef start_key = rowkey_column.getRowKeyValue(offset);
-        WriteBatches   wbs(storage_pool);
+        WriteBatches   wbs(storage_pool, db_context.getWriteLimiter());
         DeltaPackPtr   write_pack;
         RowKeyRange    write_range;
 
@@ -617,7 +617,7 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr &        dm_context,
     // Check https://github.com/pingcap/tics/issues/2040 for more details.
     // TODO: If tiflash crash during the middle of ingesting, we may leave some DTFiles on disk and
     // they can not be deleted. We should find a way to cleanup those files.
-    WriteBatches ingest_wbs(storage_pool);
+    WriteBatches ingest_wbs(storage_pool, dm_context->getWriteLimiter());
     if (files.size() > 0)
     {
         for (const auto & file : files)
@@ -657,7 +657,7 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr &        dm_context,
 
             // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
             DeltaPacks   packs;
-            WriteBatches wbs(storage_pool);
+            WriteBatches wbs(storage_pool, dm_context->getWriteLimiter());
 
             for (const auto & file : files)
             {
@@ -1584,7 +1584,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds());
     });
 
-    WriteBatches wbs(storage_pool, is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
+    WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
 
     auto range          = segment->getRowKeyRange();
     auto split_info_opt = segment->prepareSplit(dm_context, schema_snap, segment_snap, wbs, !is_foreground);
@@ -1713,8 +1713,8 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
     auto left_range  = left->getRowKeyRange();
     auto right_range = right->getRowKeyRange();
-
-    WriteBatches wbs(storage_pool, is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
+    
+    WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
     auto         merged_stable = Segment::prepareMerge(dm_context, schema_snap, left, left_snap, right, right_snap, wbs, !is_foreground);
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
@@ -1833,8 +1833,8 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
         }
     });
 
-    bool         need_rate_limit = (run_thread != TaskRunThread::Thread_FG);
-    WriteBatches wbs(storage_pool, need_rate_limit ? dm_context.db_context.getRateLimiter() : nullptr);
+    bool need_rate_limit = (run_thread != TaskRunThread::Thread_FG);
+    WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
 
     auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs, need_rate_limit);
     wbs.writeLogAndData();
