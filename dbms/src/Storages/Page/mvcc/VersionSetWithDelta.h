@@ -336,6 +336,7 @@ private:
             }
         }
         CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_snapshots_removed);
+        // Return some statistics of the oldest living snapshot.
         return {longest_living_seconds, longest_living_from_thread_id};
     }
 
@@ -358,10 +359,10 @@ public:
         return sz;
     }
 
-    std::tuple<size_t, double, unsigned> numSnapshots() const
+    std::tuple<size_t, double, unsigned> getSnapshotsStat() const
     {
-        // Note: this will scan and remove expired weak_ptr to snapshot
         std::unique_lock lock(read_write_mutex);
+        // Note: this will scan and remove expired weak_ptrs from `snapshots`
         auto [longest_living_seconds, t_id] = removeExpiredSnapshots(lock);
         return {snapshots.size(), longest_living_seconds, t_id};
     }

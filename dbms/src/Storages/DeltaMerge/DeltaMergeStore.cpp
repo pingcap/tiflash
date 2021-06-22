@@ -1713,7 +1713,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
     auto left_range  = left->getRowKeyRange();
     auto right_range = right->getRowKeyRange();
-    
+
     WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
     auto         merged_stable = Segment::prepareMerge(dm_context, schema_snap, left, left_snap, right, right_snap, wbs, !is_foreground);
     wbs.writeLogAndData();
@@ -1833,7 +1833,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
         }
     });
 
-    bool need_rate_limit = (run_thread != TaskRunThread::Thread_FG);
+    bool         need_rate_limit = (run_thread != TaskRunThread::Thread_FG);
     WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
 
     auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs, need_rate_limit);
@@ -2117,24 +2117,30 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
     stat.avg_pack_size_in_stable  = (Float64)stat.total_stable_size / stat.total_pack_count_in_stable;
 
     {
-        std::tie(stat.storage_stable_num_snapshots, stat.storage_stable_oldest_snapshot, stat.storage_stable_oldest_from_thread) //
-            = storage_pool.data().getNumSnapshots();
+        std::tie(stat.storage_stable_num_snapshots, //
+                 stat.storage_stable_oldest_snapshot_lifetime,
+                 stat.storage_stable_oldest_snapshot_thread_id)
+            = storage_pool.data().getSnapshotsStat();
         PageStorage::SnapshotPtr stable_snapshot = storage_pool.data().getSnapshot();
         stat.storage_stable_num_pages            = stable_snapshot->version()->numPages();
         stat.storage_stable_num_normal_pages     = stable_snapshot->version()->numNormalPages();
         stat.storage_stable_max_page_id          = stable_snapshot->version()->maxId();
     }
     {
-        std::tie(stat.storage_delta_num_snapshots, stat.storage_delta_oldest_snapshot, stat.storage_delta_oldest_from_thread) //
-            = storage_pool.log().getNumSnapshots();
+        std::tie(stat.storage_delta_num_snapshots, //
+                 stat.storage_delta_oldest_snapshot_lifetime,
+                 stat.storage_delta_oldest_snapshot_thread_id)
+            = storage_pool.log().getSnapshotsStat();
         PageStorage::SnapshotPtr log_snapshot = storage_pool.log().getSnapshot();
         stat.storage_delta_num_pages          = log_snapshot->version()->numPages();
         stat.storage_delta_num_normal_pages   = log_snapshot->version()->numNormalPages();
         stat.storage_delta_max_page_id        = log_snapshot->version()->maxId();
     }
     {
-        std::tie(stat.storage_meta_num_snapshots, stat.storage_meta_oldest_snapshot, stat.storage_meta_oldest_from_thread) //
-            = storage_pool.meta().getNumSnapshots();
+        std::tie(stat.storage_meta_num_snapshots, //
+                 stat.storage_meta_oldest_snapshot_lifetime,
+                 stat.storage_meta_oldest_snapshot_thread_id)
+            = storage_pool.meta().getSnapshotsStat();
         PageStorage::SnapshotPtr meta_snapshot = storage_pool.meta().getSnapshot();
         stat.storage_meta_num_pages            = meta_snapshot->version()->numPages();
         stat.storage_meta_num_normal_pages     = meta_snapshot->version()->numNormalPages();
