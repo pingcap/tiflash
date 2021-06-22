@@ -10,6 +10,7 @@
 
 #include <common/StringRef.h>
 #include <Common/Arena.h>
+//#include <Common/HashTable/FixedHashMap.h>
 #include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/TwoLevelHashMap.h>
 #include <common/ThreadPool.h>
@@ -64,6 +65,7 @@ class IBlockOutputStream;
 
 using AggregatedDataWithoutKey = AggregateDataPtr;
 
+//using AggregatedDataWithUInt8Key = FixedImplicitZeroHashMapWithCalculatedSize<UInt8, AggregateDataPtr>;
 using AggregatedDataWithUInt8Key = HashMap<UInt64, AggregateDataPtr, TrivialHash, HashTableFixedGrower<8>>;
 using AggregatedDataWithUInt16Key = HashMap<UInt64, AggregateDataPtr, TrivialHash, HashTableFixedGrower<16>>;
 
@@ -1275,7 +1277,7 @@ protected:
         StringRefs & keys,
         AggregateDataPtr overflow_row) const;
 
-    template <typename Method>
+    template <bool no_more_keys, typename Method>
     void executeImplBatch(
         Method & method,
         typename Method::State & state,
@@ -1284,7 +1286,8 @@ protected:
         ColumnRawPtrs & key_columns,
         AggregateFunctionInstruction * aggregate_instructions,
         const Sizes & key_sizes,
-        StringRefs & keys) const;
+        StringRefs & keys,
+        AggregateDataPtr overflow_row) const;
 
     /// For case when there are no keys (all aggregate into one row).
     void executeWithoutKeyImpl(

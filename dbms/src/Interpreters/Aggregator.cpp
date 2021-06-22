@@ -358,9 +358,9 @@ void NO_INLINE Aggregator::executeImpl(
     state.init(key_columns, collators);
 
     if (!no_more_keys)
-        executeImplBatch(method, state, aggregates_pool, rows, key_columns, aggregate_instructions, key_sizes, keys);
+        executeImplBatch<false>(method, state, aggregates_pool, rows, key_columns, aggregate_instructions, key_sizes, keys, overflow_row);
     else
-        executeImplCase<true>(method, state, aggregates_pool, rows, key_columns, aggregate_instructions, key_sizes, keys, overflow_row);
+        executeImplBatch<true>(method, state, aggregates_pool, rows, key_columns, aggregate_instructions, key_sizes, keys, overflow_row);
 }
 
 #ifndef __clang__
@@ -461,7 +461,7 @@ void NO_INLINE Aggregator::executeImplCase(
 #pragma GCC diagnostic pop
 #endif
 
-template <typename Method>
+template <bool no_more_keys, typename Method>
 void NO_INLINE Aggregator::executeImplBatch(
     Method & method,
     typename Method::State & state,
@@ -470,50 +470,107 @@ void NO_INLINE Aggregator::executeImplBatch(
     ColumnRawPtrs & key_columns,
     AggregateFunctionInstruction * aggregate_instructions,
     const Sizes & key_sizes,
-    StringRefs & keys) const
+    StringRefs & keys,
+    AggregateDataPtr overflow_row [[maybe_unused]]) const
 {
-    PODArray<AggregateDataPtr> places(rows);
-
     typename Method::iterator it;
+    bool inserted;
+
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(key_columns.size(), "");
+
+    /// Optimization for special case when there are no aggregate functions.
+    if (params.aggregates_size == 0)
+    {
+        if constexpr (no_more_keys)
+            return;
+
+        /// For all rows.
+        AggregateDataPtr place = aggregates_pool->alloc(0);
+        for (size_t i = 0; i < rows; ++i)
+        {
+            typename Method::Key key = state.getKey(key_columns, params.keys_size, i, key_sizes, keys, *aggregates_pool, sort_key_containers);
+            method.data.emplace(key, it, inserted);
+            Method::getAggregateData(it->second) = place;
+        }
+        return;
+    }
+
+    /*
+    /// Optimization for special case when aggregating by 8bit key.
+    if constexpr (!no_more_keys && std::is_same_v<Method, typename decltype(AggregatedDataVariants::key8)::element_type>)
+    {
+        for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
+        {
+            inst->batch_that->addBatchLookupTable8(
+                rows,
+                reinterpret_cast<AggregateDataPtr *>(method.data.data()),
+                inst->state_offset,
+                [&](AggregateDataPtr & aggregate_data)
+                {
+                    aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                    createAggregateStates(aggregate_data);
+                },
+                state.getKeyData(),
+                inst->batch_arguments,
+                aggregates_pool);
+        }
+        return;
+    }
+    */
+
+    /// Generic case.
+
+    std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
+
     for (size_t i = 0; i < rows; ++i)
     {
+        AggregateDataPtr aggregate_data = nullptr;
+
         /// Get the key to insert into the hash table.
         typename Method::Key key = state.getKey(key_columns, params.keys_size, i, key_sizes, keys, *aggregates_pool, sort_key_containers);
 
-        /// Ignore optimization for consecutive identical keys in batch mode.
-        bool inserted = false;
-        method.data.emplace(key, it, inserted);
-
-        /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
-        if (inserted)
+        if constexpr (!no_more_keys)
         {
-            AggregateDataPtr & aggregate_data = Method::getAggregateData(it->second);
+            method.data.emplace(key, it, inserted);
 
-            /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
-            aggregate_data = nullptr;
+            /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
+            if (inserted)
+            {
+                /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+                Method::getAggregateData(it->second) = nullptr;
 
-            method.onNewKey(*it, params.keys_size, keys, *aggregates_pool);
+                method.onNewKey(*it, params.keys_size, keys, *aggregates_pool);
 
-            AggregateDataPtr place = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-            createAggregateStates(place);
-            aggregate_data = place;
+                AggregateDataPtr place = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                createAggregateStates(place);
+                Method::getAggregateData(it->second) = place;
+            }
+            else
+                method.onExistingKey(key, keys, *aggregates_pool);
+
+            aggregate_data = Method::getAggregateData(it->second);
         }
         else
-            method.onExistingKey(key, keys, *aggregates_pool);
+        {
+            /// Add only if the key already exists.
+            it = method.data.find(key);
+            if (method.data.end() == it)
+                aggregate_data = Method::getAggregateData(it->second);
+            else
+                aggregate_data = overflow_row;
+        }
 
-        places[i] = Method::getAggregateData(it->second);
-        assert(places[i] != nullptr);
+        places[i] = aggregate_data;
     }
 
     /// Add values to the aggregate functions.
     for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
     {
         if (inst->offsets)
-            inst->batch_that->addBatchArray(rows, places.data(), inst->state_offset, inst->batch_arguments, inst->offsets, aggregates_pool);
+            inst->batch_that->addBatchArray(rows, places.get(), inst->state_offset, inst->batch_arguments, inst->offsets, aggregates_pool);
         else
-            inst->batch_that->addBatch(rows, places.data(), inst->state_offset, inst->batch_arguments, aggregates_pool);
+            inst->batch_that->addBatch(rows, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
     }
 }
 
