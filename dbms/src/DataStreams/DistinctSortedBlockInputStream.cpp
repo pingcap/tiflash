@@ -108,13 +108,13 @@ bool DistinctSortedBlockInputStream::buildFilter(
 
         /// Make a key.
         typename Method::Key key = state.getKey(columns, columns.size(), i, key_sizes);
-        typename Method::Data::iterator it = method.data.find(key);
+        typename Method::Data::LookupResult it = method.data.find(key);
         bool inserted;
         method.data.emplace(key, it, inserted);
 
         if (inserted)
         {
-            method.onNewKey(*it, columns.size(), variants.string_pool);
+            method.onNewKey(it->key, columns.size(), variants.string_pool);
             has_new_data = true;
         }
 

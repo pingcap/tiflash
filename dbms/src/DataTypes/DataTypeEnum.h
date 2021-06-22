@@ -88,7 +88,7 @@ public:
         if (it == std::end(name_to_value_map))
             throw Exception{"Unknown element '" + name.toString() + "' for type " + getName(), ErrorCodes::LOGICAL_ERROR};
 
-        return it->second;
+        return it->getMapped();
     }
 
     Field castToName(const Field & value_or_name) const override;
