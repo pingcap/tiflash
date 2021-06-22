@@ -978,7 +978,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         return false;
     };
     auto try_bg_split = [&](const SegmentPtr & seg) {
-        if (should_split)
+        if (should_split && !seg->isSplitForbidden())
         {
             delta_last_try_split_rows  = delta_rows;
             delta_last_try_split_bytes = delta_bytes;
@@ -990,7 +990,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto try_fg_split = [&](const SegmentPtr & my_segment) -> bool {
         auto my_segment_rows = my_segment->getEstimatedRows();
         auto my_should_split = my_segment_rows >= dm_context->segment_limit_rows * 3;
-        if (my_should_split)
+        if (my_should_split && !my_segment->isSplitForbidden())
         {
             if (segmentSplit(*dm_context, my_segment).first)
                 return true;
@@ -1189,7 +1189,9 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
     if (!split_info_opt.has_value())
     {
-        LOG_WARNING(log, "Give up segment [" << segment->segmentId() << "] split because of prepare split failed");
+        // Likely we can not find an appropriate split point for this segment later, forbid the split until this segment get updated through applying delta-merge. Or it will slow down the write a lot.
+        segment->forbidSplit();
+        LOG_WARNING(log, "Giving up and forbid later split. Segment [" << segment->segmentId() << "]. Because of prepare split failed");
         return {};
     }
 
