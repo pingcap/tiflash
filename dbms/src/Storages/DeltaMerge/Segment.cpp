@@ -538,13 +538,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, con
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
-<<<<<<< HEAD
     WriteBatches wbs(dm_context.storage_pool);
-    auto         segment_snap = createSnapshot(dm_context, true);
-=======
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
     auto         segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfMergeDelta);
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
     if (!segment_snap)
         return {};
 
@@ -622,13 +617,8 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
 
 SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
-<<<<<<< HEAD
     WriteBatches wbs(dm_context.storage_pool);
-    auto         segment_snap = createSnapshot(dm_context, true);
-=======
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
     auto         segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
     if (!segment_snap)
         return {};
 
