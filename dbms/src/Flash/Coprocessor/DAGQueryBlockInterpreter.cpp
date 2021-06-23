@@ -1348,6 +1348,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         executeTS(query_block.source->tbl_scan(), pipeline);
         recordProfileStreams(pipeline, query_block.source_name);
+        dag.getDAGContext().table_scan_executor_id = query_block.source_name;
     }
 
     auto res = analyzeExpressions();

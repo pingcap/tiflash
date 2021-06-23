@@ -83,6 +83,8 @@ namespace DB
         F(type_raft_read_index_duration, {{"type", "tmt_raft_read_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                          \
     M(tiflash_raft_wait_index_duration_seconds, "Bucketed histogram of raft wait index duration", Histogram,                              \
         F(type_raft_wait_index_duration, {{"type", "tmt_raft_wait_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                          \
+    M(tiflash_syncing_data_freshness, "The freshness of tiflash data with tikv data", Histogram,                                          \
+        F(type_syncing_data_freshness, {{"type", "data_freshness"}}, ExpBuckets{0.0005, 2, 20}))                                          \
     M(tiflash_storage_write_amplification, "The data write amplification in storage engine", Gauge)                                       \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                             \
     M(tiflash_storage_command_count, "Total number of storage's command, such as delete range / shutdown /startup", Counter,              \
@@ -120,6 +122,8 @@ namespace DB
         F(type_low_write, {"type", "low_write"}))                                                                                         \
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
         F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}), F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}))   \
+    M(tiflash_storage_logical_throughput_bytes, "The logical throughput of read tasks of storage in bytes", Histogram,                    \
+        F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 50 * 1024 * 1024}))                                     \
     M(tiflash_storage_rate_limiter_total_request_bytes, "RateLimiter total requested bytes", Counter)                                     \
     M(tiflash_storage_rate_limiter_total_alloc_bytes, "RateLimiter total allocated bytes", Counter)                                       \
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                   \
@@ -150,6 +154,27 @@ struct ExpBuckets
             e = current;
             current *= base;
         });
+        return buckets;
+    }
+};
+
+// Buckets with same width
+struct EqualWidthBuckets
+{
+    const size_t start;
+    const int num_buckets;
+    const size_t step;
+    inline operator prometheus::Histogram::BucketBoundaries() const &&
+    {
+        // up to `num_buckets` * `step`
+        assert(step > 1);
+        prometheus::Histogram::BucketBoundaries buckets(num_buckets);
+        size_t idx = 0;
+        for (auto & e : buckets)
+        {
+            e = start + step * idx;
+            idx++;
+        }
         return buckets;
     }
 };
