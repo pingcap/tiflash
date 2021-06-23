@@ -93,42 +93,52 @@ void AggregatedDataVariants::convertToTwoLevel()
 
 Block Aggregator::getHeader(bool final) const
 {
+    return params.getHeader(final);
+}
+
+Block Aggregator::Params::getHeader(
+    const Block & src_header,
+    const Block & intermediate_header,
+    const ColumnNumbers & keys,
+    const AggregateDescriptions & aggregates,
+    bool final)
+{
     Block res;
 
-    if (params.src_header)
+    if (intermediate_header)
     {
-        for (size_t i = 0; i < params.keys_size; ++i)
-            res.insert(params.src_header.safeGetByPosition(params.keys[i]).cloneEmpty());
-
-        for (size_t i = 0; i < params.aggregates_size; ++i)
-        {
-            size_t arguments_size = params.aggregates[i].arguments.size();
-            DataTypes argument_types(arguments_size);
-            for (size_t j = 0; j < arguments_size; ++j)
-                argument_types[j] = params.src_header.safeGetByPosition(params.aggregates[i].arguments[j]).type;
-
-            DataTypePtr type;
-            if (final)
-                type = params.aggregates[i].function->getReturnType();
-            else
-                type = std::make_shared<DataTypeAggregateFunction>(params.aggregates[i].function, argument_types, params.aggregates[i].parameters);
-
-            res.insert({ type, params.aggregates[i].column_name });
-        }
-    }
-    else if (params.intermediate_header)
-    {
-        res = params.intermediate_header.cloneEmpty();
+        res = intermediate_header.cloneEmpty();
 
         if (final)
         {
-            for (size_t i = 0; i < params.aggregates_size; ++i)
+            for (const auto & aggregate : aggregates)
             {
-                auto & elem = res.getByPosition(params.keys_size + i);
+                auto & elem = res.getByName(aggregate.column_name);
 
-                elem.type = params.aggregates[i].function->getReturnType();
+                elem.type = aggregate.function->getReturnType();
                 elem.column = elem.type->createColumn();
             }
+        }
+    }
+    else
+    {
+        for (const auto & key : keys)
+            res.insert(src_header.safeGetByPosition(key).cloneEmpty());
+
+        for (const auto & aggregate : aggregates)
+        {
+            size_t arguments_size = aggregate.arguments.size();
+            DataTypes argument_types(arguments_size);
+            for (size_t j = 0; j < arguments_size; ++j)
+                argument_types[j] = src_header.safeGetByPosition(aggregate.arguments[j]).type;
+
+            DataTypePtr type;
+            if (final)
+                type = aggregate.function->getReturnType();
+            else
+                type = std::make_shared<DataTypeAggregateFunction>(aggregate.function, argument_types, aggregate.parameters);
+
+            res.insert({ type, aggregate.column_name });
         }
     }
 
@@ -280,6 +290,12 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
     /// If all keys fits in N bits, will use hash table with all keys packed (placed contiguously) to single N-bit key.
     if (params.keys_size == num_fixed_contiguous_keys)
     {
+        if (keys_bytes <= 2)
+            return AggregatedDataVariants::Type::keys16;
+        if (keys_bytes <= 4)
+            return AggregatedDataVariants::Type::keys32;
+        if (keys_bytes <= 8)
+            return AggregatedDataVariants::Type::keys64;
         if (keys_bytes <= 16)
             return AggregatedDataVariants::Type::keys128;
         if (keys_bytes <= 32)
@@ -292,11 +308,6 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
 
     if (params.keys_size == 1 && types_removed_nullable[0]->isFixedString())
         return AggregatedDataVariants::Type::key_fixed_string;
-
-    /** If it is possible to use 'concat' method due to one-to-one correspondense. Otherwise the method will be 'serialized'.
-      */
-    if (params.keys_size == num_contiguous_keys && num_fixed_contiguous_keys + 1 >= num_contiguous_keys)
-        return AggregatedDataVariants::Type::concat;
 
     /** For case with multiple strings, we use 'concat' method despite the fact, that correspondense is not one-to-one.
       * Concat will concatenate strings including its zero terminators.
@@ -440,7 +451,7 @@ void NO_INLINE Aggregator::executeImplCase(
             /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
             aggregate_data = nullptr;
 
-            method.onNewKey(it->getValue(), params.keys_size, keys, *aggregates_pool);
+            method.onNewKey(it->value, params.keys_size, keys, *aggregates_pool);
 
             AggregateDataPtr place = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
             createAggregateStates(place);
@@ -554,11 +565,15 @@ void NO_INLINE Aggregator::executeImplBatch(
         else
         {
             /// Add only if the key already exists.
+            /// TODO(fuzhe)
+            /*
             it = method.data.find(key);
             if (it.isFound())
                 aggregate_data = Method::getAggregateData(it->getMapped());
             else
                 aggregate_data = overflow_row;
+                */
+            UNUSED(key);
         }
 
         places[i] = aggregate_data;
@@ -980,15 +995,15 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
     MutableColumns & final_aggregate_columns,
     const Sizes & key_sizes) const
 {
-    for (const auto & value : data)
+    data.forEachValue([&](const auto & key, auto & mapped)
     {
-        method.insertKeyIntoColumns(value.getMapped(), key_columns, params.keys_size, key_sizes, params.collators);
+        method.insertKeyIntoColumns(key, key_columns, params.keys_size, key_sizes, params.collators);
 
-        for (size_t i = 0; i < params.aggregates_size; ++i)
-            aggregate_functions[i]->insertResultInto(
-                Method::getAggregateData(value.getMapped()) + offsets_of_aggregate_states[i],
-                *final_aggregate_columns[i]);
-    }
+    for (size_t i = 0; i < params.aggregates_size; ++i)
+        aggregate_functions[i]->insertResultInto(
+            Method::getAggregateData(mapped) + offsets_of_aggregate_states[i],
+            *final_aggregate_columns[i]);
+    });
 
     destroyImpl<Method>(data);      /// NOTE You can do better.
 }
@@ -1002,16 +1017,16 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
     const Sizes & key_sizes) const
 {
 
-    for (auto & value : data)
+    data.forEachValue([&](const auto & key, auto & mapped)
     {
-        method.insertKeyIntoColumns(value.getMapped(), key_columns, params.keys_size, key_sizes, params.collators);
+        method.insertKeyIntoColumns(key, key_columns, params.keys_size, key_sizes, params.collators);
 
         /// reserved, so push_back does not throw exceptions
         for (size_t i = 0; i < params.aggregates_size; ++i)
-            aggregate_columns[i]->push_back(Method::getAggregateData(value.getMapped()) + offsets_of_aggregate_states[i]);
+            aggregate_columns[i]->push_back(Method::getAggregateData(mapped) + offsets_of_aggregate_states[i]);
 
-        Method::getAggregateData(value.getMapped()) = nullptr;
-    }
+        Method::getAggregateData(mapped) = nullptr;
+    });
 }
 
 
@@ -1309,7 +1324,7 @@ void NO_INLINE Aggregator::mergeDataImpl(
 {
     for (auto it = table_src.begin(); it != table_src.end(); ++it)
     {
-        decltype(it) res_it;
+        typename Method::Data::LookupResult res_it;
         bool inserted;
         table_dst.emplace(it->getKey(), res_it, inserted, it.getHash());
 
@@ -1344,26 +1359,21 @@ void NO_INLINE Aggregator::mergeDataNoMoreKeysImpl(
     Table & table_src,
     Arena * arena) const
 {
-    for (auto it = table_src.begin(); it != table_src.end(); ++it)
+    table_src.mergeToViaFind(table_dst, [&](AggregateDataPtr dst, AggregateDataPtr & src, bool found)
     {
-        decltype(it) res_it = table_dst.find(it->getKey(), it.getHash());
-
-        AggregateDataPtr res_data = table_dst.end() == res_it
-            ? overflows
-            : Method::getAggregateData(res_it->getMapped());
+        AggregateDataPtr res_data = found ? dst : overflows;
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
             aggregate_functions[i]->merge(
                 res_data + offsets_of_aggregate_states[i],
-                Method::getAggregateData(it->getMapped()) + offsets_of_aggregate_states[i],
+                src + offsets_of_aggregate_states[i],
                 arena);
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
-            aggregate_functions[i]->destroy(
-                Method::getAggregateData(it->getMapped()) + offsets_of_aggregate_states[i]);
+            aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
 
-        Method::getAggregateData(it->getMapped()) = nullptr;
-    }
+        src = nullptr;
+    });
 
     table_src.clearAndShrink();
 }
@@ -1374,27 +1384,23 @@ void NO_INLINE Aggregator::mergeDataOnlyExistingKeysImpl(
     Table & table_src,
     Arena * arena) const
 {
-    for (auto it = table_src.begin(); it != table_src.end(); ++it)
+    table_src.mergeToViaFind(table_dst,
+        [&](AggregateDataPtr dst, AggregateDataPtr & src, bool found)
     {
-        decltype(it) res_it = table_dst.find(it->getKey(), it.getHash());
-
-        if (table_dst.end() == res_it)
-            continue;
-
-        AggregateDataPtr res_data = Method::getAggregateData(res_it->getMapped());
+        if (!found)
+            return;
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
             aggregate_functions[i]->merge(
-                res_data + offsets_of_aggregate_states[i],
-                Method::getAggregateData(it->getMapped()) + offsets_of_aggregate_states[i],
+                dst + offsets_of_aggregate_states[i],
+                src + offsets_of_aggregate_states[i],
                 arena);
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
-            aggregate_functions[i]->destroy(
-                Method::getAggregateData(it->getMapped()) + offsets_of_aggregate_states[i]);
+            aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
 
-        Method::getAggregateData(it->getMapped()) = nullptr;
-    }
+        src = nullptr;
+    });
 
     table_src.clearAndShrink();
 }
@@ -1768,7 +1774,7 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
     size_t rows = block.rows();
     for (size_t i = 0; i < rows; ++i)
     {
-        typename Table::iterator it;
+        typename Table::LookupResult it;
 
         bool inserted;          /// Inserted a new key, or was this key already?
         bool overflow = false;  /// The new key did not fit in the hash table because of no_more_keys.
@@ -1801,7 +1807,7 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
             AggregateDataPtr & aggregate_data = Method::getAggregateData(it->getMapped());
             aggregate_data = nullptr;
 
-            method.onNewKey(it->getValue(), params.keys_size, keys, *aggregates_pool);
+            method.onNewKey(it->value, params.keys_size, keys, *aggregates_pool);
 
             AggregateDataPtr place = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
             createAggregateStates(place);
