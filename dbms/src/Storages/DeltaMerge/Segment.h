@@ -238,6 +238,9 @@ public:
     }
     bool hasAbandoned() { return delta->hasAbandoned(); }
 
+    bool isSplitForbidden() { return split_forbidden; }
+    void forbidSplit() { split_forbidden = true; }
+
     void drop(const FileProviderPtr & file_provider) { stable->drop(file_provider); }
 
     RowsAndBytes
@@ -322,6 +325,8 @@ private:
 
     const DeltaValueSpacePtr  delta;
     const StableValueSpacePtr stable;
+
+    bool split_forbidden = false;
 
     Logger * log;
 };

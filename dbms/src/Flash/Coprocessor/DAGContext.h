@@ -8,6 +8,7 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Flash/Coprocessor/DAGDriver.h>
 
 namespace DB
 {
@@ -84,6 +85,8 @@ public:
     bool return_executor_id;
     bool is_mpp_task;
     bool is_root_mpp_task;
+
+    RegionInfoList retry_regions;
 
 private:
     /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo
