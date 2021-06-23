@@ -2,8 +2,10 @@
 
 #include <common/preciseExp10.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnNullable.h>
 #include <Functions/IFunction.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsGeo.h>
@@ -64,7 +66,7 @@ private:
 };
 
 
-template <typename Impl>
+template <typename Impl, bool Nullable = false>
 class FunctionMathUnaryFloat64 : public IFunction
 {
 public:
@@ -84,7 +86,14 @@ private:
                 "Illegal type " + arguments.front()->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
-        return std::make_shared<DataTypeFloat64>();
+        if constexpr(Nullable)
+        {
+            return makeNullable(std::make_shared<DataTypeFloat64>());
+        }
+        else
+        {
+            return std::make_shared<DataTypeFloat64>();
+        }
     }
 
     template <typename FieldType>
@@ -102,22 +111,51 @@ private:
             const auto rows_remaining = src_size % Impl::rows_per_iteration;
             const auto rows_size = src_size - rows_remaining;
 
-            for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
-                Impl::execute(&src_data[i], &dst_data[i]);
-
-            if (rows_remaining != 0)
+            if constexpr(Nullable)
             {
-                FieldType src_remaining[Impl::rows_per_iteration];
-                memcpy(src_remaining, &src_data[rows_size], rows_remaining * sizeof(FieldType));
-                memset(src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(FieldType));
-                Float64 dst_remaining[Impl::rows_per_iteration];
+                auto null_map = ColumnUInt8::create();
+                auto& null_map_data = null_map->getData();
+                null_map_data.resize(src_size);
 
-                Impl::execute(src_remaining, dst_remaining);
+                for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
+                    Impl::execute(&src_data[i], &dst_data[i], &null_map_data[i]);
 
-                memcpy(&dst_data[rows_size], dst_remaining, rows_remaining * sizeof(Float64));
+                if (rows_remaining != 0)
+                {
+                    FieldType src_remaining[Impl::rows_per_iteration];
+                    memcpy(src_remaining, &src_data[rows_size], rows_remaining * sizeof(FieldType));
+                    memset(src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(FieldType));
+                    Float64 dst_remaining[Impl::rows_per_iteration];
+                    UInt8 null_map_remaining[Impl::rows_per_iteration];
+
+
+                    Impl::execute(src_remaining, dst_remaining, null_map_remaining);
+
+                    memcpy(&dst_data[rows_size], dst_remaining, rows_remaining * sizeof(Float64));
+                    memcpy(&null_map_data[rows_size], null_map_remaining, rows_remaining * sizeof(UInt8));
+                }
+
+                block.getByPosition(result).column = ColumnNullable::create(std::move(dst), std::move(null_map));
             }
+            else
+            {
+                for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
+                    Impl::execute(&src_data[i], &dst_data[i]);
 
-            block.getByPosition(result).column = std::move(dst);
+                if (rows_remaining != 0)
+                {
+                    FieldType src_remaining[Impl::rows_per_iteration];
+                    memcpy(src_remaining, &src_data[rows_size], rows_remaining * sizeof(FieldType));
+                    memset(src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(FieldType));
+                    Float64 dst_remaining[Impl::rows_per_iteration];
+
+                    Impl::execute(src_remaining, dst_remaining);
+
+                    memcpy(&dst_data[rows_size], dst_remaining, rows_remaining * sizeof(Float64));
+                }
+
+                block.getByPosition(result).column = std::move(dst);
+            }
             return true;
         }
 
@@ -148,6 +186,21 @@ private:
     }
 };
 
+template <typename Impl>
+using FunctionMathUnaryFloat64Nullable = FunctionMathUnaryFloat64<Impl, true>;
+
+template <typename Name, bool(Function)(Float64, Float64&)>
+struct UnaryFunctionNullablePlain
+{
+    static constexpr auto name = Name::name;
+    static constexpr auto rows_per_iteration = 1;
+
+    template <typename T>
+    static void execute(const T * src, Float64 * dst, UInt8* is_null)
+    {
+        *is_null = Function(static_cast<Float64>(*src), *dst);
+    }
+};
 
 template <typename Name, Float64(Function)(Float64)>
 struct UnaryFunctionPlain
@@ -185,7 +238,7 @@ struct UnaryFunctionVectorized
 #endif
 
 
-template <typename Impl>
+template <typename Impl, bool Nullable = false>
 class FunctionMathBinaryFloat64 : public IFunction
 {
 public:
@@ -212,8 +265,14 @@ private:
 
         check_argument_type(arguments.front().get());
         check_argument_type(arguments.back().get());
-
-        return std::make_shared<DataTypeFloat64>();
+        if constexpr(Nullable)
+        {
+            return makeNullable(std::make_shared<DataTypeFloat64>());
+        }
+        else
+        {
+            return std::make_shared<DataTypeFloat64>();
+        }
     }
 
     template <typename LeftType, typename RightType>
@@ -234,22 +293,51 @@ private:
             const auto rows_remaining = src_size % Impl::rows_per_iteration;
             const auto rows_size = src_size - rows_remaining;
 
-            for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
+            if constexpr(Nullable)
+            {
+                auto null_map = ColumnUInt8::create();
+                auto& null_map_data = null_map->getData();
+                null_map_data.resize(src_size);
+                for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
+                {
+                    Impl::execute(left_src_data, &right_src_data[i], &dst_data[i], &null_map_data[i]);
+                }
+                if (rows_remaining != 0)
+                {
+                    RightType right_src_remaining[Impl::rows_per_iteration];
+                    memcpy(right_src_remaining, &right_src_data[rows_size], rows_remaining * sizeof(RightType));
+                    memset(right_src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(RightType));
+                    Float64 dst_remaining[Impl::rows_per_iteration];
+                    UInt8 null_map_remaining[Impl::rows_per_iteration];
+
+                    Impl::execute(left_src_data, right_src_remaining, dst_remaining, null_map_remaining);
+
+                    memcpy(&dst_data[rows_size], dst_remaining, rows_remaining * sizeof(Float64));
+                    memcpy(&null_map_data[rows_size], null_map_remaining, rows_remaining * sizeof(UInt8));
+                }
+
+                block.getByPosition(result).column = ColumnNullable::create(std::move(dst), std::move(null_map));
+            }
+            else
+            {
+                for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
                 Impl::execute(left_src_data, &right_src_data[i], &dst_data[i]);
 
-            if (rows_remaining != 0)
-            {
-                RightType right_src_remaining[Impl::rows_per_iteration];
-                memcpy(right_src_remaining, &right_src_data[rows_size], rows_remaining * sizeof(RightType));
-                memset(right_src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(RightType));
-                Float64 dst_remaining[Impl::rows_per_iteration];
+                if (rows_remaining != 0)
+                {
+                    RightType right_src_remaining[Impl::rows_per_iteration];
+                    memcpy(right_src_remaining, &right_src_data[rows_size], rows_remaining * sizeof(RightType));
+                    memset(right_src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(RightType));
+                    Float64 dst_remaining[Impl::rows_per_iteration];
 
-                Impl::execute(left_src_data, right_src_remaining, dst_remaining);
+                    Impl::execute(left_src_data, right_src_remaining, dst_remaining);
 
-                memcpy(&dst_data[rows_size], dst_remaining, rows_remaining * sizeof(Float64));
+                    memcpy(&dst_data[rows_size], dst_remaining, rows_remaining * sizeof(Float64));
+                }
+
+                block.getByPosition(result).column = std::move(dst);
             }
-
-            block.getByPosition(result).column = std::move(dst);
+            
             return true;
         }
 
@@ -273,25 +361,57 @@ private:
             const auto rows_remaining = src_size % Impl::rows_per_iteration;
             const auto rows_size = src_size - rows_remaining;
 
-            for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
-                Impl::execute(&left_src_data[i], &right_src_data[i], &dst_data[i]);
-
-            if (rows_remaining != 0)
+            if constexpr(Nullable)
             {
-                LeftType left_src_remaining[Impl::rows_per_iteration];
-                memcpy(left_src_remaining, &left_src_data[rows_size], rows_remaining * sizeof(LeftType));
-                memset(left_src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(LeftType));
-                RightType right_src_remaining[Impl::rows_per_iteration];
-                memcpy(right_src_remaining, &right_src_data[rows_size], rows_remaining * sizeof(RightType));
-                memset(right_src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(RightType));
-                Float64 dst_remaining[Impl::rows_per_iteration];
+                auto null_map = ColumnUInt8::create();
+                auto& null_map_data = null_map->getData();
+                null_map_data.resize(src_size);
 
-                Impl::execute(left_src_remaining, right_src_remaining, dst_remaining);
+                for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
+                    Impl::execute(&left_src_data[i], &right_src_data[i], &dst_data[i], &null_map_data[i]);
 
-                memcpy(&dst_data[rows_size], dst_remaining, rows_remaining * sizeof(Float64));
+                if (rows_remaining != 0)
+                {
+                    LeftType left_src_remaining[Impl::rows_per_iteration];
+                    memcpy(left_src_remaining, &left_src_data[rows_size], rows_remaining * sizeof(LeftType));
+                    memset(left_src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(LeftType));
+                    RightType right_src_remaining[Impl::rows_per_iteration];
+                    memcpy(right_src_remaining, &right_src_data[rows_size], rows_remaining * sizeof(RightType));
+                    memset(right_src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(RightType));
+                    Float64 dst_remaining[Impl::rows_per_iteration];
+                    UInt8 null_map_remaining[Impl::rows_per_iteration];
+
+                    Impl::execute(left_src_remaining, right_src_remaining, dst_remaining, null_map_remaining);
+
+                    memcpy(&dst_data[rows_size], dst_remaining, rows_remaining * sizeof(Float64));
+                    memcpy(&null_map_data[rows_size], null_map_remaining, rows_remaining * sizeof(UInt8));
+                }
+
+                block.getByPosition(result).column = ColumnNullable::create(std::move(dst), std::move(null_map));
             }
+            else
+            {
 
-            block.getByPosition(result).column = std::move(dst);
+                for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
+                    Impl::execute(&left_src_data[i], &right_src_data[i], &dst_data[i]);
+
+                if (rows_remaining != 0)
+                {
+                    LeftType left_src_remaining[Impl::rows_per_iteration];
+                    memcpy(left_src_remaining, &left_src_data[rows_size], rows_remaining * sizeof(LeftType));
+                    memset(left_src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(LeftType));
+                    RightType right_src_remaining[Impl::rows_per_iteration];
+                    memcpy(right_src_remaining, &right_src_data[rows_size], rows_remaining * sizeof(RightType));
+                    memset(right_src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(RightType));
+                    Float64 dst_remaining[Impl::rows_per_iteration];
+
+                    Impl::execute(left_src_remaining, right_src_remaining, dst_remaining);
+
+                    memcpy(&dst_data[rows_size], dst_remaining, rows_remaining * sizeof(Float64));
+                }
+
+                block.getByPosition(result).column = std::move(dst);
+            }
             return true;
         }
         else if (const auto right_arg_typed = checkAndGetColumnConst<ColumnVector<RightType>>(right_arg))
@@ -308,22 +428,51 @@ private:
             const auto rows_remaining = src_size % Impl::rows_per_iteration;
             const auto rows_size = src_size - rows_remaining;
 
-            for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
-                Impl::execute(&left_src_data[i], right_src_data, &dst_data[i]);
-
-            if (rows_remaining != 0)
+            if constexpr(Nullable)
             {
-                LeftType left_src_remaining[Impl::rows_per_iteration];
-                memcpy(left_src_remaining, &left_src_data[rows_size], rows_remaining * sizeof(LeftType));
-                memset(left_src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(LeftType));
-                Float64 dst_remaining[Impl::rows_per_iteration];
+                auto null_map = ColumnUInt8::create();
+                auto& null_map_data = null_map->getData();
+                null_map_data.resize(src_size);
 
-                Impl::execute(left_src_remaining, right_src_data, dst_remaining);
+                for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
+                    Impl::execute(&left_src_data[i], right_src_data, &dst_data[i], &null_map_data[i]);
 
-                memcpy(&dst_data[rows_size], dst_remaining, rows_remaining * sizeof(Float64));
+                if (rows_remaining != 0)
+                {
+                    LeftType left_src_remaining[Impl::rows_per_iteration];
+                    memcpy(left_src_remaining, &left_src_data[rows_size], rows_remaining * sizeof(LeftType));
+                    memset(left_src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(LeftType));
+                    Float64 dst_remaining[Impl::rows_per_iteration];
+                    UInt8 null_map_remaining[Impl::rows_per_iteration];
+
+                    Impl::execute(left_src_remaining, right_src_data, dst_remaining, null_map_remaining);
+
+                    memcpy(&dst_data[rows_size], dst_remaining, rows_remaining * sizeof(Float64));
+                    memcpy(&null_map_data[rows_size], null_map_remaining, rows_remaining * sizeof(UInt8));
+                }
+
+                block.getByPosition(result).column = ColumnNullable::create(std::move(dst), std::move(null_map));
             }
+            else
+            {
 
-            block.getByPosition(result).column = std::move(dst);
+                for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
+                    Impl::execute(&left_src_data[i], right_src_data, &dst_data[i]);
+
+                if (rows_remaining != 0)
+                {
+                    LeftType left_src_remaining[Impl::rows_per_iteration];
+                    memcpy(left_src_remaining, &left_src_data[rows_size], rows_remaining * sizeof(LeftType));
+                    memset(left_src_remaining + rows_remaining, 0, (Impl::rows_per_iteration - rows_remaining) * sizeof(LeftType));
+                    Float64 dst_remaining[Impl::rows_per_iteration];
+
+                    Impl::execute(left_src_remaining, right_src_data, dst_remaining);
+
+                    memcpy(&dst_data[rows_size], dst_remaining, rows_remaining * sizeof(Float64));
+                }
+
+                block.getByPosition(result).column = std::move(dst);
+            }
             return true;
         }
 
@@ -410,6 +559,23 @@ private:
     }
 };
 
+template <typename Impl>
+using FunctionMathBinaryFloat64Nullable = FunctionMathBinaryFloat64<Impl, true>;
+
+
+template <typename Name, bool(Function)(Float64, Float64, Float64&)>
+struct BinaryFunctionNullablePlain
+{
+    static constexpr auto name = Name::name;
+    static constexpr auto rows_per_iteration = 1;
+
+    template <typename T1, typename T2>
+    static void execute(const T1 * src_left, const T2 * src_right, Float64 * dst, UInt8* is_null)
+    {
+        *is_null = Function(static_cast<Float64>(*src_left), static_cast<Float64>(*src_right), *dst);
+    }
+};
+
 
 template <typename Name, Float64(Function)(Float64, Float64)>
 struct BinaryFunctionPlain
@@ -460,9 +626,13 @@ struct PiImpl
 };
 
 
-double log2args(double b, double e)
+bool log2args(double b, double e, double& result)
 {
-    return log(e) / log(b);
+    if(b == 1 || b < 0 || e < 0) {
+        return true;
+    }
+    result = log(e) / log(b);
+    return false;
 }
 
 double sign(double x)
@@ -502,7 +672,7 @@ using FunctionE = FunctionMathNullaryConstFloat64<EImpl>;
 using FunctionPi = FunctionMathNullaryConstFloat64<PiImpl>;
 using FunctionExp = FunctionMathUnaryFloat64<UnaryFunctionVectorized<ExpName, exp>>;
 using FunctionLog = FunctionMathUnaryFloat64<UnaryFunctionVectorized<LogName, log>>;
-using FunctionLog2Args = FunctionMathBinaryFloat64<BinaryFunctionPlain<Log2ArgsName, DB::log2args>>;
+using FunctionLog2Args = FunctionMathBinaryFloat64Nullable<BinaryFunctionNullablePlain<Log2ArgsName, DB::log2args>>;
 using FunctionExp2 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Exp2Name, exp2>>;
 using FunctionLog2 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Log2Name, log2>>;
 using FunctionExp10 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Exp10Name, preciseExp10>>;
