@@ -6,6 +6,7 @@
 #include <Columns/ColumnConst.h>
 #include <Functions/IFunction.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsGeo.h>
 #include <Common/config.h>
 #include <Common/typeid_cast.h>
 
@@ -469,16 +470,6 @@ double sign(double x)
     return (x > 0) - (x < 0);
 }
 
-double degrees(double x)
-{
-    return x / PiImpl::value * 180.0;
-}
-
-double radians(double x)
-{
-    return x / 180.0 * PiImpl::value;
-}
-
 
 struct RadiansName { static constexpr auto name = "radians"; };
 struct DegreesName { static constexpr auto name = "degrees"; };
@@ -504,8 +495,8 @@ struct LGammaName { static constexpr auto name = "lgamma"; };
 struct TGammaName { static constexpr auto name = "tgamma"; };
 struct PowName { static constexpr auto name = "pow"; };
 
-using FunctionRadians = FunctionMathUnaryFloat64<UnaryFunctionPlain<RadiansName, DB::radians>>;
-using FunctionDegrees = FunctionMathUnaryFloat64<UnaryFunctionPlain<DegreesName, DB::degrees>>;
+using FunctionRadians = FunctionMathUnaryFloat64<UnaryFunctionPlain<RadiansName, DB::degToRad>>;
+using FunctionDegrees = FunctionMathUnaryFloat64<UnaryFunctionPlain<DegreesName, DB::radToDeg>>;
 using FunctionSign = FunctionMathUnaryFloat64<UnaryFunctionPlain<SignName, DB::sign>>;
 using FunctionE = FunctionMathNullaryConstFloat64<EImpl>;
 using FunctionPi = FunctionMathNullaryConstFloat64<PiImpl>;

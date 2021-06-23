@@ -25,25 +25,18 @@ namespace ErrorCodes
 
 struct CRC32Impl
 {
-    static void execute(const String& s, Int64& res)
+    static void execute(const StringRef & s, Int64 & res)
     {
         // zlib crc32
-        res = crc32(0, reinterpret_cast<const unsigned char*>(s.data()), s.size());
+        res = crc32(0, reinterpret_cast<const unsigned char*>(s.data), s.size);
     }
-    static void execute(const ColumnString* arg_col, PaddedPODArray<Int64> & res)
+    template <typename Column>
+    static void execute(const Column * arg_col, PaddedPODArray<Int64> & res)
     {
         res.resize(arg_col->size());
         for(size_t i = 0;i < arg_col->size();++i)
         {
-            execute((*arg_col)[i].get<String>(), res[i]);
-        }
-    }
-    static void execute(const ColumnFixedString* arg_col, PaddedPODArray<Int64> & res)
-    {
-        res.resize(arg_col->size());
-        for(size_t i = 0;i < arg_col->size();++i)
-        {
-            execute((*arg_col)[i].get<String>(), res[i]);
+            execute(arg_col->getDataAt(i), res[i]);
         }
     }
 };
@@ -89,7 +82,7 @@ public:
 
 struct ConvImpl
 {
-    static String execute(const String& arg, int from_base, int to_base)
+    static String execute(const String & arg, int from_base, int to_base)
     {
         bool is_signed = false, is_negative = false, ignore_sign = false;
         if(from_base < 0)
@@ -188,21 +181,13 @@ struct ConvImpl
         return result;
     }
 
-    template <typename T1, typename T2>
-    static void execute(const ColumnString* arg_col0, const std::vector<T1>* arg_col1, const std::vector<T2>* arg_col2, ColumnString& res_col)
+    template <typename T1, typename T2, typename Column>
+    static void execute(const Column * arg_col0, const std::unique_ptr<IGetVecHelper<T1>> & arg_col1, const std::unique_ptr<IGetVecHelper<T2>> & arg_col2, ColumnString & res_col)
     {
         for(size_t i = 0;i < arg_col0->size();++i)
         {
-            String result = execute((*arg_col0)[i].get<String>(), (*arg_col1)[i], (*arg_col2)[i]);
-            res_col.insertData(result.c_str(), result.size());
-        }
-    }
-    template <typename T1, typename T2>
-    static void executeFixed(const ColumnFixedString* arg_col0, const std::vector<T1>* arg_col1, const std::vector<T2>* arg_col2, ColumnString& res_col)
-    {
-        for(size_t i = 0;i < arg_col0->size();++i)
-        {
-            String result = execute((*arg_col0)[i].get<String>(), (*arg_col1)[i], (*arg_col2)[i]);
+            // we want some std::string operation in ConvImpl so we call toString here
+            String result = execute(arg_col0->getDataAt(i).toString(), arg_col1->get(i), arg_col2->get(i));
             res_col.insertData(result.c_str(), result.size());
         }
     }
@@ -210,28 +195,6 @@ struct ConvImpl
 
 class FunctionConv : public IFunction
 {   
-    template <typename IntType>
-    struct GetIntVecHelper
-    {
-        static std::vector<IntType> GetVec(const ColumnConst* int_arg_typed, size_t N)
-        {
-            return std::vector<IntType>(N, int_arg_typed->getValue<IntType>());
-        }
-
-        static std::vector<IntType> GetVec(const ColumnVector<IntType>* int_arg_typed, size_t N)
-        {
-            std::vector<IntType> result;
-            result.reserve(N);
-            for(size_t i = 0;i < int_arg_typed->size();++i) {
-                result.push_back(int_arg_typed->getElement(i));
-            }
-            return result;
-        }
-    };
-
-
-
-
     template <typename FirstIntType, typename SecondIntType, typename FirstIntColumn, typename SecondIntColumn>
     void executeWithIntTypes(Block & block, const ColumnNumbers & arguments, const size_t result, const FirstIntColumn * first_int_arg_typed,
         const SecondIntColumn * second_int_arg_typed)
@@ -242,18 +205,16 @@ class FunctionConv : public IFunction
 
         if (const auto string_col = checkAndGetColumn<ColumnString>(string_arg))
         {
-            const size_t N = string_col->size();
-            std::vector<FirstIntType> first_vec = GetIntVecHelper<FirstIntType>::GetVec(first_int_arg_typed, N);
-            std::vector<SecondIntType> second_vec = GetIntVecHelper<SecondIntType>::GetVec(second_int_arg_typed, N);
-            ConvImpl::execute(string_col, &first_vec, &second_vec, *col_res);
+            auto first_int_vec_helper = IGetVecHelper<FirstIntType>::getHelper(first_int_arg_typed);
+            auto second_int_vec_helper = IGetVecHelper<SecondIntType>::getHelper(second_int_arg_typed);
+            ConvImpl::execute(string_col, first_int_vec_helper, second_int_vec_helper, *col_res);
             block.getByPosition(result).column = std::move(col_res);
         }
         else if(const auto string_col = checkAndGetColumn<ColumnFixedString>(string_arg))
         {
-            const size_t N = string_col->size();
-            std::vector<FirstIntType> first_vec = GetIntVecHelper<FirstIntType>::GetVec(first_int_arg_typed, N);
-            std::vector<SecondIntType> second_vec = GetIntVecHelper<SecondIntType>::GetVec(second_int_arg_typed, N);
-            ConvImpl::executeFixed(string_col, &first_vec, &second_vec, *col_res);
+            auto first_int_vec_helper = IGetVecHelper<FirstIntType>::getHelper(first_int_arg_typed);
+            auto second_int_vec_helper = IGetVecHelper<SecondIntType>::getHelper(second_int_arg_typed);
+            ConvImpl::execute(string_col, first_int_vec_helper, second_int_vec_helper, *col_res);
             block.getByPosition(result).column = std::move(col_res);
         }
         else
