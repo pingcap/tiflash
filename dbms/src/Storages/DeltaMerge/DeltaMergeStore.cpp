@@ -1165,13 +1165,8 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
             return {};
         }
 
-<<<<<<< HEAD
-        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true);
-        if (!segment_snap)
-=======
         segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
-        if (!segment_snap || !segment_snap->getRows())
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
+        if (!segment_snap)
         {
             LOG_DEBUG(log, "Give up segment [" << segment->segmentId() << "] split");
             return {};
@@ -1318,19 +1313,11 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds());
     });
 
-<<<<<<< HEAD
     auto left_range  = left->getRange();
     auto right_range = right->getRange();
 
     WriteBatches wbs(storage_pool);
     auto         merged_stable = Segment::prepareMerge(dm_context, schema_snap, left, left_snap, right, right_snap, wbs);
-=======
-    auto left_range  = left->getRowKeyRange();
-    auto right_range = right->getRowKeyRange();
-
-    WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
-    auto         merged_stable = Segment::prepareMerge(dm_context, schema_snap, left, left_snap, right, right_snap, wbs, !is_foreground);
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
 
@@ -1422,12 +1409,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
             .Observe(watch_delta_merge.elapsedSeconds());
     });
 
-<<<<<<< HEAD
     WriteBatches wbs(storage_pool);
-=======
-    bool         need_rate_limit = (run_thread != TaskRunThread::Thread_FG);
-    WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
 
     auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
     wbs.writeLogAndData();
@@ -1782,12 +1764,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext &          dm_c
         {
             if (tasks.empty() || tasks.back()->segment != seg_it->second)
             {
-<<<<<<< HEAD
-                auto segment_snap = segment->createSnapshot(dm_context);
-=======
-                auto segment      = seg_it->second;
                 auto segment_snap = segment->createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap));

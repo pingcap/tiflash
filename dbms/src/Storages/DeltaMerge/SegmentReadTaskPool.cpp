@@ -12,26 +12,15 @@ namespace DB::DM
 
 SegmentReadTask::SegmentReadTask(const SegmentPtr &         segment_, //
                                  const SegmentSnapshotPtr & read_snapshot_,
-                                 const RowKeyRanges &       ranges_)
+                                 const HandleRanges &       ranges_)
     : segment(segment_), read_snapshot(read_snapshot_), ranges(ranges_)
 {
     CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks);
 }
 
-SegmentReadTask::SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshotPtr & read_snapshot_)
-    : SegmentReadTask{segment_, read_snapshot_, RowKeyRanges{}}
-{
-}
-
 SegmentReadTask::~SegmentReadTask()
 {
     CurrentMetrics::sub(CurrentMetrics::DT_SegmentReadTasks);
-}
-
-std::pair<size_t, size_t> SegmentReadTask::getRowsAndBytes() const
-{
-    return {read_snapshot->delta->getRows() + read_snapshot->stable->getRows(),
-            read_snapshot->delta->getBytes() + read_snapshot->stable->getBytes()};
 }
 
 SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tasks, size_t expected_size)
@@ -56,9 +45,9 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
         size_t split_count = top->ranges.size() / 2;
 
         auto left = std::make_shared<SegmentReadTask>(
-            top->segment, top->read_snapshot->clone(), RowKeyRanges(top->ranges.begin(), top->ranges.begin() + split_count));
+            top->segment, top->read_snapshot->clone(), HandleRanges(top->ranges.begin(), top->ranges.begin() + split_count));
         auto right = std::make_shared<SegmentReadTask>(
-            top->segment, top->read_snapshot->clone(), RowKeyRanges(top->ranges.begin() + split_count, top->ranges.end()));
+            top->segment, top->read_snapshot->clone(), HandleRanges(top->ranges.begin() + split_count, top->ranges.end()));
 
         largest_ranges_first.push(left);
         largest_ranges_first.push(right);

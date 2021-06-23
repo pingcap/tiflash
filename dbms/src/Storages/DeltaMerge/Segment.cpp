@@ -277,19 +277,7 @@ bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
-<<<<<<< HEAD
-SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update) const
-=======
-bool Segment::ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
-{
-    auto new_range = range.shrink(rowkey_range);
-    LOG_TRACE(log, "Segment [" << segment_id << "] write region snapshot: " << new_range.toDebugString());
-
-    return delta->ingestPacks(dm_context, range, packs, clear_data_in_range);
-}
-
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
 {
     // If the snapshot is created for read, then the snapshot will contain all packs (cached and persisted) for read.
     // If the snapshot is created for update, then the snapshot will only contain the persisted packs.
@@ -464,13 +452,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, con
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
-<<<<<<< HEAD
     WriteBatches wbs(dm_context.storage_pool);
-    auto         segment_snap = createSnapshot(dm_context, true);
-=======
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
     auto         segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfMergeDelta);
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
     if (!segment_snap)
         return {};
 
@@ -558,13 +541,8 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
 
 SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
-<<<<<<< HEAD
     WriteBatches wbs(dm_context.storage_pool);
-    auto         segment_snap = createSnapshot(dm_context, true);
-=======
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
     auto         segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
     if (!segment_snap)
         return {};
 

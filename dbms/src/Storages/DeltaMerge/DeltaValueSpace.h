@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
@@ -361,7 +362,7 @@ public:
 
     /// Create a constant snapshot for read.
     /// Returns empty if this instance is abandoned, you should try again.
-    SnapshotPtr createSnapshot(const DMContext & context, bool for_update = false);
+    SnapshotPtr createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type);
 };
 
 using Pack             = DeltaValueSpace::Pack;

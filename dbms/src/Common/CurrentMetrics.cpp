@@ -25,37 +25,6 @@
     M(LeaderReplica)                            \
     M(MemoryTracking)                           \
     M(MemoryTrackingInBackgroundProcessingPool) \
-<<<<<<< HEAD
-    M(MemoryTrackingForMerges) \
-    M(LeaderElection) \
-    M(EphemeralNode) \
-    M(ZooKeeperSession) \
-    M(ZooKeeperWatch) \
-    M(ZooKeeperRequest) \
-    M(DelayedInserts) \
-    M(ContextLockWait) \
-    M(StorageBufferRows) \
-    M(StorageBufferBytes) \
-    M(DictCacheRequests) \
-    M(Revision) \
-    M(PSMVCCNumSnapshots) \
-    M(RWLockWaitingReaders) \
-    M(RWLockWaitingWriters) \
-    M(RWLockActiveReaders) \
-    M(RWLockActiveWriters) \
-    M(StoreSizeCapacity) \
-    M(StoreSizeAvailable) \
-    M(StoreSizeUsed) \
-    M(DT_DeltaMerge) \
-    M(DT_DeltaCompact) \
-    M(DT_DeltaFlush) \
-    M(DT_SegmentSplit) \
-    M(DT_SegmentMerge) \
-    M(DT_PlaceIndexUpdate) \
-    M(DT_DeltaMergeTotalBytes) \
-    M(DT_DeltaMergeTotalRows) \
-    M(RaftNumSnapshotsPendingApply) \
-=======
     M(MemoryTrackingForMerges)                  \
     M(LeaderElection)                           \
     M(EphemeralNode)                            \
@@ -95,7 +64,6 @@
     M(DT_SnapshotOfSegmentMerge)                \
     M(DT_SnapshotOfMergeDelta)                  \
     M(DT_SnapshotOfPlaceIndex)
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
 
 
 namespace CurrentMetrics

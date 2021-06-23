@@ -30,15 +30,11 @@ DeltaValueSpace::Snapshot::~Snapshot()
     }
 }
 
-<<<<<<< HEAD
-SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update)
-=======
 // ================================================
 // DeltaValueSpace
 // ================================================
 
-DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type)
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
+DeltaValueSpace::SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type)
 {
     if (for_update)
     {
@@ -54,11 +50,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     if (abandoned.load(std::memory_order_relaxed))
         return {};
 
-<<<<<<< HEAD
-    auto snap          = std::make_shared<Snapshot>();
-=======
-    auto snap          = std::make_shared<DeltaValueSnapshot>(type);
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
+    auto snap          = std::make_shared<Snapshot>(type);
     snap->is_update    = for_update;
     snap->delta        = this->shared_from_this();
     snap->storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, true);
