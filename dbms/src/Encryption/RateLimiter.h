@@ -3,6 +3,8 @@
 #include <Common/Stopwatch.h>
 #include <Server/StorageConfigParser.h>
 
+#include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -93,11 +95,28 @@ public:
 
     void updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_, Poco::Logger * log_);
 
+    bool readLimited() const;
+
 private:
+    struct TaskIOInfo
+    {
+        pid_t tid = 0;
+        UInt64 read_bytes = 0;
+        UInt64 write_bytes = 0;
+        std::chrono::time_point<std::chrono::system_clock> update_time;
+    };
+
+    // <read_bytes, write_bytes>
+    std::pair<Int64, Int64> readTaskIOInfo(const std::string& fname, Poco::Logger* log_);
+
     StorageIORateLimitConfig io_config;
     RateLimiterPtr bg_write_limiter;
     RateLimiterPtr fg_write_limiter;
     std::mutex mtx_;
+
+    std::atomic<bool> bg_read_limited;
+    std::atomic<bool> fg_read_limited;
+    std::vector<pid_t> bg_thread_id;
 
     // Noncopyable and nonmovable.
     IORateLimiter(const IORateLimiter & limiter) = delete;

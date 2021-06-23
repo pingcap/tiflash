@@ -5,6 +5,9 @@
 #include <common/logger_useful.h>
 
 #include <cassert>
+#include <fstream>
+
+#include <boost/algorithm/string.hpp>
 
 namespace CurrentMetrics
 {
@@ -177,16 +180,48 @@ void IORateLimiter::updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::Abstrac
 
     io_config = new_io_config;
 
-    if (io_config.max_bytes_per_sec == 0)
+    auto GenRateLimiter = [&](UInt64 bytes_per_sec)
     {
-        bg_write_limiter = nullptr;
-        fg_write_limiter = nullptr;
-    }
-    else
-    {
-        bg_write_limiter = std::make_shared<RateLimiter>(metrics_, io_config.getBgWriteMaxBytesPerSec());
-        fg_write_limiter = std::make_shared<RateLimiter>(metrics_, io_config.getFgWriteMaxBytesPerSec());
-    }
+        return bytes_per_sec == 0 ? nullptr : std::make_shared<RateLimiter>(metrics_, bytes_per_sec);
+    };
+
+    bg_write_limiter = GenRateLimiter(io_config.getBgWriteMaxBytesPerSec());
+    fg_write_limiter = GenRateLimiter(io_config.getFgWriteMaxBytesPerSec());
 }
 
+bool IORateLimiter::readLimited() const
+{
+    return is_background_thread ? bg_read_limited.load(std::memory_order_relaxed) : fg_read_limited.load(std::memory_order_relaxed);
+}
+
+std::pair<Int64, Int64> IORateLimiter::readTaskIOInfo(const std::string& fname, Poco::Logger* log_)
+{
+    std::ifstream ifs(fname);
+    std::string s;
+
+    Int64 read_bytes = -1;
+    Int64 write_bytes = -1;
+    while (std::getline(ifs, s))
+    {
+        std::vector<std::string> values;
+        boost::split(values, s, boost::is_any_of(":"));
+        if (values.size() != 2)
+        {
+            LOG_WARNING(log_, "readTaskIOInfo: " << s << " is invalid.");
+            continue;
+        }
+        if (values[0] == "read_bytes")
+        {
+            boost::algorithm::trim(values[1]);
+            read_bytes = std::stoll(values[1]);
+        }
+        else if (values[0] == "write_bytes")
+        {
+            boost::algorithm::trim(values[1]);
+            write_bytes = std::stoll(values[1]);
+        }
+    }
+    return {read_bytes, write_bytes};
+}
+    // I/O of foreground thread = I/O of total - I/O of background thread
 } // namespace DB
