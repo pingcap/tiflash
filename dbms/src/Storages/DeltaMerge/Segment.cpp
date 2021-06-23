@@ -61,7 +61,7 @@ extern const Metric DT_SnapshotOfRead;
 extern const Metric DT_SnapshotOfReadRaw;
 extern const Metric DT_SnapshotOfSegmentSplit;
 extern const Metric DT_SnapshotOfSegmentMerge;
-extern const Metric DT_SnapshotOfMergeDelta;
+extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
 } // namespace CurrentMetrics
 
@@ -537,7 +537,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, con
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
-    auto         segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfMergeDelta);
+    auto         segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
     if (!segment_snap)
         return {};
 

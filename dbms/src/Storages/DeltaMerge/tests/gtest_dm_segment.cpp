@@ -17,7 +17,7 @@ extern const Metric DT_SnapshotOfRead;
 extern const Metric DT_SnapshotOfReadRaw;
 extern const Metric DT_SnapshotOfSegmentSplit;
 extern const Metric DT_SnapshotOfSegmentMerge;
-extern const Metric DT_SnapshotOfMergeDelta;
+extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
 } // namespace CurrentMetrics
 
