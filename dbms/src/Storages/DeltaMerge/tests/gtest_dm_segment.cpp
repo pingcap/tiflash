@@ -224,7 +224,7 @@ try
     };
 
     auto check_rows = [&](size_t expected_rows) {
-        auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto   in            = segment->getInputStream(dmContext(), *tableColumns());
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
@@ -251,9 +251,8 @@ try
 
     // Thread A
     {
-        auto in = segment->getInputStream(
-            dmContext(), *tableColumns(), snap, {RowKeyRange::newAll(false, 1)}, {}, MAX_UINT64, DEFAULT_BLOCK_SIZE);
-        int num_rows_read = 0;
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), snap, {HandleRange::newAll()}, {}, MAX_UINT64, DEFAULT_BLOCK_SIZE);
+        int  num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
         {

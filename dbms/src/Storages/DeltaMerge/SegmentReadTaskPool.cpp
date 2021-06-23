@@ -18,6 +18,11 @@ SegmentReadTask::SegmentReadTask(const SegmentPtr &         segment_, //
     CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks);
 }
 
+SegmentReadTask::SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshotPtr & read_snapshot_)
+    : SegmentReadTask{segment_, read_snapshot_, HandleRanges{}}
+{
+}
+
 SegmentReadTask::~SegmentReadTask()
 {
     CurrentMetrics::sub(CurrentMetrics::DT_SegmentReadTasks);

@@ -144,6 +144,8 @@ public:
         size_t bytes;
         size_t deletes;
 
+        CurrentMetrics::Metric type;
+
         /// TODO: The members below are not actually snapshots, they should not be here.
 
         // The delta index which we actually use. Could be cloned from shared_delta_index with some updates and compacts.
@@ -156,9 +158,11 @@ public:
         // The data of packs when reading.
         std::vector<Columns> packs_data;
 
+        Snapshot(CurrentMetrics::Metric type_) : type(type_) {}
+
         SnapshotPtr clone()
         {
-            auto c                = std::make_shared<Snapshot>();
+            auto c                = std::make_shared<Snapshot>(type);
             c->is_update          = is_update;
             c->shared_delta_index = shared_delta_index;
             c->delta              = delta;

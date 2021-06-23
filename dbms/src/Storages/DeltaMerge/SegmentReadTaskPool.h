@@ -29,7 +29,9 @@ struct SegmentReadTask
     SegmentReadTask(const SegmentPtr &         segment_, //
                     const SegmentSnapshotPtr & read_snapshot_,
                     const HandleRanges &       ranges_);
-    
+
+    SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshotPtr & read_snapshot_);
+
     ~SegmentReadTask();
 
     void addRange(const HandleRange & range) { ranges.push_back(range); }
