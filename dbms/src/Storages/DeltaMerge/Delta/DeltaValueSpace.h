@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
@@ -248,7 +249,7 @@ public:
     /// Create a constant snapshot for read.
     /// Returns empty if this instance is abandoned, you should try again.
     /// for_update: true means this snapshot is created for Segment split/merge, delta merge, or flush.
-    DeltaSnapshotPtr createSnapshot(const DMContext & context, bool for_update = false);
+    DeltaSnapshotPtr createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type);
 };
 
 class DeltaValueSnapshot : public std::enable_shared_from_this<DeltaValueSnapshot>, private boost::noncopyable
@@ -274,13 +275,15 @@ private:
     // We need a reference to original delta object, to release the "is_updating" lock.
     DeltaValueSpacePtr _delta;
 
+    CurrentMetrics::Metric type;
+
 public:
     DeltaSnapshotPtr clone()
     {
         if (unlikely(is_update))
             throw Exception("Should not call this method when is_update is true", ErrorCodes::LOGICAL_ERROR);
 
-        auto c                = std::make_shared<DeltaValueSnapshot>();
+        auto c                = std::make_shared<DeltaValueSnapshot>(type);
         c->is_update          = is_update;
         c->shared_delta_index = shared_delta_index;
         c->storage_snap       = storage_snap;
@@ -296,10 +299,17 @@ public:
         return c;
     }
 
+    DeltaValueSnapshot(CurrentMetrics::Metric type_)
+    {
+        type = type_;
+        CurrentMetrics::add(type);
+    }
+
     ~DeltaValueSnapshot()
     {
         if (is_update)
             _delta->releaseUpdating();
+        CurrentMetrics::sub(type);
     }
 
     DeltaPacks & getPacks() { return packs; }
