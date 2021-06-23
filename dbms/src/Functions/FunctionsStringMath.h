@@ -57,6 +57,7 @@ public:
         // tidb get int64 from crc32, so we do the same thing
         return std::make_shared<DataTypeInt64>();
     }
+    bool useDefaultImplementationForConstants() const override { return true; }
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
     {
         const auto arg = block.getByPosition(arguments[0]).column.get();
