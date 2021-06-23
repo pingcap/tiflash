@@ -36,7 +36,7 @@ struct HashMethodOneNumber
     const char * vec;
 
     /// If the keys of a fixed length then key_sizes contains their lengths, empty otherwise.
-    HashMethodOneNumber(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const HashMethodContextPtr &, const TiDB::TiDBCollators &)
+    HashMethodOneNumber(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators &)
     {
         vec = key_columns[0]->getRawData().data;
     }
@@ -45,9 +45,6 @@ struct HashMethodOneNumber
     {
         vec = column->getRawData().data;
     }
-
-    /// Creates context. Method is called once and result context is used in all threads.
-    using Base::createContext; /// (const HashMethodContext::Settings &) -> HashMethodContextPtr
 
     /// Emplace key into HashTable or HashMap. If Data is HashMap, returns ptr to value, otherwise nullptr.
     /// Data is a HashTable where to insert key from column's row.
@@ -82,7 +79,7 @@ struct HashMethodString
     const IColumn::Offset * offsets;
     const UInt8 * chars;
 
-    HashMethodString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const HashMethodContextPtr &, const TiDB::TiDBCollators & collators)
+    HashMethodString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {
         const IColumn & column = *key_columns[0];
         const ColumnString & column_string = assert_cast<const ColumnString &>(column);
@@ -122,7 +119,7 @@ struct HashMethodStringWithCollator
     const IColumn::Offset * offsets;
     const UInt8 * chars;
 
-    HashMethodStringWithCollator(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const HashMethodContextPtr &, const TiDB::TiDBCollators & collators)
+    HashMethodStringWithCollator(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {
         const IColumn & column = *key_columns[0];
         const ColumnString & column_string = assert_cast<const ColumnString &>(column);
@@ -167,7 +164,7 @@ struct HashMethodFixedString
     size_t n;
     const ColumnFixedString::Chars * chars;
 
-    HashMethodFixedString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const HashMethodContextPtr &, const TiDB::TiDBCollators &)
+    HashMethodFixedString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators &)
     {
         const IColumn & column = *key_columns[0];
         const ColumnFixedString & column_string = assert_cast<const ColumnFixedString &>(column);
@@ -209,7 +206,7 @@ struct HashMethodKeysFixed
     Sizes key_sizes;
     size_t keys_size;
 
-    HashMethodKeysFixed(const ColumnRawPtrs & key_columns, const Sizes & key_sizes_, const HashMethodContextPtr &, const TiDB::TiDBCollators &)
+    HashMethodKeysFixed(const ColumnRawPtrs & key_columns, const Sizes & key_sizes_, const TiDB::TiDBCollators &)
         : Base(key_columns), key_sizes(std::move(key_sizes_)), keys_size(key_columns.size())
     {
     }
@@ -244,7 +241,7 @@ struct HashMethodSerialized
     size_t keys_size;
     TiDB::TiDBCollators collators;
 
-    HashMethodSerialized(const ColumnRawPtrs & key_columns_, const Sizes & /*key_sizes*/, const HashMethodContextPtr &, const TiDB::TiDBCollators & collators_)
+    HashMethodSerialized(const ColumnRawPtrs & key_columns_, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators_)
         : key_columns(key_columns_), keys_size(key_columns_.size()), collators(collators_) {}
 
 protected:
@@ -269,7 +266,7 @@ struct HashMethodHashed
 
     ColumnRawPtrs key_columns;
 
-    HashMethodHashed(ColumnRawPtrs key_columns_, const Sizes &, const HashMethodContextPtr &, const TiDB::TiDBCollators &)
+    HashMethodHashed(ColumnRawPtrs key_columns_, const Sizes &, const TiDB::TiDBCollators &)
         : key_columns(std::move(key_columns_)) {}
 
     ALWAYS_INLINE Key getKeyHolder(size_t row, Arena &, std::vector<String> &) const
@@ -278,5 +275,6 @@ struct HashMethodHashed
     }
 };
 
-}
-}
+} // namespace ColumnsHashing
+} // namespace DB
+

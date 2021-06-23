@@ -3,6 +3,7 @@
 #include <Columns/IColumn.h>
 #include <Common/assert_cast.h>
 #include <Common/HashTable/HashTableKeyHolder.h>
+#include <Functions/FunctionHelpers.h>
 #include <Interpreters/AggregationCommon.h>
 
 
@@ -15,22 +16,6 @@ namespace ErrorCodes
 
 namespace ColumnsHashing
 {
-
-/// Generic context for HashMethod. Context is shared between multiple threads, all methods must be thread-safe.
-/// Is used for caching.
-class HashMethodContext
-{
-public:
-    virtual ~HashMethodContext() = default;
-
-    struct Settings
-    {
-        size_t max_threads;
-    };
-};
-
-using HashMethodContextPtr = std::shared_ptr<HashMethodContext>;
-
 
 namespace columns_hashing_impl
 {
@@ -117,26 +102,24 @@ public:
     static constexpr bool has_mapped = !std::is_same<Mapped, void>::value;
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
 
-    static HashMethodContextPtr createContext(const HashMethodContext::Settings &) { return nullptr; }
-
     template <typename Data>
-    ALWAYS_INLINE EmplaceResult emplaceKey(Data & data, size_t row, Arena & pool)
+    ALWAYS_INLINE EmplaceResult emplaceKey(Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
     {
-        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, pool);
+        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, pool, sort_key_containers);
         return emplaceImpl(key_holder, data);
     }
 
     template <typename Data>
-    ALWAYS_INLINE FindResult findKey(Data & data, size_t row, Arena & pool)
+    ALWAYS_INLINE FindResult findKey(Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
     {
-        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, pool);
+        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, pool, sort_key_containers);
         return findKeyImpl(keyHolderGetKey(key_holder), data);
     }
 
     template <typename Data>
-    ALWAYS_INLINE size_t getHash(const Data & data, size_t row, Arena & pool)
+    ALWAYS_INLINE size_t getHash(const Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
     {
-        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, pool);
+        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, pool, sort_key_containers);
         return data.hash(keyHolderGetKey(key_holder));
     }
 
@@ -347,8 +330,8 @@ private:
     ColumnRawPtrs actual_columns;
 };
 
-}
+} // namespace columns_hashing_impl
 
-}
+} // namespace ColumnsHashing
 
-}
+} // namespace DB

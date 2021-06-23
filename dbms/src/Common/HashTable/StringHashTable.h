@@ -25,8 +25,8 @@ inline StringRef ALWAYS_INLINE toStringRef(const StringKey8 & n)
 }
 inline StringRef ALWAYS_INLINE toStringRef(const StringKey16 & n)
 {
-    assert(n.items[1] != 0);
-    return {reinterpret_cast<const char *>(&n), 16ul - (__builtin_clzll(n.items[1]) >> 3)};
+    assert(n.high != 0);
+    return {reinterpret_cast<const char *>(&n), 16ul - (__builtin_clzll(n.high) >> 3)};
 }
 inline StringRef ALWAYS_INLINE toStringRef(const StringKey24 & n)
 {
@@ -43,14 +43,14 @@ struct StringHashTableHash
         res = _mm_crc32_u64(res, key);
         return res;
     }
-    size_t ALWAYS_INLINE operator()(StringKey16 key) const
+    size_t ALWAYS_INLINE operator()(const StringKey16 & key) const
     {
         size_t res = -1ULL;
-        res = _mm_crc32_u64(res, key.items[0]);
-        res = _mm_crc32_u64(res, key.items[1]);
+        res = _mm_crc32_u64(res, key.low);
+        res = _mm_crc32_u64(res, key.high);
         return res;
     }
-    size_t ALWAYS_INLINE operator()(StringKey24 key) const
+    size_t ALWAYS_INLINE operator()(const StringKey24 & key) const
     {
         size_t res = -1ULL;
         res = _mm_crc32_u64(res, key.a);
@@ -63,11 +63,11 @@ struct StringHashTableHash
     {
         return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 8);
     }
-    size_t ALWAYS_INLINE operator()(StringKey16 key) const
+    size_t ALWAYS_INLINE operator()(const StringKey16 & key) const
     {
         return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 16);
     }
-    size_t ALWAYS_INLINE operator()(StringKey24 key) const
+    size_t ALWAYS_INLINE operator()(const StringKey24 & key) const
     {
         return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 24);
     }
