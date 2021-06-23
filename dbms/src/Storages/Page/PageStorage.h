@@ -235,6 +235,7 @@ public:
     explicit PageReader(PageStorage & storage_) : storage(storage_), snap() {}
     /// Snapshot read.
     PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_) : storage(storage_), snap(snap_) {}
+    PageReader(PageStorage & storage_, PageStorage::SnapshotPtr && snap_) : storage(storage_), snap(std::move(snap_)) {}
 
     Page    read(PageId page_id) const { return storage.read(page_id, snap); }
     PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, snap); }
