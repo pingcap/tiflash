@@ -285,7 +285,22 @@ private:
 
         if (inserted)
         {
-            cell.queue_iterator = queue.insert(queue.end(), key);
+            try
+            {
+                cell.queue_iterator = queue.insert(queue.end(), key);
+            }
+            catch (std::exception & e)
+            {
+                cells.erase(res.first);
+                LOG_ERROR(&Logger::get("LRUCache"), "queue.insert throw std::exception: " << e.what());
+                throw;
+            }
+            catch (...)
+            {
+                cells.erase(res.first);
+                LOG_ERROR(&Logger::get("LRUCache"), "queue.insert throw unknow exception");
+                throw;
+            }
         }
         else
         {
