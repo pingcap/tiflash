@@ -106,7 +106,7 @@ public:
     bool write(DMContext & dm_context, const Block & block); // For test only
     bool write(DMContext & dm_context, const HandleRange & delete_range);
 
-    SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update = false) const;
+    SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
 
     BlockInputStreamPtr getInputStream(const DMContext &          dm_context,
                                        const ColumnDefines &      columns_to_read,

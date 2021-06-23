@@ -1,7 +1,11 @@
 #pragma once
 
+<<<<<<< HEAD
 #include <Storages/DeltaMerge/RangeUtils.h>
 #include <Storages/DeltaMerge/Segment.h>
+=======
+#include <Storages/DeltaMerge/RowKeyRangeUtils.h>
+>>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
 
 #include <queue>
 
@@ -11,6 +15,10 @@ namespace DM
 {
 struct DMContext;
 struct SegmentReadTask;
+class Segment;
+using SegmentPtr = std::shared_ptr<Segment>;
+struct SegmentSnapshot;
+using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
 
 using DMContextPtr       = std::shared_ptr<DMContext>;
 using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;
@@ -23,13 +31,9 @@ struct SegmentReadTask
     SegmentSnapshotPtr read_snapshot;
     HandleRanges       ranges;
 
-    explicit SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshotPtr & read_snapshot_)
-        : segment(segment_), read_snapshot(read_snapshot_)
-    {
-    }
-
     SegmentReadTask(const SegmentPtr &         segment_, //
                     const SegmentSnapshotPtr & read_snapshot_,
+<<<<<<< HEAD
                     const HandleRanges &       ranges_)
         : segment(segment_), read_snapshot(read_snapshot_), ranges(ranges_)
     {
@@ -78,6 +82,21 @@ struct SegmentReadTask
 
         return result_tasks;
     }
+=======
+                    const RowKeyRanges &       ranges_);
+
+    explicit SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshotPtr & read_snapshot_);
+
+    ~SegmentReadTask();
+
+    std::pair<size_t, size_t> getRowsAndBytes() const;
+
+    void addRange(const RowKeyRange & range) { ranges.push_back(range); }
+
+    void mergeRanges() { ranges = DM::tryMergeRanges(std::move(ranges), 1); }
+
+    static SegmentReadTasks trySplitReadTasks(const SegmentReadTasks & tasks, size_t expected_size);
+>>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
 };
 
 
