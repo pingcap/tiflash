@@ -1,3 +1,4 @@
+#pragma once
 #include <Storages/Page/PageStorage.h>
 
 #include <optional>
