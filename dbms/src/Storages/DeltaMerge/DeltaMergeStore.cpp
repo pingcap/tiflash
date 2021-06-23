@@ -48,7 +48,7 @@ extern const Metric DT_SnapshotOfRead;
 extern const Metric DT_SnapshotOfReadRaw;
 extern const Metric DT_SnapshotOfSegmentSplit;
 extern const Metric DT_SnapshotOfSegmentMerge;
-extern const Metric DT_SnapshotOfMergeDelta;
+extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
 } // namespace CurrentMetrics
 
@@ -1384,7 +1384,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
             return {};
         }
 
-        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfMergeDelta);
+        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
         if (!segment_snap)
         {
             LOG_DEBUG(log, "Give up merge delta, segment [" << segment->segmentId() << "]");

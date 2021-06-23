@@ -1,3 +1,4 @@
+#include <Common/CurrentMetrics.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
@@ -7,6 +8,11 @@
 
 #include <ext/scope_guard.h>
 #include <vector>
+
+namespace CurrentMetrics
+{
+extern const Metric DT_SnapshotOfDeltaCompact;
+} // namespace CurrentMetrics
 
 namespace DB::DM
 {
@@ -48,8 +54,9 @@ bool DeltaValueSpace::compact(DMContext & context)
             throw Exception(simpleInfo() + " is expected to be updating", ErrorCodes::LOGICAL_ERROR);
     });
 
-    CompackTasks             tasks;
-    PageStorage::SnapshotPtr log_storage_snap;
+    CompackTasks              tasks;
+    PageStorage::SnapshotPtr  log_storage_snap;
+    CurrentMetrics::Increment snapshot_metrics{CurrentMetrics::DT_SnapshotOfDeltaCompact, 0};
 
     {
         /// Prepare compact tasks.
@@ -110,6 +117,7 @@ bool DeltaValueSpace::compact(DMContext & context)
         }
 
         log_storage_snap = context.storage_pool.log().getSnapshot();
+        snapshot_metrics.changeTo(1); // add metrics for snapshot
     }
 
     /// Write generated compact packs' data.
@@ -118,12 +126,13 @@ bool DeltaValueSpace::compact(DMContext & context)
     size_t total_compact_rows  = 0;
 
     WriteBatches wbs(context.storage_pool);
-    PageReader   reader(context.storage_pool.log(), log_storage_snap);
+    PageReader   reader(context.storage_pool.log(), std::move(log_storage_snap));
     for (auto & task : tasks)
     {
         auto & schema          = *(task.to_compact[0]->schema);
         auto   compact_columns = schema.cloneEmptyColumns();
 
+        // Read data from old packs
         for (auto & pack : task.to_compact)
         {
             if (unlikely(pack->isDeleteRange()))
