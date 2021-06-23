@@ -52,11 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-<<<<<<< HEAD
-  "iteration": 1595916828338,
-=======
   "iteration": 1624364017760,
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
   "links": [],
   "panels": [
     {
@@ -2388,8 +2384,6 @@
               "intervalFactor": 1,
               "legendFormat": "30min-{{instance}}",
               "refId": "D"
-<<<<<<< HEAD
-=======
             },
             {
               "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]))) by (instance)",
@@ -2406,7 +2400,6 @@
               "intervalFactor": 1,
               "legendFormat": "5min-write-{{instance}}",
               "refId": "F"
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
             }
           ],
           "thresholds": [],

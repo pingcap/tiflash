@@ -1495,11 +1495,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     auto left_range  = left->getRowKeyRange();
     auto right_range = right->getRowKeyRange();
 
-<<<<<<< HEAD
     WriteBatches wbs(storage_pool, is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
-=======
-    WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
     auto         merged_stable = Segment::prepareMerge(dm_context, schema_snap, left, left_snap, right, right_snap, wbs, !is_foreground);
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
@@ -1599,12 +1595,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
                 .Observe(watch_delta_merge.elapsedSeconds());
     });
 
-<<<<<<< HEAD
     WriteBatches wbs(storage_pool, is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
-=======
-    bool         need_rate_limit = (run_thread != TaskRunThread::Thread_FG);
-    WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
->>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
 
     auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs, !is_foreground);
     wbs.writeLogAndData();
