@@ -131,7 +131,11 @@ public:
     void write(WriteBatch && write_batch, const RateLimiterPtr & rate_limiter = nullptr);
 
     SnapshotPtr getSnapshot();
-    size_t      getNumSnapshots() const;
+    // Get some statistics of all living snapshots and the oldest living snapshot.
+    // Return < num of snapshots,
+    //          living time(seconds) of the oldest snapshot,
+    //          created thread id of the oldest snapshot      >
+    std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
 
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {});
     Page      read(PageId page_id, SnapshotPtr snapshot = {});
