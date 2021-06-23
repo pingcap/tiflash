@@ -196,7 +196,9 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
 
             {
                 Stopwatch wait_index_watch;
-                if (region->waitIndex(batch_read_index_result->at(read_index_res_idx).first.read_index(), tmt.getTerminated()))
+                auto & terminated = tmt.getTerminated();
+                region->waitIndex(batch_read_index_result->at(read_index_res_idx).first.read_index(), terminated);
+                if (terminated)
                 {
                     unavailable_regions.add(region_to_query.region_id, RegionException::RegionReadStatus::NOT_FOUND);
                     continue;
