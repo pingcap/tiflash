@@ -1134,7 +1134,7 @@ try
 
         write_100_rows(segment);
 
-        auto split_info = segment->prepareSplit(dmContext(), tableColumns(), segment_snap, wbs, false);
+        auto split_info = segment->prepareSplit(dmContext(), tableColumns(), segment_snap, wbs);
 
         wbs.writeLogAndData();
         split_info->my_stable->enableDMFilesGC();
@@ -1165,7 +1165,7 @@ try
         write_100_rows(other_segment);
         segment->flushCache(dmContext());
 
-        auto merged_stable = Segment::prepareMerge(dmContext(), tableColumns(), segment, left_snap, other_segment, right_snap, wbs, false);
+        auto merged_stable = Segment::prepareMerge(dmContext(), tableColumns(), segment, left_snap, other_segment, right_snap, wbs);
 
         wbs.writeLogAndData();
         merged_stable->enableDMFilesGC();

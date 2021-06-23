@@ -136,14 +136,12 @@ StableValueSpacePtr createNewStable(DMContext &                 context,
                                     const ColumnDefinesPtr &    schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     PageId                      stable_id,
-                                    WriteBatches &              wbs,
-                                    bool                        need_rate_limit)
+                                    WriteBatches &              wbs)
 {
     auto delegate   = context.path_pool.getStableDiskDelegator();
     auto store_path = delegate.choosePath();
 
     DMFileBlockOutputStream::Flags flags;
-    flags.setRateLimit(need_rate_limit);
     flags.setSingleFile(context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
 
     PageId dmfile_id = context.storage_pool.newDataPageId();
@@ -190,7 +188,7 @@ SegmentPtr Segment::newSegment(DMContext &              context,
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
 
     auto delta  = std::make_shared<DeltaValueSpace>(delta_id);
-    auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs, false);
+    auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs);
 
     auto segment = std::make_shared<Segment>(INITIAL_EPOCH, range, segment_id, next_segment_id, delta, stable);
 
@@ -543,7 +541,7 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & 
     if (!segment_snap)
         return {};
 
-    auto new_stable = prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs, false);
+    auto new_stable = prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
 
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
@@ -558,8 +556,7 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & 
 StableValueSpacePtr Segment::prepareMergeDelta(DMContext &                dm_context,
                                                const ColumnDefinesPtr &   schema_snap,
                                                const SegmentSnapshotPtr & segment_snap,
-                                               WriteBatches &             wbs,
-                                               bool                       need_rate_limit) const
+                                               WriteBatches &             wbs) const
 {
     LOG_INFO(log,
              "Segment [" << DB::toString(segment_id)
@@ -571,7 +568,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext &                dm_con
     auto data_stream = getInputStreamForDataExport(
         dm_context, *schema_snap, segment_snap, rowkey_range, dm_context.stable_pack_rows, /*reorginize_block*/ true);
 
-    auto new_stable = createNewStable(dm_context, schema_snap, data_stream, segment_snap->stable->getId(), wbs, need_rate_limit);
+    auto new_stable = createNewStable(dm_context, schema_snap, data_stream, segment_snap->stable->getId(), wbs);
 
     LOG_INFO(log, "Segment [" << DB::toString(segment_id) << "] prepare merge delta done.");
 
@@ -622,7 +619,7 @@ SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & sche
     if (!segment_snap)
         return {};
 
-    auto split_info_opt = prepareSplit(dm_context, schema_snap, segment_snap, wbs, false);
+    auto split_info_opt = prepareSplit(dm_context, schema_snap, segment_snap, wbs);
     if (!split_info_opt.has_value())
         return {};
 
@@ -812,14 +809,13 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
 std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext &                dm_context,
                                                         const ColumnDefinesPtr &   schema_snap,
                                                         const SegmentSnapshotPtr & segment_snap,
-                                                        WriteBatches &             wbs,
-                                                        bool                       need_rate_limit) const
+                                                        WriteBatches &             wbs) const
 {
     if (!dm_context.enable_logical_split         //
         || segment_snap->stable->getPacks() <= 3 //
         || segment_snap->delta->getRows() > segment_snap->stable->getRows())
     {
-        return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs, need_rate_limit);
+        return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
     }
     else
     {
@@ -833,7 +829,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext &             
                 log,
                 "Got bad split point [" << (split_point_opt.has_value() ? split_point_opt->toRowKeyValueRef().toDebugString() : "no value")
                                         << "] for segment " << info() << ", fall back to split physical.");
-            return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs, need_rate_limit);
+            return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
         }
         else
             return prepareSplitLogical(dm_context, schema_snap, segment_snap, split_point_opt.value(), wbs);
@@ -906,8 +902,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
 std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &                dm_context,
                                                                 const ColumnDefinesPtr &   schema_snap,
                                                                 const SegmentSnapshotPtr & segment_snap,
-                                                                WriteBatches &             wbs,
-                                                                bool                       need_rate_limit) const
+                                                                WriteBatches &             wbs) const
 {
     LOG_INFO(log, "Segment [" << segment_id << "] prepare split physical start");
 
@@ -956,7 +951,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
         my_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             my_data, *read_info.read_columns, dm_context.min_version, is_common_handle);
         auto my_stable_id = segment_snap->stable->getId();
-        my_new_stable     = createNewStable(dm_context, schema_snap, my_data, my_stable_id, wbs, need_rate_limit);
+        my_new_stable     = createNewStable(dm_context, schema_snap, my_data, my_stable_id, wbs);
     }
 
     LOG_INFO(log, "prepare my_new_stable done");
@@ -983,7 +978,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             other_data, *read_info.read_columns, dm_context.min_version, is_common_handle);
         auto other_stable_id = dm_context.storage_pool.newMetaPageId();
-        other_stable         = createNewStable(dm_context, schema_snap, other_data, other_stable_id, wbs, need_rate_limit);
+        other_stable         = createNewStable(dm_context, schema_snap, other_data, other_stable_id, wbs);
     }
 
     LOG_INFO(log, "prepare other_stable done");
@@ -1066,7 +1061,7 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
     if (!left_snap || !right_snap)
         return {};
 
-    auto merged_stable = prepareMerge(dm_context, schema_snap, left, left_snap, right, right_snap, wbs, false);
+    auto merged_stable = prepareMerge(dm_context, schema_snap, left, left_snap, right, right_snap, wbs);
 
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
@@ -1086,8 +1081,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
                                           const SegmentSnapshotPtr & left_snap,
                                           const SegmentPtr &         right,
                                           const SegmentSnapshotPtr & right_snap,
-                                          WriteBatches &             wbs,
-                                          bool                       need_rate_limit)
+                                          WriteBatches &             wbs)
 {
     LOG_INFO(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] prepare merge start");
 
@@ -1125,7 +1119,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
         merged_stream, *schema_snap, dm_context.min_version, dm_context.is_common_handle);
 
     auto merged_stable_id = left->stable->getId();
-    auto merged_stable    = createNewStable(dm_context, schema_snap, merged_stream, merged_stable_id, wbs, need_rate_limit);
+    auto merged_stable    = createNewStable(dm_context, schema_snap, merged_stream, merged_stable_id, wbs);
 
     LOG_INFO(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] prepare merge done");
 
