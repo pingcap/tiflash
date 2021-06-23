@@ -41,7 +41,7 @@ struct MPPTunnel
 
     bool connected; // if the exchange in has connected this tunnel.
 
-    bool finished; // if the tunnel has finished its connection.
+    std::atomic<bool> finished; // if the tunnel has finished its connection.
 
     ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
 
@@ -50,13 +50,22 @@ struct MPPTunnel
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
+    int input_num;
+
+    std::unique_ptr<std::thread> send_th;
+
+    ConcurrentBoundedQueue<std::shared_ptr<mpp::MPPDataPacket>>send_queue;
+
     Logger * log;
 
-    MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_, const std::chrono::seconds timeout_)
+    MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_, const std::chrono::seconds timeout_, int input_num_=40)
         : connected(false),
           finished(false),
           timeout(timeout_),
           tunnel_id("tunnel" + std::to_string(sender_meta_.task_id()) + "+" + std::to_string(receiver_meta_.task_id())),
+          input_num(input_num_),
+          send_th(nullptr),
+          send_queue(input_num_*5), /// TODO(fzh)
           log(&Logger::get(tunnel_id))
     {}
 
@@ -66,6 +75,10 @@ struct MPPTunnel
         {
             if (!finished)
                 writeDone();
+            if(nullptr != send_th)
+            {
+                send_th->join();
+            }
         }
         catch (...)
         {
@@ -73,6 +86,23 @@ struct MPPTunnel
         }
     }
 
+    void write( std::shared_ptr<mpp::MPPDataPacket> data, bool close_after_write = false)
+    {
+        if (finished)
+            throw Exception("write to tunnel which is already closed.");
+        send_queue.push(std::move(data));
+        if (close_after_write)
+        {
+            std::unique_lock<std::mutex> lk(mu);
+            if (!finished)
+            {
+                finished = true;
+                send_queue.push(nullptr);
+                cv_for_finished.notify_all();
+                LOG_TRACE(log, "finish write and close the tunnel");
+            }
+        }
+    }
     // write a single packet to the tunnel, it will block if tunnel is not ready.
     // TODO: consider to hold a buffer
     void write(const mpp::MPPDataPacket & data, bool close_after_write = false)
@@ -106,7 +136,7 @@ struct MPPTunnel
             LOG_TRACE(log, "finish write");
     }
 
-    // finish the writing.
+    // finish the writing which should be strictly after all packets are written
     void writeDone()
     {
         std::unique_lock<std::mutex> lk(mu);
@@ -125,12 +155,30 @@ struct MPPTunnel
             cv_for_connected.wait(lk, [&]() { return connected; });
         }
         finished = true;
+        send_queue.push(nullptr);
         cv_for_finished.notify_all();
     }
 
     /// close() finishes the tunnel, if the tunnel is connected already, it will
     /// write the error message to the tunnel, otherwise it just close the tunnel
     void close(const String & reason);
+
+    void send()
+    {
+        while(connected)
+        {
+            auto res = std::shared_ptr<mpp::MPPDataPacket>();
+            send_queue.pop(res);
+            if (nullptr == res)
+            {
+                return;
+            }
+            else
+            {
+                writer->Write(*res.get());
+            }
+        }
+    }
 
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
@@ -140,11 +188,14 @@ struct MPPTunnel
             throw Exception("has connected");
         }
         std::lock_guard<std::mutex> lk(mu);
-        LOG_DEBUG(log, "ready to connect");
-        connected = true;
-        writer = writer_;
+        {
+            LOG_DEBUG(log, "ready to connect");
+            connected = true;
+            writer = writer_;
 
-        cv_for_connected.notify_all();
+            cv_for_connected.notify_all();
+        }
+        send_th = std::make_unique<std::thread>([this]{send();});
     }
 
     // wait until all the data has been transferred.
@@ -152,7 +203,7 @@ struct MPPTunnel
     {
         std::unique_lock<std::mutex> lk(mu);
 
-        cv_for_finished.wait(lk, [&]() { return finished; });
+        cv_for_finished.wait(lk, [&]() { return finished.load(); });
     }
 };
 

@@ -259,7 +259,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::BatchWrite()
     rows_in_blocks = 0;
 }
 
-
 template class StreamingDAGResponseWriter<StreamWriterPtr>;
 template class StreamingDAGResponseWriter<MPPTunnelSetPtr>;
 
