@@ -3787,12 +3787,20 @@
               "refId": "D"
             },
             {
-              "expr": "tiflash_system_current_metric_DT_SnapshotOfMergeDelta{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfDeltaMerge{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
-              "legendFormat": "merge_delta-{{instance}}",
+              "legendFormat": "delta_merge-{{instance}}",
               "refId": "E"
+            },
+            {
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfDeltaCompact{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "delta_compact-{{instance}}",
+              "refId": "J"
             },
             {
               "expr": "tiflash_system_current_metric_DT_SnapshotOfSegmentMerge{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
