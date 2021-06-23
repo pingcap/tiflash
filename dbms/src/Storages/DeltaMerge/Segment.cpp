@@ -57,6 +57,12 @@ namespace CurrentMetrics
 extern const Metric DT_DeltaCompact;
 extern const Metric DT_DeltaFlush;
 extern const Metric DT_PlaceIndexUpdate;
+extern const Metric DT_SnapshotOfRead;
+extern const Metric DT_SnapshotOfReadRaw;
+extern const Metric DT_SnapshotOfSegmentSplit;
+extern const Metric DT_SnapshotOfSegmentMerge;
+extern const Metric DT_SnapshotOfMergeDelta;
+extern const Metric DT_SnapshotOfPlaceIndex;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -321,11 +327,11 @@ bool Segment::ingestPacks(DMContext & dm_context, const RowKeyRange & range, con
     return delta->ingestPacks(dm_context, range, packs, clear_data_in_range);
 }
 
-SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update) const
+SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
 {
     // If the snapshot is created for read, then the snapshot will contain all packs (cached and persisted) for read.
     // If the snapshot is created for update, then the snapshot will only contain the persisted packs.
-    auto delta_snap  = delta->createSnapshot(dm_context, for_update);
+    auto delta_snap  = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
@@ -426,7 +432,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
                                             UInt64                max_version,
                                             size_t                expected_block_size)
 {
-    auto segment_snap = createSnapshot(dm_context);
+    auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
     if (!segment_snap)
         return {};
     return getInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
@@ -524,7 +530,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_con
 
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read)
 {
-    auto segment_snap = createSnapshot(dm_context);
+    auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfReadRaw);
     if (!segment_snap)
         return {};
     return getInputStreamRaw(dm_context, columns_to_read, segment_snap, true);
@@ -533,7 +539,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, con
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
-    auto         segment_snap = createSnapshot(dm_context, true);
+    auto         segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfMergeDelta);
     if (!segment_snap)
         return {};
 
@@ -612,7 +618,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
 SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
-    auto         segment_snap = createSnapshot(dm_context, true);
+    auto         segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
     if (!segment_snap)
         return {};
 
@@ -1055,8 +1061,8 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
-    auto left_snap  = left->createSnapshot(dm_context, true);
-    auto right_snap = right->createSnapshot(dm_context, true);
+    auto left_snap  = left->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+    auto right_snap = right->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
     if (!left_snap || !right_snap)
         return {};
 
@@ -1214,7 +1220,7 @@ bool Segment::compactDelta(DMContext & dm_context)
 void Segment::placeDeltaIndex(DMContext & dm_context)
 {
     // Update delta-index with persisted packs.
-    auto segment_snap = createSnapshot(dm_context, /*for_update=*/true);
+    auto segment_snap = createSnapshot(dm_context, /*for_update=*/true, CurrentMetrics::DT_SnapshotOfPlaceIndex);
     if (!segment_snap)
         return;
     getReadInfo(dm_context,
