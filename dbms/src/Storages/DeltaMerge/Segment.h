@@ -161,8 +161,7 @@ public:
     std::optional<SplitInfo> prepareSplit(DMContext &                dm_context,
                                           const ColumnDefinesPtr &   schema_snap,
                                           const SegmentSnapshotPtr & segment_snap,
-                                          WriteBatches &             wbs,
-                                          bool                       need_rate_limit) const;
+                                          WriteBatches &             wbs) const;
 
     SegmentPair
     applySplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, SplitInfo & split_info) const;
@@ -177,8 +176,7 @@ public:
                                             const SegmentSnapshotPtr & left_snap,
                                             const SegmentPtr &         right,
                                             const SegmentSnapshotPtr & right_snap,
-                                            WriteBatches &             wbs,
-                                            bool                       need_rate_limit);
+                                            WriteBatches &             wbs);
     static SegmentPtr          applyMerge(DMContext &                 dm_context, //
                                           const SegmentPtr &          left,
                                           const SegmentSnapshotPtr &  left_snap,
@@ -191,8 +189,7 @@ public:
     StableValueSpacePtr prepareMergeDelta(DMContext &                dm_context,
                                           const ColumnDefinesPtr &   schema_snap,
                                           const SegmentSnapshotPtr & segment_snap,
-                                          WriteBatches &             wbs,
-                                          bool                       need_rate_limit) const;
+                                          WriteBatches &             wbs) const;
     SegmentPtr          applyMergeDelta(DMContext &                 dm_context,
                                         const SegmentSnapshotPtr &  segment_snap,
                                         WriteBatches &              wbs,
@@ -286,8 +283,7 @@ private:
     std::optional<SplitInfo> prepareSplitPhysical(DMContext &                dm_context,
                                                   const ColumnDefinesPtr &   schema_snap,
                                                   const SegmentSnapshotPtr & segment_snap,
-                                                  WriteBatches &             wbs,
-                                                  bool                       need_rate_limit) const;
+                                                  WriteBatches &             wbs) const;
 
 
     /// Make sure that all delta packs have been placed.
