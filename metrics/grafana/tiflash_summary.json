@@ -52,7 +52,11 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
+<<<<<<< HEAD
   "iteration": 1595916828338,
+=======
+  "iteration": 1624364017760,
+>>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
   "links": [],
   "panels": [
     {
@@ -2384,6 +2388,25 @@
               "intervalFactor": 1,
               "legendFormat": "30min-{{instance}}",
               "refId": "D"
+<<<<<<< HEAD
+=======
+            },
+            {
+              "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]))) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "5min-all-{{instance}}",
+              "refId": "E"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_DMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m])) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "5min-write-{{instance}}",
+              "refId": "F"
+>>>>>>> 8f8b729e5... Add time and thread_id for snapshot to check stale snapshots (#2229)
             }
           ],
           "thresholds": [],
@@ -3680,6 +3703,158 @@
             },
             {
               "format": "none",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "fill": 1,
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 55
+          },
+          "id": 88,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "tiflash_system_current_metric_DT_SegmentReadTasks{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "read_tasks-{{instance}}",
+              "refId": "I"
+            },
+            {
+              "expr": "tiflash_system_current_metric_PSMVCCSnapshotsList{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "snapshot_list-{{instance}}",
+              "refId": "A"
+            },
+            {
+              "expr": "tiflash_system_current_metric_PSMVCCNumSnapshots{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "heatmap",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "num_snapshot-{{instance}}",
+              "refId": "B"
+            },
+            {
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfRead{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "read-{{instance}}",
+              "refId": "C"
+            },
+            {
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfReadRaw{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "read_raw-{{instance}}",
+              "refId": "D"
+            },
+            {
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfMergeDelta{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "merge_delta-{{instance}}",
+              "refId": "E"
+            },
+            {
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfSegmentMerge{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "seg_merge-{{instance}}",
+              "refId": "F"
+            },
+            {
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfSegmentSplit{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "seg_split-{{instance}}",
+              "refId": "G"
+            },
+            {
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfPlaceIndex{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "place_index-{{instance}}",
+              "refId": "H"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "MVCC Snapshots",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
