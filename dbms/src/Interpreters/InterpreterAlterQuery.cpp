@@ -1,5 +1,4 @@
 #include <Interpreters/InterpreterAlterQuery.h>
-#include <Interpreters/DDLWorker.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -45,7 +44,7 @@ BlockIO InterpreterAlterQuery::execute()
     auto & alter = typeid_cast<ASTAlterQuery &>(*query_ptr);
 
     if (!alter.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, context, {alter.table});
+        throw Exception("Shoul not run into `executeDDLQueryOnCluster`");
 
     const String & table_name = alter.table;
     String database_name = alter.database.empty() ? context.getCurrentDatabase() : alter.database;

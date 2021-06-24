@@ -2,7 +2,6 @@
 #include <Databases/DatabaseTiFlash.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/DDLWorker.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Storages/IStorage.h>
@@ -57,14 +56,7 @@ BlockIO InterpreterRenameQuery::execute()
 
     if (!rename.cluster.empty())
     {
-        NameSet databases;
-        for (const auto & elem : rename.elements)
-        {
-            databases.emplace(elem.from.database);
-            databases.emplace(elem.to.database);
-        }
-
-        return executeDDLQueryOnCluster(query_ptr, context, databases);
+        throw Exception("Shoul not run into `executeDDLQueryOnCluster`");
     }
 
     String current_database = context.getCurrentDatabase();
