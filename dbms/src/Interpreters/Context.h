@@ -31,12 +31,6 @@ class IPAddress;
 }
 } // namespace Poco
 
-namespace zkutil
-{
-class ZooKeeper;
-}
-
-
 namespace DB
 {
 
