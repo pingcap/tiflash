@@ -145,7 +145,11 @@ void RateLimiter::refillAndAlloc()
     }
 }
 
+#if __APPLE__ && __clang__
+extern __thread bool is_background_thread;
+#else
 extern thread_local bool is_background_thread;
+#endif
 
 RateLimiterPtr IORateLimiter::getWriteLimiter()
 {
