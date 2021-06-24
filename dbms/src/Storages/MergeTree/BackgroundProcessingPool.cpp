@@ -24,7 +24,11 @@ namespace DB
 constexpr double BackgroundProcessingPool::sleep_seconds;
 constexpr double BackgroundProcessingPool::sleep_seconds_random_part;
 
+#if __APPLE__ && __clang__
+__thread bool is_background_thread = false;
+#else
 thread_local bool is_background_thread = false;
+#endif
 
 void BackgroundProcessingPool::TaskInfo::wake()
 {
