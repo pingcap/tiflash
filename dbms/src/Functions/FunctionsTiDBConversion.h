@@ -1706,7 +1706,7 @@ private:
     template <bool return_nullable>
     WrapperType createWrapper(const DataTypePtr & from_type, const DataTypePtr & to_type) const
     {
-        if (from_type->equals(*to_type) && !from_type->isParametric() && !from_type->isString() && !return_nullable)
+        if (from_type->equals(*to_type) && !from_type->isParametric() && !from_type->isString())
             return createIdentityWrapper(from_type);
         if (const auto from_actual_type = checkAndGetDataType<DataTypeUInt8>(from_type.get()))
             return createWrapper<DataTypeUInt8, return_nullable>(to_type);
@@ -1813,7 +1813,34 @@ private:
         }
         else
         {
-            return wrapper;
+            if (from_inner_type->equals(*to_inner_type) && !from_inner_type->isParametric() && !from_inner_type->isString()
+                && to_type->isNullable())
+            {
+                /// convert not_null type to nullable_type
+                return [wrapper, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_,
+                           const tipb::FieldType & tidb_tp_, const Context & context_) {
+                    auto & res = block.getByPosition(result);
+                    const auto & ret_type = res.type;
+                    const auto & nullable_type = static_cast<const DataTypeNullable &>(*ret_type);
+                    const auto & nested_type = nullable_type.getNestedType();
+
+                    Block tmp_block = block;
+                    size_t tmp_res_index = tmp_block.columns();
+                    tmp_block.insert({nullptr, nested_type, ""});
+
+                    wrapper(tmp_block, arguments, tmp_res_index, in_union_, tidb_tp_, context_);
+                    /// This is a conversion from an ordinary type to a nullable type.
+                    /// So we create a trivial null map.
+                    ColumnPtr null_map = ColumnUInt8::create(block.rows(), 0);
+
+                    const auto & tmp_res = tmp_block.getByPosition(tmp_res_index);
+                    res.column = ColumnNullable::create(tmp_res.column, null_map);
+                };
+            }
+            else
+            {
+                return wrapper;
+            }
         }
     }
 
