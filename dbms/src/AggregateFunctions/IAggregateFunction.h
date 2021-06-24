@@ -101,7 +101,7 @@ public:
     }
 
     /// Inserts results into a column.
-    virtual void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const = 0;
+    virtual void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const = 0;
 
     /** Returns true for aggregate functions of type -State.
       * They are executed as other aggregate functions, but not finalized (return an aggregation state that can be combined with another).

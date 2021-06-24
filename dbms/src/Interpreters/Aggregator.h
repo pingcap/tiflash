@@ -177,7 +177,7 @@ struct AggregationMethodOneNumber
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     // Insert the key from the hash table into columns.
-    static void insertKeyIntoColumns(const Key & key, std::vector<IColumn *> & key_columns, const Sizes & /*key_sizes*/)
+    static void insertKeyIntoColumns(const Key & key, std::vector<IColumn *> & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators &)
     {
         const auto * key_holder = reinterpret_cast<const char *>(&key);
         auto * column = static_cast<ColumnVectorHelper *>(key_columns[0]);
@@ -204,7 +204,7 @@ struct AggregationMethodString
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
-    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &)
+    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
     {
         static_cast<ColumnString *>(key_columns[0])->insertData(key.data, key.size);
     }
@@ -225,11 +225,11 @@ struct AggregationMethodStringNoCache
     template <typename Other>
     AggregationMethodStringNoCache(const Other & other) : data(other.data) {}
 
-    using State = ColumnsHashing::HashMethodStringWithCollator<typename Data::value_type, Mapped>;
+    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, true, false>;
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
-    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &)
+    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
     {
         static_cast<ColumnString *>(key_columns[0])->insertData(key.data, key.size);
     }
@@ -254,7 +254,7 @@ struct AggregationMethodFixedString
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
-    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &)
+    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
     {
         static_cast<ColumnFixedString *>(key_columns[0])->insertData(key.data, key.size);
     }
@@ -279,7 +279,7 @@ struct AggregationMethodFixedStringNoCache
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
-    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &)
+    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
     {
         static_cast<ColumnFixedString *>(key_columns[0])->insertData(key.data, key.size);
     }
@@ -314,7 +314,7 @@ struct AggregationMethodKeysFixed
         return State::shuffleKeyColumns(key_columns, key_sizes);
     }
 
-    static void insertKeyIntoColumns(const Key & key, std::vector<IColumn *> & key_columns, const Sizes & key_sizes)
+    static void insertKeyIntoColumns(const Key & key, std::vector<IColumn *> & key_columns, const Sizes & key_sizes, const TiDB::TiDBCollators &)
     {
         size_t keys_size = key_columns.size();
 
@@ -329,7 +329,7 @@ struct AggregationMethodKeysFixed
 
             bool column_nullable = false;
             if constexpr (has_nullable_keys)
-                column_nullable = isColumnNullable(*key_columns[i]);
+                column_nullable = key_columns[i]->isColumnNullable();
 
             /// If we have a nullable column, get its nested column and its null map.
             if (column_nullable)
@@ -352,7 +352,7 @@ struct AggregationMethodKeysFixed
                 size_t bucket = i / 8;
                 size_t offset = i % 8;
                 UInt8 val = (reinterpret_cast<const UInt8 *>(&key)[bucket] >> offset) & 1;
-                null_map->insertValue(val);
+                null_map->insert(val);
                 is_null = val == 1;
             }
 
@@ -392,18 +392,15 @@ struct AggregationMethodSerialized
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
-    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &)
+    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators & collators)
     {
         const auto * pos = key.data;
         for (size_t i = 0; i < key_columns.size(); ++i)
-            pos = key_columns[i]->deserializeAndInsertFromArena(pos, data.collators.empty() ? nullptr : data.collators[i]);
+            pos = key_columns[i]->deserializeAndInsertFromArena(pos, collators.empty() ? nullptr : collators[i]);
     }
 };
 
 class Aggregator;
-
-using ColumnsHashing::HashMethodContext;
-using ColumnsHashing::HashMethodContextPtr;
 
 struct AggregatedDataVariants : private boost::noncopyable
 {
@@ -678,6 +675,7 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(serialized_two_level)       \
         M(nullable_keys128_two_level) \
         M(nullable_keys256_two_level) \
+
 };
 
 using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;
@@ -821,7 +819,7 @@ public:
     /// Merge partially aggregated blocks separated to buckets into one data structure.
     void mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVariants & result, size_t max_threads);
 
-    bool mergeBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys);
+    bool mergeBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys, const FileProviderPtr & file_provider);
 
     /// Merge several partially aggregated blocks into one.
     /// Precondition: for all blocks block.info.is_overflows flag must be the same.
@@ -1107,8 +1105,7 @@ protected:
         Columns columns,
         AggregateColumns & aggregate_columns,
         Columns & materialized_columns,
-        AggregateFunctionInstructions & instructions,
-        NestedColumnsHolder & nested_columns_holder);
+        AggregateFunctionInstructions & instructions);
 
     void addSingleKeyToAggregateColumns(
         const AggregatedDataVariants & data_variants,

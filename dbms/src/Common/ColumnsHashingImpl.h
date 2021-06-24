@@ -105,21 +105,21 @@ public:
     template <typename Data>
     ALWAYS_INLINE EmplaceResult emplaceKey(Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
     {
-        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, pool, sort_key_containers);
+        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return emplaceImpl(key_holder, data);
     }
 
     template <typename Data>
     ALWAYS_INLINE FindResult findKey(Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
     {
-        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, pool, sort_key_containers);
+        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return findKeyImpl(keyHolderGetKey(key_holder), data);
     }
 
     template <typename Data>
     ALWAYS_INLINE size_t getHash(const Data & data, size_t row, Arena & pool, std::vector<String> & sort_key_containers)
     {
-        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, pool, sort_key_containers);
+        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return data.hash(keyHolderGetKey(key_holder));
     }
 

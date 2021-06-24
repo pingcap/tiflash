@@ -75,7 +75,7 @@ public:
         this->data(place).value.read(buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         ColumnArray & arr_to = static_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
@@ -91,7 +91,7 @@ public:
 
         size_t i = 0;
         for (auto it = set.begin(); it != set.end(); ++it, ++i)
-            data_to[old_size + i] = *it;
+            data_to[old_size + i] = it->getKey();
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
@@ -181,7 +181,7 @@ public:
         else
         {
             if (inserted)
-                it->data = arena->insert(str_serialized.data, str_serialized.size);
+                it->key = arena->insert(str_serialized.data, str_serialized.size);
         }
     }
 
@@ -196,11 +196,11 @@ public:
         {
             cur_set.emplace(rhs_elem, it, inserted);
             if (inserted)
-                it->data = arena->insert(it->data, it->size);
+                it->key = arena->insert(it->data, it->size);
         }
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         ColumnArray & arr_to = static_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();

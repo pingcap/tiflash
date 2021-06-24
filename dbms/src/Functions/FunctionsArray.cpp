@@ -2495,7 +2495,7 @@ void FunctionArrayReduce::executeImpl(Block & block, const ColumnNumbers & argum
         for (size_t i = 0; i < rows; ++i)
         {
             if (!res_col_aggregate_function)
-                agg_func.insertResultInto(places[i], res_col);
+                agg_func.insertResultInto(places[i], res_col, arena.get());
             else
                 res_col_aggregate_function->insertFrom(places[i]);
         }
@@ -2516,7 +2516,7 @@ void FunctionArrayReduce::executeImpl(Block & block, const ColumnNumbers & argum
                     agg_func.add(place, aggregate_arguments, j, arena.get());
 
                 if (!res_col_aggregate_function)
-                    agg_func.insertResultInto(place, res_col);
+                    agg_func.insertResultInto(place, res_col, arena.get());
                 else
                     res_col_aggregate_function->insertFrom(place);
             }
@@ -3334,15 +3334,15 @@ ColumnPtr FunctionArrayIntersect::execute(const UnpackedArrays & arrays, Mutable
 
         for (const auto & pair : map)
         {
-            if (pair.second == args)
+            if (pair.getMapped() == args)
             {
                 ++result_offset;
                 if constexpr (is_numeric_column)
-                    result_data.insert(pair.first);
+                    result_data.insert(pair.getKey());
                 else if constexpr (std::is_same<ColumnType, ColumnString>::value || std::is_same<ColumnType, ColumnFixedString>::value)
-                    result_data.insertData(pair.first.data, pair.first.size);
+                    result_data.insertData(pair.getKey().data, pair.getKey().size);
                 else
-                    result_data.deserializeAndInsertFromArena(pair.first.data);
+                    result_data.deserializeAndInsertFromArena(pair.getKey().data);
 
                 if (all_nullable)
                     null_map.push_back(0);

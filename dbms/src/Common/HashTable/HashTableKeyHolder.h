@@ -84,6 +84,11 @@ inline StringRef & ALWAYS_INLINE keyHolderGetKey(DB::ArenaKeyHolder & holder)
     return holder.key;
 }
 
+inline StringRef & ALWAYS_INLINE keyHolderGetKey(DB::ArenaKeyHolder && holder)
+{
+    return holder.key;
+}
+
 inline void ALWAYS_INLINE keyHolderPersistKey(DB::ArenaKeyHolder & holder)
 {
     // Hash table shouldn't ask us to persist a zero key
@@ -91,7 +96,18 @@ inline void ALWAYS_INLINE keyHolderPersistKey(DB::ArenaKeyHolder & holder)
     holder.key.data = holder.pool.insert(holder.key.data, holder.key.size);
 }
 
+inline void ALWAYS_INLINE keyHolderPersistKey(DB::ArenaKeyHolder && holder)
+{
+    // Hash table shouldn't ask us to persist a zero key
+    assert(holder.key.size > 0);
+    holder.key.data = holder.pool.insert(holder.key.data, holder.key.size);
+}
+
 inline void ALWAYS_INLINE keyHolderDiscardKey(DB::ArenaKeyHolder &)
+{
+}
+
+inline void ALWAYS_INLINE keyHolderDiscardKey(DB::ArenaKeyHolder &&)
 {
 }
 
@@ -115,11 +131,29 @@ inline StringRef & ALWAYS_INLINE keyHolderGetKey(DB::SerializedKeyHolder & holde
     return holder.key;
 }
 
+inline StringRef & ALWAYS_INLINE keyHolderGetKey(DB::SerializedKeyHolder && holder)
+{
+    return holder.key;
+}
+
 inline void ALWAYS_INLINE keyHolderPersistKey(DB::SerializedKeyHolder &)
 {
 }
 
+inline void ALWAYS_INLINE keyHolderPersistKey(DB::SerializedKeyHolder &&)
+{
+}
+
 inline void ALWAYS_INLINE keyHolderDiscardKey(DB::SerializedKeyHolder & holder)
+{
+    //[[maybe_unused]] void * new_head = holder.pool.rollback(holder.key.size);
+    //assert(new_head == holder.key.data);
+    holder.pool.rollback(holder.key.size);
+    holder.key.data = nullptr;
+    holder.key.size = 0;
+}
+
+inline void ALWAYS_INLINE keyHolderDiscardKey(DB::SerializedKeyHolder && holder)
 {
     //[[maybe_unused]] void * new_head = holder.pool.rollback(holder.key.size);
     //assert(new_head == holder.key.data);
