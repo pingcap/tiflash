@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Common/ZooKeeper/ZooKeeper.h>
 #include <Common/Exception.h>
 #include <IO/ReadHelpers.h>
 

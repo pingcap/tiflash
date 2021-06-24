@@ -6,6 +6,3 @@ add_library(clickhouse_common_zookeeper ${SPLIT_SHARED} ${clickhouse_common_zook
 
 target_link_libraries (clickhouse_common_zookeeper clickhouse_common_io)
 
-if (ENABLE_TESTS)
-    add_subdirectory (tests EXCLUDE_FROM_ALL)
-endif ()
