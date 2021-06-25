@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/Delta/DeltaPack.h>
+#include <Storages/DeltaMerge/DurationStat.h>
 
 namespace DB
 {
@@ -93,7 +94,7 @@ public:
     PageId getDataPageId() const { return data_page_id; }
     void   setDataPageId(PageId page_id) { data_page_id = page_id; }
 
-    void appendToCache(const Block data, size_t offset, size_t limit, size_t data_bytes);
+    void appendToCache(const Block data, size_t offset, size_t limit, size_t data_bytes, DurationStat * stat = nullptr);
 
     void disableAppend() { disable_append = true; }
     bool isAppendable() { return data_page_id == 0 && cache && !disable_append; }

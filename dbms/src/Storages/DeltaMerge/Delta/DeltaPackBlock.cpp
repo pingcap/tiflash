@@ -37,9 +37,9 @@ DeltaPackPtr DeltaPackBlock::createCachePack(const BlockPtr & schema)
     return DeltaPackPtr(p);
 }
 
-void DeltaPackBlock::appendToCache(const Block data, size_t offset, size_t limit, size_t data_bytes)
+void DeltaPackBlock::appendToCache(const Block data, size_t offset, size_t limit, size_t data_bytes, DurationStat * stat)
 {
-    std::scoped_lock cache_lock(cache->mutex);
+    LOCK_AND_ADD_DURATION(cache->mutex, stat);
 
     for (size_t i = 0; i < cache->block.columns(); ++i)
     {

@@ -259,7 +259,7 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         /// Update delta tree
         if (new_delta_index)
-            delta_index = new_delta_index;
+            deltaIndex()->swap(*new_delta_index);
 
         for (auto & pack : packs)
         {

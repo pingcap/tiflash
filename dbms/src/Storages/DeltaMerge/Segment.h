@@ -114,8 +114,8 @@ public:
 
     void serialize(WriteBatch & wb);
 
-    bool writeToDisk(DMContext & dm_context, const DeltaPackPtr & pack);
-    bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
+    bool writeToDisk(DMContext & dm_context, const DeltaPackPtr & pack, DurationStat * stat = nullptr);
+    bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit, DurationStat * stat = nullptr);
     bool write(DMContext & dm_context, const Block & block); // For test only
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
     bool writeRegionSnapshot(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);

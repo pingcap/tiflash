@@ -184,6 +184,8 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             }
         }
 
+        Stopwatch total_wait_index_watch;
+
         for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < region_end_idx; ++region_idx, ++read_index_res_idx)
         {
             RegionQueryInfo & region_to_query = regions_info[region_idx];
@@ -195,16 +197,18 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             auto & region = regions_snapshot.find(region_to_query.region_id)->second;
 
             {
-                Stopwatch wait_index_watch;
+                Stopwatch watch;
                 if (region->waitIndex(batch_read_index_result->at(read_index_res_idx).first.read_index(), tmt.getTerminated()))
                 {
                     unavailable_regions.add(region_to_query.region_id, RegionException::RegionReadStatus::NOT_FOUND);
                     continue;
                 }
-                GET_METRIC(metrics, tiflash_raft_wait_index_duration_seconds).Observe(wait_index_watch.elapsedSeconds());
+                GET_METRIC(metrics, tiflash_raft_wait_index_duration_seconds, type_raft_wait_index_duration).Observe(watch.elapsedSeconds());
             }
             if (resolve_locks)
             {
+                Stopwatch watch;
+
                 auto res = RegionTable::resolveLocksAndWriteRegion( //
                     tmt,                                            //
                     table_id,                                       //
@@ -214,6 +218,8 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
                     region_to_query.version,                        //
                     region_to_query.conf_version,                   //
                     region_to_query.range_in_table, log);
+
+                GET_METRIC(metrics, tiflash_raft_wait_index_duration_seconds, type_raft_resolve_lock_and_flush_duration).Observe(watch.elapsedSeconds());
 
                 std::visit(variant_op::overloaded{
                                [&](LockInfoPtr & lock) { unavailable_regions.setRegionLock(region->id(), std::move(lock)); },
@@ -232,6 +238,9 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
                     res);
             }
         }
+
+        GET_METRIC(metrics, tiflash_raft_wait_index_duration_seconds, type_raft_total_wait_index_duration).Observe(total_wait_index_watch.elapsedSeconds());
+
         LOG_DEBUG(log,
             "Finish wait index | resolve locks | check memory cache for " << batch_read_index_req.size() << " regions, cost "
                                                                           << batch_wait_index_watch.elapsedMilliseconds() << "ms");

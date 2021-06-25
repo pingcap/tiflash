@@ -259,9 +259,10 @@ void DeltaValueSpace::appendPackInner(const DeltaPackPtr & pack)
     unsaved_deletes += pack->getDeletes();
 }
 
-bool DeltaValueSpace::appendPack(DMContext & /*context*/, const DeltaPackPtr & pack)
+bool DeltaValueSpace::appendPack(DMContext & /*context*/, const DeltaPackPtr & pack, DurationStat * stat)
 {
-    std::scoped_lock lock(mutex);
+    LOCK_AND_ADD_DURATION(mutex, stat)
+
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 
@@ -270,9 +271,10 @@ bool DeltaValueSpace::appendPack(DMContext & /*context*/, const DeltaPackPtr & p
     return true;
 }
 
-bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit)
+bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit, DurationStat * stat)
 {
-    std::scoped_lock lock(mutex);
+    LOCK_AND_ADD_DURATION(mutex, stat)
+
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 
@@ -330,9 +332,10 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     return true;
 }
 
-bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const RowKeyRange & delete_range)
+bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const RowKeyRange & delete_range, DurationStat * stat)
 {
-    std::scoped_lock lock(mutex);
+    LOCK_AND_ADD_DURATION(mutex, stat)
+
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 
@@ -342,12 +345,11 @@ bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const RowKeyRan
     return true;
 }
 
-bool DeltaValueSpace::appendRegionSnapshot(DMContext & /*context*/,
-                                           const RowKeyRange & range,
-                                           const DeltaPacks &  packs,
-                                           bool                clear_data_in_range)
+bool DeltaValueSpace::appendRegionSnapshot(
+    DMContext & /*context*/, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range, DurationStat * stat)
 {
-    std::scoped_lock lock(mutex);
+    LOCK_AND_ADD_DURATION(mutex, stat)
+
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 

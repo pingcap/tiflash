@@ -11,6 +11,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/DurationStat.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
@@ -96,7 +97,7 @@ private:
     std::atomic<size_t> last_try_split_bytes            = 0;
     std::atomic<size_t> last_try_place_delta_index_rows = 0;
 
-    DeltaIndexPtr delta_index;
+    DeltaIndexPtr _delta_index;
 
     // Protects the operations in this instance.
     mutable std::mutex mutex;
@@ -109,6 +110,9 @@ private:
     void checkPacks(const DeltaPacks & new_packs);
 
     void appendPackInner(const DeltaPackPtr & pack);
+
+    auto & deltaIndex() { return _delta_index; }
+    void   setDeltaIndex(const DeltaIndexPtr & new_delta_index) { _delta_index = new_delta_index; }
 
 public:
     DeltaValueSpace(PageId id_, const DeltaPacks & packs_ = {});
@@ -231,13 +235,14 @@ public:
     /// some updates on this instance. E.g. this instance have been abandoned.
     /// Caller should try again from the beginning.
 
-    bool appendPack(DMContext & context, const DeltaPackPtr & pack);
+    bool appendPack(DMContext & context, const DeltaPackPtr & pack, DurationStat * stat = nullptr);
 
-    bool appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit);
+    bool appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit, DurationStat * stat = nullptr);
 
-    bool appendDeleteRange(DMContext & context, const RowKeyRange & delete_range);
+    bool appendDeleteRange(DMContext & context, const RowKeyRange & delete_range, DurationStat * stat = nullptr);
 
-    bool appendRegionSnapshot(DMContext & context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
+    bool appendRegionSnapshot(
+        DMContext & context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range, DurationStat * stat = nullptr);
 
     /// Flush the data of packs which haven't write to disk yet, and also save the metadata of packs.
     bool flush(DMContext & context);

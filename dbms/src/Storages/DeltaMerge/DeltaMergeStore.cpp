@@ -434,7 +434,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     Block block      = to_write;
     block            = addExtraColumnIfNeed(db_context, std::move(block));
 
-    const auto bytes = block.bytes();
+    const auto write_bytes = block.bytes();
 
     {
         // Sort by handle & version in ascending order.
@@ -453,6 +453,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     const auto handle_column = block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
     auto       rowkey_column = RowKeyColumnContainer(handle_column, is_common_handle);
 
+    DurationStat stat;
+
     while (offset != rows)
     {
         RowKeyValueRef start_key = rowkey_column.getRowKeyValue(offset);
@@ -465,7 +467,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         {
             SegmentPtr segment;
             {
-                std::shared_lock lock(read_write_mutex);
+                LOCK_AND_ADD_DURATION(read_write_mutex, &stat)
 
                 auto segment_it = segments.upper_bound(start_key);
                 if (segment_it == segments.end())
@@ -495,7 +497,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             // While large packs are directly written to PageStorage.
             if (small_pack)
             {
-                if (segment->writeToCache(*dm_context, block, offset, limit))
+                if (segment->writeToCache(*dm_context, block, offset, limit, &stat))
                 {
                     updated_segments.push_back(segment);
                     break;
@@ -516,7 +518,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                 }
 
                 // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
-                if (segment->writeToDisk(*dm_context, write_pack))
+                if (segment->writeToDisk(*dm_context, write_pack, &stat))
                 {
                     updated_segments.push_back(segment);
                     break;
@@ -527,7 +529,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         offset += limit;
     }
 
-    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_bytes, type_write).Increment(bytes);
+    GET_METRIC(dm_context->metrics, tiflash_dt_write_path_seconds, type_storage_lock).Observe(stat.getLockSeconds());
+    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_bytes, type_write).Increment(write_bytes);
     GET_METRIC(dm_context->metrics, tiflash_storage_throughput_rows, type_write).Increment(rows);
 
     if (db_settings.dt_flush_after_write)
@@ -538,8 +541,12 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         flushCache(dm_context, merge_range);
     }
 
+    Stopwatch check_update_watch;
+
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+
+    GET_METRIC(dm_context->metrics, tiflash_dt_write_path_seconds, type_check_update).Observe(check_update_watch.elapsedSeconds);
 }
 
 void DeltaMergeStore::writeRegionSnapshot(const DMContextPtr & dm_context,

@@ -209,16 +209,14 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 
     switch (version)
     {
-    case SegmentFormat::V1:
-    {
+    case SegmentFormat::V1: {
         HandleRange range;
         readIntBinary(range.start, buf);
         readIntBinary(range.end, buf);
         rowkey_range = RowKeyRange::fromHandleRange(range);
         break;
     }
-    case SegmentFormat::V2:
-    {
+    case SegmentFormat::V2: {
         rowkey_range = RowKeyRange::deserialize(buf);
         break;
     }
@@ -251,18 +249,18 @@ void Segment::serialize(WriteBatch & wb)
     wb.putPage(segment_id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-bool Segment::writeToDisk(DMContext & dm_context, const DeltaPackPtr & pack)
+bool Segment::writeToDisk(DMContext & dm_context, const DeltaPackPtr & pack, DurationStat * stat)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] write to disk rows: " << pack->getRows() << ", isFile" << pack->isFile());
-    return delta->appendPack(dm_context, pack);
+    return delta->appendPack(dm_context, pack, stat);
 }
 
-bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit)
+bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit, DurationStat * stat)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] write to cache rows: " << limit);
     if (unlikely(limit == 0))
         return true;
-    return delta->appendToCache(dm_context, block, offset, limit);
+    return delta->appendToCache(dm_context, block, offset, limit, stat);
 }
 
 bool Segment::write(DMContext & dm_context, const Block & block)
