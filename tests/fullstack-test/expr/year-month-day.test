@@ -1,0 +1,85 @@
+mysql> drop table if exists test.t
+mysql> create table test.t(a datetime, b date, c timestamp);
+mysql> alter table test.t set tiflash replica 1;
+mysql> insert into test.t values('2020-01-01 00:00:01', '2020-01-01 00:00:01', '2020-01-01 00:00:01');
+mysql> insert into test.t values('2021-12-31 23:59:59', '2021-12-31 23:59:59', '2021-12-31 23:59:59');
+mysql> insert into test.t values(null, null, null);
+func> wait_table test t
+
+mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tikv"; select count(*), year(a), month(a), day(a), year(b), month(b), day(b), year(c), month(c), day(c) from test.t group by year(a), month(a), day(a), year(b), month(b), day(b), year(c), month(c), day(c);
++----------+---------+----------+--------+---------+----------+--------+---------+----------+--------+
+| count(*) | year(a) | month(a) | day(a) | year(b) | month(b) | day(b) | year(c) | month(c) | day(c) |
++----------+---------+----------+--------+---------+----------+--------+---------+----------+--------+
+|        1 |    2020 |        1 |      1 |    2020 |        1 |      1 |    2020 |        1 |      1 |
+|        1 |    2021 |       12 |     31 |    2021 |       12 |     31 |    2022 |        1 |      1 |
+|        1 |    NULL |     NULL |   NULL |    NULL |     NULL |   NULL |    NULL |     NULL |   NULL |
++----------+---------+----------+--------+---------+----------+--------+---------+----------+--------+
+mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tiflash"; select count(*), year(a), month(a), day(a), year(b), month(b), day(b), year(c), month(c), day(c) from test.t group by year(a), month(a), day(a), year(b), month(b), day(b), year(c), month(c), day(c);
++----------+---------+----------+--------+---------+----------+--------+---------+----------+--------+
+| count(*) | year(a) | month(a) | day(a) | year(b) | month(b) | day(b) | year(c) | month(c) | day(c) |
++----------+---------+----------+--------+---------+----------+--------+---------+----------+--------+
+|        1 |    2020 |        1 |      1 |    2020 |        1 |      1 |    2020 |        1 |      1 |
+|        1 |    2021 |       12 |     31 |    2021 |       12 |     31 |    2022 |        1 |      1 |
+|        1 |    NULL |     NULL |   NULL |    NULL |     NULL |   NULL |    NULL |     NULL |   NULL |
++----------+---------+----------+--------+---------+----------+--------+---------+----------+--------+
+mysql> set time_zone = '-1:00'; set @@session.tidb_isolation_read_engines = "tikv"; select count(*), year(a), month(a), day(a), year(b), month(b), day(b), year(c), month(c), day(c) from test.t group by year(a), month(a), day(a), year(b), month(b), day(b), year(c), month(c), day(c);
++----------+---------+----------+--------+---------+----------+--------+---------+----------+--------+
+| count(*) | year(a) | month(a) | day(a) | year(b) | month(b) | day(b) | year(c) | month(c) | day(c) |
++----------+---------+----------+--------+---------+----------+--------+---------+----------+--------+
+|        1 |    2020 |        1 |      1 |    2020 |        1 |      1 |    2019 |       12 |     31 |
+|        1 |    NULL |     NULL |   NULL |    NULL |     NULL |   NULL |    NULL |     NULL |   NULL |
+|        1 |    2021 |       12 |     31 |    2021 |       12 |     31 |    2021 |       12 |     31 |
++----------+---------+----------+--------+---------+----------+--------+---------+----------+--------+
+mysql> set time_zone = '-1:00'; set @@session.tidb_isolation_read_engines = "tiflash"; select count(*), year(a), month(a), day(a), year(b), month(b), day(b), year(c), month(c), day(c) from test.t group by year(a), month(a), day(a), year(b), month(b), day(b), year(c), month(c), day(c);
++----------+---------+----------+--------+---------+----------+--------+---------+----------+--------+
+| count(*) | year(a) | month(a) | day(a) | year(b) | month(b) | day(b) | year(c) | month(c) | day(c) |
++----------+---------+----------+--------+---------+----------+--------+---------+----------+--------+
+|        1 |    2020 |        1 |      1 |    2020 |        1 |      1 |    2019 |       12 |     31 |
+|        1 |    NULL |     NULL |   NULL |    NULL |     NULL |   NULL |    NULL |     NULL |   NULL |
+|        1 |    2021 |       12 |     31 |    2021 |       12 |     31 |    2021 |       12 |     31 |
++----------+---------+----------+--------+---------+----------+--------+---------+----------+--------+
+
+mysql> set time_zone = '-1:00'; select year(c) from test.t where year(c)=2019;
++---------+
+| year(c) |
++---------+
+|    2019 |
++---------+
+
+mysql> set time_zone = '+1:00'; select year(c) from test.t where year(c)=2022;
++---------+
+| year(c) |
++---------+
+|    2022 |
++---------+
+
+mysql> set time_zone = '-1:00'; select month(c) from test.t where month(c)=12;
++---------+
+| month(c) |
++---------+
+|    12 |
+|    12 |
++---------+
+
+mysql> set time_zone = '+1:00'; select month(c) from test.t where month(c) is null;
++---------+
+| month(c) |
++---------+
+|    NULL |
++---------+
+
+mysql> set time_zone = '-1:00'; select day(c) from test.t where day(c)=31;
++---------+
+| day(c) |
++---------+
+|    31 |
+|    31 |
++---------+
+
+mysql> set time_zone = '+1:00'; select day(c) from test.t where day(c)=1;
++---------+
+| day(c) |
++---------+
+|    1 |
+|    1 |
++---------+

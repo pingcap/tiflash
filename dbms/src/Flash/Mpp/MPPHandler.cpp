@@ -74,7 +74,7 @@ void MPPTask::unregisterTask()
     }
 }
 
-void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
+std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     auto start_time = Clock::now();
     dag_req = std::make_unique<tipb::DAGRequest>();
@@ -198,6 +198,8 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context->compile_time_ns = compile_time_ns;
+
+    return dag_context->retry_regions;
 }
 
 String taskStatusToString(TaskStatus ts)
@@ -359,7 +361,15 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
     {
         Stopwatch stopwatch;
         task = std::make_shared<MPPTask>(task_request.meta(), context);
-        task->prepare(task_request);
+
+        auto retry_regions = task->prepare(task_request);
+        for (auto region : retry_regions)
+        {
+            auto * retry_region = response->add_retry_regions();
+            retry_region->set_id(region.region_id);
+            retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
+            retry_region->mutable_region_epoch()->set_version(region.region_version);
+        }
         if (task->dag_context->isRootMPPTask())
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_root_task_run);

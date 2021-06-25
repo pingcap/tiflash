@@ -1097,7 +1097,14 @@ struct AbsImpl
     static inline ResultType apply(A a)
     {
         if constexpr (std::is_integral_v<A> && std::is_signed_v<A>)
+        {
+            // keep the same behavior as mysql and tidb, even though error no is not the same.
+            if unlikely(a == INT64_MIN)
+            {
+                throw Exception("BIGINT value is out of range in 'abs(-9223372036854775808)'");
+            }
             return a < 0 ? static_cast<ResultType>(~a) + 1 : a;
+        }
         else if constexpr (std::is_integral_v<A> && std::is_unsigned_v<A>)
             return static_cast<ResultType>(a);
         else if constexpr (std::is_floating_point_v<A>)

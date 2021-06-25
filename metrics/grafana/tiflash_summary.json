@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1595916828338,
+  "iteration": 1624440142159,
   "links": [],
   "panels": [
     {
@@ -2251,13 +2251,18 @@
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "/delete_range|ingest/",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_command_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(increase(tiflash_storage_command_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{type}}",
@@ -2300,11 +2305,11 @@
               "show": true
             },
             {
-              "format": "none",
+              "format": "opm",
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             }
           ],
@@ -2348,7 +2353,16 @@
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "/5min-write/",
+              "yaxis": 2
+            },
+            {
+              "alias": "/5min-all/",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
@@ -2384,6 +2398,22 @@
               "intervalFactor": 1,
               "legendFormat": "30min-{{instance}}",
               "refId": "D"
+            },
+            {
+              "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]))) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "5min-all-{{instance}}",
+              "refId": "E"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_DMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m])) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "5min-write-{{instance}}",
+              "refId": "F"
             }
           ],
           "thresholds": [],
@@ -2415,7 +2445,7 @@
               "show": true
             },
             {
-              "format": "none",
+              "format": "Bps",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -2689,17 +2719,31 @@
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "/(delta_merge)|(seg_)/",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"delta_merge|delta_merge_fg|delta_merge_bg_gc|seg_merge|seg_split\"}[1m])) by (type)",
               "format": "time_series",
+              "hide": false,
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
               "refId": "A"
+            },
+            {
+              "expr": "sum(increase(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"delta_merge|delta_merge_fg|delta_merge_bg_gc|seg_merge|seg_split\"}[1m])) by (type)",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "{{type}}",
+              "refId": "B"
             }
           ],
           "thresholds": [],
@@ -2731,11 +2775,11 @@
               "show": true
             },
             {
-              "format": "none",
+              "format": "opm",
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             }
           ],
@@ -2763,10 +2807,12 @@
             "alignAsTable": true,
             "avg": false,
             "current": true,
-            "max": false,
+            "max": true,
             "min": false,
             "rightSide": true,
             "show": true,
+            "sort": null,
+            "sortDesc": null,
             "total": false,
             "values": true
           },
@@ -2780,7 +2826,7 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "alias": "99-delta_merge",
+              "alias": "/^.*-delta_merge/",
               "yaxis": 2
             }
           ],
@@ -2789,17 +2835,17 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le,type))",
+              "expr": "histogram_quantile(1, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le,type))",
               "format": "time_series",
-              "hide": true,
+              "hide": false,
               "intervalFactor": 1,
-              "legendFormat": "999-{{type}}",
+              "legendFormat": "max-{{type}}",
               "refId": "A"
             },
             {
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le,type))",
               "format": "time_series",
-              "hide": false,
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "99-{{type}}",
               "refId": "B"
@@ -2961,6 +3007,7 @@
             "colorScale": "sqrt",
             "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
+            "min": 0,
             "mode": "spectrum"
           },
           "dataFormat": "tsbuckets",
@@ -3489,7 +3536,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The request size and allocated bytes of Rate Limiter",
+          "description": "",
           "fill": 1,
           "gridPos": {
             "h": 8,
@@ -3497,7 +3544,7 @@
             "x": 0,
             "y": 47
           },
-          "id": 84,
+          "id": 88,
           "legend": {
             "alignAsTable": true,
             "avg": false,
@@ -3512,7 +3559,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "null as zero",
+          "nullPointMode": "null",
           "percentage": false,
           "pointradius": 2,
           "points": false,
@@ -3523,32 +3570,90 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(tiflash_storage_rate_limiter_total_request_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30s])",
+              "expr": "tiflash_system_current_metric_DT_SegmentReadTasks{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "request_bytes-{{instance}}",
+              "legendFormat": "read_tasks-{{instance}}",
+              "refId": "I"
+            },
+            {
+              "expr": "tiflash_system_current_metric_PSMVCCSnapshotsList{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "snapshot_list-{{instance}}",
               "refId": "A"
             },
             {
-              "expr": "rate(tiflash_storage_rate_limiter_total_alloc_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30s])",
-              "format": "time_series",
+              "expr": "tiflash_system_current_metric_PSMVCCNumSnapshots{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "heatmap",
+              "hide": true,
               "intervalFactor": 1,
-              "legendFormat": "alloc_bytes-{{instance}}",
+              "legendFormat": "num_snapshot-{{instance}}",
               "refId": "B"
             },
             {
-              "expr": "tiflash_storage_rate_limiter_total_request_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"} - tiflash_storage_rate_limiter_total_alloc_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfRead{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
-              "legendFormat": "pending_bytes-{{instance}}",
+              "legendFormat": "read-{{instance}}",
               "refId": "C"
+            },
+            {
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfReadRaw{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "read_raw-{{instance}}",
+              "refId": "D"
+            },
+            {
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfDeltaMerge{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "delta_merge-{{instance}}",
+              "refId": "E"
+            },
+            {
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfDeltaCompact{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "delta_compact-{{instance}}",
+              "refId": "J"
+            },
+            {
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfSegmentMerge{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "seg_merge-{{instance}}",
+              "refId": "F"
+            },
+            {
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfSegmentSplit{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "seg_split-{{instance}}",
+              "refId": "G"
+            },
+            {
+              "expr": "tiflash_system_current_metric_DT_SnapshotOfPlaceIndex{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "place_index-{{instance}}",
+              "refId": "H"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Rate Limiter",
+          "title": "MVCC Snapshots",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -3564,8 +3669,7 @@
           },
           "yaxes": [
             {
-              "decimals": 0,
-              "format": "decbytes",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -3691,110 +3795,73 @@
             "align": false,
             "alignLevel": null
           }
-        }
-      ],
-      "repeat": null,
-      "title": "Storage",
-      "type": "row"
-    },
-    {
-      "collapsed": true,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 4
-      },
-      "id": 64,
-      "panels": [
+        },
         {
           "aliasColors": {},
           "bars": false,
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "decimals": 1,
-          "description": "The throughput of write and  delta's background management",
+          "description": "The request size and allocated bytes of Rate Limiter",
           "fill": 1,
           "gridPos": {
-            "h": 9,
-            "w": 24,
+            "h": 8,
+            "w": 12,
             "x": 0,
-            "y": 5
+            "y": 55
           },
-          "height": "",
-          "id": 70,
+          "id": 84,
           "legend": {
             "alignAsTable": true,
             "avg": false,
             "current": true,
-            "hideEmpty": false,
-            "hideZero": false,
             "max": true,
             "min": false,
             "rightSide": true,
             "show": true,
-            "sideWidth": null,
-            "sort": "current",
-            "sortDesc": true,
             "total": false,
             "values": true
           },
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "null",
+          "nullPointMode": "null as zero",
           "percentage": false,
-          "pointradius": 5,
+          "pointradius": 2,
           "points": false,
           "renderer": "flot",
-          "repeatedByRow": true,
-          "seriesOverrides": [
-            {
-              "alias": "/total/",
-              "yaxis": 2
-            }
-          ],
+          "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_throughput_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"write\"}[1m]))",
+              "expr": "rate(tiflash_storage_rate_limiter_total_request_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30s])",
               "format": "time_series",
-              "hide": false,
               "intervalFactor": 1,
-              "legendFormat": "throughput_write",
-              "refId": "A",
-              "step": 10
+              "legendFormat": "request_bytes-{{instance}}",
+              "refId": "A"
             },
             {
-              "expr": "sum(rate(tiflash_storage_throughput_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!=\"write\"}[1m]))",
+              "expr": "rate(tiflash_storage_rate_limiter_total_alloc_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30s])",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "throughput_delta-management",
+              "legendFormat": "alloc_bytes-{{instance}}",
               "refId": "B"
             },
             {
-              "expr": "sum(tiflash_storage_throughput_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"write\"})",
+              "expr": "tiflash_storage_rate_limiter_total_request_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"} - tiflash_storage_rate_limiter_total_alloc_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "total_write",
+              "legendFormat": "pending_bytes-{{instance}}",
               "refId": "C"
-            },
-            {
-              "expr": "sum(tiflash_storage_throughput_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!=\"write\"})",
-              "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "total_delta-management",
-              "refId": "D"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Write & Delta Management Throughput",
+          "title": "Rate Limiter",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -3810,7 +3877,8 @@
           },
           "yaxes": [
             {
-              "format": "Bps",
+              "decimals": 0,
+              "format": "decbytes",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -3818,7 +3886,7 @@
               "show": true
             },
             {
-              "format": "bytes",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -3837,107 +3905,13 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The stall duration of write and delete range",
-          "fill": 1,
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 0,
-            "y": 14
-          },
-          "id": 62,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "max": false,
-            "min": false,
-            "rightSide": false,
-            "show": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null as zero",
-          "percentage": false,
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [
-            {
-              "alias": "99-delta_merge",
-              "yaxis": 2
-            }
-          ],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_write_stall_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type, instance))",
-              "format": "time_series",
-              "hide": false,
-              "intervalFactor": 1,
-              "legendFormat": "99-{{type}}-{{instance}}",
-              "refId": "B"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Write Stall Duration",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "s",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "s",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
           "description": "The background task num that is currently being rate limited",
           "fill": 1,
           "gridPos": {
-            "h": 7,
+            "h": 8,
             "w": 12,
             "x": 12,
-            "y": 14
+            "y": 55
           },
           "id": 86,
           "legend": {
@@ -4014,6 +3988,246 @@
           }
         }
       ],
+      "repeat": null,
+      "title": "Storage",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "id": 64,
+      "panels": [
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
+          "description": "The throughput of write and  delta's background management",
+          "fill": 1,
+          "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 5
+          },
+          "height": "",
+          "id": 70,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "hideEmpty": false,
+            "hideZero": false,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": null,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "repeatedByRow": true,
+          "seriesOverrides": [
+            {
+              "alias": "/total/",
+              "yaxis": 2
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "sum(rate(tiflash_storage_throughput_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"write|ingest\"}[1m]))",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "throughput_write",
+              "refId": "A",
+              "step": 10
+            },
+            {
+              "expr": "sum(rate(tiflash_storage_throughput_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"write|ingest\"}[1m]))",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "throughput_delta-management",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(tiflash_storage_throughput_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"write|ingest\"})",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "total_write",
+              "refId": "C"
+            },
+            {
+              "expr": "sum(tiflash_storage_throughput_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"write|ingest\"})",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "total_delta-management",
+              "refId": "D"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Write & Delta Management Throughput",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "Bps",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "bytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The stall duration of write and delete range",
+          "fill": 1,
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 14
+          },
+          "id": 62,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [
+            {
+              "alias": "99-delta_merge",
+              "yaxis": 2
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_write_stall_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type, instance))",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "99-{{type}}-{{instance}}",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(1, sum(rate(tiflash_storage_write_stall_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type, instance))",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "max-{{type}}-{{instance}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Write Stall Duration",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        }
+      ],
       "title": "Storage Write Stall",
       "type": "row"
     },
@@ -4077,7 +4291,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Read Index OPS",
+          "title": "Raft Read Index OPS",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -4154,10 +4368,10 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "999",
+              "legendFormat": "max",
               "refId": "A"
             },
             {
@@ -4186,7 +4400,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Read Index Duration",
+          "title": "Raft Batch Read Index Duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -4262,10 +4476,10 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "999",
+              "legendFormat": "max",
               "refId": "A"
             },
             {
@@ -4294,7 +4508,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Wait Index Duration",
+          "title": "Raft Wait Index Duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -4544,6 +4758,7 @@
             "colorScale": "sqrt",
             "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
+            "min": 0,
             "mode": "spectrum"
           },
           "dataFormat": "tsbuckets",
@@ -4609,6 +4824,7 @@
             "colorScale": "sqrt",
             "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
+            "min": 0,
             "mode": "spectrum"
           },
           "dataFormat": "tsbuckets",
@@ -4674,6 +4890,7 @@
             "colorScale": "sqrt",
             "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
+            "min": 0,
             "mode": "spectrum"
           },
           "dataFormat": "tsbuckets",
@@ -4902,6 +5119,7 @@
             "colorScale": "sqrt",
             "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
+            "min": 0,
             "mode": "spectrum"
           },
           "dataFormat": "tsbuckets",
@@ -4967,6 +5185,7 @@
             "colorScale": "sqrt",
             "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
+            "min": 0,
             "mode": "spectrum"
           },
           "dataFormat": "tsbuckets",
@@ -5048,6 +5267,7 @@
         "query": "label_values(tiflash_system_profile_event_Query, tidb_cluster)",
         "refresh": 2,
         "regex": "",
+        "skipUrlSync": false,
         "sort": 1,
         "tagValuesQuery": "",
         "tags": [],

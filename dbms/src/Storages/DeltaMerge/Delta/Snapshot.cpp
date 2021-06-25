@@ -60,7 +60,7 @@ std::pair<size_t, size_t> findPack(const DeltaPacks & packs, size_t rows_offset,
 // DeltaValueSpace
 // ================================================
 
-DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update)
+DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type)
 {
     if (for_update && !tryLockUpdating())
         return {};
@@ -69,7 +69,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     if (abandoned.load(std::memory_order_relaxed))
         return {};
 
-    auto snap          = std::make_shared<DeltaValueSnapshot>();
+    auto snap          = std::make_shared<DeltaValueSnapshot>(type);
     snap->is_update    = for_update;
     snap->_delta       = this->shared_from_this();
     snap->storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, true);

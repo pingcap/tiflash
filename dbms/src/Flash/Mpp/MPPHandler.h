@@ -341,7 +341,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         }
     }
 
-    void prepare(const mpp::DispatchTaskRequest & task_request);
+    std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
 
     void updateProgress(const Progress &) { task_progress.current_progress++; }
 
