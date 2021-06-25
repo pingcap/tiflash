@@ -529,6 +529,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         offset += limit;
     }
 
+    GET_METRIC(dm_context->metrics, tiflash_dt_write_rows_count, type_store).Observe(rows);
     GET_METRIC(dm_context->metrics, tiflash_dt_write_path_seconds, type_storage_lock).Observe(stat.getLockSeconds());
     GET_METRIC(dm_context->metrics, tiflash_storage_throughput_bytes, type_write).Increment(write_bytes);
     GET_METRIC(dm_context->metrics, tiflash_storage_throughput_rows, type_write).Increment(rows);

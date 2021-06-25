@@ -86,6 +86,10 @@ namespace DB
     M(tiflash_dt_write_path_seconds, "Bucketed histogram of write path in DT engine", Histogram,                                          \
         F(type_storage_lock, {{"type", "storage_lock"}}, ExpBuckets{0.0005, 2, 20}),                                                      \
         F(type_check_update, {{"type", "check_update"}}, ExpBuckets{0.0005, 2, 20}))                                                      \
+    M(tiflash_dt_write_rows_count, "Bucketed histogram of rows being written into Storage", Histogram,                                    \
+        F(type_cache, {{"type", "cache"}}, ExpBuckets{1, 2, 20}), /**/                                                                    \
+        F(type_disk, {{"type", "disk"}}, ExpBuckets{1, 2, 20}),   /**/                                                                    \
+        F(type_store, {{"type", "store"}}, ExpBuckets{1, 2, 20}))                                                                         \
     M(tiflash_storage_write_amplification, "The data write amplification in storage engine", Gauge)                                       \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                             \
     M(tiflash_storage_command_count, "Total number of storage's command, such as delete range / shutdown /startup", Counter,              \
@@ -132,8 +136,6 @@ namespace DB
         F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))                                                                    \
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
-    M(tiflash_raft_dt_lock_seconds, "FFFF", Histogram, F(type_segment_map, {{"type", "segment_map"}}, ExpBuckets{0.0005, 2, 20}),         \
-        F(type_, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))                                                                         \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
         F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))
 
