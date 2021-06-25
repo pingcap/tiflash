@@ -56,6 +56,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     void addRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index, size_t concurrency, bool is_streaming_call)
     {
+        if (resp.execution_summaries_size() == 0)
+            return;
         if (!execution_summaries_inited.load())
         {
             initRemoteExecutionSummaries(resp, concurrency);

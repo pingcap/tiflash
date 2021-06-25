@@ -27,7 +27,7 @@ public:
     void finishWrite() override;
 
 private:
-    void ScheduleEncodeTask();
+    void ScheduleEncodeTask(bool collect_execution_info);
     ThreadPool::Job getEncodeTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
     ThreadPool::Job getEncodePartitionTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
