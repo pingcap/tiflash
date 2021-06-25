@@ -29,8 +29,11 @@ public:
 private:
     template <bool collect_execution_info>
     void ScheduleEncodeTask();
+    void BatchWrite();
     ThreadPool::Job getEncodeTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
     ThreadPool::Job getEncodePartitionTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    void EncodeThenWriteBlock(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    void PartitionAndEncodeThenWriteBlock(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
     tipb::ExchangeType exchange_type;
     StreamWriterPtr writer;
