@@ -25,6 +25,29 @@ void DAGResponseWriter::fillTiExecutionSummary(
         execution_summary->set_executor_id(executor_id);
 }
 
+template <typename RemoteBlockInputStream>
+void mergeRemoteExecuteSummaries(
+    RemoteBlockInputStream * input_stream, std::unordered_map<String, std::vector<ExecutionSummary>> execution_summaries)
+{
+    size_t source_num = input_stream->getSourceNum();
+    for (size_t s_index = 0; s_index < source_num; s_index++)
+    {
+        auto remote_execution_summaries = input_stream->getRemoteExecutionSummaries(s_index);
+        if (remote_execution_summaries != nullptr)
+        {
+            bool is_streaming_call = input_stream->isStreamingCall();
+            for (auto & p : *remote_execution_summaries)
+            {
+                if (execution_summaries[p.first].size() < source_num)
+                {
+                    execution_summaries[p.first].resize(source_num);
+                }
+                execution_summaries[p.first][s_index].merge(p.second, is_streaming_call);
+            }
+        }
+    }
+}
+
 void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode)
 {
     if (!dag_context.collect_execution_summaries)
@@ -33,27 +56,10 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
     std::unordered_map<String, std::vector<ExecutionSummary>> merged_remote_execution_summaries;
     for (auto & streamPtr : dag_context.getRemoteInputStreams())
     {
-        auto coprocessor_input_stream = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get());
-        auto exchange_receiver_input_stream = dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get());
-        auto remote_execution_summaries = coprocessor_input_stream != nullptr
-            ? coprocessor_input_stream->getRemoteExecutionSummaries()
-            : exchange_receiver_input_stream->getRemoteExecutionSummaries();
-        if (remote_execution_summaries != nullptr)
-        {
-            bool is_streaming_call = coprocessor_input_stream != nullptr ? coprocessor_input_stream->isStreamingCall()
-                                                                         : exchange_receiver_input_stream->isStreamingCall();
-            for (auto & p : *remote_execution_summaries)
-            {
-                if (merged_remote_execution_summaries[p.first].size() < p.second.size())
-                {
-                    merged_remote_execution_summaries[p.first].resize(p.second.size());
-                }
-                for (size_t i = 0; i < p.second.size(); i++)
-                {
-                    merged_remote_execution_summaries[p.first][i].merge(p.second[i], is_streaming_call);
-                }
-            }
-        }
+        if (dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get()) != nullptr)
+            mergeRemoteExecuteSummaries(dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get()), merged_remote_execution_summaries);
+        else
+            mergeRemoteExecuteSummaries(dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()), merged_remote_execution_summaries);
     }
 
     /// add execution_summary for local executor
