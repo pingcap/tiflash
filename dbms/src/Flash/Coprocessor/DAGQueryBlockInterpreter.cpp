@@ -1302,9 +1302,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         // todo choose a more reasonable stream number
         for (size_t i = 0; i < max_streams; i++)
         {
-            auto stream = std::make_shared<ExchangeReceiverInputStream>(it->second);
-            pipeline.streams.push_back(stream);
+            BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second);
             dag.getDAGContext().getRemoteInputStreams().push_back(stream);
+            stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0);
+            pipeline.streams.push_back(stream);
         }
         std::vector<NameAndTypePair> source_columns;
         Block block = pipeline.firstStream()->getHeader();

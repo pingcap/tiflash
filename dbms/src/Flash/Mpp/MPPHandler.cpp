@@ -11,6 +11,8 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
 
+#include <DataStreams/SquashingBlockOutputStream.h>
+
 namespace DB
 {
 
@@ -194,7 +196,8 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     std::unique_ptr<DAGResponseWriter> response_writer
         = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, exchangeSender.tp(),
             context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), *dag_context);
-    io.out = std::make_shared<DAGBlockOutputStream>(io.in->getHeader(), std::move(response_writer));
+    BlockOutputStreamPtr squash_stream = std::make_shared<DAGBlockOutputStream>(io.in->getHeader(), std::move(response_writer));
+    io.out = std::make_shared<SquashingBlockOutputStream>(squash_stream, 20000, 0);
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context->compile_time_ns = compile_time_ns;
