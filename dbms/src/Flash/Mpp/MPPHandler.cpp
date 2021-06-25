@@ -211,38 +211,10 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
         }
     }
+    dag_context->tunnel_set = tunnel_set;
     // read index , this may take a long time.
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
 
-    // get partition column ids
-    auto part_keys = exchangeSender.partition_keys();
-    std::vector<Int64> partition_col_id;
-    for (const auto & expr : part_keys)
-    {
-        assert(isColumnExpr(expr));
-        auto column_index = decodeDAGInt64(expr.val());
-        partition_col_id.emplace_back(column_index);
-    }
-    /// insert a SharedQueryBlockInputStream
-    BlockInputStreamPtr shared_query_block_input_stream
-        = std::make_shared<SharedQueryBlockInputStream>(dag_context->final_concurrency*5, io.in);
-    /// parallel ExchangeSender
-    DAGPipeline pipeline;
-    for (size_t i = 0; i < dag_context->final_concurrency; i++)
-    {
-        // construct writer
-        std::unique_ptr<DAGResponseWriter> response_writer
-            = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, exchangeSender.tp(),
-                                                                            context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), *dag_context);
-        pipeline.streams.push_back(std::make_shared<ExchangeSender>(shared_query_block_input_stream,std::move(response_writer)));
-    }
-    DAGQueryBlockInterpreter::executeUnion(pipeline,dag_context->final_concurrency);
-    /// the top is also a union
-    io.in = pipeline.firstStream();
-
-    //io.out = std::make_shared<DAGBlockOutputStream>(io.in->getHeader(), std::move(response_writer));
-    //BlockOutputStreamPtr squash_stream = std::make_shared<DAGBlockOutputStream>(io.in->getHeader(), std::move(response_writer));
-    //io.out = std::make_shared<SquashingBlockOutputStream>(squash_stream, 20000, 0);
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context->compile_time_ns = compile_time_ns;

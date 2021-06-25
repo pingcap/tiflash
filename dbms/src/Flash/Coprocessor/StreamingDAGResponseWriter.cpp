@@ -100,7 +100,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
         ScheduleEncodeTask();
     }
 #else
-    if ((Int64)rows_in_blocks > (records_per_chunk== -1? 4096:records_per_chunk))
+    if ((Int64)rows_in_blocks > (records_per_chunk== -1? 2048:records_per_chunk))
     {
         BatchWrite();
     }
@@ -279,7 +279,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::BatchWrite()
 {
     tipb::SelectResponse response;
     //addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
-    LOG_WARNING(log, "[ENCODE] schedule a send task, active "+ std::to_string(thread_pool.active()) + " of total " + std::to_string(thread_pool.size()));
+    LOG_WARNING(log, "[ENCODE] batch write, rows = "+ std::to_string(rows_in_blocks));
     if (exchange_type == tipb::ExchangeType::Hash)
     {
         PartitionAndEncodeThenWriteBlock(blocks,response);

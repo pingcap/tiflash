@@ -1,14 +1,18 @@
+#include <Common/FailPoint.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
+#include <DataStreams/ExchangeSender.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
+#include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
 #include <Storages/StorageMergeTree.h>
 #include <pingcap/coprocessor/Client.h>
 
+#include "DAGCodec.h"
 
 namespace DB
 {
@@ -21,6 +25,7 @@ extern const int SCHEMA_VERSION_ERROR;
 extern const int UNKNOWN_EXCEPTION;
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
+
 
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_),
@@ -78,10 +83,31 @@ BlockIO InterpreterDAG::execute()
     /// it is ok to use the same region_info for the whole dag request
     std::vector<SubqueriesForSets> subqueriesForSets;
     BlockInputStreams streams = executeQueryBlock(*dag.getQueryBlock(), subqueriesForSets);
-
     DAGPipeline pipeline;
     pipeline.streams = streams;
 
+    /// add exchange sender on the top of operators
+    const auto & exchangeSender = dag.getDAGRequest().root_executor().exchange_sender();
+    // get partition column ids
+    auto part_keys = exchangeSender.partition_keys();
+    std::vector<Int64> partition_col_id;
+    for (const auto & expr : part_keys)
+    {
+        assert(isColumnExpr(expr));
+        auto column_index = decodeDAGInt64(expr.val());
+        partition_col_id.emplace_back(column_index);
+    }
+    pipeline.transform([&](auto & stream)
+        {
+        // construct writer
+        std::unique_ptr<DAGResponseWriter> response_writer
+                                               = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(context.getDAGContext()->tunnel_set, partition_col_id, exchangeSender.tp(),
+            context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), dag.getDAGContext());
+        stream = std::make_shared<ExchangeSender>(stream,std::move(response_writer));
+       }
+    );
+
+    /// add union to run in parallel if needed
     DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams);
     if (!subqueriesForSets.empty())
     {

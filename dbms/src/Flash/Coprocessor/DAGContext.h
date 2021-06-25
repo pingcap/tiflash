@@ -15,13 +15,14 @@ namespace DB
 {
 
 class Context;
+struct MPPTunnelSet;
 
 struct ProfileStreamsInfo
 {
     UInt32 qb_id;
     BlockInputStreams input_streams;
 };
-
+using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -31,6 +32,7 @@ public:
           return_executor_id(dag_request.has_root_executor() || dag_request.executors(0).has_executor_id()),
           is_mpp_task(false),
           is_root_mpp_task(false),
+          tunnel_set(nullptr),
           flags(dag_request.flags()),
           sql_mode(dag_request.sql_mode()),
           _warnings(std::numeric_limits<int>::max()){};
@@ -38,6 +40,7 @@ public:
         : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries()),
           return_executor_id(true),
           is_mpp_task(true),
+          tunnel_set(nullptr),
           flags(dag_request.flags()),
           sql_mode(dag_request.sql_mode()),
           mpp_task_meta(meta_),
@@ -108,7 +111,7 @@ public:
     bool return_executor_id;
     bool is_mpp_task;
     bool is_root_mpp_task;
-
+    MPPTunnelSetPtr tunnel_set;
     RegionInfoList retry_regions;
 
 private:
@@ -126,6 +129,7 @@ private:
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
+
     ConcurrentBoundedQueue<tipb::Error> _warnings;
 };
 
