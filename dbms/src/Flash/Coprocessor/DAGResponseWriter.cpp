@@ -33,17 +33,16 @@ void mergeRemoteExecuteSummaries(
     for (size_t s_index = 0; s_index < source_num; s_index++)
     {
         auto remote_execution_summaries = input_stream->getRemoteExecutionSummaries(s_index);
-        if (remote_execution_summaries != nullptr)
+        if (remote_execution_summaries == nullptr)
+            continue;
+        bool is_streaming_call = input_stream->isStreamingCall();
+        for (auto & p : *remote_execution_summaries)
         {
-            bool is_streaming_call = input_stream->isStreamingCall();
-            for (auto & p : *remote_execution_summaries)
+            if (execution_summaries[p.first].size() < source_num)
             {
-                if (execution_summaries[p.first].size() < source_num)
-                {
-                    execution_summaries[p.first].resize(source_num);
-                }
-                execution_summaries[p.first][s_index].merge(p.second, is_streaming_call);
+                execution_summaries[p.first].resize(source_num);
             }
+            execution_summaries[p.first][s_index].merge(p.second, is_streaming_call);
         }
     }
 }
