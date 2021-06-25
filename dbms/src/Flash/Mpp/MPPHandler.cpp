@@ -279,44 +279,47 @@ void MPPTask::runImpl()
     LOG_INFO(log, "task starts running");
     status = RUNNING;
     auto from = io.in;
-    auto to = io.out;
+    //auto to = io.out;
     try
     {
         from->readPrefix();
-        to->writePrefix();
+    //    to->writePrefix();
         LOG_DEBUG(log, "begin read ");
 
         size_t count = 0;
 
         while (Block block = from->read())
         {
-            count += block.rows();
+            if(block)
+            {
+                count += block.rows();
 #if OLD
-            to->write(block);
+                to->write(block);
 #endif
-            FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
-            if (dag_context->isRootMPPTask())
-            {
-                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
-            }
-            else
-            {
-                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
+                FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
+                if (dag_context->isRootMPPTask())
+                {
+                    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
+                }
+                else
+                {
+                    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
+                }
             }
         }
 
         /// For outputting additional information in some formats.
-        if (IProfilingBlockInputStream * input = dynamic_cast<IProfilingBlockInputStream *>(from.get()))
-        {
-            if (input->getProfileInfo().hasAppliedLimit())
-                to->setRowsBeforeLimit(input->getProfileInfo().getRowsBeforeLimit());
-
-            to->setTotals(input->getTotals());
-            to->setExtremes(input->getExtremes());
-        }
+//        if (IProfilingBlockInputStream * input = dynamic_cast<IProfilingBlockInputStream *>(from.get()))
+//        {
+//            if (input->getProfileInfo().hasAppliedLimit())
+//                to->setRowsBeforeLimit(input->getProfileInfo().getRowsBeforeLimit());
+//
+//            to->setTotals(input->getTotals());
+//            to->setExtremes(input->getExtremes());
+//        }
 
         from->readSuffix();
-        to->writeSuffix();
+        //to->writeSuffix();
 
         finishWrite();
 
