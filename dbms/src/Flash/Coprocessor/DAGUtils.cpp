@@ -487,7 +487,7 @@ extern const String UniqRawResName;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"}, {tipb::ExprType::Sum, "sum"}, {tipb::ExprType::Min, "min"}, {tipb::ExprType::Max, "max"},
-    {tipb::ExprType::First, "any"}, {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
+    {tipb::ExprType::First, "first_row"}, {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
     //{tipb::ExprType::Avg, ""},
     //{tipb::ExprType::GroupConcat, ""},
     //{tipb::ExprType::Agg_BitAnd, ""},
@@ -515,8 +515,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastIntAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastIntAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastRealAsInt, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastRealAsReal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastRealAsInt, "tidb_cast"}, {tipb::ScalarFuncSig::CastRealAsReal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastRealAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastRealAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastRealAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastRealAsDuration, "cast"},
@@ -529,8 +528,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastDecimalAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastStringAsInt, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastStringAsReal, "cast"},
+    {tipb::ScalarFuncSig::CastStringAsInt, "tidb_cast"}, {tipb::ScalarFuncSig::CastStringAsReal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastStringAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastStringAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastStringAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastStringAsDuration, "cast"},
@@ -538,8 +536,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     {tipb::ScalarFuncSig::CastTimeAsInt, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastTimeAsReal, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastTimeAsString, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastTimeAsDecimal, "tidb_cast"}, {tipb::ScalarFuncSig::CastTimeAsTime, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastTimeAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastTimeAsDecimal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastTimeAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastTimeAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastTimeAsJson, "cast"},
 
@@ -800,7 +798,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     {tipb::ScalarFuncSig::DateFormatSig, "dateFormat"},
     //{tipb::ScalarFuncSig::DateLiteral, "cast"},
-    //{tipb::ScalarFuncSig::DateDiff, "cast"},
+    {tipb::ScalarFuncSig::DateDiff, "tidbDateDiff"},
     //{tipb::ScalarFuncSig::NullTimeDiff, "cast"},
     //{tipb::ScalarFuncSig::TimeStringTimeDiff, "cast"},
     //{tipb::ScalarFuncSig::DurationDurationTimeDiff, "cast"},
@@ -840,7 +838,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::NowWithoutArg, "cast"},
 
     //{tipb::ScalarFuncSig::DayName, "cast"},
-    //{tipb::ScalarFuncSig::DayOfMonth, "cast"},
+    {tipb::ScalarFuncSig::DayOfMonth, "toDayOfMonth"},
     //{tipb::ScalarFuncSig::DayOfWeek, "cast"},
     //{tipb::ScalarFuncSig::DayOfYear, "cast"},
 
@@ -849,7 +847,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::WeekDay, "cast"},
     //{tipb::ScalarFuncSig::WeekOfYear, "cast"},
 
-    //{tipb::ScalarFuncSig::Year, "cast"},
+    {tipb::ScalarFuncSig::Year, "toYear"},
     //{tipb::ScalarFuncSig::YearWeekWithMode, "cast"},
     //{tipb::ScalarFuncSig::YearWeekWithoutMode, "cast"},
 
@@ -890,8 +888,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SubDateAndString, "cast"},
 
     //{tipb::ScalarFuncSig::UnixTimestampCurrent, "cast"},
-    //{tipb::ScalarFuncSig::UnixTimestampInt, "cast"},
-    //{tipb::ScalarFuncSig::UnixTimestampDec, "cast"},
+    {tipb::ScalarFuncSig::UnixTimestampInt, "tidbUnixTimeStampInt"}, {tipb::ScalarFuncSig::UnixTimestampDec, "tidbUnixTimeStampDec"},
 
     //{tipb::ScalarFuncSig::ConvertTz, "cast"},
     //{tipb::ScalarFuncSig::MakeDate, "cast"},
@@ -912,9 +909,9 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::TimestampLiteral, "cast"},
 
     //{tipb::ScalarFuncSig::LastDay, "cast"},
-    //{tipb::ScalarFuncSig::StrToDateDate, "cast"},
-    //{tipb::ScalarFuncSig::StrToDateDatetime, "cast"},
-    //{tipb::ScalarFuncSig::StrToDateDuration, "cast"},
+    {tipb::ScalarFuncSig::StrToDateDate, "strToDateDate"},
+    {tipb::ScalarFuncSig::StrToDateDatetime, "strToDateDatetime"},
+    // {tipb::ScalarFuncSig::StrToDateDuration, "cast"},
     {tipb::ScalarFuncSig::FromUnixTime1Arg, "fromUnixTime"}, {tipb::ScalarFuncSig::FromUnixTime2Arg, "fromUnixTime"},
     {tipb::ScalarFuncSig::ExtractDatetime, "extractMyDateTime"},
     //{tipb::ScalarFuncSig::ExtractDuration, "cast"},
@@ -928,12 +925,12 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::AddDateDatetimeInt, "date_add"},
 
     //{tipb::ScalarFuncSig::SubDateStringString, "cast"},
-    //{tipb::ScalarFuncSig::SubDateStringInt, "cast"},
+    {tipb::ScalarFuncSig::SubDateStringInt, "date_sub"},
     //{tipb::ScalarFuncSig::SubDateStringDecimal, "cast"},
     //{tipb::ScalarFuncSig::SubDateIntString, "cast"},
     //{tipb::ScalarFuncSig::SubDateIntInt, "cast"},
     //{tipb::ScalarFuncSig::SubDateDatetimeString, "cast"},
-    //{tipb::ScalarFuncSig::SubDateDatetimeInt, "cast"},
+    {tipb::ScalarFuncSig::SubDateDatetimeInt, "date_sub"},
 
     //{tipb::ScalarFuncSig::FromDays, "cast"},
     //{tipb::ScalarFuncSig::TimeFormat, "cast"},
@@ -943,9 +940,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Bin, "cast"},
     //{tipb::ScalarFuncSig::ASCII, "cast"},
     //{tipb::ScalarFuncSig::Char, "cast"},
-    {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"},
-    //{tipb::ScalarFuncSig::Concat, "cast"},
-    //{tipb::ScalarFuncSig::ConcatWS, "cast"},
+    {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"}, {tipb::ScalarFuncSig::Concat, "tidbConcat"},
+    {tipb::ScalarFuncSig::ConcatWS, "tidbConcatWS"},
     //{tipb::ScalarFuncSig::Convert, "cast"},
     //{tipb::ScalarFuncSig::Elt, "cast"},
     //{tipb::ScalarFuncSig::ExportSet3Arg, "cast"},
@@ -966,8 +962,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::InstrUTF8, "cast"},
     //{tipb::ScalarFuncSig::Instr, "cast"},
 
-    {tipb::ScalarFuncSig::LTrim, "ltrim"},
-    //{tipb::ScalarFuncSig::LeftUTF8, "cast"},
+    {tipb::ScalarFuncSig::LTrim, "ltrim"}, {tipb::ScalarFuncSig::LeftUTF8, "leftUTF8"},
     //{tipb::ScalarFuncSig::Left, "cast"},
     {tipb::ScalarFuncSig::Length, "length"},
     //{tipb::ScalarFuncSig::Locate2ArgsUTF8, "cast"},
@@ -985,10 +980,10 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Quote, "cast"},
     {tipb::ScalarFuncSig::RTrim, "rtrim"},
     //{tipb::ScalarFuncSig::Repeat, "cast"},
-    //{tipb::ScalarFuncSig::Replace, "cast"},
+    {tipb::ScalarFuncSig::Replace, "replaceAll"},
     //{tipb::ScalarFuncSig::ReverseUTF8, "cast"},
     //{tipb::ScalarFuncSig::Reverse, "cast"},
-    //{tipb::ScalarFuncSig::RightUTF8, "cast"},
+    {tipb::ScalarFuncSig::RightUTF8, "rightUTF8"},
     //{tipb::ScalarFuncSig::Right, "cast"},
     //{tipb::ScalarFuncSig::RpadUTF8, "cast"},
     //{tipb::ScalarFuncSig::Rpad, "cast"},

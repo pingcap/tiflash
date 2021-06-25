@@ -7,9 +7,7 @@
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsConversion.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/sortBlock.h>
 #include <Storages/ColumnsDescription.h>
@@ -207,7 +205,7 @@ inline bool hasColumn(const ColumnDefines & columns, const ColId & col_id)
 }
 
 template <bool check_default_value = false>
-inline bool isSameSchema(const Block & a, const Block & b)
+inline bool checkSchema(const Block & a, const Block & b)
 {
     if (a.columns() != b.columns())
         return false;

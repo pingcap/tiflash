@@ -1,3 +1,4 @@
+
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/EmptyBlockInputStream.h>
@@ -14,7 +15,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
-#include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
+#include <Storages/DeltaMerge/ReorganizeBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
@@ -57,6 +58,12 @@ namespace CurrentMetrics
 extern const Metric DT_DeltaCompact;
 extern const Metric DT_DeltaFlush;
 extern const Metric DT_PlaceIndexUpdate;
+extern const Metric DT_SnapshotOfRead;
+extern const Metric DT_SnapshotOfReadRaw;
+extern const Metric DT_SnapshotOfSegmentSplit;
+extern const Metric DT_SnapshotOfSegmentMerge;
+extern const Metric DT_SnapshotOfDeltaMerge;
+extern const Metric DT_SnapshotOfPlaceIndex;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -73,15 +80,15 @@ namespace DM
 
 const static size_t SEGMENT_BUFFER_SIZE = 128; // More than enough.
 
-DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
-                             const ColumnDefinesPtr &       schema_snap,
-                             const BlockInputStreamPtr &    input_stream,
-                             UInt64                         file_id,
-                             const String &                 parent_path,
-                             DMFileBlockOutputStream::Flags flags)
+DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
+                             const ColumnDefinesPtr &    schema_snap,
+                             const BlockInputStreamPtr & input_stream,
+                             UInt64                      file_id,
+                             const String &              parent_path,
+                             bool                        need_rate_limit)
 {
-    auto   dmfile        = DMFile::create(file_id, parent_path, flags.isSingleFile());
-    auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, flags);
+    auto   dmfile        = DMFile::create(file_id, parent_path, dm_context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
+    auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, need_rate_limit);
     auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
     input_stream->readPrefix();
@@ -121,12 +128,8 @@ StableValueSpacePtr createNewStable(DMContext &                 context,
     auto delegate   = context.path_pool.getStableDiskDelegator();
     auto store_path = delegate.choosePath();
 
-    DMFileBlockOutputStream::Flags flags;
-    flags.setRateLimit(need_rate_limit);
-    flags.setSingleFile(context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
-
     PageId dmfile_id = context.storage_pool.newDataPageId();
-    auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path, flags);
+    auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path, need_rate_limit);
     auto   stable    = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dmfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
     stable->saveMeta(wbs.meta);
@@ -212,14 +215,16 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 
     switch (version)
     {
-    case SegmentFormat::V1: {
+    case SegmentFormat::V1:
+    {
         HandleRange range;
         readIntBinary(range.start, buf);
         readIntBinary(range.end, buf);
         rowkey_range = RowKeyRange::fromHandleRange(range);
         break;
     }
-    case SegmentFormat::V2: {
+    case SegmentFormat::V2:
+    {
         rowkey_range = RowKeyRange::deserialize(buf);
         break;
     }
@@ -298,19 +303,19 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
-bool Segment::ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
+bool Segment::writeRegionSnapshot(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);
     LOG_TRACE(log, "Segment [" << segment_id << "] write region snapshot: " << new_range.toDebugString());
 
-    return delta->ingestPacks(dm_context, range, packs, clear_data_in_range);
+    return delta->appendRegionSnapshot(dm_context, range, packs, clear_data_in_range);
 }
 
-SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update) const
+SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
 {
     // If the snapshot is created for read, then the snapshot will contain all packs (cached and persisted) for read.
     // If the snapshot is created for update, then the snapshot will only contain the persisted packs.
-    auto delta_snap  = delta->createSnapshot(dm_context, for_update);
+    auto delta_snap  = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
@@ -411,7 +416,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
                                             UInt64                max_version,
                                             size_t                expected_block_size)
 {
-    auto segment_snap = createSnapshot(dm_context);
+    auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
     if (!segment_snap)
         return {};
     return getInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
@@ -440,7 +445,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext &      
     data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, data_range, 0);
     if (reorgnize_block)
     {
-        data_stream = std::make_shared<PKSquashingBlockInputStream<false>>(data_stream, EXTRA_HANDLE_COLUMN_ID, is_common_handle);
+        data_stream = std::make_shared<ReorganizeBlockInputStream>(data_stream, EXTRA_HANDLE_COLUMN_NAME);
     }
     data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         data_stream, *read_info.read_columns, dm_context.min_version, is_common_handle);
@@ -509,7 +514,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_con
 
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read)
 {
-    auto segment_snap = createSnapshot(dm_context);
+    auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfReadRaw);
     if (!segment_snap)
         return {};
     return getInputStreamRaw(dm_context, columns_to_read, segment_snap, true);
@@ -518,7 +523,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, con
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
     WriteBatches wbs(dm_context.storage_pool);
-    auto         segment_snap = createSnapshot(dm_context, true);
+    auto         segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
     if (!segment_snap)
         return {};
 
@@ -594,7 +599,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
 SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
     WriteBatches wbs(dm_context.storage_pool);
-    auto         segment_snap = createSnapshot(dm_context, true);
+    auto         segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
     if (!segment_snap)
         return {};
 
@@ -682,7 +687,21 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     stream.readSuffix();
 
     RowKeyColumnContainer rowkey_column(block.getByPosition(0).column, is_common_handle);
-    return {RowKeyValue(rowkey_column.getRowKeyValue(read_row_in_pack))};
+    RowKeyValue           split_point(rowkey_column.getRowKeyValue(read_row_in_pack));
+
+
+    if (!rowkey_range.check(split_point.toRowKeyValueRef())
+        || RowKeyRange(rowkey_range.start, split_point, is_common_handle, rowkey_column_size).none()
+        || RowKeyRange(split_point, rowkey_range.end, is_common_handle, rowkey_column_size).none())
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << " unexpected split_handle: " << split_point.toRowKeyValueRef().toDebugString()
+                                 << ", should be in range " << rowkey_range.toDebugString() << ", cur_rows: " << cur_rows
+                                 << ", read_row_in_pack: " << read_row_in_pack << ", file_index: " << file_index);
+        return {};
+    }
+
+    return {split_point};
 }
 
 std::optional<RowKeyValue>
@@ -756,10 +775,16 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
     }
     stream->readSuffix();
 
-    if (!rowkey_range.check(split_point.toRowKeyValueRef()))
-        throw Exception("getSplitPointSlow unexpected split_handle: " + split_point.toRowKeyValueRef().toDebugString()
-                        + ", should be in range " + rowkey_range.toDebugString() + ", exact_rows: " + DB::toString(exact_rows)
-                        + ", cur count:" + DB::toString(count));
+    if (!rowkey_range.check(split_point.toRowKeyValueRef())
+        || RowKeyRange(rowkey_range.start, split_point, is_common_handle, rowkey_column_size).none()
+        || RowKeyRange(split_point, rowkey_range.end, is_common_handle, rowkey_column_size).none())
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << " unexpected split_handle: " << split_point.toRowKeyValueRef().toDebugString()
+                                 << ", should be in range " << rowkey_range.toDebugString() << ", exact_rows: " << DB::toString(exact_rows)
+                                 << ", cur count: " << DB::toString(count) << ", split_row_index: " << split_row_index);
+        return {};
+    }
 
     return {split_point};
 }
@@ -773,7 +798,9 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext &             
     if (!dm_context.enable_logical_split         //
         || segment_snap->stable->getPacks() <= 3 //
         || segment_snap->delta->getRows() > segment_snap->stable->getRows())
+    {
         return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs, need_rate_limit);
+    }
     else
     {
         auto split_point_opt = getSplitPointFast(dm_context, segment_snap->stable);
@@ -809,8 +836,12 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     RowKeyRange other_range(split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
 
     if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitLogical: unexpected range! my_range: " + my_range.toDebugString()
-                        + ", other_range: " + other_range.toDebugString());
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << ": unexpected range! my_range: " << my_range.toDebugString()
+                                 << ", other_range: " << other_range.toDebugString() << ", aborted");
+        return {};
+    }
 
     GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &storage_pool);
 
@@ -873,8 +904,12 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
     RowKeyRange other_range(split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
 
     if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitPhysical: unexpected range! my_range: " + my_range.toDebugString()
-                        + ", other_range: " + other_range.toDebugString());
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << ": unexpected range! my_range: " << my_range.toDebugString()
+                                 << ", other_range: " << other_range.toDebugString() << ", aborted");
+        return {};
+    }
 
     StableValueSpacePtr my_new_stable;
     StableValueSpacePtr other_stable;
@@ -897,7 +932,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
 
 
         my_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(my_data, my_range, 0);
-        my_data = std::make_shared<PKSquashingBlockInputStream<false>>(my_data, EXTRA_HANDLE_COLUMN_ID, is_common_handle);
+        my_data = std::make_shared<ReorganizeBlockInputStream>(my_data, EXTRA_HANDLE_COLUMN_NAME);
         my_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             my_data, *read_info.read_columns, dm_context.min_version, is_common_handle);
         auto my_stable_id = segment_snap->stable->getId();
@@ -924,7 +959,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
 
 
         other_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(other_data, other_range, 0);
-        other_data = std::make_shared<PKSquashingBlockInputStream<false>>(other_data, EXTRA_HANDLE_COLUMN_ID, is_common_handle);
+        other_data = std::make_shared<ReorganizeBlockInputStream>(other_data, EXTRA_HANDLE_COLUMN_NAME);
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             other_data, *read_info.read_columns, dm_context.min_version, is_common_handle);
         auto other_stable_id = dm_context.storage_pool.newMetaPageId();
@@ -1006,8 +1041,8 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
 {
     WriteBatches wbs(dm_context.storage_pool);
 
-    auto left_snap  = left->createSnapshot(dm_context, true);
-    auto right_snap = right->createSnapshot(dm_context, true);
+    auto left_snap  = left->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+    auto right_snap = right->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
     if (!left_snap || !right_snap)
         return {};
 
@@ -1054,7 +1089,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
                                                      dm_context.stable_pack_rows);
 
         stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, segment->rowkey_range, 0);
-        stream = std::make_shared<PKSquashingBlockInputStream<false>>(stream, EXTRA_HANDLE_COLUMN_ID, dm_context.is_common_handle);
+        stream = std::make_shared<ReorganizeBlockInputStream>(stream, EXTRA_HANDLE_COLUMN_NAME);
         stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             stream, *read_info.read_columns, dm_context.min_version, dm_context.is_common_handle);
 
@@ -1162,7 +1197,7 @@ bool Segment::compactDelta(DMContext & dm_context)
 void Segment::placeDeltaIndex(DMContext & dm_context)
 {
     // Update delta-index with persisted packs.
-    auto segment_snap = createSnapshot(dm_context, /*for_update=*/true);
+    auto segment_snap = createSnapshot(dm_context, /*for_update=*/true, CurrentMetrics::DT_SnapshotOfPlaceIndex);
     if (!segment_snap)
         return;
     getReadInfo(dm_context,
@@ -1437,7 +1472,7 @@ bool Segment::placeDelete(const DMContext &           dm_context,
     {
         RowKeyValueRef first_rowkey       = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle).getRowKeyValue(0);
         auto           place_handle_range = skippable_place ? RowKeyRange::startFrom(first_rowkey, is_common_handle, rowkey_column_size)
-                                                            : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
+                                                  : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
         auto compacted_index = update_delta_tree.getCompactedEntries();
 

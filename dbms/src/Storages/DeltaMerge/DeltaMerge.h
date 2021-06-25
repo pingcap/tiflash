@@ -514,7 +514,7 @@ private:
             use_stable_rows = delta_index_it.getSid() - prev_sid;
         }
     }
-};
+}; // namespace DM
 
 } // namespace DM
 } // namespace DB

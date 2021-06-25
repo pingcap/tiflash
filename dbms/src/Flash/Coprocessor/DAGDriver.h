@@ -38,6 +38,8 @@ public:
     {}
 };
 
+using RegionInfoList = std::vector<RegionInfo>;
+
 /// An abstraction of driver running DAG request.
 /// Now is a naive native executor. Might get evolved to drive MPP-like computation.
 

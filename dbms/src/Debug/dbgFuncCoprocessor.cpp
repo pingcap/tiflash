@@ -59,12 +59,7 @@ static const String MPP_QUERY = "mpp_query";
 static const String USE_BROADCAST_JOIN = "use_broadcast_join";
 static const String MPP_PARTITION_NUM = "mpp_partition_num";
 static const String MPP_TIMEOUT = "mpp_timeout";
-static String LOCAL_HOST = "127.0.0.1:3930";
-
-namespace Debug
-{
-void setServiceAddr(const std::string & addr) { LOCAL_HOST = addr; }
-} // namespace Debug
+static const String LOCAL_HOST = "127.0.0.1:3930";
 
 struct DAGProperties
 {

@@ -66,17 +66,19 @@ DeltaPacks deserializePacks_V3(DMContext & context, const RowKeyRange & segment_
             pack = DeltaPackDeleteRange::deserializeMetadata(buf);
             break;
         case DeltaPack::Type::BLOCK: {
-            std::tie(pack, last_schema) = DeltaPackBlock::deserializeMetadata(buf, last_schema);
+            pack = DeltaPackBlock::deserializeMetadata(buf, last_schema);
+            if (auto dp_block = pack->tryToBlock(); dp_block)
+                last_schema = dp_block->getSchema();
             break;
         }
         case DeltaPack::Type::FILE: {
-            pack = DeltaPackFile::deserializeMetadata(context, segment_range, buf);
+            pack = DeltaPackFile::deserializeMetadata(context, segment_range, buf, last_schema);
             break;
         }
         default:
             throw Exception("Unexpected pack type: " + DB::toString(pack_type), ErrorCodes::LOGICAL_ERROR);
         }
-        packs.emplace_back(std::move(pack));
+        packs.push_back(pack);
     }
     return packs;
 }

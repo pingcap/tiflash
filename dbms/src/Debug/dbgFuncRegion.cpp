@@ -60,7 +60,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
         TMTContext & tmt = context.getTMTContext();
         RegionPtr region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
-        tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
+        tmt.getKVStore()->onSnapshot(region, nullptr, 0, tmt);
 
         std::stringstream ss;
         ss << "put region #" << region_id << ", range" << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region->getRange()->rawKeys())
@@ -74,7 +74,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
         TMTContext & tmt = context.getTMTContext();
         RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
-        tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
+        tmt.getKVStore()->onSnapshot(region, nullptr, 0, tmt);
 
         std::stringstream ss;
         ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"

@@ -341,7 +341,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         }
     }
 
-    void prepare(const mpp::DispatchTaskRequest & task_request);
+    std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
 
     void updateProgress(const Progress &) { task_progress.current_progress++; }
 
@@ -414,11 +414,8 @@ class MPPTaskManager : private boost::noncopyable
 
     std::condition_variable cv;
 
-    BackgroundProcessingPool & background_pool;
-    BackgroundProcessingPool::TaskHandle handle;
-
 public:
-    explicit MPPTaskManager(BackgroundProcessingPool & background_pool_);
+    MPPTaskManager();
     ~MPPTaskManager();
 
     std::vector<UInt64> getCurrentQueries()

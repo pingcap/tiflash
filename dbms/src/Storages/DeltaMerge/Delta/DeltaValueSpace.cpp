@@ -237,7 +237,7 @@ void DeltaValueSpace::appendPackInner(const DeltaPackPtr & pack)
         // If this pack's schema is identical to last_schema, then use the last_schema instance,
         // so that we don't have to serialize my_schema instance.
         auto my_schema = dp_block->getSchema();
-        if (last_schema && my_schema && last_schema != my_schema && isSameSchema(*my_schema, *last_schema))
+        if (last_schema && my_schema && last_schema != my_schema && checkSchema(*my_schema, *last_schema))
             dp_block->resetIdenticalSchema(last_schema);
     }
 
@@ -289,14 +289,14 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
             {
                 if constexpr (DM_RUN_CHECK)
                 {
-                    if (unlikely(!isSameSchema(*p->getSchema(), p->getCache()->block)))
+                    if (unlikely(!checkSchema(*p->getSchema(), p->getCache()->block)))
                         throw Exception("Mutable pack's structure of schema and block are different: " + last_pack->toString());
                 }
 
                 auto & cache_block = p->getCache()->block;
                 bool   is_overflow
                     = cache_block.rows() >= context.delta_cache_limit_rows || cache_block.bytes() >= context.delta_cache_limit_bytes;
-                bool is_same_schema = isSameSchema(block, cache_block);
+                bool is_same_schema = checkSchema(block, cache_block);
                 if (!is_overflow && is_same_schema)
                 {
                     // The last cache block is available
@@ -312,7 +312,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     {
         // Create a new pack.
         auto last_schema = lastSchema();
-        auto my_schema   = (last_schema && isSameSchema(block, *last_schema)) ? last_schema : std::make_shared<Block>(block.cloneEmpty());
+        auto my_schema   = (last_schema && checkSchema(block, *last_schema)) ? last_schema : std::make_shared<Block>(block.cloneEmpty());
 
         auto new_pack = DeltaPackBlock::createCachePack(my_schema);
         appendPackInner(new_pack);
@@ -342,19 +342,20 @@ bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const RowKeyRan
     return true;
 }
 
-bool DeltaValueSpace::ingestPacks(DMContext & /*context*/, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
+bool DeltaValueSpace::appendRegionSnapshot(DMContext & /*context*/,
+                                           const RowKeyRange & range,
+                                           const DeltaPacks &  packs,
+                                           bool                clear_data_in_range)
 {
     std::scoped_lock lock(mutex);
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 
-    // Prepend a DeleteRange to clean data before applying packs
     if (clear_data_in_range)
     {
         auto p = std::make_shared<DeltaPackDeleteRange>(range);
         appendPackInner(p);
     }
-
     for (auto & p : packs)
     {
         appendPackInner(p);

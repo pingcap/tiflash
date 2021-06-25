@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -75,7 +76,7 @@ void MPPTask::unregisterTask()
     }
 }
 
-void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
+std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     auto start_time = Clock::now();
     dag_req = std::make_unique<tipb::DAGRequest>();
@@ -129,7 +130,6 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         }
     }
     context.getTimezoneInfo().resetByDAGRequest(*dag_req);
-    context.setProgressCallback([this](const Progress & progress) { this->updateProgress(progress); });
 
     dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
     context.setDAGContext(dag_context.get());
@@ -201,6 +201,8 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context->compile_time_ns = compile_time_ns;
+
+    return dag_context->retry_regions;
 }
 
 String taskStatusToString(TaskStatus ts)
@@ -305,23 +307,29 @@ bool MPPTask::isTaskHanging()
 
 void MPPTask::cancel(const String & reason)
 {
-    auto current_status = status.load();
+    auto current_status = status.exchange(CANCELLED);
     if (current_status == FINISHED || current_status == CANCELLED)
-        return;
-    LOG_WARNING(log, "Begin cancel task: " + id.toString());
-    /// step 1. cancel query streams
-    status = CANCELLED;
-    auto process_list_element = context.getProcessListElement();
-    if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
     {
-        BlockInputStreamPtr input_stream;
-        BlockOutputStreamPtr output_stream;
-        if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
+        if (current_status == FINISHED)
+            status = FINISHED;
+        return;
+    }
+    LOG_WARNING(log, "Begin cancel task: " + id.toString());
+    /// step 1. cancel query streams if it is running
+    if (current_status == RUNNING)
+    {
+        auto process_list_element = context.getProcessListElement();
+        if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
         {
-            IProfilingBlockInputStream * input_stream_casted;
-            if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
+            BlockInputStreamPtr input_stream;
+            BlockOutputStreamPtr output_stream;
+            if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
             {
-                input_stream_casted->cancel(true);
+                IProfilingBlockInputStream * input_stream_casted;
+                if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
+                {
+                    input_stream_casted->cancel(true);
+                }
             }
         }
     }
@@ -356,7 +364,15 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
     {
         Stopwatch stopwatch;
         task = std::make_shared<MPPTask>(task_request.meta(), context);
-        task->prepare(task_request);
+
+        auto retry_regions = task->prepare(task_request);
+        for (auto region : retry_regions)
+        {
+            auto * retry_region = response->add_retry_regions();
+            retry_region->set_id(region.region_id);
+            retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
+            retry_region->mutable_region_epoch()->set_version(region.region_version);
+        }
         if (task->dag_context->isRootMPPTask())
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_root_task_run);
@@ -393,52 +409,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
     return grpc::Status::OK;
 }
 
-MPPTaskManager::MPPTaskManager(BackgroundProcessingPool & background_pool_)
-    : log(&Logger::get("TaskManager")), background_pool(background_pool_)
-{
-    handle = background_pool.addTask(
-        [&, this] {
-            bool has_hanging_query = false;
-            try
-            {
-                /// get a snapshot of current queries
-                auto current_query = this->getCurrentQueries();
-                for (auto query_id : current_query)
-                {
-                    /// get a snapshot of current tasks
-                    auto current_tasks = this->getCurrentTasksForQuery(query_id);
-                    bool has_hanging_task = false;
-                    for (auto & task : current_tasks)
-                    {
-                        if (task->isTaskHanging())
-                        {
-                            has_hanging_task = true;
-                            break;
-                        }
-                    }
-                    if (has_hanging_task)
-                    {
-                        has_hanging_query = true;
-                        this->cancelMPPQuery(query_id, "MPP Task canceled because it seems hangs");
-                    }
-                }
-            }
-            catch (const Exception & e)
-            {
-                LOG_ERROR(log, "MPPTaskMonitor failed by " << e.displayText() << " \n stack : " << e.getStackTrace().toString());
-            }
-            catch (const Poco::Exception & e)
-            {
-                LOG_ERROR(log, "MPPTaskMonitor failed by " << e.displayText());
-            }
-            catch (const std::exception & e)
-            {
-                LOG_ERROR(log, "MPPTaskMonitor failed by " << e.what());
-            }
-            return has_hanging_query;
-        },
-        false);
-}
+MPPTaskManager::MPPTaskManager() : log(&Logger::get("TaskManager")) {}
 
 MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg)
 {
@@ -565,6 +536,6 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
     LOG_ERROR(log, "The task " + task->id.toString() + " cannot be found and fail to unregister");
 }
 
-MPPTaskManager::~MPPTaskManager() { background_pool.removeTask(handle); }
+MPPTaskManager::~MPPTaskManager() {}
 
 } // namespace DB

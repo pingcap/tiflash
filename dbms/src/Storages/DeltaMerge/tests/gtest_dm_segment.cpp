@@ -1,7 +1,7 @@
+#include <Common/CurrentMetrics.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <gtest/gtest.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -11,16 +11,20 @@
 
 #include "dm_basic_include.h"
 
+namespace CurrentMetrics
+{
+extern const Metric DT_SnapshotOfRead;
+extern const Metric DT_SnapshotOfReadRaw;
+extern const Metric DT_SnapshotOfSegmentSplit;
+extern const Metric DT_SnapshotOfSegmentMerge;
+extern const Metric DT_SnapshotOfDeltaMerge;
+extern const Metric DT_SnapshotOfPlaceIndex;
+} // namespace CurrentMetrics
+
 namespace DB
 {
 namespace DM
 {
-extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
-                                    const ColumnDefinesPtr &       schema_snap,
-                                    const BlockInputStreamPtr &    input_stream,
-                                    UInt64                         file_id,
-                                    const String &                 parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
 namespace tests
 {
 
@@ -184,6 +188,7 @@ try
         {
             // flush segment
             segment = segment->mergeDelta(dmContext(), tableColumns());
+            ;
         }
 
         {
@@ -240,7 +245,7 @@ try
     // Thread A
     write_rows(100);
     check_rows(100);
-    auto snap = segment->createSnapshot(dmContext());
+    auto snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
 
     // Thread B
     write_rows(100);
@@ -1041,12 +1046,8 @@ public:
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto delegate     = context.path_pool.getStableDiskDelegator();
         auto store_path   = delegate.choosePath();
-
-        DMFileBlockOutputStream::Flags flags;
-        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
-
         auto dmfile
-            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, flags);
+            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, false);
 
         delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
@@ -1076,7 +1077,8 @@ try
             case Segment_test_Mode::V2_BlockOnly:
                 segment->write(dmContext(), std::move(block));
                 break;
-            case Segment_test_Mode::V2_FileOnly: {
+            case Segment_test_Mode::V2_FileOnly:
+            {
                 auto delegate          = dmContext().path_pool.getStableDiskDelegator();
                 auto file_provider     = dmContext().db_context.getFileProvider();
                 auto [range, file_ids] = genDMFile(dmContext(), block);
@@ -1089,7 +1091,7 @@ try
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
 
-                segment->ingestPacks(dmContext(), range, {pack}, false);
+                segment->writeRegionSnapshot(dmContext(), range, {pack}, false);
                 break;
             }
             default:
@@ -1118,7 +1120,7 @@ try
     SegmentPtr other_segment;
     {
         WriteBatches wbs(dmContext().storage_pool);
-        auto         segment_snap = segment->createSnapshot(dmContext(), true);
+        auto         segment_snap = segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
         ASSERT_FALSE(!segment_snap);
 
         write_100_rows(segment);
@@ -1147,8 +1149,8 @@ try
     {
         WriteBatches wbs(dmContext().storage_pool);
 
-        auto left_snap  = segment->createSnapshot(dmContext(), true);
-        auto right_snap = other_segment->createSnapshot(dmContext(), true);
+        auto left_snap  = segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+        auto right_snap = other_segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
         ASSERT_FALSE(!left_snap || !right_snap);
 
         write_100_rows(other_segment);
@@ -1352,6 +1354,7 @@ try
     {
         segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
+        ;
     }
 
     {
@@ -1529,6 +1532,7 @@ try
     {
         segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
+        ;
     }
 
     {

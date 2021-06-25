@@ -27,7 +27,6 @@
 #pragma clang diagnostic pop
 #endif
 
-
 namespace DB
 {
 namespace tests

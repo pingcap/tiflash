@@ -101,20 +101,26 @@ struct DeltaMergeStoreStat
     Float64 avg_pack_rows_in_stable    = 0;
     Float64 avg_pack_size_in_stable    = 0;
 
-    UInt64 storage_stable_num_snapshots    = 0;
-    UInt64 storage_stable_num_pages        = 0;
-    UInt64 storage_stable_num_normal_pages = 0;
-    UInt64 storage_stable_max_page_id      = 0;
+    UInt64  storage_stable_num_snapshots             = 0;
+    Float64 storage_stable_oldest_snapshot_lifetime  = 0.0;
+    UInt64  storage_stable_oldest_snapshot_thread_id = 0;
+    UInt64  storage_stable_num_pages                 = 0;
+    UInt64  storage_stable_num_normal_pages          = 0;
+    UInt64  storage_stable_max_page_id               = 0;
 
-    UInt64 storage_delta_num_snapshots    = 0;
-    UInt64 storage_delta_num_pages        = 0;
-    UInt64 storage_delta_num_normal_pages = 0;
-    UInt64 storage_delta_max_page_id      = 0;
+    UInt64  storage_delta_num_snapshots             = 0;
+    Float64 storage_delta_oldest_snapshot_lifetime  = 0.0;
+    UInt64  storage_delta_oldest_snapshot_thread_id = 0;
+    UInt64  storage_delta_num_pages                 = 0;
+    UInt64  storage_delta_num_normal_pages          = 0;
+    UInt64  storage_delta_max_page_id               = 0;
 
-    UInt64 storage_meta_num_snapshots    = 0;
-    UInt64 storage_meta_num_pages        = 0;
-    UInt64 storage_meta_num_normal_pages = 0;
-    UInt64 storage_meta_max_page_id      = 0;
+    UInt64  storage_meta_num_snapshots             = 0;
+    Float64 storage_meta_oldest_snapshot_lifetime  = 0.0;
+    UInt64  storage_meta_oldest_snapshot_thread_id = 0;
+    UInt64  storage_meta_num_pages                 = 0;
+    UInt64  storage_meta_num_normal_pages          = 0;
+    UInt64  storage_meta_max_page_id               = 0;
 
     UInt64 background_tasks_length = 0;
 };
@@ -262,38 +268,32 @@ public:
 
     Block addExtraColumnIfNeed(const Context & db_context, Block && block) const;
 
-    void write(const Context & db_context, const DB::Settings & db_settings, Block && block);
+    void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
+
+    void writeRegionSnapshot(const DMContextPtr & dm_context, //
+                             const RowKeyRange &  range,
+                             std::vector<PageId>  file_ids,
+                             bool                 clear_data_in_range);
+
+    void writeRegionSnapshot(const Context &      db_context, //
+                             const DB::Settings & db_settings,
+                             const RowKeyRange &  range,
+                             std::vector<PageId>  file_ids,
+                             bool                 clear_data_in_range)
+    {
+        auto dm_context = newDMContext(db_context, db_settings);
+        return writeRegionSnapshot(dm_context, range, file_ids, clear_data_in_range);
+    }
 
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
 
-    std::tuple<String, PageId> preAllocateIngestFile();
-
-    void preIngestFile(const String & parent_path, const PageId file_id, size_t file_size);
-
-    void ingestFiles(const DMContextPtr &        dm_context, //
-                     const RowKeyRange &         range,
-                     const std::vector<PageId> & file_ids,
-                     bool                        clear_data_in_range);
-
-    void ingestFiles(const Context &             db_context, //
-                     const DB::Settings &        db_settings,
-                     const RowKeyRange &         range,
-                     const std::vector<PageId> & file_ids,
-                     bool                        clear_data_in_range)
-    {
-        auto dm_context = newDMContext(db_context, db_settings);
-        return ingestFiles(dm_context, range, file_ids, clear_data_in_range);
-    }
-
-    /// Read all rows without MVCC filtering
     BlockInputStreams readRaw(const Context &       db_context,
                               const DB::Settings &  db_settings,
                               const ColumnDefines & column_defines,
                               size_t                num_streams,
                               const SegmentIdSet &  read_segments = {});
 
-    /// Read rows with MVCC filtering
-    /// `sorted_ranges` should be already sorted and merged
+    /// ranges should be sorted and merged already.
     BlockInputStreams read(const Context &       db_context,
                            const DB::Settings &  db_settings,
                            const ColumnDefines & columns_to_read,
@@ -325,11 +325,6 @@ public:
                      ColumnID &                    max_column_id_used,
                      const Context &               context);
 
-    const ColumnDefinesPtr getStoreColumns() const
-    {
-        std::shared_lock lock(read_write_mutex);
-        return store_columns;
-    }
     const ColumnDefines & getTableColumns() const { return original_table_columns; }
     const ColumnDefine &  getHandle() const { return original_table_handle_define; }
     BlockPtr              getHeader() const;
@@ -355,9 +350,9 @@ public:
 
     RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
-private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
 
+private:
     bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);

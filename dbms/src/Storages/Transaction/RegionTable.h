@@ -36,7 +36,6 @@ struct MockTiDBTable;
 class RegionRangeKeys;
 class RegionTaskLock;
 struct RegionPtrWithBlock;
-struct RegionPtrWithSnapshotFiles;
 class RegionScanFilter;
 using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
 
@@ -205,7 +204,6 @@ private:
     Logger * log;
 };
 
-
 // Block cache of region data with schema version.
 struct RegionPreDecodeBlockData
 {
@@ -245,26 +243,6 @@ struct RegionPtrWithBlock
 
     const Base & base;
     CachePtr pre_decode_cache;
-};
-
-
-// A wrap of RegionPtr, with snapshot files directory waitting to be ingested
-struct RegionPtrWithSnapshotFiles
-{
-    using Base = RegionPtr;
-
-    /// can accept const ref of RegionPtr without cache
-    RegionPtrWithSnapshotFiles(const Base & base_, std::vector<UInt64> ids_ = {}) : base(base_), ingest_ids(std::move(ids_)) {}
-
-    /// to be compatible with usage as RegionPtr.
-    Base::element_type * operator->() const { return base.operator->(); }
-    const Base::element_type & operator*() const { return base.operator*(); }
-
-    /// make it could be cast into RegionPtr implicitly.
-    operator const Base &() const { return base; }
-
-    const Base & base;
-    const std::vector<UInt64> ingest_ids;
 };
 
 } // namespace DB

@@ -100,10 +100,6 @@ extern const int ARGUMENT_OUT_OF_BOUND;
 extern const int INVALID_CONFIG_PARAMETER;
 } // namespace ErrorCodes
 
-namespace Debug
-{
-extern void setServiceAddr(const std::string & addr);
-}
 
 static std::string getCanonicalPath(std::string path)
 {
@@ -812,7 +808,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         builder.SetMaxSendMessageSize(-1);
         flash_grpc_server = builder.BuildAndStart();
         LOG_INFO(log, "Flash grpc server listening on [" << raft_config.flash_server_addr << "]");
-        Debug::setServiceAddr(raft_config.flash_server_addr);
     }
 
     SCOPE_EXIT({
@@ -1148,7 +1143,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 tiflash_instance_wrap.tmt->getKVStore()->traverseRegions([&batch_read_index_req](RegionID, const RegionPtr & region) {
                     batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region));
                 });
-                tiflash_instance_wrap.proxy_helper->batchReadIndex(batch_read_index_req);
+                tiflash_instance_wrap.proxy_helper->batchReadIndex(
+                    batch_read_index_req, tiflash_instance_wrap.tmt->batchReadIndexTimeout());
             }
             LOG_INFO(log, "start to wait for terminal signal");
         }

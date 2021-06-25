@@ -1,3 +1,4 @@
+#include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>

@@ -8,30 +8,33 @@ namespace DB
 namespace DM
 {
 
-DMFileWriter::DMFileWriter(const DMFilePtr &             dmfile_,
-                           const ColumnDefines &         write_columns_,
-                           const FileProviderPtr &       file_provider_,
-                           const RateLimiterPtr &        rate_limiter_,
-                           const DMFileWriter::Options & options_)
+DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
+                           const ColumnDefines &       write_columns_,
+                           size_t                      min_compress_block_size_,
+                           size_t                      max_compress_block_size_,
+                           const CompressionSettings & compression_settings_,
+                           const FileProviderPtr &     file_provider_,
+                           const RateLimiterPtr &      rate_limiter_)
     : dmfile(dmfile_),
       write_columns(write_columns_),
-      options(options_, dmfile),
+      min_compress_block_size(min_compress_block_size_),
+      max_compress_block_size(max_compress_block_size_),
+      compression_settings(compression_settings_),
+      single_file_mode(dmfile->isSingleFileMode()),
       // assume pack_stat_file is the first file created inside DMFile
       // it will create encryption info for the whole DMFile
-      pack_stat_file((options.flags.isSingleFile()) //
-                         ? nullptr
-                         : createWriteBufferFromFileBaseByFileProvider(file_provider_,
-                                                                       dmfile->packStatPath(),
-                                                                       dmfile->encryptionPackStatPath(),
-                                                                       true,
-                                                                       rate_limiter_,
-                                                                       0,
-                                                                       0,
-                                                                       options.max_compress_block_size)),
-      single_file_stream((!options.flags.isSingleFile())
-                             ? nullptr
-                             : new SingleFileStream(
-                                 dmfile_, options.compression_settings, options.max_compress_block_size, file_provider_, rate_limiter_)),
+      pack_stat_file(single_file_mode ? nullptr
+                                      : createWriteBufferFromFileBaseByFileProvider(file_provider_,
+                                                                                    dmfile->packStatPath(),
+                                                                                    dmfile->encryptionPackStatPath(),
+                                                                                    true,
+                                                                                    rate_limiter_,
+                                                                                    0,
+                                                                                    0,
+                                                                                    max_compress_block_size)),
+      single_file_stream(!single_file_mode ? nullptr
+                                           : new SingleFileStream(
+                                               dmfile_, compression_settings_, max_compress_block_size_, file_provider_, rate_limiter_)),
       file_provider(file_provider_),
       rate_limiter(rate_limiter_)
 {
@@ -43,7 +46,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &             dmfile_,
         /// for handle column always generate index
         bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || cd.type->isInteger() || cd.type->isDateOrDateTime();
 
-        if (options.flags.isSingleFile())
+        if (single_file_mode)
         {
             if (do_index)
             {
@@ -73,8 +76,8 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
         auto       stream      = std::make_unique<Stream>(dmfile, //
                                                stream_name,
                                                type,
-                                               options.compression_settings,
-                                               options.max_compress_block_size,
+                                               compression_settings,
+                                               max_compress_block_size,
                                                file_provider,
                                                rate_limiter,
                                                IDataType::isNullMap(substream_path) ? false : do_index);
@@ -107,7 +110,7 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
             stat.first_tag = (UInt8)(col->get64(0));
     }
 
-    if (!options.flags.isSingleFile())
+    if (!single_file_mode)
     {
         writePODBinary(stat, *pack_stat_file);
     }
@@ -117,7 +120,7 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
 
 void DMFileWriter::finalize()
 {
-    if (!options.flags.isSingleFile())
+    if (!single_file_mode)
     {
         pack_stat_file->sync();
     }
@@ -127,7 +130,7 @@ void DMFileWriter::finalize()
         finalizeColumn(cd.id, cd.type);
     }
 
-    if (options.flags.isSingleFile())
+    if (single_file_mode)
     {
         dmfile->finalizeForSingleFileMode(single_file_stream->plain_hashing);
         single_file_stream->flush();
@@ -142,7 +145,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 {
     size_t rows = column.size();
 
-    if (options.flags.isSingleFile())
+    if (single_file_mode)
     {
         auto callback = [&](const IDataType::SubstreamPath & substream) {
             size_t     offset_in_compressed_file = single_file_stream->plain_hashing.count();
@@ -215,7 +218,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                     stream->minmaxes->addPack(column, del_mark);
 
                 /// There could already be enough data to compress into the new block.
-                if (stream->original_hashing.offset() >= options.min_compress_block_size)
+                if (stream->original_hashing.offset() >= min_compress_block_size)
                     stream->original_hashing.next();
 
                 auto offset_in_compressed_block = stream->original_hashing.offset();
@@ -253,7 +256,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 {
     size_t bytes_written = 0;
 
-    if (options.flags.isSingleFile())
+    if (single_file_mode)
     {
         auto callback = [&](const IDataType::SubstreamPath & substream) {
             const auto stream_name = DMFile::getFileNameBase(col_id, substream);

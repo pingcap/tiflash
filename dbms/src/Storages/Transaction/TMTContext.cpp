@@ -13,10 +13,12 @@
 
 namespace DB
 {
+// default batch-read-index timeout is 10_000ms.
+extern const uint64_t DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS = 10 * 1000;
 
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_),
-      kvstore(std::make_shared<KVStore>(context, raft_config.snapshot_apply_method)),
+      kvstore(std::make_shared<KVStore>(context)),
       region_table(context),
       background_service(nullptr),
       cluster(raft_config.pd_addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>()
@@ -25,9 +27,11 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
       schema_syncer(raft_config.pd_addrs.size() == 0
               ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ true>>(cluster))
               : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ false>>(cluster))),
-      mpp_task_manager(std::make_shared<MPPTaskManager>(context.getBackgroundPool())),
+      mpp_task_manager(std::make_shared<MPPTaskManager>()),
       engine(raft_config.engine),
-      disable_bg_flush(raft_config.disable_bg_flush)
+      disable_bg_flush(raft_config.disable_bg_flush),
+      replica_read_max_thread(1),
+      batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
 {}
 
 void TMTContext::restore(const TiFlashRaftProxyHelper * proxy_helper)
@@ -85,6 +89,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     static constexpr const char * COMPACT_LOG_MIN_ROWS = "flash.compact_log_min_rows";
     static constexpr const char * COMPACT_LOG_MIN_BYTES = "flash.compact_log_min_bytes";
     static constexpr const char * REPLICA_READ_MAX_THREAD = "flash.replica_read_max_thread";
+    static constexpr const char * BATCH_READ_INDEX_TIMEOUT_MS = "flash.batch_read_index_timeout_ms";
 
 
     getRegionTable().setTableCheckerThreshold(config.getDouble(TABLE_OVERLAP_THRESHOLD, 0.6));
@@ -92,7 +97,12 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     getKVStore()->setRegionCompactLogConfig(std::max(config.getUInt64(COMPACT_LOG_MIN_PERIOD, 120), 1),
         std::max(config.getUInt64(COMPACT_LOG_MIN_ROWS, 40 * 1024), 1),
         std::max(config.getUInt64(COMPACT_LOG_MIN_BYTES, 32 * 1024 * 1024), 1));
-    replica_read_max_thread = std::max(config.getUInt64(REPLICA_READ_MAX_THREAD, 1), 1);
+    {
+        replica_read_max_thread = std::max(config.getUInt64(REPLICA_READ_MAX_THREAD, 1), 1);
+        batch_read_index_timeout_ms = config.getUInt64(BATCH_READ_INDEX_TIMEOUT_MS, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
+        LOG_INFO(&Logger::get(__FUNCTION__),
+            "read-index max thread num: " << replicaReadMaxThread() << ", timeout: " << batchReadIndexTimeout() << "ms");
+    }
 }
 
 const std::atomic_bool & TMTContext::getTerminated() const { return terminated; }
@@ -103,5 +113,8 @@ void TMTContext::setTerminated()
     // notify all region to stop learner read.
     kvstore->traverseRegions([](const RegionID, const RegionPtr & region) { region->notifyApplied(); });
 }
+
+UInt64 TMTContext::replicaReadMaxThread() const { return replica_read_max_thread.load(std::memory_order::memory_order_relaxed); }
+UInt64 TMTContext::batchReadIndexTimeout() const { return batch_read_index_timeout_ms.load(std::memory_order::memory_order_relaxed); }
 
 } // namespace DB

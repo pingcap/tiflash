@@ -181,6 +181,29 @@ static String buildLogicalFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
+// left(str,len) = substrUTF8(str,1,len)
+static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    const String & func_name = "substringUTF8";
+    Names argument_names;
+
+    // the first parameter: str
+    String str = analyzer->getActions(expr.children()[0], actions, false);
+    argument_names.push_back(str);
+
+    // the second parameter: const(1)
+    auto const_one = tipb::Expr();
+    constructInt64LiteralTiExpr(const_one, 1);
+    auto col_const_one = analyzer->getActions(const_one, actions, false);
+    argument_names.push_back(col_const_one);
+
+    // the third parameter: len
+    String name = analyzer->getActions(expr.children()[1], actions, false);
+    argument_names.push_back(name);
+
+    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+}
+
 static const String tidb_cast_name = "tidb_cast";
 
 static String buildCastFunctionInternal(DAGExpressionAnalyzer * analyzer, const Names & argument_names, bool in_union,
@@ -219,25 +242,41 @@ static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Ex
     return buildCastFunctionInternal(analyzer, {name, type_expr_name}, false, expr.field_type(), actions);
 }
 
-static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+struct DateAdd
 {
+    static constexpr auto name = "date_add";
+    static const std::unordered_map<String, String> unit_to_func_name_map;
+};
+const std::unordered_map<String, String> DateAdd::unit_to_func_name_map = {{"DAY", "addDays"}, {"WEEK", "addWeeks"}, {"MONTH", "addMonths"},
+                                                                           {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}};
+struct DateSub
+{
+    static constexpr auto name = "date_sub";
+    static const std::unordered_map<String, String> unit_to_func_name_map;
+};
+const std::unordered_map<String, String> DateSub::unit_to_func_name_map
+    = {{"DAY", "subtractDays"}, {"WEEK", "subtractWeeks"}, {"MONTH", "subtractMonths"}, {"YEAR", "subtractYears"},
+       {"HOUR", "subtractHours"}, {"MINUTE", "subtractMinutes"}, {"SECOND", "subtractSeconds"}};
 
-    static const std::unordered_map<String, String> unit_to_func_name_map({{"DAY", "addDays"}, {"WEEK", "addWeeks"}, {"MONTH", "addMonths"},
-        {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}});
+template <typename Impl>
+static String buildDateAddOrSubFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
     if (expr.children_size() != 3)
     {
-        throw TiFlashException("date add function requires three arguments", Errors::Coprocessor::BadRequest);
+        throw TiFlashException(std::string() + Impl::name + " function requires three arguments", Errors::Coprocessor::BadRequest);
     }
     String date_column = analyzer->getActions(expr.children(0), actions);
     String delta_column = analyzer->getActions(expr.children(1), actions);
     if (expr.children(2).tp() != tipb::ExprType::String)
     {
-        throw TiFlashException("3rd argument of date add function must be string literal", Errors::Coprocessor::BadRequest);
+        throw TiFlashException(
+            std::string() + "3rd argument of " + Impl::name + " function must be string literal", Errors::Coprocessor::BadRequest);
     }
     String unit = expr.children(2).val();
-    if (unit_to_func_name_map.find(unit) == unit_to_func_name_map.end())
-        throw TiFlashException("date_add does not support unit " + unit + " yet.", Errors::Coprocessor::Unimplemented);
-    String func_name = unit_to_func_name_map.find(unit)->second;
+    if (Impl::unit_to_func_name_map.find(unit) == Impl::unit_to_func_name_map.end())
+        throw TiFlashException(
+            std::string() + Impl::name + " function does not support unit " + unit + " yet.", Errors::Coprocessor::Unimplemented);
+    String func_name = Impl::unit_to_func_name_map.find(unit)->second;
     const auto & date_column_type = removeNullable(actions->getSampleBlock().getByName(date_column).type);
     if (!date_column_type->isDateOrDateTime())
     {
@@ -303,25 +342,13 @@ static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr &
 }
 
 static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>>
-    function_builder_map({
-        {"in", buildInFunction},
-        {"notIn", buildInFunction},
-        {"globalIn", buildInFunction},
-        {"globalNotIn", buildInFunction},
-        {"tidbIn", buildInFunction},
-        {"tidbNotIn", buildInFunction},
-        {"ifNull", buildIfNullFunction},
-        {"multiIf", buildMultiIfFunction},
-        {"tidb_cast", buildCastFunction},
-        {"date_add", buildDateAddFunction},
-        {"and", buildLogicalFunction},
-        {"or", buildLogicalFunction},
-        {"xor", buildLogicalFunction},
-        {"not", buildLogicalFunction},
-        {"bitAnd", buildBitwiseFunction},
-        {"bitOr", buildBitwiseFunction},
-        {"bitXor", buildBitwiseFunction},
-        {"bitNot", buildBitwiseFunction},
+    function_builder_map({{"in", buildInFunction}, {"notIn", buildInFunction}, {"globalIn", buildInFunction},
+        {"globalNotIn", buildInFunction}, {"tidbIn", buildInFunction}, {"tidbNotIn", buildInFunction}, {"ifNull", buildIfNullFunction},
+        {"multiIf", buildMultiIfFunction}, {"tidb_cast", buildCastFunction},
+        {"and", buildLogicalFunction}, {"or", buildLogicalFunction}, {"xor", buildLogicalFunction}, {"not", buildLogicalFunction},
+        {"bitAnd", buildBitwiseFunction}, {"bitOr", buildBitwiseFunction}, {"bitXor", buildBitwiseFunction},
+        {"bitNot", buildBitwiseFunction}, {"leftUTF8", buildLeftUTF8Function},
+        {"date_add", buildDateAddOrSubFunction<DateAdd>}, {"date_sub", buildDateAddOrSubFunction<DateSub>}
     });
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
@@ -694,7 +721,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(ExpressionActionsChain &
             /// In ClickHouse, it returns id,t1_value,t2_value
             /// In TiDB, it returns t1_id,t1_value,t2_id,t2_value
             /// So in order to make the join compatible with TiDB, if the join key is a columnRef, for inner/left
-            /// join, add a new key as right join key, for right join, add a new key as left join key
+            /// join, add a new key for right join key, for right join, add new key for both left and right join key
             String updated_key_name = unique_name_generator.toUniqueName((left ? "_l_k_" : "_r_k_") + key_name);
             /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
             /// key names, so just copy a key with new name

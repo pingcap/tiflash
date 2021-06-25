@@ -2814,7 +2814,7 @@ void ExpressionAnalyzer::collectJoinedColumns(NameSet & joined_columns, NamesAnd
         {
             joined_columns.insert(col.name);
 
-            bool make_nullable = settings.join_use_nulls && (table_join.kind == ASTTableJoin::Kind::Left || table_join.kind == ASTTableJoin::Kind::Full);
+            bool make_nullable = settings.join_use_nulls && (table_join.kind == ASTTableJoin::Kind::Left || table_join.kind == ASTTableJoin::Kind::Cross_Left || table_join.kind == ASTTableJoin::Kind::Full);
             joined_columns_name_type.emplace_back(col.name, make_nullable ? makeNullable(col.type) : col.type);
         }
     }

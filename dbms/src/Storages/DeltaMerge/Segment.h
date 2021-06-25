@@ -118,9 +118,9 @@ public:
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
     bool write(DMContext & dm_context, const Block & block); // For test only
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
-    bool ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
+    bool writeRegionSnapshot(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
 
-    SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update = false) const;
+    SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
 
     BlockInputStreamPtr getInputStream(const DMContext &          dm_context,
                                        const ColumnDefines &      columns_to_read,
@@ -238,6 +238,9 @@ public:
     }
     bool hasAbandoned() { return delta->hasAbandoned(); }
 
+    bool isSplitForbidden() { return split_forbidden; }
+    void forbidSplit() { split_forbidden = true; }
+
     void drop(const FileProviderPtr & file_provider) { stable->drop(file_provider); }
 
     RowsAndBytes
@@ -323,8 +326,17 @@ private:
     const DeltaValueSpacePtr  delta;
     const StableValueSpacePtr stable;
 
+    bool split_forbidden = false;
+
     Logger * log;
 };
+
+DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
+                             const ColumnDefinesPtr &    schema_snap,
+                             const BlockInputStreamPtr & input_stream,
+                             UInt64                      file_id,
+                             const String &              parent_path,
+                             bool                        need_rate_limit);
 
 } // namespace DM
 } // namespace DB
