@@ -27,7 +27,7 @@ void DAGResponseWriter::fillTiExecutionSummary(
 
 template <typename RemoteBlockInputStream>
 void mergeRemoteExecuteSummaries(
-    RemoteBlockInputStream * input_stream, std::unordered_map<String, std::vector<ExecutionSummary>> execution_summaries)
+    RemoteBlockInputStream * input_stream, std::unordered_map<String, std::vector<ExecutionSummary>> & execution_summaries)
 {
     size_t source_num = input_stream->getSourceNum();
     for (size_t s_index = 0; s_index < source_num; s_index++)
