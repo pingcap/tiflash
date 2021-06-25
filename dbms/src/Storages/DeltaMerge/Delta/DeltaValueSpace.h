@@ -97,7 +97,7 @@ private:
     std::atomic<size_t> last_try_split_bytes            = 0;
     std::atomic<size_t> last_try_place_delta_index_rows = 0;
 
-    DeltaIndexPtr _delta_index;
+    DeltaIndexPtr delta_index;
 
     // Protects the operations in this instance.
     mutable std::mutex mutex;
@@ -111,9 +111,7 @@ private:
 
     void appendPackInner(const DeltaPackPtr & pack);
 
-    auto & deltaIndex() { return _delta_index; }
-    void   setDeltaIndex(const DeltaIndexPtr & new_delta_index) { _delta_index = new_delta_index; }
-
+    auto & deltaIndex() { return delta_index; }
 public:
     DeltaValueSpace(PageId id_, const DeltaPacks & packs_ = {});
 

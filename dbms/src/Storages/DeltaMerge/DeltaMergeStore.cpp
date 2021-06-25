@@ -546,7 +546,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 
-    GET_METRIC(dm_context->metrics, tiflash_dt_write_path_seconds, type_check_update).Observe(check_update_watch.elapsedSeconds);
+    GET_METRIC(dm_context->metrics, tiflash_dt_write_path_seconds, type_check_update).Observe(check_update_watch.elapsedSeconds());
 }
 
 void DeltaMergeStore::writeRegionSnapshot(const DMContextPtr & dm_context,
