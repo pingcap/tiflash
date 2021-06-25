@@ -497,6 +497,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             // While large packs are directly written to PageStorage.
             if (small_pack)
             {
+                GET_METRIC(dm_context->metrics, tiflash_dt_write_rows_count, type_cache).Observe(limit);
+
                 if (segment->writeToCache(*dm_context, block, offset, limit, &stat))
                 {
                     updated_segments.push_back(segment);
@@ -505,6 +507,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             }
             else
             {
+                GET_METRIC(dm_context->metrics, tiflash_dt_write_rows_count, type_disk).Observe(limit);
+
                 // If pack haven't been written, or the pk range has changed since last write, then write it and
                 // delete former written pack.
                 if (!write_pack || (write_pack && write_range != rowkey_range))
