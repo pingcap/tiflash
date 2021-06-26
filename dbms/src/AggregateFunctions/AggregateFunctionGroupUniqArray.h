@@ -146,7 +146,7 @@ public:
 
         for (const auto & elem : set)
         {
-            writeStringBinary(elem, buf);
+            writeStringBinary(elem.key, buf);
         }
     }
 
@@ -168,7 +168,7 @@ public:
         auto & set = this->data(place).value;
 
         bool inserted;
-        State::Set::iterator it;
+        State::Set::LookupResult it;
 
         StringRef str_serialized = getSerialization(*columns[0], row_num, *arena);
         set.emplace(str_serialized, it, inserted);
@@ -187,16 +187,16 @@ public:
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
-        auto & cur_set = this->data(place).value;
+	auto & cur_set = this->data(place).value;
         auto & rhs_set = this->data(rhs).value;
 
         bool inserted;
-        State::Set::iterator it;
+        State::Set::LookupResult it;
         for (auto & rhs_elem : rhs_set)
         {
-            cur_set.emplace(rhs_elem, it, inserted);
-            if (inserted)
-                it->key = arena->insert(it->data, it->size);
+            // We have to copy the keys to our arena.
+            assert(arena != nullptr);
+            cur_set.emplace(ArenaKeyHolder{rhs_elem.getValue(), *arena}, it, inserted);
         }
     }
 
@@ -211,7 +211,7 @@ public:
 
         for (auto & elem : set)
         {
-            deserializeAndInsert(elem, data_to);
+            deserializeAndInsert(elem.key, data_to);
         }
     }
 

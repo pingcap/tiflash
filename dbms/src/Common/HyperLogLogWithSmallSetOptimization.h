@@ -45,7 +45,7 @@ private:
         Large * tmp_large = new Large;
 
         for (const auto & x : small)
-            tmp_large->insert(x);
+            tmp_large->insert(x.getKey());
 
         large = tmp_large;
     }
@@ -97,7 +97,7 @@ public:
         else
         {
             for (const auto & x : rhs.small)
-                insert(x);
+                insert(x.getKey());
         }
     }
 

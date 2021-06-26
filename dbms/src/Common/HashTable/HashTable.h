@@ -1349,8 +1349,8 @@ public:
     /// when I refine the code using shared_mutex to return read lock for ConstIterator and write lock for Iterator, the tests
     /// in gtest_concurrent_hashmap(with test_loop = 1000) is about 5 times slower. Since the typical usage of concurrent hash map
     /// in TiFlash is concurrent insert(when building join hash table), I think just keep using mutex is ok.
-    using IteratorWithLock = std::pair<typename HashTableType::iterator, std::unique_ptr<std::lock_guard<std::mutex>>>;
-    using ConstIteratorWithLock = std::pair<typename HashTableType::const_iterator, std::unique_ptr<std::lock_guard<std::mutex>>>;
+    using IteratorWithLock = std::pair<typename HashTableType::LookupResult, std::unique_ptr<std::lock_guard<std::mutex>>>;
+    using ConstIteratorWithLock = std::pair<typename HashTableType::ConstLookupResult, std::unique_ptr<std::lock_guard<std::mutex>>>;
     HashTableWithLock() {}
     HashTableWithLock(size_t reserve_for_num_elements) : hash_table(reserve_for_num_elements) {}
     std::mutex & getMutex() { return mutex; }

@@ -304,6 +304,17 @@ template
 >
 using HashMapWithSavedHash = HashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator>;
 
+template <typename Key, typename Mapped, typename Hash,
+    size_t initial_size_degree>
+using HashMapWithStackMemory = HashMapTable<
+    Key,
+    HashMapCellWithSavedHash<Key, Mapped, Hash>,
+    Hash,
+    HashTableGrower<initial_size_degree>,
+    HashTableAllocatorWithStackMemory<
+        (1ULL << initial_size_degree)
+        * sizeof(HashMapCellWithSavedHash<Key, Mapped, Hash>)>>;
+
 /// ConcurrentHashTable is the base class, it contains a vector of HashTableWithLock, ConcurrentHashMapTable is a derived
 /// class from ConcurrentHashTable, it makes hash table to be a hash map, and ConcurrentHashMap/ConcurrentHashMapWithSavedHash
 /// is just name alias for ConcurrentHashMapTable
