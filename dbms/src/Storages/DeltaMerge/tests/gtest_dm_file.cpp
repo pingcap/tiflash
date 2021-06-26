@@ -29,14 +29,10 @@ TEST(DMFileWriterFlags_test, SetClearFlags)
     Flags flags;
 
     bool f = false;
-    flags.setRateLimit(f);
-    EXPECT_FALSE(flags.needRateLimit());
     flags.setSingleFile(f);
     EXPECT_FALSE(flags.isSingleFile());
 
     f = true;
-    flags.setRateLimit(f);
-    EXPECT_TRUE(flags.needRateLimit());
     flags.setSingleFile(f);
     EXPECT_TRUE(flags.isSingleFile());
 }
