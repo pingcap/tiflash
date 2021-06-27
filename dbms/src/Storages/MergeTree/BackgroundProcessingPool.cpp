@@ -24,6 +24,11 @@ namespace DB
 constexpr double BackgroundProcessingPool::sleep_seconds;
 constexpr double BackgroundProcessingPool::sleep_seconds_random_part;
 
+#if __APPLE__ && __clang__
+__thread bool is_background_thread = false;
+#else
+thread_local bool is_background_thread = false;
+#endif
 
 void BackgroundProcessingPool::TaskInfo::wake()
 {
@@ -115,6 +120,7 @@ void BackgroundProcessingPool::threadFunction()
         static std::atomic_uint64_t tid{0};
         const auto name = "BkgPool" + std::to_string(tid++);
         setThreadName(name.data());
+        is_background_thread = true;
     }
 
     MemoryTracker memory_tracker;
