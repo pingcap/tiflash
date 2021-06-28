@@ -489,8 +489,12 @@ void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns 
     {
         for (size_t j = 0; j < aggregate_columns[i].size(); ++j)
         {
-            materialized_columns.push_back(columns.at(params.aggregates[i].arguments[j])->convertToFullColumnIfConst());
-            aggregate_columns[i][j] = materialized_columns.back().get();
+            aggregate_columns[i][j] = columns.at(params.aggregates[i].arguments[j]).get();
+            if (ColumnPtr converted = aggregate_columns[i][j]->convertToFullColumnIfConst())
+            {
+                materialized_columns.push_back(converted);
+                aggregate_columns[i][j] = materialized_columns.back().get();
+            }
         }
 
         aggregate_functions_instructions[i].arguments = aggregate_columns[i].data();
@@ -547,8 +551,13 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
     /// Remember the columns we will work with
     for (size_t i = 0; i < params.keys_size; ++i)
     {
-        materialized_columns.push_back(columns.at(params.keys[i])->convertToFullColumnIfConst());
-        key_columns[i] = materialized_columns.back().get();
+        key_columns[i] = columns.at(params.keys[i]).get();
+
+        if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
+        {
+            materialized_columns.push_back(converted);
+            key_columns[i] = materialized_columns.back().get();
+        }
     }
 
     AggregateFunctionInstructions aggregate_functions_instructions;
