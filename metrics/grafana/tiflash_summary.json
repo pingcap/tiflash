@@ -4315,7 +4315,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Read Index OPS",
+          "title": "Raft Read Index OPS",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -4392,10 +4392,10 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "999",
+              "legendFormat": "max",
               "refId": "A"
             },
             {
@@ -4424,7 +4424,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Read Index Duration",
+          "title": "Raft Batch Read Index Duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -4500,10 +4500,10 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "999",
+              "legendFormat": "max",
               "refId": "A"
             },
             {
@@ -4532,7 +4532,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Wait Index Duration",
+          "title": "Raft Wait Index Duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
