@@ -1753,7 +1753,7 @@ private:
         //  other type, its parameter should be the same
         DataTypePtr from_inner_type = removeNullable(from_type);
         DataTypePtr to_inner_type = removeNullable(to_type);
-        return !(from_type->isNullable() ^ to_type->isNullable()) && from_inner_type->equals(*to_inner_type) && !from_inner_type->isParametric() && !from_inner_type->isString();
+        return from_type->isNullable() == to_type->isNullable() && from_inner_type->equals(*to_inner_type) && !from_inner_type->isParametric() && !from_inner_type->isString();
     }
 
     WrapperType prepare(const DataTypePtr & from_type, const DataTypePtr & to_type) const
