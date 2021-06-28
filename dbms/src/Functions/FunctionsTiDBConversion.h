@@ -1748,6 +1748,18 @@ private:
             "tidb_cast from " + from_type->getName() + " to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
     }
 
+<<<<<<< HEAD
+=======
+    bool isIdentityCast(const DataTypePtr & from_type, const DataTypePtr & to_type) const
+    {
+        // todo should remove !from_type->isParametric(), because when a type equals to
+        //  other type, its parameter should be the same
+        DataTypePtr from_inner_type = removeNullable(from_type);
+        DataTypePtr to_inner_type = removeNullable(to_type);
+        return !(from_type->isNullable() ^ to_type->isNullable()) && from_inner_type->equals(*to_inner_type) && !from_inner_type->isParametric() && !from_inner_type->isString();
+    }
+
+>>>>>>> b096d8328... fix cast fail (#2260)
     WrapperType prepare(const DataTypePtr & from_type, const DataTypePtr & to_type) const
     {
         if (from_type->onlyNull())
@@ -1758,10 +1770,16 @@ private:
             };
         }
 
+<<<<<<< HEAD
         DataTypePtr from_inner_type = removeNullable(from_type);
         DataTypePtr to_inner_type = removeNullable(to_type);
         if (from_type->equals(*to_type) && !from_inner_type->isParametric() && !from_inner_type->isString())
+=======
+        if (isIdentityCast(from_type, to_type))
+>>>>>>> b096d8328... fix cast fail (#2260)
             return createIdentityWrapper(from_type);
+        DataTypePtr from_inner_type = removeNullable(from_type);
+        DataTypePtr to_inner_type = removeNullable(to_type);
 
         auto wrapper = prepareImpl(from_inner_type, to_inner_type, to_type->isNullable());
         if (from_type->isNullable())
