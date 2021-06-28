@@ -557,9 +557,9 @@ PageStorage::SnapshotPtr PageStorage::getSnapshot()
     return versioned_page_entries.getSnapshot();
 }
 
-size_t PageStorage::getNumSnapshots() const
+std::tuple<size_t, double, unsigned> PageStorage::getSnapshotsStat() const
 {
-    return versioned_page_entries.numSnapshots();
+    return versioned_page_entries.getSnapshotsStat();
 }
 
 Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
