@@ -27,7 +27,8 @@ public:
     void finishWrite() override;
 
 private:
-    void ScheduleEncodeTask(bool collect_execution_info);
+    template <bool collect_execution_info>
+    void ScheduleEncodeTask();
     ThreadPool::Job getEncodeTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
     ThreadPool::Job getEncodePartitionTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
@@ -38,6 +39,7 @@ private:
     size_t rows_in_blocks;
     uint16_t partition_num;
     ThreadPool thread_pool;
+    void ScheduleEncodeTask();
 };
 
 } // namespace DB
