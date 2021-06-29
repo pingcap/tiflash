@@ -27,6 +27,45 @@ namespace ErrorCodes
 
 namespace ColumnsHashing
 {
+template <typename T, typename Enable = void>
+struct VecHolder
+{
+    const char * data;
+    VecHolder(const IColumn * col)
+    {
+        data = col->getRawData().data;
+    }
+
+    T get(size_t row) const
+    {
+        return unalignedLoad<T>(data + row * sizeof(T));
+    }
+
+    operator const T * () const
+    {
+        return reinterpret_cast<const T *>(data);
+    }
+};
+
+template <typename T>
+struct VecHolder<T, std::enable_if_t<std::is_same_v<Int256>, void>>
+{
+    const T * data;
+    VecHolder(const IColumn * col)
+    {
+        data = &static_cast<const ColumnVector<T> *>(col)->getData()[0];
+    }
+
+    T get(size_t row) const
+    {
+        return data[row];
+    }
+
+    operator const T * () const
+    {
+        return data;
+    }
+};
 
 /// For the case when there is one numeric key.
 /// UInt8/16/32/64 for any type with corresponding bit width.
@@ -37,17 +76,17 @@ struct HashMethodOneNumber
     using Self = HashMethodOneNumber<Value, Mapped, FieldType, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
 
-    const char * vec;
+    VecHolder<FieldType> vec;
 
     /// If the keys of a fixed length then key_sizes contains their lengths, empty otherwise.
     HashMethodOneNumber(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators &)
+        : vec(key_columns[0])
     {
-        vec = key_columns[0]->getRawData().data;
     }
 
     HashMethodOneNumber(const IColumn * column)
+        : vec(column)
     {
-        vec = column->getRawData().data;
     }
 
     /// Emplace key into HashTable or HashMap. If Data is HashMap, returns ptr to value, otherwise nullptr.
@@ -64,13 +103,10 @@ struct HashMethodOneNumber
     /// Is used for default implementation in HashMethodBase.
     FieldType getKeyHolder(size_t row, Arena *, std::vector<String> &) const
     {
-        if constexpr(std::is_same_v<FieldType, Int256>)
-            return vec[row];
-        else
-            return unalignedLoad<FieldType>(vec + row * sizeof(FieldType));
+        return vec.get(row);
     }
 
-    const FieldType * getKeyData() const { return reinterpret_cast<const FieldType *>(vec); }
+    const FieldType * getKeyData() const { return vec; }
 };
 
 
