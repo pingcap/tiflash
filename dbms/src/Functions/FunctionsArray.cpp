@@ -2405,8 +2405,6 @@ DataTypePtr FunctionArrayReduce::getReturnTypeImpl(const ColumnsWithTypeAndName 
 void FunctionArrayReduce::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
 {
     IAggregateFunction & agg_func = *aggregate_function.get();
-    std::unique_ptr<char[]> place_holder { new char[agg_func.sizeOfData()] };
-    AggregateDataPtr place = place_holder.get();
 
     size_t rows = block.rows();
 
@@ -2458,79 +2456,46 @@ void FunctionArrayReduce::executeImpl(Block & block, const ColumnNumbers & argum
         throw Exception("State function " + agg_func.getName() + " inserts results into non-state column "
                         + block.getByPosition(result).type->getName(), ErrorCodes::ILLEGAL_COLUMN);
 
-    if (agg_func.supportBatchOperations())
+    std::unique_ptr<Arena> arena = std::make_unique<Arena>();
+
+    PODArray<AggregateDataPtr> places(rows);
+    for (size_t i = 0; i < rows; ++i)
     {
-        std::unique_ptr<Arena> arena = std::make_unique<Arena>();
-
-        PODArray<AggregateDataPtr> places(rows);
-        for (size_t i = 0; i < rows; ++i)
+        places[i] = arena->alignedAlloc(agg_func.sizeOfData(), agg_func.alignOfData());
+        try
         {
-            places[i] = arena->alignedAlloc(agg_func.sizeOfData(), agg_func.alignOfData());
-            try
-            {
-                agg_func.create(places[i]);
-            }
-            catch (...)
-            {
-                for (size_t j = 0; j < i; ++j)
-                    agg_func.destroy(places[j]);
-                throw;
-            }
+            agg_func.create(places[i]);
         }
-
-        SCOPE_EXIT({
-            for (size_t i = 0; i < rows; ++i)
-                agg_func.destroy(places[i]);
-        });
-
+        catch (...)
         {
-            auto * that = &agg_func;
-            /// Unnest consecutive trailing -State combinators
-            while (auto * func = typeid_cast<AggregateFunctionState *>(that))
-                that = func->getNestedFunction().get();
-
-            that->addBatchArray(rows, places.data(), 0, aggregate_arguments, offsets->data(), arena.get());
-        }
-
-        for (size_t i = 0; i < rows; ++i)
-        {
-            if (!res_col_aggregate_function)
-                agg_func.insertResultInto(places[i], res_col);
-            else
-                res_col_aggregate_function->insertFrom(places[i]);
-        }
-    }
-    else
-    {
-        std::unique_ptr<Arena> arena = agg_func.allocatesMemoryInArena() ? std::make_unique<Arena>() : nullptr;
-
-        ColumnArray::Offset current_offset = 0;
-        for (size_t i = 0; i < rows; ++i)
-        {
-            agg_func.create(place);
-            ColumnArray::Offset next_offset = (*offsets)[i];
-
-            try
-            {
-                for (size_t j = current_offset; j < next_offset; ++j)
-                    agg_func.add(place, aggregate_arguments, j, arena.get());
-
-                if (!res_col_aggregate_function)
-                    agg_func.insertResultInto(place, res_col);
-                else
-                    res_col_aggregate_function->insertFrom(place);
-            }
-            catch (...)
-            {
-                agg_func.destroy(place);
-                throw;
-            }
-
-            agg_func.destroy(place);
-            current_offset = next_offset;
+            for (size_t j = 0; j < i; ++j)
+                agg_func.destroy(places[j]);
+            throw;
         }
     }
 
+    SCOPE_EXIT({
+        for (size_t i = 0; i < rows; ++i)
+            agg_func.destroy(places[i]);
+    });
+
+    {
+        auto * that = &agg_func;
+        /// Unnest consecutive trailing -State combinators
+        while (auto * func = typeid_cast<AggregateFunctionState *>(that))
+            that = func->getNestedFunction().get();
+
+        that->addBatchArray(rows, places.data(), 0, aggregate_arguments, offsets->data(), arena.get());
+    }
+
+    for (size_t i = 0; i < rows; ++i)
+    {
+        if (!res_col_aggregate_function)
+            agg_func.insertResultInto(places[i], res_col);
+        else
+            res_col_aggregate_function->insertFrom(places[i]);
+    }
+    
     if (!is_const)
     {
         block.getByPosition(result).column = std::move(result_holder);

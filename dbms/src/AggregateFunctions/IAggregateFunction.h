@@ -72,12 +72,6 @@ public:
     /// How the data structure should be aligned. NOTE: Currently not used (structures with aggregation state are put without alignment).
     virtual size_t alignOfData() const = 0;
 
-    /// TODO: remove this function after all aggregate functions support batch operations
-    virtual bool supportBatchOperations() const
-    {
-        return false;
-    }
-
     /** Adds a value into aggregation data on which place points to.
      *  columns points to columns containing arguments of aggregation function.
      *  row_num is number of row which should be added.
@@ -117,9 +111,6 @@ public:
     using AddFunc = void (*)(const IAggregateFunction *, AggregateDataPtr, const IColumn **, size_t, Arena *);
     virtual AddFunc getAddressOfAddFunction() const = 0;
 
-/// TODO: remove this function after all aggregate functions support batch operations
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
     /** Contains a loop with calls to "add" function. You can collect arguments into array "places"
       *  and do a single call to "addBatch" for devirtualization and inlining.
       */
@@ -129,25 +120,19 @@ public:
         size_t place_offset,
         const IColumn ** columns,
         Arena * arena,
-        ssize_t if_argument_pos = -1) const
-    {
-    }
+        ssize_t if_argument_pos = -1) const = 0;
 
     virtual void mergeBatch(
         size_t batch_size,
         AggregateDataPtr * places,
         size_t place_offset,
         const AggregateDataPtr * rhs,
-        Arena * arena) const
-    {
-    }
+        Arena * arena) const = 0;
 
     /** The same for single place.
       */
     virtual void addBatchSinglePlace(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1) const
-    {
-    }
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1) const = 0;
 
     /** The same for single place when need to aggregate only filtered data.
       */
@@ -157,17 +142,11 @@ public:
         const IColumn ** columns,
         const UInt8 * null_map,
         Arena * arena,
-        ssize_t if_argument_pos = -1) const
-    {
-        if (!supportBatchOperations())
-            throw Exception("addBatchSinglePlaceNotNull is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    }
+        ssize_t if_argument_pos = -1) const = 0;
 
     virtual void addBatchSinglePlaceFromInterval(
         size_t batch_begin, size_t batch_end, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1)
-        const
-    {
-    }
+        const = 0;
 
     /** In addition to addBatch, this method collects multiple rows of arguments into array "places"
       *  as long as they are between offsets[i-1] and offsets[i]. This is used for arrayReduce and
@@ -180,9 +159,7 @@ public:
         size_t place_offset,
         const IColumn ** columns,
         const UInt64 * offsets,
-        Arena * arena) const
-    {
-    }
+        Arena * arena) const = 0;
 
     /** The case when the aggregation key is UInt8
       * and pointers to aggregation states are stored in AggregateDataPtr[256] lookup table.
@@ -194,10 +171,7 @@ public:
         std::function<void(AggregateDataPtr &)> init,
         const UInt8 * key,
         const IColumn ** columns,
-        Arena * arena) const
-    {
-    }
-#pragma GCC diagnostic pop
+        Arena * arena) const = 0;
 
     /** This is used for runtime code generation to determine, which header files to include in generated source.
       * Always implement it as
@@ -220,8 +194,6 @@ private:
 
 public:
     AddFunc getAddressOfAddFunction() const override { return &addFree; }
-
-    bool supportBatchOperations() const override { return true; }
 
     void addBatch(
         size_t batch_size,
