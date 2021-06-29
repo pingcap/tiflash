@@ -3,13 +3,11 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/ProfileEvents.h>
 #include <IO/WriteHelpers.h>
-#include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/mvcc/VersionSet.h>
 #include <stdint.h>
 
 #include <boost/core/noncopyable.hpp>
 #include <cassert>
-#include <chrono>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -30,7 +28,6 @@ extern const Event PSMVCCApplyOnNewDelta;
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCNumSnapshots;
-extern const Metric PSMVCCSnapshotsList;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -126,15 +123,8 @@ public:
         VersionSetWithDelta * vset;
         TVersionView          view;
 
-        using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
-        const unsigned t_id;
-
-    private:
-        const TimePoint create_time;
-
     public:
-        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_)
-            : vset(vset_), view(std::move(tail_)), t_id(Poco::ThreadNumber::get()), create_time(std::chrono::steady_clock::now())
+        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_) : vset(vset_), view(std::move(tail_))
         {
             CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
         }
@@ -158,14 +148,6 @@ public:
 
         const TVersionView * version() const { return &view; }
 
-        // The time this snapshot living for
-        double elapsedSeconds() const
-        {
-            auto                          end  = std::chrono::steady_clock::now();
-            std::chrono::duration<double> diff = end - create_time;
-            return diff.count();
-        }
-
         template <typename V, typename VV, typename VE, typename B>
         friend class VersionSetWithDelta;
     };
@@ -183,7 +165,6 @@ public:
         auto s = std::make_shared<Snapshot>(this, current);
         // Register snapshot to VersionSet
         snapshots.emplace_back(SnapshotWeakPtr(s));
-        CurrentMetrics::add(CurrentMetrics::PSMVCCSnapshotsList);
         return s;
     }
 
@@ -310,34 +291,20 @@ protected:
     }
 
 private:
-    std::tuple<double, unsigned> removeExpiredSnapshots(const std::unique_lock<std::shared_mutex> &) const
+    void removeExpiredSnapshots(const std::unique_lock<std::shared_mutex> &) const
     {
-        double    longest_living_seconds        = 0.0;
-        unsigned  longest_living_from_thread_id = 0;
-        DB::Int64 num_snapshots_removed         = 0;
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
         {
-            auto snapshot_or_invalid = iter->lock();
-            if (snapshot_or_invalid == nullptr)
+            if (iter->expired())
             {
-                // Clear expired snapshots weak_ptrs
+                // Clear free snapshots
                 iter = snapshots.erase(iter);
-                num_snapshots_removed += 1;
             }
             else
             {
-                const auto snapshot_lifetime = snapshot_or_invalid->elapsedSeconds();
-                if (snapshot_lifetime > longest_living_seconds)
-                {
-                    longest_living_seconds        = snapshot_lifetime;
-                    longest_living_from_thread_id = snapshot_or_invalid->t_id;
-                }
                 iter++;
             }
         }
-        CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_snapshots_removed);
-        // Return some statistics of the oldest living snapshot.
-        return {longest_living_seconds, longest_living_from_thread_id};
     }
 
 public:
@@ -359,12 +326,12 @@ public:
         return sz;
     }
 
-    std::tuple<size_t, double, unsigned> getSnapshotsStat() const
+    size_t numSnapshots() const
     {
+        // Note: this will scan and remove expired weak_ptr to snapshot
         std::unique_lock lock(read_write_mutex);
-        // Note: this will scan and remove expired weak_ptrs from `snapshots`
-        auto [longest_living_seconds, t_id] = removeExpiredSnapshots(lock);
-        return {snapshots.size(), longest_living_seconds, t_id};
+        removeExpiredSnapshots(lock);
+        return snapshots.size();
     }
 
     std::string toDebugString() const

@@ -1,5 +1,3 @@
-#pragma once
-
 #include <Common/TiFlashBuildInfo.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
@@ -251,7 +249,6 @@ public:
     }
 #define MAKE_METRIC_ENUM_F(field_name, ...) field_name
 APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
-#undef APPLY_FOR_METRICS
 
 #define __GET_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
 #define __GET_METRIC_0(ptr, family) (ptr)->family.get()

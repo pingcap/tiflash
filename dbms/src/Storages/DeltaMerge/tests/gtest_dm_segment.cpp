@@ -1,4 +1,3 @@
-#include <Common/CurrentMetrics.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -10,16 +9,6 @@
 #include <memory>
 
 #include "dm_basic_include.h"
-
-namespace CurrentMetrics
-{
-extern const Metric DT_SnapshotOfRead;
-extern const Metric DT_SnapshotOfReadRaw;
-extern const Metric DT_SnapshotOfSegmentSplit;
-extern const Metric DT_SnapshotOfSegmentMerge;
-extern const Metric DT_SnapshotOfDeltaMerge;
-extern const Metric DT_SnapshotOfPlaceIndex;
-} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -245,7 +234,7 @@ try
     // Thread A
     write_rows(100);
     check_rows(100);
-    auto snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+    auto snap = segment->createSnapshot(dmContext());
 
     // Thread B
     write_rows(100);
@@ -1120,7 +1109,7 @@ try
     SegmentPtr other_segment;
     {
         WriteBatches wbs(dmContext().storage_pool);
-        auto         segment_snap = segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
+        auto         segment_snap = segment->createSnapshot(dmContext(), true);
         ASSERT_FALSE(!segment_snap);
 
         write_100_rows(segment);
@@ -1149,8 +1138,8 @@ try
     {
         WriteBatches wbs(dmContext().storage_pool);
 
-        auto left_snap  = segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
-        auto right_snap = other_segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+        auto left_snap  = segment->createSnapshot(dmContext(), true);
+        auto right_snap = other_segment->createSnapshot(dmContext(), true);
         ASSERT_FALSE(!left_snap || !right_snap);
 
         write_100_rows(other_segment);

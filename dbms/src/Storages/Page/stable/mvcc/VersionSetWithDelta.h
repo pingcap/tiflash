@@ -69,6 +69,8 @@ public:
           config(config_),
           log(log_)
     {
+        // The placeholder snapshot should not be counted.
+        CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
     }
 
     virtual ~VersionSetWithDelta()
@@ -76,6 +78,9 @@ public:
         current.reset();
         // snapshot list is empty
         assert(snapshots->prev == snapshots.get());
+
+        // Ignore the destructor of placeholder snapshot
+        CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
     }
 
     void apply(TVersionEdit & edit)

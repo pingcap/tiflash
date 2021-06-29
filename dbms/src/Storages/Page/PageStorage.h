@@ -130,11 +130,7 @@ public:
     void write(WriteBatch && write_batch, const RateLimiterPtr & rate_limiter = nullptr);
 
     SnapshotPtr getSnapshot();
-    // Get some statistics of all living snapshots and the oldest living snapshot.
-    // Return < num of snapshots,
-    //          living time(seconds) of the oldest snapshot,
-    //          created thread id of the oldest snapshot      >
-    std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
+    size_t      getNumSnapshots() const;
 
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {});
     Page      read(PageId page_id, SnapshotPtr snapshot = {});
@@ -235,7 +231,6 @@ public:
     explicit PageReader(PageStorage & storage_) : storage(storage_), snap() {}
     /// Snapshot read.
     PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_) : storage(storage_), snap(snap_) {}
-    PageReader(PageStorage & storage_, PageStorage::SnapshotPtr && snap_) : storage(storage_), snap(std::move(snap_)) {}
 
     Page    read(PageId page_id) const { return storage.read(page_id, snap); }
     PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, snap); }
