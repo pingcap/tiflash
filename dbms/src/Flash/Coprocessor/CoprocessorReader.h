@@ -84,6 +84,7 @@ public:
         }
     }
 
+    size_t getSourceNum() { return 1; }
     String getName() { return "CoprocessorReader"; }
 };
 } // namespace DB
