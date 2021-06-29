@@ -48,6 +48,12 @@ extern const Metric DT_SegmentSplit;
 extern const Metric DT_SegmentMerge;
 extern const Metric DT_DeltaMergeTotalBytes;
 extern const Metric DT_DeltaMergeTotalRows;
+extern const Metric DT_SnapshotOfRead;
+extern const Metric DT_SnapshotOfReadRaw;
+extern const Metric DT_SnapshotOfSegmentSplit;
+extern const Metric DT_SnapshotOfSegmentMerge;
+extern const Metric DT_SnapshotOfDeltaMerge;
+extern const Metric DT_SnapshotOfPlaceIndex;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -917,7 +923,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
             (void)handle;
             if (read_segments.empty() || read_segments.count(segment->segmentId()))
             {
-                auto segment_snap = segment->createSnapshot(*dm_context);
+                auto segment_snap = segment->createSnapshot(*dm_context, false, CurrentMetrics::DT_SnapshotOfReadRaw);
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap, RowKeyRanges{segment->getRowKeyRange()}));
@@ -1561,7 +1567,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
             return {};
         }
 
-        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true);
+        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
         if (!segment_snap || !segment_snap->getRows())
         {
             LOG_DEBUG(log, "Give up segment [" << segment->segmentId() << "] split");
@@ -1587,7 +1593,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
 
     auto range          = segment->getRowKeyRange();
-    auto split_info_opt = segment->prepareSplit(dm_context, schema_snap, segment_snap, wbs, !is_foreground);
+    auto split_info_opt = segment->prepareSplit(dm_context, schema_snap, segment_snap, wbs);
 
     if (!split_info_opt.has_value())
     {
@@ -1689,8 +1695,8 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
             return;
         }
 
-        left_snap  = left->createSnapshot(dm_context, /* for_update */ true);
-        right_snap = right->createSnapshot(dm_context, /* for_update */ true);
+        left_snap  = left->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+        right_snap = right->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
 
         if (!left_snap || !right_snap)
         {
@@ -1713,9 +1719,9 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
     auto left_range  = left->getRowKeyRange();
     auto right_range = right->getRowKeyRange();
-    
+
     WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
-    auto         merged_stable = Segment::prepareMerge(dm_context, schema_snap, left, left_snap, right, right_snap, wbs, !is_foreground);
+    auto         merged_stable = Segment::prepareMerge(dm_context, schema_snap, left, left_snap, right, right_snap, wbs);
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
 
@@ -1780,7 +1786,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
             return {};
         }
 
-        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true);
+        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
         if (!segment_snap)
         {
             LOG_DEBUG(log, "Give up merge delta, segment [" << segment->segmentId() << "]");
@@ -1833,10 +1839,9 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
         }
     });
 
-    bool need_rate_limit = (run_thread != TaskRunThread::Thread_FG);
     WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
 
-    auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs, need_rate_limit);
+    auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
 
@@ -2117,21 +2122,30 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
     stat.avg_pack_size_in_stable  = (Float64)stat.total_stable_size / stat.total_pack_count_in_stable;
 
     {
-        stat.storage_stable_num_snapshots        = storage_pool.data().getNumSnapshots();
+        std::tie(stat.storage_stable_num_snapshots, //
+                 stat.storage_stable_oldest_snapshot_lifetime,
+                 stat.storage_stable_oldest_snapshot_thread_id)
+            = storage_pool.data().getSnapshotsStat();
         PageStorage::SnapshotPtr stable_snapshot = storage_pool.data().getSnapshot();
         stat.storage_stable_num_pages            = stable_snapshot->version()->numPages();
         stat.storage_stable_num_normal_pages     = stable_snapshot->version()->numNormalPages();
         stat.storage_stable_max_page_id          = stable_snapshot->version()->maxId();
     }
     {
-        stat.storage_delta_num_snapshots      = storage_pool.log().getNumSnapshots();
+        std::tie(stat.storage_delta_num_snapshots, //
+                 stat.storage_delta_oldest_snapshot_lifetime,
+                 stat.storage_delta_oldest_snapshot_thread_id)
+            = storage_pool.log().getSnapshotsStat();
         PageStorage::SnapshotPtr log_snapshot = storage_pool.log().getSnapshot();
         stat.storage_delta_num_pages          = log_snapshot->version()->numPages();
         stat.storage_delta_num_normal_pages   = log_snapshot->version()->numNormalPages();
         stat.storage_delta_max_page_id        = log_snapshot->version()->maxId();
     }
     {
-        stat.storage_meta_num_snapshots        = storage_pool.meta().getNumSnapshots();
+        std::tie(stat.storage_meta_num_snapshots, //
+                 stat.storage_meta_oldest_snapshot_lifetime,
+                 stat.storage_meta_oldest_snapshot_thread_id)
+            = storage_pool.meta().getSnapshotsStat();
         PageStorage::SnapshotPtr meta_snapshot = storage_pool.meta().getSnapshot();
         stat.storage_meta_num_pages            = meta_snapshot->version()->numPages();
         stat.storage_meta_num_normal_pages     = meta_snapshot->version()->numNormalPages();
@@ -2207,7 +2221,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext &          dm_c
             if (tasks.empty() || tasks.back()->segment != seg_it->second)
             {
                 auto segment      = seg_it->second;
-                auto segment_snap = segment->createSnapshot(dm_context);
+                auto segment_snap = segment->createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap));
