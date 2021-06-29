@@ -30,10 +30,12 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWr
 }
 
 template <class StreamWriterPtr>
+template <bool collect_execution_info>
 void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
 {
     tipb::SelectResponse response;
-    addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
+    if constexpr (collect_execution_info)
+        addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
     if (exchange_type == tipb::ExchangeType::Hash)
     {
         thread_pool.schedule(getEncodePartitionTask(blocks, response));
@@ -49,10 +51,15 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
+<<<<<<< HEAD
     if (rows_in_blocks > 0)
     {
         ScheduleEncodeTask();
     }
+=======
+    /// always send a response back to send the final execute summaries
+    ScheduleEncodeTask<true>();
+>>>>>>> 8a4e9a674... refine execution summary for streaming rpc (#2252)
     // wait all job finishes.
     thread_pool.wait();
 }
@@ -230,7 +237,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     blocks.push_back(block);
     if ((Int64)rows_in_blocks > records_per_chunk)
     {
-        ScheduleEncodeTask();
+        ScheduleEncodeTask<false>();
     }
 }
 
