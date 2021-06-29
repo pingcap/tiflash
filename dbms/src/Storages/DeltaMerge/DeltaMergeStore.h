@@ -236,7 +236,11 @@ public:
         std::mutex mutex;
 
     public:
-        size_t length() { return light_tasks.size() + heavy_tasks.size(); }
+        size_t length()
+        {
+            std::scoped_lock lock(mutex);
+            return light_tasks.size() + heavy_tasks.size();
+        }
 
         bool addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
 
