@@ -39,7 +39,6 @@ private:
     size_t rows_in_blocks;
     uint16_t partition_num;
     ThreadPool thread_pool;
-    void ScheduleEncodeTask();
 };
 
 } // namespace DB
