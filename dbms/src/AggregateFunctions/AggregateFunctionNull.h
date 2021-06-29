@@ -420,6 +420,9 @@ public:
     void addBatchSinglePlace(
         size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1) const override
     {
+        if (batch_size == 0)
+            return;
+
         if constexpr (input_is_nullable)
         {
             const ColumnNullable * column = assert_cast<const ColumnNullable *>(columns[0]);
