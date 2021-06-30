@@ -73,14 +73,12 @@ using AggregatedDataWithInt256Key = HashMap<Int256, AggregateDataPtr, HashCRC32<
 using AggregatedDataWithStringKey = HashMapWithSavedHash<StringRef, AggregateDataPtr>;
 using AggregatedDataWithKeys128 = HashMap<UInt128, AggregateDataPtr, HashCRC32<UInt128>>;
 using AggregatedDataWithKeys256 = HashMap<UInt256, AggregateDataPtr, HashCRC32<UInt256>>;
-using AggregatedDataHashed = HashMap<UInt128, std::pair<StringRef*, AggregateDataPtr>, TrivialHash>;
 
 using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
 using AggregatedDataWithInt256KeyTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
 using AggregatedDataWithStringKeyTwoLevel = TwoLevelHashMapWithSavedHash<StringRef, AggregateDataPtr>;
 using AggregatedDataWithKeys128TwoLevel = TwoLevelHashMap<UInt128, AggregateDataPtr, HashCRC32<UInt128>>;
 using AggregatedDataWithKeys256TwoLevel = TwoLevelHashMap<UInt256, AggregateDataPtr, HashCRC32<UInt256>>;
-using AggregatedDataHashedTwoLevel = TwoLevelHashMap<UInt128, std::pair<StringRef*, AggregateDataPtr>, TrivialHash>;
 
 /** Variants with better hash function, using more than 32 bits for hash.
   * Using for merging phase of external aggregation, where number of keys may be far greater than 4 billion,
@@ -388,21 +386,19 @@ struct AggregatedDataVariants : private boost::noncopyable
     std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKey>>   key_fixed_string;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128>>                   keys128;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256>>                   keys256;
-    std::unique_ptr<AggregationMethodHashed<AggregatedDataHashed>>                           hashed;
     std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKey>>                serialized;
 
-    std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel>> key32_two_level;
-    std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel>> key64_two_level;
-    std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel>> key_int256_two_level;
-    std::unique_ptr<AggregationMethodString<AggregatedDataWithStringKeyTwoLevel>>            key_string_two_level;
-    std::unique_ptr<AggregationMethodFixedString<AggregatedDataWithStringKeyTwoLevel>>       key_fixed_string_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel>>           keys128_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel>>           keys256_two_level;
-    std::unique_ptr<AggregationMethodHashed<AggregatedDataHashedTwoLevel>>                   hashed_two_level;
-    std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevel>>        serialized_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel>>        key32_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel>>        key64_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel>>        key_int256_two_level;
+    std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>>       key_string_two_level;
+    std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>>  key_fixed_string_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel>>                  keys128_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel>>                  keys256_two_level;
+    std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevel>>               serialized_two_level;
 
     std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyHash64>>   key64_hash64;
-    std::unique_ptr<AggregationMethodString<AggregatedDataWithStringKeyHash64>>              key_string_hash64;
+    std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithStringKeyHash64>>       key_string_hash64;
     std::unique_ptr<AggregationMethodFixedString<AggregatedDataWithStringKeyHash64>>         key_fixed_string_hash64;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128Hash64>>             keys128_hash64;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256Hash64>>             keys256_hash64;
@@ -425,7 +421,6 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(keys128,                    false) \
         M(keys256,                    false) \
         M(key_int256,                    false) \
-        M(hashed,                     false) \
         M(serialized,                 false) \
         M(key32_two_level,            true) \
         M(key64_two_level,            true) \
@@ -434,7 +429,6 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(key_fixed_string_two_level, true) \
         M(keys128_two_level,          true) \
         M(keys256_two_level,          true) \
-        M(hashed_two_level,           true) \
         M(serialized_two_level,       true) \
         M(key64_hash64,               false) \
         M(key_string_hash64,          false) \
@@ -561,7 +555,6 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(key_fixed_string) \
         M(keys128)          \
         M(keys256)          \
-        M(hashed)           \
         M(serialized)       \
         M(nullable_keys128) \
         M(nullable_keys256) \
@@ -605,7 +598,6 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(key_fixed_string_two_level) \
         M(keys128_two_level)          \
         M(keys256_two_level)          \
-        M(hashed_two_level)           \
         M(serialized_two_level)       \
         M(nullable_keys128_two_level) \
         M(nullable_keys256_two_level)
@@ -700,7 +692,7 @@ public:
     };
 
 
-    Aggregator(const Params & params_);
+    explicit Aggregator(const Params & params_);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider);
@@ -713,7 +705,6 @@ public:
     /// Process one block. Return false if the processing should be aborted (with group_by_overflow_mode = 'break').
     bool executeOnBlock(const Block & block, AggregatedDataVariants & result, const FileProviderPtr & file_provider,
         ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns,    /// Passed to not create them anew for each block
-        StringRefs & keys,                                        /// - pass the corresponding objects that are initially empty.
         bool & no_more_keys);
 
     /** Convert the aggregation data structure into a block.
