@@ -213,27 +213,18 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
 
     size_t keys_bytes = 0;
 
-    size_t num_contiguous_keys = 0;
     size_t num_fixed_contiguous_keys = 0;
-    size_t num_string_keys = 0;
 
     key_sizes.resize(params.keys_size);
     for (size_t j = 0; j < params.keys_size; ++j)
     {
         if (types_removed_nullable[j]->isValueUnambiguouslyRepresentedInContiguousMemoryRegion())
         {
-            ++num_contiguous_keys;
-
             if (types_removed_nullable[j]->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion() && (params.collators.empty() || params.collators[j] == nullptr))
             {
                 ++num_fixed_contiguous_keys;
                 key_sizes[j] = types_removed_nullable[j]->getSizeOfValueInMemory();
                 keys_bytes += key_sizes[j];
-            }
-
-            if (types_removed_nullable[j]->isString())
-            {
-                ++num_string_keys;
             }
         }
     }
