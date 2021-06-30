@@ -27,46 +27,6 @@ namespace ErrorCodes
 
 namespace ColumnsHashing
 {
-template <typename T, typename Enable = void>
-struct VecHolder
-{
-    const char * data;
-    VecHolder(const IColumn * col)
-    {
-        data = col->getRawData().data;
-    }
-
-    T get(size_t row) const
-    {
-        return unalignedLoad<T>(data + row * sizeof(T));
-    }
-
-    operator const T * () const
-    {
-        return reinterpret_cast<const T *>(data);
-    }
-};
-
-template <typename T>
-struct VecHolder<T, std::enable_if_t<std::is_same_v<Int256>, void>>
-{
-    const T * data;
-    VecHolder(const IColumn * col)
-    {
-        data = &static_cast<const ColumnVector<T> *>(col)->getData()[0];
-    }
-
-    T get(size_t row) const
-    {
-        return data[row];
-    }
-
-    operator const T * () const
-    {
-        return data;
-    }
-};
-
 /// For the case when there is one numeric key.
 /// UInt8/16/32/64 for any type with corresponding bit width.
 template <typename Value, typename Mapped, typename FieldType, bool use_cache = true>
@@ -76,17 +36,17 @@ struct HashMethodOneNumber
     using Self = HashMethodOneNumber<Value, Mapped, FieldType, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
 
-    VecHolder<FieldType> vec;
+    const FieldType * vec;
 
     /// If the keys of a fixed length then key_sizes contains their lengths, empty otherwise.
     HashMethodOneNumber(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators &)
-        : vec(key_columns[0])
     {
+        vec = &static_cast<const ColumnVector<FieldType> *>(key_columns[0])->getData()[0];
     }
 
     HashMethodOneNumber(const IColumn * column)
-        : vec(column)
     {
+        vec = &static_cast<const ColumnVector<FieldType> *>(column)->getData()[0];
     }
 
     /// Emplace key into HashTable or HashMap. If Data is HashMap, returns ptr to value, otherwise nullptr.
@@ -103,7 +63,10 @@ struct HashMethodOneNumber
     /// Is used for default implementation in HashMethodBase.
     FieldType getKeyHolder(size_t row, Arena *, std::vector<String> &) const
     {
-        return vec.get(row);
+        if constexpr (std::is_same_v<FieldType, Int256>)
+            return vec[row];
+        else
+            return unalignedLoad<FieldType>(vec + row);
     }
 
     const FieldType * getKeyData() const { return vec; }
