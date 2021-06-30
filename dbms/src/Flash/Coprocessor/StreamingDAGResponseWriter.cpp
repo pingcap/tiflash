@@ -190,9 +190,9 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             WeakHash32 hash(rows);
 
             // get hash values by all partition key columns
-            for (auto i : partition_col_ids)
+            for (size_t i = 0; i < partition_col_ids.size(); i++)
             {
-                block.getByPosition(i).column->updateWeakHash32(hash);
+                block.getByPosition(partition_col_ids[i]).column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
             }
             const auto & hash_data = hash.getData();
 

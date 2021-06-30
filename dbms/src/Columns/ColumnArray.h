@@ -65,7 +65,7 @@ public:
     const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
     void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
-    void updateWeakHash32(WeakHash32 & hash) const override;
+    void updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src_, size_t n) override;

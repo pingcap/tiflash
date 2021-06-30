@@ -273,7 +273,7 @@ public:
         }
     }
 
-    void updateWeakHash32(WeakHash32 & hash) const override;
+    void updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
