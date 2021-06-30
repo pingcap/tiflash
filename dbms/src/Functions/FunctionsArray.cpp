@@ -2491,11 +2491,11 @@ void FunctionArrayReduce::executeImpl(Block & block, const ColumnNumbers & argum
     for (size_t i = 0; i < rows; ++i)
     {
         if (!res_col_aggregate_function)
-            agg_func.insertResultInto(places[i], res_col);
+            agg_func.insertResultInto(places[i], res_col, arena.get());
         else
             res_col_aggregate_function->insertFrom(places[i]);
     }
-    
+
     if (!is_const)
     {
         block.getByPosition(result).column = std::move(result_holder);
