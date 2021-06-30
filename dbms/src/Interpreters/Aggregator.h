@@ -762,13 +762,13 @@ struct AggregatedDataVariants : private boost::noncopyable
       */
     Aggregator * aggregator = nullptr;
 
-    size_t keys_size;    /// Number of keys. NOTE do we need this field?
+    size_t keys_size{};  /// Number of keys. NOTE do we need this field?
     Sizes key_sizes;     /// Dimensions of keys, if keys of fixed length
     TiDB::TiDBCollators collators;
 
     /// Pools for states of aggregate functions. Ownership will be later transferred to ColumnAggregateFunction.
     Arenas aggregates_pools;
-    Arena * aggregates_pool;    /// The pool that is currently used for allocation.
+    Arena * aggregates_pool{};    /// The pool that is currently used for allocation.
 
     /** Specialization for the case when there are no keys, and for keys not fitted into max_rows_to_group_by.
       */
@@ -1055,10 +1055,6 @@ public:
         const size_t max_rows_to_group_by;
         const OverflowMode group_by_overflow_mode;
 
-        /// For dynamic compilation.
-        Compiler * compiler;
-        const UInt32 min_count_to_compile;
-
         /// Two-level aggregation settings (used for a large number of keys).
         /** With how many keys or the size of the aggregation state in bytes,
           *  two-level aggregation begins to be used. Enough to reach of at least one of the thresholds.
@@ -1081,7 +1077,6 @@ public:
             const Block & src_header_,
             const ColumnNumbers & keys_, const AggregateDescriptions & aggregates_,
             bool overflow_row_, size_t max_rows_to_group_by_, OverflowMode group_by_overflow_mode_,
-            Compiler * compiler_, UInt32 min_count_to_compile_,
             size_t group_by_two_level_threshold_, size_t group_by_two_level_threshold_bytes_,
             size_t max_bytes_before_external_group_by_,
             bool empty_result_for_aggregation_by_empty_set_,
@@ -1090,7 +1085,6 @@ public:
             : src_header(src_header_),
             keys(keys_), aggregates(aggregates_), keys_size(keys.size()), aggregates_size(aggregates.size()),
             overflow_row(overflow_row_), max_rows_to_group_by(max_rows_to_group_by_), group_by_overflow_mode(group_by_overflow_mode_),
-            compiler(compiler_), min_count_to_compile(min_count_to_compile_),
             group_by_two_level_threshold(group_by_two_level_threshold_), group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_),
             max_bytes_before_external_group_by(max_bytes_before_external_group_by_),
             empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_),
@@ -1101,7 +1095,7 @@ public:
         /// Only parameters that matter during merge.
         Params(const Block & intermediate_header_,
             const ColumnNumbers & keys_, const AggregateDescriptions & aggregates_, bool overflow_row_, const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, nullptr, 0, 0, 0, 0, false, "", collators_)
+            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, "", collators_)
         {
             intermediate_header = intermediate_header_;
         }
@@ -1231,26 +1225,6 @@ protected:
     std::mutex mutex;
 
     Logger * log = &Logger::get("Aggregator");
-
-    /** Dynamically compiled library for aggregation, if any.
-      * The meaning of dynamic compilation is to specialize code
-      *  for a specific list of aggregate functions.
-      * This allows you to expand the loop to create and update states of aggregate functions,
-      *  and also use inline-code instead of virtual calls.
-      */
-    struct CompiledData
-    {
-        SharedLibraryPtr compiled_aggregator;
-
-        /// Obtained with dlsym. It is still necessary to make reinterpret_cast to the function pointer.
-        void * compiled_method_ptr = nullptr;
-        void * compiled_two_level_method_ptr = nullptr;
-    };
-    /// shared_ptr - to pass into a callback, that can survive Aggregator.
-    std::shared_ptr<CompiledData> compiled_data { new CompiledData };
-
-    bool compiled_if_possible = false;
-    void compileIfPossible(AggregatedDataVariants::Type type);
 
     /// Returns true if you can abort the current task.
     CancellationHook isCancelled;
