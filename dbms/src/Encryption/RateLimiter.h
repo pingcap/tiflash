@@ -32,44 +32,44 @@ using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 class RateLimiter
 {
 public:
-    RateLimiter(TiFlashMetricsPtr metrics_, UInt64 rate_limit_per_sec_, UInt64 refill_period_ms_ = 100);
+    RateLimiter(TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, UInt64 refill_period_ms_ = 100);
 
-    ~RateLimiter();
+    virtual ~RateLimiter();
 
     // `request()` is the main interface used by clients.
     // It receives the requested balance as the parameter,
     // and blocks until the request balance is satisfied.
-    void request(UInt64 bytes);
+    void request(Int64 bytes);
 
     // just for test purpose
     inline UInt64 getTotalBytesThrough() const { return total_bytes_through; }
 
-private:
-    void refillAndAlloc();
+protected:
+    virtual bool canGrant(Int64 bytes);
+    virtual void consumeBytes(Int64 bytes);
+    virtual void refillAndAlloc();
 
-    inline UInt64 calculateRefillBalancePerPeriod(UInt64 rate_limit_per_sec_) const
+    inline Int64 calculateRefillBalancePerPeriod(Int64 rate_limit_per_sec_) const
     {
         auto refill_period_per_second = std::max(1, 1000 / refill_period_ms);
         return rate_limit_per_sec_ / refill_period_per_second;
     }
 
-private:
     // used to represent pending request
     struct Request
     {
-        explicit Request(UInt64 bytes) : remaining_bytes(bytes), bytes(bytes), granted(false) {}
-        UInt64 remaining_bytes;
-        UInt64 bytes;
+        explicit Request(Int64 bytes) : remaining_bytes(bytes), bytes(bytes), granted(false) {}
+        Int64 remaining_bytes;
+        Int64 bytes;
         std::condition_variable cv;
         bool granted;
     };
 
-private:
     UInt64 refill_period_ms;
     AtomicStopwatch refill_stop_watch;
 
-    UInt64 refill_balance_per_period;
-    UInt64 available_balance;
+    Int64 refill_balance_per_period;
+    Int64 available_balance;
 
     UInt64 total_bytes_through;
 
@@ -86,6 +86,35 @@ private:
 
 using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 
+class ReadLimiter final : public RateLimiter
+{
+public:
+    ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, UInt64 refill_period_ms_ = 100);
+
+#ifndef DBMS_PUBLIC_GTEST
+protected:
+#endif
+
+    virtual void refillAndAlloc() override;
+    virtual void consumeBytes(Int64 bytes) override;
+    virtual bool canGrant(Int64 bytes) override;
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
+
+    Int64 getAvailableBalance();
+    Int64 refreshAvailableBalance();
+
+    std::function<Int64()> getIOStatistic;
+    Int64 last_stat_bytes;
+
+    using TimePoint = std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds>;
+    TimePoint last_stat_time;
+
+    static constexpr UInt64 get_io_statistic_period_us = 2000;
+};
+
 class IORateLimiter
 {
 public:
@@ -94,29 +123,44 @@ public:
     RateLimiterPtr getWriteLimiter();
 
     void updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_, Poco::Logger * log_);
+    
+    void setBackgroundThreadIds(std::vector<pid_t> thread_ids); 
 
-    bool readLimited() const;
-
-private:
-    struct TaskIOInfo
+    struct IOInfo
     {
-        pid_t tid = 0;
-        UInt64 read_bytes = 0;
-        UInt64 write_bytes = 0;
-        std::chrono::time_point<std::chrono::system_clock> update_time;
+        Int64 total_write_bytes;
+        Int64 total_read_bytes;
+        Int64 bg_write_bytes;
+        Int64 bg_read_bytes;
+        std::chrono::time_point<std::chrono::system_clock> uptime_time;
+
+        IOInfo() : total_write_bytes(0), total_read_bytes(0), bg_write_bytes(0), bg_read_bytes(0) {}
+
+        std::string toString() const
+        {
+            return "total_write_bytes: " + std::to_string(total_write_bytes) +
+                   " total_read_bytes: " + std::to_string(total_read_bytes) +
+                   " bg_write_bytes: " + std::to_string(bg_write_bytes) + 
+                   " bg_read_bytes: " +  std::to_string(bg_read_bytes);
+        }
     };
 
-    // <read_bytes, write_bytes>
-    std::pair<Int64, Int64> readTaskIOInfo(const std::string& fname, Poco::Logger* log_);
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
+
+    std::pair<Int64, Int64> getReadWriteBytes(const std::string& fname, Poco::Logger* log_);
+    IOInfo getCurrentIOInfo(Poco::Logger* log_);
 
     StorageIORateLimitConfig io_config;
     RateLimiterPtr bg_write_limiter;
     RateLimiterPtr fg_write_limiter;
+    RateLimiterPtr bg_read_limiter;
+    RateLimiterPtr fg_read_limiter;
     std::mutex mtx_;
 
-    std::atomic<bool> bg_read_limited;
-    std::atomic<bool> fg_read_limited;
-    std::vector<pid_t> bg_thread_id;
+    std::vector<pid_t> bg_thread_ids;
+    IOInfo last_io_info;
 
     // Noncopyable and nonmovable.
     IORateLimiter(const IORateLimiter & limiter) = delete;

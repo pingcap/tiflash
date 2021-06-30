@@ -6,10 +6,15 @@
 #include <IO/WriteHelpers.h>
 #include <common/logger_useful.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
+#include <Interpreters/Context.h>
 
 #include <pcg_random.hpp>
 #include <random>
 
+#ifdef __linux__
+#include <unistd.h>
+#include <sys/syscall.h>
+#endif
 
 namespace CurrentMetrics
 {
@@ -121,6 +126,9 @@ void BackgroundProcessingPool::threadFunction()
         const auto name = "BkgPool" + std::to_string(tid++);
         setThreadName(name.data());
         is_background_thread = true;
+        #ifdef __linux__
+        addThreadId(syscall(SYS_gettid));
+        #endif
     }
 
     MemoryTracker memory_tracker;
@@ -230,6 +238,18 @@ void BackgroundProcessingPool::threadFunction()
     }
 
     current_memory_tracker = nullptr;
+}
+
+std::vector<pid_t> BackgroundProcessingPool::getThreadIds()
+{
+    std::lock_guard lock(thread_ids_mtx);
+    return thread_ids;
+}
+
+void BackgroundProcessingPool::addThreadId(pid_t tid)
+{
+    std::lock_guard lock(thread_ids_mtx);
+    thread_ids.push_back(tid);
 }
 
 }

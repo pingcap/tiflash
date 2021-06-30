@@ -37,7 +37,7 @@ public:
     UInt32 bg_read_weight;
     
     StorageIORateLimitConfig() : max_bytes_per_sec(0), max_read_bytes_per_sec(0), max_write_bytes_per_sec(0), use_max_bytes_per_sec(true),
-        fg_write_weight(1), bg_write_weight(5), fg_read_weight(5), bg_read_weight(1) {}
+        fg_write_weight(1), bg_write_weight(3), fg_read_weight(5), bg_read_weight(3) {}
     
     void parse(const String& storage_io_rate_limit, Poco::Logger* log);
 

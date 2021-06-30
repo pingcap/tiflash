@@ -91,6 +91,7 @@ class RateLimiter;
 using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 struct TiFlashRaftConfig;
 class DAGContext;
+class IORateLimiter;
 
 namespace DM
 {
@@ -414,6 +415,7 @@ public:
 
     void initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config, Poco::Logger* log);
     RateLimiterPtr getWriteLimiter() const;
+    IORateLimiter& getIORateLimiter() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;

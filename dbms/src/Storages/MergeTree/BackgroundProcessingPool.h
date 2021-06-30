@@ -16,6 +16,8 @@
 namespace DB
 {
 
+class Context;
+
 /** Using a fixed number of threads, perform an arbitrary number of tasks in an infinite loop.
   * In this case, one task can run simultaneously from different threads.
   * Designed for tasks that perform continuous background work (for example, merge).
@@ -70,6 +72,8 @@ public:
 
     ~BackgroundProcessingPool();
 
+    std::vector<pid_t> getThreadIds();
+    void addThreadId(pid_t tid);
 private:
     using Tasks = std::multimap<Poco::Timestamp, TaskHandle>;    /// key is desired next time to execute (priority).
     using Threads = std::vector<std::thread>;
@@ -82,6 +86,8 @@ private:
     std::mutex tasks_mutex;
 
     Threads threads;
+    std::vector<pid_t> thread_ids;  // Linux Thread ID
+    std::mutex thread_ids_mtx;
 
     std::atomic<bool> shutdown {false};
     std::condition_variable wake_event;

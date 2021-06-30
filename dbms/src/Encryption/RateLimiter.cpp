@@ -1,4 +1,5 @@
 #include <Common/CurrentMetrics.h>
+#include <Common/Exception.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/RateLimiter.h>
 #include <Poco/Util/AbstractConfiguration.h>
@@ -15,7 +16,12 @@ extern const Metric RateLimiterPendingWriteRequest;
 }
 namespace DB
 {
-RateLimiter::RateLimiter(TiFlashMetricsPtr metrics_, UInt64 rate_limit_per_sec_, UInt64 refill_period_ms_)
+namespace ErrorCodes
+{
+extern const int UNKNOWN_EXCEPTION;  
+}
+
+RateLimiter::RateLimiter(TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, UInt64 refill_period_ms_)
     : refill_period_ms{refill_period_ms_},
       refill_balance_per_period{calculateRefillBalancePerPeriod(rate_limit_per_sec_)},
       available_balance{refill_balance_per_period},
@@ -35,7 +41,7 @@ RateLimiter::~RateLimiter()
         exit_cv.wait(lock);
 }
 
-void RateLimiter::request(UInt64 bytes)
+void RateLimiter::request(Int64 bytes)
 {
     std::unique_lock<std::mutex> lock(request_mutex);
 
@@ -49,12 +55,12 @@ void RateLimiter::request(UInt64 bytes)
     if (metrics)
         GET_METRIC(metrics, tiflash_storage_rate_limiter_total_request_bytes).Increment(bytes);
 
-    if (available_balance >= bytes)
+    if (canGrant(bytes))
     {
         if (metrics)
             GET_METRIC(metrics, tiflash_storage_rate_limiter_total_alloc_bytes).Increment(bytes);
-        total_bytes_through += bytes;
-        available_balance -= bytes;
+
+        consumeBytes(bytes);
         return;
     }
 
@@ -117,6 +123,17 @@ void RateLimiter::request(UInt64 bytes)
     }
 }
 
+bool RateLimiter::canGrant(Int64 bytes)
+{
+    return available_balance >= bytes;
+}
+
+void RateLimiter::consumeBytes(Int64 bytes)
+{
+    total_bytes_through += bytes;
+    available_balance -= bytes;
+}
+
 void RateLimiter::refillAndAlloc()
 {
     if (available_balance < refill_balance_per_period)
@@ -147,6 +164,86 @@ void RateLimiter::refillAndAlloc()
             next_req->cv.notify_one();
     }
 }
+
+ReadLimiter::ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, UInt64 refill_period_ms_)
+    : RateLimiter(metrics_, rate_limit_per_sec_, refill_period_ms_),
+      getIOStatistic(std::move(getIOStatistic_)),
+      last_stat_bytes(0)
+{}
+
+Int64 ReadLimiter::getAvailableBalance()
+{
+    TimePoint now = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
+    if (now <= last_stat_time)
+    {
+        return available_balance;
+    }
+    // Not call getIOStatisctics() every time for performance.
+    UInt64 elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(now - last_stat_time).count();
+    if (elapsed_us < get_io_statistic_period_us)
+    {
+        return available_balance;
+    }
+
+    return refreshAvailableBalance();
+}
+
+Int64 ReadLimiter::refreshAvailableBalance()
+{
+    TimePoint now = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
+    Int64 bytes = getIOStatistic();
+    if (bytes < last_stat_bytes)
+    {
+        LOG_WARNING(&Poco::Logger::get("ReadLimiter"), " last_stat_time: " << last_stat_time.time_since_epoch().count() <<
+            " last_stat_bytes: " << last_stat_bytes << " current_time: " << now.time_since_epoch().count() << " current_stat_time: " << bytes);
+    }
+    else
+    {
+        available_balance -= (bytes - last_stat_bytes);
+        last_stat_bytes = bytes;
+        last_stat_time = now;
+    }
+    return available_balance;
+}
+
+void ReadLimiter::consumeBytes([[maybe_unused]] Int64 bytes)
+{
+    // Do nothing for read.
+}
+
+bool ReadLimiter::canGrant([[maybe_unused]] Int64 bytes)
+{
+    return getAvailableBalance() > 0;
+}
+
+void ReadLimiter::refillAndAlloc()
+{
+    if (available_balance < refill_balance_per_period)
+    {
+        available_balance += refill_balance_per_period;
+    }
+    if (getAvailableBalance() <= 0)
+    {
+        return;
+    }
+
+    assert(!req_queue.empty());
+    auto * head_req = req_queue.front();
+    while (!req_queue.empty())
+    {
+        auto * next_req = req_queue.front();
+        total_bytes_through += next_req->remaining_bytes;
+        next_req->remaining_bytes = 0;
+        next_req->granted = true;
+        req_queue.pop_front();
+        if (metrics)
+            GET_METRIC(metrics, tiflash_storage_rate_limiter_total_alloc_bytes).Increment(next_req->bytes);
+        // quota granted, signal the thread
+        if (next_req != head_req)
+            next_req->cv.notify_one();
+    }
+}
+
 
 #if __APPLE__ && __clang__
 extern __thread bool is_background_thread;
@@ -187,18 +284,36 @@ void IORateLimiter::updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::Abstrac
 
     bg_write_limiter = GenRateLimiter(io_config.getBgWriteMaxBytesPerSec());
     fg_write_limiter = GenRateLimiter(io_config.getFgWriteMaxBytesPerSec());
+
+    auto getBgReadIOStatistic = [&]() 
+    { 
+        return getCurrentIOInfo(log_).bg_read_bytes; 
+    };
+    bg_read_limiter = std::make_shared<ReadLimiter>(getBgReadIOStatistic, metrics_, io_config.getBgReadMaxBytesPerSec());
+
+    auto getFgReadIOStatistic = [&]() 
+    {
+        auto io_info = getCurrentIOInfo(log_);
+        return std::max(0, io_info.total_read_bytes - io_info.bg_read_bytes);
+    };
+    fg_read_limiter = std::make_shared<ReadLimiter>(getFgReadIOStatistic, metrics_, io_config.getFgReadMaxBytesPerSec());
 }
 
-bool IORateLimiter::readLimited() const
+void IORateLimiter::setBackgroundThreadIds(std::vector<pid_t> thread_ids)
 {
-    return is_background_thread ? bg_read_limited.load(std::memory_order_relaxed) : fg_read_limited.load(std::memory_order_relaxed);
+    bg_thread_ids.swap(thread_ids);
 }
 
-std::pair<Int64, Int64> IORateLimiter::readTaskIOInfo(const std::string& fname, Poco::Logger* log_)
+std::pair<Int64, Int64> IORateLimiter::getReadWriteBytes(const std::string& fname, Poco::Logger* log_)
 {
     std::ifstream ifs(fname);
+    if (ifs.fail())
+    {
+        std::string msg = " open " + fname + " fail: " + strerror(errno);
+        LOG_ERROR(log_, msg);
+        throw Exception(msg, ErrorCodes::UNKNOWN_EXCEPTION);
+    }
     std::string s;
-
     Int64 read_bytes = -1;
     Int64 write_bytes = -1;
     while (std::getline(ifs, s))
@@ -221,7 +336,34 @@ std::pair<Int64, Int64> IORateLimiter::readTaskIOInfo(const std::string& fname, 
             write_bytes = std::stoll(values[1]);
         }
     }
+    if (read_bytes == -1 || write_bytes == -1)
+    {
+        std::string msg = " read_bytes: " + std::to_string(read_bytes) + " write_bytes: " + std::to_string(write_bytes); 
+        LOG_ERROR(log_, msg);
+        throw Exception(msg, ErrorCodes::UNKNOWN_EXCEPTION);
+    }
     return {read_bytes, write_bytes};
 }
-    // I/O of foreground thread = I/O of total - I/O of background thread
+
+IORateLimiter::IOInfo IORateLimiter::getCurrentIOInfo(Poco::Logger* log_)
+{
+    IOInfo io_info;
+    // Read I/O info of this process.
+    static const pid_t pid = getpid();
+    static const std::string proc_io_fname = "/proc/" + std::to_string(pid) + "/io";
+    std::tie(io_info.total_read_bytes, io_info.total_write_bytes) = getReadWriteBytes(proc_io_fname, log_);
+
+    // Read I/O info of each background threads.
+    for (pid_t tid : bg_thread_ids)
+    {
+        const std::string thread_io_fname = "/proc/" + std::to_string(pid) + "/task/" + std::to_string(tid) + "/io";
+        Int64 read_bytes, write_bytes;
+        std::tie(read_bytes, write_bytes) = getReadWriteBytes(thread_io_fname, log_);
+        io_info.bg_read_bytes += read_bytes;
+        io_info.bg_write_bytes += write_bytes;
+    }
+    io_info.uptime_time = std::chrono::system_clock::now();
+    return io_info;
+}
+
 } // namespace DB

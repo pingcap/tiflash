@@ -309,11 +309,6 @@ void StorageIORateLimitConfig::parse(const String& storage_io_rate_limit, Poco::
         }
     };
 
-    UInt32 fg_write_weight;
-    UInt32 bg_write_weight;
-    UInt32 fg_read_weight;
-    UInt32 bg_read_weight;
-
     readConfig("max-bytes-per-sec", max_bytes_per_sec);
     readConfig("max-read-bytes-per-sec", max_read_bytes_per_sec);
     readConfig("max-write-bytes-per-sec", max_write_bytes_per_sec);
@@ -322,7 +317,7 @@ void StorageIORateLimitConfig::parse(const String& storage_io_rate_limit, Poco::
     readConfig("foreground-read-weight", fg_read_weight);
     readConfig("background-read-weight", bg_read_weight);
     
-    use_max_bytes_per_sec = max_read_bytes_per_sec == 0 && max_write_bytes_per_sec == 0;
+    use_max_bytes_per_sec = (max_read_bytes_per_sec == 0 && max_write_bytes_per_sec == 0);
 
     LOG_INFO(log, "storage.io-rate-limit " << toString());
 }
