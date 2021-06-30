@@ -3,12 +3,32 @@
 #endif
 
 #include <Columns/IColumn.h>
+#include <Columns/ColumnsCommon.h>
 
 
 namespace DB
 {
 
-size_t countBytesInFilter(const IColumn::Filter & filt)
+#if defined(__SSE2__) && defined(__POPCNT__)
+/// Transform 64-byte mask to 64-bit mask.
+static UInt64 toBits64(const Int8 * bytes64)
+{
+    static const __m128i zero16 = _mm_setzero_si128();
+    UInt64 res =
+        static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+            _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64)), zero16)))
+        | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+            _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 16)), zero16))) << 16)
+        | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+            _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 32)), zero16))) << 32)
+        | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+            _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 48)), zero16))) << 48);
+
+    return ~res;
+}
+#endif
+
+size_t countBytesInFilter(const UInt8 * filt, size_t sz)
 {
     size_t count = 0;
 
@@ -17,33 +37,53 @@ size_t countBytesInFilter(const IColumn::Filter & filt)
       * It would be better to use != 0, then this does not allow SSE2.
       */
 
-    const Int8 * pos = reinterpret_cast<const Int8 *>(&filt[0]);
-    const Int8 * end = pos + filt.size();
+    const Int8 * pos = reinterpret_cast<const Int8 *>(filt);
+    const Int8 * end = pos + sz;
 
-#if __SSE2__ && __POPCNT__
-    const __m128i zero16 = _mm_setzero_si128();
-    const Int8 * end64 = pos + filt.size() / 64 * 64;
+#if defined(__SSE2__) && defined(__POPCNT__)
+    const Int8 * end64 = pos + sz / 64 * 64;
 
     for (; pos < end64; pos += 64)
-        count += __builtin_popcountll(
-            static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpgt_epi8(
-                _mm_loadu_si128(reinterpret_cast<const __m128i *>(pos)),
-                zero16)))
-            | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpgt_epi8(
-                _mm_loadu_si128(reinterpret_cast<const __m128i *>(pos + 16)),
-                zero16))) << 16)
-            | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpgt_epi8(
-                _mm_loadu_si128(reinterpret_cast<const __m128i *>(pos + 32)),
-                zero16))) << 32)
-            | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpgt_epi8(
-                _mm_loadu_si128(reinterpret_cast<const __m128i *>(pos + 48)),
-                zero16))) << 48));
+        count += __builtin_popcountll(toBits64(pos));
 
     /// TODO Add duff device for tail?
 #endif
 
     for (; pos < end; ++pos)
-        count += *pos > 0;
+        count += *pos != 0;
+
+    return count;
+}
+
+size_t countBytesInFilter(const IColumn::Filter & filt)
+{
+    return countBytesInFilter(filt.data(), filt.size());
+}
+
+size_t countBytesInFilterWithNull(const IColumn::Filter & filt, const UInt8 * null_map)
+{
+    size_t count = 0;
+
+    /** NOTE: In theory, `filt` should only contain zeros and ones.
+      * But, just in case, here the condition > 0 (to signed bytes) is used.
+      * It would be better to use != 0, then this does not allow SSE2.
+      */
+
+    const Int8 * pos = reinterpret_cast<const Int8 *>(filt.data());
+    const Int8 * pos2 = reinterpret_cast<const Int8 *>(null_map);
+    const Int8 * end = pos + filt.size();
+
+#if defined(__SSE2__) && defined(__POPCNT__)
+    const Int8 * end64 = pos + filt.size() / 64 * 64;
+
+    for (; pos < end64; pos += 64, pos2 += 64)
+        count += __builtin_popcountll(toBits64(pos) & ~toBits64(pos2));
+
+        /// TODO Add duff device for tail?
+#endif
+
+    for (; pos < end; ++pos)
+        count += (*pos & ~*pos2) != 0;
 
     return count;
 }
@@ -57,43 +97,18 @@ std::vector<size_t> countColumnsSizeInSelector(IColumn::ColumnIndex num_columns,
     return counts;
 }
 
-/** clang 4 generates better code than gcc 6.
-  * And both gcc and clang could not vectorize trivial loop by bytes automatically.
-  */
-bool memoryIsZero(const void * data, size_t size)
+bool memoryIsByte(const void * data, size_t size, uint8_t byte)
 {
-    const Int8 * pos = reinterpret_cast<const Int8 *>(data);
-    const Int8 * end = pos + size;
-
-#if __SSE2__
-    const __m128 zero16 = _mm_setzero_ps();
-    const Int8 * end64 = pos + size / 64 * 64;
-
-    for (; pos < end64; pos += 64)
-        if (_mm_movemask_ps(_mm_cmpneq_ps(
-                _mm_loadu_ps(reinterpret_cast<const float *>(pos)),
-                zero16))
-            | _mm_movemask_ps(_mm_cmpneq_ps(
-                _mm_loadu_ps(reinterpret_cast<const float *>(pos + 16)),
-                zero16))
-            | _mm_movemask_ps(_mm_cmpneq_ps(
-                _mm_loadu_ps(reinterpret_cast<const float *>(pos + 32)),
-                zero16))
-            | _mm_movemask_ps(_mm_cmpneq_ps(
-                _mm_loadu_ps(reinterpret_cast<const float *>(pos + 48)),
-                zero16)))
-            return false;
-
-    /// TODO Add duff device for tail?
-#endif
-
-    for (; pos < end; ++pos)
-        if (*pos)
-            return false;
-
-    return true;
+    if (size == 0)
+        return true;
+    const auto * ptr = reinterpret_cast<const uint8_t *>(data);
+    return *ptr == byte && memcmp(ptr, ptr + 1, size - 1) == 0;
 }
 
+bool memoryIsZero(const void * data, size_t size)
+{
+    return memoryIsByte(data, size, 0x0);
+}
 
 namespace ErrorCodes
 {
