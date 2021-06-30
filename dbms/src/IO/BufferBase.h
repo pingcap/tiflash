@@ -77,6 +77,9 @@ public:
     /// offset in bytes of the cursor from the beginning of the buffer
     inline size_t offset() const { return pos - working_buffer.begin(); }
 
+    /// remain bytes haven't been dealed with in buffer
+    inline size_t remain() const { return working_buffer.end() - pos; }
+
     /** How many bytes have been read/written, counting those that are still in the buffer. */
     size_t count() const
     {

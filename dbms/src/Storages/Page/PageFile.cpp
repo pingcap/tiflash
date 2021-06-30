@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #endif
 
+#include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
 #include <Storages/Page/PageFile.h>
@@ -219,9 +220,11 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 // PageFile::MetaMergingReader
 // =========================================================
 
-PageFile::MetaMergingReader::~MetaMergingReader()
-{
-    page_file.free(meta_buffer, meta_size);
+PageFile::MetaMergingReader::~MetaMergingReader() {
+    // maybe it's bad to close file explicitly.
+    if (nullptr != meta_file && !meta_file->isClosed()) {
+        meta_file->close();
+    }
 }
 
 // Try to initiallize access to meta, read the whole metadata to memory.
@@ -239,6 +242,7 @@ void PageFile::MetaMergingReader::initialize()
     if (unlikely(!file.exists()))
         throw Exception("Try to read meta of " + page_file.toString() + ", but not exists. Path: " + path, ErrorCodes::LOGICAL_ERROR);
 
+    // meta size is const once initialize.
     meta_size = file.getSize();
     if (meta_size == 0) // Empty file
     {
@@ -250,10 +254,20 @@ void PageFile::MetaMergingReader::initialize()
     // File not exists.
     if (unlikely(underlying_file->getFd() == -1))
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
-    SCOPE_EXIT({ underlying_file->close(); });
-    meta_buffer = (char *)page_file.alloc(meta_size);
-    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size);
+    meta_file = underlying_file;
+    meta_reading_buffer = std::make_shared<ReadBufferFromFileDescriptor>(meta_file->getFd());
     status = Status::Opened;
+}
+
+void PageFile::MetaMergingReader::bufferReadFailed(String reason) {
+    LOG_WARNING(page_file.log,
+                "Incomplete write batch {" << toString() << "} for " << reason << ", [batch_start_pos=" << meta_file_offset << "] [meta_size=" << meta_size
+                                           << "] [bytes_already_read=" << DB::toString(meta_reading_buffer->count()) << "] [file=" << page_file.metaPath() << "] ignored.");
+    status = Status::Finished;
+    if (nullptr != meta_file && !meta_file->isClosed()) {
+        meta_file->close();
+    }
+    return;
 }
 
 bool PageFile::MetaMergingReader::hasNext() const
@@ -269,27 +283,55 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     if (status == Status::Uninitialized)
         initialize();
     // Note that we need to check if status is finished after initialize.
-    if (status == Status::Finished)
+    if (status == Status::Finished) {
+        if (nullptr != meta_file && !meta_file->isClosed()) {
+            meta_file->close();
+        }
         return;
+    }
 
-    char * meta_data_end = meta_buffer + meta_size;
-    char * pos           = meta_buffer + meta_file_offset;
-    if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
+    if (meta_file_offset + sizeof(PageMetaFormat::WBSize) > meta_size)
     {
         LOG_WARNING(page_file.log,
                     "Incomplete write batch {" << toString() << "} [batch_start_pos=" << meta_file_offset << "] [meta_size=" << meta_size
                                                << "] [file=" << page_file.metaPath() << "] ignored.");
         status = Status::Finished;
+        if (nullptr != meta_file && !meta_file->isClosed()) {
+            meta_file->close();
+        }
         return;
     }
-    const char * wb_start_pos = pos;
-    const auto   wb_bytes     = PageUtil::get<PageMetaFormat::WBSize>(pos);
-    if (wb_start_pos + wb_bytes > meta_data_end)
+
+    PageMetaFormat::WBSize wb_bytes;
+    bool success = PageUtil::get<PageMetaFormat::WBSize>(meta_reading_buffer, &wb_bytes);
+    if (unlikely(!success)) {
+        bufferReadFailed("reading WBSize failed");
+        return;
+    }
+    if (meta_file_offset + wb_bytes > meta_size)
     {
         LOG_WARNING(page_file.log,
                     "Incomplete write batch {" << toString() << "} [expect_batch_bytes=" << wb_bytes << "] [meta_size=" << meta_size
                                                << "] [file=" << page_file.metaPath() << "] ignored.");
         status = Status::Finished;
+        if (nullptr != meta_file && !meta_file->isClosed()) {
+            meta_file->close();
+        }
+        return;
+    }
+    
+    // alloc temp buffer to read data
+    char * pos = (char *)page_file.alloc(wb_bytes);
+    char * wb_start_pos = pos;
+    SCOPE_EXIT({ page_file.free(wb_start_pos, wb_bytes); });
+
+    // construct the buffer, throw exception when not read enough data or just return?
+    std::memcpy(pos, reinterpret_cast<char *>(&wb_bytes), sizeof(PageMetaFormat::WBSize));
+    pos += sizeof(PageMetaFormat::WBSize);
+    size_t data_read = meta_reading_buffer->read(pos, wb_bytes-sizeof(PageMetaFormat::WBSize));
+    if (unlikely(data_read != wb_bytes - sizeof(PageMetaFormat::WBSize))) {
+        bufferReadFailed("reading all data failed");
+        // should I throw exception?
         return;
     }
 
@@ -410,8 +452,8 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
                         ErrorCodes::LOGICAL_ERROR);
 
     curr_write_batch_sequence = wb_sequence;
-    meta_file_offset          = pos - meta_buffer;
-    data_file_offset += curr_wb_data_offset;
+    meta_file_offset          = meta_reading_buffer->count();
+    data_file_offset          += curr_wb_data_offset;
 }
 
 // =========================================================

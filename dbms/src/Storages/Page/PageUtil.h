@@ -134,6 +134,55 @@ inline T get(std::conditional_t<advance, char *&, const char *> pos)
         pos += sizeof(T);
     return v;
 }
+
+/// Read and advance sizeof(T) bytes by read buffer.
+/// Return false if there are no enough data.
+/// It may throw an exception, if something is wrong when invoking ReadBuffer::next
+/// How to deal with the case get throws exception in moveNext(), which happens more often than other case?
+template <typename T, bool advance = true>
+inline bool get(const ReadBufferPtr & read_buffer, T * const result)
+{
+    if constexpr (!advance) {
+        if (unlikely(read_buffer->remain() < sizeof(T)))
+            return false;
+
+        std::memcpy(reinterpret_cast<char *>(result), read_buffer->position(), sizeof(T));
+        return true;
+    }
+
+    size_t read_bytes = read_buffer->read(reinterpret_cast<char *>(result), sizeof(T));
+    return read_bytes == sizeof(T);
+}
+
+// template <typename T, bool advance = true>
+// inline std::tuple<T, bool> get(const ReadBufferPtr & read_buffer)
+// {
+//     T v;
+//     if constexpr (!advance) {
+//         if (unlikely(read_buffer->remain() < sizeof(T)))
+//             return std::make_tuple(v, false);
+
+//         std::memcpy(reinterpret_cast<char *>(&v), read_buffer->position(), sizeof(T));
+//         return std::make_tuple(v, true);
+//     }
+
+//     size_t bytes_need_read_remain = sizeof(T);
+
+//     do {
+//         if (unlikely(!read_buffer->hasPendingData())) {
+//             if (unlikely(!read_buffer->next())) {
+//                 // if next return false, bad case, had better log it, because you only read partial data and lose the working buffer.
+//                 return std::make_tuple(v, false);
+//             }
+//         }
+//         size_t bytes_to_read = std::min(read_buffer->remain(), bytes_need_read_remain);
+//         std::memcpy(reinterpret_cast<char *>(&v) + sizeof(T) - bytes_need_read_remain, read_buffer->position(), bytes_to_read);
+//         read_buffer->position() += bytes_to_read;
+//         bytes_need_read_remain -= bytes_to_read;
+//     }
+//     while (unlikely(bytes_need_read_remain > 0))
+//     return std::make_tuple(v, true);
+// }
 } // namespace PageUtil
 
 } // namespace DB

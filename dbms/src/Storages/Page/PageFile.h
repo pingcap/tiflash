@@ -158,6 +158,7 @@ public:
 
     private:
         void initialize();
+        inline void bufferReadFailed(String reason);
 
     private:
         PageFile & page_file;
@@ -167,9 +168,10 @@ public:
         WriteBatch::SequenceID curr_write_batch_sequence = 0;
         PageEntriesEdit        curr_edit;
 
-        // The whole buffer and size of metadata, should be initlized in method `initlize()`.
-        char * meta_buffer = nullptr;
+        // The read buffer and size of metadata, with the underlying meta file should be initlized in method `initlize()`.
+        ReadBufferPtr meta_reading_buffer;
         size_t meta_size   = 0;
+        RandomAccessFilePtr meta_file = nullptr;
 
         // Current parsed offsets.
         size_t meta_file_offset = 0;
