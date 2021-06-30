@@ -10,7 +10,9 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
+#include <AggregateFunctions/AggregateFunctionArray.h>
 #include <AggregateFunctions/AggregateFunctionCount.h>
+#include <AggregateFunctions/AggregateFunctionState.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
@@ -42,10 +44,11 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int CANNOT_COMPILE_CODE;
+    extern const int UNKNOWN_AGGREGATED_DATA_VARIANT;
     extern const int TOO_MANY_ROWS;
     extern const int EMPTY_DATA_PASSED;
     extern const int CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS;
+    extern const int LOGICAL_ERROR;
 }
 
 
@@ -212,7 +215,6 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
       */
 
     size_t keys_bytes = 0;
-
     size_t num_fixed_contiguous_keys = 0;
 
     key_sizes.resize(params.keys_size);
@@ -324,18 +326,15 @@ void NO_INLINE Aggregator::executeImpl(
     ColumnRawPtrs & key_columns,
     TiDB::TiDBCollators & collators,
     AggregateFunctionInstruction * aggregate_instructions,
-    const Sizes & key_sizes,
-    StringRefs & keys,
     bool no_more_keys,
     AggregateDataPtr overflow_row) const
 {
-    typename Method::State state;
-    state.init(key_columns, collators);
+    typename Method::State state(key_columns, key_sizes, collators);
 
     if (!no_more_keys)
-        executeImplCase<false>(method, state, aggregates_pool, rows, key_columns, aggregate_instructions, key_sizes, keys, overflow_row);
+        executeImplCase<false>(method, state, aggregates_pool, rows, aggregate_instructions, overflow_row);
     else
-        executeImplCase<true>(method, state, aggregates_pool, rows, key_columns, aggregate_instructions, key_sizes, keys, overflow_row);
+        executeImplCase<true>(method, state, aggregates_pool, rows, aggregate_instructions, overflow_row);
 }
 
 #ifndef __clang__
@@ -349,82 +348,52 @@ void NO_INLINE Aggregator::executeImplCase(
     typename Method::State & state,
     Arena * aggregates_pool,
     size_t rows,
-    ColumnRawPtrs & key_columns,
     AggregateFunctionInstruction * aggregate_instructions,
-    const Sizes & key_sizes,
-    StringRefs & keys,
     AggregateDataPtr overflow_row) const
 {
     /// NOTE When editing this code, also pay attention to SpecializedAggregator.h.
 
     /// For all rows.
-    typename Method::iterator it;
-    typename Method::Key prev_key;
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(key_columns.size(), "");
     for (size_t i = 0; i < rows; ++i)
     {
-        bool inserted;          /// Inserted a new key, or was this key already?
-        bool overflow = false;  /// The new key did not fit in the hash table because of no_more_keys.
+        AggregateDataPtr aggregate_data = nullptr;
 
-        /// Get the key to insert into the hash table.
-        typename Method::Key key = state.getKey(key_columns, params.keys_size, i, key_sizes, keys, *aggregates_pool, sort_key_containers);
-
-        if (!no_more_keys)  /// Insert.
+        if constexpr (!no_more_keys)  /// Insert.
         {
-            /// Optimization for consecutive identical keys.
-            if (!Method::no_consecutive_keys_optimization(params.collators))
-            {
-                if (i != 0 && key == prev_key)
-                {
-                    /// Add values to the aggregate functions.
-                    AggregateDataPtr value = Method::getAggregateData(it->second);
-                    for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
-                        (*inst->func)(inst->that, value + inst->state_offset, inst->arguments, i, aggregates_pool);
-
-                    method.onExistingKey(key, keys, *aggregates_pool);
-                    continue;
-                }
-                else
-                    prev_key = key;
-            }
-
             method.data.emplace(key, it, inserted);
+            auto emplace_result = state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers);
+
+            /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
+            if (emplace_result.isInserted())
+            {
+                /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+                emplace_result.setMapped(nullptr);
+
+                aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                createAggregateStates(aggregate_data);
+
+                emplace_result.setMapped(aggregate_data);
+            }
+            else
+                aggregate_data = emplace_result.getMapped();
         }
         else
         {
             /// Add only if the key already exists.
-            inserted = false;
-            it = method.data.find(key);
-            if (method.data.end() == it)
-                overflow = true;
+            auto find_result = state.findKey(method.data, i, *aggregates_pool, sort_key_containers);
+            if (find_result.isFound())
+                aggregate_data = find_result.getMapped();
         }
+
+        /// aggregate_date == nullptr means that the new key did not fit in the hash table because of no_more_keys.
 
         /// If the key does not fit, and the data does not need to be aggregated in a separate row, then there's nothing to do.
-        if (no_more_keys && overflow && !overflow_row)
-        {
-            method.onExistingKey(key, keys, *aggregates_pool);
+        if (!aggregate_data && !overflow_row)
             continue;
-        }
 
-        /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
-        if (inserted)
-        {
-            AggregateDataPtr & aggregate_data = Method::getAggregateData(it->second);
-
-            /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
-            aggregate_data = nullptr;
-
-            method.onNewKey(*it, params.keys_size, keys, *aggregates_pool);
-
-            AggregateDataPtr place = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-            createAggregateStates(place);
-            aggregate_data = place;
-        }
-        else
-            method.onExistingKey(key, keys, *aggregates_pool);
-
-        AggregateDataPtr value = (!no_more_keys || !overflow) ? Method::getAggregateData(it->second) : overflow_row;
+        AggregateDataPtr value = aggregate_data ? aggregate_data : overflow_row;
 
         /// Add values to the aggregate functions.
         for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
@@ -1596,7 +1565,6 @@ std::unique_ptr<IBlockInputStream> Aggregator::mergeAndConvertToBlocks(
 template <bool no_more_keys, typename Method, typename Table>
 void NO_INLINE Aggregator::mergeStreamsImplCase(
     Block & block,
-    const Sizes & key_sizes,
     Arena * aggregates_pool,
     Method & method,
     Table & data,
@@ -1612,34 +1580,37 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
     for (size_t i = 0; i < params.aggregates_size; ++i)
         aggregate_columns[i] = &typeid_cast<const ColumnAggregateFunction &>(*block.safeGetByPosition(params.keys_size + i).column).getData();
 
-    typename Method::State state;
-    state.init(key_columns, params.collators);
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(key_columns.size(), "");
 
+    typename Method::State state(key_columns, key_sizes, params.collators);
+
     /// For all rows.
-    StringRefs keys(params.keys_size);
     size_t rows = block.rows();
     for (size_t i = 0; i < rows; ++i)
     {
-        typename Table::iterator it;
+        AggregateDataPtr aggregate_data = nullptr;
 
-        bool inserted;          /// Inserted a new key, or was this key already?
-        bool overflow = false;  /// The new key did not fit in the hash table because of no_more_keys.
-
-        /// Get the key to insert into the hash table.
-        auto key = state.getKey(key_columns, params.keys_size, i, key_sizes, keys, *aggregates_pool, sort_key_containers);
-
-        if (!no_more_keys)
+        if constexpr (!no_more_keys)
         {
-            data.emplace(key, it, inserted);
+            auto emplace_result = state.emplaceKey(data, i, *aggregates_pool, sort_key_containers);
+            if (emplace_result.isInserted())
+            {
+                emplace_result.setMapped(nullptr);
+
+                aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                createAggregateStates(aggregate_data);
+
+                emplace_result.setMapped(aggregate_data);
+            }
+            else
+                aggregate_data = emplace_result.getMapped();
         }
         else
         {
-            inserted = false;
-            it = data.find(key);
-            if (data.end() == it)
-                overflow = true;
+            auto find_result = state.findKey(data, i, *aggregates_pool, sort_key_containers);
+            if (find_result.isFound())
+                aggregate_data = find_result.getMapped();
         }
 
         /// If the key does not fit, and the data does not need to be aggregated into a separate row, then there's nothing to do.
@@ -1649,22 +1620,7 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
             continue;
         }
 
-        /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
-        if (inserted)
-        {
-            AggregateDataPtr & aggregate_data = Method::getAggregateData(it->second);
-            aggregate_data = nullptr;
-
-            method.onNewKey(*it, params.keys_size, keys, *aggregates_pool);
-
-            AggregateDataPtr place = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-            createAggregateStates(place);
-            aggregate_data = place;
-        }
-        else
-            method.onExistingKey(key, keys, *aggregates_pool);
-
-        AggregateDataPtr value = (!no_more_keys || !overflow) ? Method::getAggregateData(it->second) : overflow_row;
+        AggregateDataPtr value = aggregate_data ? aggregate_data : overflow_row;
 
         /// Merge state of aggregate functions.
         for (size_t j = 0; j < params.aggregates_size; ++j)
@@ -1681,7 +1637,6 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
 template <typename Method, typename Table>
 void NO_INLINE Aggregator::mergeStreamsImpl(
     Block & block,
-    const Sizes & key_sizes,
     Arena * aggregates_pool,
     Method & method,
     Table & data,
@@ -1689,9 +1644,9 @@ void NO_INLINE Aggregator::mergeStreamsImpl(
     bool no_more_keys) const
 {
     if (!no_more_keys)
-        mergeStreamsImplCase<false>(block, key_sizes, aggregates_pool, method, data, overflow_row);
+        mergeStreamsImplCase<false>(block, aggregates_pool, method, data, overflow_row);
     else
-        mergeStreamsImplCase<true>(block, key_sizes, aggregates_pool, method, data, overflow_row);
+        mergeStreamsImplCase<true>(block, aggregates_pool, method, data, overflow_row);
 }
 
 
