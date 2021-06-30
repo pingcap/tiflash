@@ -218,7 +218,15 @@ public:
         std::mutex mutex;
 
     public:
+<<<<<<< HEAD
         size_t length() { return tasks.size(); }
+=======
+        size_t length()
+        {
+            std::scoped_lock lock(mutex);
+            return light_tasks.size() + heavy_tasks.size();
+        }
+>>>>>>> e9f28c717... Fix incursive deadlock in ~Snapshot (#2277)
 
         void addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
 
