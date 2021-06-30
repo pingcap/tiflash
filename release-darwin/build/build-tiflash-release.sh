@@ -24,6 +24,7 @@ cmake "$SRCPATH" \
       -DENABLE_ICU=OFF \
       -DENABLE_MYSQL=OFF \
       -Wno-dev \
+      -DUSE_INTERNAL_RE2_LIBRARY=FALSE \
       -DNO_WERROR=ON
 
 make -j $NPROC tiflash
