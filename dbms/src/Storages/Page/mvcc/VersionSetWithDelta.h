@@ -50,6 +50,9 @@ public:
     virtual ~MultiVersionCountableForDelta() = default;
 };
 
+// TODO: Merge `VersionSetWithDelta` with `PageEntriesVersionSetWithDelta`, template make things
+//       more complicated and hard to understand. 
+//
 /// \tparam TVersion         -- Single version on version-list. Require for a `prev` member, see `MultiVersionDeltaCountable`
 /// \tparam TVersionView     -- A view to see a list of versions as a single version
 /// \tparam TVersionEdit     -- Changes to apply to version set for generating new version
@@ -139,19 +142,13 @@ public:
             CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
         }
 
+        // Releasing a snapshot object may do compaction on vset's versions.
         ~Snapshot()
         {
             vset->compactOnDeltaRelease(view.getSharedTailVersion());
             // Remove snapshot from linked list
 
             view.release();
-
-            // Do cleanup for invalid snapshot weak_ptr randomly.
-            if (vset->config.doCleanup())
-            {
-                std::unique_lock lock = vset->acquireForLock();
-                vset->removeExpiredSnapshots(lock);
-            }
 
             CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
         }
@@ -181,7 +178,10 @@ public:
         std::unique_lock<std::shared_mutex> lock(read_write_mutex);
 
         auto s = std::make_shared<Snapshot>(this, current);
-        // Register snapshot to VersionSet
+        // Register a weak_ptr to snapshot into VersionSet so that we can get all living PageFiles
+        // by `PageEntriesVersionSetWithDelta::listAllLiveFiles`, and it remove useless weak_ptr of snapshots.
+        // Do not call `vset->removeExpiredSnapshots` inside `~Snapshot`, or it may cause incursive deadlock
+        // on `vset->read_write_mutex`.
         snapshots.emplace_back(SnapshotWeakPtr(s));
         CurrentMetrics::add(CurrentMetrics::PSMVCCSnapshotsList);
         return s;
@@ -262,8 +262,8 @@ protected:
         return false;
     }
 
-    // If `tail` is in current
-    // Do compaction on version-list [head, tail]. If there some versions after tail, use vset's `rebase` to concat them.
+    // If `tail` is in the latest versions-list, do compaction on version-list [head, tail].
+    // If there some versions after tail, use vset's `rebase` to concat them.
     void compactOnDeltaRelease(VersionPtr tail)
     {
         if (tail == nullptr || tail->isBase())
