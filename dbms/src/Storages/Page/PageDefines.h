@@ -22,6 +22,7 @@ static constexpr UInt64 PAGE_FILE_MAX_SIZE = 1024 * 2 * MB;
 static constexpr UInt64 PAGE_FILE_SMALL_SIZE = 2 * MB;
 static constexpr UInt64 PAGE_FILE_ROLL_SIZE = 128 * MB;
 static constexpr UInt64 PAGE_META_ROLL_SIZE = 2 * MB;
+static constexpr UInt64 DBMS_DEFAULT_META_READER_BUFFER_SIZE = 1024; // The size of the meta reader buffer by default.
 
 static_assert(PAGE_SIZE_STEP >= ((1 << 10) * 16), "PAGE_SIZE_STEP should be at least 16 KB");
 static_assert((PAGE_SIZE_STEP & (PAGE_SIZE_STEP - 1)) == 0, "PAGE_SIZE_STEP should be power of 2");

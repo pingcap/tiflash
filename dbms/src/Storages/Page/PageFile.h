@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Encryption/FileProvider.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/Page/Page.h>
@@ -117,10 +118,9 @@ public:
     class MetaMergingReader : private boost::noncopyable
     {
     public:
-        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter = nullptr);
-        static MetaMergingReaderPtr createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter = nullptr);
-
         MetaMergingReader(PageFile & page_file_); // should only called by `createFrom`
+        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter = nullptr);
+        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter = nullptr);
 
         ~MetaMergingReader();
 
@@ -167,7 +167,9 @@ public:
         }
 
     private:
-        void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter);
+        void close();
+
+        void initialize(std::optional<size_t> max_meta_offset, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter);
 
     private:
         PageFile & page_file;
@@ -177,9 +179,10 @@ public:
         WriteBatch::SequenceID curr_write_batch_sequence = 0;
         PageEntriesEdit curr_edit;
 
-        // The whole buffer and size of metadata, should be initlized in method `initlize()`.
-        char * meta_buffer = nullptr;
+        // The read buffer and size of metadata.
+        // meta_reading_buffer will keep the underlying meta file open if it's not nullptr.
         size_t meta_size = 0;
+        std::unique_ptr<ReadBufferFromFileProvider> meta_reading_buffer = nullptr;
 
         // Current parsed offsets.
         size_t meta_file_offset = 0;

@@ -136,6 +136,16 @@ inline T get(std::conditional_t<advance, char *&, const char *> pos)
         pos += sizeof(T);
     return v;
 }
+
+/// Read and advance sizeof(T) bytes by read buffer.
+/// Return false if there are no enough data.
+/// It may throw an exception, if something is wrong when invoking ReadBuffer::next
+/// How to deal with the case get throws exception in moveNext(), which happens more often than other case?
+template <typename T>
+inline bool get(ReadBuffer * read_buffer, T * const result)
+{
+    return sizeof(T) == read_buffer->read(reinterpret_cast<char *>(result), sizeof(T));
+}
 } // namespace PageUtil
 
 } // namespace DB

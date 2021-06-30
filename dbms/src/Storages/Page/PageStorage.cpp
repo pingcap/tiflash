@@ -119,7 +119,7 @@ PageFormat::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_
 
         // Simply check the last non-empty PageFile is good enough
         all_empty = false;
-        auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(*iter));
+        auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(*iter), /*meta_file_buffer_size=*/DBMS_DEFAULT_META_READER_BUFFER_SIZE);
         while (reader->hasNext())
         {
             // Continue to read the binary version of next WriteBatch.
@@ -260,7 +260,7 @@ void PageStorage::restore()
               || page_file.getType() == PageFile::Type::Checkpoint))
             throw Exception("Try to recover from " + page_file.toString() + ", illegal type.", ErrorCodes::LOGICAL_ERROR);
 
-        if (auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file));
+        if (auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), config.meta_file_reading_buf_size);
             reader->hasNext())
         {
             // Read one WriteBatch

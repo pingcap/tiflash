@@ -182,7 +182,7 @@ try
 
     PageStorage::MetaMergingQueue mergine_queue;
     {
-        if (auto reader = PageFile::MetaMergingReader::createFrom(page_file, ctx.getReadLimiter());
+        if (auto reader = PageFile::MetaMergingReader::createFrom(page_file, /*meta_file_buffer_size=*/DBMS_DEFAULT_META_READER_BUFFER_SIZE, ctx.getReadLimiter()); //
             reader->hasNext())
         {
             reader->moveNext();
