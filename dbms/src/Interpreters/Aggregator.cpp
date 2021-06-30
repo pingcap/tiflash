@@ -863,7 +863,8 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
         for (size_t i = 0; i < params.aggregates_size; ++i)
             aggregate_functions[i]->insertResultInto(
                 Method::getAggregateData(value.second) + offsets_of_aggregate_states[i],
-                *final_aggregate_columns[i]);
+                *final_aggregate_columns[i],
+                nullptr);
     }
 
     destroyImpl<Method>(data);      /// NOTE You can do better.
@@ -987,7 +988,7 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
                 if (!final)
                     aggregate_columns[i]->push_back(data + offsets_of_aggregate_states[i]);
                 else
-                    aggregate_functions[i]->insertResultInto(data + offsets_of_aggregate_states[i], *final_aggregate_columns[i]);
+                    aggregate_functions[i]->insertResultInto(data + offsets_of_aggregate_states[i], *final_aggregate_columns[i], nullptr);
             }
 
             if (!final)
