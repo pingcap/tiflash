@@ -8,7 +8,7 @@ NPROC=${NPROC:-$(sysctl -n hw.physicalcpu || grep -c ^processor /proc/cpuinfo)}
 CMAKE_BUILD_TYPE="RELWITHDEBINFO"
 ENABLE_EMBEDDED_COMPILER="FALSE"
 
-install_dir="$SRCPATH/release-darwin/tiflash"
+INSTALL_DIR="$SRCPATH/release-darwin/tiflash"
 
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
 mkdir -p ${SRCPATH}/libs/libtiflash-proxy
@@ -29,11 +29,15 @@ cmake "$SRCPATH" \
 
 make -j $NPROC tiflash
 
-cp -f "$build_dir/dbms/src/Server/tiflash" "$install_dir/tiflash"
-cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.dylib" "$install_dir/libtiflash_proxy.dylib"
+cp -f "$build_dir/dbms/src/Server/tiflash" "$INSTALL_DIR/tiflash"
+cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.dylib" "$INSTALL_DIR/libtiflash_proxy.dylib"
 
-FILE="$install_dir/tiflash"
+FILE="$INSTALL_DIR/tiflash"
 otool -L "$FILE"
+
+otool -L ${FILE} | egrep -v "$(otool -D ${FILE})" | egrep -v "/(usr/lib|System|libtiflash_proxy)" | grep -o "/.*\.dylib" | while read; do
+  cp ${REPLY} ${INSTALL_DIR}; install_name_tool -change $REPLY @executable_path/"$(basename ${REPLY})" $FILE;
+done
 
 set +e
 echo "show ccache stats"
