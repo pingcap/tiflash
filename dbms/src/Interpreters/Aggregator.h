@@ -11,8 +11,11 @@
 #include <common/ThreadPool.h>
 
 #include <Common/Arena.h>
+#include <Common/HashTable/FixedHashMap.h>
 #include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/TwoLevelHashMap.h>
+#include <Common/HashTable/StringHashMap.h>
+#include <Common/HashTable/TwoLevelStringHashMap.h>
 #include <Common/ColumnsHashing.h>
 
 #include <DataStreams/IBlockInputStream.h>
@@ -65,18 +68,28 @@ class IBlockOutputStream;
 
 using AggregatedDataWithoutKey = AggregateDataPtr;
 
-using AggregatedDataWithUInt8Key = HashMap<UInt64, AggregateDataPtr, TrivialHash, HashTableFixedGrower<8>>;
-using AggregatedDataWithUInt16Key = HashMap<UInt64, AggregateDataPtr, TrivialHash, HashTableFixedGrower<16>>;
+using AggregatedDataWithUInt8Key = FixedImplicitZeroHashMapWithCalculatedSize<UInt8, AggregateDataPtr>;
+using AggregatedDataWithUInt16Key = FixedImplicitZeroHashMap<UInt16, AggregateDataPtr>;
 
+using AggregatedDataWithUInt32Key = HashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
 using AggregatedDataWithUInt64Key = HashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
-using AggregatedDataWithInt256Key = HashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
+
+using AggregatedDataWithShortStringKey = StringHashMap<AggregateDataPtr>;
 using AggregatedDataWithStringKey = HashMapWithSavedHash<StringRef, AggregateDataPtr>;
+
+using AggregatedDataWithInt256Key = HashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
+
 using AggregatedDataWithKeys128 = HashMap<UInt128, AggregateDataPtr, HashCRC32<UInt128>>;
 using AggregatedDataWithKeys256 = HashMap<UInt256, AggregateDataPtr, HashCRC32<UInt256>>;
 
+using AggregatedDataWithUInt32KeyTwoLevel = TwoLevelHashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
 using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
+
 using AggregatedDataWithInt256KeyTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
+
+using AggregatedDataWithShortStringKeyTwoLevel = TwoLevelStringHashMap<AggregateDataPtr>;
 using AggregatedDataWithStringKeyTwoLevel = TwoLevelHashMapWithSavedHash<StringRef, AggregateDataPtr>;
+
 using AggregatedDataWithKeys128TwoLevel = TwoLevelHashMap<UInt128, AggregateDataPtr, HashCRC32<UInt128>>;
 using AggregatedDataWithKeys256TwoLevel = TwoLevelHashMap<UInt256, AggregateDataPtr, HashCRC32<UInt256>>;
 
@@ -382,20 +395,25 @@ struct AggregatedDataVariants : private boost::noncopyable
     std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64Key>>         key32;
     std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64Key>>         key64;
     std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256Key>>         key_int256;
-    std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithStringKey>>             key_string;
-    std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithStringKey>>        key_fixed_string;
+    std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithShortStringKey>>        key_string;
+    std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKey>>   key_fixed_string;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt16Key, false, false>>   keys16;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt32Key>>                 keys32;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt64Key>>                 keys64;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128>>                   keys128;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256>>                   keys256;
     std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKey>>                serialized;
 
-    std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel>>        key32_two_level;
-    std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel>>        key64_two_level;
-    std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel>>        key_int256_two_level;
-    std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithStringKeyTwoLevel>>            key_string_two_level;
-    std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithStringKeyTwoLevel>>       key_fixed_string_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel>>                  keys128_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel>>                  keys256_two_level;
-    std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevel>>               serialized_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel>> key32_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel>> key64_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel>> key_int256_two_level;
+    std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>>       key_string_two_level;
+    std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>>  key_fixed_string_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt32KeyTwoLevel>>         keys32_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt64KeyTwoLevel>>         keys64_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel>>           keys128_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel>>           keys256_two_level;
+    std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevel>>        serialized_two_level;
 
     std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyHash64>>   key64_hash64;
     std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithStringKeyHash64>>       key_string_hash64;
@@ -418,15 +436,20 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(key64,                      false) \
         M(key_string,                 false) \
         M(key_fixed_string,           false) \
+        M(keys16,                     false) \
+        M(keys32,                     false) \
+        M(keys64,                     false) \
         M(keys128,                    false) \
         M(keys256,                    false) \
-        M(key_int256,                    false) \
+        M(key_int256,                 false) \
         M(serialized,                 false) \
         M(key32_two_level,            true) \
         M(key64_two_level,            true) \
-        M(key_int256_two_level,            true) \
+        M(key_int256_two_level,       true) \
         M(key_string_two_level,       true) \
         M(key_fixed_string_two_level, true) \
+        M(keys32_two_level,           true) \
+        M(keys64_two_level,           true) \
         M(keys128_two_level,          true) \
         M(keys256_two_level,          true) \
         M(serialized_two_level,       true) \
@@ -550,9 +573,11 @@ struct AggregatedDataVariants : private boost::noncopyable
     #define APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M) \
         M(key32)            \
         M(key64)            \
-        M(key_int256)            \
+        M(key_int256)       \
         M(key_string)       \
         M(key_fixed_string) \
+        M(keys32)           \
+        M(keys64)           \
         M(keys128)          \
         M(keys256)          \
         M(serialized)       \
@@ -562,11 +587,12 @@ struct AggregatedDataVariants : private boost::noncopyable
     #define APPLY_FOR_VARIANTS_NOT_CONVERTIBLE_TO_TWO_LEVEL(M) \
         M(key8)             \
         M(key16)            \
+        M(keys16)           \
         M(key64_hash64)     \
-        M(key_string_hash64)\
         M(key_fixed_string_hash64) \
         M(keys128_hash64)   \
         M(keys256_hash64)   \
+        M(key_string_hash64) \
         M(serialized_hash64) \
 
     #define APPLY_FOR_VARIANTS_SINGLE_LEVEL(M) \
@@ -593,14 +619,16 @@ struct AggregatedDataVariants : private boost::noncopyable
     #define APPLY_FOR_VARIANTS_TWO_LEVEL(M) \
         M(key32_two_level)            \
         M(key64_two_level)            \
-        M(key_string_two_level)       \
         M(key_int256_two_level)       \
+        M(key_string_two_level)       \
         M(key_fixed_string_two_level) \
+        M(keys32_two_level)           \
+        M(keys64_two_level)           \
         M(keys128_two_level)          \
         M(keys256_two_level)          \
         M(serialized_two_level)       \
         M(nullable_keys128_two_level) \
-        M(nullable_keys256_two_level)
+        M(nullable_keys256_two_level) 
 
 };
 

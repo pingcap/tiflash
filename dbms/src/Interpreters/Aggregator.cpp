@@ -263,14 +263,22 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
             return AggregatedDataVariants::Type::key64;
         if (size_of_field == 16)
             return AggregatedDataVariants::Type::keys128;
+        if (size_of_field == 32)
+            return AggregatedDataVariants::Type::keys256;
         if (size_of_field == sizeof(Decimal256))
             return AggregatedDataVariants::Type::key_int256;
-        throw Exception("Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16, 32.", ErrorCodes::LOGICAL_ERROR);
     }
 
     /// If all keys fits in N bits, will use hash table with all keys packed (placed contiguously) to single N-bit key.
     if (params.keys_size == num_fixed_contiguous_keys)
     {
+        if (keys_bytes <= 2)
+            return AggregatedDataVariants::Type::keys16;
+        if (keys_bytes <= 4)
+            return AggregatedDataVariants::Type::keys32;
+        if (keys_bytes <= 8)
+            return AggregatedDataVariants::Type::keys64;
         if (keys_bytes <= 16)
             return AggregatedDataVariants::Type::keys128;
         if (keys_bytes <= 32)
@@ -364,6 +372,27 @@ void NO_INLINE Aggregator::executeImplBatch(
         AggregateDataPtr place = aggregates_pool->alloc(0);
         for (size_t i = 0; i < rows; ++i)
             state.emplaceKey(method.data, i, *aggregates_pool, sort_key_containers).setMapped(place);
+        return;
+    }
+
+    /// Optimization for special case when aggregating by 8bit key.
+    if constexpr (!no_more_keys && std::is_same_v<Method, typename decltype(AggregatedDataVariants::key8)::element_type>)
+    {
+        for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
+        {
+            inst->batch_that->addBatchLookupTable8(
+                rows,
+                reinterpret_cast<AggregateDataPtr *>(method.data.data()),
+                inst->state_offset,
+                [&](AggregateDataPtr & aggregate_data)
+                {
+                    aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                    createAggregateStates(aggregate_data);
+                },
+                state.getKeyData(),
+                inst->batch_arguments,
+                aggregates_pool);
+        }
         return;
     }
 
