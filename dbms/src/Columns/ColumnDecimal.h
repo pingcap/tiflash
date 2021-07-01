@@ -28,6 +28,11 @@ public:
         scale(scale_)
     {}
 
+    DecimalPaddedPODArray(size_t size, const T & x, UInt32 scale_)
+        :   Base(size, x),
+            scale(scale_)
+    {}
+
     DecimalPaddedPODArray(const DecimalPaddedPODArray & other)
     :   Base(other.begin(), other.end()),
         scale(other.scale)
@@ -73,6 +78,10 @@ private:
     :   data(n, scale_),
         scale(scale_)
     {}
+    ColumnDecimal(const size_t n, const T & x, UInt32 scale_)
+        :   data(n, x, scale_),
+            scale(scale_)
+    {}
 
     ColumnDecimal(const ColumnDecimal & src)
     :   data(src.data),
@@ -101,6 +110,15 @@ public:
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
     void popBack(size_t n) override { data.resize_assume_reserved(data.size() - n); }
+
+    StringRef getRawData() const override
+    {
+        if constexpr (is_Decimal256)
+        {
+            throw Exception("getRawData is not supported for " + IColumn::getName());
+        }
+        return StringRef(reinterpret_cast<const char*>(data.data()), byteSize());
+    }
 
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
