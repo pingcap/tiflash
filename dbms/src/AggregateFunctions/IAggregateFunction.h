@@ -187,7 +187,7 @@ template <typename Derived>
 class IAggregateFunctionHelper : public IAggregateFunction
 {
 private:
-    static void addFree(const IAggregateFunction * that, AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena * arena)
+    static void addFree(const IAggregateFunction * that, AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
     {
         static_cast<const Derived &>(*that).add(place, columns, row_num, arena);
     }
@@ -398,7 +398,7 @@ public:
         _IAggregateFunctionImpl::CollatorHolder<with_collator>::setCollator(collator_);
     }
 
-    void create(AggregateDataPtr place) const override
+    void create(AggregateDataPtr __restrict place) const override
     {
         this->setDataCollator(new (place) Data);
     }
