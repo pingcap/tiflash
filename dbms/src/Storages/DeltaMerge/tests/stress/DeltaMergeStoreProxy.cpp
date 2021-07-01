@@ -1,6 +1,5 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
-#include <Storages/DeltaMerge/tests/bank/DeltaMergeStoreProxy.h>
-
+#include <Storages/DeltaMerge/tests/stress/DeltaMergeStoreProxy.h>
 namespace DB
 {
 namespace DM
@@ -8,23 +7,16 @@ namespace DM
 namespace tests
 {
 
-template <typename T>
-void insertColumn(Block & block, const DataTypePtr & type, const String & name, Int64 col_id, T value)
-{
-    ColumnWithTypeAndName col({}, type, name, col_id);
-    IColumn::MutablePtr   m_col = col.type->createColumn();
-    Field                 field = value;
-    m_col->insert(field);
-    col.column = std::move(m_col);
-    block.insert(std::move(col));
-}
+IDGenerator<Int64> pk{0};
+
+IDGenerator<UInt64> tso{0};
 
 template <typename T>
-void insertColumn(Block & block, const DataTypePtr & type, const String & name, Int64 col_id, std::vector<T> values)
+void insertColumn(Block & block, const DataTypePtr & type, const String & name, Int64 col_id, const std::vector<T> & values)
 {
     ColumnWithTypeAndName col({}, type, name, col_id);
     IColumn::MutablePtr   m_col = col.type->createColumn();
-    for (const T& v : values)
+    for (const T & v : values)
     {
         Field field = v;
         m_col->insert(field);
@@ -33,154 +25,99 @@ void insertColumn(Block & block, const DataTypePtr & type, const String & name, 
     block.insert(std::move(col));
 }
 
-void DeltaMergeStoreProxy::upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
+void DeltaMergeStoreProxy::genBlock(Block & block, const std::vector<Int64> & ids)
 {
-    std::lock_guard<std::mutex> guard{mutex};
-    Block                       block;
+    insertColumn<Int64>(block, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID, ids);
+    std::vector<UInt64> v_tso = tso.get(static_cast<UInt32>(ids.size()));
+    insertColumn<UInt64>(block, VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME, VERSION_COLUMN_ID, v_tso);
+    std::vector<UInt64> v_tag(ids.size(), 0);
+    insertColumn<UInt64>(block, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID, v_tag);
+    std::vector<UInt64> v_balance(ids.size(), 1024);
+    insertColumn<UInt64>(block, col_balance_define.type, col_balance_define.name, col_balance_define.id, v_balance);
+    std::string         s("C", 128);
+    std::vector<String> v_s(ids.size(), s);
+    insertColumn<String>(block, col_random_define.type, col_random_define.name, col_random_define.id, v_s);
+}
 
-    insertColumn<Int64>(block, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID, id);
-    insertColumn<UInt64>(block, VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME, VERSION_COLUMN_ID, tso);
-    insertColumn<UInt64>(block, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID, 0);
-    insertColumn<UInt64>(block, col_balance_define.type, col_balance_define.name, col_balance_define.id, balance);
-
-    auto genStr = [](UInt64 id, UInt64 tso, UInt64 balance)
-    {
-        std::string t = std::to_string(id) + "_" + std::to_string(tso) + "_" + std::to_string(balance) + ";";
-        std::string s;
-        while (s.size() < 128)
-        {
-            s += t;
-        }
-        return s;
-    };
-    insertColumn<String>(block, col_random_define.type, col_random_define.name, col_random_define.id, genStr(id, tso, balance));
+void DeltaMergeStoreProxy::write(const std::vector<Int64> & ids)
+{
+    Block block;
+    genBlock(block, ids);
+    std::lock_guard lock{mutex};
     store->write(*context, context->getSettingsRef(), std::move(block));
 }
 
-UInt64 DeltaMergeStoreProxy::selectBalance(UInt64 id, UInt64 tso)
+UInt64 DeltaMergeStoreProxy::countRows()
 {
-    std::lock_guard<std::mutex> guard{mutex};
-    // read all columns from store
-    const auto &        columns = store->getTableColumns();
-    BlockInputStreamPtr in      = store->read(*context,
-                                         context->getSettingsRef(),
-                                         columns,
-                                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                         /* num_streams= */ 1,
-                                         /* max_version= */ tso,
-                                         EMPTY_FILTER,
-                                         /* expected_block_size= */ 1024)[0];
-
-    bool   found         = false;
-    size_t result        = 0;
-    size_t num_rows_read = 0;
-    in->readPrefix();
+    BlockInputStreamPtr in;
+    {
+        std::lock_guard lock{mutex};
+        const auto &    columns = store->getTableColumns();
+        in                      = store->read(*context,
+                         context->getSettingsRef(),
+                         columns,
+                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                         /* num_streams= */ 1,
+                         /* max_version= */ tso.get(),
+                         EMPTY_FILTER,
+                         /* expected_block_size= */ 1024)[0];
+    }
+    UInt64 total_count = 0;
     while (Block block = in->read())
     {
-        num_rows_read += block.rows();
-        ColumnWithTypeAndName col1        = block.getByName(pk_name);
-        ColumnWithTypeAndName version_col = block.getByName(VERSION_COLUMN_NAME);
-        ColumnWithTypeAndName tag_col     = block.getByName(TAG_COLUMN_NAME);
-        ColumnWithTypeAndName balance_col = block.getByName("balance");
-        for (Int64 i = 0; i < Int64(col1.column->size()); ++i)
-        {
-            if (version_col.column->getUInt(i) > tso)
-            {
-                continue;
-            }
-            if ((col1.column->getUInt(i) == id) && ((*tag_col.column)[i].get<UInt8>() != 1))
-            {
-                if (!found)
-                {
-                    found  = true;
-                    result = balance_col.column->getUInt(i);
-                }
-            }
-        }
+        total_count += block.rows();
     }
-    in->readSuffix();
-    EXPECT_EQ(found, true);
-    UInt64 another_result = db.selectBalance(id, tso);
-    if (another_result != result)
-    {
-        std::cout << "result between deltamerge and simpledb doesn't match" << std::endl;
-        throw std::exception();
-    }
-    return result;
+    LOG_INFO(log, "ThreadID: " << std::this_thread::get_id() <<  " TotalCount: " << total_count);
+    return total_count;
 }
 
-UInt64 DeltaMergeStoreProxy::sumBalance(UInt64 begin, UInt64 end, UInt64 tso)
+void DeltaMergeStoreProxy::genDataMultiThread(UInt64 count, Int32 concurrency)
 {
-    std::lock_guard<std::mutex> guard{mutex};
-    // read all columns from store
-    const auto &        columns = store->getTableColumns();
-    BlockInputStreamPtr in      = store->read(*context,
-                                         context->getSettingsRef(),
-                                         columns,
-                                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                         /* num_streams= */ 1,
-                                         /* max_version= */ tso,
-                                         EMPTY_FILTER,
-                                         /* expected_block_size= */ 1024)[0];
+    UInt64 count_per_thread = count / concurrency + 1;
+    UInt64 will_gen_count = count_per_thread * concurrency;
+    LOG_INFO(log, "Will gen " << will_gen_count << " rows.");
+    std::vector<std::thread> threads;
+    threads.reserve(concurrency);
+    for (Int32 i = 0; i < concurrency; i++)
+    {
+        threads.push_back(std::thread(&DeltaMergeStoreProxy::genData, this, count_per_thread));
+    }
 
-    std::vector<bool>   found_status;
-    std::vector<UInt64> result;
-    found_status.resize(end - begin, false);
-    result.resize(end - begin, 0);
-    size_t num_rows_read = 0;
-    in->readPrefix();
-    while (Block block = in->read())
+    for (auto & t : threads)
     {
-        num_rows_read += block.rows();
-        ColumnWithTypeAndName col1        = block.getByName(pk_name);
-        ColumnWithTypeAndName version_col = block.getByName(VERSION_COLUMN_NAME);
-        ColumnWithTypeAndName tag_col     = block.getByName(TAG_COLUMN_NAME);
-        ColumnWithTypeAndName balance_col = block.getByName("balance");
-        for (Int64 i = 0; i < Int64(col1.column->size()); ++i)
-        {
-            if (version_col.column->getUInt(i) > tso)
-            {
-                continue;
-            }
-            UInt64 id = col1.column->getUInt(i);
-            if ((id >= begin) && (id < end))
-            {
-                if ((*tag_col.column)[i].get<UInt8>() != 1)
-                {
-                    if (!found_status[id])
-                    {
-                        found_status[id] = true;
-                        result[id]       = balance_col.column->getUInt(i);
-                    }
-                }
-            }
-        }
+        t.join();
     }
-    in->readSuffix();
-    UInt64 sum = 0;
-    for (auto f : found_status)
-        EXPECT_EQ(f, true);
-    for (auto i : result)
-        sum += i;
-    UInt64 another_sum = db.sumBalance(begin, end, tso);
-    if (another_sum != sum)
-    {
-        std::cout << "result between deltamerge and simpledb doesn't match" << std::endl;
-        throw std::exception();
-    }
-    return sum;
+
+    LOG_INFO(log, "Generate data finished.");
+    UInt64 real_rows = countRows();
+    LOG_INFO(log, "Except rows: " << will_gen_count << " Real rows: " << real_rows);    
 }
 
-void DeltaMergeStoreProxy::moveMoney(UInt64 from, UInt64 to, UInt64 num, UInt64 tso)
+void DeltaMergeStoreProxy::genData(UInt64 count)
 {
-    UInt64 from_balance = selectBalance(from, tso);
-    if (from_balance < num)
+    UInt64 gen_count = 0;
+    while (gen_count < count)
     {
-        return;
+        auto c   = std::min(gen_count + 128, count) - gen_count;
+        auto ids = pk.get(c);
+        write(ids);
+        gen_count += 128;
     }
-    UInt64 to_balance = selectBalance(to, tso);
-    updateBalance(from, from_balance - num, tso);
-    updateBalance(to, to_balance + num, tso);
+}
+
+void DeltaMergeStoreProxy::readDataMultiThread(Int32 concurrency)
+{
+    std::vector<std::thread> threads;
+    threads.reserve(concurrency);
+    for (Int32 i = 0; i < concurrency; i++)
+    {
+        threads.push_back(std::thread(&DeltaMergeStoreProxy::countRows, this));
+    }
+
+    for (auto & t : threads)
+    {
+        t.join();
+    }
 }
 } // namespace tests
 } // namespace DM

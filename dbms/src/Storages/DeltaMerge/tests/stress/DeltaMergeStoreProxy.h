@@ -3,10 +3,10 @@
 #include <Core/Types.h>
 #include <DataTypes/DataTypeString.h>
 #include <Poco/File.h>
+#include <Poco/Logger.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/tests/bank/IDGenerator.h>
-#include <Storages/DeltaMerge/tests/bank/SimpleDB.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
+#include <Storages/DeltaMerge/tests/stress/SimpleDB.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <cstddef>
@@ -20,10 +20,37 @@ namespace DM
 {
 namespace tests
 {
+
+template <typename T>
+class IDGenerator
+{
+public:
+    IDGenerator(T t_) : t(t_) {}
+    std::vector<T> get(Int32 count)
+    {
+        T              start = t.fetch_add(count);
+        std::vector<T> v(count);
+        for (int i = 0; i < count; i++)
+        {
+            v[i] = start + i;
+        }
+        return v;
+    }
+
+    T get() { return t.fetch_add(1); }
+
+private:
+    std::atomic<T> t;
+};
+
 class DeltaMergeStoreProxy
 {
 public:
-    DeltaMergeStoreProxy() : name{"bank"}, col_balance_define{2, "balance", std::make_shared<DataTypeUInt64>()}, col_random_define{3, "random_text", std::make_shared<DataTypeString>()}
+    DeltaMergeStoreProxy()
+        : name{"stress"},
+          col_balance_define{2, "balance", std::make_shared<DataTypeUInt64>()},
+          col_random_define{3, "random_text", std::make_shared<DataTypeString>()},
+          log(&Poco::Logger::get("DeltaMergeStoreProxy"))
     {
         // construct DeltaMergeStore
         String     path = DB::tests::TiFlashTestEnv::getTemporaryPath() + name;
@@ -38,29 +65,18 @@ public:
         store                             = std::make_shared<DeltaMergeStore>(
             *context, true, "test", name, *table_column_defines, handle_column_define, false, 1, DeltaMergeStore::Settings());
     }
-    void upsertRow(UInt64 id, UInt64 balance, UInt64 tso);
 
-public:
-    void insertBalance(UInt64 id, UInt64 balance, UInt64 tso)
-    {
-        db.insertBalance(id, balance, tso);
-        upsertRow(id, balance, tso);
-    }
+    void   write(const std::vector<Int64> & ids);
+    UInt64 countRows();
 
-    void updateBalance(UInt64 id, UInt64 balance, UInt64 tso)
-    {
-        db.updateBalance(id, balance, tso);
-        upsertRow(id, balance, tso);
-    }
+    void genDataMultiThread(UInt64 count, Int32 concurrency);
+    void genData(UInt64 count);
 
-    UInt64 selectBalance(UInt64 id, UInt64 tso);
-
-    UInt64 sumBalance(UInt64 begin, UInt64 end, UInt64 tso);
-
-public:
-    void moveMoney(UInt64 from, UInt64 to, UInt64 num, UInt64 tso);
+    void readDataMultiThread(Int32 concurrency);
 
 private:
+    void genBlock(Block & block, const std::vector<Int64> & ids);
+
     String                   name;
     std::unique_ptr<Context> context;
     const ColumnDefine       col_balance_define;
@@ -72,6 +88,8 @@ private:
     const String pk_name = EXTRA_HANDLE_COLUMN_NAME;
 
     std::mutex mutex;
+
+    Poco::Logger * log;
 };
 } // namespace tests
 } // namespace DM
