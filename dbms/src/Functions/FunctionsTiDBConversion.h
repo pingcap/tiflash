@@ -441,9 +441,8 @@ struct TiDBConvertToInteger
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
 
-        auto col_to = ColumnVector<ToFieldType>::create();
+        auto col_to = ColumnVector<ToFieldType>::create(size, 0);
         typename ColumnVector<ToFieldType>::Container & vec_to = col_to->getData();
-        vec_to.resize(size);
 
         ColumnUInt8::MutablePtr col_null_map_to;
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
@@ -684,9 +683,8 @@ struct TiDBConvertToFloat
         size_t size = block.getByPosition(arguments[0]).column->size();
 
         /// NOTICE: Since ToFieldType only can be Float32 or Float64, convert from_value to Float64 and then implicitly cast to ToFieldType is fine.
-        auto col_to = ColumnVector<ToFieldType>::create();
+        auto col_to = ColumnVector<ToFieldType>::create(size, 0);
         typename ColumnVector<ToFieldType>::Container & vec_to = col_to->getData();
-        vec_to.resize(size);
 
         ColumnUInt8::MutablePtr col_null_map_to;
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
@@ -1096,9 +1094,8 @@ struct TiDBConvertToDecimal
         bool, const tipb::FieldType &, const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
-        auto col_to = ColumnDecimal<ToFieldType>::create(0, scale);
+        auto col_to = ColumnDecimal<ToFieldType>::create(size, static_cast<ToFieldType>(0), scale);
         typename ColumnDecimal<ToFieldType>::Container & vec_to = col_to->getData();
-        vec_to.resize(size);
 
         ColumnUInt8::MutablePtr col_null_map_to;
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
@@ -1193,9 +1190,8 @@ struct TiDBConvertToTime
         Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType &, const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
-        auto col_to = ColumnUInt64::create();
+        auto col_to = ColumnUInt64::create(size, 0);
         ColumnUInt64::Container & vec_to = col_to->getData();
-        vec_to.resize(size);
 
         ColumnUInt8::MutablePtr col_null_map_to;
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
