@@ -1094,7 +1094,7 @@ struct TiDBConvertToDecimal
         bool, const tipb::FieldType &, const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
-        auto col_to = ColumnDecimal<ToFieldType>::create(size, (ToFieldType)0, scale);
+        auto col_to = ColumnDecimal<ToFieldType>::create(size, static_cast<ToFieldType>(0), scale);
         typename ColumnDecimal<ToFieldType>::Container & vec_to = col_to->getData();
 
         ColumnUInt8::MutablePtr col_null_map_to;
