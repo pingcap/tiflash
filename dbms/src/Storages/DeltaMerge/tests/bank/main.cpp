@@ -168,6 +168,7 @@ int main(int argc, char * argv[])
         std::cout << "Usage: <cmd> account balance worker try_num" << std::endl;
         return 1;
     }
+    DB::tests::TiFlashTestEnv::initializeGlobalContext();
     UInt64 account = std::stoul(argv[1]);
     UInt64 balance = std::stoul(argv[2]);
     UInt64 worker  = std::stoul(argv[3]);
