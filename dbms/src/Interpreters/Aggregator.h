@@ -382,8 +382,8 @@ struct AggregatedDataVariants : private boost::noncopyable
     std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64Key>>         key32;
     std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64Key>>         key64;
     std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256Key>>         key_int256;
-    std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithShortStringKey>>        key_string;
-    std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKey>>   key_fixed_string;
+    std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithStringKey>>             key_string;
+    std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithStringKey>>        key_fixed_string;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128>>                   keys128;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256>>                   keys256;
     std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKey>>                serialized;
@@ -391,8 +391,8 @@ struct AggregatedDataVariants : private boost::noncopyable
     std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel>>        key32_two_level;
     std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel>>        key64_two_level;
     std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel>>        key_int256_two_level;
-    std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>>       key_string_two_level;
-    std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>>  key_fixed_string_two_level;
+    std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithStringKeyTwoLevel>>            key_string_two_level;
+    std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithStringKeyTwoLevel>>       key_fixed_string_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel>>                  keys128_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel>>                  keys256_two_level;
     std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevel>>               serialized_two_level;
@@ -601,6 +601,7 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(serialized_two_level)       \
         M(nullable_keys128_two_level) \
         M(nullable_keys256_two_level)
+
 };
 
 using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;
@@ -943,14 +944,14 @@ protected:
     void convertToBlockImplFinal(
         Method & method,
         Table & data,
-        MutableColumns & key_columns,
+        std::vector<IColumn *>  key_columns,
         MutableColumns & final_aggregate_columns) const;
 
     template <typename Method, typename Table>
     void convertToBlockImplNotFinal(
         Method & method,
         Table & data,
-        MutableColumns & key_columns,
+        std::vector<IColumn *>  key_columns,
         AggregateColumnsData & aggregate_columns) const;
 
     template <typename Filler>
