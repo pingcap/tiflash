@@ -894,40 +894,6 @@ protected:
         Method & method,
         IBlockOutputStream & out);
 
-public:
-    /// Templates that are instantiated by dynamic code compilation - see SpecializedAggregator.h
-
-    template <typename Method, typename AggregateFunctionsList>
-    void executeSpecialized(
-        Method & method,
-        Arena * aggregates_pool,
-        size_t rows,
-        ColumnRawPtrs & key_columns,
-        AggregateColumns & aggregate_columns,
-        const Sizes & key_sizes,
-        StringRefs & keys,
-        bool no_more_keys,
-        AggregateDataPtr overflow_row) const;
-
-    template <bool no_more_keys, typename Method, typename AggregateFunctionsList>
-    void executeSpecializedCase(
-        Method & method,
-        typename Method::State & state,
-        Arena * aggregates_pool,
-        size_t rows,
-        ColumnRawPtrs & key_columns,
-        AggregateColumns & aggregate_columns,
-        const Sizes & key_sizes,
-        StringRefs & keys,
-        AggregateDataPtr overflow_row) const;
-
-    template <typename AggregateFunctionsList>
-    void executeSpecializedWithoutKey(
-        AggregatedDataWithoutKey & res,
-        size_t rows,
-        AggregateColumns & aggregate_columns,
-        Arena * arena) const;
-
 protected:
     /// Merge data from hash table `src` into `dst`.
     template <typename Method, typename Table>
@@ -965,6 +931,7 @@ protected:
         MutableColumns & key_columns,
         AggregateColumnsData & aggregate_columns,
         MutableColumns & final_aggregate_columns,
+        Arena * arena,
         bool final) const;
 
     template <typename Method, typename Table>
@@ -972,7 +939,8 @@ protected:
         Method & method,
         Table & data,
         std::vector<IColumn *>  key_columns,
-        MutableColumns & final_aggregate_columns) const;
+        MutableColumns & final_aggregate_columns,
+        Arena * arena) const;
 
     template <typename Method, typename Table>
     void convertToBlockImplNotFinal(
@@ -992,8 +960,15 @@ protected:
     Block convertOneBucketToBlock(
         AggregatedDataVariants & data_variants,
         Method & method,
+        Arena * arena,
         bool final,
         size_t bucket) const;
+
+    template <typename Mapped>
+    void insertAggregatesIntoColumns(
+        Mapped & mapped,
+        MutableColumns & final_aggregate_columns,
+        Arena * arena) const;
 
     void prepareAggregateInstructions(
         Columns columns,
