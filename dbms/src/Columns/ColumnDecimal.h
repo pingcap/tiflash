@@ -111,6 +111,15 @@ public:
 
     void popBack(size_t n) override { data.resize_assume_reserved(data.size() - n); }
 
+    StringRef getRawData() const override
+    {
+        if constexpr (is_Decimal256)
+        {
+            throw Exception("getRawData is not supported for " + IColumn::getName());
+        }
+        return StringRef(reinterpret_cast<const char*>(data.data()), byteSize());
+    }
+
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
     void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
