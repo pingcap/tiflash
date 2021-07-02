@@ -142,7 +142,8 @@ inline T get(std::conditional_t<advance, char *&, const char *> pos)
 template <typename T, bool advance = true>
 inline bool get(const ReadBufferPtr & read_buffer, T * const result)
 {
-    if constexpr (!advance) {
+    if constexpr (!advance)
+    {
         if (unlikely(read_buffer->remain() < sizeof(T)))
             return false;
 

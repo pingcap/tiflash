@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Encryption/FileProvider.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/Page/Page.h>
@@ -158,7 +159,7 @@ public:
 
     private:
         void initialize();
-        inline void bufferReadFailed(String reason);
+        void close();
 
     private:
         PageFile & page_file;
@@ -169,9 +170,8 @@ public:
         PageEntriesEdit        curr_edit;
 
         // The read buffer and size of metadata, with the underlying meta file should be initlized in method `initlize()`.
-        ReadBufferPtr meta_reading_buffer;
-        size_t meta_size   = 0;
-        RandomAccessFilePtr meta_file = nullptr;
+        ReadBufferFromFileProviderPtr meta_reading_buffer;
+        size_t                        meta_size = 0;
 
         // Current parsed offsets.
         size_t meta_file_offset = 0;

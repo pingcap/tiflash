@@ -43,4 +43,6 @@ private:
 private:
     RandomAccessFilePtr file;
 };
+
+using ReadBufferFromFileProviderPtr = std::shared_ptr<ReadBufferFromFileProvider>;
 } // namespace DB
