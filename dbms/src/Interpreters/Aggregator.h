@@ -105,7 +105,6 @@ using AggregatedDataWithStringKeyHash64 = HashMapWithSavedHash<StringRef, Aggreg
 using AggregatedDataWithKeys128Hash64 = HashMap<UInt128, AggregateDataPtr, DefaultHash<UInt128>>;
 using AggregatedDataWithKeys256Hash64 = HashMap<UInt256, AggregateDataPtr, DefaultHash<UInt256>>;
 
-
 /// For the case where there is one numeric key.
 /// FieldType is UInt8/16/32/64 for any type with corresponding bit width.
 template <typename FieldType, typename TData,
@@ -442,11 +441,7 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(keys64,                     false) \
         M(keys128,                    false) \
         M(keys256,                    false) \
-<<<<<<< HEAD
         M(key_int256,                 false) \
-=======
-        M(key_int256,                    false) \
->>>>>>> master
         M(serialized,                 false) \
         M(key32_two_level,            true) \
         M(key64_two_level,            true) \
@@ -597,10 +592,7 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(key_fixed_string_hash64) \
         M(keys128_hash64)   \
         M(keys256_hash64)   \
-<<<<<<< HEAD
         M(key_string_hash64) \
-=======
->>>>>>> master
         M(serialized_hash64) \
 
     #define APPLY_FOR_VARIANTS_SINGLE_LEVEL(M) \
@@ -724,6 +716,18 @@ public:
             intermediate_header = intermediate_header_;
         }
 
+        static Block getHeader(
+            const Block & src_header,
+            const Block & intermediate_header,
+            const ColumnNumbers & keys,
+            const AggregateDescriptions & aggregates,
+            bool final);
+
+        Block getHeader(bool final) const
+        {
+            return getHeader(src_header, intermediate_header, keys, aggregates, final);
+        }
+
         /// Calculate the column numbers in `keys` and `aggregates`.
         void calculateColumnNumbers(const Block & block);
     };
@@ -753,6 +757,8 @@ public:
       */
     BlocksList convertToBlocks(AggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
 
+    ManyAggregatedDataVariants prepareVariantsToMerge(ManyAggregatedDataVariants & data_variants) const;
+
     /** Merge several aggregation data structures and output the result as a block stream.
       */
     std::unique_ptr<IBlockInputStream> mergeAndConvertToBlocks(ManyAggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
@@ -761,6 +767,8 @@ public:
       * (Pre-aggregate several blocks that represent the result of independent aggregations from remote servers.)
       */
     void mergeStream(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t max_threads);
+
+    using BucketToBlocks = std::map<Int32, BlocksList>;
 
     /// Merge several partially aggregated blocks into one.
     /// Precondition: for all blocks block.info.is_overflows flag must be the same.
@@ -946,7 +954,7 @@ protected:
     void convertToBlockImplFinal(
         Method & method,
         Table & data,
-        std::vector<IColumn *>  key_columns,
+        std::vector<IColumn *> key_columns,
         MutableColumns & final_aggregate_columns,
         Arena * arena) const;
 
