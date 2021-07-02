@@ -266,9 +266,13 @@ struct AggregateFunctionSumKahanData
 };
 
 
+struct NameSum                { static constexpr auto name = "sum"; };
+struct NameCountSecondStage                { static constexpr auto name = "countSecondStage"; };
+extern const String CountSecondStage;
+
 /// Counts the sum of the numbers.
-template <typename T, typename TResult, typename Data>
-class AggregateFunctionSum final : public IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data>>
+template <typename T, typename TResult, typename Data, typename Name = NameSum>
+class AggregateFunctionSum final : public IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Name>>
 {
     static_assert(IsDecimal<T> == IsDecimal<TResult>);
 public:
@@ -276,7 +280,7 @@ public:
     using ColVecType = std::conditional_t<IsDecimal<T>, ColumnDecimal<T>, ColumnVector<T>>;
     using ColVecResult = std::conditional_t<IsDecimal<T>, ColumnDecimal<TResult>, ColumnVector<TResult>>;
 
-    String getName() const override { return "sum"; }
+    String getName() const override { return Name::name; }
 
     ScaleType result_scale;
     PrecType result_prec;
