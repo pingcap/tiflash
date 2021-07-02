@@ -107,7 +107,7 @@ Block ITableDeclaration::getSampleBlockNonMaterializedNoHidden() const
 
 static std::string listOfColumns(const NamesAndTypesList & available_columns)
 {
-    std::stringstream s;
+    WriteBufferFromOwnString s;
     for (auto it = available_columns.begin(); it != available_columns.end(); ++it)
     {
         if (it != available_columns.begin())

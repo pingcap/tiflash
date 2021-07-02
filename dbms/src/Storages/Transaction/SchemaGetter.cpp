@@ -1,4 +1,5 @@
 #include <Common/TiFlashException.h>
+#include <IO/WriteBufferFromString.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/SchemaGetter.h>
 #include <pingcap/kv/Scanner.h>
@@ -32,7 +33,7 @@ struct TxnStructure
 
     static String encodeStringDataKey(const String & key)
     {
-        std::stringstream stream;
+        WriteBufferFromOwnString stream;
 
         stream.write(metaPrefix, 1);
 
@@ -44,7 +45,7 @@ struct TxnStructure
 
     static String encodeHashDataKey(const String & key, const String & field)
     {
-        std::stringstream stream;
+        WriteBufferFromOwnString stream;
 
         stream.write(metaPrefix, 1);
 
@@ -57,7 +58,7 @@ struct TxnStructure
 
     static String hashDataKeyPrefix(const String & key)
     {
-        std::stringstream stream;
+        WriteBufferFromOwnString stream;
 
         stream.write(metaPrefix, 1);
 

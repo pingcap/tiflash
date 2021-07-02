@@ -26,7 +26,7 @@ namespace ast
 
 String astToDebugString(const IAST * const ast)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ast->dumpTree(ss);
     return ss.str();
 }

@@ -1230,7 +1230,7 @@ String Segment::simpleInfo() const
 
 String Segment::info() const
 {
-    std::stringstream s;
+    WriteBufferFromOwnString s;
     s << "{[id:" << segment_id << "], [next:" << next_segment_id << "], [epoch:" << epoch << "], [range:" << rowkey_range.toDebugString()
       << "], [rowkey_range:" << rowkey_range.toDebugString() << "], [delta rows:" << delta->getRows()
       << "], [delete ranges:" << delta->getDeletes() << "], [stable(" << stable->getDMFilesString() << "):" << stable->getRows() << "]}";

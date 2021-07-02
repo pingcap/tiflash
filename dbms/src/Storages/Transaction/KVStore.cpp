@@ -36,7 +36,7 @@ void KVStore::restore(const TiFlashRaftProxyHelper * proxy_helper)
     this->proxy_helper = proxy_helper;
     regionsMut() = region_persister.restore(proxy_helper);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "Restored " << regions().size() << " regions. ";
 
     // init range index

@@ -19,7 +19,7 @@ template <typename HandleType>
 BlockInputStreamPtr createBlockInputStreamFromRange(
     Context & context, const StorageMergeTree & storage, const HandleRange<HandleType> & handle_range, const std::string & pk_name)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "SELRAW NOKVSTORE `" << MutableSupport::version_column_name << "`, `" << MutableSupport::delmark_column_name << "`, `" << pk_name
        << "` FROM `" << storage.getDatabaseName() << "`.`" << storage.getTableName() << "` WHERE (" << handle_range.first.handle_id
        << " <= `" << pk_name << "`) AND (`" << pk_name << "`";
@@ -124,7 +124,7 @@ void tryOptimizeStorageFinal(Context & context, TableID table_id)
             throw;
     }
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "OPTIMIZE TABLE `" << storage->getDatabaseName() << "`.`" << storage->getTableName() << "` PARTITION ID '0' FINAL";
 
     std::string query = ss.str();

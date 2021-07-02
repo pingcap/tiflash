@@ -14,7 +14,7 @@ namespace DM
 
 String astToDebugString(const IAST * const ast)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ast->dumpTree(ss);
     return ss.str();
 }
@@ -172,7 +172,7 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
         }
         catch (std::exception & e)
         {
-            std::stringstream ss;
+            WriteBufferFromOwnString ss;
             ss << "std::exception: " << e.what()
                << " (in setColumnDefineDefaultValue for default_expression:" + astToDebugString(command.default_expression.get()) << ")";
             DB::Exception ex(ss.str(), ErrorCodes::LOGICAL_ERROR);

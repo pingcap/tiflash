@@ -95,7 +95,7 @@ void DistributedBlockOutputStream::writeAsync(const Block & block)
 
 std::string DistributedBlockOutputStream::getCurrentStateDescription()
 {
-    std::stringstream buffer;
+    WriteBufferFromOwnString buffer;
     const auto & addresses = cluster->getShardsAddresses();
 
     buffer << "Insertion status:\n";

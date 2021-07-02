@@ -9,14 +9,14 @@ const Int64 int_handle_max = std::numeric_limits<HandleID>::max();
 
 String getIntHandleMinKey()
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     DB::EncodeInt64(int_handle_min, ss);
     return ss.str();
 }
 
 String getIntHandleMaxKey()
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     DB::EncodeInt64(int_handle_max, ss);
     ss.put('\0');
     return ss.str();
@@ -32,7 +32,7 @@ RowKeyValue RowKeyValueRef::toRowKeyValue() const
 {
     if (data == nullptr)
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         DB::EncodeInt64(int_value, ss);
         return RowKeyValue(is_common_handle, std::make_shared<String>(ss.str()), int_value);
     }

@@ -319,7 +319,7 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     const auto checksum_calc             = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
     if (wb_checksum != checksum_calc)
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         ss << "[expecte_checksum=" << std::hex << wb_checksum << "] [actual_checksum" << checksum_calc << "]";
         throw Exception("Write batch checksum not match {" + toString() + "} [path=" + page_file.folderPath()
                             + "] [batch_bytes=" + DB::toString(wb_bytes) + "] " + ss.str(),
@@ -576,7 +576,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
             auto checksum = CityHash_v1_0_2::CityHash64(pos, entry.size);
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
-                std::stringstream ss;
+                WriteBufferFromOwnString ss;
                 ss << ", expected: " << std::hex << entry.checksum << ", but: " << checksum;
                 throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path + ss.str(),
                                 ErrorCodes::CHECKSUM_DOESNT_MATCH);
@@ -629,7 +629,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
             auto checksum = CityHash_v1_0_2::CityHash64(data_buf, entry.size);
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
-                std::stringstream ss;
+                WriteBufferFromOwnString ss;
                 ss << ", expected: " << std::hex << entry.checksum << ", but: " << checksum;
                 throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path + ss.str(),
                                 ErrorCodes::CHECKSUM_DOESNT_MATCH);
@@ -709,7 +709,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
                 auto field_checksum  = CityHash_v1_0_2::CityHash64(write_offset, size_to_read);
                 if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
                 {
-                    std::stringstream ss;
+                    WriteBufferFromOwnString ss;
                     ss << ", expected: " << std::hex << expect_checksum << ", but: " << field_checksum;
                     throw Exception("Page[" + DB::toString(page_id) + "] field[" + DB::toString(field_index)
                                         + "] checksum not match, broken file: " + data_file_path + ss.str(),

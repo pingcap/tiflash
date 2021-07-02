@@ -582,7 +582,7 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr &        dm_context,
 {
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
     {
-        std::stringstream stream;
+        WriteBufferFromOwnString stream;
         stream << " try to ingest files into a shutdown table: " << db_name << "." << table_name;
         auto msg = stream.str();
         LOG_WARNING(log, __FUNCTION__ << msg);
@@ -719,7 +719,7 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr &        dm_context,
 
     {
         // Add some logging about the ingested file ids and updated segments
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         // Example: "ingest dmf_1001,1002,1003 into segment [1,3]"
         //          "ingest <empty> into segment [1,3]"
         if (file_ids.empty())

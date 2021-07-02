@@ -174,7 +174,7 @@ struct MinMaxValueFixed : public MinMaxValue
 
     String toString() const override
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         ss << "{\"type\":\"fixed\",\"min\":\"" << DB::toString(min) << "\",\"max\":\"" << DB::toString(max) << "\"}";
         return ss.str();
     }
@@ -257,7 +257,7 @@ struct MinMaxValueString : public MinMaxValue
 
     String toString() const override
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         ss << "{\"type\":\"string\",\"min\":\"" << min << "\",\"max\":\"" << max << "\"}";
         return ss.str();
     }
@@ -334,7 +334,7 @@ struct MinMaxValueDataGeneric : public MinMaxValue
 
     String toString() const override
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         ss << "{\"type\":\"generic\",\"min\":\"" << applyVisitor(FieldVisitorToString(), min) << "\",\"max\":\""
            << applyVisitor(FieldVisitorToString(), max) << "\"}";
         return ss.str();

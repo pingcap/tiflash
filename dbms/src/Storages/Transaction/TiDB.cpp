@@ -1,6 +1,7 @@
 #include <Common/Decimal.h>
 #include <Common/MyTime.h>
 #include <IO/ReadBufferFromString.h>
+#include <IO/WriteBufferFromString.h>
 #include <Poco/Base64Decoder.h>
 #include <Poco/MemoryStream.h>
 #include <Poco/StreamCopier.h>
@@ -286,7 +287,7 @@ try
 
 #ifndef NDEBUG
     // Check stringify in Debug mode
-    std::stringstream str;
+    WriteBufferFromOwnString str;
     json->stringify(str);
 #endif
 
@@ -358,7 +359,7 @@ try
 
 #ifndef NDEBUG
     // Check stringify in Debug mode
-    std::stringstream str;
+    WriteBufferFromOwnString str;
     json->stringify(str);
 #endif
 
@@ -407,7 +408,7 @@ try
 
 #ifndef NDEBUG
     // Check stringify in Debug mode
-    std::stringstream str;
+    WriteBufferFromOwnString str;
     json->stringify(str);
 #endif
 
@@ -454,7 +455,7 @@ try
 
 #ifndef NDEBUG
     // Check stringify in Debug mode
-    std::stringstream str;
+    WriteBufferFromOwnString str;
     json->stringify(str);
 #endif
 
@@ -484,7 +485,7 @@ catch (const Poco::Exception & e)
 String DBInfo::serialize() const
 try
 {
-    std::stringstream buf;
+    WriteBufferFromOwnString buf;
 
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);
@@ -546,7 +547,7 @@ try
     json->set("length", length);
 
 #ifndef NDEBUG
-    std::stringstream str;
+    WriteBufferFromOwnString str;
     json->stringify(str);
 #endif
 
@@ -608,7 +609,7 @@ try
     json->set("is_global", is_global);
 
 #ifndef NDEBUG
-    std::stringstream str;
+    WriteBufferFromOwnString str;
     json->stringify(str);
 #endif
 
@@ -663,7 +664,7 @@ TableInfo::TableInfo(const String & table_info_json) { deserialize(table_info_js
 String TableInfo::serialize() const
 try
 {
-    std::stringstream buf;
+    WriteBufferFromOwnString buf;
 
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);

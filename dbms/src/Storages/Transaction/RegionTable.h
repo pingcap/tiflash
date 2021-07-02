@@ -217,7 +217,7 @@ struct RegionPreDecodeBlockData
         : block(std::move(block_)), schema_version(schema_version_), data_list_read(std::move(data_list_read_))
     {}
     RegionPreDecodeBlockData(const RegionPreDecodeBlockData &) = delete;
-    void toString(std::stringstream & ss) const
+    void toString(WriteBuffer & ss) const
     {
         ss << " {";
         ss << " schema_version: " << schema_version;

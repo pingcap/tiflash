@@ -329,7 +329,7 @@ PageIdAndEntries DataCompactor<SnapshotPtr>::collectValidEntries(const PageIdSet
 template <typename SnapshotPtr>
 void DataCompactor<SnapshotPtr>::logMigrationDetails(const MigrateInfos & infos, const PageFileIdAndLevel & migrate_file_id) const
 {
-    std::stringstream migrate_stream, remove_stream;
+    WriteBufferFromOwnString migrate_stream, remove_stream;
     migrate_stream << "[";
     remove_stream << "[";
     for (const auto & [file_id, num_pages] : infos)

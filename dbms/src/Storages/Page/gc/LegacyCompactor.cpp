@@ -65,7 +65,7 @@ LegacyCompactor::tryCompact(                 //
     auto wb       = prepareCheckpointWriteBatch(snapshot, checkpoint_sequence);
 
     {
-        std::stringstream legacy_ss;
+        WriteBufferFromOwnString legacy_ss;
         legacy_ss << "[";
         for (const auto & page_file : page_files_to_compact)
             legacy_ss << "(" << page_file.getFileId() << "," << page_file.getLevel() << "),";

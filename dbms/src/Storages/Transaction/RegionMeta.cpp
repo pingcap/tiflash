@@ -115,7 +115,7 @@ ImutRegionRangePtr RegionMeta::getRange() const
 
 std::string RegionMeta::toString(bool dump_status) const
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "[region " << regionId();
     if (dump_status)
     {

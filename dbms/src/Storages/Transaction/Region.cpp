@@ -148,7 +148,7 @@ Regions RegionRaftCommandDelegate::execBatchSplit(
     }
 
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         for (const auto & region : split_regions)
         {
             region->getDebugString(ss);
@@ -316,7 +316,7 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
         case raft_cmdpb::AdminCmdType::CommitMerge:
         case raft_cmdpb::AdminCmdType::RollbackMerge:
         {
-            std::stringstream ss;
+            WriteBufferFromOwnString ss;
             ss << "After execute merge cmd, current region info: ";
             getDebugString(ss);
             LOG_INFO(log, ss.str());
@@ -364,7 +364,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
     return region;
 }
 
-std::string Region::getDebugString(std::stringstream & ss) const
+std::string Region::getDebugString(WriteBufferFromOwnString & ss) const
 {
     ss << "{region " << id();
     {
@@ -407,7 +407,7 @@ std::string Region::dataInfo() const
 {
     std::shared_lock<std::shared_mutex> lock(mutex);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     auto write_size = data.writeCF().getSize(), lock_size = data.lockCF().getSize(), default_size = data.defaultCF().getSize();
     ss << "[";
     if (write_size)

@@ -68,7 +68,7 @@ void DecodeBytes(size_t & cursor, const String & raw_value, StringStream & ss)
 
 String DecodeBytes(size_t & cursor, const String & raw_value)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     DecodeBytes(cursor, raw_value, ss);
     return ss.str();
 }
@@ -381,7 +381,7 @@ void SkipDatum(size_t & cursor, const String & raw_value)
     }
 }
 
-void EncodeFloat64(Float64 num, std::stringstream & ss)
+void EncodeFloat64(Float64 num, WriteBufferFromOwnString & ss)
 {
     UInt64 u = enforce_cast<UInt64>(num);
     if (u & SIGN_MASK)
@@ -391,7 +391,7 @@ void EncodeFloat64(Float64 num, std::stringstream & ss)
     return EncodeUInt<UInt64>(u, ss);
 }
 
-void EncodeBytes(const String & ori_str, std::stringstream & ss)
+void EncodeBytes(const String & ori_str, WriteBufferFromOwnString & ss)
 {
     size_t len = ori_str.size();
     size_t index = 0;
@@ -414,21 +414,21 @@ void EncodeBytes(const String & ori_str, std::stringstream & ss)
     }
 }
 
-void EncodeCompactBytes(const String & str, std::stringstream & ss)
+void EncodeCompactBytes(const String & str, WriteBufferFromOwnString & ss)
 {
     TiKV::writeVarInt(Int64(str.size()), ss);
     ss.write(str.c_str(), str.size());
 }
 
-void EncodeJSON(const String & str, std::stringstream & ss)
+void EncodeJSON(const String & str, WriteBufferFromOwnString & ss)
 {
     // TiFlash store the JSON binary as string, so just return the string
     ss.write(str.c_str(), str.size());
 }
 
-void EncodeVarUInt(UInt64 num, std::stringstream & ss) { TiKV::writeVarUInt(num, ss); }
+void EncodeVarUInt(UInt64 num, WriteBufferFromOwnString & ss) { TiKV::writeVarUInt(num, ss); }
 
-void EncodeVarInt(Int64 num, std::stringstream & ss) { TiKV::writeVarInt(num, ss); }
+void EncodeVarInt(Int64 num, WriteBufferFromOwnString & ss) { TiKV::writeVarInt(num, ss); }
 
 inline void writeWord(String & buf, Int32 word, int size)
 {
@@ -456,7 +456,7 @@ inline void writeWord(String & buf, Int32 word, int size)
 }
 
 template <typename T>
-void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, std::stringstream & ss)
+void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, WriteBufferFromOwnString & ss)
 {
     static_assert(IsDecimal<T>);
 
@@ -531,7 +531,7 @@ void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, std::string
     ss.write(buf.c_str(), buf.size());
 }
 
-void EncodeDecimalForRow(const Field & field, std::stringstream & ss, const ColumnInfo & column_info)
+void EncodeDecimalForRow(const Field & field, WriteBufferFromOwnString & ss, const ColumnInfo & column_info)
 {
     if (field.getType() == Field::Types::Decimal32)
     {
@@ -559,7 +559,7 @@ void EncodeDecimalForRow(const Field & field, std::stringstream & ss, const Colu
     }
 }
 
-void EncodeDecimal(const Field & field, std::stringstream & ss)
+void EncodeDecimal(const Field & field, WriteBufferFromOwnString & ss)
 {
     if (field.getType() == Field::Types::Decimal32)
     {
@@ -587,7 +587,7 @@ void EncodeDecimal(const Field & field, std::stringstream & ss)
     }
 }
 
-void EncodeDatumForRow(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss, const ColumnInfo & column_info)
+void EncodeDatumForRow(const Field & field, TiDB::CodecFlag flag, WriteBufferFromOwnString & ss, const ColumnInfo & column_info)
 {
     if (flag == TiDB::CodecFlagDecimal && !field.isNull())
     {
@@ -597,7 +597,7 @@ void EncodeDatumForRow(const Field & field, TiDB::CodecFlag flag, std::stringstr
     return EncodeDatum(field, flag, ss);
 }
 
-void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss)
+void EncodeDatum(const Field & field, TiDB::CodecFlag flag, WriteBufferFromOwnString & ss)
 {
     if (field.isNull())
         flag = TiDB::CodecFlagNil;
@@ -629,9 +629,9 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & 
     }
 }
 
-template void EncodeDecimalImpl<Decimal32>(const Decimal32 &, PrecType, ScaleType, std::stringstream & ss);
-template void EncodeDecimalImpl<Decimal64>(const Decimal64 &, PrecType, ScaleType, std::stringstream & ss);
-template void EncodeDecimalImpl<Decimal128>(const Decimal128 &, PrecType, ScaleType, std::stringstream & ss);
-template void EncodeDecimalImpl<Decimal256>(const Decimal256 &, PrecType, ScaleType, std::stringstream & ss);
+template void EncodeDecimalImpl<Decimal32>(const Decimal32 &, PrecType, ScaleType, WriteBufferFromOwnString & ss);
+template void EncodeDecimalImpl<Decimal64>(const Decimal64 &, PrecType, ScaleType, WriteBufferFromOwnString & ss);
+template void EncodeDecimalImpl<Decimal128>(const Decimal128 &, PrecType, ScaleType, WriteBufferFromOwnString & ss);
+template void EncodeDecimalImpl<Decimal256>(const Decimal256 &, PrecType, ScaleType, WriteBufferFromOwnString & ss);
 
 } // namespace DB

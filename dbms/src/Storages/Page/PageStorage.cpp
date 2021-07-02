@@ -50,7 +50,7 @@ void PageStorage::StatisticsInfo::mergeEdits(const PageEntriesEdit & edit)
 
 String PageStorage::StatisticsInfo::toString() const
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << puts << " puts and " << refs << " refs and " //
        << deletes << " deletes and " << upserts << " upserts";
     return ss.str();
@@ -77,7 +77,7 @@ void PageStorage::Config::reload(const PageStorage::Config & rhs)
 
 String PageStorage::Config::toDebugString() const
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "PageStorage::Config {gc_min_files:" << gc_min_files << ", gc_min_bytes:" << gc_min_bytes
        << ", gc_max_valid_rate:" << DB::toString(gc_max_valid_rate, 3) << ", gc_min_legacy_num:" << gc_min_legacy_num
        << ", gc_max_expect_legacy: " << DB::toString(gc_max_expect_legacy_files)

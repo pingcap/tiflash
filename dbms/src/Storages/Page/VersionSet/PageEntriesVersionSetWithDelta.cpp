@@ -84,7 +84,7 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
     if (num_invalid_snapshot_to_clean > 0)
     {
         CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_invalid_snapshot_to_clean);
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         ss << name << " gcApply remove " << num_invalid_snapshot_to_clean << " invalid snapshots, " << valid_snapshots.size()
            << " snapshots left, longest lifetime " << DB::toString(longest_living_seconds, 3) << " seconds, created from thread_id "
            << longest_living_from_thread_id;
