@@ -105,53 +105,6 @@ using AggregatedDataWithStringKeyHash64 = HashMapWithSavedHash<StringRef, Aggreg
 using AggregatedDataWithKeys128Hash64 = HashMap<UInt128, AggregateDataPtr, DefaultHash<UInt128>>;
 using AggregatedDataWithKeys256Hash64 = HashMap<UInt256, AggregateDataPtr, DefaultHash<UInt256>>;
 
-template <typename Base>
-struct AggregationDataWithNullKey : public Base
-{
-    using Base::Base;
-
-    bool & hasNullKeyData() { return has_null_key_data; }
-    AggregateDataPtr & getNullKeyData() { return null_key_data; }
-    bool hasNullKeyData() const { return has_null_key_data; }
-    const AggregateDataPtr & getNullKeyData() const { return null_key_data; }
-    size_t size() const { return Base::size() + (has_null_key_data ? 1 : 0); }
-    bool empty() const { return Base::empty() && !has_null_key_data; }
-    void clear()
-    {
-        Base::clear();
-        has_null_key_data = false;
-    }
-    void clearAndShrink()
-    {
-        Base::clearAndShrink();
-        has_null_key_data = false;
-    }
-
-private:
-    bool has_null_key_data = false;
-    AggregateDataPtr null_key_data = nullptr;
-};
-
-template <typename Base>
-struct AggregationDataWithNullKeyTwoLevel : public Base
-{
-    using Base::impls;
-
-    AggregationDataWithNullKeyTwoLevel() = default;
-
-    template <typename Other>
-    explicit AggregationDataWithNullKeyTwoLevel(const Other & other) : Base(other)
-    {
-        impls[0].hasNullKeyData() = other.hasNullKeyData();
-        impls[0].getNullKeyData() = other.getNullKeyData();
-    }
-
-    bool & hasNullKeyData() { return impls[0].hasNullKeyData(); }
-    AggregateDataPtr & getNullKeyData() { return impls[0].getNullKeyData(); }
-    bool hasNullKeyData() const { return impls[0].hasNullKeyData(); }
-    const AggregateDataPtr & getNullKeyData() const { return impls[0].getNullKeyData(); }
-};
-
 /// For the case where there is one numeric key.
 /// FieldType is UInt8/16/32/64 for any type with corresponding bit width.
 template <typename FieldType, typename TData,

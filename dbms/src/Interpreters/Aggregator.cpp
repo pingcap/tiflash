@@ -2154,10 +2154,10 @@ void NO_INLINE Aggregator::convertBlockToTwoLevelImpl(
     const Block & source,
     std::vector<Block> & destinations) const
 {
+    typename Method::State state(key_columns, key_sizes, params.collators);
+
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(params.keys_size, "");
-
-    typename Method::State state(key_columns, key_sizes, params.collators);
 
     size_t rows = source.rows();
     size_t columns = source.columns();
@@ -2255,7 +2255,6 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
 
     return splitted_blocks;
 }
-
 
 
 template <typename Method, typename Table>
