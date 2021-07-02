@@ -179,7 +179,7 @@ Aggregator::Aggregator(const Params & params_)
             all_aggregates_has_trivial_destructor = false;
     }
 
-    method = chooseAggregationMethod();
+    method_chosen = chooseAggregationMethod();
 }
 
 
@@ -213,27 +213,18 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
 
     size_t keys_bytes = 0;
 
-    size_t num_contiguous_keys = 0;
     size_t num_fixed_contiguous_keys = 0;
-    size_t num_string_keys = 0;
 
     key_sizes.resize(params.keys_size);
     for (size_t j = 0; j < params.keys_size; ++j)
     {
         if (types_removed_nullable[j]->isValueUnambiguouslyRepresentedInContiguousMemoryRegion())
         {
-            ++num_contiguous_keys;
-
             if (types_removed_nullable[j]->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion() && (params.collators.empty() || params.collators[j] == nullptr))
             {
                 ++num_fixed_contiguous_keys;
                 key_sizes[j] = types_removed_nullable[j]->getSizeOfValueInMemory();
                 keys_bytes += key_sizes[j];
-            }
-
-            if (types_removed_nullable[j]->isString())
-            {
-                ++num_string_keys;
             }
         }
     }
@@ -291,21 +282,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
     if (params.keys_size == 1 && types_removed_nullable[0]->isFixedString())
         return AggregatedDataVariants::Type::key_fixed_string;
 
-    /** If it is possible to use 'concat' method due to one-to-one correspondense. Otherwise the method will be 'serialized'.
-      */
-    if (params.keys_size == num_contiguous_keys && num_fixed_contiguous_keys + 1 >= num_contiguous_keys)
-        return AggregatedDataVariants::Type::concat;
-
-    /** For case with multiple strings, we use 'concat' method despite the fact, that correspondense is not one-to-one.
-      * Concat will concatenate strings including its zero terminators.
-      * But if strings contains zero bytes in between, different keys may clash.
-      * For example, keys ('a\0b', 'c') and ('a', 'b\0c') will be aggregated as one key.
-      * This is documented behaviour. It may be avoided by just switching to 'serialized' method, which is less efficient.
-      */
-    /// disable this because it is not compatible with TiDB
-    //if (params.keys_size == num_fixed_contiguous_keys + num_string_keys)
-    //    return AggregatedDataVariants::Type::concat;
-
+    /// Fallback case.
     return AggregatedDataVariants::Type::serialized;
 
     /// NOTE AggregatedDataVariants::Type::hashed is not used. It's proven to be less efficient than 'serialized' in most cases.
@@ -544,7 +521,7 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
     /// How to perform the aggregation?
     if (result.empty())
     {
-        result.init(method);
+        result.init(method_chosen);
         result.keys_size = params.keys_size;
         result.key_sizes = key_sizes;
         result.collators = params.collators;
@@ -863,7 +840,8 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
         for (size_t i = 0; i < params.aggregates_size; ++i)
             aggregate_functions[i]->insertResultInto(
                 Method::getAggregateData(value.second) + offsets_of_aggregate_states[i],
-                *final_aggregate_columns[i]);
+                *final_aggregate_columns[i],
+                nullptr);
     }
 
     destroyImpl<Method>(data);      /// NOTE You can do better.
@@ -987,7 +965,7 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
                 if (!final)
                     aggregate_columns[i]->push_back(data + offsets_of_aggregate_states[i]);
                 else
-                    aggregate_functions[i]->insertResultInto(data + offsets_of_aggregate_states[i], *final_aggregate_columns[i]);
+                    aggregate_functions[i]->insertResultInto(data + offsets_of_aggregate_states[i], *final_aggregate_columns[i], nullptr);
             }
 
             if (!final)
@@ -1787,8 +1765,8 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
     if (has_two_level)
     {
     #define M(NAME) \
-        if (method == AggregatedDataVariants::Type::NAME) \
-            method = AggregatedDataVariants::Type::NAME ## _two_level;
+        if (method_chosen == AggregatedDataVariants::Type::NAME) \
+            method_chosen = AggregatedDataVariants::Type::NAME ## _two_level;
 
         APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
 
@@ -1801,7 +1779,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
     /// result will destroy the states of aggregate functions in the destructor
     result.aggregator = this;
 
-    result.init(method);
+    result.init(method_chosen);
     result.keys_size = params.keys_size;
     result.key_sizes = key_sizes;
 
@@ -1924,7 +1902,7 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
       * Better hash function is needed because during external aggregation,
       *  we may merge partitions of data with total number of keys far greater than 4 billion.
       */
-    auto merge_method = method;
+    auto merge_method = method_chosen;
 
 #define APPLY_FOR_VARIANTS_THAT_MAY_USE_BETTER_HASH_FUNCTION(M) \
         M(key64)            \
@@ -1932,7 +1910,6 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
         M(key_fixed_string) \
         M(keys128)          \
         M(keys256)          \
-        M(concat)           \
         M(serialized)       \
 
 #define M(NAME) \
@@ -2082,7 +2059,7 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
     for (size_t i = 0; i < params.keys_size; ++i)
         key_columns[i] = block.safeGetByPosition(i).column.get();
 
-    AggregatedDataVariants::Type type = method;
+    AggregatedDataVariants::Type type = method_chosen;
     data.keys_size = params.keys_size;
     data.key_sizes = key_sizes;
 

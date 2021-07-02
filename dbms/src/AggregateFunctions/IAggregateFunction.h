@@ -95,7 +95,7 @@ public:
     }
 
     /// Inserts results into a column.
-    virtual void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const = 0;
+    virtual void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const = 0;
 
     /** Returns true for aggregate functions of type -State.
       * They are executed as other aggregate functions, but not finalized (return an aggregation state that can be combined with another).
@@ -187,7 +187,7 @@ template <typename Derived>
 class IAggregateFunctionHelper : public IAggregateFunction
 {
 private:
-    static void addFree(const IAggregateFunction * that, AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
+    static void addFree(const IAggregateFunction * that, AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena * arena)
     {
         static_cast<const Derived &>(*that).add(place, columns, row_num, arena);
     }

@@ -216,7 +216,7 @@ public:
         }
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
     {
         const AggregateFunctionForEachData & state = data(place);
 
@@ -227,7 +227,7 @@ public:
         const char * nested_state = state.array_of_aggregate_datas;
         for (size_t i = 0; i < state.dynamic_array_size; ++i)
         {
-            nested_func->insertResultInto(nested_state, elems_to);
+            nested_func->insertResultInto(nested_state, elems_to, arena);
             nested_state += nested_size_of_data;
         }
 

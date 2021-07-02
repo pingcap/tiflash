@@ -98,12 +98,16 @@ struct AggregateFunctionSumKahanData
 };
 
 
+struct NameSum                { static constexpr auto name = "sum"; };
+struct NameCountSecondStage                { static constexpr auto name = "countSecondStage"; };
+extern const String CountSecondStage;
+
 /// Counts the sum of the numbers.
-template <typename T, typename TResult, typename Data>
-class AggregateFunctionSum final : public IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data>>
+template <typename T, typename TResult, typename Data, typename Name = NameSum>
+class AggregateFunctionSum final : public IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Name>>
 {
 public:
-    String getName() const override { return "sum"; }
+    String getName() const override { return Name::name; }
 
     ScaleType result_scale;
     PrecType result_prec;
@@ -149,7 +153,7 @@ public:
         this->data(place).read(buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         if constexpr (IsDecimal<TResult>) {
             static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(this->data(place).get(), result_scale);
