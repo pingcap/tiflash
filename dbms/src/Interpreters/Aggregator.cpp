@@ -224,7 +224,6 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
       * Later, during aggregation process, data may be converted (partitioned) to two-level structure, if cardinality is high.
       */
     size_t keys_bytes = 0;
-
     size_t num_fixed_contiguous_keys = 0;
 
     key_sizes.resize(params.keys_size);
@@ -467,6 +466,7 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
     }
 }
 
+
 void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns & aggregate_columns, Columns & materialized_columns,
     AggregateFunctionInstructions & aggregate_functions_instructions)
 {
@@ -529,9 +529,6 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
         LOG_TRACE(log, "Aggregation method: " << result.getMethodName());
     }
 
-    if (isCancelled())
-        return true;
-
     /** Constant columns are not supported directly during aggregation.
       * To make them work anyway, we materialize them.
       */
@@ -583,8 +580,8 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
                 executeImpl(*result.NAME, result.aggregates_pool, num_rows, key_columns, result.collators,\
                     aggregate_functions_instructions.data(), no_more_keys, overflow_row_ptr);
 
-        if (false) {} // NOLINT
-        APPLY_FOR_AGGREGATED_VARIANTS(M)
+            if (false) {} // NOLINT
+            APPLY_FOR_AGGREGATED_VARIANTS(M)
         #undef M
     }
 
@@ -697,19 +694,20 @@ Block Aggregator::convertOneBucketToBlock(
     size_t bucket) const
 {
     Block block = prepareBlockAndFill(data_variants, final, method.data.impls[bucket].size(),
-        [bucket, &method,arena,  this] (
+        [bucket, &method, arena, this] (
             MutableColumns & key_columns,
             AggregateColumnsData & aggregate_columns,
             MutableColumns & final_aggregate_columns,
-            bool final)
+            bool final_)
         {
             convertToBlockImpl(method, method.data.impls[bucket],
-                key_columns, aggregate_columns, final_aggregate_columns, arena, final);
+                key_columns, aggregate_columns, final_aggregate_columns, arena, final_);
         });
 
     block.info.bucket_num = bucket;
     return block;
 }
+
 
 template <typename Method>
 void Aggregator::writeToTemporaryFileImpl(
@@ -853,6 +851,7 @@ void Aggregator::convertToBlockImpl(
         convertToBlockImplFinal(method, data, std::move(raw_key_columns), final_aggregate_columns, arena);
     else
         convertToBlockImplNotFinal(method, data, std::move(raw_key_columns), aggregate_columns);
+
     /// In order to release memory early.
     data.clearAndShrink();
 }
@@ -924,6 +923,7 @@ inline void Aggregator::insertAggregatesIntoColumns(
     if (exception)
         std::rethrow_exception(exception);
 }
+
 
 template <typename Method, typename Table>
 void NO_INLINE Aggregator::convertToBlockImplFinal(
@@ -1114,6 +1114,7 @@ Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_v
     return prepareBlockAndFill(data_variants, final, rows, filler);
 }
 
+
 BlocksList Aggregator::prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const
 {
 #define M(NAME) \
@@ -1204,6 +1205,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
     return blocks;
 }
 
+
 BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, bool final, size_t max_threads) const
 {
     if (isCancelled())
@@ -1223,6 +1225,9 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
     if (max_threads > 1 && data_variants.sizeWithoutOverflowRow() > 100000  /// TODO Make a custom threshold.
         && data_variants.isTwoLevel())                      /// TODO Use the shared thread pool with the `merge` function.
         thread_pool = std::make_unique<ThreadPool>(max_threads);
+
+    if (isCancelled())
+        return BlocksList();
 
     if (data_variants.without_key)
         blocks.emplace_back(prepareBlockAndFillWithoutKey(
@@ -1332,7 +1337,6 @@ void NO_INLINE Aggregator::mergeDataOnlyExistingKeysImpl(
     Table & table_src,
     Arena * arena) const
 {
-
     table_src.mergeToViaFind(table_dst,
         [&](AggregateDataPtr dst, AggregateDataPtr & src, bool found)
     {
@@ -1439,58 +1443,6 @@ void NO_INLINE Aggregator::mergeBucketImpl(
     }
 }
 
-
-template <typename Method>
-void NO_INLINE Aggregator::convertBlockToTwoLevelImpl(
-    Method & method,
-    Arena * pool,
-    ColumnRawPtrs & key_columns,
-    const Block & source,
-    std::vector<Block> & destinations) const
-{
-    std::vector<std::string> sort_key_containers;
-    sort_key_containers.resize(params.keys_size, "");
-
-    typename Method::State state(key_columns, key_sizes, params.collators);
-
-    size_t rows = source.rows();
-    size_t columns = source.columns();
-
-    /// Create a 'selector' that will contain bucket index for every row. It will be used to scatter rows to buckets.
-    IColumn::Selector selector(rows);
-
-    /// For every row.
-    for (size_t i = 0; i < rows; ++i)
-    {
-        /// Calculate bucket number from row hash.
-        auto hash = state.getHash(method.data, i, *pool, sort_key_containers);
-        auto bucket = method.data.getBucketFromHash(hash);
-
-        selector[i] = bucket;
-    }
-
-    size_t num_buckets = destinations.size();
-
-    for (size_t column_idx = 0; column_idx < columns; ++column_idx)
-    {
-        const ColumnWithTypeAndName & src_col = source.getByPosition(column_idx);
-        MutableColumns scattered_columns = src_col.column->scatter(num_buckets, selector);
-
-        for (size_t bucket = 0, size = num_buckets; bucket < size; ++bucket)
-        {
-            if (!scattered_columns[bucket]->empty())
-            {
-                Block & dst = destinations[bucket];
-                dst.info.bucket_num = bucket;
-                dst.insert({std::move(scattered_columns[bucket]), src_col.type, src_col.name});
-            }
-
-            /** Inserted columns of type ColumnAggregateFunction will own states of aggregate functions
-              *  by holding shared_ptr to source column. See ColumnAggregateFunction.h
-              */
-        }
-    }
-}
 
 std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
 {
@@ -2339,6 +2291,59 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
         }
 
         LOG_TRACE(log, "Merged partially aggregated single-level data.");
+    }
+}
+
+
+template <typename Method>
+void NO_INLINE Aggregator::convertBlockToTwoLevelImpl(
+    Method & method,
+    Arena * pool,
+    ColumnRawPtrs & key_columns,
+    const Block & source,
+    std::vector<Block> & destinations) const
+{
+    std::vector<std::string> sort_key_containers;
+    sort_key_containers.resize(params.keys_size, "");
+
+    typename Method::State state(key_columns, key_sizes, params.collators);
+
+    size_t rows = source.rows();
+    size_t columns = source.columns();
+
+    /// Create a 'selector' that will contain bucket index for every row. It will be used to scatter rows to buckets.
+    IColumn::Selector selector(rows);
+
+    /// For every row.
+    for (size_t i = 0; i < rows; ++i)
+    {
+        /// Calculate bucket number from row hash.
+        auto hash = state.getHash(method.data, i, *pool, sort_key_containers);
+        auto bucket = method.data.getBucketFromHash(hash);
+
+        selector[i] = bucket;
+    }
+
+    size_t num_buckets = destinations.size();
+
+    for (size_t column_idx = 0; column_idx < columns; ++column_idx)
+    {
+        const ColumnWithTypeAndName & src_col = source.getByPosition(column_idx);
+        MutableColumns scattered_columns = src_col.column->scatter(num_buckets, selector);
+
+        for (size_t bucket = 0, size = num_buckets; bucket < size; ++bucket)
+        {
+            if (!scattered_columns[bucket]->empty())
+            {
+                Block & dst = destinations[bucket];
+                dst.info.bucket_num = bucket;
+                dst.insert({std::move(scattered_columns[bucket]), src_col.type, src_col.name});
+            }
+
+            /** Inserted columns of type ColumnAggregateFunction will own states of aggregate functions
+              *  by holding shared_ptr to source column. See ColumnAggregateFunction.h
+              */
+        }
     }
 }
 
