@@ -341,6 +341,7 @@ struct AggregationMethodSerialized
     }
 };
 
+
 class Aggregator;
 
 struct AggregatedDataVariants : private boost::noncopyable
