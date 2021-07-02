@@ -772,7 +772,7 @@ public:
         this->data(place).read(buf, *type.get(), arena);
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         this->data(place).insertResultInto(to);
     }

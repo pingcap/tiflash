@@ -253,7 +253,7 @@ void GraphiteRollupSortedBlockInputStream::finishCurrentGroup(MutableColumns & m
 
     if (aggregate_state_created)
     {
-        current_pattern->function->insertResultInto(place_for_aggregate_state.data(), *merged_columns[value_column_num]);
+        current_pattern->function->insertResultInto(place_for_aggregate_state.data(), *merged_columns[value_column_num], nullptr);
         current_pattern->function->destroy(place_for_aggregate_state.data());
         aggregate_state_created = false;
     }

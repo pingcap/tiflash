@@ -70,7 +70,7 @@ public:
         readBinary(this->data(place).value, buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         static_cast<ColumnVector<T> &>(to).getData().push_back(this->data(place).value);
     }

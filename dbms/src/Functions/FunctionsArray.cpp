@@ -2470,7 +2470,7 @@ void FunctionArrayReduce::executeImpl(Block & block, const ColumnNumbers & argum
                 agg_func.add(place, aggregate_arguments, j, arena.get());
 
             if (!res_col_aggregate_function)
-                agg_func.insertResultInto(place, res_col);
+                agg_func.insertResultInto(place, res_col, arena.get());
             else
                 res_col_aggregate_function->insertFrom(place);
         }
