@@ -1768,6 +1768,7 @@ ManyAggregatedDataVariants Aggregator::prepareVariantsToMerge(ManyAggregatedData
     return non_empty_data;
 }
 
+
 template <bool no_more_keys, typename Method, typename Table>
 void NO_INLINE Aggregator::mergeStreamsImplCase(
     Block & block,
@@ -2056,6 +2057,95 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
 }
 
 
+Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
+{
+    if (blocks.empty())
+        return {};
+
+    auto bucket_num = blocks.front().info.bucket_num;
+    bool is_overflows = blocks.front().info.is_overflows;
+
+    LOG_TRACE(log, "Merging partially aggregated blocks (bucket = {})." << bucket_num);
+    Stopwatch watch;
+
+    /** If possible, change 'method' to some_hash64. Otherwise, leave as is.
+      * Better hash function is needed because during external aggregation,
+      *  we may merge partitions of data with total number of keys far greater than 4 billion.
+      */
+    auto merge_method = method_chosen;
+
+#define APPLY_FOR_VARIANTS_THAT_MAY_USE_BETTER_HASH_FUNCTION(M) \
+        M(key64)            \
+        M(key_string)       \
+        M(key_fixed_string) \
+        M(keys128)          \
+        M(keys256)          \
+        M(serialized)       \
+
+#define M(NAME) \
+    if (merge_method == AggregatedDataVariants::Type::NAME) \
+        merge_method = AggregatedDataVariants::Type::NAME ## _hash64; \
+
+    APPLY_FOR_VARIANTS_THAT_MAY_USE_BETTER_HASH_FUNCTION(M)
+#undef M
+
+#undef APPLY_FOR_VARIANTS_THAT_MAY_USE_BETTER_HASH_FUNCTION
+
+    /// Temporary data for aggregation.
+    AggregatedDataVariants result;
+
+    /// result will destroy the states of aggregate functions in the destructor
+    result.aggregator = this;
+
+    result.init(merge_method);
+    result.keys_size = params.keys_size;
+    result.key_sizes = key_sizes;
+
+    for (Block & block : blocks)
+    {
+        if (bucket_num >= 0 && block.info.bucket_num != bucket_num)
+            bucket_num = -1;
+
+        if (result.type == AggregatedDataVariants::Type::without_key || is_overflows)
+            mergeWithoutKeyStreamsImpl(block, result);
+
+    #define M(NAME, IS_TWO_LEVEL) \
+        else if (result.type == AggregatedDataVariants::Type::NAME) \
+            mergeStreamsImpl(block, result.aggregates_pool, *result.NAME, result.NAME->data, nullptr, false);
+
+        APPLY_FOR_AGGREGATED_VARIANTS(M)
+    #undef M
+        else if (result.type != AggregatedDataVariants::Type::without_key)
+            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+    }
+
+    Block block;
+    if (result.type == AggregatedDataVariants::Type::without_key || is_overflows)
+        block = prepareBlockAndFillWithoutKey(result, final, is_overflows);
+    else
+        block = prepareBlockAndFillSingleLevel(result, final);
+    /// NOTE: two-level data is not possible here - chooseAggregationMethod chooses only among single-level methods.
+
+    if (!final)
+    {
+        /// Pass ownership of aggregate function states from result to ColumnAggregateFunction objects in the resulting block.
+        result.aggregator = nullptr;
+    }
+
+    size_t rows = block.rows();
+    size_t bytes = block.bytes();
+    double elapsed_seconds = watch.elapsedSeconds();
+    LOG_TRACE(log, std::fixed << std::setprecision(3)
+        << "Merged partially aggregated blocks. "
+        << rows << " rows, " << bytes / 1048576.0 << " MiB."
+        << " in " << elapsed_seconds << " sec."
+        << " (" << rows / elapsed_seconds << " rows/sec., " << bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
+
+    block.info.bucket_num = bucket_num;
+    return block;
+}
+
+
 template <typename Method>
 void NO_INLINE Aggregator::convertBlockToTwoLevelImpl(
     Method & method,
@@ -2166,94 +2256,6 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
     return splitted_blocks;
 }
 
-
-Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
-{
-    if (blocks.empty())
-        return {};
-
-    auto bucket_num = blocks.front().info.bucket_num;
-    bool is_overflows = blocks.front().info.is_overflows;
-
-    LOG_TRACE(log, "Merging partially aggregated blocks (bucket = {})." << bucket_num);
-    Stopwatch watch;
-
-    /** If possible, change 'method' to some_hash64. Otherwise, leave as is.
-      * Better hash function is needed because during external aggregation,
-      *  we may merge partitions of data with total number of keys far greater than 4 billion.
-      */
-    auto merge_method = method_chosen;
-
-#define APPLY_FOR_VARIANTS_THAT_MAY_USE_BETTER_HASH_FUNCTION(M) \
-        M(key64)            \
-        M(key_string)       \
-        M(key_fixed_string) \
-        M(keys128)          \
-        M(keys256)          \
-        M(serialized)       \
-
-#define M(NAME) \
-    if (merge_method == AggregatedDataVariants::Type::NAME) \
-        merge_method = AggregatedDataVariants::Type::NAME ## _hash64; \
-
-    APPLY_FOR_VARIANTS_THAT_MAY_USE_BETTER_HASH_FUNCTION(M)
-#undef M
-
-#undef APPLY_FOR_VARIANTS_THAT_MAY_USE_BETTER_HASH_FUNCTION
-
-    /// Temporary data for aggregation.
-    AggregatedDataVariants result;
-
-    /// result will destroy the states of aggregate functions in the destructor
-    result.aggregator = this;
-
-    result.init(merge_method);
-    result.keys_size = params.keys_size;
-    result.key_sizes = key_sizes;
-
-    for (Block & block : blocks)
-    {
-        if (bucket_num >= 0 && block.info.bucket_num != bucket_num)
-            bucket_num = -1;
-
-        if (result.type == AggregatedDataVariants::Type::without_key || is_overflows)
-            mergeWithoutKeyStreamsImpl(block, result);
-
-    #define M(NAME, IS_TWO_LEVEL) \
-        else if (result.type == AggregatedDataVariants::Type::NAME) \
-            mergeStreamsImpl(block, result.aggregates_pool, *result.NAME, result.NAME->data, nullptr, false);
-
-        APPLY_FOR_AGGREGATED_VARIANTS(M)
-    #undef M
-        else if (result.type != AggregatedDataVariants::Type::without_key)
-            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-    }
-
-    Block block;
-    if (result.type == AggregatedDataVariants::Type::without_key || is_overflows)
-        block = prepareBlockAndFillWithoutKey(result, final, is_overflows);
-    else
-        block = prepareBlockAndFillSingleLevel(result, final);
-    /// NOTE: two-level data is not possible here - chooseAggregationMethod chooses only among single-level methods.
-
-    if (!final)
-    {
-        /// Pass ownership of aggregate function states from result to ColumnAggregateFunction objects in the resulting block.
-        result.aggregator = nullptr;
-    }
-
-    size_t rows = block.rows();
-    size_t bytes = block.bytes();
-    double elapsed_seconds = watch.elapsedSeconds();
-    LOG_TRACE(log, std::fixed << std::setprecision(3)
-        << "Merged partially aggregated blocks. "
-        << rows << " rows, " << bytes / 1048576.0 << " MiB."
-        << " in " << elapsed_seconds << " sec."
-        << " (" << rows / elapsed_seconds << " rows/sec., " << bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
-
-    block.info.bucket_num = bucket_num;
-    return block;
-}
 
 
 template <typename Method, typename Table>
