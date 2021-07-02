@@ -25,6 +25,7 @@ namespace ErrorCodes
 }
 
 extern const String UniqRawResName = "uniqRawRes";
+extern const String CountSecondStage;
 
 void AggregateFunctionFactory::registerFunction(const String & name, Creator creator, CaseSensitiveness case_sensitiveness)
 {
@@ -45,7 +46,7 @@ void AggregateFunctionFactory::registerFunction(const String & name, Creator cre
 /// A little hack - if we have NULL arguments, don't even create nested function.
 /// Combinator will check if nested_function was created.
 /// TODO Consider replace with function property. See also https://github.com/ClickHouse/ClickHouse/pull/11661
-extern const std::unordered_set<String> hacking_return_non_null_agg_func_names = {"count", "uniq", "uniqHLL12", "uniqExact", "uniqCombined", UniqRawResName};
+extern const std::unordered_set<String> hacking_return_non_null_agg_func_names = {"count", "uniq", "uniqHLL12", "uniqExact", "uniqCombined", UniqRawResName, CountSecondStage};
 
 AggregateFunctionPtr AggregateFunctionFactory::get(
     const String & name,
