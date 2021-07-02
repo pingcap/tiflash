@@ -13,6 +13,9 @@ namespace
 template <typename T>
 using AggregateFunctionSumSimple = AggregateFunctionSum<T, typename NearestFieldType<T>::Type, AggregateFunctionSumData<typename NearestFieldType<T>::Type>>;
 
+template <typename T>
+using AggregateFunctionCountSecondStage = AggregateFunctionSum<T, typename NearestFieldType<T>::Type, AggregateFunctionSumData<typename NearestFieldType<T>::Type>, NameCountSecondStage>;
+
 template <typename T, typename TResult>
 using AggregateFunctionSumDecimal = AggregateFunctionSum<T, TResult, AggregateFunctionSumData<TResult>>;
 
@@ -69,11 +72,14 @@ AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const 
 
 }
 
+const String CountSecondStage = NameCountSecondStage::name;
+
 void registerAggregateFunctionSum(AggregateFunctionFactory & factory)
 {
     factory.registerFunction("sum", createAggregateFunctionSum<AggregateFunctionSumSimple>, AggregateFunctionFactory::CaseInsensitive);
     factory.registerFunction("sumWithOverflow", createAggregateFunctionSum<AggregateFunctionSumWithOverflow>);
     factory.registerFunction("sumKahan", createAggregateFunctionSum<AggregateFunctionSumKahan>);
+    factory.registerFunction(CountSecondStage, createAggregateFunctionSum<AggregateFunctionCountSecondStage>, AggregateFunctionFactory::CaseInsensitive);
 }
 
 }
