@@ -720,32 +720,6 @@ Block Aggregator::convertOneBucketToBlock(
     return block;
 }
 
-Block Aggregator::mergeAndConvertOneBucketToBlock(
-    ManyAggregatedDataVariants & variants,
-    Arena * arena,
-    bool final,
-    size_t bucket) const
-{
-    auto & merged_data = *variants[0];
-    auto method = merged_data.type;
-    Block block;
-
-    if (false) {} // NOLINT
-#define M(NAME) \
-    else if (method == AggregatedDataVariants::Type::NAME) \
-    { \
-        mergeBucketImpl<decltype(merged_data.NAME)::element_type>(variants, bucket, arena); \
-        if (isCancelled()) \
-            return {}; \
-        block = convertOneBucketToBlock(merged_data, *merged_data.NAME, arena, final, bucket); \
-    }
-
-    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
-#undef M
-
-    return block;
-}
-
 template <typename Method>
 void Aggregator::writeToTemporaryFileImpl(
     AggregatedDataVariants & data_variants,
@@ -811,6 +785,55 @@ bool Aggregator::checkLimits(size_t result_size, bool & no_more_keys) const
     }
 
     return true;
+}
+
+
+void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider)
+{
+    if (isCancelled())
+        return;
+
+    ColumnRawPtrs key_columns(params.keys_size);
+    AggregateColumns aggregate_columns(params.aggregates_size);
+
+    /** Used if there is a limit on the maximum number of rows in the aggregation,
+      *  and if group_by_overflow_mode == ANY.
+      * In this case, new keys are not added to the set, but aggregation is performed only by
+      *  keys that have already managed to get into the set.
+      */
+    bool no_more_keys = false;
+
+    LOG_TRACE(log, "Aggregating");
+
+    Stopwatch watch;
+
+    size_t src_rows = 0;
+    size_t src_bytes = 0;
+
+    /// Read all the data
+    while (Block block = stream->read())
+    {
+        if (isCancelled())
+            return;
+
+        src_rows += block.rows();
+        src_bytes += block.bytes();
+
+        if (!executeOnBlock(block, result, file_provider, key_columns, aggregate_columns, no_more_keys))
+            break;
+    }
+
+    /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
+    /// To do this, we pass a block with zero rows to aggregate.
+    if (result.empty() && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
+        executeOnBlock(stream->getHeader(), result, file_provider, key_columns, aggregate_columns, no_more_keys);
+
+    double elapsed_seconds = watch.elapsedSeconds();
+    size_t rows = result.sizeWithoutOverflowRow();
+    LOG_TRACE(log, std::fixed << std::setprecision(3)
+        << "Aggregated. " << src_rows << " to " << rows << " rows (from " << src_bytes / 1048576.0 << " MiB)"
+        << " in " << elapsed_seconds << " sec."
+        << " (" << src_rows / elapsed_seconds << " rows/sec., " << src_bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
 }
 
 
@@ -1025,48 +1048,6 @@ Block Aggregator::prepareBlockAndFill(
             res.getByPosition(i).column = res.getByPosition(i).column->cut(0, rows);
 
     return res;
-}
-
-
-void Aggregator::addSingleKeyToAggregateColumns(
-    const AggregatedDataVariants & data_variants,
-    MutableColumns & aggregate_columns) const
-{
-    const auto & data = data_variants.without_key;
-    for (size_t i = 0; i < params.aggregates_size; ++i)
-    {
-        auto & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
-        column_aggregate_func.getData().push_back(data + offsets_of_aggregate_states[i]);
-    }
-}
-
-void Aggregator::addArenasToAggregateColumns(
-    const AggregatedDataVariants & data_variants,
-    MutableColumns & aggregate_columns) const
-{
-    for (size_t i = 0; i < params.aggregates_size; ++i)
-    {
-        auto & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
-        for (const auto & pool : data_variants.aggregates_pools)
-            column_aggregate_func.addArena(pool);
-    }
-}
-
-
-void Aggregator::createStatesAndFillKeyColumnsWithSingleKey(
-    AggregatedDataVariants & data_variants,
-    Columns & key_columns,
-    size_t key_row,
-    MutableColumns & final_key_columns) const
-{
-    AggregateDataPtr place = data_variants.aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-    createAggregateStates(place);
-    data_variants.without_key = place;
-
-    for (size_t i = 0; i < params.keys_size; ++i)
-    {
-        final_key_columns[i]->insertFrom(*key_columns[i].get(), key_row);
-    }
 }
 
 
@@ -2521,56 +2502,6 @@ void Aggregator::setCancellationHook(const CancellationHook cancellation_hook)
 {
     isCancelled = cancellation_hook;
 }
-
-
-void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider)
-{
-    if (isCancelled())
-        return;
-
-    ColumnRawPtrs key_columns(params.keys_size);
-    AggregateColumns aggregate_columns(params.aggregates_size);
-
-    /** Used if there is a limit on the maximum number of rows in the aggregation,
-      *  and if group_by_overflow_mode == ANY.
-      * In this case, new keys are not added to the set, but aggregation is performed only by
-      *  keys that have already managed to get into the set.
-      */
-    bool no_more_keys = false;
-
-    LOG_TRACE(log, "Aggregating");
-
-    Stopwatch watch;
-
-    size_t src_rows = 0;
-    size_t src_bytes = 0;
-
-    /// Read all the data
-    while (Block block = stream->read())
-    {
-        if (isCancelled())
-            return;
-
-        src_rows += block.rows();
-        src_bytes += block.bytes();
-
-        if (!executeOnBlock(block, result, file_provider, key_columns, aggregate_columns, no_more_keys))
-            break;
-    }
-
-    /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
-    /// To do this, we pass a block with zero rows to aggregate.
-    if (result.empty() && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
-        executeOnBlock(stream->getHeader(), result, file_provider, key_columns, aggregate_columns, no_more_keys);
-
-    double elapsed_seconds = watch.elapsedSeconds();
-    size_t rows = result.sizeWithoutOverflowRow();
-    LOG_TRACE(log, std::fixed << std::setprecision(3)
-        << "Aggregated. " << src_rows << " to " << rows << " rows (from " << src_bytes / 1048576.0 << " MiB)"
-        << " in " << elapsed_seconds << " sec."
-        << " (" << src_rows / elapsed_seconds << " rows/sec., " << src_bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
-}
-
 
 
 }

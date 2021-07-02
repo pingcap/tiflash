@@ -187,7 +187,7 @@ public:
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
-	auto & cur_set = this->data(place).value;
+        auto & cur_set = this->data(place).value;
         auto & rhs_set = this->data(rhs).value;
 
         bool inserted;

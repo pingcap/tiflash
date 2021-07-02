@@ -1036,11 +1036,11 @@ protected:
         bool final,
         size_t bucket) const;
 
-    Block mergeAndConvertOneBucketToBlock(
-        ManyAggregatedDataVariants & variants,
-        Arena * arena,
-        bool final,
-        size_t bucket) const;
+    void prepareAggregateInstructions(
+        Columns columns,
+        AggregateColumns & aggregate_columns,
+        Columns & materialized_columns,
+        AggregateFunctionInstructions & instructions);
 
     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
     Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
@@ -1100,26 +1100,6 @@ protected:
       * - sets the variable no_more_keys to true.
       */
     bool checkLimits(size_t result_size, bool & no_more_keys) const;
-
-    void prepareAggregateInstructions(
-        Columns columns,
-        AggregateColumns & aggregate_columns,
-        Columns & materialized_columns,
-        AggregateFunctionInstructions & instructions);
-
-    void addSingleKeyToAggregateColumns(
-        const AggregatedDataVariants & data_variants,
-        MutableColumns & aggregate_columns) const;
-
-    void addArenasToAggregateColumns(
-        const AggregatedDataVariants & data_variants,
-        MutableColumns & aggregate_columns) const;
-
-    void createStatesAndFillKeyColumnsWithSingleKey(
-        AggregatedDataVariants & data_variants,
-        Columns & key_columns, size_t key_row,
-        MutableColumns & final_key_columns) const;
-
 };
 
 
@@ -1132,6 +1112,7 @@ template <typename Method> Method & getDataVariant(AggregatedDataVariants & vari
 APPLY_FOR_AGGREGATED_VARIANTS(M)
 
 #undef M
+
 
 } // namespace DB
 
