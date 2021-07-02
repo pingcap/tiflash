@@ -1791,7 +1791,7 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
     }
 
     std::vector<std::string> sort_key_containers;
-    sort_key_containers.resize(key_columns.size(), "");
+    sort_key_containers.resize(params.keys_size, "");
 
     typename Method::State state(key_columns, key_sizes, params.collators);
 
@@ -1903,7 +1903,6 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
       * Then the calculations can be parallelized by buckets.
       * We decompose the blocks to the bucket numbers indicated in them.
       */
-    using BucketToBlocks = std::map<Int32, BlocksList>;
     BucketToBlocks bucket_to_blocks;
 
     /// Read all the data.
