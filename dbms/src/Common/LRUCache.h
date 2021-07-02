@@ -291,6 +291,7 @@ private:
             }
             catch (std::exception & e)
             {
+                // If queue.insert() throws exception, cells and queue will be in inconsistent.
                 cells.erase(res.first);
                 LOG_ERROR(&Logger::get("LRUCache"), "queue.insert throw std::exception: " << e.what());
                 throw;
