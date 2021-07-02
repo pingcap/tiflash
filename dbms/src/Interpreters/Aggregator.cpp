@@ -223,6 +223,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
     /** Returns ordinary (not two-level) methods, because we start from them.
       * Later, during aggregation process, data may be converted (partitioned) to two-level structure, if cardinality is high.
       */
+
     size_t keys_bytes = 0;
     size_t num_fixed_contiguous_keys = 0;
 
@@ -965,6 +966,7 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
     });
 }
 
+
 template <typename Filler>
 Block Aggregator::prepareBlockAndFill(
     AggregatedDataVariants & data_variants,
@@ -1443,63 +1445,6 @@ void NO_INLINE Aggregator::mergeBucketImpl(
     }
 }
 
-
-std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
-{
-    if (!block)
-        return {};
-
-    AggregatedDataVariants data;
-
-    ColumnRawPtrs key_columns(params.keys_size);
-
-    /// Remember the columns we will work with
-    for (size_t i = 0; i < params.keys_size; ++i)
-        key_columns[i] = block.safeGetByPosition(i).column.get();
-
-    AggregatedDataVariants::Type type = method_chosen;
-    data.keys_size = params.keys_size;
-    data.key_sizes = key_sizes;
-
-#define M(NAME) \
-    else if (type == AggregatedDataVariants::Type::NAME) \
-        type = AggregatedDataVariants::Type::NAME ## _two_level;
-
-    if (false) {} // NOLINT
-    APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
-#undef M
-    else
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-
-    data.init(type);
-
-    size_t num_buckets = 0;
-
-#define M(NAME) \
-    else if (data.type == AggregatedDataVariants::Type::NAME) \
-        num_buckets = data.NAME->data.NUM_BUCKETS;
-
-    if (false) {} // NOLINT
-    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
-#undef M
-    else
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-
-    std::vector<Block> splitted_blocks(num_buckets);
-
-#define M(NAME) \
-    else if (data.type == AggregatedDataVariants::Type::NAME) \
-        convertBlockToTwoLevelImpl(*data.NAME, data.aggregates_pool, \
-            key_columns, block, splitted_blocks);
-
-    if (false) {} // NOLINT
-    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
-#undef M
-    else
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-
-    return splitted_blocks;
-}
 
 /** Combines aggregation states together, turns them into blocks, and outputs streams.
   * If the aggregation states are two-level, then it produces blocks strictly in order of 'bucket_num'.
@@ -2345,6 +2290,64 @@ void NO_INLINE Aggregator::convertBlockToTwoLevelImpl(
               */
         }
     }
+}
+
+
+std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
+{
+    if (!block)
+        return {};
+
+    AggregatedDataVariants data;
+
+    ColumnRawPtrs key_columns(params.keys_size);
+
+    /// Remember the columns we will work with
+    for (size_t i = 0; i < params.keys_size; ++i)
+        key_columns[i] = block.safeGetByPosition(i).column.get();
+
+    AggregatedDataVariants::Type type = method_chosen;
+    data.keys_size = params.keys_size;
+    data.key_sizes = key_sizes;
+
+#define M(NAME) \
+    else if (type == AggregatedDataVariants::Type::NAME) \
+        type = AggregatedDataVariants::Type::NAME ## _two_level;
+
+    if (false) {} // NOLINT
+    APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
+#undef M
+    else
+        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+
+    data.init(type);
+
+    size_t num_buckets = 0;
+
+#define M(NAME) \
+    else if (data.type == AggregatedDataVariants::Type::NAME) \
+        num_buckets = data.NAME->data.NUM_BUCKETS;
+
+    if (false) {} // NOLINT
+    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+#undef M
+    else
+        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+
+    std::vector<Block> splitted_blocks(num_buckets);
+
+#define M(NAME) \
+    else if (data.type == AggregatedDataVariants::Type::NAME) \
+        convertBlockToTwoLevelImpl(*data.NAME, data.aggregates_pool, \
+            key_columns, block, splitted_blocks);
+
+    if (false) {} // NOLINT
+    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+#undef M
+    else
+        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+
+    return splitted_blocks;
 }
 
 
