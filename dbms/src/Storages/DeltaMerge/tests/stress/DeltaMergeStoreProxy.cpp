@@ -107,11 +107,18 @@ void DeltaMergeStoreProxy::genData(UInt64 count)
 
 void DeltaMergeStoreProxy::readDataMultiThread(Int32 concurrency)
 {
+    auto work = [&]()
+    {
+        for (;;)
+        {
+            countRows();
+        }
+    };
     std::vector<std::thread> threads;
     threads.reserve(concurrency);
     for (Int32 i = 0; i < concurrency; i++)
     {
-        threads.push_back(std::thread(&DeltaMergeStoreProxy::countRows, this));
+        threads.push_back(std::thread(work));
     }
 
     for (auto & t : threads)

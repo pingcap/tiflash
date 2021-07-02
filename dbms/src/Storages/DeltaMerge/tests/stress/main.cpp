@@ -36,13 +36,22 @@ int main(int argc, [[maybe_unused]]char * argv[])
 
     DB::DM::tests::DeltaMergeStoreProxy store_proxy;
 
-    if (gen_data_count > 0)
+    try
     {
-        store_proxy.genDataMultiThread(gen_data_count, write_thread_count);
+        if (gen_data_count > 0)
+        {
+            store_proxy.genDataMultiThread(gen_data_count, write_thread_count);
+        }
+        store_proxy.readDataMultiThread(read_thread_count);
     }
-
-    store_proxy.readDataMultiThread(read_thread_count);
-
+    catch (std::exception& e)
+    {
+        LOG_INFO(&Poco::Logger::get("DeltaMergeStoreProxy"), e.what());
+    }
+    catch (...)
+    {
+        LOG_INFO(&Poco::Logger::get("DeltaMergeStoreProxy"), "Unknow exception");   
+    }
     DB::tests::TiFlashTestEnv::shutdown();
     return 0;
 }
