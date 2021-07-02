@@ -510,6 +510,7 @@ void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns 
     }
 }
 
+
 bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & result, const FileProviderPtr & file_provider,
     ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, bool & no_more_keys)
 {
@@ -1706,6 +1707,68 @@ std::unique_ptr<IBlockInputStream> Aggregator::mergeAndConvertToBlocks(
 }
 
 
+ManyAggregatedDataVariants Aggregator::prepareVariantsToMerge(ManyAggregatedDataVariants & data_variants) const
+{
+    if (data_variants.empty())
+        throw Exception("Empty data passed to Aggregator::mergeAndConvertToBlocks.", ErrorCodes::EMPTY_DATA_PASSED);
+
+    LOG_TRACE(log, "Merging aggregated data");
+
+    ManyAggregatedDataVariants non_empty_data;
+    non_empty_data.reserve(data_variants.size());
+    for (auto & data : data_variants)
+        if (!data->empty())
+            non_empty_data.push_back(data);
+
+    if (non_empty_data.empty())
+        return {};
+
+    if (non_empty_data.size() > 1)
+    {
+        /// Sort the states in descending order so that the merge is more efficient (since all states are merged into the first).
+        std::sort(non_empty_data.begin(), non_empty_data.end(),
+            [](const AggregatedDataVariantsPtr & lhs, const AggregatedDataVariantsPtr & rhs)
+            {
+                return lhs->sizeWithoutOverflowRow() > rhs->sizeWithoutOverflowRow();
+            });
+    }
+
+    /// If at least one of the options is two-level, then convert all the options into two-level ones, if there are not such.
+    /// Note - perhaps it would be more optimal not to convert single-level versions before the merge, but merge them separately, at the end.
+
+    bool has_at_least_one_two_level = false;
+    for (const auto & variant : non_empty_data)
+    {
+        if (variant->isTwoLevel())
+        {
+            has_at_least_one_two_level = true;
+            break;
+        }
+    }
+
+    if (has_at_least_one_two_level)
+        for (auto & variant : non_empty_data)
+            if (!variant->isTwoLevel())
+                variant->convertToTwoLevel();
+
+    AggregatedDataVariantsPtr & first = non_empty_data[0];
+
+    for (size_t i = 1, size = non_empty_data.size(); i < size; ++i)
+    {
+        if (first->type != non_empty_data[i]->type)
+            throw Exception("Cannot merge different aggregated data variants.", ErrorCodes::CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS);
+
+        /** Elements from the remaining sets can be moved to the first data set.
+          * Therefore, it must own all the arenas of all other sets.
+          */
+        first->aggregates_pools.insert(first->aggregates_pools.end(),
+            non_empty_data[i]->aggregates_pools.begin(), non_empty_data[i]->aggregates_pools.end());
+    }
+
+    return non_empty_data;
+}
+
+
 template <bool no_more_keys, typename Method, typename Table>
 void NO_INLINE Aggregator::mergeStreamsImplCase(
     Block & block,
@@ -1776,7 +1839,6 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
             aggregate_columns[j]->data(),
             aggregates_pool);
     }
-
 
     /// Early release memory.
     block.clear();
