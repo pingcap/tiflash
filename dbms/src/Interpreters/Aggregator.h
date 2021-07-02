@@ -409,8 +409,8 @@ struct AggregatedDataVariants : private boost::noncopyable
     std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel>> key_int256_two_level;
     std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>>       key_string_two_level;
     std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>>  key_fixed_string_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt32KeyTwoLevel>>           keys32_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt64KeyTwoLevel>>           keys64_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt32KeyTwoLevel>>         keys32_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt64KeyTwoLevel>>         keys64_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel>>           keys128_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel>>           keys256_two_level;
     std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevel>>        serialized_two_level;
@@ -573,7 +573,7 @@ struct AggregatedDataVariants : private boost::noncopyable
     #define APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M) \
         M(key32)            \
         M(key64)            \
-        M(key_int256)            \
+        M(key_int256)       \
         M(key_string)       \
         M(key_fixed_string) \
         M(keys32)           \
@@ -628,13 +628,12 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(keys256_two_level)          \
         M(serialized_two_level)       \
         M(nullable_keys128_two_level) \
-        M(nullable_keys256_two_level) \
+        M(nullable_keys256_two_level) 
 
 };
 
 using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;
 using ManyAggregatedDataVariants = std::vector<AggregatedDataVariantsPtr>;
-using ManyAggregatedDataVariantsPtr = std::shared_ptr<ManyAggregatedDataVariants>;
 
 /** How are "total" values calculated with WITH TOTALS?
   * (For more details, see TotalsHavingBlockInputStream.)
@@ -770,7 +769,7 @@ public:
     void mergeStream(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t max_threads);
 
     using BucketToBlocks = std::map<Int32, BlocksList>;
-    //
+ 
     /// Merge several partially aggregated blocks into one.
     /// Precondition: for all blocks block.info.is_overflows flag must be the same.
     /// (either all blocks are from overflow data or none blocks are).
@@ -840,7 +839,6 @@ protected:
     };
 
     using AggregateFunctionInstructions = std::vector<AggregateFunctionInstruction>;
-    using NestedColumnsHolder = std::vector<std::vector<const IColumn *>>;
 
     Sizes offsets_of_aggregate_states;    /// The offset to the n-th aggregate function in a row of aggregate functions.
     size_t total_size_of_aggregate_states = 0;    /// The total size of the row from the aggregate functions.
@@ -889,6 +887,7 @@ protected:
         bool no_more_keys,
         AggregateDataPtr overflow_row) const;
 
+    /// Specialization for a particular value no_more_keys.
     template <bool no_more_keys, typename Method>
     void executeImplBatch(
         Method & method,
@@ -950,12 +949,6 @@ protected:
         Arena * arena,
         bool final) const;
 
-    template <typename Mapped>
-    void insertAggregatesIntoColumns(
-        Mapped & mapped,
-        MutableColumns & final_aggregate_columns,
-        Arena * arena) const;
-
     template <typename Method, typename Table>
     void convertToBlockImplFinal(
         Method & method,
@@ -985,6 +978,12 @@ protected:
         Arena * arena,
         bool final,
         size_t bucket) const;
+
+    template <typename Mapped>
+    void insertAggregatesIntoColumns(
+        Mapped & mapped,
+        MutableColumns & final_aggregate_columns,
+        Arena * arena) const;
 
     void prepareAggregateInstructions(
         Columns columns,
