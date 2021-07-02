@@ -25,6 +25,49 @@ void insertColumn(Block & block, const DataTypePtr & type, const String & name, 
     block.insert(std::move(col));
 }
 
+void DeltaMergeStoreProxy::genMultiThread()
+{
+    if (opts.gen_total_rows <= 0)
+    {
+        LOG_INFO(log, "opts.gen_total_rows " << opts.gen_total_rows);
+        return;
+    }
+
+    UInt64 gen_rows_per_thread = opts.gen_total_rows / opts.gen_concurrency + 1;
+    UInt64 gen_total_rows = gen_rows_per_thread * opts.gen_concurrency;  // May large than opts.gen_total_row, it doesn't matter.
+    LOG_INFO(log, "Generate concurrency: " << opts.gen_concurrency << " Generate rows per thread: " << gen_rows_per_thread << " Generate total rows: " << gen_total_rows);
+
+    gen_threads.reserve(opts.gen_concurrency);
+    for (UInt32 i = 0; i < opts.gen_concurrency; i++)
+    {
+        gen_threads.push_back(std::thread(&DeltaMergeStoreProxy::genData, this, gen_rows_per_thread));
+    }
+
+    LOG_INFO(log, "Generate data finished.");
+    UInt64 total_rows = countRows();
+    LOG_INFO(log, "Total rows: " << total_rows);    
+}
+
+void DeltaMergeStoreProxy::genData(UInt64 rows)
+{
+    UInt64 generated_count = 0;
+    while (generated_count < rows)
+    {
+        auto c   = std::min(opts.gen_rows_per_block, rows - generated_count);
+        auto ids = pk.get(c);
+        write(ids);
+        generated_count += c;
+    }
+}
+
+void DeltaMergeStoreProxy::write(const std::vector<Int64> & ids)
+{
+    Block block;
+    genBlock(block, ids);
+    std::lock_guard lock{mutex};
+    store->write(*context, context->getSettingsRef(), std::move(block));
+}
+
 void DeltaMergeStoreProxy::genBlock(Block & block, const std::vector<Int64> & ids)
 {
     insertColumn<Int64>(block, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID, ids);
@@ -39,12 +82,20 @@ void DeltaMergeStoreProxy::genBlock(Block & block, const std::vector<Int64> & id
     insertColumn<String>(block, col_random_define.type, col_random_define.name, col_random_define.id, v_s);
 }
 
-void DeltaMergeStoreProxy::write(const std::vector<Int64> & ids)
+void DeltaMergeStoreProxy::readMultiThread()
 {
-    Block block;
-    genBlock(block, ids);
-    std::lock_guard lock{mutex};
-    store->write(*context, context->getSettingsRef(), std::move(block));
+    auto work = [&]()
+    {
+        for (;;)
+        {
+            countRows();
+        }
+    };
+    read_threads.reserve(opts.read_concurrency);
+    for (UInt32 i = 0; i < opts.read_concurrency; i++)
+    {
+        read_threads.push_back(std::thread(work));
+    }
 }
 
 UInt64 DeltaMergeStoreProxy::countRows()
@@ -66,66 +117,150 @@ UInt64 DeltaMergeStoreProxy::countRows()
     while (Block block = in->read())
     {
         total_count += block.rows();
+        if (opts.read_sleep_us > 0)
+        {
+          std::this_thread::sleep_for(std::chrono::microseconds(opts.read_sleep_us));
+        }
     }
     LOG_INFO(log, "ThreadID: " << std::this_thread::get_id() <<  " TotalCount: " << total_count);
     return total_count;
 }
 
-void DeltaMergeStoreProxy::genDataMultiThread(UInt64 count, Int32 concurrency)
-{
-    UInt64 count_per_thread = count / concurrency + 1;
-    UInt64 will_gen_count = count_per_thread * concurrency;
-    LOG_INFO(log, "Will gen " << will_gen_count << " rows.");
-    std::vector<std::thread> threads;
-    threads.reserve(concurrency);
-    for (Int32 i = 0; i < concurrency; i++)
-    {
-        threads.push_back(std::thread(&DeltaMergeStoreProxy::genData, this, count_per_thread));
-    }
-
-    for (auto & t : threads)
-    {
-        t.join();
-    }
-
-    LOG_INFO(log, "Generate data finished.");
-    UInt64 real_rows = countRows();
-    LOG_INFO(log, "Except rows: " << will_gen_count << " Real rows: " << real_rows);    
-}
-
-void DeltaMergeStoreProxy::genData(UInt64 count)
-{
-    UInt64 gen_count = 0;
-    while (gen_count < count)
-    {
-        auto c   = std::min(gen_count + 128, count) - gen_count;
-        auto ids = pk.get(c);
-        write(ids);
-        gen_count += 128;
-    }
-}
-
-void DeltaMergeStoreProxy::readDataMultiThread(Int32 concurrency)
+void DeltaMergeStoreProxy::insertMultiThread()
 {
     auto work = [&]()
     {
         for (;;)
         {
-            countRows();
+            insert();
+            if (opts.write_sleep_us > 0)
+            {
+                std::this_thread::sleep_for(std::chrono::microseconds(opts.write_sleep_us));
+            }
         }
     };
-    std::vector<std::thread> threads;
-    threads.reserve(concurrency);
-    for (Int32 i = 0; i < concurrency; i++)
-    {
-        threads.push_back(std::thread(work));
-    }
 
-    for (auto & t : threads)
+    insert_threads.reserve(opts.insert_concurrency);
+    for (UInt32 i = 0; i < opts.insert_concurrency; i++)
+    {
+        insert_threads.push_back(std::thread(work));
+    }
+}
+
+void DeltaMergeStoreProxy::updateMultiThread()
+{
+    auto work = [&]()
+    {
+        for (;;)
+        {
+            update();
+            if (opts.write_sleep_us > 0)
+            {
+                std::this_thread::sleep_for(std::chrono::microseconds(opts.write_sleep_us));
+            }
+        }
+    };
+
+    update_threads.reserve(opts.update_concurrency);
+    for (UInt32 i = 0; i < opts.update_concurrency; i++)
+    {
+        update_threads.push_back(std::thread(work));
+    }
+}
+
+void DeltaMergeStoreProxy::deleteMultiThread()
+{
+    auto work = [&]()
+    {
+        for (;;)
+        {
+            deleteRange();
+            if (opts.write_sleep_us > 0)
+            {
+                std::this_thread::sleep_for(std::chrono::microseconds(opts.write_sleep_us));
+            }
+        }
+    };
+
+    delete_threads.reserve(opts.delete_concurrency);
+    for (UInt32 i = 0; i < opts.delete_concurrency; i++)
+    {
+        delete_threads.push_back(std::thread(work));
+    }
+}
+
+void DeltaMergeStoreProxy::insert()
+{
+    auto new_ids = pk.get(opts.write_rows_per_block);   // Generate new id for insert
+    write(new_ids);
+}
+
+void DeltaMergeStoreProxy::update()
+{
+    std::vector<Int64> ids;
+    for (UInt32 i = 0; i < opts.write_rows_per_block; i++)
+    {
+        Int64 id = rand() % pk.max();  // FIXME rand() return value is int.
+        if (std::find(ids.begin(), ids.end(), id) == ids.end())
+        {
+            ids.push_back(id);  // Get already exist id for update
+        }
+    }
+    write(ids);
+}
+
+void DeltaMergeStoreProxy::deleteRange()
+{
+    auto id1 = rand() % pk.max();
+    auto id2 = id1 + (rand() % 128);
+    auto range = RowKeyRange::fromHandleRange(HandleRange{id1, id2});
+    store->deleteRange(*context, context->getSettingsRef(), range);
+}
+
+void DeltaMergeStoreProxy::waitGenThreads()
+{
+    LOG_INFO(log, "wait gen threads begin: " << gen_threads.size());
+    joinThreads(gen_threads);
+    LOG_INFO(log, "wait gen threads end: " << gen_threads.size());
+}
+
+void DeltaMergeStoreProxy::waitReadThreads()
+{
+    LOG_INFO(log, "wait read threads begin: " << read_threads.size());
+    joinThreads(read_threads);
+    LOG_INFO(log, "wait read threads end: " << read_threads.size());
+}
+
+void DeltaMergeStoreProxy::waitInsertThreads()
+{
+    LOG_INFO(log, "wait insert threads begin: " << insert_threads.size());
+    joinThreads(insert_threads);
+    LOG_INFO(log, "wait insert threads end: " << insert_threads.size());
+}
+
+void DeltaMergeStoreProxy::waitUpdateThreads()
+{
+    LOG_INFO(log, "wait update threads begin: " << update_threads.size());
+    joinThreads(update_threads);
+    LOG_INFO(log, "wait update threads end: " << update_threads.size());
+}
+
+void DeltaMergeStoreProxy::waitDeleteThreads()
+{
+    LOG_INFO(log, "wait delete threads begin: " << delete_threads.size());
+    joinThreads(delete_threads);
+    LOG_INFO(log, "wait delete threads end: " << delete_threads.size());
+}
+
+void DeltaMergeStoreProxy::joinThreads(std::vector<std::thread>& threads)
+{
+    for (auto& t : threads)
     {
         t.join();
     }
+    threads.clear();
 }
+
 } // namespace tests
 } // namespace DM
 } // namespace DB
