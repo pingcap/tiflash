@@ -1779,9 +1779,6 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
     ColumnRawPtrs key_columns(params.keys_size);
     AggregateColumnsConstData aggregate_columns(params.aggregates_size);
 
-    std::vector<std::string> sort_key_containers;
-    sort_key_containers.resize(params.keys_size, "");
-
     /// Remember the columns we will work with
     for (size_t i = 0; i < params.keys_size; ++i)
         key_columns[i] = block.safeGetByPosition(i).column.get();
@@ -1791,6 +1788,9 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
         const auto & aggregate_column_name = params.aggregates[i].column_name;
         aggregate_columns[i] = &typeid_cast<const ColumnAggregateFunction &>(*block.getByName(aggregate_column_name).column).getData();
     }
+
+    std::vector<std::string> sort_key_containers;
+    sort_key_containers.resize(params.keys_size, "");
 
     typename Method::State state(key_columns, key_sizes, params.collators);
 
@@ -1802,7 +1802,7 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
     {
         AggregateDataPtr aggregate_data = nullptr;
 
-        if (!no_more_keys)
+        if constexpr (!no_more_keys)
         {
             auto emplace_result = state.emplaceKey(data, i, *aggregates_pool, sort_key_containers);
             if (emplace_result.isInserted())
@@ -1902,7 +1902,6 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
       * Then the calculations can be parallelized by buckets.
       * We decompose the blocks to the bucket numbers indicated in them.
       */
-    using BucketToBlocks = std::map<Int32, BlocksList>;
     BucketToBlocks bucket_to_blocks;
 
     /// Read all the data.
@@ -2036,189 +2035,6 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
                 return;
             }
 
-            if (!checkLimits(result.sizeWithoutOverflowRow(), no_more_keys))
-                break;
-
-            if (result.type == AggregatedDataVariants::Type::without_key || block.info.is_overflows)
-                mergeWithoutKeyStreamsImpl(block, result);
-
-        #define M(NAME, IS_TWO_LEVEL) \
-            else if (result.type == AggregatedDataVariants::Type::NAME) \
-                mergeStreamsImpl(block, result.aggregates_pool, *result.NAME, result.NAME->data, result.without_key, no_more_keys);
-
-            APPLY_FOR_AGGREGATED_VARIANTS(M)
-        #undef M
-            else if (result.type != AggregatedDataVariants::Type::without_key)
-                throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-        }
-
-        LOG_TRACE(log, "Merged partially aggregated single-level data.");
-    }
-}
-
-
-bool Aggregator::mergeBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys, const FileProviderPtr & file_provider)
-{
-    /// `result` will destroy the states of aggregate functions in the destructor
-    result.aggregator = this;
-
-    /// How to perform the aggregation?
-    if (result.empty())
-    {
-        result.init(method_chosen);
-        result.keys_size = params.keys_size;
-        result.key_sizes = key_sizes;
-        LOG_TRACE(log, "Aggregation method: {}" << result.getMethodName());
-    }
-
-    if (result.type == AggregatedDataVariants::Type::without_key || block.info.is_overflows)
-        mergeWithoutKeyStreamsImpl(block, result);
-
-#define M(NAME, IS_TWO_LEVEL) \
-    else if (result.type == AggregatedDataVariants::Type::NAME) \
-        mergeStreamsImpl(block, result.aggregates_pool, *result.NAME, result.NAME->data, result.without_key, no_more_keys);
-
-    APPLY_FOR_AGGREGATED_VARIANTS(M)
-#undef M
-    else if (result.type != AggregatedDataVariants::Type::without_key)
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-
-    size_t result_size = result.sizeWithoutOverflowRow();
-    Int64 current_memory_usage = 0;
-    if (current_memory_tracker)
-        current_memory_usage = current_memory_tracker->get();
-
-    /// Here all the results in the sum are taken into account, from different threads.
-    auto result_size_bytes = current_memory_usage - memory_usage_before_aggregation;
-
-    bool worth_convert_to_two_level
-        = (params.group_by_two_level_threshold && result_size >= params.group_by_two_level_threshold)
-        || (params.group_by_two_level_threshold_bytes && result_size_bytes >= static_cast<Int64>(params.group_by_two_level_threshold_bytes));
-
-    /** Converting to a two-level data structure.
-      * It allows you to make, in the subsequent, an effective merge - either economical from memory or parallel.
-      */
-    if (result.isConvertibleToTwoLevel() && worth_convert_to_two_level)
-        result.convertToTwoLevel();
-
-    /// Checking the constraints.
-    if (!checkLimits(result_size, no_more_keys))
-        return false;
-
-    /** Flush data to disk if too much RAM is consumed.
-      * Data can only be flushed to disk if a two-level aggregation structure is used.
-      */
-    if (params.max_bytes_before_external_group_by
-        && result.isTwoLevel()
-        && current_memory_usage > static_cast<Int64>(params.max_bytes_before_external_group_by)
-        && worth_convert_to_two_level)
-    {
-        writeToTemporaryFile(result, file_provider);
-    }
-
-    return true;
-}
-
-void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVariants & result, size_t max_threads)
-{
-    if (bucket_to_blocks.empty())
-        return;
-
-    UInt64 total_input_rows = 0;
-    for (auto & bucket : bucket_to_blocks)
-        for (auto & block : bucket.second)
-            total_input_rows += block.rows();
-
-    /** `minus one` means the absence of information about the bucket
-      * - in the case of single-level aggregation, as well as for blocks with "overflowing" values.
-      * If there is at least one block with a bucket number greater or equal than zero, then there was a two-level aggregation.
-      */
-    auto max_bucket = bucket_to_blocks.rbegin()->first;
-    bool has_two_level = max_bucket >= 0;
-
-    if (has_two_level)
-    {
-    #define M(NAME) \
-        if (method_chosen == AggregatedDataVariants::Type::NAME) \
-            method_chosen = AggregatedDataVariants::Type::NAME ## _two_level;
-
-        APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
-
-    #undef M
-    }
-
-    /// result will destroy the states of aggregate functions in the destructor
-    result.aggregator = this;
-
-    result.init(method_chosen);
-    result.keys_size = params.keys_size;
-    result.key_sizes = key_sizes;
-
-    bool has_blocks_with_unknown_bucket = bucket_to_blocks.count(-1);
-
-    /// First, parallel the merge for the individual buckets. Then we continue merge the data not allocated to the buckets.
-    if (has_two_level)
-    {
-        /** In this case, no_more_keys is not supported due to the fact that
-          *  from different threads it is difficult to update the general state for "other" keys (overflows).
-          * That is, the keys in the end can be significantly larger than max_rows_to_group_by.
-          */
-
-        LOG_TRACE(log, "Merging partially aggregated two-level data.");
-
-        auto merge_bucket = [&bucket_to_blocks, &result, this](Int32 bucket, Arena * aggregates_pool)
-        {
-            for (Block & block : bucket_to_blocks[bucket])
-            {
-            #define M(NAME) \
-                else if (result.type == AggregatedDataVariants::Type::NAME) \
-                    mergeStreamsImpl(block, aggregates_pool, *result.NAME, result.NAME->data.impls[bucket], nullptr, false);
-
-                if (false) {} // NOLINT
-                    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
-            #undef M
-                else
-                    throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-            }
-        };
-
-        std::unique_ptr<ThreadPool> thread_pool;
-        if (max_threads > 1 && total_input_rows > 100000)    /// TODO Make a custom threshold.
-            thread_pool = std::make_unique<ThreadPool>(max_threads);
-
-        for (const auto & bucket_blocks : bucket_to_blocks)
-        {
-            const auto bucket = bucket_blocks.first;
-
-            if (bucket == -1)
-                continue;
-
-            result.aggregates_pools.push_back(std::make_shared<Arena>());
-            Arena * aggregates_pool = result.aggregates_pools.back().get();
-
-            auto task = [bucket, &merge_bucket, aggregates_pool]{ return merge_bucket(bucket, aggregates_pool); };
-
-            if (thread_pool)
-                thread_pool->schedule(task);
-            else
-                task();
-        }
-
-        if (thread_pool)
-            thread_pool->wait();
-
-        LOG_TRACE(log, "Merged partially aggregated two-level data.");
-    }
-
-    if (has_blocks_with_unknown_bucket)
-    {
-        LOG_TRACE(log, "Merging partially aggregated single-level data.");
-
-        bool no_more_keys = false;
-
-        BlocksList & blocks = bucket_to_blocks[-1];
-        for (Block & block : blocks)
-        {
             if (!checkLimits(result.sizeWithoutOverflowRow(), no_more_keys))
                 break;
 
