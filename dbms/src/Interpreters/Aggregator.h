@@ -354,6 +354,7 @@ struct AggregationMethodSerialized
     }
 };
 
+
 class Aggregator;
 
 struct AggregatedDataVariants : private boost::noncopyable
@@ -441,7 +442,11 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(keys64,                     false) \
         M(keys128,                    false) \
         M(keys256,                    false) \
+<<<<<<< HEAD
         M(key_int256,                 false) \
+=======
+        M(key_int256,                    false) \
+>>>>>>> master
         M(serialized,                 false) \
         M(key32_two_level,            true) \
         M(key64_two_level,            true) \
@@ -592,7 +597,10 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(key_fixed_string_hash64) \
         M(keys128_hash64)   \
         M(keys256_hash64)   \
+<<<<<<< HEAD
         M(key_string_hash64) \
+=======
+>>>>>>> master
         M(serialized_hash64) \
 
     #define APPLY_FOR_VARIANTS_SINGLE_LEVEL(M) \
