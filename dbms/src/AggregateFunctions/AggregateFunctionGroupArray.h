@@ -111,7 +111,7 @@ public:
         buf.read(reinterpret_cast<char *>(&value[0]), size * sizeof(value[0]));
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         const auto & value = this->data(place).value;
         size_t size = value.size();
@@ -365,7 +365,7 @@ public:
         data(place).last = prev;
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         auto & column_array = static_cast<ColumnArray &>(to);
 

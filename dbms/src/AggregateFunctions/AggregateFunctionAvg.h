@@ -79,7 +79,7 @@ public:
         readVarUInt(this->data(place).count, buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         if constexpr (IsDecimal<TResult>)
         {

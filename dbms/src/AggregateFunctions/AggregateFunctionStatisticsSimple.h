@@ -237,7 +237,7 @@ public:
         this->data(place).read(buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         const auto & data = this->data(place);
         auto & dst = static_cast<ColumnVector<ResultType> &>(to).getData();

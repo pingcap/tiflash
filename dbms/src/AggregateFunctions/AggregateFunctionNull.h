@@ -150,14 +150,14 @@ public:
         }
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
     {
-        if (result_is_nullable)
+        if constexpr (result_is_nullable)
         {
             ColumnNullable & to_concrete = static_cast<ColumnNullable &>(to);
             if (getFlag(place))
             {
-                nested_function->insertResultInto(nestedPlace(place), to_concrete.getNestedColumn());
+                nested_function->insertResultInto(nestedPlace(place), to_concrete.getNestedColumn(), arena);
                 to_concrete.getNullMapData().push_back(0);
             }
             else
@@ -167,7 +167,7 @@ public:
         }
         else
         {
-            nested_function->insertResultInto(nestedPlace(place), to);
+            nested_function->insertResultInto(nestedPlace(place), to, arena);
         }
     }
 
@@ -350,15 +350,15 @@ public:
         }
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
     {
-        if (result_is_nullable)
+        if constexpr (result_is_nullable)
         {
             ColumnNullable & to_concrete = static_cast<ColumnNullable &>(to);
             UInt8 flag = getFlag(place);
             if (flag == 1)
             {
-                nested_function->insertResultInto(nestedPlace(place), to_concrete.getNestedColumn());
+                nested_function->insertResultInto(nestedPlace(place), to_concrete.getNestedColumn(), arena);
                 to_concrete.getNullMapData().push_back(0);
             }
             else
@@ -368,7 +368,7 @@ public:
         }
         else
         {
-            nested_function->insertResultInto(nestedPlace(place), to);
+            nested_function->insertResultInto(nestedPlace(place), to, arena);
         }
     }
 
