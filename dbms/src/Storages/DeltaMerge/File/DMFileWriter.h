@@ -140,7 +140,6 @@ public:
     {
     private:
         static constexpr size_t IS_SINGLE_FILE         = 0x01;
-        static constexpr size_t NEED_RATE_LIMIT        = 0x02;
 
         size_t value;
 
@@ -149,8 +148,6 @@ public:
 
         inline void setSingleFile(bool v) { value = (v ? (value | IS_SINGLE_FILE) : (value & ~IS_SINGLE_FILE)); }
         inline bool isSingleFile() const { return (value & IS_SINGLE_FILE); }
-        inline void setRateLimit(bool v) { value = (v ? (value | NEED_RATE_LIMIT) : (value & ~NEED_RATE_LIMIT)); }
-        inline bool needRateLimit() const { return (value & NEED_RATE_LIMIT); }
     };
 
     struct Options

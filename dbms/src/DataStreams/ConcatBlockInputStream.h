@@ -27,11 +27,17 @@ public:
 protected:
     Block readImpl() override
     {
+        FilterPtr filter_;
+        return readImpl(filter_, false);
+    }
+
+    Block readImpl(FilterPtr & res_filter, bool return_filter) override
+    {
         Block res;
 
         while (current_stream != children.end())
         {
-            res = (*current_stream)->read();
+            res = (*current_stream)->read(res_filter, return_filter);
 
             if (res)
                 break;
@@ -49,4 +55,4 @@ private:
     BlockInputStreams::iterator current_stream;
 };
 
-}
+} // namespace DB
