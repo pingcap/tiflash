@@ -14,7 +14,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/ASTSubquery.h>
-#include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Common/FieldVisitors.h>
 #include <DataTypes/FieldToDataType.h>
@@ -516,11 +516,7 @@ void TypeAndConstantInference::dump(WriteBuffer & out) const
         if (!it->second.node)
             writeCString("(none)", out);
         else
-        {
-            std::stringstream formatted_ast;
-            formatAST(*it->second.node, formatted_ast, false, true);
-            writeString(formatted_ast.str(), out);
-        }
+            formatAST(*it->second.node, out, false, true);
 
         writeChar('\n', out);
     }

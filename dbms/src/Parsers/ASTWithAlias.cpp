@@ -6,6 +6,13 @@
 namespace DB
 {
 
+static void writeAlias(const String & name, const ASTWithAlias::FormatSettings & settings)
+{
+    settings.ostr << (settings.hilite ? IAST::hilite_keyword : "") << " AS " << (settings.hilite ? IAST::hilite_alias : "");
+    settings.writeIdentifier(name);
+    settings.ostr << (settings.hilite ? IAST::hilite_none : "");
+}
+
 void ASTWithAlias::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     if (!alias.empty())
@@ -27,7 +34,7 @@ void ASTWithAlias::formatImpl(const FormatSettings & settings, FormatState & sta
 
     if (!alias.empty())
     {
-        writeAlias(alias, settings.ostr, settings.hilite);
+        writeAlias(alias, settings);
         if (frame.need_parens)
             settings.ostr <<')';
     }

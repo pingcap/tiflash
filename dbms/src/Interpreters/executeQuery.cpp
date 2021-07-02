@@ -4,6 +4,7 @@
 
 #include <IO/ConcatReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromString.h>
 
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/copyData.h>
@@ -360,7 +361,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             if (!internal && res.in)
             {
-                std::stringstream log_str;
+                WriteBufferFromOwnString log_str;
                 log_str << "Query pipeline:\n";
                 res.in->dumpTree(log_str);
                 LOG_DEBUG(&Logger::get("executeQuery"), log_str.str());

@@ -8,6 +8,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <Columns/ColumnString.h>
 #include <Common/typeid_cast.h>
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterShowCreateQuery.h>
 
@@ -55,7 +56,7 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
     if (!create_query && ast.temporary)
         throw Exception("Unable to show the create query of " + ast.table + ". Maybe it was created by the system.", ErrorCodes::THERE_IS_NO_QUERY);
 
-    std::stringstream stream;
+    WriteBufferFromOwnString stream;
     formatAST(*create_query, stream, false, true);
     String res = stream.str();
 

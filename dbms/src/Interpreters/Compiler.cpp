@@ -10,6 +10,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromString.h>
 
 #include <Interpreters/Compiler.h>
 #include <Interpreters/config_compile.h>
@@ -216,7 +217,7 @@ void Compiler::compile(
         out << get_code();
     }
 
-    std::stringstream command;
+    WriteBufferFromOwnString command;
 
     /// Slightly unconvenient.
     command <<

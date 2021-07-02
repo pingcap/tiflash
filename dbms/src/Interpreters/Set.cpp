@@ -18,6 +18,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Interpreters/evaluateConstantExpression.h>
@@ -334,7 +335,7 @@ ColumnPtr Set::execute(const Block & block, bool negative) const
 
     if (data_types.size() != num_key_columns)
     {
-        std::stringstream message;
+        WriteBufferFromOwnString message;
         message << "Number of columns in section IN doesn't match. "
             << num_key_columns << " at left, " << data_types.size() << " at right.";
         throw Exception(message.str(), ErrorCodes::NUMBER_OF_COLUMNS_DOESNT_MATCH);

@@ -9,6 +9,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
+#include <IO/WriteBufferFromString.h>
 
 #include <set>
 #include <optional>
@@ -454,7 +455,7 @@ void ExpressionAction::executeOnTotals(Block & block) const
 
 std::string ExpressionAction::toString() const
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     switch (type)
     {
         case ADD_COLUMN:
@@ -539,7 +540,7 @@ void ExpressionActions::checkLimits(Block & block) const
 
         if (non_const_columns > settings.max_temporary_non_const_columns)
         {
-            std::stringstream list_of_non_const_columns;
+            WriteBufferFromOwnString list_of_non_const_columns;
             for (size_t i = 0, size = block.columns(); i < size; ++i)
                 if (!block.safeGetByPosition(i).column->isColumnConst())
                     list_of_non_const_columns << "\n" << block.safeGetByPosition(i).name;
@@ -912,7 +913,7 @@ void ExpressionActions::finalize(const Names & output_columns)
 
 std::string ExpressionActions::dumpActions() const
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
 
     ss << "input:\n";
     for (NamesAndTypesList::const_iterator it = input_columns.begin(); it != input_columns.end(); ++it)
@@ -1073,7 +1074,7 @@ void ExpressionActionsChain::finalize()
 
 std::string ExpressionActionsChain::dumpChain()
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
 
     for (size_t i = 0; i < steps.size(); ++i)
     {

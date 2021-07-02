@@ -25,7 +25,7 @@ static void processImpl(const ASTPtr & ast, CollectAliases::Aliases & aliases, C
 
         if (!it_inserted.second && ast->getTreeHash() != it_inserted.first->second.node->getTreeHash())
         {
-            std::stringstream message;
+            WriteBufferFromOwnString message;
             message << "Different expressions with the same alias " << backQuoteIfNeed(alias) << ":\n";
             formatAST(*it_inserted.first->second.node, message, false, true);
             message << "\nand\n";
@@ -97,7 +97,7 @@ void CollectAliases::dump(WriteBuffer & out) const
                 break;
         }
 
-        std::stringstream formatted_ast;
+        WriteBufferFromOwnString formatted_ast;
         formatAST(*it->second.node, formatted_ast, false, true);
         writeString(formatted_ast.str(), out);
 

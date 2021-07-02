@@ -3,6 +3,7 @@
 #include <Parsers/ASTShowTablesQuery.h>
 #include <Parsers/ASTIdentifier.h>
 
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
@@ -46,7 +47,7 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
       */
     context.assertDatabaseExists(database, false);
 
-    std::stringstream rewritten_query;
+    WriteBufferFromOwnString rewritten_query;
     rewritten_query << "SELECT name FROM system.tables WHERE ";
 
     if (query.temporary)

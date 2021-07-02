@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include <Core/Types.h>
+#include <IO/WriteBufferFromString.h>
 #include <Storages/Transaction/Types.h>
 #include <common/likely.h>
 #include <Common/Exception.h>
@@ -77,7 +78,7 @@ struct Handle
 
     bool operator>=(const Handle & handle) const { return !(*this < handle); }
 
-    void toString(std::stringstream & ss) const
+    void toString(WriteBufferFromOwnString & ss) const
     {
         if (type == HandleIDType::NORMAL)
             ss << handle_id;
@@ -87,7 +88,7 @@ struct Handle
 
     String toString() const
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         toString(ss);
         return ss.str();
     }

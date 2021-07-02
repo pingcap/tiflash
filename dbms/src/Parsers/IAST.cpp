@@ -36,18 +36,6 @@ String backQuoteIfNeed(const String & x)
 }
 
 
-void IAST::writeAlias(const String & name, std::ostream & s, bool hilite) const
-{
-    s << (hilite ? hilite_keyword : "") << " AS " << (hilite ? hilite_alias : "");
-
-    WriteBufferFromOStream wb(s, 32);
-    writeProbablyBackQuotedString(name, wb);
-    wb.next();
-
-    s << (hilite ? hilite_none : "");
-}
-
-
 size_t IAST::checkSize(size_t max_size) const
 {
     size_t res = 1;

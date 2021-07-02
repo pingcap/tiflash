@@ -8,7 +8,7 @@
 #include <Parsers/ASTQualifiedAsterisk.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTFunction.h>
-#include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/String.h>
 #include <Common/typeid_cast.h>
@@ -439,11 +439,7 @@ void AnalyzeColumns::dump(WriteBuffer & out) const
 
         writeCString(". AST: ", out);
         if (it->second.node)
-        {
-            std::stringstream formatted_ast;
-            formatAST(*it->second.node, formatted_ast, false, true);
-            writeString(formatted_ast.str(), out);
-        }
+            formatAST(*it->second.node, out, false, true);
         else
             writeCString("(none)", out);
 

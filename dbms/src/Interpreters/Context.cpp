@@ -57,6 +57,7 @@
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <IO/PersistedCache.h>
+#include <IO/WriteBufferFromString.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
@@ -1849,7 +1850,7 @@ void Context::checkTableCanBeDropped(const String & database, const String & tab
 
     String table_size_str = formatReadableSizeWithDecimalSuffix(table_size);
     String max_table_size_to_drop_str = formatReadableSizeWithDecimalSuffix(max_table_size_to_drop);
-    std::stringstream ostr;
+    WriteBufferFromOwnString ostr;
 
     ostr << "Table " << backQuoteIfNeed(database) << "." << backQuoteIfNeed(table) << " was not dropped.\n"
          << "Reason:\n"

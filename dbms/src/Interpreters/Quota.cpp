@@ -5,6 +5,7 @@
 #include <Common/SipHash.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/Quota.h>
 
 #include <set>
@@ -61,7 +62,7 @@ void QuotaForInterval::checkExceeded(time_t current_time, const String & quota_n
 
 String QuotaForInterval::toString() const
 {
-    std::stringstream res;
+    WriteBufferFromOwnString res;
 
     auto loaded_rounded_time = rounded_time.load(std::memory_order_relaxed);
 
@@ -136,7 +137,7 @@ void QuotaForInterval::check(
 {
     if (max_amount && used_amount > max_amount)
     {
-        std::stringstream message;
+        WriteBufferFromOwnString message;
         message << "Quota for user '" << user_name << "' for ";
 
         if (duration == 3600)
@@ -242,7 +243,7 @@ void QuotaForIntervals::checkAndAddExecutionTime(time_t current_time, Poco::Time
 
 String QuotaForIntervals::toString() const
 {
-    std::stringstream res;
+    WriteBufferFromOwnString res;
 
     for (Container::const_reverse_iterator it = cont.rbegin(); it != cont.rend(); ++it)
         res << std::endl << it->second.toString();

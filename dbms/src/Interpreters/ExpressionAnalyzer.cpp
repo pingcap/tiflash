@@ -23,6 +23,7 @@
 #include <Columns/ColumnSet.h>
 #include <Columns/ColumnConst.h>
 
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/ExpressionActions.h>
@@ -891,7 +892,7 @@ void ExpressionAnalyzer::addASTAliases(ASTPtr & ast, int ignore_levels)
     {
         if (aliases.count(alias) && ast->getTreeHash() != aliases[alias]->getTreeHash())
         {
-            std::stringstream message;
+            WriteBufferFromOwnString message;
             message << "Different expressions with the same alias " << backQuoteIfNeed(alias) << ":\n";
             formatAST(*ast, message, false, true);
             message << "\nand\n";

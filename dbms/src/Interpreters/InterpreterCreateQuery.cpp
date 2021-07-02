@@ -8,6 +8,7 @@
 #include <Common/escapeForFileName.h>
 
 #include <Encryption/WriteBufferFromFileProvider.h>
+#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 
 #include <Parsers/ASTColumnDeclaration.h>
@@ -95,7 +96,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         if ((engine.name != "TiFlash" && engine.arguments) || engine.parameters || storage.partition_by || storage.order_by
             || storage.sample_by || storage.settings)
         {
-            std::stringstream ostr;
+            WriteBufferFromOwnString ostr;
             formatAST(storage, ostr, false, false);
             throw Exception("Unknown database engine: " + ostr.str(), ErrorCodes::UNKNOWN_DATABASE_ENGINE);
         }
@@ -121,7 +122,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         create.attach = true;
         create.if_not_exists = false;
 
-        std::ostringstream statement_stream;
+        WriteBufferFromOwnString statement_stream;
         formatAST(create, statement_stream, false);
         statement_stream << '\n';
         String statement = statement_stream.str();

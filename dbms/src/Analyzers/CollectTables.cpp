@@ -9,7 +9,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/ASTSubquery.h>
-#include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Common/typeid_cast.h>
 
@@ -173,11 +173,7 @@ void CollectTables::dump(WriteBuffer & out) const
         if (!table.node)
             writeCString("(none)", out);
         else
-        {
-            std::stringstream formatted_ast;
-            formatAST(*table.node, formatted_ast, false, true);
-            writeString(formatted_ast.str(), out);
-        }
+            formatAST(*table.node, out, false, true);
 
         writeChar('\n', out);
     }

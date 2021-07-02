@@ -5,6 +5,7 @@
 #include <Databases/DatabaseTiFlash.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -511,7 +512,7 @@ void DatabaseTiFlash::alterTombstone(const Context & context, Timestamp tombston
 
     String statement;
     {
-        std::ostringstream stream;
+        WriteBufferFromOwnString stream;
         formatAST(*ast, stream, false, false);
         stream << '\n';
         statement = stream.str();
