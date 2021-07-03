@@ -447,7 +447,7 @@ void Connection::sendExternalTablesData(ExternalTablesData & data)
     maybe_compressed_out_bytes = maybe_compressed_out->count() - maybe_compressed_out_bytes;
     double elapsed = watch.elapsedSeconds();
 
-    std::stringstream msg;
+    WriteBufferFromOwnString msg;
     msg << std::fixed << std::setprecision(3);
     msg << "Sent data for " << data.size() << " external tables, total " << rows << " rows in " << elapsed << " sec., "
         << static_cast<size_t>(rows / watch.elapsedSeconds()) << " rows/sec., "

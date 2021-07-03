@@ -20,7 +20,7 @@ extern const int COP_BAD_DAG_REQUEST;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
-void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringstream & ss)
+void DAGStringConverter::buildTSString(const tipb::TableScan & ts, WriteBuffer & ss)
 {
     TableID table_id;
     if (ts.has_table_id())
@@ -69,7 +69,7 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
     ss << "FROM " << storage->getDatabaseName() << "." << storage->getTableName() << " ";
 }
 
-void DAGStringConverter::buildSelString(const tipb::Selection & sel, std::stringstream & ss)
+void DAGStringConverter::buildSelString(const tipb::Selection & sel, WriteBuffer & ss)
 {
     bool first = true;
     for (const tipb::Expr & expr : sel.conditions())
@@ -88,9 +88,9 @@ void DAGStringConverter::buildSelString(const tipb::Selection & sel, std::string
     }
 }
 
-void DAGStringConverter::buildLimitString(const tipb::Limit & limit, std::stringstream & ss) { ss << "LIMIT " << limit.limit() << " "; }
+void DAGStringConverter::buildLimitString(const tipb::Limit & limit, WriteBuffer & ss) { ss << "LIMIT " << limit.limit() << " "; }
 
-void DAGStringConverter::buildProjString(const tipb::Projection & proj, std::stringstream & ss)
+void DAGStringConverter::buildProjString(const tipb::Projection & proj, WriteBuffer & ss)
 {
     ss << "PROJECTION ";
     bool first = true;
@@ -105,7 +105,7 @@ void DAGStringConverter::buildProjString(const tipb::Projection & proj, std::str
     }
 }
 
-void DAGStringConverter::buildAggString(const tipb::Aggregation & agg, std::stringstream & ss)
+void DAGStringConverter::buildAggString(const tipb::Aggregation & agg, WriteBuffer & ss)
 {
     for (auto & agg_func : agg.agg_func())
     {
@@ -132,7 +132,7 @@ void DAGStringConverter::buildAggString(const tipb::Aggregation & agg, std::stri
     }
     afterAgg = true;
 }
-void DAGStringConverter::buildTopNString(const tipb::TopN & topN, std::stringstream & ss)
+void DAGStringConverter::buildTopNString(const tipb::TopN & topN, WriteBuffer & ss)
 {
     ss << "ORDER BY ";
     bool first = true;
@@ -149,7 +149,7 @@ void DAGStringConverter::buildTopNString(const tipb::TopN & topN, std::stringstr
 }
 
 //todo return the error message
-void DAGStringConverter::buildString(const tipb::Executor & executor, std::stringstream & ss)
+void DAGStringConverter::buildString(const tipb::Executor & executor, WriteBuffer & ss)
 {
     switch (executor.tp())
     {
@@ -192,8 +192,8 @@ DAGStringConverter::DAGStringConverter(Context & context_, const tipb::DAGReques
 
 String DAGStringConverter::buildSqlString()
 {
-    std::stringstream query_buf;
-    std::stringstream project;
+    WriteBufferFromOwnString query_buf;
+    WriteBufferFromOwnString project;
     for (const tipb::Executor & executor : dag_request.executors())
     {
         buildString(executor, query_buf);

@@ -120,7 +120,7 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
         MockTiKV::instance().getRaftTerm(region_id),
         tmt);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "execute batch split, region " << region_id << " into (" << region_id << "," << region_id2 << ")";
     output(ss.str());
 }
@@ -162,7 +162,7 @@ void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, 
         MockTiKV::instance().getRaftTerm(region_id),
         tmt);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "execute prepare merge, source " << region_id << " target " << target_id;
     output(ss.str());
 }
@@ -200,7 +200,7 @@ void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, D
         MockTiKV::instance().getRaftTerm(current_id),
         tmt);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "execute commit merge, source " << source_id << " current " << current_id;
     output(ss.str());
 }
@@ -237,7 +237,7 @@ void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args,
         MockTiKV::instance().getRaftTerm(region_id),
         tmt);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "execute rollback merge, region " << region_id;
     output(ss.str());
 }

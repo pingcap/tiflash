@@ -192,7 +192,7 @@ std::string DictionaryStructure::getKeyDescription() const
     if (id)
         return "UInt64";
 
-    std::ostringstream out;
+    WriteBufferFromOwnString out;
 
     out << '(';
 

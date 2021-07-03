@@ -1257,7 +1257,7 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
 
         const bool forbidden_because_of_modify = num_files_to_modify > settings.max_files_to_modify_in_alter_columns;
 
-        std::stringstream exception_message;
+        WriteBufferFromOwnString exception_message;
         exception_message
             << "Suspiciously many ("
             << (forbidden_because_of_modify ? num_files_to_modify : num_files_to_remove)
@@ -2311,7 +2311,7 @@ void MergeTreeData::Transaction::rollback()
 {
     if (!isEmpty())
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         ss << " Removing parts:";
         for (const auto & part : precommitted_parts)
             ss << " " << part->relative_path;

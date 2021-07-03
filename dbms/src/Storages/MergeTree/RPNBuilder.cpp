@@ -266,7 +266,7 @@ bool RPNBuilder<NodeT, PreparedSetsT>::isTupleIndexable(
     {
         if (num_key_columns != (size_t)getChildCount(node))
         {
-            std::stringstream message;
+            WriteBufferFromOwnString message;
             message << "Number of columns in section IN doesn't match. " << getChildCount(node) << " at left, " << num_key_columns
                     << " at right.";
             throw Exception(message.str(), ErrorCodes::NUMBER_OF_COLUMNS_DOESNT_MATCH);

@@ -71,7 +71,7 @@ const String & getFunctionName(const tipb::Expr & expr)
 
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     String func_name;
     Field f;
     switch (expr.tp())
@@ -410,7 +410,7 @@ void constructStringLiteralTiExpr(tipb::Expr & expr, const String & value)
 void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value)
 {
     expr.set_tp(tipb::ExprType::Int64);
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     encodeDAGInt64(value, ss);
     expr.set_val(ss.str());
     auto * field_type = expr.mutable_field_type();
@@ -421,7 +421,7 @@ void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value)
 void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value)
 {
     expr.set_tp(tipb::ExprType::MysqlTime);
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     encodeDAGUInt64(packed_value, ss);
     expr.set_val(ss.str());
     auto * field_type = expr.mutable_field_type();

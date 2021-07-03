@@ -18,7 +18,7 @@ namespace ErrorCodes
 
 void CollapsingSortedBlockInputStream::reportIncorrectData()
 {
-    std::stringstream s;
+    WriteBufferFromOwnString s;
     s << "Incorrect data: number of rows with sign = 1 (" << count_positive
         << ") differs with number of rows with sign = -1 (" << count_negative
         << ") by more than one (for key: ";

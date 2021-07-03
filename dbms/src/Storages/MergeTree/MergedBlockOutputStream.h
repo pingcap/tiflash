@@ -53,8 +53,8 @@ protected:
 
         /// compressed -> compressed_buf -> plain_hashing -> plain_file
         std::unique_ptr<WriteBufferFromFileBase> plain_file;
-        std::ostringstream substream_col_stream;
-        std::ostringstream substream_mark_stream;
+        WriteBufferFromOwnString substream_col_stream;
+        WriteBufferFromOwnString substream_mark_stream;
         std::unique_ptr<WriteBufferFromOStream> substream_ostream;
         std::shared_ptr<HashingWriteBuffer> plain_hashing;
         CompressedWriteBuffer compressed_buf;

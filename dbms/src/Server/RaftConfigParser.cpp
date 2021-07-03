@@ -42,7 +42,7 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
     {
         String ignore_dbs = config.getString("raft.ignore_databases");
         Poco::StringTokenizer string_tokens(ignore_dbs, ",");
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         bool first = true;
         for (auto string_token : string_tokens)
         {

@@ -28,7 +28,7 @@ void dbgFuncSleep(Context &, const ASTs & args, DBGInvoker::Printer output)
 {
     const Int64 t = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     std::this_thread::sleep_for(std::chrono::milliseconds(t));
-    std::stringstream res;
+    WriteBufferFromOwnString res;
     res << "sleep " << t << " ms.";
     output(res.str());
 }
@@ -157,7 +157,7 @@ BlockInputStreamPtr DBGInvoker::invoke(Context & context, const std::string & or
 BlockInputStreamPtr DBGInvoker::invokeSchemaless(
     Context & context, const std::string & name, const SchemalessDBGFunc & func, const ASTs & args)
 {
-    std::stringstream col_name;
+    WriteBufferFromOwnString col_name;
     col_name << name << "(";
     for (size_t i = 0; i < args.size(); ++i)
     {

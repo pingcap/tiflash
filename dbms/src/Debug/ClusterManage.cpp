@@ -54,7 +54,7 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
             return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
     }
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     auto & tmt = *server->tmt;
 
     std::vector<RegionID> region_list;
@@ -153,7 +153,7 @@ void ClusterManage::findRegionByRange(Context & context, const ASTs & args, Prin
     output(toString(regions.size()));
     if (mode == ID_LIST)
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         if (!regions.empty())
             ss << "regions: ";
         for (const auto & region : regions)

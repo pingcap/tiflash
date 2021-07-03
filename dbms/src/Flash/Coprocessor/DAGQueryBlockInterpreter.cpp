@@ -111,7 +111,7 @@ buildRemoteTS(const std::unordered_map<RegionVerID, const RegionInfo &> & region
         context.getQueryContext().getDAGContext()->retry_regions.push_back(it.second);
     }
     LOG_DEBUG(log, ({
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         ss << "Start to retry " << region_retry.size() << " regions (";
         for (auto & r : region_retry)
             ss << r.first.toString() << ",";
@@ -431,7 +431,7 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
                 // clean all streams from local because we are not sure the correctness of those streams
                 pipeline.streams.clear();
                 const auto & dag_regions = dag.getRegions();
-                std::stringstream ss;
+                WriteBufferFromOwnString ss;
                 // Normally there is only few regions need to retry when super batch is enabled. Retry to read
                 // from local first. However, too many retry in different places may make the whole process
                 // time out of control. We limit the number of retries to 1 now.

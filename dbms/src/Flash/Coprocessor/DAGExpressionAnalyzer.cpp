@@ -30,7 +30,7 @@ extern const int UNSUPPORTED_METHOD;
 
 static String genFuncString(const String & func_name, const Names & argument_names)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << func_name << "(";
     bool first = true;
     for (const String & argument_name : argument_names)

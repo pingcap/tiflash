@@ -56,7 +56,7 @@ void PrettyCompactBlockOutputStream::writeHeader(
 void PrettyCompactBlockOutputStream::writeBottom(const Widths & max_widths)
 {
     /// Create delimiters
-    std::stringstream bottom_separator;
+    WriteBufferFromOwnString bottom_separator;
 
     bottom_separator << "└";
     for (size_t i = 0; i < max_widths.size(); ++i)

@@ -1154,7 +1154,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         users_config_reloader->start();
 
         {
-            std::stringstream message;
+            WriteBufferFromOwnString message;
             message << "Available RAM = " << formatReadableSizeWithBinarySuffix(getMemoryAmount()) << ";"
                     << " physical cores = " << getNumberOfPhysicalCPUCores()
                     << ";"

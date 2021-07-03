@@ -94,10 +94,10 @@ void PrettyBlockOutputStream::write(const Block & block)
     calculateWidths(block, widths, max_widths, name_widths);
 
     /// Create separators
-    std::stringstream top_separator;
-    std::stringstream middle_names_separator;
-    std::stringstream middle_values_separator;
-    std::stringstream bottom_separator;
+    WriteBufferFromOwnString top_separator;
+    WriteBufferFromOwnString middle_names_separator;
+    WriteBufferFromOwnString middle_values_separator;
+    WriteBufferFromOwnString bottom_separator;
 
     top_separator           << "┏";
     middle_names_separator  << "┡";

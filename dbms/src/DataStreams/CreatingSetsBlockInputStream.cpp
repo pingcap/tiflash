@@ -209,7 +209,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTr
 
         if (head_rows != 0)
         {
-            std::stringstream msg;
+            WriteBufferFromOwnString msg;
             msg << std::fixed << std::setprecision(3);
             msg << "Created. ";
 

@@ -26,7 +26,7 @@ try
 }
 catch (DB::Exception & e)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << bin_path;
     for (const auto & arg : args)
     {

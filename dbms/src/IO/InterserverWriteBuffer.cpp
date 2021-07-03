@@ -38,7 +38,7 @@ InterserverWriteBuffer::InterserverWriteBuffer(const std::string & host_, int po
     std::string encoded_compress;
     Poco::URI::encode(compress_str, "&#", encoded_compress);
 
-    std::stringstream uri;
+    WriteBufferFromOwnString uri;
     uri << "http://" << host << ":" << port
         << "/?endpoint=" << encoded_endpoint
         << "&compress=" << encoded_compress

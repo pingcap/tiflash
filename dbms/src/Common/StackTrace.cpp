@@ -18,7 +18,7 @@ StackTrace::StackTrace()
 std::string StackTrace::toString() const
 {
     char ** symbols = backtrace_symbols(frames, frames_size);
-    std::stringstream res;
+    WriteBufferFromOwnString res;
 
     if (!symbols)
         return "Cannot get symbols for stack trace.\n";

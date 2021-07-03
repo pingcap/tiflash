@@ -16,7 +16,7 @@ public:
 
     String getString() override
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         ti_chunk->encodeChunk(ss);
         return ss.str();
     }

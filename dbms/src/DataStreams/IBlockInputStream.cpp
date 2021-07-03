@@ -18,7 +18,7 @@ namespace ErrorCodes
 
 String IBlockInputStream::getTreeID() const
 {
-    std::stringstream s;
+    WriteBufferFromOwnString s;
     s << getName();
 
     if (!children.empty())

@@ -122,7 +122,7 @@ public:
 
     String toString()
     {
-        std::stringstream s;
+        WriteBufferFromOwnString s;
         s << "{placed rows:" << placed_rows << ", deletes:" << placed_deletes << ", delta tree: " << delta_tree->numEntries() << "|"
           << delta_tree->numInserts() << "|" << delta_tree->numDeletes() << "}";
         return s.str();

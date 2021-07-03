@@ -30,7 +30,7 @@ namespace ErrorCodes
 
 std::string DataTypeAggregateFunction::getName() const
 {
-    std::stringstream stream;
+    WriteBufferFromOwnString stream;
     stream << "AggregateFunction(" << function->getName();
 
     if (!parameters.empty())

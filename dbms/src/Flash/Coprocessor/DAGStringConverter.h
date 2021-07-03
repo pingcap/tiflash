@@ -32,13 +32,13 @@ public:
     }
 
 protected:
-    void buildTSString(const tipb::TableScan & ts, std::stringstream & ss);
-    void buildSelString(const tipb::Selection & sel, std::stringstream & ss);
-    void buildLimitString(const tipb::Limit & limit, std::stringstream & ss);
-    void buildProjString(const tipb::Projection & proj, std::stringstream & ss);
-    void buildAggString(const tipb::Aggregation & agg, std::stringstream & ss);
-    void buildTopNString(const tipb::TopN & topN, std::stringstream & ss);
-    void buildString(const tipb::Executor & executor, std::stringstream & ss);
+    void buildTSString(const tipb::TableScan & ts, WriteBuffer & ss);
+    void buildSelString(const tipb::Selection & sel, WriteBuffer & ss);
+    void buildLimitString(const tipb::Limit & limit, WriteBuffer & ss);
+    void buildProjString(const tipb::Projection & proj, WriteBuffer & ss);
+    void buildAggString(const tipb::Aggregation & agg, WriteBuffer & ss);
+    void buildTopNString(const tipb::TopN & topN, WriteBuffer & ss);
+    void buildString(const tipb::Executor & executor, WriteBuffer & ss);
 
 protected:
     Context & context;

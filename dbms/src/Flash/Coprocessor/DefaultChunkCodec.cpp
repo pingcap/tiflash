@@ -14,7 +14,7 @@ class DefaultChunkCodecStream : public ChunkCodecStream
 {
 public:
     explicit DefaultChunkCodecStream(const std::vector<tipb::FieldType> & field_types) : ChunkCodecStream(field_types) {}
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     String getString() override { return ss.str(); }
     void encode(const Block & block, size_t start, size_t end) override;
     void clear() override { ss.str(""); }

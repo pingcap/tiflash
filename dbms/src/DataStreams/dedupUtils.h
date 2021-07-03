@@ -146,7 +146,7 @@ public:
     String str()
     {
 
-        std::stringstream ostr;
+        WriteBufferFromOwnString ostr;
         ostr << "#";
         if (stream_position == size_t(-1))
             ostr << "?";
@@ -211,7 +211,7 @@ public:
 
     String str()
     {
-        std::stringstream ostr;
+        WriteBufferFromOwnString ostr;
         ostr << Self::size() << "*" << queue_max << "Q";
         for (size_t i = 0; i < Self::size(); ++i)
             ostr << ":" << Self::operator[](i)->size();
@@ -421,7 +421,7 @@ public:
 
     String str()
     {
-        std::stringstream ostr;
+        WriteBufferFromOwnString ostr;
 
         if (!block)
         {
@@ -488,7 +488,7 @@ class CursorQueue : public std::priority_queue<CursorPlainPtr>
 public:
     String str()
     {
-        std::stringstream ostr;
+        WriteBufferFromOwnString ostr;
         ostr << "Q:" << size();
 
         CursorQueue copy = *this;
@@ -541,7 +541,7 @@ struct DedupBound : public DedupCursor
 
     String str()
     {
-        std::stringstream ostr;
+        WriteBufferFromOwnString ostr;
         ostr << DedupCursor::str();
         ostr << (is_bottom ? "L" : "F");
         return ostr.str();
@@ -561,7 +561,7 @@ class BoundQueue : public std::priority_queue<DedupBound>
 public:
     String str()
     {
-        std::stringstream ostr;
+        WriteBufferFromOwnString ostr;
         ostr << "Q:" << size();
 
         BoundQueue copy = *this;
@@ -618,7 +618,7 @@ public:
 
     String str()
     {
-        std::stringstream ostr;
+        WriteBufferFromOwnString ostr;
         ostr << "[";
         for (Data::iterator it = data.begin(); it != data.end(); ++it)
             ostr << ((*it) ? "+" : "-");

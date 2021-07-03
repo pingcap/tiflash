@@ -27,7 +27,7 @@ void dbgFuncSetFlushThreshold(Context & context, const ASTs & args, DBGInvoker::
     TMTContext & tmt = context.getTMTContext();
     tmt.getRegionTable().setFlushThresholds({{bytes, Seconds(seconds)}});
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "set flush threshold to (" << bytes << " bytes, " << seconds << " seconds)";
     output(ss.str());
 }
@@ -48,7 +48,7 @@ void dbgInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer outp
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     RegionBench::insert(table->table_info, region_id, handle_id, args.begin() + 4, args.end(), context);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "wrote one row to " << database_name << "." + table_name << " region #" << region_id;
     ss << " with raft commands";
     output(ss.str());
@@ -76,7 +76,7 @@ void dbgInsertRowFull(Context & context, const ASTs & args, DBGInvoker::Printer 
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     RegionBench::insert(table->table_info, region_id, handle_id, args.begin() + 6, args.end(), context, extra_data);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "wrote one row to " << database_name << "." + table_name << " region #" << region_id;
     ss << " with raft commands";
     output(ss.str());
@@ -99,7 +99,7 @@ void dbgFuncRaftDeleteRow(Context & context, const ASTs & args, DBGInvoker::Prin
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     RegionBench::remove(table->table_info, region_id, handle_id, context);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "delete one row in " << database_name << "." + table_name << ", region #" << region_id;
     output(ss.str());
 }

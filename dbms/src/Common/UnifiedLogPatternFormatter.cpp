@@ -105,7 +105,7 @@ std::string UnifiedLogPatternFormatter::getTimestamp() const
 
     std::sprintf(buffer, "%04d/%02d/%02d %02d:%02d:%02d.%03d", year, month, day, hour, minute, second, milliseconds);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << buffer << " ";
 
     // Handle time zone section

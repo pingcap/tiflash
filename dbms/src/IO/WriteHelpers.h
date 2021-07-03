@@ -826,7 +826,7 @@ template <typename T>
 inline std::enable_if_t<std::is_floating_point_v<T>, String>
 toString(const T & x, int precision)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << std::fixed << std::setprecision(precision) << x;
     return ss.str();
 }
@@ -834,7 +834,7 @@ toString(const T & x, int precision)
 /// Pointer to a string
 inline String ptrToString(const void * const p)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << p;
     return ss.str();
 }

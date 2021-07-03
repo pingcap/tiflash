@@ -34,7 +34,7 @@ void dbgFuncEnableSchemaSyncService(Context & context, const ASTs & args, DBGInv
             context.getSchemaSyncService().reset();
     }
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "schema sync service " << (enable ? "enabled" : "disabled");
     output(ss.str());
 }
@@ -45,7 +45,7 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
     auto schema_syncer = tmt.getSchemaSyncer();
     schema_syncer->syncSchemas(context);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "schemas refreshed";
     output(ss.str());
 }
@@ -63,7 +63,7 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
         gc_safe_point = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     service->gc(gc_safe_point);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "schemas gc done";
     output(ss.str());
 }
@@ -74,7 +74,7 @@ void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer ou
     auto schema_syncer = tmt.getSchemaSyncer();
     schema_syncer->reset();
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "reset schemas";
     output(ss.str());
 }
@@ -85,7 +85,7 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
         throw Exception("Args not matched, should be: database-name[, table-name]", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     if (args.size() == 1)
     {
         auto db = context.getDatabase(database_name);

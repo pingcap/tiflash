@@ -1852,7 +1852,7 @@ private:
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
-        std::stringstream function_name;
+        WriteBufferFromOwnString function_name;
         function_name << (function_is_plus ? "add" : "subtract") << interval_data_type->kindToString() << 's';
 
         return FunctionFactory::instance().get(function_name.str(), context);

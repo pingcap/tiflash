@@ -212,7 +212,7 @@ std::string MultiplexedConnections::dumpAddresses() const
 std::string MultiplexedConnections::dumpAddressesUnlocked() const
 {
     bool is_first = true;
-    std::ostringstream os;
+    WriteBufferFromOwnString os;
     for (const ReplicaState & state : replica_states)
     {
         const Connection * connection = state.connection;

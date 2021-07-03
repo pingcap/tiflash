@@ -663,7 +663,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
     if (settings.force_primary_key && key_condition.alwaysUnknownOrTrue())
     {
-        std::stringstream exception_message;
+        WriteBufferFromOwnString exception_message;
         exception_message << "Primary key (";
         for (size_t i = 0, size = sort_descr.size(); i < size; ++i)
             exception_message << (i == 0 ? "" : ", ") << sort_descr[i].column_name;
@@ -1319,7 +1319,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                     if (log->debug())
                     {
-                        std::stringstream ss;
+                        WriteBufferFromOwnString ss;
 
                         for (size_t i = 0; i < ranges.size(); ++i)
                         {

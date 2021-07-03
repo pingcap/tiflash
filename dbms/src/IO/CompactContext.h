@@ -33,7 +33,7 @@ struct CompactWriteCtx : public CompactCtxBase {
     std::string file_name;
     int fd;
 
-    std::ostringstream mark_stream;
+    WriteBufferFromOwnString mark_stream;
 
     WriteBufferFromFile plain_file;
     std::shared_ptr<HashingWriteBuffer> plain_hashing;

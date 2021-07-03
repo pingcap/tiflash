@@ -241,12 +241,12 @@ void StorageDeltaMerge::updateTableColumnInfo()
             // fallover
         }
         // Unknown bug, throw an exception.
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         ss << "[";
         for (const auto & k : pks)
             ss << k << ",";
         ss << "]";
-        std::stringstream columns_stream;
+        WriteBufferFromOwnString columns_stream;
         columns_stream << "[";
         for (const auto & col : all_columns)
             columns_stream << col.name << ",";
@@ -614,7 +614,7 @@ BlockInputStreams StorageDeltaMerge::read( //
         String str_query_ranges;
         if (log->trace())
         {
-            std::stringstream ss;
+            WriteBufferFromOwnString ss;
             for (const auto & region : mvcc_query_info.regions_query_info)
             {
                 if (!region.required_handle_ranges.empty())
@@ -637,7 +637,7 @@ BlockInputStreams StorageDeltaMerge::read( //
 
         if (log->trace())
         {
-            std::stringstream ss_merged_range;
+            WriteBufferFromOwnString ss_merged_range;
             for (const auto & range : ranges)
                 ss_merged_range << range.toDebugString() << ",";
             LOG_TRACE(log, "reading ranges: orig, " << str_query_ranges << " merged, " << ss_merged_range.str());

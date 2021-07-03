@@ -364,7 +364,7 @@ void TCPHandler::readData(const Settings & global_settings)
             double elapsed = watch.elapsedSeconds();
             if (elapsed > receive_timeout.totalSeconds())
             {
-                std::stringstream ss;
+                WriteBufferFromOwnString ss;
                 ss << "Timeout exceeded while receiving data from client.";
                 ss << " Waited for " << static_cast<size_t>(elapsed) << " seconds,";
                 ss << " timeout is " << receive_timeout.totalSeconds() << " seconds.";

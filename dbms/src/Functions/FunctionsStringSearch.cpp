@@ -374,7 +374,7 @@ inline bool likePatternIsStrstr(const String & pattern, String & res)
 // return "abc\"
 String replaceEscapeChar(String & orig_string, UInt8 escape_char)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     for (size_t i = 0; i < orig_string.size(); i++)
     {
         auto c = orig_string[i];

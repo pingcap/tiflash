@@ -116,7 +116,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
             }
             else
                 key = RecordKVFormat::genKey(table_id, handle_id);
-            std::stringstream ss;
+            WriteBufferFromOwnString ss;
             RegionBench::encodeRow(table->table_info, fields, ss);
             TiKVValue value(ss.str());
             UInt64 commit_ts = tso;
@@ -145,7 +145,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotWithData(Context & context, const AST
     // Mock to apply a snapshot with data in `region`
     auto & tmt = context.getTMTContext();
     context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithBlock>(region, tmt);
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "put region #" << region_id << ", range" << range_string << " to table #" << table_id << " with " << cnt << " records";
     output(ss.str());
 }
@@ -217,7 +217,7 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
     tmt.getKVStore()->handleApplySnapshot(
         std::move(region_info), peer_id, SSTViewVec{nullptr, 0}, MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM, tmt);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "put region #" << region_id << ", range[" << RecordKVFormat::DecodedTiKVKeyToDebugString<true>(start_decoded_key) << ", "
        << RecordKVFormat::DecodedTiKVKeyToDebugString<false>(end_decoded_key) << ")"
        << " to table #" << table_id << " with raft commands";
@@ -358,7 +358,7 @@ void GenMockSSTData(const TiDB::TableInfo & table_info,
 
         {
             TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
-            std::stringstream ss;
+            WriteBufferFromOwnString ss;
             RegionBench::encodeRow(table_info, fields, ss);
             TiKVValue prewrite_value(ss.str());
             UInt64 commit_ts = handle_id;
@@ -490,7 +490,7 @@ static GlobalRegionMap GLOBAL_REGION_MAP;
 extern RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr &, Context &);
 void MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     auto region = GenDbgRegionSnapshotWithData(context, args);
     const auto region_name = "__snap_" + std::to_string(region->id());
     ss << "pre-handle " << region->toString(false) << " snapshot with data " << region->dataInfo();
@@ -521,7 +521,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyBlock(Context & context, const A
     auto & tmt = context.getTMTContext();
     context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithBlock>({region, std::move(block_cache)}, tmt);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "success apply " << region->id() << " with block cache";
     output(ss.str());
 }
@@ -619,7 +619,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
     GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
 
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         ss << "Generate " << ingest_ids.size() << " files for [region_id=" << region_id << "]";
         output(ss.str());
     }
@@ -639,7 +639,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles(Context & context, const
     context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(
         RegionPtrWithSnapshotFiles{new_region, std::move(ingest_ids)}, tmt);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "success apply region " << new_region->id() << " with dt files";
     output(ss.str());
 }

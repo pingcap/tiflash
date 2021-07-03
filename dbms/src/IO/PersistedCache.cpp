@@ -204,7 +204,7 @@ bool PersistedCache::cacheMarksFile(const std::string & origin_path, size_t file
 std::string markRangesToString(const MarkRanges & mark_ranges, const MarksInCompressedFile & marks,
     size_t file_marks_count, bool align = false)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "[";
     for (size_t i = 0; i < mark_ranges.size(); ++i)
     {

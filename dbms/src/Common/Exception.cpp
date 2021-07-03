@@ -69,7 +69,7 @@ void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_
 
 std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded_stacktrace)
 {
-    std::stringstream stream;
+    WriteBufferFromOwnString stream;
 
     try
     {
@@ -180,7 +180,7 @@ void tryLogException(std::exception_ptr e, Poco::Logger * logger, const std::str
 
 std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool check_embedded_stacktrace)
 {
-    std::stringstream stream;
+    WriteBufferFromOwnString stream;
 
     try
     {

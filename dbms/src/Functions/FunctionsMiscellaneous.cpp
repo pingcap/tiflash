@@ -1922,7 +1922,7 @@ public:
 
 std::string FunctionVersion::getVersion() const
 {
-    std::ostringstream os;
+    WriteBufferFromOwnString os;
     os << TiFlashBuildInfo::getVersion();
     return os.str();
 }

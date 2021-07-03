@@ -28,7 +28,7 @@ Block ReplacingTMTSortedBlockInputStream<HandleType>::readImpl()
 
         if (deleted_by_range)
         {
-            std::stringstream ss;
+            WriteBufferFromOwnString ss;
 
             if (log->trace())
             {

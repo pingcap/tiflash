@@ -62,7 +62,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         RegionPtr region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
         tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         ss << "put region #" << region_id << ", range" << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region->getRange()->rawKeys())
            << " to table #" << table_id << " with kvstore.onSnapshot";
         output(ss.str());
@@ -76,7 +76,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
         tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
            << " to table #" << table_id << " with kvstore.onSnapshot";
         output(ss.str());
@@ -88,7 +88,7 @@ void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output
     TMTContext & tmt = context.getTMTContext();
     tmt.getRegionTable().tryFlushRegions();
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "region_table try flush regions";
     output(ss.str());
 }
@@ -105,7 +105,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     TMTContext & tmt = context.getTMTContext();
     tmt.getRegionTable().tryFlushRegion(region_id);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "region_table try flush region " << region_id;
     output(ss.str());
 }
@@ -115,7 +115,7 @@ void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none,
     size_t size = 0;
     context.getTMTContext().getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         std::ignore = region_id;
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         auto rawkeys = region->getRange()->rawKeys();
         auto table_info = MockTiDB::instance().getTableInfoByID(table_id);
         bool is_common_handle = false;
@@ -193,7 +193,7 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
     RegionTable & region_table = tmt.getRegionTable();
     kvstore->mockRemoveRegion(region_id, region_table);
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     ss << "remove region #" << region_id;
     output(ss.str());
 }

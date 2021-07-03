@@ -63,7 +63,7 @@ void MemoryTracker::alloc(Int64 size)
     {
         free(size);
 
-        std::stringstream message;
+        WriteBufferFromOwnString message;
         message << "Memory tracker";
         if (description)
             message << " " << description;
@@ -78,7 +78,7 @@ void MemoryTracker::alloc(Int64 size)
     {
         free(size);
 
-        std::stringstream message;
+        WriteBufferFromOwnString message;
         message << "Memory limit";
         if (description)
             message << " " << description;

@@ -51,7 +51,7 @@ void dbgFuncMappedDatabase(Context & context, const ASTs & args, DBGInvoker::Pri
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     auto mapped = mappedDatabase(context, database_name);
     if (mapped == std::nullopt)
         ss << "Database " << database_name << " not found.";
@@ -71,7 +71,7 @@ void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printe
     if (args.size() == 3)
         qualify = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value) == "true";
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     auto mapped = mappedTable(context, database_name, table_name);
     if (mapped == std::nullopt)
         ss << "Table " << database_name << "." << table_name << " not found.";

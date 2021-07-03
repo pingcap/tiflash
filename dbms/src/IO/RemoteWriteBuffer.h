@@ -70,7 +70,7 @@ public:
         Poco::URI::encode(path, "&#", encoded_path);
         Poco::URI::encode(tmp_path, "&#", encoded_tmp_path);
 
-        std::stringstream uri;
+        WriteBufferFromOwnString uri;
         uri << "http://" << host << ":" << port
             << "/?action=write"
             << "&path=" << (tmp_path.empty() ? encoded_path : encoded_tmp_path)
@@ -192,12 +192,12 @@ private:
         std::istream & istr = session.receiveResponse(response);
         Poco::Net::HTTPResponse::HTTPStatus status = response.getStatus();
 
-        std::stringstream message;
+        WriteBufferFromOwnString message;
         message << istr.rdbuf();
 
         if (status != Poco::Net::HTTPResponse::HTTP_OK || message.str() != "Ok.\n")
         {
-            std::stringstream error_message;
+            WriteBufferFromOwnString error_message;
             error_message << "Received error from remote server " << uri_str << ", body: " << message.str();
 
             throw Exception(error_message.str(), ErrorCodes::RECEIVED_ERROR_FROM_REMOTE_IO_SERVER);
@@ -206,7 +206,7 @@ private:
 
     void rename()
     {
-        std::stringstream uri;
+        WriteBufferFromOwnString uri;
         uri << "http://" << host << ":" << port
             << "/?action=rename"
             << "&from=" << encoded_tmp_path

@@ -458,7 +458,7 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
 
 void literalToPB(tipb::Expr * expr, const Field & value, uint32_t collator_id)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     switch (value.getType())
     {
         case Field::Types::Which::Null:
@@ -616,7 +616,7 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
             throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
         expr->set_tp(tipb::ColumnRef);
         *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         encodeDAGInt64(ft - input.begin(), ss);
         auto s_val = ss.str();
         expr->set_val(s_val);
@@ -638,7 +638,7 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
                 throw Exception("No such column " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
             expr->set_tp(tipb::ColumnRef);
             *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
-            std::stringstream ss;
+            WriteBufferFromOwnString ss;
             encodeDAGInt64(ft - input.begin(), ss);
             auto s_val = ss.str();
             expr->set_val(s_val);
@@ -928,7 +928,7 @@ struct ExchangeSender : Executor
         {
             auto * expr = exchange_sender->add_partition_keys();
             expr->set_tp(tipb::ColumnRef);
-            std::stringstream ss;
+            WriteBufferFromOwnString ss;
             encodeDAGInt64(i, ss);
             expr->set_val(ss.str());
         }
@@ -1303,7 +1303,7 @@ struct Project : public Executor
                     tipb::Expr * expr = proj->add_exprs();
                     expr->set_tp(tipb::ColumnRef);
                     *(expr->mutable_field_type()) = columnInfoToFieldType(input_schema[i].second);
-                    std::stringstream ss;
+                    WriteBufferFromOwnString ss;
                     encodeDAGInt64(i, ss);
                     auto s_val = ss.str();
                     expr->set_val(s_val);
@@ -1437,7 +1437,7 @@ struct Join : Executor
                 tipb_type.set_collate(collator_id);
 
                 tipb_key->set_tp(tipb::ColumnRef);
-                std::stringstream ss;
+                WriteBufferFromOwnString ss;
                 encodeDAGInt64(index, ss);
                 tipb_key->set_val(ss.str());
                 *tipb_key->mutable_field_type() = tipb_type;

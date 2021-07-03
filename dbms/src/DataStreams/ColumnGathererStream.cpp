@@ -115,7 +115,7 @@ void ColumnGathererStream::readSuffixImpl()
         return;
 
     double seconds = profile_info.total_stopwatch.elapsedSeconds();
-    std::stringstream speed;
+    WriteBufferFromOwnString speed;
     if (seconds)
         speed << ", " << profile_info.rows / seconds << " rows/sec., "
             << profile_info.bytes / 1048576.0 / seconds << " MiB/sec.";

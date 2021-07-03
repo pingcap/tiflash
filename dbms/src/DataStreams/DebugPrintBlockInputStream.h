@@ -17,7 +17,7 @@ private:
             LOG_DEBUG(log, "Empty block.");
             return block;
         }
-        std::stringstream writer;
+        WriteBufferFromOwnString writer;
         DebugPrinter::print(writer, block);
         LOG_DEBUG(log, "Block rows:\n" + writer.str());
         return block;

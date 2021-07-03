@@ -1180,7 +1180,7 @@ private:
         else
             std::cerr << SAVE_CURSOR_POSITION;
 
-        std::stringstream message;
+        WriteBufferFromOwnString message;
         message << indicators[increment % 8]
             << std::fixed << std::setprecision(3)
             << " Progress: ";

@@ -31,7 +31,7 @@ namespace ErrorCodes
 
 String Range::toString() const
 {
-    std::stringstream str;
+    WriteBufferFromOwnString str;
 
     if (!left_bounded)
         str << "(-inf, ";
@@ -643,7 +643,7 @@ bool KeyCondition::mayBeTrueAfter(
 
 String RPNElement::toString() const
 {
-    auto print_wrapped_column = [this](std::ostringstream & ss)
+    auto print_wrapped_column = [this](WriteBuffer & ss)
     {
         for (auto it = monotonic_functions_chain.rbegin(); it != monotonic_functions_chain.rend(); ++it)
             ss << (*it)->getName() << "(";
@@ -654,7 +654,7 @@ String RPNElement::toString() const
             ss << ")";
     };
 
-    std::ostringstream ss;
+    WriteBufferFromOwnString ss;
     switch (function)
     {
         case FUNCTION_AND:
