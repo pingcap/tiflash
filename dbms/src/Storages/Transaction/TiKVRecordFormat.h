@@ -81,13 +81,13 @@ inline UInt64 decodeUInt64Desc(const UInt64 x) { return ~decodeUInt64(x); }
 
 inline Int64 decodeInt64(const UInt64 x) { return static_cast<Int64>(decodeUInt64(x) ^ SIGN_MASK); }
 
-inline void encodeInt64(const Int64 x, WriteBufferFromOwnString & ss)
+inline void encodeInt64(const Int64 x, WriteBuffer & ss)
 {
     auto u = RecordKVFormat::encodeInt64(x);
     ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
 }
 
-inline void encodeUInt64(const UInt64 x, WriteBufferFromOwnString & ss)
+inline void encodeUInt64(const UInt64 x, WriteBuffer & ss)
 {
     auto u = RecordKVFormat::encodeUInt64(x);
     ss.write(reinterpret_cast<const char *>(&u), sizeof(u));

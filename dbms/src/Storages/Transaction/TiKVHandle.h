@@ -78,7 +78,7 @@ struct Handle
 
     bool operator>=(const Handle & handle) const { return !(*this < handle); }
 
-    void toString(WriteBufferFromOwnString & ss) const
+    void toString(WriteBuffer & ss) const
     {
         if (type == HandleIDType::NORMAL)
             ss << handle_id;

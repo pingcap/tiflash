@@ -113,7 +113,7 @@ public:
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
-    std::string getDebugString(WriteBufferFromOwnString & ss) const;
+    std::string getDebugString(WriteBuffer & ss) const;
     RegionID id() const;
     pingcap::kv::RegionVerID verID() const;
     ImutRegionRangePtr getRange() const;

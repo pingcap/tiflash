@@ -364,7 +364,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
     return region;
 }
 
-std::string Region::getDebugString(WriteBufferFromOwnString & ss) const
+std::string Region::getDebugString(WriteBuffer & ss) const
 {
     ss << "{region " << id();
     {

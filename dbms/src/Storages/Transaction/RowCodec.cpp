@@ -21,7 +21,7 @@ static T decodeUInt(size_t & cursor, const TiKVValue::Base & raw_value)
 }
 
 template <typename T>
-static void encodeUInt(T u, WriteBufferFromOwnString & ss)
+static void encodeUInt(T u, WriteBuffer & ss)
 {
     u = toLittleEndian(u);
     ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
@@ -77,7 +77,7 @@ static std::make_unsigned_t<Target> castIntWithLength(Sign i)
 }
 
 template <typename T>
-static void encodeIntWithLength(T i, WriteBufferFromOwnString & ss)
+static void encodeIntWithLength(T i, WriteBuffer & ss)
 {
     if (castIntWithLength<UInt64>(castIntWithLength<UInt8>(i)) == i)
         encodeUInt(static_cast<UInt8>(castIntWithLength<UInt8>(i)), ss);
@@ -386,7 +386,7 @@ Field decodeUnknownColumnV2(const Field & unknown, const ColumnInfo & column_inf
     return RowV2::decodeNotNullColumn(0, raw_value, raw_value.length(), column_info);
 }
 
-void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBufferFromOwnString & ss)
+void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss)
 {
     size_t column_in_key = 0;
     if (table_info.pk_is_handle)
@@ -414,7 +414,7 @@ struct RowEncoderV2
 {
     RowEncoderV2(const TableInfo & table_info_, const std::vector<Field> & fields_) : table_info(table_info_), fields(fields_) {}
 
-    void encode(WriteBufferFromOwnString & ss) &&
+    void encode(WriteBuffer & ss) &&
     {
         size_t column_in_key = 0;
         if (table_info.pk_is_handle)
@@ -477,7 +477,7 @@ struct RowEncoderV2
 
 private:
     template <typename T>
-    void encodeColumnIDs(WriteBufferFromOwnString & ss)
+    void encodeColumnIDs(WriteBuffer & ss)
     {
         for (const auto & not_null_id_val : not_null_column_id_values)
         {
@@ -490,7 +490,7 @@ private:
     }
 
     template <typename T>
-    void encodeValueOffsets(WriteBufferFromOwnString & ss)
+    void encodeValueOffsets(WriteBuffer & ss)
     {
         T offset = 0;
         for (const auto & not_null_id_val : not_null_column_id_values)
@@ -500,7 +500,7 @@ private:
         }
     }
 
-    void encodeValues(WriteBufferFromOwnString & ss)
+    void encodeValues(WriteBuffer & ss)
     {
         for (const auto & not_null_id_val : not_null_column_id_values)
         {
@@ -518,7 +518,7 @@ private:
     std::set<ColumnID> null_column_ids;
 };
 
-void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBufferFromOwnString & ss)
+void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss)
 {
     RowEncoderV2(table_info, fields).encode(ss);
 }
