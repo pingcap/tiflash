@@ -822,6 +822,7 @@ inline String toString(const T & x)
     return buf.str();
 }
 
+/*
 template <typename T>
 inline std::enable_if_t<std::is_floating_point_v<T>, String>
 toString(const T & x, int precision)
@@ -830,13 +831,16 @@ toString(const T & x, int precision)
     ss << std::fixed << std::setprecision(precision) << x;
     return ss.str();
 }
+*/
+
+void writePointerHex(const void * ptr, WriteBuffer & buf);
 
 /// Pointer to a string
 inline String ptrToString(const void * const p)
 {
-    WriteBufferFromOwnString ss;
-    ss << p;
-    return ss.str();
+    WriteBufferFromOwnString buf;
+    writePointerHex(p, buf);
+    return buf.releaseStr();
 }
 
 }

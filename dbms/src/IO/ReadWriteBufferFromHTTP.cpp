@@ -73,7 +73,7 @@ ReadWriteBufferFromHTTP::ReadWriteBufferFromHTTP(const Poco::URI & uri,
 
     if (status != Poco::Net::HTTPResponse::HTTP_OK)
     {
-        WriteBufferFromOwnString error_message;
+        std::stringstream error_message;
         error_message << "Received error from remote server " << uri.toString() << ". HTTP status code: " << status << " "
                       << response.getReason() << ", body: " << istr->rdbuf();
 

@@ -1,4 +1,5 @@
 #include <Common/UnifiedLogPatternFormatter.h>
+#include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/Channel.h>

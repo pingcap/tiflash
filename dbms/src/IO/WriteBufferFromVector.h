@@ -93,6 +93,11 @@ public:
     {
         finalize();
     }
+
+    size_t tellp() const
+    {
+        return vector.size();
+    }
 };
 
 }

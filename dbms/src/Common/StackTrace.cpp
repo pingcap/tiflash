@@ -7,6 +7,8 @@
 #include <sstream>
 
 #include <Common/StackTrace.h>
+#include <IO/Operators.h>
+#include <IO/WriteBufferFromString.h>
 #include <common/demangle.h>
 
 
@@ -18,7 +20,7 @@ StackTrace::StackTrace()
 std::string StackTrace::toString() const
 {
     char ** symbols = backtrace_symbols(frames, frames_size);
-    WriteBufferFromOwnString res;
+    DB::WriteBufferFromOwnString res;
 
     if (!symbols)
         return "Cannot get symbols for stack trace.\n";
@@ -53,7 +55,7 @@ std::string StackTrace::toString() const
             else
                 res << symbols[i];
 
-            res << std::endl;
+            res << '\n';
         }
     }
     catch (...)
@@ -63,5 +65,5 @@ std::string StackTrace::toString() const
     }
 
     free(symbols);
-    return res.str();
+    return res.releaseStr();
 }

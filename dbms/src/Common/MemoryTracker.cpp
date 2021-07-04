@@ -2,7 +2,9 @@
 #include <common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/formatReadable.h>
+#include <IO/Operators.h>
 #include <IO/WriteHelpers.h>
+#include <IO/WriteBufferFromString.h>
 #include <iomanip>
 
 #include <Common/MemoryTracker.h>
@@ -63,7 +65,7 @@ void MemoryTracker::alloc(Int64 size)
     {
         free(size);
 
-        WriteBufferFromOwnString message;
+        DB::WriteBufferFromOwnString message;
         message << "Memory tracker";
         if (description)
             message << " " << description;
@@ -78,7 +80,7 @@ void MemoryTracker::alloc(Int64 size)
     {
         free(size);
 
-        WriteBufferFromOwnString message;
+        DB::WriteBufferFromOwnString message;
         message << "Memory limit";
         if (description)
             message << " " << description;

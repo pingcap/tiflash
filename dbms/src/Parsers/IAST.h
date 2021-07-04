@@ -5,6 +5,7 @@
 
 #include <Core/Types.h>
 #include <Common/Exception.h>
+#include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <Parsers/StringRange.h>
 
@@ -77,7 +78,7 @@ public:
     void dumpTree(WriteBuffer & ostr, size_t indent = 0) const
     {
         String indent_str(indent, '-');
-        ostr << indent_str << getID() << ", " << this << std::endl;
+        ostr << indent_str << getID() << ", " << this << '\n';
         for (const auto & child : children)
             child->dumpTree(ostr, indent + 1);
     }

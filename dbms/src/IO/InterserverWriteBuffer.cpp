@@ -6,6 +6,8 @@
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
 
+#include <IO/Operators.h>
+#include <IO/WriteBufferFromString.h>
 #include <common/logger_useful.h>
 
 

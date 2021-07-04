@@ -76,7 +76,7 @@ void CompactWriteCtx::endMark(std::string name) {
 void CompactWriteCtx::mergeMarksStream(std::string mark_str, size_t file_offset) {
     std::istringstream read_mark_stream(mark_str);
     ReadBufferFromIStream read_buffer(read_mark_stream);
-    WriteBufferFromOStream write_buffer(mark_stream);
+    WriteBuffer& write_buffer = mark_stream;
     while(!read_buffer.eof()) {
         size_t offset_in_file;
         size_t offset_in_block;

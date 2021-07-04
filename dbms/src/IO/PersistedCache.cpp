@@ -10,6 +10,7 @@
 #include <Common/SipHash.h>
 #include <Common/ProfileEvents.h>
 #include <IO/BufferWithOwnMemory.h>
+#include <IO/Operators.h>
 
 namespace ProfileEvents
 {
