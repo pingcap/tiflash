@@ -20,7 +20,7 @@ struct StressOptions
     UInt32 insert_concurrency;
     UInt32 update_concurrency;
     UInt32 delete_concurrency;
-    UInt32 write_rows_per_block;  // insert or delete block size
+    UInt32 write_rows_per_block; // insert or delete block size
     UInt32 write_sleep_us;
     UInt32 read_concurrency;
     UInt32 read_sleep_us;
@@ -56,25 +56,25 @@ private:
 class DeltaMergeStoreProxy
 {
 public:
-    DeltaMergeStoreProxy(const StressOptions& opts_)
+    DeltaMergeStoreProxy(const StressOptions & opts_)
         : name("stress"),
           col_balance_define(2, "balance", std::make_shared<DataTypeUInt64>()),
           col_random_define(3, "random_text", std::make_shared<DataTypeString>()),
           log(&Poco::Logger::get("DeltaMergeStoreProxy")),
           opts(opts_)
     {
-        String path = DB::tests::TiFlashTestEnv::getTemporaryPath() + name;
+        String     path = DB::tests::TiFlashTestEnv::getTemporaryPath() + name;
         Poco::File file(path);
         if (file.exists())
         {
             file.remove(true);
         }
-        context = std::make_unique<Context>(DMTestEnv::getContext());
+        context                   = std::make_unique<Context>(DMTestEnv::getContext());
         auto table_column_defines = DMTestEnv::getDefaultColumns();
         table_column_defines->emplace_back(col_balance_define);
         table_column_defines->emplace_back(col_random_define);
         ColumnDefine handle_column_define = (*table_column_defines)[0];
-        store = std::make_shared<DeltaMergeStore>(
+        store                             = std::make_shared<DeltaMergeStore>(
             *context, true, "test", name, *table_column_defines, handle_column_define, false, 1, DeltaMergeStore::Settings());
     }
 
@@ -90,15 +90,16 @@ public:
     void waitInsertThreads();
     void waitUpdateThreads();
     void waitDeleteThreads();
+
 private:
-    void genData(UInt64 rows);
-    void write(const std::vector<Int64> & ids);
+    void   genData(UInt64 rows);
+    void   write(const std::vector<Int64> & ids);
     UInt64 countRows();
-    void genBlock(Block & block, const std::vector<Int64> & ids);
-    void joinThreads(std::vector<std::thread>& threads);
-    void insert();
-    void update();
-    void deleteRange();
+    void   genBlock(Block & block, const std::vector<Int64> & ids);
+    void   joinThreads(std::vector<std::thread> & threads);
+    void   insert();
+    void   update();
+    void   deleteRange();
 
     String                   name;
     std::unique_ptr<Context> context;
@@ -111,7 +112,7 @@ private:
     std::mutex mutex;
 
     Poco::Logger * log;
-    StressOptions opts;
+    StressOptions  opts;
 
     std::vector<std::thread> gen_threads;
     std::vector<std::thread> read_threads;
