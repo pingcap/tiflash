@@ -140,3 +140,8 @@ endif ()
 
 add_subdirectory (prometheus-cpp)
 add_subdirectory (fmtlib-cmake)
+
+set(CRC64_ENABLE_TESTS OFF CACHE BOOL "Disable CRC64 Tests" FORCE)
+set(CRC64_ENABLE_BENCHES OFF CACHE BOOL "Disable CRC64 Benches" FORCE)
+set(CRC64_ENABLE_CAPI OFF CACHE BOOL "Disable CRC64 CAPI" FORCE)
+add_subdirectory (crc64-cxx)

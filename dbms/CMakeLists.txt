@@ -233,13 +233,15 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
 
-target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
+target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR} ${ClickHouse_SOURCE_DIR}/contrib/crc64-cxx/include)
 target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io BEFORE PUBLIC ${DOUBLE_CONVERSION_INCLUDE_DIR})
 
 # also for copy_headers.sh:
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
+
+target_link_libraries(dbms PUBLIC crc64)
 
 add_subdirectory (tests)
 
