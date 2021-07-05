@@ -344,7 +344,7 @@ private:
 #elif defined(__aarch64__)
         #if defined(__arm64__) || defined(__arm64) /// Apple arm cpu
             caller_address = reinterpret_cast<void *>(context.uc_mcontext->__ss.__pc);
-        #elif /// arm server
+        #else /// arm server
             caller_address = reinterpret_cast<void *>(context.uc_mcontext.pc);
         #endif
 #endif
