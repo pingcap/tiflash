@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <DataTypes/DataTypeString.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
@@ -168,11 +169,14 @@ int main(int argc, char * argv[])
         std::cout << "Usage: <cmd> account balance worker try_num" << std::endl;
         return 1;
     }
+    DB::tests::TiFlashTestEnv::setupLogger();
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
+    fiu_init(0);
     UInt64 account = std::stoul(argv[1]);
     UInt64 balance = std::stoul(argv[2]);
     UInt64 worker  = std::stoul(argv[3]);
     UInt64 try_num = std::stoul(argv[4]);
     DB::DM::tests::run_bank(account, balance, worker, try_num);
+    DB::tests::TiFlashTestEnv::shutdown();
     return 0;
 }

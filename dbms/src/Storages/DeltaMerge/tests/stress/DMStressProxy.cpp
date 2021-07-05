@@ -1,6 +1,6 @@
+#include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/tests/stress/DMStressProxy.h>
-
 #include <sys/time.h>
 
 namespace DB
@@ -45,16 +45,14 @@ void DMStressProxy::genMultiThread()
     gen_threads.reserve(opts.gen_concurrency);
     for (UInt32 i = 0; i < opts.gen_concurrency; i++)
     {
-        gen_threads.push_back(std::thread(&DMStressProxy::genData, this, gen_rows_per_thread));
+        gen_threads.push_back(std::thread(&DMStressProxy::genData, this, i, gen_rows_per_thread));
     }
-
-    LOG_INFO(log, "Generate data finished.");
-    UInt64 total_rows = countRows();
-    LOG_INFO(log, "Total rows: " << total_rows);
 }
 
-void DMStressProxy::genData(UInt64 rows)
+void DMStressProxy::genData(UInt32 id, UInt64 rows)
 {
+    std::string thread_name = "dm_gen_" + std::to_string(id);
+    setThreadName(thread_name.c_str());
     UInt64 generated_count = 0;
     while (generated_count < rows)
     {
@@ -65,18 +63,17 @@ void DMStressProxy::genData(UInt64 rows)
     }
 }
 
-UInt64 getCurrUS()
-{
-    struct timeval tv;
-    gettimeofday(&tv, nullptr);
-    return tv.tv_sec * 1000000ul + tv.tv_usec;
-}
-
 void DMStressProxy::write(const std::vector<Int64> & ids)
 {
     Block block;
     genBlock(block, ids);
+
+    auto locks = key_lock.getLocks(ids);
     store->write(*context, context->getSettingsRef(), std::move(block));
+    if (opts.verify)
+    {
+        pks.insert(ids);
+    }
 }
 
 void DMStressProxy::genBlock(Block & block, const std::vector<Int64> & ids)
@@ -95,33 +92,35 @@ void DMStressProxy::genBlock(Block & block, const std::vector<Int64> & ids)
 
 void DMStressProxy::readMultiThread()
 {
-    auto work = [&]() {
-        for (;;)
+    auto work = [&](UInt32 id) {
+        std::string thread_name = "dm_read_" + std::to_string(id);
+        setThreadName(thread_name.c_str());
+        while (!stop)
         {
-            countRows();
+            countRows(rnd() % 100);
         }
     };
+
     read_threads.reserve(opts.read_concurrency);
     for (UInt32 i = 0; i < opts.read_concurrency; i++)
     {
-        read_threads.push_back(std::thread(work));
+        read_threads.push_back(std::thread(work, i));
     }
 }
 
-UInt64 DMStressProxy::countRows()
+UInt64 DMStressProxy::countRows(UInt32 rnd_break_prob)
 {
-    BlockInputStreamPtr in;
-    {
-        const auto &    columns = store->getTableColumns();
-        in                      = store->read(*context,
-                         context->getSettingsRef(),
-                         columns,
-                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                         /* num_streams= */ 1,
-                         /* max_version= */ tso.get(),
-                         EMPTY_FILTER,
-                         /* expected_block_size= */ 1024)[0];
-    }
+    const auto & columns = store->getTableColumns();
+
+    BlockInputStreamPtr in = store->read(*context,
+                                         context->getSettingsRef(),
+                                         columns,
+                                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                         /* num_streams= */ 1,
+                                         /* max_version= */ tso.get(),
+                                         EMPTY_FILTER,
+                                         /* expected_block_size= */ 1024)[0];
+
     UInt64 total_count = 0;
     while (Block block = in->read())
     {
@@ -130,15 +129,21 @@ UInt64 DMStressProxy::countRows()
         {
             std::this_thread::sleep_for(std::chrono::microseconds(opts.read_sleep_us));
         }
+        if (rnd() % 100 < rnd_break_prob)
+        {
+            break; // Randomly break
+        }
     }
-    LOG_INFO(log, "ThreadID: " << std::this_thread::get_id() << " TotalCount: " << total_count);
+    LOG_INFO(log, "countRows ThreadID: " << std::this_thread::get_id() << " TotalCount: " << total_count);
     return total_count;
 }
 
 void DMStressProxy::insertMultiThread()
 {
-    auto work = [&]() {
-        for (;;)
+    auto work = [&](UInt32 id) {
+        std::string thread_name = "dm_insert_" + std::to_string(id);
+        setThreadName(thread_name.c_str());
+        while (!stop)
         {
             insert();
             if (opts.write_sleep_us > 0)
@@ -151,14 +156,16 @@ void DMStressProxy::insertMultiThread()
     insert_threads.reserve(opts.insert_concurrency);
     for (UInt32 i = 0; i < opts.insert_concurrency; i++)
     {
-        insert_threads.push_back(std::thread(work));
+        insert_threads.push_back(std::thread(work, i));
     }
 }
 
 void DMStressProxy::updateMultiThread()
 {
-    auto work = [&]() {
-        for (;;)
+    auto work = [&](UInt32 id) {
+        std::string thread_name = "dm_update_" + std::to_string(id);
+        setThreadName(thread_name.c_str());
+        while (!stop)
         {
             update();
             if (opts.write_sleep_us > 0)
@@ -171,14 +178,16 @@ void DMStressProxy::updateMultiThread()
     update_threads.reserve(opts.update_concurrency);
     for (UInt32 i = 0; i < opts.update_concurrency; i++)
     {
-        update_threads.push_back(std::thread(work));
+        update_threads.push_back(std::thread(work, i));
     }
 }
 
 void DMStressProxy::deleteMultiThread()
 {
-    auto work = [&]() {
-        for (;;)
+    auto work = [&](UInt32 id) {
+        std::string thread_name = "dm_delete_" + std::to_string(id);
+        setThreadName(thread_name.c_str());
+        while (!stop)
         {
             deleteRange();
             if (opts.write_sleep_us > 0)
@@ -191,7 +200,7 @@ void DMStressProxy::deleteMultiThread()
     delete_threads.reserve(opts.delete_concurrency);
     for (UInt32 i = 0; i < opts.delete_concurrency; i++)
     {
-        delete_threads.push_back(std::thread(work));
+        delete_threads.push_back(std::thread(work, i));
     }
 }
 
@@ -218,9 +227,21 @@ void DMStressProxy::update()
 void DMStressProxy::deleteRange()
 {
     Int64 id1   = rnd() % pk.max();
-    Int64 id2   = id1 + (rnd() % opts.write_rows_per_block);
-    auto range = RowKeyRange::fromHandleRange(HandleRange{id1, id2});
+    Int64 id2   = id1 + (rnd() % opts.write_rows_per_block) + 1;
+    auto  range = RowKeyRange::fromHandleRange(HandleRange{id1, id2});
+
+    std::vector<Int64> ids; // [id1, id2)
+    ids.reserve(id2 - id1);
+    for (Int64 i = id1; i < id2; i++)
+    {
+        ids.push_back(i);
+    }
+    auto locks = key_lock.getLocks(ids);
     store->deleteRange(*context, context->getSettingsRef(), range);
+    if (opts.verify)
+    {
+        pks.erase(ids);
+    }
 }
 
 void DMStressProxy::waitGenThreads()
@@ -267,6 +288,106 @@ void DMStressProxy::joinThreads(std::vector<std::thread> & threads)
     threads.clear();
 }
 
+void DMStressProxy::verifySingleThread()
+{
+    auto work = [&]() {
+        setThreadName("verify");
+        while (!stop)
+        {
+            verify();
+            sleep(opts.verify_sleep_sec);
+        }
+    };
+    verify_thread = std::thread(work);
+}
+
+void DMStressProxy::waitVerifyThread()
+{
+    LOG_INFO(log, "wait verify thread begin");
+    verify_thread.join();
+    LOG_INFO(log, "wait verify thread end");
+}
+
+void DMStressProxy::verify()
+{
+    auto          locks = key_lock.getAllLocks(); // Prevent all keys being write.
+    ColumnDefines columns;
+    columns.emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
+    BlockInputStreamPtr in             = store->read(*context,
+                                         context->getSettingsRef(),
+                                         columns,
+                                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                         /* num_streams= */ 1,
+                                         /* max_version= */ tso.get(),
+                                         EMPTY_FILTER,
+                                         /* expected_block_size= */ 1024)[0];
+    UInt64              dm_total_count = 0;
+    while (Block block = in->read())
+    {
+        dm_total_count += block.rows();
+        std::string msg = "Verify rows: " + std::to_string(block.rows()) + " columns: " + std::to_string(block.columns());
+        if (block.columns() != 1)
+        {
+            LOG_ERROR(log, msg + " columns must be 1.");
+            throw DB::Exception(msg + " columns must be 1.", ErrorCodes::LOGICAL_ERROR);
+        }
+        else
+        {
+            LOG_INFO(log, msg);
+        }
+
+        auto itr = block.begin();
+        for (size_t i = 0; i < itr->column->size(); i++)
+        {
+            Int64 id = itr->column->getInt(i);
+            LOG_INFO(log, "Verify id " << id);
+            if (!pks.exist(id))
+            {
+                LOG_ERROR(log, "Verify id " << id << " not found from pks.");
+            }
+        }
+    }
+    UInt64      pks_total_count = pks.count();
+    std::string msg = "Verify dm_total_count: " + std::to_string(dm_total_count) + " pks_total_count: " + std::to_string(pks_total_count);
+    if (pks_total_count != dm_total_count)
+    {
+        LOG_ERROR(log, msg + " total_count mismatch.");
+        throw DB::Exception(msg, ErrorCodes::LOGICAL_ERROR);
+    }
+    else
+    {
+        LOG_INFO(log, msg + " Verify success!");
+    }
+
+    if (pks_total_count >= max_total_count)
+    {
+        LOG_INFO(log, "pks_total_count: " << pks_total_count << " max_total_count: " << max_total_count);
+        stop.store(true);  // Stop the process to avoid use too much memory.
+    }
+}
+
+void DMStressProxy::run()
+{
+    genMultiThread();      // Run the gennerate data threads with other read-write thread concurrently
+    readMultiThread();
+    insertMultiThread();
+    updateMultiThread();
+    deleteMultiThread();
+    if (opts.verify)
+    {
+        verifySingleThread();
+    }
+
+    waitGenThreads();
+    waitReadThreads();
+    waitInsertThreads();
+    waitUpdateThreads();
+    waitDeleteThreads();
+    if (opts.verify)
+    {
+        waitVerifyThread();
+    }
+}
 } // namespace tests
 } // namespace DM
 } // namespace DB
