@@ -1,5 +1,5 @@
 #pragma once
-
+#include <random>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeString.h>
 #include <Poco/File.h>
@@ -20,7 +20,7 @@ struct StressOptions
     UInt32 insert_concurrency;
     UInt32 update_concurrency;
     UInt32 delete_concurrency;
-    UInt32 write_rows_per_block; // insert or delete block size
+    UInt32 write_rows_per_block; // insert or update block size
     UInt32 write_sleep_us;
     UInt32 read_concurrency;
     UInt32 read_sleep_us;
@@ -53,15 +53,15 @@ private:
     std::atomic<T> t;
 };
 
-class DeltaMergeStoreProxy
+class DMStressProxy
 {
 public:
-    DeltaMergeStoreProxy(const StressOptions & opts_)
+    DMStressProxy(const StressOptions & opts_)
         : name("stress"),
           col_balance_define(2, "balance", std::make_shared<DataTypeUInt64>()),
           col_random_define(3, "random_text", std::make_shared<DataTypeString>()),
-          log(&Poco::Logger::get("DeltaMergeStoreProxy")),
-          opts(opts_)
+          log(&Poco::Logger::get("DMStressProxy")),
+          opts(opts_), rnd(::time(nullptr))
     {
         String     path = DB::tests::TiFlashTestEnv::getTemporaryPath() + name;
         Poco::File file(path);
@@ -119,6 +119,8 @@ private:
     std::vector<std::thread> insert_threads;
     std::vector<std::thread> update_threads;
     std::vector<std::thread> delete_threads;
+
+    std::default_random_engine rnd;
 };
 } // namespace tests
 } // namespace DM

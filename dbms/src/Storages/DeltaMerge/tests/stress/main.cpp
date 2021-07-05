@@ -1,5 +1,5 @@
 #include <Common/FailPoint.h>
-#include <Storages/DeltaMerge/tests/stress/DeltaMergeStoreProxy.h>
+#include <Storages/DeltaMerge/tests/stress/DMStressProxy.h>
 
 #include <boost/program_options.hpp>
 
@@ -12,9 +12,9 @@ StressOptions parseStressOptions(int argc, char * argv[])
     desc.add_options()("help", "produce help message")("mode", value<String>()->default_value(""), "stress mode: wo, ro, rw")(
         "insert_concurrency", value<UInt32>()->default_value(58), "number of insert thread")(
         "update_concurrency", value<UInt32>()->default_value(40), "number of update thread")(
-        "delete_concurrency", value<UInt32>()->default_value(2), "number of delete thread")(
+        "delete_concurrency", value<UInt32>()->default_value(1), "number of delete thread")(
         "write_sleep_us", value<UInt32>()->default_value(20), "sleep microseconds between write operators")(
-        "write_rows_per_block", value<UInt32>()->default_value(1), "number of rows per write(insert or update)")(
+        "write_rows_per_block", value<UInt32>()->default_value(8), "number of rows per write(insert or update)")(
         "read_concurrency", value<UInt32>()->default_value(20), "number of read thread")(
         "read_sleep_us", value<UInt32>()->default_value(100), "sleep microseconds between read operations")(
         "gen_total_rows", value<UInt64>()->default_value(10000000), "generate data total rows")(
@@ -66,7 +66,7 @@ int main(int argc, char * argv[])
     init();
     auto opts = parseStressOptions(argc, argv);
 
-    DB::DM::tests::DeltaMergeStoreProxy store_proxy(opts);
+    DB::DM::tests::DMStressProxy store_proxy(opts);
 
     try
     {
@@ -85,11 +85,11 @@ int main(int argc, char * argv[])
     }
     catch (std::exception & e)
     {
-        LOG_INFO(&Poco::Logger::get("DeltaMergeStoreProxy"), e.what());
+        LOG_INFO(&Poco::Logger::get("DMStressProxy"), e.what());
     }
     catch (...)
     {
-        LOG_INFO(&Poco::Logger::get("DeltaMergeStoreProxy"), "Unknow exception");
+        LOG_INFO(&Poco::Logger::get("DMStressProxy"), "Unknow exception");
     }
     DB::tests::TiFlashTestEnv::shutdown();
     return 0;

@@ -1,5 +1,8 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
-#include <Storages/DeltaMerge/tests/stress/DeltaMergeStoreProxy.h>
+#include <Storages/DeltaMerge/tests/stress/DMStressProxy.h>
+
+#include <sys/time.h>
+
 namespace DB
 {
 namespace DM
@@ -25,7 +28,7 @@ void insertColumn(Block & block, const DataTypePtr & type, const String & name, 
     block.insert(std::move(col));
 }
 
-void DeltaMergeStoreProxy::genMultiThread()
+void DMStressProxy::genMultiThread()
 {
     if (opts.gen_total_rows <= 0)
     {
@@ -34,7 +37,7 @@ void DeltaMergeStoreProxy::genMultiThread()
     }
 
     UInt64 gen_rows_per_thread = opts.gen_total_rows / opts.gen_concurrency + 1;
-    UInt64 gen_total_rows      = gen_rows_per_thread * opts.gen_concurrency; // May large than opts.gen_total_row, it doesn't matter.
+    UInt64 gen_total_rows      = gen_rows_per_thread * opts.gen_concurrency; // May large than opts.gen_total_row.
     LOG_INFO(log,
              "Generate concurrency: " << opts.gen_concurrency << " Generate rows per thread: " << gen_rows_per_thread
                                       << " Generate total rows: " << gen_total_rows);
@@ -42,7 +45,7 @@ void DeltaMergeStoreProxy::genMultiThread()
     gen_threads.reserve(opts.gen_concurrency);
     for (UInt32 i = 0; i < opts.gen_concurrency; i++)
     {
-        gen_threads.push_back(std::thread(&DeltaMergeStoreProxy::genData, this, gen_rows_per_thread));
+        gen_threads.push_back(std::thread(&DMStressProxy::genData, this, gen_rows_per_thread));
     }
 
     LOG_INFO(log, "Generate data finished.");
@@ -50,7 +53,7 @@ void DeltaMergeStoreProxy::genMultiThread()
     LOG_INFO(log, "Total rows: " << total_rows);
 }
 
-void DeltaMergeStoreProxy::genData(UInt64 rows)
+void DMStressProxy::genData(UInt64 rows)
 {
     UInt64 generated_count = 0;
     while (generated_count < rows)
@@ -62,15 +65,21 @@ void DeltaMergeStoreProxy::genData(UInt64 rows)
     }
 }
 
-void DeltaMergeStoreProxy::write(const std::vector<Int64> & ids)
+UInt64 getCurrUS()
+{
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    return tv.tv_sec * 1000000ul + tv.tv_usec;
+}
+
+void DMStressProxy::write(const std::vector<Int64> & ids)
 {
     Block block;
     genBlock(block, ids);
-    std::lock_guard lock{mutex};
     store->write(*context, context->getSettingsRef(), std::move(block));
 }
 
-void DeltaMergeStoreProxy::genBlock(Block & block, const std::vector<Int64> & ids)
+void DMStressProxy::genBlock(Block & block, const std::vector<Int64> & ids)
 {
     insertColumn<Int64>(block, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID, ids);
     std::vector<UInt64> v_tso = tso.get(static_cast<UInt32>(ids.size()));
@@ -84,7 +93,7 @@ void DeltaMergeStoreProxy::genBlock(Block & block, const std::vector<Int64> & id
     insertColumn<String>(block, col_random_define.type, col_random_define.name, col_random_define.id, v_s);
 }
 
-void DeltaMergeStoreProxy::readMultiThread()
+void DMStressProxy::readMultiThread()
 {
     auto work = [&]() {
         for (;;)
@@ -99,11 +108,10 @@ void DeltaMergeStoreProxy::readMultiThread()
     }
 }
 
-UInt64 DeltaMergeStoreProxy::countRows()
+UInt64 DMStressProxy::countRows()
 {
     BlockInputStreamPtr in;
     {
-        std::lock_guard lock{mutex};
         const auto &    columns = store->getTableColumns();
         in                      = store->read(*context,
                          context->getSettingsRef(),
@@ -127,7 +135,7 @@ UInt64 DeltaMergeStoreProxy::countRows()
     return total_count;
 }
 
-void DeltaMergeStoreProxy::insertMultiThread()
+void DMStressProxy::insertMultiThread()
 {
     auto work = [&]() {
         for (;;)
@@ -147,7 +155,7 @@ void DeltaMergeStoreProxy::insertMultiThread()
     }
 }
 
-void DeltaMergeStoreProxy::updateMultiThread()
+void DMStressProxy::updateMultiThread()
 {
     auto work = [&]() {
         for (;;)
@@ -167,7 +175,7 @@ void DeltaMergeStoreProxy::updateMultiThread()
     }
 }
 
-void DeltaMergeStoreProxy::deleteMultiThread()
+void DMStressProxy::deleteMultiThread()
 {
     auto work = [&]() {
         for (;;)
@@ -187,18 +195,18 @@ void DeltaMergeStoreProxy::deleteMultiThread()
     }
 }
 
-void DeltaMergeStoreProxy::insert()
+void DMStressProxy::insert()
 {
     auto new_ids = pk.get(opts.write_rows_per_block); // Generate new id for insert
     write(new_ids);
 }
 
-void DeltaMergeStoreProxy::update()
+void DMStressProxy::update()
 {
     std::vector<Int64> ids;
     for (UInt32 i = 0; i < opts.write_rows_per_block; i++)
     {
-        Int64 id = rand() % pk.max(); // FIXME rand() return value is int.
+        Int64 id = rnd() % pk.max();
         if (std::find(ids.begin(), ids.end(), id) == ids.end())
         {
             ids.push_back(id); // Get already exist id for update
@@ -207,50 +215,50 @@ void DeltaMergeStoreProxy::update()
     write(ids);
 }
 
-void DeltaMergeStoreProxy::deleteRange()
+void DMStressProxy::deleteRange()
 {
-    auto id1   = rand() % pk.max();
-    auto id2   = id1 + (rand() % 128);
+    Int64 id1   = rnd() % pk.max();
+    Int64 id2   = id1 + (rnd() % opts.write_rows_per_block);
     auto range = RowKeyRange::fromHandleRange(HandleRange{id1, id2});
     store->deleteRange(*context, context->getSettingsRef(), range);
 }
 
-void DeltaMergeStoreProxy::waitGenThreads()
+void DMStressProxy::waitGenThreads()
 {
     LOG_INFO(log, "wait gen threads begin: " << gen_threads.size());
     joinThreads(gen_threads);
     LOG_INFO(log, "wait gen threads end: " << gen_threads.size());
 }
 
-void DeltaMergeStoreProxy::waitReadThreads()
+void DMStressProxy::waitReadThreads()
 {
     LOG_INFO(log, "wait read threads begin: " << read_threads.size());
     joinThreads(read_threads);
     LOG_INFO(log, "wait read threads end: " << read_threads.size());
 }
 
-void DeltaMergeStoreProxy::waitInsertThreads()
+void DMStressProxy::waitInsertThreads()
 {
     LOG_INFO(log, "wait insert threads begin: " << insert_threads.size());
     joinThreads(insert_threads);
     LOG_INFO(log, "wait insert threads end: " << insert_threads.size());
 }
 
-void DeltaMergeStoreProxy::waitUpdateThreads()
+void DMStressProxy::waitUpdateThreads()
 {
     LOG_INFO(log, "wait update threads begin: " << update_threads.size());
     joinThreads(update_threads);
     LOG_INFO(log, "wait update threads end: " << update_threads.size());
 }
 
-void DeltaMergeStoreProxy::waitDeleteThreads()
+void DMStressProxy::waitDeleteThreads()
 {
     LOG_INFO(log, "wait delete threads begin: " << delete_threads.size());
     joinThreads(delete_threads);
     LOG_INFO(log, "wait delete threads end: " << delete_threads.size());
 }
 
-void DeltaMergeStoreProxy::joinThreads(std::vector<std::thread> & threads)
+void DMStressProxy::joinThreads(std::vector<std::thread> & threads)
 {
     for (auto & t : threads)
     {
