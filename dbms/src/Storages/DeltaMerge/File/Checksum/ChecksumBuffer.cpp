@@ -59,5 +59,9 @@ template class IDigestBuffer<City128, DB::ReadBuffer>;
 template class DigestWriteBuffer<CRC32>;
 template class DigestWriteBuffer<CRC64>;
 template class DigestWriteBuffer<City128>;
+template class DigestReadBuffer<CRC32>;
+template class DigestReadBuffer<CRC64>;
+template class DigestReadBuffer<City128>;
+
 
 } // namespace DB::DM::Checksum

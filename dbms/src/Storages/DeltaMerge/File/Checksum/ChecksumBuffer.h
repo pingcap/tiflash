@@ -5,7 +5,6 @@
 #ifndef CLICKHOUSE_CHECKSUMBUFFER_H
 #define CLICKHOUSE_CHECKSUMBUFFER_H
 #include <IO/HashingWriteBuffer.h>
-
 #include "DMChecksum.h"
 
 namespace DB::DM::Checksum
@@ -17,7 +16,7 @@ public:
     using HashType = typename Backend::HashType;
 
     explicit IDigestBuffer(size_t block_size_ = DBMS_DEFAULT_HASHING_BLOCK_SIZE)
-        : BufferWithOwnMemory<Buffer>(block_size_), block_pos(0), block_size(block_size_)
+        : BufferWithOwnMemory<Buffer>(block_size_, nullptr, 512), block_pos(0), block_size(block_size_)
     {
     }
 
@@ -78,6 +77,44 @@ public:
         this->next();
         return IDigestBuffer<Backend, WriteBuffer>::getHash();
     }
+};
+
+/*
+ * Calculates the hash from the read data. When reading, the data is read from the nested ReadBuffer.
+ * Small pieces are copied into its own memory.
+ */
+template <typename Backend>
+class DigestReadBuffer : public IDigestBuffer<Backend, ReadBuffer>
+{
+public:
+    explicit DigestReadBuffer(ReadBuffer & in_, size_t block_size = DBMS_DEFAULT_HASHING_BLOCK_SIZE) :
+        IDigestBuffer<Backend, ReadBuffer>(block_size), in(in_)
+    {
+        this->working_buffer = in.buffer();
+        this->pos = in.position();
+
+        /// calculate hash from the data already read
+        if (this->working_buffer.size())
+        {
+            this->calculateHash(this->pos, this->working_buffer.end() - this->pos);
+        }
+    }
+
+private:
+    bool nextImpl() override
+    {
+        in.position() = this->pos;
+        bool res = in.next();
+        this->working_buffer = in.buffer();
+        this->pos = in.position();
+
+        this->calculateHash(this->working_buffer.begin(), this->working_buffer.size());
+
+        return res;
+    }
+
+private:
+    ReadBuffer & in;
 };
 
 } // namespace DB::DM::Checksum
