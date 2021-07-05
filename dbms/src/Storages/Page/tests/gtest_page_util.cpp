@@ -64,13 +64,13 @@ TEST(PageUtils_test, GetStrFromBuffer)
     int fd2 = PageUtil::openFile<true, true>(FileName);
     ASSERT_GT(fd2, 0);
 
-    size_t        buffer_size = 10;
-    ReadBufferPtr buffer      = std::make_shared<ReadBufferFromFileDescriptor>(fd2, buffer_size);
+    size_t                                        buffer_size = 10;
+    std::unique_ptr<ReadBufferFromFileDescriptor> buffer      = std::make_unique<ReadBufferFromFileDescriptor>(fd2, buffer_size);
 
     // real test
     char result[28];
-    bool success = PageUtil::get<char[28]>(buffer, &result);
-    ASSERT(success)
+    bool success = PageUtil::get<char[28]>(buffer.get(), &result);
+    ASSERT_TRUE(success);
     for (int i = 0; i < 28; ++i)
     {
         ASSERT_EQ(result[i], file_write[i]);
@@ -79,10 +79,10 @@ TEST(PageUtils_test, GetStrFromBuffer)
     ASSERT_EQ(buffer->offset(), (long unsigned int)(28 % buffer_size));
 
     int result2;
-    success = PageUtil::get<int>(buffer, &result2);
-    ASSERT(success);
+    success = PageUtil::get<int>(buffer.get(), &result2);
+    ASSERT_TRUE(success);
     ASSERT_EQ(result2, length);
-    ASSERT(!buffer->hasPendingData());
+    ASSERT_TRUE(!buffer->hasPendingData());
     ASSERT_EQ(buffer->count(), (long unsigned int)(28 + sizeof(int)));
     ASSERT_EQ(buffer->offset(), (long unsigned int)((28 + sizeof(int)) % buffer_size));
     ::close(fd2);

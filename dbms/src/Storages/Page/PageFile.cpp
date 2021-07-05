@@ -222,7 +222,6 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
 PageFile::MetaMergingReader::~MetaMergingReader()
 {
-    // maybe it's bad to close file explicitly.
     close();
 }
 
@@ -248,7 +247,7 @@ void PageFile::MetaMergingReader::initialize()
         status = Status::Finished;
         return;
     }
-    meta_reading_buffer = std::make_shared<ReadBufferFromFileProvider>(page_file.file_provider, path, page_file.metaEncryptionPath());
+    meta_reading_buffer = std::make_unique<ReadBufferFromFileProvider>(page_file.file_provider, path, page_file.metaEncryptionPath());
     // File not exists.
     if (unlikely(meta_reading_buffer->getFD() < 0))
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
@@ -257,10 +256,9 @@ void PageFile::MetaMergingReader::initialize()
 
 void PageFile::MetaMergingReader::close()
 {
-    if (nullptr != meta_reading_buffer && meta_reading_buffer->getFD() > 0)
-    {
-        meta_reading_buffer->close();
-    }
+    status = Status::Finished;
+
+    meta_reading_buffer = nullptr;
 }
 
 bool PageFile::MetaMergingReader::hasNext() const
@@ -281,19 +279,9 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
         return;
     }
 
-    if (meta_file_offset + sizeof(PageMetaFormat::WBSize) > meta_size)
-    {
-        LOG_WARNING(page_file.log,
-                    "Incomplete write batch {" << toString() << "} [batch_start_pos=" << meta_file_offset << "] [meta_size=" << meta_size
-                                               << "] [file=" << page_file.metaPath() << "] ignored.");
-        status = Status::Finished;
-        close();
-        return;
-    }
-
     PageMetaFormat::WBSize wb_bytes;
 
-    bool success = PageUtil::get<PageMetaFormat::WBSize>(meta_reading_buffer, &wb_bytes);
+    bool success = PageUtil::get<PageMetaFormat::WBSize>(meta_reading_buffer.get(), &wb_bytes);
     if (unlikely(!success))
     {
         LOG_WARNING(page_file.log,
@@ -302,7 +290,6 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
                                                << "] [bytes_already_read=" << DB::toString(meta_reading_buffer->count())
                                                << "] [file=" << page_file.metaPath() << "] ignored.");
 
-        status = Status::Finished;
         close();
         return;
     }
@@ -311,7 +298,6 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
         LOG_WARNING(page_file.log,
                     "Incomplete write batch {" << toString() << "} [expect_batch_bytes=" << wb_bytes << "] [meta_size=" << meta_size
                                                << "] [file=" << page_file.metaPath() << "] ignored.");
-        status = Status::Finished;
         close();
         return;
     }
@@ -321,7 +307,7 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     char * wb_start_pos = pos;
     SCOPE_EXIT({ page_file.free(wb_start_pos, wb_bytes); });
 
-    // construct the buffer, throw exception when not read enough data or just return?
+    // construct the temporary reading buffer
     std::memcpy(pos, reinterpret_cast<char *>(&wb_bytes), sizeof(PageMetaFormat::WBSize));
     pos += sizeof(PageMetaFormat::WBSize);
     size_t data_read = meta_reading_buffer->read(pos, wb_bytes - sizeof(PageMetaFormat::WBSize));
@@ -332,9 +318,7 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
                                                << "] [meta_size=" << meta_size
                                                << "] [bytes_already_read=" << DB::toString(meta_reading_buffer->count())
                                                << "] [file=" << page_file.metaPath() << "] ignored.");
-        status = Status::Finished;
         close();
-        // should I throw exception?
         return;
     }
 

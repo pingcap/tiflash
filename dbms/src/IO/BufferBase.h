@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Defines.h>
+
 #include <algorithm>
 
 
@@ -49,14 +50,15 @@ public:
 
     private:
         Position begin_pos;
-        Position end_pos;        /// 1 byte after the end of the buffer
+        Position end_pos; /// 1 byte after the end of the buffer
     };
 
     /** The constructor takes a range of memory to use for the buffer.
       * offset - the starting point of the cursor. ReadBuffer must set it to the end of the range, and WriteBuffer - to the beginning.
       */
     BufferBase(Position ptr, size_t size, size_t offset)
-        : pos(ptr + offset), working_buffer(ptr, ptr + size), internal_buffer(ptr, ptr + size) {}
+        : pos(ptr + offset), working_buffer(ptr, ptr + size), internal_buffer(ptr, ptr + size)
+    {}
 
     void set(Position ptr, size_t size, size_t offset)
     {
@@ -76,9 +78,6 @@ public:
 
     /// offset in bytes of the cursor from the beginning of the buffer
     inline size_t offset() const { return pos - working_buffer.begin(); }
-
-    /// remain bytes haven't been dealed with in buffer
-    inline size_t remain() const { return working_buffer.end() - pos; }
 
     /** How many bytes have been read/written, counting those that are still in the buffer. */
     size_t count() const
@@ -113,4 +112,4 @@ protected:
 };
 
 
-}
+} // namespace DB

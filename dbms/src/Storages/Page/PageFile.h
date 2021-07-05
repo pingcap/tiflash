@@ -169,9 +169,10 @@ public:
         WriteBatch::SequenceID curr_write_batch_sequence = 0;
         PageEntriesEdit        curr_edit;
 
-        // The read buffer and size of metadata, with the underlying meta file should be initlized in method `initlize()`.
-        ReadBufferFromFileProviderPtr meta_reading_buffer;
-        size_t                        meta_size = 0;
+        // The read buffer and size of metadata.
+        // meta_reading_buffer will keep the underlying meta file open if it's not nullptr.
+        size_t                                      meta_size           = 0;
+        std::unique_ptr<ReadBufferFromFileProvider> meta_reading_buffer = nullptr;
 
         // Current parsed offsets.
         size_t meta_file_offset = 0;
