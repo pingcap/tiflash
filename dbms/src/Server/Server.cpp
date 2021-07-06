@@ -78,10 +78,19 @@
 #include <jemalloc/jemalloc.h>
 #endif
 
+<<<<<<< HEAD
 #ifndef NDEBUG
+=======
+#if USE_MIMALLOC
+#include <Poco/JSON/Parser.h>
+#include <mimalloc.h>
+
+#include <fstream>
+#endif
+
+>>>>>>> 9d51ac4e0... Refine some include headers & add option `ENABLE_FAILPOINTS` (#2296)
 #ifdef FIU_ENABLE
 #include <fiu.h>
-#endif
 #endif
 
 namespace CurrentMetrics
@@ -348,10 +357,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     setThreadName("TiFlashMain");
 
     Logger * log = &logger();
-#ifndef NDEBUG
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
-#endif
 #endif
 
     UpdateMallocConfig(log);

@@ -29,7 +29,7 @@ endif ()
 
 find_package (Threads)
 
-if (ENABLE_TESTS)
+if (ENABLE_FAILPOINTS)
     add_definitions(-DFIU_ENABLE)
 endif()
 
