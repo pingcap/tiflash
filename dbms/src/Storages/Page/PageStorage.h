@@ -59,7 +59,7 @@ public:
         size_t gc_min_legacy_num = 3;
 
         size_t  gc_max_expect_legacy_files = 100;
-        Float64 gc_max_valid_rate_bound    = 0.95;
+        Float64 gc_max_valid_rate_bound    = 1.0;
 
         // Maximum write concurrency. Must not be changed once the PageStorage object is created.
         size_t num_write_slots = 1;
