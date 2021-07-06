@@ -33,7 +33,7 @@ static inline void requiredRead(void * buffer, size_t size, const DB::ReadBuffer
         offset += sizeof(ChecksumFrame<Digest::ALGO>);                                      \
         break;
 
-DB::DM::SerializedVersionInfo::SerializedVersionInfo(const DB::ReadBufferPtr & filePtr) : checksums(), extraInfo()
+DB::DM::SerializedVersionInfo::SerializedVersionInfo(const DB::ReadBufferPtr & filePtr, bool readExtra) : checksums(), extraInfo()
 {
     VersionInfo header{};
     requiredRead(&header, sizeof(header), filePtr);
@@ -59,15 +59,18 @@ DB::DM::SerializedVersionInfo::SerializedVersionInfo(const DB::ReadBufferPtr & f
         checksums.push_back(frame);
     }
 
-    for (auto i = 0ull; i < header.extraCount; ++i)
+    if (readExtra)
     {
-        ExtraInfoFrame frame{};
-        requiredRead(&frame, sizeof(frame), filePtr);
-        std::string name(frame.nameSize, ' ');
-        std::string content(frame.contentSize, ' ');
-        requiredRead(name.data(), frame.nameSize, filePtr);
-        requiredRead(content.data(), frame.contentSize, filePtr);
-        extraInfo.emplace(std::move(name), std::move(content));
+        for (auto i = 0ull; i < header.extraCount; ++i)
+        {
+            ExtraInfoFrame frame{};
+            requiredRead(&frame, sizeof(frame), filePtr);
+            std::string name(frame.nameSize, ' ');
+            std::string content(frame.contentSize, ' ');
+            requiredRead(name.data(), frame.nameSize, filePtr);
+            requiredRead(content.data(), frame.contentSize, filePtr);
+            extraInfo.emplace(std::move(name), std::move(content));
+        }
     }
 }
 

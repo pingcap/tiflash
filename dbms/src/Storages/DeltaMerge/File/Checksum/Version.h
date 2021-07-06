@@ -12,26 +12,25 @@
 namespace DB::DM
 {
 
-static inline constexpr uint32_t DEFAULT_ENDIAN_VALUE = 0x04030201u;
-
 enum class FileVersion : uint64_t
 {
     Legacy = 0x0000'0000'0000'0000,
     FileV1 = 0x0000'0000'0000'0001
 };
 
-static inline constexpr uint64_t CURRENT_FILE_VERSION = 0x00000001u;
+static inline constexpr FileVersion CURRENT_FILE_VERSION = FileVersion::FileV1;
+static inline constexpr uint32_t    DEFAULT_ENDIAN_VALUE = 0x04030201u;
 
-static inline size_t getChecksumCountByVersion(FileVersion version)
+static inline constexpr size_t getChecksumCountByVersion(FileVersion version)
 {
     switch (version)
     {
     case FileVersion::Legacy:
-        return 0;
+        return 0ull;
     case FileVersion::FileV1:
-        return 2;
+        return 2ull;
     }
-    __builtin_unreachable();
+    return 0ull;
 }
 
 
@@ -94,7 +93,7 @@ public:
     {
     }
 
-    explicit SerializedVersionInfo(const ReadBufferPtr & filePtr);
+    SerializedVersionInfo(const ReadBufferPtr & filePtr, bool readExtra);
 
     void writeToBuffer(const WriteBufferPtr & filePtr);
 
