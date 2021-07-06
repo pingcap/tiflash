@@ -378,6 +378,11 @@ std::string Region::getDebugString(std::stringstream & ss) const
 
 RegionID Region::id() const { return meta.regionId(); }
 
+<<<<<<< HEAD
+=======
+pingcap::kv::RegionVerID Region::verID() const { return pingcap::kv::RegionVerID(id(), confVer(), version()); }
+
+>>>>>>> 9d51ac4e0... Refine some include headers & add option `ENABLE_FAILPOINTS` (#2296)
 bool Region::isPendingRemove() const { return peerState() == raft_serverpb::PeerState::Tombstone; }
 
 bool Region::isMerging() const { return peerState() == raft_serverpb::PeerState::Merging; }

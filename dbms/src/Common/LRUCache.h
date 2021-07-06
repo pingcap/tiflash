@@ -1,13 +1,13 @@
 #pragma once
 
-#include <unordered_map>
+#include <common/logger_useful.h>
+
+#include <atomic>
+#include <chrono>
 #include <list>
 #include <memory>
-#include <chrono>
 #include <mutex>
-#include <atomic>
-
-#include <common/logger_useful.h>
+#include <unordered_map>
 
 
 namespace DB
@@ -16,10 +16,7 @@ namespace DB
 template <typename T>
 struct TrivialWeightFunction
 {
-    size_t operator()(const T &) const
-    {
-        return 1;
-    }
+    size_t operator()(const T &) const { return 1; }
 };
 
 
@@ -29,7 +26,10 @@ struct TrivialWeightFunction
 /// Cache starts to evict entries when their total weight exceeds max_size and when expiration time of these
 /// entries is due.
 /// Value weight should not change after insertion.
-template <typename TKey, typename TMapped, typename HashFunction = std::hash<TKey>, typename WeightFunction = TrivialWeightFunction<TMapped>>
+template <typename TKey,
+    typename TMapped,
+    typename HashFunction = std::hash<TKey>,
+    typename WeightFunction = TrivialWeightFunction<TMapped>>
 class LRUCache
 {
 public:
@@ -44,7 +44,8 @@ private:
 
 public:
     LRUCache(size_t max_size_, const Delay & expiration_delay_ = Delay::zero())
-        : max_size(std::max(static_cast<size_t>(1), max_size_)), expiration_delay(expiration_delay_) {}
+        : max_size(std::max(static_cast<size_t>(1), max_size_)), expiration_delay(expiration_delay_)
+    {}
 
     MappedPtr get(const Key & key)
     {
@@ -158,7 +159,6 @@ public:
     virtual ~LRUCache() {}
 
 private:
-
     /// Represents pending insertion attempt.
     struct InsertToken
     {
@@ -166,7 +166,7 @@ private:
 
         std::mutex mutex;
         bool cleaned_up = false; /// Protected by the token mutex
-        MappedPtr value; /// Protected by the token mutex
+        MappedPtr value;         /// Protected by the token mutex
 
         LRUCache & cache;
         size_t refcount = 0; /// Protected by the cache mutex
@@ -185,7 +185,8 @@ private:
 
         InsertTokenHolder() = default;
 
-        void acquire(const Key * key_, const std::shared_ptr<InsertToken> & token_, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
+        void acquire(
+            const Key * key_, const std::shared_ptr<InsertToken> & token_, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
         {
             key = key_;
             token = token_;
@@ -229,8 +230,8 @@ private:
     {
         bool expired(const Timestamp & last_timestamp, const Delay & expiration_delay) const
         {
-            return (expiration_delay == Delay::zero()) ||
-                ((last_timestamp > timestamp) && ((last_timestamp - timestamp) > expiration_delay));
+            return (expiration_delay == Delay::zero())
+                || ((last_timestamp > timestamp) && ((last_timestamp - timestamp) > expiration_delay));
         }
 
         MappedPtr value;
@@ -252,8 +253,8 @@ private:
     const Delay expiration_delay;
 
     mutable std::mutex mutex;
-    std::atomic<size_t> hits {0};
-    std::atomic<size_t> misses {0};
+    std::atomic<size_t> hits{0};
+    std::atomic<size_t> misses{0};
 
     WeightFunction weight_function;
 
@@ -276,9 +277,7 @@ private:
 
     void setImpl(const Key & key, const MappedPtr & mapped, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
     {
-        auto res = cells.emplace(std::piecewise_construct,
-            std::forward_as_tuple(key),
-            std::forward_as_tuple());
+        auto res = cells.emplace(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple());
 
         Cell & cell = res.first->second;
         bool inserted = res.second;
@@ -348,4 +347,4 @@ private:
 };
 
 
-}
+} // namespace DB
