@@ -51,7 +51,7 @@ void PosixWritableFile::close()
         return;
     while (0 != ::close(fd))
         if (errno != EINTR)
-            throw Exception("Cannot close file", ErrorCodes::CANNOT_CLOSE_FILE);
+            throwFromErrno("Cannot close file " + file_name, ErrorCodes::CANNOT_CLOSE_FILE);
 
     metric_increment.changeTo(0); // Subtract metrics for `CurrentMetrics::OpenFileForWrite`
 

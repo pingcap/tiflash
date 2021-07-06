@@ -66,7 +66,7 @@ void PosixRandomAccessFile::close()
         return;
     while (::close(fd) != 0)
         if (errno != EINTR)
-            throw Exception("Cannot close file", ErrorCodes::CANNOT_CLOSE_FILE);
+            throwFromErrno("Cannot close file " + file_name, ErrorCodes::CANNOT_CLOSE_FILE);
 
     fd = -1;
     metric_increment.destroy();
