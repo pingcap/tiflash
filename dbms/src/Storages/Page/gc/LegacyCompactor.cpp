@@ -141,8 +141,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         merging_queue.pop();
         // We don't want to do compaction on formal / writing files. If any, just stop collecting `page_files_to_remove`.
         if (reader->belongingPageFile().getType() == PageFile::Type::Formal //
-            || writing_file_ids.count(reader->fileIdLevel()) != 0           //
-            || (reader->writeBatchSequence() > last_sequence + 1))
+            || writing_file_ids.count(reader->fileIdLevel()) != 0)
         {
             LOG_DEBUG(log,
                       storage_name << " collectPageFilesToCompact stop on " << reader->belongingPageFile().toString() //
@@ -154,17 +153,32 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
         // all edits after that checkpoint too. If checkpoint's WriteBatch sequence number is not 0, we
         // apply WriteBatch edits only if its WriteBatch sequence is larger than or equeal tocheckpoint.
+        const auto reader_wb_seq = reader->writeBatchSequence();
         if (!old_checkpoint_sequence.has_value() || //
-            (old_checkpoint_sequence.has_value()
-             && (*old_checkpoint_sequence == 0 || *old_checkpoint_sequence <= reader->writeBatchSequence())))
+            (old_checkpoint_sequence.has_value() && //
+             (*old_checkpoint_sequence == 0 || *old_checkpoint_sequence <= reader_wb_seq)))
         {
-            // LOG_TRACE(log, storage_name << " collectPageFilesToCompact recovering from " + reader->toString());
+            if (unlikely(reader_wb_seq > last_sequence + 1))
+            {
+                // There would be a case for lefting hole on the WAL (combined from multiple meta files).
+                // Thread 1 tries to write a WriteBatch with seq=999 (called wb1), thread 2 try to write a WriteBatch
+                // with seq=1000 (called wb2). However, wb2 is committed to disk first. And the process crashes in the
+                // middle of writing wb1 (or even not writing down wb1 at all). After recovering from disk, the wb1 is
+                // throw away while wb2 is left.
+                // Then there would be a hole in the WAL. We need to automatically recover from crashes in the middle
+                // from writing, so just skip the hole and continue the compaction.
+                // FIXME: rethink the multi-threads writing support.
+                LOG_WARNING(log,
+                            storage_name << " collectPageFilesToCompact skip sequence hole from " << last_sequence << " to "
+                                         << reader_wb_seq << ", {" << reader->toString() << "}");
+            }
+
             try
             {
                 auto edits = reader->getEdits();
                 version_set.apply(edits);
-                last_sequence    = reader->writeBatchSequence();
-                compact_sequence = std::max(compact_sequence, reader->writeBatchSequence());
+                last_sequence    = reader_wb_seq;
+                compact_sequence = std::max(compact_sequence, reader_wb_seq);
                 info.mergeEdits(edits);
             }
             catch (Exception & e)
