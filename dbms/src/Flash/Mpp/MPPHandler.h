@@ -137,11 +137,18 @@ struct MPPTunnel
             return;
         if (connected)
         {
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(reason);
-            data.set_allocated_error(err);
-            writer->Write(data);
+            try
+            {
+                mpp::MPPDataPacket data;
+                auto err = new mpp::Error();
+                err->set_msg(reason);
+                data.set_allocated_error(err);
+                writer->Write(data);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
+            }
         }
         finished = true;
         cv_for_finished.notify_all();
@@ -298,34 +305,9 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
     /// without waiting the tunnel to be connected
     void closeAllTunnel(const String & reason)
     {
-        try
+        for (auto & it : tunnel_map)
         {
-            for (auto & it : tunnel_map)
-            {
-                it.second->close(reason);
-            }
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Failed to close all tunnels");
-        }
-    }
-    void writeErrToAllTunnel(const String & e)
-    {
-        try
-        {
-            for (auto & it : tunnel_map)
-            {
-                mpp::MPPDataPacket data;
-                auto err = new mpp::Error();
-                err->set_msg(e);
-                data.set_allocated_error(err);
-                it.second->write(data, true);
-            }
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Failed to write error " + e + " to all tunnels");
+            it.second->close(reason);
         }
     }
 
@@ -336,6 +318,8 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
             it.second->writeDone();
         }
     }
+
+    void writeErrToAllTunnel(const String & e);
 
     std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
 
@@ -376,6 +360,8 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         /// MPPTask maybe destructed by different thread, set the query memory_tracker
         /// to current_memory_tracker in the destructor
         current_memory_tracker = memory_tracker;
+        closeAllTunnel("");
+        LOG_DEBUG(log, "finish MPPTask: " << id.toString());
     }
 };
 

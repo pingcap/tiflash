@@ -26,6 +26,7 @@ extern const char exception_before_mpp_non_root_task_run[];
 extern const char exception_before_mpp_root_task_run[];
 extern const char exception_during_mpp_non_root_task_run[];
 extern const char exception_during_mpp_root_task_run[];
+extern const char exception_during_mpp_write_err_to_tunnel[];
 } // namespace FailPoints
 
 bool MPPTaskProgress::isTaskHanging(const Context & context)
@@ -296,6 +297,27 @@ void MPPTask::runImpl()
     GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_dispatch_mpp_task).Observe(peak_memory);
     unregisterTask();
     status = FINISHED;
+}
+
+void MPPTask::writeErrToAllTunnel(const String & e)
+{
+    for (auto & it : tunnel_map)
+    {
+        try
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_write_err_to_tunnel);
+            mpp::MPPDataPacket data;
+            auto err = new mpp::Error();
+            err->set_msg(e);
+            data.set_allocated_error(err);
+            it.second->write(data, true);
+        }
+        catch (...)
+        {
+            it.second->close("Failed to write error msg to tunnel");
+            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->tunnel_id);
+        }
+    }
 }
 
 bool MPPTask::isTaskHanging()
