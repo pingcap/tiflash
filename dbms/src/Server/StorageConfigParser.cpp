@@ -1,4 +1,13 @@
+/// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
+#if !__clang__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 #include <Common/Config/cpptoml.h>
+#if !__clang__
+#pragma GCC diagnostic pop
+#endif
+
 #include <Common/Exception.h>
 #include <Common/formatReadable.h>
 #include <IO/ReadHelpers.h>

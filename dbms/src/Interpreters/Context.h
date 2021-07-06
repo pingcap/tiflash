@@ -2,7 +2,6 @@
 
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
@@ -99,6 +98,7 @@ using FileProviderPtr = std::shared_ptr<FileProvider>;
 class RateLimiter;
 using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 struct TiFlashRaftConfig;
+class DAGContext;
 
 namespace DM
 {
