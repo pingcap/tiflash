@@ -3,6 +3,8 @@
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGDriver.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
