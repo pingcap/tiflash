@@ -218,7 +218,11 @@ public:
         std::mutex mutex;
 
     public:
-        size_t length() { return tasks.size(); }
+        size_t length()
+        {
+            std::scoped_lock lock(mutex);
+            return tasks.size();
+        }
 
         void addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
 
