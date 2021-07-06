@@ -43,6 +43,8 @@ public:
     std::string releaseStr()
     {
         finalize();
+        /// Prevent further writes.
+        set(nullptr, 0);
         return std::move(value);
     }
 };
