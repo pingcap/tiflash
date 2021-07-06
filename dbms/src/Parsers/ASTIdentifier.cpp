@@ -12,9 +12,8 @@ void ASTIdentifier::formatImplWithoutAlias(const FormatSettings & settings, Form
     {
         settings.ostr << (settings.hilite ? hilite_identifier : "");
 
-        WriteBufferFromOStream wb(settings.ostr, 32);
-        writeProbablyBackQuotedString(name, wb);
-        wb.next();
+        writeProbablyBackQuotedString(name, settings.ostr);
+        settings.ostr.next();
 
         settings.ostr << (settings.hilite ? hilite_none : "");
     };

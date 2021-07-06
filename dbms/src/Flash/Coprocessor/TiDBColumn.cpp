@@ -1,6 +1,7 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/TiDBColumn.h>
 #include <IO/Endian.h>
+#include <IO/Operators.h>
 
 namespace DB
 {
@@ -31,7 +32,6 @@ void TiDBColumn::clear()
     null_bitmap.clear();
     var_offsets.clear();
     var_offsets.push_back(0);
-    data.str("");
     current_data_size = 0;
 }
 

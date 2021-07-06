@@ -12,6 +12,7 @@
 #include <Functions/IFunction.h>
 #include <Storages/IStorage.h>
 #include <Interpreters/ExpressionAnalyzer.h>
+#include <IO/WriteBufferFromOStream.h>
 #include <Parsers/IAST.h>
 
 
@@ -98,7 +99,9 @@ std::ostream & operator<<(std::ostream & stream, const Connection::Packet & what
 std::ostream & operator<<(std::ostream & stream, const IAST & what)
 {
     stream << "IAST{";
-    what.dumpTree(stream);
+    WriteBufferFromOStream buffer(stream, 32);
+    what.dumpTree(buffer);
+    buffer.next();
     stream << "}";
     return stream;
 }

@@ -18,7 +18,7 @@ public:
     {
         WriteBufferFromOwnString ss;
         ti_chunk->encodeChunk(ss);
-        return ss.str();
+        return ss.releaseStr();
     }
     void clear() override { ti_chunk->clear(); }
     void encode(const Block & block, size_t start, size_t end) override;

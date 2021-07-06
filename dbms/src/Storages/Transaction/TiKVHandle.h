@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include <Core/Types.h>
+#include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <Storages/Transaction/Types.h>
 #include <common/likely.h>

@@ -53,7 +53,7 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
     if (query.temporary)
         rewritten_query << "is_temporary";
     else
-        rewritten_query << "database = " << std::quoted(database, '\'');
+        rewritten_query << "database = " << DB::quote << database;
 
     if (!query.like.empty())
         rewritten_query << " AND name " << (query.not_like ? "NOT " : "") << "LIKE " << std::quoted(query.like, '\'');
