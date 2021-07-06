@@ -616,6 +616,7 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
             throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
         expr->set_tp(tipb::ColumnRef);
         *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
+        expr->mutable_field_type()->set_collate(collator_id);
         WriteBufferFromOwnString ss;
         encodeDAGInt64(ft - input.begin(), ss);
         expr->set_val(ss.releaseStr());
@@ -929,6 +930,10 @@ struct ExchangeSender : Executor
             WriteBufferFromOwnString ss;
             encodeDAGInt64(i, ss);
             expr->set_val(ss.releaseStr());
+            auto tipb_type = TiDB::columnInfoToFieldType(output_schema[i].second);
+            *expr->mutable_field_type() = tipb_type;
+            tipb_type.set_collate(collator_id);
+            *exchange_sender->add_types() = tipb_type;
         }
         for (auto task_id : mpp_info.sender_target_task_ids)
         {
@@ -1121,6 +1126,7 @@ struct Aggregation : public Executor
     std::vector<ASTPtr> agg_exprs;
     std::vector<ASTPtr> gby_exprs;
     bool is_final_mode;
+    DAGSchema output_schema_for_partial_agg;
     Aggregation(size_t & index_, const DAGSchema & output_schema_, bool has_uniq_raw_res_, bool need_append_project_,
         std::vector<ASTPtr> && agg_exprs_, std::vector<ASTPtr> && gby_exprs_, bool is_final_mode_)
         : Executor(index_, "aggregation_" + std::to_string(index_), output_schema_),
@@ -1207,6 +1213,8 @@ struct Aggregation : public Executor
     }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
+        /// output schema for partial agg is the original agg's output schema
+        output_schema_for_partial_agg = output_schema;
         output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(),
                                 [&](const auto & field) { return used_columns.count(field.first) == 0; }),
             output_schema.end());
@@ -1245,7 +1253,7 @@ struct Aggregation : public Executor
         if (gby_exprs.size() == 0)
             throw Exception("agg without group by columns not supported in mpp query");
         std::shared_ptr<Aggregation> partial_agg = std::make_shared<Aggregation>(
-            executor_index, output_schema, has_uniq_raw_res, false, std::move(agg_exprs), std::move(gby_exprs), false);
+            executor_index, output_schema_for_partial_agg, has_uniq_raw_res, false, std::move(agg_exprs), std::move(gby_exprs), false);
         partial_agg->children.push_back(children[0]);
         std::vector<size_t> partition_keys;
         size_t agg_func_num = partial_agg->agg_exprs.size();
@@ -1254,10 +1262,10 @@ struct Aggregation : public Executor
             partition_keys.push_back(i + agg_func_num);
         }
         std::shared_ptr<ExchangeSender> exchange_sender
-            = std::make_shared<ExchangeSender>(executor_index, output_schema, tipb::Hash, partition_keys);
+            = std::make_shared<ExchangeSender>(executor_index, output_schema_for_partial_agg, tipb::Hash, partition_keys);
         exchange_sender->children.push_back(partial_agg);
 
-        std::shared_ptr<ExchangeReceiver> exchange_receiver = std::make_shared<ExchangeReceiver>(executor_index, output_schema);
+        std::shared_ptr<ExchangeReceiver> exchange_receiver = std::make_shared<ExchangeReceiver>(executor_index, output_schema_for_partial_agg);
         exchange_map[exchange_receiver->name] = std::make_pair(exchange_receiver, exchange_sender);
         /// re-construct agg_exprs and gby_exprs in final_agg
         for (size_t i = 0; i < partial_agg->agg_exprs.size(); i++)
@@ -1268,12 +1276,12 @@ struct Aggregation : public Executor
             if (agg_func->name == "count")
                 update_agg_func->name = "sum";
             update_agg_func->arguments->children.clear();
-            update_agg_func->arguments->children.push_back(std::make_shared<ASTIdentifier>(output_schema[i].first));
+            update_agg_func->arguments->children.push_back(std::make_shared<ASTIdentifier>(output_schema_for_partial_agg[i].first));
             agg_exprs.push_back(update_agg_expr);
         }
         for (size_t i = 0; i < partial_agg->gby_exprs.size(); i++)
         {
-            gby_exprs.push_back(std::make_shared<ASTIdentifier>(output_schema[agg_func_num + i].first));
+            gby_exprs.push_back(std::make_shared<ASTIdentifier>(output_schema_for_partial_agg[agg_func_num + i].first));
         }
         children[0] = exchange_receiver;
     }
@@ -2262,7 +2270,8 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
                 has_uniq_raw_res = true;
         }
 
-        if (dynamic_cast<mock::Aggregation *>(root_executor.get())->need_append_project)
+        auto * agg = dynamic_cast<mock::Aggregation *>(root_executor.get());
+        if (agg->need_append_project || ast_query.select_expression_list->children.size() != agg->agg_exprs.size() + agg->gby_exprs.size())
         {
             /// Project if needed
             root_executor = compileProject(root_executor, executor_index, ast_query.select_expression_list);
