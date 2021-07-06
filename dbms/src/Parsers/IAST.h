@@ -78,7 +78,7 @@ public:
     void dumpTree(WriteBuffer & ostr, size_t indent = 0) const
     {
         String indent_str(indent, '-');
-        ostr << indent_str << getID() << ", " << this << '\n';
+        ostr << indent_str << getID() << ", " << ptrToString(this) << '\n';
         for (const auto & child : children)
             child->dumpTree(ostr, indent + 1);
     }
@@ -152,7 +152,7 @@ public:
 
         char nl_or_ws;
 
-        FormatSettings(std::ostream & ostr_, bool hilite_, bool one_line_)
+        FormatSettings(WriteBuffer & ostr_, bool hilite_, bool one_line_)
             : ostr(ostr_), hilite(hilite_), one_line(one_line_)
         {
             nl_or_ws = one_line ? ' ' : '\n';
