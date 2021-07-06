@@ -65,5 +65,13 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_m
 ERROR 1105 (HY000) at line 1: other error for mpp stream: DB::Exception: Fail point FailPoints::exception_during_mpp_root_task_run is triggered.
 => DBGInvoke __disable_fail_point(exception_during_mpp_root_task_run)
 
+## exception during mpp write err to tunnel
+=> DBGInvoke __enable_fail_point(exception_during_mpp_non_root_task_run)
+=> DBGInvoke __enable_fail_point(exception_during_mpp_write_err_to_tunnel)
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_mpp=1; select count(value), id from t group by id;
+ERROR 1105 (HY000) at line 1: other error for mpp stream: DB::Exception: exchange receiver meet error : Failed to write error msg to tunnel
+=> DBGInvoke __disable_fail_point(exception_during_mpp_non_root_task_run)
+=> DBGInvoke __disable_fail_point(exception_during_mpp_write_err_to_tunnel)
+
 # Clean up.
 mysql> drop table if exists test.t
