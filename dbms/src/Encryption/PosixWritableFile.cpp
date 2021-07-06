@@ -31,10 +31,7 @@ PosixWritableFile::PosixWritableFile(
 PosixWritableFile::~PosixWritableFile()
 {
     metric_increment.destroy();
-    if (fd < 0)
-        return;
-
-    ::close(fd);
+    close();
 }
 
 void PosixWritableFile::open()

@@ -52,13 +52,7 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string & file_name_, int
 #endif
 }
 
-PosixRandomAccessFile::~PosixRandomAccessFile()
-{
-    if (fd < 0)
-        return;
-
-    ::close(fd);
-}
+PosixRandomAccessFile::~PosixRandomAccessFile() { close(); }
 
 void PosixRandomAccessFile::close()
 {
