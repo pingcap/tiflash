@@ -1,6 +1,7 @@
 #include <Common/FailPoint.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
+#include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/stable/PageStorage.h>
 #include <Storages/PathPool.h>
@@ -147,7 +148,9 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 
         if (!run_in_compatible_mode)
         {
+            mergeConfigFromSettings(global_context.getSettingsRef(), config);
             config.num_write_slots = 4; // extend write slots to 4 at least
+
             LOG_INFO(log, "RegionPersister running in normal mode");
             page_storage = std::make_unique<DB::PageStorage>( //
                 "RegionPersister",

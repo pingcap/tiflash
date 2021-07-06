@@ -246,6 +246,8 @@ public:
     // Stop all background tasks.
     void shutdown();
 
+    Block addExtraColumnIfNeed(const Context & db_context, Block && block) const;
+
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range);
