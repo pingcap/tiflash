@@ -171,7 +171,7 @@ public:
         }
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         // Final step does compaction of keys that have zero values, this mutates the state
         auto & merged_maps = this->data(const_cast<AggregateDataPtr>(place)).merged_maps;
