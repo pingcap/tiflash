@@ -5,7 +5,8 @@
 #ifndef CLICKHOUSE_CHECKSUMBUFFER_H
 #define CLICKHOUSE_CHECKSUMBUFFER_H
 #include <IO/HashingWriteBuffer.h>
-#include "DMChecksum.h"
+
+#include "Checksum.h"
 
 namespace DB::DM::Checksum
 {

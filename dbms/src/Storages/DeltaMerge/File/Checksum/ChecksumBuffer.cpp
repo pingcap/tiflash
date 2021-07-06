@@ -50,15 +50,22 @@ void IDigestBuffer<Backend, Buffer>::calculateHash(DB::BufferBase::Position data
     }
 }
 
+template class IDigestBuffer<None, DB::WriteBuffer>;
 template class IDigestBuffer<CRC32, DB::WriteBuffer>;
 template class IDigestBuffer<CRC64, DB::WriteBuffer>;
 template class IDigestBuffer<City128, DB::WriteBuffer>;
+
+template class IDigestBuffer<None, DB::ReadBuffer>;
 template class IDigestBuffer<CRC32, DB::ReadBuffer>;
 template class IDigestBuffer<CRC64, DB::ReadBuffer>;
 template class IDigestBuffer<City128, DB::ReadBuffer>;
+
+template class DigestWriteBuffer<None>;
 template class DigestWriteBuffer<CRC32>;
 template class DigestWriteBuffer<CRC64>;
 template class DigestWriteBuffer<City128>;
+
+template class DigestReadBuffer<None>;
 template class DigestReadBuffer<CRC32>;
 template class DigestReadBuffer<CRC64>;
 template class DigestReadBuffer<City128>;
