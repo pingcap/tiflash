@@ -4,80 +4,78 @@
 
 #ifndef CLICKHOUSE_CHECKSUMBUFFER_H
 #define CLICKHOUSE_CHECKSUMBUFFER_H
-#include <IO/HashingWriteBuffer.h>
+
+#ifndef TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE
+#define TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE (1u << 15u)
+#endif // TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE
+
+#include <Encryption/FileProvider.h>
+#include <IO/WriteBufferFromFileBase.h>
 
 #include "Checksum.h"
 
 namespace DB::DM::Checksum
 {
-template <typename Backend, typename Buffer>
-class IDigestBuffer : public BufferWithOwnMemory<Buffer>
-{
-public:
-    using HashType = typename Backend::HashType;
 
-    explicit IDigestBuffer(size_t block_size_ = DBMS_DEFAULT_HASHING_BLOCK_SIZE)
-        : BufferWithOwnMemory<Buffer>(block_size_, nullptr, 512), block_pos(0), block_size(block_size_)
-    {
-    }
-
-    virtual HashType getHash()
-    {
-        if (block_pos)
-            state.update(&BufferWithOwnMemory<Buffer>::memory[0], block_pos);
-
-        return state.checksum();
-    }
-
-    void append(DB::BufferBase::Position data) { state.update(data, block_size); }
-
-    /// computation of the hash depends on the partitioning of blocks
-    /// so you need to compute a hash of n complete pieces and one incomplete
-    void calculateHash(DB::BufferBase::Position data, size_t len);
-
-protected:
-    size_t  block_pos;
-    size_t  block_size;
-    Backend state{};
-};
 
 /** Computes the hash from the data to write and passes it to the specified WriteBuffer.
   * The buffer of the nested WriteBuffer is used as the main buffer.
   */
 template <typename Backend>
-class DigestWriteBuffer : public IDigestBuffer<Backend, WriteBuffer>
+class FramedChecksumWriteBuffer : public BufferWithOwnMemory<WriteBuffer>
 {
 private:
-    WriteBuffer & out;
-
-    void nextImpl() override
+    WritableFilePtr out;
+    void            nextImpl() override
     {
         size_t len = this->offset();
+        if (len <= sizeof(ChecksumFrame<Backend>))
+            return; // skip empty frame
 
-        auto data = this->working_buffer.begin();
-        this->calculateHash(data, len);
+        auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(*this->working_buffer.begin()); // align should not fail
+        frame.bytes  = len - sizeof(ChecksumFrame<Backend>);
+        auto digest  = Backend{};
+        digest.update(frame.data, frame.bytes);
+        frame.checksum = digest.checksum();
 
-        out.position() = this->pos;
-        out.next();
-        this->working_buffer = out.buffer();
+        auto iter     = this->working_buffer.begin();
+        auto expected = len;
+
+        while (expected != 0)
+        {
+            auto count = out->write(iter, len - expected);
+            if (unlikely(count == -1))
+            {
+                if (errno == EINTR)
+                    continue;
+                else
+                {
+                    // TODO: change throw behavior
+                    throw Poco::WriteFileException("failed to flush data to file", -errno);
+                }
+            }
+            iter += count;
+            expected -= count;
+        }
+
+        position() = reinterpret_cast<Position>(frame.data); // shift frame
     }
 
 public:
     using HashType = typename Backend::HashType;
 
-    explicit DigestWriteBuffer(WriteBuffer & out_, size_t block_size_ = DBMS_DEFAULT_HASHING_BLOCK_SIZE)
-        : IDigestBuffer<Backend, DB::WriteBuffer>(block_size_), out(out_)
+    explicit FramedChecksumWriteBuffer(WritableFilePtr out_, size_t block_size_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE)
+        : BufferWithOwnMemory<WriteBuffer>(sizeof(ChecksumFrame<Backend>) + block_size_ + 512, nullptr, alignof(ChecksumFrame<Backend>)),
+          out(std::move(out_))
     {
-        out.next(); /// If something has already been written to `out` before us, we will not let the remains of this data affect the hash.
-        this->working_buffer = out.buffer();
-        this->pos            = this->working_buffer.begin();
+        // adjust alignment, aligned memory boundary can makes it fast for digesting
+        auto shifted = this->working_buffer.begin() + sizeof(ChecksumFrame<Backend>);
+        auto offset  = (-reinterpret_cast<uintptr_t>(shifted)) & (512u - 1u);
+        auto result  = this->working_buffer.begin() + offset;
+        set(result, sizeof(ChecksumFrame<Backend>) + block_size_);
     }
 
-    HashType getHash() override
-    {
-        this->next();
-        return IDigestBuffer<Backend, WriteBuffer>::getHash();
-    }
+    ~FramedChecksumWriteBuffer() override { next(); }
 };
 
 /*
@@ -85,37 +83,74 @@ public:
  * Small pieces are copied into its own memory.
  */
 template <typename Backend>
-class DigestReadBuffer : public IDigestBuffer<Backend, ReadBuffer>
+class FramedChecksumReadBuffer : public BufferWithOwnMemory<ReadBuffer>
 {
 public:
-    explicit DigestReadBuffer(ReadBuffer & in_, size_t block_size = DBMS_DEFAULT_HASHING_BLOCK_SIZE) :
-        IDigestBuffer<Backend, ReadBuffer>(block_size), in(in_)
+    explicit FramedChecksumReadBuffer(RandomAccessFilePtr in_, size_t block_size = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE)
+        : BufferWithOwnMemory<ReadBuffer>(sizeof(ChecksumFrame<Backend>) + block_size + 512, nullptr, alignof(ChecksumFrame<Backend>)),
+          in(std::move(in_))
     {
-        this->working_buffer = in.buffer();
-        this->pos = in.position();
-
-        /// calculate hash from the data already read
-        if (this->working_buffer.size())
-        {
-            this->calculateHash(this->pos, this->working_buffer.end() - this->pos);
-        }
+        // adjust alignment, aligned memory boundary can makes it fast for digesting
+        auto shifted = this->working_buffer.begin() + sizeof(ChecksumFrame<Backend>);
+        auto offset  = (-reinterpret_cast<uintptr_t>(shifted)) & (512u - 1u);
+        auto result  = this->working_buffer.begin() + offset;
+        set(result, sizeof(ChecksumFrame<Backend>) + block_size);
     }
 
 private:
+    size_t expectRead(Position pos, size_t size) {
+        size_t expected = size;
+        while (expected != 0) {
+            auto count = in->read(pos, size);
+            if (count == 0) {
+                break;
+            }
+            if (unlikely(count < 0)) {
+                if (errno == EINTR)
+                    continue;
+                else
+                {
+                    // TODO: change throw behavior
+                    throw Poco::ReadFileException("failed to read data from file", -errno);
+                }
+            }
+            expected -= count;
+            pos += count;
+        }
+        return size - expected;
+    }
+
     bool nextImpl() override
     {
-        in.position() = this->pos;
-        bool res = in.next();
-        this->working_buffer = in.buffer();
-        this->pos = in.position();
+        // first, read frame header;
+        auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(*this->working_buffer.begin()); // align should not fail
+        auto length = expectRead(working_buffer.begin(), sizeof(ChecksumFrame<Backend>));
+        if (length == 0) return false; // EOF
+        if (length != sizeof(ChecksumFrame<Backend>)) {
+            throwReadAfterEOF();
+        }
 
-        this->calculateHash(this->working_buffer.begin(), this->working_buffer.size());
+        // now read the body
+        length = expectRead(reinterpret_cast<Position>(frame.data), frame.bytes);
+        if (length != frame.bytes) {
+            throwReadAfterEOF();
+        }
 
-        return res;
+        // examine checksum
+        auto digest = Backend {};
+        digest.update(frame.data, frame.bytes);
+        if (frame.checksum != digest.checksum()) {
+            // TODO: change throw behavior
+            throw Poco::ReadFileException("file corruption detected", -errno);
+        }
+
+        //shift position
+        position() = reinterpret_cast<Position>(frame.data);
+
+        return true;
     }
 
-private:
-    ReadBuffer & in;
+    RandomAccessFilePtr in;
 };
 
 } // namespace DB::DM::Checksum

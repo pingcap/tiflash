@@ -9,66 +9,14 @@ namespace DB::DM::Checksum
 
 using namespace DB::DM::Digest;
 
-template <typename Backend, typename Buffer>
-void IDigestBuffer<Backend, Buffer>::calculateHash(DB::BufferBase::Position data, size_t len)
-{
-    if (len)
-    {
-        /// if the data is less than `block_size`, then put them into buffer and calculate hash later
-        if (block_pos + len < block_size)
-        {
-            memcpy(&BufferWithOwnMemory<Buffer>::memory[block_pos], data, len);
-            block_pos += len;
-        }
-        else
-        {
-            /// if something is already written to the buffer, then we'll add it
-            if (block_pos)
-            {
-                size_t n = block_size - block_pos;
-                memcpy(&BufferWithOwnMemory<Buffer>::memory[block_pos], data, n);
-                append(&BufferWithOwnMemory<Buffer>::memory[0]);
-                len -= n;
-                data += n;
-                block_pos = 0;
-            }
+template class FramedChecksumReadBuffer<None>;
+template class FramedChecksumReadBuffer<CRC32>;
+template class FramedChecksumReadBuffer<CRC64>;
+template class FramedChecksumReadBuffer<City128>;
 
-            while (len >= block_size)
-            {
-                append(data);
-                len -= block_size;
-                data += block_size;
-            }
-
-            /// write the remainder to its buffer
-            if (len)
-            {
-                memcpy(&BufferWithOwnMemory<Buffer>::memory[0], data, len);
-                block_pos = len;
-            }
-        }
-    }
-}
-
-template class IDigestBuffer<None, DB::WriteBuffer>;
-template class IDigestBuffer<CRC32, DB::WriteBuffer>;
-template class IDigestBuffer<CRC64, DB::WriteBuffer>;
-template class IDigestBuffer<City128, DB::WriteBuffer>;
-
-template class IDigestBuffer<None, DB::ReadBuffer>;
-template class IDigestBuffer<CRC32, DB::ReadBuffer>;
-template class IDigestBuffer<CRC64, DB::ReadBuffer>;
-template class IDigestBuffer<City128, DB::ReadBuffer>;
-
-template class DigestWriteBuffer<None>;
-template class DigestWriteBuffer<CRC32>;
-template class DigestWriteBuffer<CRC64>;
-template class DigestWriteBuffer<City128>;
-
-template class DigestReadBuffer<None>;
-template class DigestReadBuffer<CRC32>;
-template class DigestReadBuffer<CRC64>;
-template class DigestReadBuffer<City128>;
-
+template class FramedChecksumWriteBuffer<None>;
+template class FramedChecksumWriteBuffer<CRC32>;
+template class FramedChecksumWriteBuffer<CRC64>;
+template class FramedChecksumWriteBuffer<City128>;
 
 } // namespace DB::DM::Checksum

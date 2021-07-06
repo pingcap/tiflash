@@ -91,6 +91,7 @@ struct ChecksumFrame
 {
     size_t                       bytes;
     typename Algorithm::HashType checksum;
+    uint8_t                      data[0];
 };
 
 #define BASIC_CHECK_FOR_FRAME(ALGO)                                                                                        \
