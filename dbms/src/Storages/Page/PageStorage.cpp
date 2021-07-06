@@ -1037,15 +1037,24 @@ bool PageStorage::gc(bool not_skip)
     // Simply copy without any locks, it should be fine since we only use it to skip useless GC routine when this PageStorage is cold.
     last_gc_statistics = statistics_snapshot;
 
-    LOG_INFO(log,
-             storage_name << " GC exit within " << DB::toString(watch.elapsedSeconds(), 2) << " sec. PageFiles from ["                //
-                          << gc_context.min_file_id.first << "," << gc_context.min_file_id.second                                     //
-                          << "," << PageFile::typeToString(gc_context.min_file_type) << "] to ["                                      //
-                          << gc_context.max_file_id.first << "," << gc_context.max_file_id.second                                     //
-                          << "," << PageFile::typeToString(gc_context.max_file_type) << "], num files: " << gc_context.num_page_files //
-                          << ", num legacy:" << gc_context.num_legacy_files << ", compact legacy archive files: "
-                          << gc_context.num_files_archive_in_compact_legacy << ", remove data files: " << gc_context.num_files_remove_data
-                          << ", gc apply: " << gc_context.gc_apply_stat.toString());
+    {
+        std::stringstream ss;
+        const auto        elapsed_sec = watch.elapsedSeconds();
+        ss << storage_name << " GC exit within " << DB::toString(elapsed_sec, 2) << " sec. PageFiles from ["           //
+           << gc_context.min_file_id.first << "," << gc_context.min_file_id.second                                     //
+           << "," << PageFile::typeToString(gc_context.min_file_type) << "] to ["                                      //
+           << gc_context.max_file_id.first << "," << gc_context.max_file_id.second                                     //
+           << "," << PageFile::typeToString(gc_context.max_file_type) << "], num files: " << gc_context.num_page_files //
+           << ", num legacy:" << gc_context.num_legacy_files
+           << ", compact legacy archive files: " << gc_context.num_files_archive_in_compact_legacy
+           << ", remove data files: " << gc_context.num_files_remove_data << ", gc apply: " << gc_context.gc_apply_stat.toString();
+        // Log warning if the GC run for a long time.
+        constexpr double EXIST_LONG_GC = 30.0;
+        if (elapsed_sec > EXIST_LONG_GC)
+            LOG_WARNING(log, ss.str());
+        else
+            LOG_INFO(log, ss.str());
+    }
     return gc_context.compact_result.do_compaction;
 }
 
