@@ -6,7 +6,12 @@ option (USE_INTERNAL_SSL_LIBRARY "Set to FALSE to use system *ssl library instea
 
 if (NOT USE_INTERNAL_SSL_LIBRARY)
     if (APPLE)
-        set (OPENSSL_ROOT_DIR "/usr/local/opt/openssl")
+        execute_process (
+            COMMAND brew --prefix openssl
+            OUTPUT_VARIABLE OPENSSL_ROOT_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        message (STATUS "Try set OPENSSL_ROOT_DIR to ${OPENSSL_ROOT_DIR}")
         # https://rt.openssl.org/Ticket/Display.html?user=guest&pass=guest&id=2232
         if (USE_STATIC_LIBRARIES)
             message (WARNING "Disable USE_STATIC_LIBRARIES if you have linking problems with OpenSSL on MacOS")
