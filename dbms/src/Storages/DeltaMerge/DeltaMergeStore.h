@@ -218,7 +218,11 @@ public:
         std::mutex mutex;
 
     public:
-        size_t length() { return tasks.size(); }
+        size_t length()
+        {
+            std::scoped_lock lock(mutex);
+            return tasks.size();
+        }
 
         void addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
 
@@ -245,6 +249,8 @@ public:
 
     // Stop all background tasks.
     void shutdown();
+
+    Block addExtraColumnIfNeed(const Context & db_context, Block && block) const;
 
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 

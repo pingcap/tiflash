@@ -169,7 +169,10 @@ std::pair<size_t, size_t> findPack(const Packs & packs, size_t rows_offset, size
             if (deletes_count == deletes_offset)
             {
                 if (unlikely(rows_count != rows_offset))
-                    throw Exception("deletes_offset and rows_offset are not matched");
+                    throw Exception("rows_count and rows_offset are expected to be equal. pack_index: " + DB::toString(pack_index)
+                                    + ", pack_size: " + DB::toString(packs.size()) + ", rows_count: " + DB::toString(rows_count)
+                                    + ", rows_offset: " + DB::toString(rows_offset) + ", deletes_count: " + DB::toString(deletes_count)
+                                    + ", deletes_offset: " + DB::toString(deletes_offset));
                 return {pack_index, 0};
             }
             ++deletes_count;
@@ -180,14 +183,19 @@ std::pair<size_t, size_t> findPack(const Packs & packs, size_t rows_offset, size
             if (rows_count > rows_offset)
             {
                 if (unlikely(deletes_count != deletes_offset))
-                    throw Exception("deletes_offset and rows_offset are not matched");
+                    throw Exception("deletes_count and deletes_offset are expected to be equal. pack_index: " + DB::toString(pack_index)
+                                    + ", pack_size: " + DB::toString(packs.size()) + ", rows_count: " + DB::toString(rows_count)
+                                    + ", rows_offset: " + DB::toString(rows_offset) + ", deletes_count: " + DB::toString(deletes_count)
+                                    + ", deletes_offset: " + DB::toString(deletes_offset));
 
                 return {pack_index, pack->rows - (rows_count - rows_offset)};
             }
         }
     }
     if (rows_count != rows_offset || deletes_count != deletes_offset)
-        throw Exception("illegal rows_offset(" + DB::toString(rows_offset) + "), deletes_count(" + DB::toString(deletes_count) + ")");
+        throw Exception("illegal rows_offset and deletes_offset. pack_size: " + DB::toString(packs.size())
+                        + ", rows_count: " + DB::toString(rows_count) + ", rows_offset: " + DB::toString(rows_offset)
+                        + ", deletes_count: " + DB::toString(deletes_count) + ", deletes_offset: " + DB::toString(deletes_offset));
 
     return {pack_index, 0};
 }

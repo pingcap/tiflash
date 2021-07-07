@@ -129,7 +129,7 @@ void KVStore::tryPersist(const RegionID region_id)
     }
 }
 
-void KVStore::gcRegionCache(Seconds gc_persist_period)
+void KVStore::gcRegionPersistedCache(Seconds gc_persist_period)
 {
     {
         decltype(bg_gc_region_data) tmp;
@@ -248,7 +248,16 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
     removeRegion(region_id, /* remove_data */ true, tmt.getRegionTable(), task_lock, region_manager.genRegionTaskLock(region_id));
 }
 
-void KVStore::setRegionCompactLogPeriod(UInt64 sec) { REGION_COMPACT_LOG_PERIOD = sec; }
+void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes)
+{
+    REGION_COMPACT_LOG_PERIOD = sec;
+    REGION_COMPACT_LOG_MIN_ROWS = rows;
+    REGION_COMPACT_LOG_MIN_BYTES = bytes;
+
+    LOG_INFO(log,
+        __FUNCTION__ << ": threshold config: "
+                     << "period " << sec << ", rows " << rows << ", bytes " << bytes);
+}
 
 void KVStore::persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller)
 {
@@ -261,7 +270,6 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     raft_cmdpb::AdminCmdType cmd_type, UInt64 curr_region_id, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(curr_region_id);
-    bool sync_log = true;
     const RegionPtr curr_region_ptr = getRegion(curr_region_id);
     if (curr_region_ptr == nullptr)
     {
@@ -276,29 +284,43 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
 
     curr_region.handleWriteRaftCmd({}, index, term, tmt);
 
-    if (cmd_type != raft_cmdpb::AdminCmdType::CompactLog)
-    {
-        sync_log = false;
-    }
-    else
-    {
-        // use random period so that lots of regions will not be persisted at same time.
-        auto compact_log_period = std::rand() % REGION_COMPACT_LOG_PERIOD.load(std::memory_order_relaxed);
-        if (curr_region.lastCompactLogTime() + Seconds{compact_log_period} > Clock::now())
+    const auto check_sync_log = [&]() {
+        if (cmd_type != raft_cmdpb::AdminCmdType::CompactLog)
         {
-            sync_log = false;
-            LOG_DEBUG(log, curr_region.toString(false) << " ignore compact log cmd");
+            // ignore ComputeHash, VerifyHash or other useless cmd.
+            return false;
         }
         else
         {
-            curr_region.markCompactLog();
-        }
-    }
+            auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
 
-    if (sync_log)
+            LOG_DEBUG(log, curr_region.toString(false) << " approx mem cache info: rows " << rows << ", bytes " << size_bytes);
+
+            if (rows >= REGION_COMPACT_LOG_MIN_ROWS.load(std::memory_order_relaxed)
+                || size_bytes >= REGION_COMPACT_LOG_MIN_BYTES.load(std::memory_order_relaxed))
+            {
+                // if rows or bytes more than threshold, flush cache and perist mem data.
+                return true;
+            }
+            else
+            {
+                // if thhere is little data in mem, wait until time interval reached threshold.
+                // use random period so that lots of regions will not be persisted at same time.
+                auto compact_log_period = std::rand() % REGION_COMPACT_LOG_PERIOD.load(std::memory_order_relaxed);
+                if (curr_region.lastCompactLogTime() + Seconds{compact_log_period} > Clock::now())
+                    return false;
+                else
+                    return true;
+            }
+        }
+    };
+
+    if (check_sync_log())
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
         persistRegion(curr_region, region_task_lock, "compact raft log");
+        curr_region.markCompactLog();
+        curr_region.cleanApproxMemCacheInfo();
         return EngineStoreApplyRes::Persist;
     }
     return EngineStoreApplyRes::None;

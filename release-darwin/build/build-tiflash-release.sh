@@ -47,3 +47,7 @@ cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.dylib" "$install_dir/li
 
 FILE="$install_dir/tiflash"
 otool -L "$FILE"
+
+set +e
+echo "show ccache stats"
+ccache -s

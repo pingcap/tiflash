@@ -60,7 +60,7 @@ public:
 
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
-    void gcRegionCache(Seconds gc_persist_period = REGION_CACHE_GC_PERIOD);
+    void gcRegionPersistedCache(Seconds gc_persist_period = REGION_CACHE_GC_PERIOD);
 
     void tryPersist(const RegionID region_id);
 
@@ -82,7 +82,7 @@ public:
     void handlePreApplySnapshot(const RegionPtrWithBlock &, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
-    void setRegionCompactLogPeriod(UInt64);
+    void setRegionCompactLogConfig(UInt64, UInt64, UInt64);
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
@@ -140,6 +140,8 @@ private:
     Logger * log;
 
     std::atomic<UInt64> REGION_COMPACT_LOG_PERIOD;
+    std::atomic<UInt64> REGION_COMPACT_LOG_MIN_ROWS;
+    std::atomic<UInt64> REGION_COMPACT_LOG_MIN_BYTES;
 
     mutable std::mutex bg_gc_region_data_mutex;
     std::list<RegionDataReadInfoList> bg_gc_region_data;

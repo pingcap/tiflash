@@ -1,7 +1,6 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <gtest/gtest.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB

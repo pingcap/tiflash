@@ -1,24 +1,71 @@
+def doCheckout(commit, refspec) {
+    checkout(changelog: false, poll: false, scm: [
+        $class           : "GitSCM",
+        branches         : [
+                [name: "${commit}"],
+        ],
+        userRemoteConfigs: [
+                [
+                        url          : "git@github.com:pingcap/tics.git",
+                        refspec      : refspec,
+                        credentialsId: "github-sre-bot-ssh",
+                ]
+        ],
+        extensions       : [
+                [$class: 'PruneStaleBranch'],
+                [$class: 'CleanBeforeCheckout'],
+        ],
+    ])
+}
+
 def checkoutTiCS(commit, pullId) {
     def refspec = "+refs/heads/*:refs/remotes/origin/*"
     if (pullId) {
         refspec += " +refs/pull/${pullId}/*:refs/remotes/origin/pr/${pullId}/*"
     }
+    try {
+        doCheckout(commit, refspec)
+    } catch (info) {
+        retry(2) {
+            echo "checkout failed, retry.."
+            sleep 5
+            if (sh(returnStatus: true, script: '[ -d .git ] && git rev-parse --git-dir > /dev/null 2>&1') != 0) {
+                echo ".git already exist or not a valid git dir. Delete dir..."
+                deleteDir()
+            }
+            doCheckout(commit, refspec)
+        }
+    }
+}
+
+def checkoutTiCSFull(commit, pullId) {
+    def refspec = "+refs/heads/*:refs/remotes/origin/*"
+    if (pullId) {
+        refspec += " +refs/pull/${pullId}/*:refs/remotes/origin/pr/${pullId}/*"
+    }
     checkout(changelog: false, poll: false, scm: [
-            $class           : "GitSCM",
-            branches         : [
+            $class                           : "GitSCM",
+            branches                         : [
                     [name: "${commit}"],
             ],
-            userRemoteConfigs: [
+            userRemoteConfigs                : [
                     [
                             url          : "git@github.com:pingcap/tics.git",
                             refspec      : refspec,
                             credentialsId: "github-sre-bot-ssh",
                     ]
             ],
-            extensions       : [
+            extensions                       : [
+                    [$class             : 'SubmoduleOption',
+                     disableSubmodules  : false,
+                     parentCredentials  : true,
+                     recursiveSubmodules: true,
+                     trackingSubmodules : false,
+                     reference          : ''],
                     [$class: 'PruneStaleBranch'],
                     [$class: 'CleanBeforeCheckout'],
             ],
+            doGenerateSubmoduleConfigurations: false,
     ])
 }
 
@@ -40,9 +87,17 @@ def runClosure(label, Closure body) {
 
 def runTest(label, testPath, tidbBranch) {
     runClosure(label) {
-        stage("Checkout") {
+        stage("Unstash") {
+            unstash 'git-code-tics'
             dir("tics") {
-            	checkoutTiCS("${params.ghprbActualCommit}", "${params.ghprbPullId}")
+                timeout(time: 5, unit: 'MINUTES') {
+                    container("docker") {
+                        sh """
+                        pwd
+                        DOWNLOAD_TAR=true COMMIT_HASH=${params.ghprbActualCommit} PULL_ID=${params.ghprbPullId} TAR_PATH=./tests/.build bash -e release-centos7/build/fetch-ci-build.sh
+                        """
+                    }
+                }
             }
         }
         dir(testPath) {
