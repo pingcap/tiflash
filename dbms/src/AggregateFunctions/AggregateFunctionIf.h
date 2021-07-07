@@ -79,9 +79,47 @@ public:
             nested_func->add(place, columns, row_num, arena);
     }
 
+    void addBatch(
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t) const override
+    {
+        nested_func->addBatch(batch_size, places, place_offset, columns, arena, num_arguments - 1);
+    }
+
+    void addBatchSinglePlace(
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t) const override
+    {
+        nested_func->addBatchSinglePlace(batch_size, place, columns, arena, num_arguments - 1);
+    }
+
+    void addBatchSinglePlaceNotNull(
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        const UInt8 * null_map,
+        Arena * arena,
+        ssize_t) const override
+    {
+        nested_func->addBatchSinglePlaceNotNull(batch_size, place, columns, null_map, arena, num_arguments - 1);
+    }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         nested_func->merge(place, rhs, arena);
+    }
+
+     void mergeBatch(
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        const AggregateDataPtr * rhs,
+        Arena * arena) const override
+    {
+        nested_func->mergeBatch(batch_size, places, place_offset, rhs, arena);
     }
 
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
