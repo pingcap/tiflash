@@ -29,21 +29,19 @@ private:
     void            nextImpl() override
     {
         size_t len = this->offset();
-        if (len <= sizeof(ChecksumFrame<Backend>))
-            return; // skip empty frame
-
-        auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(*this->working_buffer.begin()); // align should not fail
-        frame.bytes  = len - sizeof(ChecksumFrame<Backend>);
-        auto digest  = Backend{};
+        auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
+            *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
+        frame.bytes = len;
+        auto digest = Backend{};
         digest.update(frame.data, frame.bytes);
         frame.checksum = digest.checksum();
 
-        auto iter     = this->working_buffer.begin();
-        auto expected = len;
+        auto iter     = this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>);
+        auto expected = len + sizeof(ChecksumFrame<Backend>);
 
         while (expected != 0)
         {
-            auto count = out->write(iter, len - expected);
+            auto count = out->write(iter, expected);
             if (unlikely(count == -1))
             {
                 if (errno == EINTR)
@@ -57,8 +55,6 @@ private:
             iter += count;
             expected -= count;
         }
-
-        position() = reinterpret_cast<Position>(frame.data); // shift frame
     }
 
 public:
@@ -72,7 +68,8 @@ public:
         auto shifted = this->working_buffer.begin() + sizeof(ChecksumFrame<Backend>);
         auto offset  = (-reinterpret_cast<uintptr_t>(shifted)) & (512u - 1u);
         auto result  = this->working_buffer.begin() + offset;
-        set(result, sizeof(ChecksumFrame<Backend>) + block_size_);
+        set(result + sizeof(ChecksumFrame<Backend>), block_size_);
+        position() = working_buffer.begin(); // empty the buffer
     }
 
     ~FramedChecksumWriteBuffer() override { next(); }
@@ -98,14 +95,18 @@ public:
     }
 
 private:
-    size_t expectRead(Position pos, size_t size) {
+    size_t expectRead(Position pos, size_t size)
+    {
         size_t expected = size;
-        while (expected != 0) {
-            auto count = in->read(pos, size);
-            if (count == 0) {
+        while (expected != 0)
+        {
+            auto count = in->read(pos, expected);
+            if (count == 0)
+            {
                 break;
             }
-            if (unlikely(count < 0)) {
+            if (unlikely(count < 0))
+            {
                 if (errno == EINTR)
                     continue;
                 else
@@ -123,30 +124,34 @@ private:
     bool nextImpl() override
     {
         // first, read frame header;
-        auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(*this->working_buffer.begin()); // align should not fail
-        auto length = expectRead(working_buffer.begin(), sizeof(ChecksumFrame<Backend>));
-        if (length == 0) return false; // EOF
-        if (unlikely(length != sizeof(ChecksumFrame<Backend>))) {
+        auto & frame  = reinterpret_cast<ChecksumFrame<Backend> &>(*this->working_buffer.begin()); // align should not fail
+        auto   length = expectRead(working_buffer.begin(), sizeof(ChecksumFrame<Backend>));
+        if (length == 0)
+            return false; // EOF
+        if (unlikely(length != sizeof(ChecksumFrame<Backend>)))
+        {
             throwReadAfterEOF();
         }
 
         // now read the body
         length = expectRead(reinterpret_cast<Position>(frame.data), frame.bytes);
-        if (unlikely(length != frame.bytes)) {
+        if (unlikely(length != frame.bytes))
+        {
             throwReadAfterEOF();
         }
 
         // examine checksum
-        auto digest = Backend {};
+        auto digest = Backend{};
         digest.update(frame.data, frame.bytes);
-        if (unlikely(frame.checksum != digest.checksum())) {
+        if (unlikely(frame.checksum != digest.checksum()))
+        {
             // TODO: change throw behavior
             throw Poco::ReadFileException("file corruption detected", -errno);
         }
 
         //shift position
-        position() = reinterpret_cast<Position>(frame.data);
-
+        working_buffer_offset = sizeof(frame);
+        working_buffer.resize(sizeof(frame) + length);
         return true;
     }
 
