@@ -75,6 +75,9 @@ public:
             ((position() - reinterpret_cast<Position>(vector.data()))
                 + sizeof(typename VectorType::value_type) - 1)  /// Align up.
             / sizeof(typename VectorType::value_type));
+        bytes += offset();
+        /// Prevent further writes.
+        set(nullptr, 0);
     }
 
     bool isFinished() const { return is_finished; }
@@ -83,8 +86,8 @@ public:
     {
         if (vector.empty())
             vector.resize(initial_size);
-        set(reinterpret_cast<Position>(vector.data()), vector.size());
         bytes = 0;
+        set(reinterpret_cast<Position>(vector.data()), vector.size());
         is_finished = false;
     }
 
