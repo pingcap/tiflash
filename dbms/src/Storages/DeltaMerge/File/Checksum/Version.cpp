@@ -33,7 +33,7 @@ static inline void requiredRead(void * buffer, size_t size, const DB::ReadBuffer
         offset += sizeof(ChecksumFrame<Digest::ALGO>);                                      \
         break;
 
-DB::DM::SerializedVersionInfo::SerializedVersionInfo(const DB::ReadBufferPtr & filePtr, bool readExtra) : checksums(), extraInfo()
+DB::DM::DeserializedVersionInfo::DeserializedVersionInfo(const DB::ReadBufferPtr & filePtr, bool readExtra) : checksums(), extraInfo()
 {
     VersionInfo header{};
     requiredRead(&header, sizeof(header), filePtr);
@@ -74,7 +74,7 @@ DB::DM::SerializedVersionInfo::SerializedVersionInfo(const DB::ReadBufferPtr & f
     }
 }
 
-void DB::DM::SerializedVersionInfo::writeToBuffer(const DB::WriteBufferPtr & filePtr)
+void DB::DM::DeserializedVersionInfo::writeToBuffer(const DB::WriteBufferPtr & filePtr)
 {
     VersionInfo header{};
     header.endianValue       = DEFAULT_ENDIAN_VALUE;

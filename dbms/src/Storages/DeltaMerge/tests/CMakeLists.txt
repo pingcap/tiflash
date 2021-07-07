@@ -5,10 +5,12 @@ macro(grep_gtest_sources BASE_DIR DST_VAR)
     # Cold match files that are not in tests/ directories
     file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
 endmacro()
-# attach all dm gtest sources
+# attach all dm gtest sources // TODO: THIS DOES NOT COMPILE
 grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms/src/Storages/DeltaMerge/tests dm_gtest_sources)
 add_executable(gtests_dm EXCLUDE_FROM_ALL ${dm_gtest_sources} dm_basic_include.h)
-target_link_libraries(gtests_dm gtest_main dbms clickhouse_functions)
+target_link_libraries(gtests_dm gtest_main dbms common clickhouse_common_io clickhouse_functions)
+target_include_directories(gtests_dm PRIVATE ${CRC64_INCLUDE_DIRS})
+target_compile_definitions(gtests_dm PRIVATE -DDBMS_PUBLIC_GTEST=1)
 add_check(gtests_dm)
 
 # add unit test manually

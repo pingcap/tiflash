@@ -62,7 +62,7 @@ struct VersionInfo
     ExtraInfoFrame extraData[0];
 };
 
-class SerializedVersionInfo
+class DeserializedVersionInfo
 {
 public:
     [[nodiscard]] FileVersion  getVersion() const { return version; }
@@ -80,7 +80,7 @@ public:
 
     [[nodiscard]] const std::map<std::string, std::string> & getInfoMap() const { return extraInfo; }
 
-    SerializedVersionInfo(FileVersion                        _version,
+    DeserializedVersionInfo(FileVersion                        _version,
                           ChecksumAlgo                       _checksumAlgo,
                           size_t                             _checksumBlockSize,
                           std::vector<FixedChecksumFrame>    _checksums,
@@ -93,7 +93,7 @@ public:
     {
     }
 
-    SerializedVersionInfo(const ReadBufferPtr & filePtr, bool readExtra);
+    DeserializedVersionInfo(const ReadBufferPtr & filePtr, bool readExtra);
 
     void writeToBuffer(const WriteBufferPtr & filePtr);
 

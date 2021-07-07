@@ -19,6 +19,7 @@
 #if !__clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
 #else
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-compare"
