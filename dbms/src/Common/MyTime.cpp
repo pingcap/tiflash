@@ -930,95 +930,69 @@ size_t maxFormattedDateTimeStringLength(const String & format)
     return std::max<size_t>(result, 1);
 }
 
-MyDateTime numberToDateTime(Int64 number)
+void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
 {
-    MyDateTime datetime(0);
-
-    auto get_datetime = [](const Int64 & num) {
-        auto ymd = num / 1000000;
-        auto hms = num - ymd * 1000000;
-
-        UInt16 year = ymd / 10000;
-        ymd %= 10000;
-        UInt8 month = ymd / 100;
-        UInt8 day = ymd % 100;
-
-        UInt16 hour = hms / 10000;
-        hms %= 10000;
-        UInt8 minute = hms / 100;
-        UInt8 second = hms % 100;
-
-        return MyDateTime(year, month, day, hour, minute, second, 0);
-    };
-
-    if (number == 0)
-        return datetime;
-
-    // datetime type
-    if (number >= 10000101000000)
+    if (!(year == 0 && month == 0 && day == 0))
     {
-        return get_datetime(number);
+        if (!allow_zero_in_date && (month == 0 || day == 0))
+        {
+            char buff[] = "0000-00-00";
+            std::sprintf(buff, "%04d-%02d-%02d", year, month, day);
+            throw TiFlashException("Incorrect datetime value: " + String(buff), Errors::Types::WrongValue);
+        }
     }
 
-    // check MMDD
-    if (number < 101)
+    if (year >= 9999 || month > 12)
     {
-        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
     }
 
-    // check YYMMDD: 2000-2069
-    if (number <= 69 * 10000 + 1231)
+    UInt8 max_day = 31;
+    if (!allow_invalid_date)
     {
-        number = (number + 200000000) * 1000000;
-        return get_datetime(number);
+        constexpr static UInt8 max_days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        static auto is_leap_year = [](UInt16 _year) { return ((_year % 4 == 0) && (_year % 100 != 0)) || (_year % 400 == 0); };
+        max_day = max_days_in_month[month - 1];
+        if (month == 2 && is_leap_year(year))
+        {
+            max_day = 29;
+        }
+    }
+    if (day > max_day)
+    {
+        char buff[] = "0000-00-00";
+        std::sprintf(buff, "%04d-%02d-%02d", year, month, day);
+        throw TiFlashException("Incorrect datetime value: " + String(buff), Errors::Types::WrongValue);
     }
 
-    // check YYMMDD
-    if (number <= 991231)
+    if (hour < 0 || hour >= 24)
     {
-        number = (number + 19000000) * 1000000;
-        return get_datetime(number);
+        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
     }
-
-    // check YYYYMMDD
-    if (number <= 10000101)
+    if (minute >= 60)
     {
-        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
+        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
     }
-
-    // check hhmmss
-    if (number <= 99991231)
+    if (second >= 60)
     {
-        number = number * 1000000;
-        return get_datetime(number);
+        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
     }
+    return;
+}
 
-    // check MMDDhhmmss
-    if (number < 101000000)
+bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
+    const UInt64 & second, const UInt64 & microsecond, MyDateTime & result)
+{
+    if (year >= (1 << MyTimeBase::YEAR_BIT_FIELD_WIDTH) || month >= (1 << MyTimeBase::MONTH_BIT_FIELD_WIDTH)
+        || day >= (1 << MyTimeBase::DAY_BIT_FIELD_WIDTH) || hour >= (1 << MyTimeBase::HOUR_BIT_FIELD_WIDTH)
+        || minute >= (1 << MyTimeBase::MINUTE_BIT_FIELD_WIDTH) || second >= (1 << MyTimeBase::SECOND_BIT_FIELD_WIDTH)
+        || microsecond >= (1 << MyTimeBase::MICROSECOND_BIT_FIELD_WIDTH))
     {
-        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
+        result = MyDateTime(0, 0, 0, 0, 0, 0, 0);
+        return true;
     }
-
-    // check YYMMDDhhmmss: 2000-2069
-    if (number <= 69 * 10000000000 + 1231235959)
-    {
-        number += 20000000000000;
-        return get_datetime(number);
-    }
-
-    // check YYMMDDhhmmss
-    if (number < 70 * 10000000000 + 101000000)
-    {
-        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
-    }
-
-    if (number <= 991231235959)
-    {
-        number += 19000000000000;
-        return get_datetime(number);
-    }
-
-    return get_datetime(number);
+    result = MyDateTime(year, month, day, hour, minute, second, microsecond);
+    return false;
 }
 
 MyDateTimeFormatter::MyDateTimeFormatter(const String & layout)
