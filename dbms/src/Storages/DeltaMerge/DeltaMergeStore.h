@@ -118,9 +118,6 @@ struct DeltaMergeStoreStat
     UInt64 background_tasks_length = 0;
 };
 
-// It is used to prevent hash conflict of file caches.
-static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
-
 class DeltaMergeStore : private boost::noncopyable
 {
 public:
@@ -221,7 +218,11 @@ public:
         std::mutex mutex;
 
     public:
-        size_t length() { return tasks.size(); }
+        size_t length()
+        {
+            std::scoped_lock lock(mutex);
+            return tasks.size();
+        }
 
         void addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
 
@@ -248,6 +249,8 @@ public:
 
     // Stop all background tasks.
     void shutdown();
+
+    Block addExtraColumnIfNeed(const Context & db_context, Block && block) const;
 
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
@@ -363,7 +366,6 @@ private:
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
 
-    UInt64   hash_salt;
     Logger * log;
 }; // namespace DM
 

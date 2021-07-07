@@ -1,5 +1,6 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <IO/WriteHelpers.h>
@@ -29,6 +30,13 @@ namespace DB
 // =========================================================
 // Page Meta format
 // =========================================================
+
+namespace FailPoints
+{
+extern const char exception_before_page_file_write_sync[];
+extern const char force_formal_page_file_not_exists[];
+extern const char force_legacy_or_checkpoint_page_file_exists[];
+} // namespace FailPoints
 
 static constexpr bool PAGE_CHECKSUM_ON_READ = true;
 
@@ -269,7 +277,9 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
     char * pos           = meta_buffer + meta_file_offset;
     if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
     {
-        LOG_WARNING(page_file.log, "Incomplete write batch @" + toString() + ", ignored.");
+        LOG_WARNING(page_file.log,
+                    "Incomplete write batch {" << toString() << "} [batch_start_pos=" << meta_file_offset << "] [meta_size=" << meta_size
+                                               << "] [file=" << page_file.metaPath() << "] ignored.");
         status = Status::Finished;
         return;
     }
@@ -277,7 +287,9 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
     const auto   wb_bytes     = PageUtil::get<PageMetaFormat::WBSize>(pos);
     if (wb_start_pos + wb_bytes > meta_data_end)
     {
-        LOG_WARNING(page_file.log, "Incomplete write batch @" + toString() + ", ignored.");
+        LOG_WARNING(page_file.log,
+                    "Incomplete write batch {" << toString() << "} [expect_batch_bytes=" << wb_bytes << "] [meta_size=" << meta_size
+                                               << "] [file=" << page_file.metaPath() << "] ignored.");
         status = Status::Finished;
         return;
     }
@@ -294,7 +306,9 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
     }
     else
     {
-        throw Exception("PageFile binary version not match, unknown [version=" + DB::toString(binary_version) + "] [file=" + page_file.metaPath() + "]", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("PageFile binary version not match {" + toString() + "} [unknown_version=" + DB::toString(binary_version)
+                            + "] [file=" + page_file.metaPath() + "]",
+                        ErrorCodes::LOGICAL_ERROR);
     }
 
     // return the binary_version if `v` is not null
@@ -308,9 +322,9 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
     if (wb_checksum != checksum_calc)
     {
         std::stringstream ss;
-        ss << "expected: " << std::hex << wb_checksum << ", but: " << checksum_calc;
-        throw Exception("Write batch checksum not match, path: " + page_file.folderPath() + ", offset: "
-                            + DB::toString(wb_start_pos - meta_buffer) + ", bytes: " + DB::toString(wb_bytes) + ", " + ss.str(),
+        ss << "[expecte_checksum=" << std::hex << wb_checksum << "] [actual_checksum" << checksum_calc << "]";
+        throw Exception("Write batch checksum not match {" + toString() + "} [path=" + page_file.folderPath()
+                            + "] [batch_bytes=" + DB::toString(wb_bytes) + "] " + ss.str(),
                         ErrorCodes::CHECKSUM_DOESNT_MATCH);
     }
 
@@ -338,6 +352,13 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
                 entry.level   = PageUtil::get<PageFileLevel>(pos);
                 flags         = PageUtil::get<PageMetaFormat::PageFlags>(pos);
             }
+            else
+            {
+                throw Exception("PageFile binary version not match {" + toString() + "} [unknown_version=" + DB::toString(binary_version)
+                                    + "] [file=" + page_file.metaPath() + "]",
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+
             entry.tag      = PageUtil::get<PageMetaFormat::PageTag>(pos);
             entry.offset   = PageUtil::get<PageMetaFormat::PageOffset>(pos);
             entry.size     = PageUtil::get<PageSize>(pos);
@@ -385,7 +406,9 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
     pos += sizeof(PageMetaFormat::Checksum);
 
     if (unlikely(pos != wb_start_pos + wb_bytes))
-        throw Exception("pos not match", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("pos not match {" + toString() + "} [batch_bytes=" + DB::toString(wb_bytes)
+                            + "] [actual_bytes=" + DB::toString(pos - wb_start_pos) + "] [file=" + page_file.metaPath() + "]",
+                        ErrorCodes::LOGICAL_ERROR);
 
     curr_write_batch_sequence = wb_sequence;
     meta_file_offset          = pos - meta_buffer;
@@ -438,6 +461,15 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
+#ifndef NDEBUG
+    auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf, bool enable_failpoint) {
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), enable_failpoint);
+        if (sync_on_write)
+            PageUtil::syncFile(file);
+    };
+    write_buf(data_file, page_file.data_file_pos, data_buf, false);
+    write_buf(meta_file, page_file.meta_file_pos, meta_buf, true);
+#else
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf) {
         PageUtil::writeFile(file, offset, buf.begin(), buf.size());
         if (sync_on_write)
@@ -445,6 +477,20 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     };
     write_buf(data_file, page_file.data_file_pos, data_buf);
     write_buf(meta_file, page_file.meta_file_pos, meta_buf);
+#endif
+
+    fiu_do_on(FailPoints::exception_before_page_file_write_sync,
+              { // Mock that writing page file meta is not completed
+                  auto f    = Poco::File(meta_file->getFileName());
+                  auto size = f.getSize();
+                  f.setSize(size - 2);
+                  auto size_after = f.getSize();
+                  LOG_WARNING(page_file.log,
+                              "Failpoint truncate [file=" << meta_file->getFileName() << "] [origin_size=" << size
+                                                          << "] [truncated_size=" << size_after << "]");
+                  throw Exception(String("Fail point ") + FailPoints::exception_before_page_file_write_sync + " is triggered.",
+                                  ErrorCodes::FAIL_POINT_ERROR);
+              });
 
     page_file.data_file_pos += data_buf.size();
     page_file.meta_file_pos += meta_buf.size();
@@ -814,6 +860,12 @@ PageFile PageFile::newPageFile(PageFileId              file_id,
                                PageFile::Type          type,
                                Logger *                log)
 {
+#ifndef NDEBUG
+    // PageStorage may create a "Formal" PageFile for writing,
+    // or a "Temp" PageFile for gc data.
+    if (type != PageFile::Type::Temp && type != PageFile::Type::Formal)
+        throw Exception("Should not create page file with type: " + typeToString(type));
+#endif
     return PageFile(file_id, level, parent_path, file_provider_, type, true, log);
 }
 
@@ -834,6 +886,26 @@ bool PageFile::isPageFileExist(
     return pf.isExist();
 }
 
+void PageFile::setFileAppendPos(size_t meta_pos, size_t data_pos)
+{
+    meta_file_pos = meta_pos;
+    data_file_pos = data_pos;
+
+    // If `meta_file_pos` is less than the file size on disk, it must
+    // be some incomplete write batches meta been ignored.
+    // Truncate the meta file size to throw those broken meta away.
+    Poco::File meta_on_disk(metaPath());
+    const auto meta_size_on_disk = meta_on_disk.getSize();
+    if (unlikely(meta_size_on_disk != meta_pos))
+    {
+        LOG_WARNING(log,
+                    "Truncate incomplete write batches"
+                    " [orig_size="
+                        << meta_size_on_disk << "] [set_size=" << meta_file_pos << "] [file=" << metaPath() << "]");
+        meta_on_disk.setSize(meta_file_pos);
+    }
+}
+
 void PageFile::setFormal()
 {
     if (type != Type::Temp)
@@ -844,7 +916,14 @@ void PageFile::setFormal()
     type = Type::Formal;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
     file_provider->linkEncryptionInfo(old_data_encryption_path, dataEncryptionPath());
-    file.renameTo(folderPath());
+    try
+    {
+        file.renameTo(folderPath());
+    }
+    catch (Poco::Exception & e)
+    {
+        throw DB::Exception(e); // wrap Poco::Exception as DB::Exception for better stack backtrace
+    }
     file_provider->deleteEncryptionInfo(old_meta_encryption_path);
     file_provider->deleteEncryptionInfo(old_data_encryption_path);
 }
@@ -860,7 +939,14 @@ size_t PageFile::setLegacy()
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
-    formal_dir.renameTo(folderPath());
+    try
+    {
+        formal_dir.renameTo(folderPath());
+    }
+    catch (Poco::Exception & e)
+    {
+        throw DB::Exception(e); // wrap Poco::Exception as DB::Exception for better stack backtrace
+    }
     file_provider->deleteEncryptionInfo(old_meta_encryption_path);
     file_provider->deleteEncryptionInfo(old_data_encryption_path);
     // remove the data part
@@ -885,7 +971,14 @@ size_t PageFile::setCheckpoint()
     Poco::File file(folderPath());
     type = Type::Checkpoint;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
-    file.renameTo(folderPath());
+    try
+    {
+        file.renameTo(folderPath());
+    }
+    catch (Poco::Exception & e)
+    {
+        throw DB::Exception(e); // wrap Poco::Exception as DB::Exception for better stack backtrace
+    }
     file_provider->deleteEncryptionInfo(old_meta_encryption_path);
     // Remove the data part, should be an emtpy file.
     return removeDataIfExists();
@@ -904,7 +997,6 @@ size_t PageFile::removeDataIfExists() const
 
 void PageFile::destroy() const
 {
-    // TODO: delay remove.
     Poco::File file(folderPath());
     if (file.exists())
     {
@@ -919,13 +1011,19 @@ void PageFile::destroy() const
 
 bool PageFile::isExist() const
 {
-    Poco::File file(folderPath());
+    Poco::File folder(folderPath());
     Poco::File data_file(dataPath());
     Poco::File meta_file(metaPath());
     if (likely(type == Type::Formal))
-        return (file.exists() && data_file.exists() && meta_file.exists());
+    {
+        fiu_do_on(FailPoints::force_formal_page_file_not_exists, { return false; });
+        return (folder.exists() && data_file.exists() && meta_file.exists());
+    }
     else if (type == Type::Legacy || type == Type::Checkpoint)
-        return file.exists() && meta_file.exists();
+    {
+        fiu_do_on(FailPoints::force_legacy_or_checkpoint_page_file_exists, { return true; });
+        return folder.exists() && meta_file.exists();
+    }
     else
         throw Exception("Should not call isExist for " + toString());
 }

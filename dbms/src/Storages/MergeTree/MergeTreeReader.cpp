@@ -352,7 +352,7 @@ void MergeTreeReader::Stream::loadMarks()
 
     if (mark_cache)
     {
-        auto key = mark_cache->hash(path);
+        const auto& key = path;
         if (save_marks_in_cache)
         {
             if (compactContextPtr != nullptr) 

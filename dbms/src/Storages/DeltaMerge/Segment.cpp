@@ -290,7 +290,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
                                             UInt64                     max_version,
                                             size_t                     expected_block_size)
 {
-    LOG_TRACE(log, "Segment [" << segment_id << "] create InputStream");
+    LOG_TRACE(log, "Segment [" << segment_id << "] [epoch=" << epoch << "] create InputStream");
 
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, max_version);
 
@@ -384,9 +384,8 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_context,
                                                const ColumnDefines &      columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
-
-                                               bool   do_range_filter,
-                                               size_t expected_block_size)
+                                               bool                       do_range_filter,
+                                               size_t                     expected_block_size)
 {
     ColumnDefines new_columns_to_read;
 
@@ -611,7 +610,6 @@ std::optional<Handle> Segment::getSplitPointFast(DMContext & dm_context, const S
     DMFileBlockInputStream stream(dm_context.db_context,
                                   MAX_UINT64,
                                   false,
-                                  dm_context.hash_salt,
                                   read_file,
                                   {getExtraHandleColumnDefine()},
                                   HandleRange::newAll(),
@@ -625,7 +623,17 @@ std::optional<Handle> Segment::getSplitPointFast(DMContext & dm_context, const S
         throw Exception("Unexpected empty block");
     stream.readSuffix();
 
-    return {block.getByPosition(0).column->getInt(read_row_in_pack)};
+    Handle split_point = block.getByPosition(0).column->getInt(read_row_in_pack);
+    if (!range.check(split_point) || HandleRange(range.start, split_point).none() || Range(split_point, range.end).none())
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << " unexpected split_handle: " << split_point << ", should be in range " << range.toDebugString()
+                                 << ", cur_rows: " << cur_rows << ", read_row_in_pack: " << read_row_in_pack
+                                 << ", file_index: " << file_index);
+        return {};
+    }
+
+    return {split_point};
 }
 
 std::optional<Handle>
@@ -694,9 +702,14 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
     }
     stream->readSuffix();
 
-    if (!range.check(split_handle))
-        throw Exception("getSplitPointSlow unexpected split_handle: " + Redact::handleToDebugString(split_handle) + ", should be in range "
-                        + range.toDebugString() + ", exact_rows: " + DB::toString(exact_rows) + ", cur count:" + DB::toString(count));
+    if (!range.check(split_handle) || HandleRange(range.start, split_handle).none() || HandleRange(split_handle, range.end).none())
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << " unexpected split_handle: " << split_handle << ", should be in range " << split_handle
+                                 << ", exact_rows: " << DB::toString(exact_rows) << ", cur count: " << DB::toString(count)
+                                 << ", split_row_index: " << split_row_index);
+        return {};
+    }
 
     return {split_handle};
 }
@@ -746,8 +759,12 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     HandleRange other_range = {split_point, range.end};
 
     if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitLogical: unexpected range! my_range: " + my_range.toDebugString()
-                        + ", other_range: " + other_range.toDebugString());
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << ": unexpected range! my_range: " << my_range.toDebugString()
+                                 << ", other_range: " << other_range.toDebugString() << ", aborted");
+        return {};
+    }
 
     GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &storage_pool);
 
@@ -809,8 +826,12 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
     HandleRange other_range = {split_point, range.end};
 
     if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitPhysical: unexpected range! my_range: " + my_range.toDebugString()
-                        + ", other_range: " + other_range.toDebugString());
+    {
+        LOG_WARNING(log,
+                    __FUNCTION__ << ": unexpected range! my_range: " << my_range.toDebugString()
+                                 << ", other_range: " << other_range.toDebugString() << ", aborted");
+        return {};
+    }
 
     StableValueSpacePtr my_new_stable;
     StableValueSpacePtr other_stable;

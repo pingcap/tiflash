@@ -3,7 +3,7 @@ mysql> create table test.t (col_int bigint, col_float double, col_decimal decima
 mysql> insert into test.t values (1, 1.23, 1.234, 'string', '2021/3/23 12:00:00.123456')
 
 mysql> alter table test.t set tiflash replica 1
-func> wait_table test.t
+func> wait_table test t
 
 # This part maily test robust of NULL literal handling
 

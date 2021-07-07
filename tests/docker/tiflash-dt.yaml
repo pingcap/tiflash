@@ -4,26 +4,27 @@ services:
   # for tests under fullstack-test directory
   # (engine DeltaTree)
   tiflash0:
-    image: hub.pingcap.net/tiflash/tics:${TAG:-master}
-    ports:
-      - "3930:3930"
-      - "9000:9000"
-      - "8123:8123"
-      - "9009:9009"
-      - "20170:20170"
+    image: hub.pingcap.net/tiflash/tiflash-ci-base
     volumes:
       - ./config/tiflash_dt.toml:/config.toml:ro
       - ./config/tiflash-users.toml:/users.toml:ro
-      - ./data/tiflash_dt:/tmp/tiflash/data
-      - ./log/tiflash_dt:/tmp/tiflash/log
+      - ./data/tiflash:/tmp/tiflash/data
+      - ./log/tiflash:/tmp/tiflash/log
       - ..:/tests
-      - ./_env.sh:/tests/_env.sh
+      - ../docker/_env.sh:/tests/_env.sh
       - ./log/tiflash-cluster-manager:/tmp/tiflash/data/tmp
-      - ./config/tikv-learner.toml:/tikv.toml:ro
+      - ./config/proxy.toml:/proxy.toml:ro
       - ./config/cipher-file-256:/cipher-file-256:ro
-      - ./data/tikv-learner_dt:/data
-      - ./log/tikv-learner_dt:/log
-    command:
+      - ./data/proxy:/data
+      - ./log/proxy:/log
+      - ../.build/tiflash:/tiflash
+    entrypoint:
+      - /tiflash/tiflash
+      - server
       - --config-file
       - /config.toml
     restart: on-failure
+    depends_on:
+      - "pd0"
+      - "tikv0"
+

@@ -6,11 +6,6 @@
 
 #include <sstream>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-compare"
-#include <gtest/gtest.h>
-#pragma GCC diagnostic pop
-
 namespace DB
 {
 namespace tests

@@ -452,7 +452,7 @@ def run():
         [INSERT, SELECT, UPDATE, SELECT, UPDATE, SELECT, DELETE, SELECT],
         [INSERT, SELECT, UPDATE, SELECT, UPDATE, SELECT, UPDATE, SELECT, DELETE, SELECT],
     ]
-    parent_dir = "./fullstack-test/dml/dml_gen/"
+    parent_dir = "./fullstack-test2/dml/dml_gen/"
     directory = os.path.dirname(parent_dir)
     try:
         os.makedirs(directory)

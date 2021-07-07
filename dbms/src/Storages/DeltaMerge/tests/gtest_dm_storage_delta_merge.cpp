@@ -21,7 +21,6 @@
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
-#include <gtest/gtest.h>
 
 #include <limits>
 

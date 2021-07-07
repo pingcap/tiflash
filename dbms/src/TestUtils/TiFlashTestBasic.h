@@ -10,7 +10,23 @@
 #include <Poco/PatternFormatter.h>
 #include <Poco/SortedDirectoryIterator.h>
 #include <Common/UnifiedLogPatternFormatter.h>
+
+#if !__clang__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#else
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-compare"
+#endif
+
 #include <gtest/gtest.h>
+
+#if !__clang__
+#pragma GCC diagnostic pop
+#else
+#pragma clang diagnostic pop
+#endif
+
 
 namespace DB
 {

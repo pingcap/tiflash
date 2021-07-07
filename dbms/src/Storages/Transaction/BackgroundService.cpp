@@ -20,7 +20,7 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
                 RegionTable & region_table = tmt.getRegionTable();
                 region_table.checkTableOptimize();
             }
-            tmt.getKVStore()->gcRegionCache();
+            tmt.getKVStore()->gcRegionPersistedCache();
             return false;
         },
         false);

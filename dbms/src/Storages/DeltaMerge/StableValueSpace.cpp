@@ -29,10 +29,9 @@ void StableValueSpace::setFiles(const DMFiles & files_, DMContext * dm_context, 
     else
     {
         auto index_cache = dm_context->db_context.getGlobalContext().getMinMaxIndexCache().get();
-        auto hash_salt   = dm_context->hash_salt;
         for (auto & file : files_)
         {
-            DMFilePackFilter pack_filter(file, index_cache, hash_salt, range, EMPTY_FILTER, {}, dm_context->db_context.getFileProvider());
+            DMFilePackFilter pack_filter(file, index_cache, range, EMPTY_FILTER, {}, dm_context->db_context.getFileProvider());
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;
@@ -194,7 +193,6 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
             context.db_context,
             max_data_version,
             enable_clean_read,
-            context.hash_salt,
             stable->files[i],
             read_columns,
             handle_range,

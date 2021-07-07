@@ -1,18 +1,17 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashException.h>
-
 #include <IO/WriteHelpers.h>
+#include <Storages/Page/PageUtil.h>
 
 #include <boost/algorithm/string/classification.hpp>
 
 #ifndef __APPLE__
 #include <fcntl.h>
 #endif
-
-#include <Storages/Page/PageUtil.h>
 
 #include <ext/scope_guard.h>
 
@@ -37,7 +36,14 @@ extern const Metric Write;
 extern const Metric Read;
 } // namespace CurrentMetrics
 
-namespace DB::PageUtil
+namespace DB
+{
+namespace FailPoints
+{
+extern const char force_set_page_file_write_errno[];
+} // namespace FailPoints
+
+namespace PageUtil
 {
 
 void syncFile(WritableFilePtr & file)
@@ -46,7 +52,11 @@ void syncFile(WritableFilePtr & file)
         DB::throwFromErrno("Cannot fsync file: " + file->getFileName(), ErrorCodes::CANNOT_FSYNC);
 }
 
+#ifndef NDEBUG
+void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, bool enable_failpoint)
+#else
 void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write)
+#endif
 {
     ProfileEvents::increment(ProfileEvents::PSMWriteCalls);
     ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
@@ -61,10 +71,28 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
             res = file->pwrite(data + bytes_written, to_write - bytes_written, offset + bytes_written);
         }
 
+#ifndef NDEBUG
+        // Can inject failpoint under debug mode
+        fiu_do_on(FailPoints::force_set_page_file_write_errno, {
+            if (enable_failpoint)
+            {
+                res   = -1;
+                errno = ENOSPC;
+            }
+        });
+#endif
         if ((-1 == res || 0 == res) && errno != EINTR)
         {
             ProfileEvents::increment(ProfileEvents::PSMWriteFailed);
-            DB::throwFromErrno("Cannot write to file " + file->getFileName(), ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR);
+            auto saved_errno = errno; // save errno before `ftruncate`
+            // If error occurs, apply `ftruncate` try to truncate the broken bytes we have written.
+            // Note that the result of this ftruncate is ignored, there is nothing we can do to
+            // handle ftruncate error. The errno may change after ftruncate called.
+            int truncate_res = ::ftruncate(file->getFd(), offset);
+            DB::throwFromErrno("Cannot write to file " + file->getFileName() + " [truncate_res=" + DB::toString(truncate_res)
+                                   + "] [errno_after_truncate=" + strerror(errno) + "]",
+                               ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR,
+                               saved_errno);
         }
 
         if (res > 0)
@@ -108,4 +136,5 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
         throw DB::TiFlashException("Not enough data in file " + file->getFileName(), Errors::PageStorage::FileSizeNotMatch);
 }
 
-} // namespace DB::PageUtil
+} // namespace PageUtil
+} // namespace DB

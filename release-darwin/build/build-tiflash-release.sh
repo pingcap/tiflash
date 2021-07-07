@@ -37,7 +37,8 @@ cmake "$SRCPATH" \
       -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
       -DENABLE_ICU=OFF \
       -DENABLE_MYSQL=OFF \
-      -Wno-dev
+      -Wno-dev \
+      -DNO_WERROR=ON
 
 make -j $NPROC tiflash
 
@@ -46,3 +47,7 @@ cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.dylib" "$install_dir/li
 
 FILE="$install_dir/tiflash"
 otool -L "$FILE"
+
+set +e
+echo "show ccache stats"
+ccache -s

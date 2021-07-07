@@ -1,13 +1,18 @@
 #include <Common/FailPoint.h>
+#include <DataStreams/BlocksListBlockInputStream.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Poco/File.h>
+#include <Storages/DeltaMerge/ReorganizeBlockInputStream.h>
+
+#define private public
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#undef private
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <gtest/gtest.h>
 
 #include <memory>
 
@@ -35,8 +40,6 @@ public:
     DeltaMergeStore_test() : name("DeltaMergeStore_test") {}
 
 protected:
-    static void SetUpTestCase() {}
-
     void cleanUp()
     {
         // drop former-gen table's data in disk
@@ -59,7 +62,12 @@ protected:
 
     DeltaMergeStorePtr reload(const ColumnDefinesPtr & pre_define_columns = {})
     {
-        auto         cols                 = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
+        ColumnDefinesPtr cols;
+        if (!pre_define_columns)
+            cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID);
+        else
+            cols = pre_define_columns;
+
         ColumnDefine handle_column_define = (*cols)[0];
 
         DeltaMergeStorePtr s
@@ -126,6 +134,80 @@ try
     }
 }
 CATCH
+
+TEST_F(DeltaMergeStore_test, AddExtraColumn)
+try
+{
+    auto log = &Poco::Logger::get(GET_GTEST_FULL_NAME);
+    for (const auto & pk_type : {
+             DMTestEnv::PkType::HiddenTiDBRowID,
+             DMTestEnv::PkType::PkIsHandleInt64,
+             DMTestEnv::PkType::PkIsHandleInt32,
+         })
+    {
+        LOG_INFO(log, "Test case for " << DMTestEnv::PkTypeToString(pk_type) << " begin.");
+
+        auto cols = DMTestEnv::getDefaultColumns(pk_type);
+        store     = reload(cols);
+
+        ASSERT_EQ(store->pkIsHandle(), (pk_type == DMTestEnv::PkType::PkIsHandleInt64 || pk_type == DMTestEnv::PkType::PkIsHandleInt32))
+            << DMTestEnv::PkTypeToString(pk_type);
+
+        const size_t nrows  = 20;
+        const auto & handle = store->getHandle();
+        auto         block1 = DMTestEnv::prepareSimpleWriteBlock(0,
+                                                         nrows,
+                                                         false,
+                                                         /*tso*/ 2,
+                                                         /*pk_name*/ handle.name,
+                                                         handle.id,
+                                                         handle.type);
+
+        block1 = store->addExtraColumnIfNeed(*context, std::move(block1));
+        ASSERT_EQ(block1.rows(), nrows);
+        ASSERT_TRUE(block1.has(EXTRA_HANDLE_COLUMN_NAME));
+        for (const auto & c : block1)
+            ASSERT_EQ(c.column->size(), nrows);
+
+        // Make a block that is overlapped with `block1` and it should be squashed by `PKSquashingBlockInputStream`
+        size_t nrows_2 = 2;
+        auto   block2  = DMTestEnv::prepareSimpleWriteBlock(nrows - 1,
+                                                         nrows - 1 + nrows_2,
+                                                         false,
+                                                         /*tso*/ 4,
+                                                         /*pk_name*/ handle.name,
+                                                         handle.id,
+                                                         handle.type);
+        block2         = store->addExtraColumnIfNeed(*context, std::move(block2));
+        ASSERT_EQ(block2.rows(), nrows_2);
+        ASSERT_TRUE(block2.has(EXTRA_HANDLE_COLUMN_NAME));
+        for (const auto & c : block2)
+            ASSERT_EQ(c.column->size(), nrows_2);
+
+
+        BlockInputStreamPtr stream = std::make_shared<BlocksListBlockInputStream>(BlocksList{block1, block2});
+        stream                     = std::make_shared<ReorganizeBlockInputStream>(stream, EXTRA_HANDLE_COLUMN_NAME);
+
+        size_t num_rows_read = 0;
+        stream->readPrefix();
+        while (Block block = stream->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                ASSERT_EQ(c->size(), block.rows())
+                    << "unexpected num of rows for column [name=" << iter.name << "] " << DMTestEnv::PkTypeToString(pk_type);
+            }
+        }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, nrows + nrows_2);
+
+        LOG_INFO(log, "Test case for " << DMTestEnv::PkTypeToString(pk_type) << " done.");
+    }
+}
+CATCH
+
 
 TEST_F(DeltaMergeStore_test, SimpleWriteRead)
 try

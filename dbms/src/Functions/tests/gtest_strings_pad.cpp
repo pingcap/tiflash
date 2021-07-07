@@ -13,7 +13,6 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #include <Poco/Types.h>
-#include <gtest/gtest.h>
 
 #pragma GCC diagnostic pop
 

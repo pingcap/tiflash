@@ -135,7 +135,6 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       table_name(table_name_),
       original_table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
-      hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
     LOG_INFO(log, "Restore DeltaMerge Store start [" << db_name << "." << table_name << "]");
@@ -321,10 +320,9 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     // Here we use global context from db_context, instead of db_context directly.
     // Because db_context could be a temporary object and won't last long enough during the query process.
     // Like the context created by InterpreterSelectWithUnionQuery.
-    auto * ctx = new DMContext(db_context.getGlobalContext(),
+    auto * ctx = new DMContext(db_context.getGlobalContext(), //
                                path_pool,
                                storage_pool,
-                               hash_salt,
                                latest_gc_safe_point,
                                settings.not_compress_columns,
                                db_settings);
@@ -354,9 +352,42 @@ inline Block getSubBlock(const Block & block, size_t offset, size_t limit)
     }
 }
 
+// Add an extra handle column if handle reused the original column data.
+Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, Block && block) const
+{
+    if (pkIsHandle())
+    {
+        if (!EXTRA_HANDLE_COLUMN_TYPE->equals(*original_table_handle_define.type))
+        {
+            auto handle_pos = getPosByColumnId(block, original_table_handle_define.id);
+            addColumnToBlock(block, //
+                             EXTRA_HANDLE_COLUMN_ID,
+                             EXTRA_HANDLE_COLUMN_NAME,
+                             EXTRA_HANDLE_COLUMN_TYPE,
+                             EXTRA_HANDLE_COLUMN_TYPE->createColumn());
+            // Fill the new handle column with data in column[handle_pos] by applying cast.
+            FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
+        }
+        else
+        {
+            // If types are identical, `FunctionToInt64` just take reference to the original column.
+            // We need a deep copy for the pk column or it will make trobule for later processing.
+            auto      pk_col_with_name = getByColumnId(block, original_table_handle_define.id);
+            auto      pk_column        = pk_col_with_name.column;
+            ColumnPtr handle_column    = pk_column->cloneResized(pk_column->size());
+            addColumnToBlock(block, //
+                             EXTRA_HANDLE_COLUMN_ID,
+                             EXTRA_HANDLE_COLUMN_NAME,
+                             EXTRA_HANDLE_COLUMN_TYPE,
+                             handle_column);
+        }
+    }
+    return std::move(block);
+}
+
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, const Block & to_write)
 {
-    LOG_TRACE(log, "Write into " << db_name << "." << table_name << " " << to_write.rows() << " rows.");
+    LOG_TRACE(log, __FUNCTION__ << " table: " << db_name << "." << table_name << ", rows: " << to_write.rows());
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
@@ -366,18 +397,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     auto  dm_context = newDMContext(db_context, db_settings);
     Block block      = to_write;
+    block            = addExtraColumnIfNeed(db_context, std::move(block));
 
-    // Add an extra handle column, if handle reused the original column data.
-    if (pkIsHandle())
-    {
-        auto handle_pos = getPosByColumnId(block, original_table_handle_define.id);
-        addColumnToBlock(block, //
-                         EXTRA_HANDLE_COLUMN_ID,
-                         EXTRA_HANDLE_COLUMN_NAME,
-                         EXTRA_HANDLE_COLUMN_TYPE,
-                         EXTRA_HANDLE_COLUMN_TYPE->createColumn());
-        FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
-    }
     const auto bytes = block.bytes();
 
     {
@@ -427,8 +448,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             auto range   = segment->getRange();
             auto end_pos = range.end == P_INF_HANDLE ? handle_data.cend()
                                                      : std::lower_bound(handle_data.cbegin() + offset, handle_data.cend(), range.end);
-            limit = end_pos - (handle_data.cbegin() + offset);
-            auto bytes = block.bytes(offset, limit);
+            limit        = end_pos - (handle_data.cbegin() + offset);
+            auto bytes   = block.bytes(offset, limit);
 
             bool small_pack = limit < dm_context->delta_cache_limit_rows / 4 && bytes < dm_context->delta_cache_limit_bytes / 4;
             // Small packs are appended to Delta Cache, the flushed later.
@@ -761,9 +782,9 @@ void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const Segmen
     // The speed of delta merge in a very bad situation we assume. It should be a very conservative value.
     size_t _10MB = 10 << 20;
 
-    size_t stop_write_delta_rows = dm_context->db_context.getSettingsRef().dt_segment_stop_write_delta_rows;
+    size_t stop_write_delta_rows  = dm_context->db_context.getSettingsRef().dt_segment_stop_write_delta_rows;
     size_t stop_write_delta_bytes = dm_context->db_context.getSettingsRef().dt_segment_stop_write_delta_size;
-    size_t wait_duration_factor = dm_context->db_context.getSettingsRef().dt_segment_wait_duration_factor;
+    size_t wait_duration_factor   = dm_context->db_context.getSettingsRef().dt_segment_wait_duration_factor;
 
     size_t sleep_ms;
     if (delta_rows >= stop_write_delta_rows || delta_bytes >= stop_write_delta_bytes)
@@ -957,7 +978,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         return false;
     };
     auto try_bg_split = [&](const SegmentPtr & seg) {
-        if (should_split)
+        if (should_split && !seg->isSplitForbidden())
         {
             delta_last_try_split_rows  = delta_rows;
             delta_last_try_split_bytes = delta_bytes;
@@ -969,7 +990,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto try_fg_split = [&](const SegmentPtr & my_segment) -> bool {
         auto my_segment_rows = my_segment->getEstimatedRows();
         auto my_should_split = my_segment_rows >= dm_context->segment_limit_rows * 3;
-        if (my_should_split)
+        if (my_should_split && !my_segment->isSplitForbidden())
         {
             if (segmentSplit(*dm_context, my_segment).first)
                 return true;
@@ -1168,7 +1189,9 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
     if (!split_info_opt.has_value())
     {
-        LOG_WARNING(log, "Give up segment [" << segment->segmentId() << "] split because of prepare split failed");
+        // Likely we can not find an appropriate split point for this segment later, forbid the split until this segment get updated through applying delta-merge. Or it will slow down the write a lot.
+        segment->forbidSplit();
+        LOG_WARNING(log, "Giving up and forbid later split. Segment [" << segment->segmentId() << "]. Because of prepare split failed");
         return {};
     }
 
@@ -1522,7 +1545,7 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);
 
-    std::atomic_store<Block>(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
+    std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
 }
 
 

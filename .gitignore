@@ -247,9 +247,6 @@ release-centos7/tiflash
 release-centos7/build-release
 release-darwin/tiflash
 release-darwin/build-release
-tests/docker/data
-tests/docker/log
-tests/fullstack-test/dml/dml_gen/*
 tests/mutable-test/mutable_dedup/skipping.visual.test/*
 tests/mutable-test/mutable_dedup/small_parts.visual.test/*
 libs/libtiflash-proxy

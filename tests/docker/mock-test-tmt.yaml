@@ -3,19 +3,17 @@ version: '2.3'
 services:
   # tics0 container is for tests under mutable-test && delta-merge-test directory
   tics0:
-    image: hub.pingcap.net/tiflash/tics:${TAG:-master}
-    ports:
-      - "3930:3930"
-      - "9000:9000"
-      - "8123:8123"
-      - "9009:9009"
+    image: hub.pingcap.net/tiflash/tiflash-ci-base
     volumes:
       - ./config/tics_tmt.toml:/config.toml:ro
       - ./config/users.toml:/users.toml:ro
       - ./data/tics_tmt:/tmp/tiflash/data
       - ./log/tics_tmt:/tmp/tiflash/log
       - ..:/tests
-      - ./_env.sh:/tests/_env.sh
-    command:
+      - ../docker/_env.sh:/tests/_env.sh
+      - ../.build/tiflash:/tiflash
+    entrypoint:
+      - /tiflash/tiflash
+      - server
       - --config-file
       - /config.toml
