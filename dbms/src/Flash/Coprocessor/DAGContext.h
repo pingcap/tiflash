@@ -31,6 +31,8 @@ public:
     void handleOverflowError(const String & msg);
     void handleDivisionByZero(const String & msg);
     void handleInvalidTime(const String & msg);
+    bool allowZeroInDate() const;
+    bool allowInvalidDate() const;
     bool shouldClipToZero();
     const std::vector<std::pair<Int32, String>> & getWarnings() const { return warnings; }
     

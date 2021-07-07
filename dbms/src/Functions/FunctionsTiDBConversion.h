@@ -8,6 +8,7 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/FieldVisitors.h>
+#include <Common/MyTime.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -1300,7 +1301,8 @@ struct TiDBConvertToTime
             {
                 try
                 {
-                    MyDateTime datetime = numberToDateTime(vec_from[i]);
+                    MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
+                    bool is_null = numberToDateTime(vec_from[i], datetime, context.getDAGContext());
                     if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                     {
                         MyDate date(datetime.year, datetime.month, datetime.day);
@@ -1310,8 +1312,9 @@ struct TiDBConvertToTime
                     {
                         vec_to[i] = datetime.toPackedUInt();
                     }
+                    (*vec_null_map_to)[i] = is_null;
                 }
-                catch (const Exception &)
+                catch (const TiFlashException & e)
                 {
                     // Cannot cast, fill with NULL
                     (*vec_null_map_to)[i] = 1;
@@ -1408,6 +1411,115 @@ struct TiDBConvertToTime
             block.getByPosition(result).column = std::move(col_to);
     }
 };
+
+inline bool getDatetime(const Int64 & num, MyDateTime & result, DAGContext * ctx)
+{
+    UInt64 ymd = num / 1000000;
+    UInt64 hms = num - ymd * 1000000;
+
+    UInt64 year = ymd / 10000;
+    ymd %= 10000;
+    UInt64 month = ymd / 100;
+    UInt64 day = ymd % 100;
+
+    UInt64 hour = hms / 10000;
+    hms %= 10000;
+    UInt64 minute = hms / 100;
+    UInt64 second = hms % 100;
+
+    if (toCoreTimeChecked(year, month, day, hour, minute, second, 0, result))
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+    if (ctx)
+    {
+        result.check(ctx->allowZeroInDate(), ctx->allowInvalidDate());
+    }
+    else
+    {
+        result.check(false, false);
+    }
+    return false;
+}
+
+// Convert a integer number to DateTime and return true if the result is NULL.
+// If number is invalid(according to SQL_MODE), return NULL and handle the error with DAGContext.
+// This function may throw exception.
+inline bool numberToDateTime(Int64 number, MyDateTime & result, DAGContext * ctx)
+{
+    MyDateTime datetime(0);
+    if (number == 0)
+    {
+        result = datetime;
+        return false;
+    }
+
+    // datetime type
+    if (number >= 10000101000000)
+    {
+        return getDatetime(number, result, ctx);
+    }
+
+    // check MMDD
+    if (number < 101)
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDD: 2000-2069
+    if (number <= 69 * 10000 + 1231)
+    {
+        number = (number + 20000000) * 1000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    if (number < 70 * 10000 + 101)
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDD
+    if (number <= 991231)
+    {
+        number = (number + 19000000) * 1000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    // check hour/min/second
+    if (number <= 99991231)
+    {
+        number *= 1000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    // check MMDDHHMMSS
+    if (number < 101000000)
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDDhhmmss: 2000-2069
+    if (number <= 69 * 10000000000 + 1231235959)
+    {
+        number += 20000000000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    // check YYYYMMDDhhmmss
+    if (number < 70 * 10000000000 + 101000000)
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDDHHMMSS
+    if (number <= 991231235959)
+    {
+        number += 19000000000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    return getDatetime(number, result, ctx);
+}
 
 class PreparedFunctionTiDBCast : public PreparedFunctionImpl
 {
