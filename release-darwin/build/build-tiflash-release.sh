@@ -23,6 +23,7 @@ cmake "$SRCPATH" \
       -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
       -DENABLE_ICU=OFF \
       -DENABLE_MYSQL=OFF \
+      -DUSE_INTERNAL_RE2_LIBRARY=FALSE \
       -Wno-dev \
       -DNO_WERROR=ON
 
@@ -33,6 +34,13 @@ cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.dylib" "$install_dir/li
 
 FILE="$install_dir/tiflash"
 otool -L "$FILE"
+
+# copy dylib
+cp -f $SCRIPTPATH/copy-libs.py $install_dir
+cd $install_dir
+./copy-libs.py ./tiflash
+rm -f ./copy-libs.py
+otool -L $FILE
 
 set +e
 echo "show ccache stats"
