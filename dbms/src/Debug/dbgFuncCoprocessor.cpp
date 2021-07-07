@@ -623,25 +623,27 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
     }
     else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
     {
-        if (AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
+        /// aggregation function is handled in Aggregation, so just treated as a column
+        auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
+            auto column_name = splitQualifiedName(func->getColumnName());
+            auto field_name = splitQualifiedName(field.first);
+            if (column_name.first.empty())
+                return field_name.second == column_name.second;
+            else
+                return field_name.first == column_name.first && field_name.second == column_name.second;
+        });
+        if (ft != input.end())
         {
-            /// aggregation function is handled in Aggregation, so just treated as a column
-            auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
-                auto column_name = splitQualifiedName(func->getColumnName());
-                auto field_name = splitQualifiedName(field.first);
-                if (column_name.first.empty())
-                    return field_name.second == column_name.second;
-                else
-                    return field_name.first == column_name.first && field_name.second == column_name.second;
-            });
-            if (ft == input.end())
-                throw Exception("No such column " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
             expr->set_tp(tipb::ColumnRef);
             *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
             WriteBufferFromOwnString ss;
             encodeDAGInt64(ft - input.begin(), ss);
             expr->set_val(ss.releaseStr());
             return;
+        }
+        if (AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
+        {
+            throw Exception("No such column " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
         }
         String func_name_lowercase = Poco::toLower(func->name);
         // TODO: Support more functions.
@@ -835,6 +837,19 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
         else
         {
             /// check function
+            auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
+                auto column_name = splitQualifiedName(func->getColumnName());
+                auto field_name = splitQualifiedName(field.first);
+                if (column_name.first.empty())
+                    return field_name.second == column_name.second;
+                else
+                    return field_name.first == column_name.first && field_name.second == column_name.second;
+            });
+            if (ft != input.end())
+            {
+                used_columns.emplace(func->getColumnName());
+                return;
+            }
             for (const auto & child_ast : func->arguments->children)
             {
                 collectUsedColumnsFromExpr(input, child_ast, used_columns);
@@ -1265,7 +1280,8 @@ struct Aggregation : public Executor
             = std::make_shared<ExchangeSender>(executor_index, output_schema_for_partial_agg, tipb::Hash, partition_keys);
         exchange_sender->children.push_back(partial_agg);
 
-        std::shared_ptr<ExchangeReceiver> exchange_receiver = std::make_shared<ExchangeReceiver>(executor_index, output_schema_for_partial_agg);
+        std::shared_ptr<ExchangeReceiver> exchange_receiver
+            = std::make_shared<ExchangeReceiver>(executor_index, output_schema_for_partial_agg);
         exchange_map[exchange_receiver->name] = std::make_pair(exchange_receiver, exchange_sender);
         /// re-construct agg_exprs and gby_exprs in final_agg
         for (size_t i = 0; i < partial_agg->agg_exprs.size(); i++)
@@ -1867,16 +1883,17 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
         else
         {
             exprs.push_back(expr);
+            auto ft = std::find_if(input->output_schema.begin(), input->output_schema.end(),
+                [&](const auto & field) { return field.first == expr->getColumnName(); });
+            if (ft != input->output_schema.end())
+            {
+                output_schema.emplace_back(ft->first, ft->second);
+                continue;
+            }
             const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
             if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
             {
-                auto ft = std::find_if(input->output_schema.begin(), input->output_schema.end(),
-                    [&](const auto & field) { return field.first == func->getColumnName(); });
-                if (ft == input->output_schema.end())
-                    throw Exception("No such agg " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
-                // todo need to use the subquery alias to reconstruct the field
-                //  name if subquery is supported
-                output_schema.emplace_back(ft->first, ft->second);
+                throw Exception("No such agg " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
             }
             else
             {
