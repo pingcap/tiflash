@@ -36,7 +36,7 @@ def changeToLocal(path):
     res = []
     for i, line in enumerate(output.split('\n')):
         line = line.strip()
-        if line.startswith("/usr/local/opt"):
+        if line.startswith("/usr/local"):
             lib = line.split()[0]
             lib = lib[:-1] if lib[-1] = ':' else lib
             #print("add lib %s" % lib)
