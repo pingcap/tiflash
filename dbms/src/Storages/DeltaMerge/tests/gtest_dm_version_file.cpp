@@ -30,7 +30,7 @@ FixedChecksumFrame fakeFrame(std::string_view data)
 }
 } // namespace
 
-TEST(Version_test, Serialization)
+TEST(DMFileVersion, Serialization)
 {
     auto                    data = std::vector<char>{};
     DeserializedVersionInfo info{DM::FileVersion::FileV1,
