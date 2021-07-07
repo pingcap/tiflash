@@ -130,29 +130,7 @@ struct MPPTunnel
 
     /// close() finishes the tunnel, if the tunnel is connected already, it will
     /// write the error message to the tunnel, otherwise it just close the tunnel
-    void close(const String & reason)
-    {
-        std::unique_lock<std::mutex> lk(mu);
-        if (finished)
-            return;
-        if (connected)
-        {
-            try
-            {
-                mpp::MPPDataPacket data;
-                auto err = new mpp::Error();
-                err->set_msg(reason);
-                data.set_allocated_error(err);
-                writer->Write(data);
-            }
-            catch (...)
-            {
-                tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
-            }
-        }
-        finished = true;
-        cv_for_finished.notify_all();
-    }
+    void close(const String & reason);
 
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
