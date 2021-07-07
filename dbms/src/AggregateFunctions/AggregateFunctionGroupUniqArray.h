@@ -51,17 +51,17 @@ public:
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeNumber<T>>());
     }
 
-    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         this->data(place).value.insert(static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         this->data(place).value.merge(this->data(rhs).value);
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         auto & set = this->data(place).value;
         size_t size = set.size();
@@ -70,12 +70,12 @@ public:
             writeIntBinary(elem, buf);
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena *) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena *) const override
     {
         this->data(place).value.read(buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         ColumnArray & arr_to = static_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
@@ -139,7 +139,7 @@ public:
         return true;
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         auto & set = this->data(place).value;
         writeVarUInt(set.size(), buf);
@@ -150,7 +150,7 @@ public:
         }
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena * arena) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena * arena) const override
     {
         auto & set = this->data(place).value;
         size_t size;
@@ -163,7 +163,7 @@ public:
         }
     }
 
-    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
         auto & set = this->data(place).value;
 
@@ -185,7 +185,7 @@ public:
         }
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena * arena) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         auto & cur_set = this->data(place).value;
         auto & rhs_set = this->data(rhs).value;
@@ -200,7 +200,7 @@ public:
         }
     }
 
-    void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         ColumnArray & arr_to = static_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
