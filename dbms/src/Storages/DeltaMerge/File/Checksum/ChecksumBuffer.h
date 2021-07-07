@@ -126,20 +126,20 @@ private:
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(*this->working_buffer.begin()); // align should not fail
         auto length = expectRead(working_buffer.begin(), sizeof(ChecksumFrame<Backend>));
         if (length == 0) return false; // EOF
-        if (length != sizeof(ChecksumFrame<Backend>)) {
+        if (unlikely(length != sizeof(ChecksumFrame<Backend>))) {
             throwReadAfterEOF();
         }
 
         // now read the body
         length = expectRead(reinterpret_cast<Position>(frame.data), frame.bytes);
-        if (length != frame.bytes) {
+        if (unlikely(length != frame.bytes)) {
             throwReadAfterEOF();
         }
 
         // examine checksum
         auto digest = Backend {};
         digest.update(frame.data, frame.bytes);
-        if (frame.checksum != digest.checksum()) {
+        if (unlikely(frame.checksum != digest.checksum())) {
             // TODO: change throw behavior
             throw Poco::ReadFileException("file corruption detected", -errno);
         }
