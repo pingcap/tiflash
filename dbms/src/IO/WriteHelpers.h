@@ -20,6 +20,7 @@
 #include <Common/Decimal.h>
 #include <Common/MyTime.h>
 
+#include <IO/DoubleConverter.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteIntText.h>
 #include <IO/VarInt.h>
@@ -826,17 +827,20 @@ template <typename T>
 inline std::enable_if_t<std::is_floating_point_v<T>, String>
 toString(const T & x, int precision)
 {
-    std::stringstream ss;
-    ss << std::fixed << std::setprecision(precision) << x;
-    return ss.str();
+    DB::DoubleConverter<false>::BufferType buffer;
+    double_conversion::StringBuilder builder{buffer, sizeof(buffer)};
+    DB::DoubleConverter<false>::instance().ToFixed(x, precision, &builder);
+    return String{buffer, builder.position()};
 }
+
+void writePointerHex(const void * ptr, WriteBuffer & buf);
 
 /// Pointer to a string
 inline String ptrToString(const void * const p)
 {
-    std::stringstream ss;
-    ss << p;
-    return ss.str();
+    WriteBufferFromOwnString buf;
+    writePointerHex(p, buf);
+    return buf.releaseStr();
 }
 
 }
