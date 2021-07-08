@@ -16,6 +16,28 @@ namespace DB
 namespace DM
 {
 
+
+class ProxyWriteBuffer : public DB::WriteBuffer
+{
+private:
+    WriteBuffer & out;
+
+    void nextImpl() override
+    {
+        out.position() = pos;
+        out.next();
+        working_buffer = out.buffer();
+    }
+
+public:
+    explicit ProxyWriteBuffer(DB::WriteBuffer & out_) : DB::WriteBuffer(nullptr, 0), out(out_)
+    {
+        out.next(); /// If something has already been written to `out` before us, we will not let the remains of this data affect the hash.
+        working_buffer = out.buffer();
+        pos            = working_buffer.begin();
+    }
+};
+
 class DMFileWriter
 {
 public:
