@@ -2495,7 +2495,7 @@ void FunctionArrayReduce::executeImpl(Block & block, const ColumnNumbers & argum
         else
             res_col_aggregate_function->insertFrom(places[i]);
     }
-
+    
     if (!is_const)
     {
         block.getByPosition(result).column = std::move(result_holder);
