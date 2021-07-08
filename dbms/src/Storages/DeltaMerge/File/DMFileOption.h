@@ -7,20 +7,22 @@
 #include <Common/config_version.h>
 #include <IO/CompressionSettings.h>
 #include <Storages/DeltaMerge/File/Checksum/ChecksumBuffer.h>
+#include <Storages/DeltaMerge/File/DMFileVersion.h>
 
 namespace DB::DM
 {
-struct VersionOption
+struct DMFileOption
 {
     bool                isSingleFileMode    = false;
     CompressionSettings compressionSettings = {};
+    FileVersion         fileVersion         = CURRENT_FILE_VERSION;
 };
 
-struct LegacyOption : public VersionOption
+struct LegacyOption : public DMFileOption
 {
 };
 
-struct FileV1Option : public VersionOption
+struct FileV1Option : public DMFileOption
 {
     ChecksumAlgo                       checksumAlgo      = ChecksumAlgo::CRC64;
     size_t                             checksumBlockSize = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE;
