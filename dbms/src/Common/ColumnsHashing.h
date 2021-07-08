@@ -92,20 +92,22 @@ struct HashMethodString
         offsets = column_string.getOffsets().data();
         chars = column_string.getChars().data();
         if (!collators.empty())
+        {
+            if constexpr (!place_string_to_arena)
+                throw Exception("String with collator must be placed on arena.", ErrorCodes::LOGICAL_ERROR);
             collator = collators[0];
+        }
     }
 
     auto getKeyHolder(ssize_t row, [[maybe_unused]] Arena * pool, std::vector<String> & sort_key_containers) const
     {
-        StringRef key(chars + offsets[row - 1], offsets[row] - offsets[row - 1] - 1);
-
-        if (collator)
-        {
-            key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
-        }
+        auto last_offset = row == 0 ? 0 : offsets[row - 1];
+        StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
 
         if constexpr (place_string_to_arena)
         {
+            if (collator)
+                key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
             return ArenaKeyHolder{key, *pool};
         }
         else
