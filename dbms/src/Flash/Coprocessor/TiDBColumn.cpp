@@ -1,6 +1,7 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/TiDBColumn.h>
 #include <IO/Endian.h>
+#include <IO/Operators.h>
 
 namespace DB
 {
@@ -11,7 +12,7 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 template <typename T>
-void encodeLittleEndian(const T & value, std::stringstream & ss)
+void encodeLittleEndian(const T & value, WriteBuffer & ss)
 {
     auto v = toLittleEndian(value);
     ss.write(reinterpret_cast<const char *>(&v), sizeof(v));
@@ -31,7 +32,6 @@ void TiDBColumn::clear()
     null_bitmap.clear();
     var_offsets.clear();
     var_offsets.push_back(0);
-    data.str("");
     current_data_size = 0;
 }
 
@@ -154,7 +154,7 @@ void TiDBColumn::append(DB::Float64 value)
     finishAppendFixed();
 }
 
-void TiDBColumn::encodeColumn(std::stringstream & ss)
+void TiDBColumn::encodeColumn(WriteBuffer & ss)
 {
     encodeLittleEndian<UInt32>(length, ss);
     encodeLittleEndian<UInt32>(null_cnt, ss);
