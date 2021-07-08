@@ -30,24 +30,24 @@ namespace Digest
 class None
 {
 public:
-    using HashType                   = std::array<uint8_t, 0>;
+    using HashType                    = std::array<uint8_t, 8>;
     static constexpr size_t hash_size = sizeof(HashType);
-    static constexpr auto  algorithm = ::DB::DM::ChecksumAlgo::None;
-    void                   update(const void *, size_t) { ; }
-    [[nodiscard]] HashType checksum() const { return {}; }
+    static constexpr auto   algorithm = ::DB::DM::ChecksumAlgo::None;
+    void                    update(const void *, size_t) { ; }
+    [[nodiscard]] HashType  checksum() const { return {}; }
 };
 
 class CRC32
 {
 public:
-    using HashType                   = uint32_t;
+    using HashType                    = z_crc_t;
     static constexpr size_t hash_size = sizeof(HashType);
-    static constexpr auto  algorithm = ::DB::DM::ChecksumAlgo::CRC32;
-    void                   update(const void * src, size_t length) { state = crc32(state, reinterpret_cast<const Bytef *>(src), length); }
-    [[nodiscard]] HashType checksum() const { return static_cast<HashType>(~state); }
+    static constexpr auto   algorithm = ::DB::DM::ChecksumAlgo::CRC32;
+    void                    update(const void * src, size_t length) { state = crc32(state, reinterpret_cast<const Bytef *>(src), length); }
+    [[nodiscard]] HashType  checksum() const { return state; }
 
 private:
-    uLong state = 0xFFFFFFFF;
+    uLong state = 0;
 };
 
 class City128
@@ -55,8 +55,8 @@ class City128
 public:
     using HashType                    = unsigned __int128;
     static constexpr size_t hash_size = sizeof(HashType);
-    static constexpr auto algorithm = ::DB::DM::ChecksumAlgo::City128;
-    void                  update(const void * src, size_t length)
+    static constexpr auto   algorithm = ::DB::DM::ChecksumAlgo::City128;
+    void                    update(const void * src, size_t length)
     {
         state = CityHash_v1_0_2::CityHash128WithSeed(static_cast<const char *>(src), length, state);
     }
@@ -69,11 +69,11 @@ private:
 class CRC64
 {
 public:
-    using HashType                   = uint64_t;
+    using HashType                    = uint64_t;
     static constexpr size_t hash_size = sizeof(HashType);
-    static constexpr auto  algorithm = ::DB::DM::ChecksumAlgo::CRC64;
-    void                   update(const void * src, size_t length) { state.update(src, length); }
-    [[nodiscard]] HashType checksum() const { return state.checksum(); }
+    static constexpr auto   algorithm = ::DB::DM::ChecksumAlgo::CRC64;
+    void                    update(const void * src, size_t length) { state.update(src, length); }
+    [[nodiscard]] HashType  checksum() const { return state.checksum(); }
 
 private:
     crc64::Digest state{};
@@ -91,10 +91,11 @@ struct ChecksumFrame
 {
     size_t                       bytes;
     typename Algorithm::HashType checksum;
-    uint8_t                      data[0];
+    uint8_t _pad[alignof(size_t) > alignof(typename Algorithm::HashType) ? alignof(size_t) - sizeof(typename Algorithm::HashType) : 0];
+    uint8_t data[0];
 };
 
-#define BASIC_CHECK_FOR_FRAME(ALGO)                                                                                        \
+#define BASIC_CHECK_FOR_FRAME(ALGO)                                                                                      \
     static_assert(std::is_standard_layout_v<ChecksumFrame<Digest::ALGO>>, "DMChecksumFrame must be in standard-layout"); \
     static_assert(std::is_trivial_v<ChecksumFrame<Digest::ALGO>>, "DMChecksumFrame must be trivial");
 
