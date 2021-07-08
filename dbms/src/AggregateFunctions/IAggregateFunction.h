@@ -7,12 +7,19 @@
 
 #include <Core/Types.h>
 #include <Core/Field.h>
+#include <Columns/ColumnsNumber.h>
 #include <Common/Exception.h>
+#include <Common/assert_cast.h>
 #include <Storages/Transaction/Collator.h>
 
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int NOT_IMPLEMENTED;
+}
 
 class Arena;
 class ReadBuffer;
@@ -44,7 +51,7 @@ public:
     /// Get the result type.
     virtual DataTypePtr getReturnType() const = 0;
 
-    virtual ~IAggregateFunction() {};
+    virtual ~IAggregateFunction() = default;
 
     /** Data manipulating functions. */
 
@@ -104,6 +111,68 @@ public:
     using AddFunc = void (*)(const IAggregateFunction *, AggregateDataPtr, const IColumn **, size_t, Arena *);
     virtual AddFunc getAddressOfAddFunction() const = 0;
 
+    /** Contains a loop with calls to "add" function. You can collect arguments into array "places"
+      *  and do a single call to "addBatch" for devirtualization and inlining.
+      */
+    virtual void addBatch(
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const = 0;
+
+    virtual void mergeBatch(
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        const AggregateDataPtr * rhs,
+        Arena * arena) const = 0;
+
+    /** The same for single place.
+      */
+    virtual void addBatchSinglePlace(
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1) const = 0;
+
+    /** The same for single place when need to aggregate only filtered data.
+      */
+    virtual void addBatchSinglePlaceNotNull(
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        const UInt8 * null_map,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const = 0;
+
+    virtual void addBatchSinglePlaceFromInterval(
+        size_t batch_begin, size_t batch_end, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1)
+        const = 0;
+
+    /** In addition to addBatch, this method collects multiple rows of arguments into array "places"
+      *  as long as they are between offsets[i-1] and offsets[i]. This is used for arrayReduce and
+      *  -Array combinator. It might also be used generally to break data dependency when array
+      *  "places" contains a large number of same values consecutively.
+      */
+    virtual void addBatchArray(
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        const IColumn ** columns,
+        const UInt64 * offsets,
+        Arena * arena) const = 0;
+
+    /** The case when the aggregation key is UInt8
+      * and pointers to aggregation states are stored in AggregateDataPtr[256] lookup table.
+      */
+    virtual void addBatchLookupTable8(
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        std::function<void(AggregateDataPtr &)> init,
+        const UInt8 * key,
+        const IColumn ** columns,
+        Arena * arena) const = 0;
+
     /** This is used for runtime code generation to determine, which header files to include in generated source.
       * Always implement it as
       * const char * getHeaderFilePath() const override { return __FILE__; }
@@ -112,7 +181,6 @@ public:
 
     virtual void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
 };
-
 
 /// Implement method to obtain an address of 'add' function.
 template <typename Derived>
@@ -126,37 +194,213 @@ private:
 
 public:
     AddFunc getAddressOfAddFunction() const override { return &addFree; }
+
+    void addBatch(
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const override
+    {
+        if (if_argument_pos >= 0)
+        {
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            for (size_t i = 0; i < batch_size; ++i)
+            {
+                if (flags[i] && places[i])
+                    static_cast<const Derived *>(this)->add(places[i] + place_offset, columns, i, arena);
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < batch_size; ++i)
+                if (places[i])
+                    static_cast<const Derived *>(this)->add(places[i] + place_offset, columns, i, arena);
+        }
+    }
+
+    void mergeBatch(
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        const AggregateDataPtr * rhs,
+        Arena * arena) const override
+    {
+        for (size_t i = 0; i < batch_size; ++i)
+            if (places[i])
+                static_cast<const Derived *>(this)->merge(places[i] + place_offset, rhs[i], arena);
+    }
+
+    void addBatchSinglePlace(
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1) const override
+    {
+        if (if_argument_pos >= 0)
+        {
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            for (size_t i = 0; i < batch_size; ++i)
+            {
+                if (flags[i])
+                    static_cast<const Derived *>(this)->add(place, columns, i, arena);
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < batch_size; ++i)
+                static_cast<const Derived *>(this)->add(place, columns, i, arena);
+        }
+    }
+
+    void addBatchSinglePlaceNotNull(
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        const UInt8 * null_map,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const override
+    {
+        if (if_argument_pos >= 0)
+        {
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            for (size_t i = 0; i < batch_size; ++i)
+                if (!null_map[i] && flags[i])
+                    static_cast<const Derived *>(this)->add(place, columns, i, arena);
+        }
+        else
+        {
+            for (size_t i = 0; i < batch_size; ++i)
+                if (!null_map[i])
+                    static_cast<const Derived *>(this)->add(place, columns, i, arena);
+        }
+    }
+
+    void addBatchSinglePlaceFromInterval(
+        size_t batch_begin, size_t batch_end, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1)
+        const override
+    {
+        if (if_argument_pos >= 0)
+        {
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            for (size_t i = batch_begin; i < batch_end; ++i)
+            {
+                if (flags[i])
+                    static_cast<const Derived *>(this)->add(place, columns, i, arena);
+            }
+        }
+        else
+        {
+            for (size_t i = batch_begin; i < batch_end; ++i)
+                static_cast<const Derived *>(this)->add(place, columns, i, arena);
+        }
+    }
+
+    void addBatchArray(
+        size_t batch_size, AggregateDataPtr * places, size_t place_offset, const IColumn ** columns, const UInt64 * offsets, Arena * arena)
+        const override
+    {
+        size_t current_offset = 0;
+        for (size_t i = 0; i < batch_size; ++i)
+        {
+            size_t next_offset = offsets[i];
+            for (size_t j = current_offset; j < next_offset; ++j)
+                if (places[i])
+                    static_cast<const Derived *>(this)->add(places[i] + place_offset, columns, j, arena);
+            current_offset = next_offset;
+        }
+    }
+
+    void addBatchLookupTable8(
+        size_t batch_size,
+        AggregateDataPtr * map,
+        size_t place_offset,
+        std::function<void(AggregateDataPtr &)> init,
+        const UInt8 * key,
+        const IColumn ** columns,
+        Arena * arena) const override
+    {
+        static constexpr size_t UNROLL_COUNT = 8;
+
+        size_t i = 0;
+
+        size_t batch_size_unrolled = batch_size / UNROLL_COUNT * UNROLL_COUNT;
+        for (; i < batch_size_unrolled; i += UNROLL_COUNT)
+        {
+            AggregateDataPtr places[UNROLL_COUNT];
+            for (size_t j = 0; j < UNROLL_COUNT; ++j)
+            {
+                AggregateDataPtr & place = map[key[i + j]];
+                if (unlikely(!place))
+                    init(place);
+
+                places[j] = place;
+            }
+
+            for (size_t j = 0; j < UNROLL_COUNT; ++j)
+                static_cast<const Derived *>(this)->add(places[j] + place_offset, columns, i + j, arena);
+        }
+
+        for (; i < batch_size; ++i)
+        {
+            AggregateDataPtr & place = map[key[i]];
+            if (unlikely(!place))
+                init(place);
+            static_cast<const Derived *>(this)->add(place + place_offset, columns, i, arena);
+        }
+    }
 };
 
+namespace _IAggregateFunctionImpl
+{
+template <bool with_collator = false>
+struct CollatorHolder
+{
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator>)
+    {
+    }
+
+    template <typename T>
+    void setDataCollator(T *) const
+    {
+    }
+};
+
+template <>
+struct CollatorHolder<true>
+{
+    std::shared_ptr<TiDB::ITiDBCollator> collator;
+
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_)
+    {
+        collator = std::move(collator_);
+    }
+
+    template <typename T>
+    void setDataCollator(T * data) const
+    {
+        data->setCollator(collator);
+    }
+};
+} // namespace _IAggregateFunctionImpl
 
 /// Implements several methods for manipulation with data. T - type of structure with data for aggregation.
 template <typename T, typename Derived, bool with_collator = false>
-class IAggregateFunctionDataHelper : public IAggregateFunctionHelper<Derived>
+class IAggregateFunctionDataHelper : public IAggregateFunctionHelper<Derived>, protected _IAggregateFunctionImpl::CollatorHolder<with_collator>
 {
 protected:
     using Data = T;
 
-    static Data & data(AggregateDataPtr __restrict place) { return *reinterpret_cast<Data*>(place); }
-    static const Data & data(ConstAggregateDataPtr __restrict place) { return *reinterpret_cast<const Data*>(place); }
-    std::shared_ptr<TiDB::ITiDBCollator> collator;
+    static Data & data(AggregateDataPtr __restrict place) { return *reinterpret_cast<Data *>(place); }
+    static const Data & data(ConstAggregateDataPtr __restrict place) { return *reinterpret_cast<const Data *>(place); }
 
 public:
-
     void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_) override
     {
-        collator = collator_;
+        _IAggregateFunctionImpl::CollatorHolder<with_collator>::setCollator(collator_);
     }
-    void create(AggregateDataPtr __restrict place) const override
+
+    void create(AggregateDataPtr place) const override
     {
-        if constexpr (with_collator)
-        {
-            auto data = new (place) Data;
-            data->setCollator(collator);
-        }
-        else
-        {
-            new (place) Data;
-        }
+        this->setDataCollator(new (place) Data);
     }
 
     void destroy(AggregateDataPtr __restrict place) const noexcept override
@@ -179,9 +423,85 @@ public:
     {
         return alignof(Data);
     }
-};
 
+    void addBatchLookupTable8(
+        size_t batch_size,
+        AggregateDataPtr * map,
+        size_t place_offset,
+        std::function<void(AggregateDataPtr &)> init,
+        const UInt8 * key,
+        const IColumn ** columns,
+        Arena * arena) const override
+    {
+        const Derived & func = *static_cast<const Derived *>(this);
+
+        /// If the function is complex or too large, use more generic algorithm.
+
+        if (func.allocatesMemoryInArena() || sizeof(Data) > 16 || func.sizeOfData() != sizeof(Data))
+        {
+            IAggregateFunctionHelper<Derived>::addBatchLookupTable8(batch_size, map, place_offset, init, key, columns, arena);
+            return;
+        }
+
+        /// Will use UNROLL_COUNT number of lookup tables.
+
+        static constexpr size_t UNROLL_COUNT = 4;
+
+        std::unique_ptr<Data[]> places{new Data[256 * UNROLL_COUNT]};
+        bool has_data[256 * UNROLL_COUNT]{}; /// Separate flags array to avoid heavy initialization.
+
+        size_t i = 0;
+
+        /// Aggregate data into different lookup tables.
+
+        size_t batch_size_unrolled = batch_size / UNROLL_COUNT * UNROLL_COUNT;
+        for (; i < batch_size_unrolled; i += UNROLL_COUNT)
+        {
+            for (size_t j = 0; j < UNROLL_COUNT; ++j)
+            {
+                size_t idx = j * 256 + key[i + j];
+                if (unlikely(!has_data[idx]))
+                {
+                    new (&places[idx]) Data;
+                    has_data[idx] = true;
+                }
+                func.add(reinterpret_cast<char *>(&places[idx]), columns, i + j, nullptr);
+            }
+        }
+
+        /// Merge data from every lookup table to the final destination.
+
+        for (size_t k = 0; k < 256; ++k)
+        {
+            for (size_t j = 0; j < UNROLL_COUNT; ++j)
+            {
+                size_t idx = j * 256 + k;
+                if (has_data[idx])
+                {
+                    AggregateDataPtr & place = map[k];
+                    if (unlikely(!place))
+                        init(place);
+
+                    func.merge(place + place_offset, reinterpret_cast<const char *>(&places[idx]), nullptr);
+                }
+            }
+        }
+
+        /// Process tails and add directly to the final destination.
+
+        for (; i < batch_size; ++i)
+        {
+            size_t k = key[i];
+            AggregateDataPtr & place = map[k];
+            if (unlikely(!place))
+                init(place);
+
+            func.add(place + place_offset, columns, i, nullptr);
+        }
+    }
+};
 
 using AggregateFunctionPtr = std::shared_ptr<IAggregateFunction>;
 
-}
+} // namespace DB
+

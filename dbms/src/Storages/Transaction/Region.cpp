@@ -392,7 +392,7 @@ std::string Region::getDebugString(WriteBufferFromOwnString & ss) const
 
 RegionID Region::id() const { return meta.regionId(); }
 
-pingcap::kv::RegionVerID Region::verID() const { return RegionVerID(id(), confVer(), version()); }
+pingcap::kv::RegionVerID Region::verID() const { return pingcap::kv::RegionVerID(id(), confVer(), version()); }
 
 bool Region::isPendingRemove() const { return peerState() == raft_serverpb::PeerState::Tombstone; }
 
