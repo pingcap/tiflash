@@ -19,7 +19,7 @@ private:
         }
         WriteBufferFromOwnString writer;
         DebugPrinter::print(writer, block);
-        LOG_DEBUG(log, "Block rows:\n" + writer.str());
+        LOG_DEBUG(log, "Block rows:\n" << writer.str());
         return block;
     }
 

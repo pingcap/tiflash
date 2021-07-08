@@ -49,7 +49,7 @@ std::string DataTypeAggregateFunction::getName() const
         stream << ", " << argument_type->getName();
 
     stream << ")";
-    return stream.str();
+    return stream.releaseStr();
 }
 
 void DataTypeAggregateFunction::serializeBinary(const Field & field, WriteBuffer & ostr) const

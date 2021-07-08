@@ -144,24 +144,30 @@ public:
         return block;
     }
 
+    void stringfy(WriteBuffer & buf)
+    {
+
+        buf << "#";
+        if (stream_position == size_t(-1))
+            buf << "?";
+        else
+            buf << stream_position;
+        buf << ":";
+        if (block)
+            buf << block.rows() << "-" << deleted_rows;
+        else
+            buf << "?";
+    }
+
     String str()
     {
 
-        WriteBufferFromOwnString ostr;
-        ostr << "#";
-        if (stream_position == size_t(-1))
-            ostr << "?";
-        else
-            ostr << stream_position;
-        ostr << ":";
-        if (block)
-            ostr << block.rows() << "-" << deleted_rows;
-        else
-            ostr << "?";
+        WriteBufferFromOwnString buf;
+        stringfy(buf);
         return ostr.releaseStr();
     }
 
-    friend WriteBuffer & operator << (WriteBuffer & out, DedupingBlock & self)
+    friend std::ostream & operator << (std::ostream & out, DedupingBlock & self)
     {
         return out << self.str();
     }
@@ -179,6 +185,11 @@ private:
 
 using DedupingBlockPtr = std::shared_ptr<DedupingBlock>;
 
+inline void writeText(const DedupingBlock & block, WriteBuffer & buf)
+{
+    block.stringfy(buf);
+    return buf;
+}
 
 template <typename T>
 class SmallObjectFifo : public ConcurrentBoundedQueue<T>
@@ -210,16 +221,21 @@ public:
             Self::operator[](i) = std::make_shared<Fifo>(queue_max_);
     }
 
-    String str()
+    void stringfy(WriteBuffer & buf)
     {
-        WriteBufferFromOwnString ostr;
-        ostr << Self::size() << "*" << queue_max << "Q";
+        buf << Self::size() << "*" << queue_max << "Q";
         for (size_t i = 0; i < Self::size(); ++i)
-            ostr << ":" << Self::operator[](i)->size();
-        return ostr.str();
+            buf << ":" << Self::operator[](i)->size();
     }
 
-    friend WriteBuffer & operator << (WriteBuffer & out, FifoPtrs & self)
+    String str()
+    {
+        WriteBufferFromOwnString buf;
+        stringfy(buf);
+        return buf.releaseStr();
+    }
+
+    friend std::ostream & operator << (std::ostream & out, FifoPtrs & self)
     {
         return out << self.str();
     }
@@ -228,6 +244,12 @@ private:
     const size_t queue_max;
 };
 
+template <typename Fifo>
+inline void writeText(const FifoPtrs<Fifo> & fifoPtrs, WriteBuffer & buf)
+{
+    fifoPtrs.stringfy(buf);
+    return buf;
+}
 
 class BlocksFifo : public SmallObjectFifo<DedupingBlockPtr>
 {
@@ -420,22 +442,26 @@ public:
         return const_cast<DedupCursor *>(this)->greater(rhs);
     }
 
-    String str()
+    void stringfy(WriteBuffer & buf)
     {
-        WriteBufferFromOwnString ostr;
-
         if (!block)
         {
-            ostr << "#?";
-            return ostr.str();
+            buf << "#?";
+            return;
         }
         else
-            ostr << block->str();
-        ostr << "/" << cursor.pos << "\\" << cursor.order;
-        return ostr.str();
+            block->stringfy(buf);
+        buf << "/" << cursor.pos << "\\" << cursor.order;
     }
 
-    friend WriteBuffer & operator << (WriteBuffer & out, DedupCursor & self)
+    String str()
+    {
+        WriteBufferFromOwnString buf;
+        stringfy(buf);
+        return ostr.releaseStr();
+    }
+
+    friend std::ostream & operator << (std::ostream & out, DedupCursor & self)
     {
         return out << self.str();
     }
@@ -446,6 +472,12 @@ public:
 protected:
     SortCursorImpl cursor;
 };
+
+inline void writeText(const DedupCursor & cursor, WriteBuffer & buf)
+{
+    cursor.stringfy(buf);
+    return buf;
+}
 
 
 // For easy copy and sharing cursor.pos
@@ -477,7 +509,7 @@ struct CursorPlainPtr
         return (*ptr) < (*rhs.ptr);
     }
 
-    friend WriteBuffer & operator << (WriteBuffer & out, CursorPlainPtr & self)
+    friend std::ostream & operator << (std::ostream & out, CursorQueue & self)
     {
         return (self.ptr == 0) ? (out << "null") : (out << (*self.ptr));
     }
@@ -487,27 +519,37 @@ struct CursorPlainPtr
 class CursorQueue : public std::priority_queue<CursorPlainPtr>
 {
 public:
-    String str()
+    void stringfy(WriteBuffer & buf)
     {
-        WriteBufferFromOwnString ostr;
-        ostr << "Q:" << size();
+        buf << "Q:" << size();
 
         CursorQueue copy = *this;
         while (!copy.empty())
         {
             CursorPlainPtr it = copy.top();
             copy.pop();
-            ostr << "|" << it->str();
+            buf << "|" << it->str();
         }
-        return ostr.str();
     }
 
-    friend WriteBuffer & operator << (WriteBuffer & out, CursorQueue & self)
+    String str()
+    {
+        WriteBufferFromOwnString buf;
+        stringfy(buf);
+        return buf.releaseStr();
+    }
+
+    friend std::ostream & operator << (std::ostream & out, CursorQueue & self)
     {
         return out << self.str();
     }
 };
 
+inline void writeText(const CursorQueue & x, WriteBuffer & buf)
+{
+    x.stringfy(buf);
+    return buf;
+}
 
 struct DedupBound : public DedupCursor
 {
@@ -540,15 +582,21 @@ struct DedupBound : public DedupCursor
         return DedupCursor::greater(rhs);
     }
 
-    String str()
+    void stringfy(WriteBuffer & buf)
     {
-        WriteBufferFromOwnString ostr;
-        ostr << DedupCursor::str();
-        ostr << (is_bottom ? "L" : "F");
-        return ostr.str();
+        buf << DedupCursor::str();
+        buf << (is_bottom ? "L" : "F");
     }
 
-    friend WriteBuffer & operator << (WriteBuffer & out, DedupBound & self)
+    String str()
+    {
+
+        WriteBufferFromOwnString buf;
+        stringfy(buf);
+        return ostr.releaseStr();
+    }
+
+    friend std::ostream & operator << (std::ostream & out, DedupBound & self)
     {
         return out << self.str();
     }
@@ -556,26 +604,38 @@ struct DedupBound : public DedupCursor
 
 using DedupBoundPtr = std::shared_ptr<DedupBound>;
 
+inline void writeText(const DedupBound & x, WriteBuffer & buf)
+{
+    x.stringfy(buf);
+    return buf;
+}
+
 
 class BoundQueue : public std::priority_queue<DedupBound>
 {
 public:
-    String str()
+    void stringfy(WriteBuffer & buf)
     {
-        WriteBufferFromOwnString ostr;
-        ostr << "Q:" << size();
+        buf << "Q:" << size();
 
         BoundQueue copy = *this;
         while (!copy.empty())
         {
             DedupBound it = copy.top();
             copy.pop();
-            ostr << "|" << it.str();
+            buf << "|" << it.str();
         }
-        return ostr.str();
     }
 
-    friend WriteBuffer & operator << (WriteBuffer & out, BoundQueue & self)
+    String str()
+    {
+
+        WriteBufferFromOwnString buf;
+        stringfy(buf);
+        return ostr.releaseStr();
+    }
+
+    friend std::ostream & operator << (std::ostream & out, BoundQueue & self)
     {
         return out << self.str();
     }
@@ -583,6 +643,12 @@ public:
 
 using DedupCursorPtr = std::shared_ptr<DedupCursor>;
 using DedupCursors = std::vector<DedupCursorPtr>;
+
+inline void writeText(const BoundQueue & x, WriteBuffer & buf)
+{
+    x.stringfy(buf);
+    return buf;
+}
 
 
 class StreamMasks
@@ -617,17 +683,22 @@ public:
         return data[i];
     }
 
-    String str()
+    void stringfy(WriteBuffer & buf)
     {
-        WriteBufferFromOwnString ostr;
-        ostr << "[";
+        buf << "[";
         for (Data::iterator it = data.begin(); it != data.end(); ++it)
-            ostr << ((*it) ? "+" : "-");
-        ostr << "]";
-        return ostr.str();
+            buf << ((*it) ? "+" : "-");
+        buf << "]";
     }
 
-    friend WriteBuffer & operator << (WriteBuffer & out, StreamMasks & self)
+    String str()
+    {
+        WriteBufferFromOwnString buf;
+        stringfy(buf);
+        return buf.releaseStr();
+    }
+
+    friend std::ostream & operator << (std::ostream & out, StreamMasks & self)
     {
         return out << self.str();
     }
@@ -636,6 +707,12 @@ private:
     Data data;
     size_t sum;
 };
+
+inline void writeText(const StreamMasks & x, WriteBuffer & buf)
+{
+    x.stringfy(buf);
+    return buf;
+}
 
 
 class IdGen

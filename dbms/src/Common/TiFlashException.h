@@ -223,12 +223,12 @@ private:
 class TiFlashException : public Exception
 {
 public:
-    TiFlashException(const std::string & _msg, const TiFlashError & _error) : Exception(_msg), error(_error) {}
+    TiFlashException(std::string _msg, TiFlashError _error) : Exception(std::move(_msg)), error(std::move(_error)) {}
 
     const char * name() const throw() override { return "DB::TiFlashException"; }
     const char * className() const throw() override { return "DB::TiFlashException"; }
 
-    TiFlashError getError() const { return error; }
+    const TiFlashError & getError() const { return error; }
 
     std::string standardText() const;
 

@@ -55,7 +55,7 @@ String getTableDefinitionFromCreateQuery(const ASTPtr & query)
     WriteBufferFromOwnString statement_stream;
     formatAST(create, statement_stream, false);
     statement_stream << '\n';
-    return statement_stream.str();
+    return statement_stream.releaseStr();
 }
 
 String getDatabaseDefinitionFromCreateQuery(const ASTPtr & query)
@@ -79,7 +79,7 @@ String getDatabaseDefinitionFromCreateQuery(const ASTPtr & query)
     WriteBufferFromOwnString statement_stream;
     formatAST(create, statement_stream, false);
     statement_stream << '\n';
-    return statement_stream.str();
+    return statement_stream.releaseStr();
 }
 
 

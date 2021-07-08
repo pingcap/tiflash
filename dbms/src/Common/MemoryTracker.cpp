@@ -88,7 +88,7 @@ void MemoryTracker::alloc(Int64 size)
             << " (attempt to allocate chunk of " << size << " bytes)"
             << ", maximum: " << formatReadableSizeWithBinarySuffix(current_limit);
 
-        throw DB::TiFlashException(message.str(), DB::Errors::Coprocessor::MemoryLimitExceeded);
+        throw DB::TiFlashException(message.releaseStr(), DB::Errors::Coprocessor::MemoryLimitExceeded);
     }
 
     if (will_be > peak.load(std::memory_order_relaxed))        /// Races doesn't matter. Could rewrite with CAS, but not worth.
