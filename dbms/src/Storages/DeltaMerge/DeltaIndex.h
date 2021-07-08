@@ -1,5 +1,6 @@
 #pragma once
 
+#include <IO/Operators.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/Page/PageDefines.h>
@@ -125,7 +126,7 @@ public:
         WriteBufferFromOwnString s;
         s << "{placed rows:" << placed_rows << ", deletes:" << placed_deletes << ", delta tree: " << delta_tree->numEntries() << "|"
           << delta_tree->numInserts() << "|" << delta_tree->numDeletes() << "}";
-        return s.str();
+        return s.releaseStr();
     }
 
     UInt64 getId() const { return id; }

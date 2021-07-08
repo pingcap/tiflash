@@ -2828,16 +2828,16 @@ try
     // Delete range [0, 64)
     const size_t num_deleted_rows = 64;
     {
-        std::stringstream ss;
-        ss << TiDB::CodecFlagInt;
+        WriteBufferFromOwnString ss;
+        ss << static_cast<int>(TiDB::CodecFlagInt);
         DB::EncodeInt64(Int64(0), ss);
-        ss << TiDB::CodecFlagInt;
+        ss << static_cast<int>(TiDB::CodecFlagInt);
         DB::EncodeInt64(Int64(0), ss);
         RowKeyValue start(true, std::make_shared<String>(ss.str()));
-        ss.str("");
-        ss << TiDB::CodecFlagInt;
+        ss.restart();
+        ss << static_cast<int>(TiDB::CodecFlagInt);
         DB::EncodeInt64(Int64(num_deleted_rows), ss);
-        ss << TiDB::CodecFlagInt;
+        ss << static_cast<int>(TiDB::CodecFlagInt);
         DB::EncodeInt64(Int64(num_deleted_rows), ss);
         RowKeyValue end(true, std::make_shared<String>(ss.str()));
         RowKeyRange range(start, end, true, 2);

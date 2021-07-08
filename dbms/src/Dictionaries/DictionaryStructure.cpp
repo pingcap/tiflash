@@ -2,6 +2,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Columns/IColumn.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <IO/Operators.h>
 #include <IO/WriteHelpers.h>
 
 #include <ext/range.h>
@@ -209,7 +210,7 @@ std::string DictionaryStructure::getKeyDescription() const
 
     out << ')';
 
-    return out.str();
+    return out.releaseStr();
 }
 
 

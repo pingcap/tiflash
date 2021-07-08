@@ -70,10 +70,10 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
                 region_list.push_back(region.first);
         });
     }
-    ss << count << std::endl;
+    ss << count << '\n';
     for (const auto & region_id : region_list)
         ss << region_id << ' ';
-    ss << std::endl;
+    ss << '\n';
 
     auto s = RawCppString::New(ss.str());
     return HttpRequestRes{.status = status,

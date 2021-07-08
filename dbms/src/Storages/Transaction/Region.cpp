@@ -364,7 +364,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * p
     return region;
 }
 
-std::string Region::getDebugString(WriteBuffer & ss) const
+std::string Region::getDebugString(std::stringstream & ss) const
 {
     ss << "{region " << id();
     {
@@ -375,6 +375,19 @@ std::string Region::getDebugString(WriteBuffer & ss) const
     }
     ss << "}";
     return ss.str();
+}
+
+std::string Region::getDebugString(WriteBufferFromOwnString & ss) const
+{
+    ss << "{region " << id();
+    {
+        UInt64 index = meta.appliedIndex();
+        const auto & meta_snap = meta.dumpRegionMetaSnapshot();
+        ss << ", index " << index << ", table " << mapped_table_id << ", ver " << meta_snap.ver << " conf_ver " << meta_snap.conf_ver
+           << ", state " << raft_serverpb::PeerState_Name(peerState()) << ", peer " << meta_snap.peer.ShortDebugString();
+    }
+    ss << "}";
+    return ss.releaseStr();
 }
 
 RegionID Region::id() const { return meta.regionId(); }

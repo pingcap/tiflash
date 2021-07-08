@@ -11,15 +11,15 @@ String getIntHandleMinKey()
 {
     WriteBufferFromOwnString ss;
     DB::EncodeInt64(int_handle_min, ss);
-    return ss.str();
+    return ss.releaseStr();
 }
 
 String getIntHandleMaxKey()
 {
     WriteBufferFromOwnString ss;
     DB::EncodeInt64(int_handle_max, ss);
-    ss.put('\0');
-    return ss.str();
+    ss.write('\0');
+    return ss.releaseStr();
 }
 
 const RowKeyValue RowKeyValue::INT_HANDLE_MIN_KEY    = RowKeyValue(false, std::make_shared<String>(getIntHandleMinKey()), int_handle_min);

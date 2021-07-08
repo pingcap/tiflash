@@ -1,4 +1,5 @@
 #include <Common/CurrentMetrics.h>
+#include <IO/Operators.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 

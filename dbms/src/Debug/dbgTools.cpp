@@ -326,7 +326,7 @@ void insert(                                                                    
         key = RecordKVFormat::genKey(table_id, handle_id);
     WriteBufferFromOwnString ss;
     encodeRow(table_info, fields, ss);
-    TiKVValue value(ss.str());
+    TiKVValue value(ss.releaseStr());
 
     UInt64 prewrite_ts = pd_client->getTS();
     UInt64 commit_ts = pd_client->getTS();
@@ -443,7 +443,7 @@ struct BatchCtrl
             // TODO: May need to use BumpyDatum to flatten before encoding.
             EncodeDatum(ss, column.getCodecFlag(), magic_num);
         }
-        return TiKVValue(ss.str());
+        return TiKVValue(ss.releaseStr());
     }
 };
 

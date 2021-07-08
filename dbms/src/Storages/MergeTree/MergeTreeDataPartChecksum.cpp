@@ -1,7 +1,6 @@
 #include "MergeTreeDataPartChecksum.h"
 #include <Common/SipHash.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Operators.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/CompressedReadBuffer.h>
@@ -408,7 +407,7 @@ void MinimalisticDataPartChecksums::checkEqualImpl(const MinimalisticDataPartChe
         error_msg << "Different number of files: " << rhs.num_compressed_files << " compressed (expected " << num_compressed_files << ")"
             << " and " << rhs.num_uncompressed_files << " uncompressed ones (expected " << num_uncompressed_files << ")";
 
-        throw Exception(error_msg.str(), ErrorCodes::CHECKSUM_DOESNT_MATCH);
+        throw Exception(error_msg.releaseStr(), ErrorCodes::CHECKSUM_DOESNT_MATCH);
     }
 
     Strings errors;

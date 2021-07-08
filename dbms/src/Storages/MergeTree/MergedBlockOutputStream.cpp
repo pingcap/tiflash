@@ -240,11 +240,11 @@ IMergedBlockOutputStream::ColumnStream::ColumnStream(
     const CompactWriteContextPtr & compactCtxPtr,
     bool is_substream) :
     escaped_column_name(escaped_column_name_),
-    substream_ostream(is_substream ? std::make_unique<WriteBufferFromOStream>(substream_col_stream) : NULL),
+    substream_ostream(is_substream ? &substream_col_stream : nullptr),
     plain_hashing(is_substream ? std::make_shared<HashingWriteBuffer>(*substream_ostream) : compactCtxPtr->plain_hashing), 
     compressed_buf(*plain_hashing, compression_settings), 
     compressed(compressed_buf),
-    marks_sstream(std::make_unique<WriteBufferFromOStream>(is_substream ? substream_mark_stream: compactCtxPtr->mark_stream)),
+    marks_sstream(is_substream ? &substream_mark_stream: &compactCtxPtr->mark_stream),
     marks(*marks_sstream)
 {}
 

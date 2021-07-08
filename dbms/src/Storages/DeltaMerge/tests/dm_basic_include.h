@@ -4,6 +4,8 @@
 #include <Common/typeid_cast.h>
 #include <Core/Block.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <IO/Operators.h>
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
@@ -150,13 +152,13 @@ public:
                     if (is_common_handle)
                     {
                         Int64             value = reversed ? end - 1 - i : beg + i;
-                        std::stringstream ss;
+                        WriteBufferFromOwnString ss;
                         for (size_t index = 0; index < rowkey_column_size; index++)
                         {
-                            ss << TiDB::CodecFlagInt;
+                            ss << static_cast<int>(TiDB::CodecFlagInt);
                             ::DB::EncodeInt64(value, ss);
                         }
-                        field = ss.str();
+                        field = ss.releaseStr();
                     }
                     else
                     {
@@ -269,13 +271,13 @@ public:
                 if (is_common_handle)
                 {
                     Field             field;
-                    std::stringstream ss;
+                    WriteBufferFromOwnString ss;
                     for (size_t index = 0; index < rowkey_column_size; index++)
                     {
-                        ss << TiDB::CodecFlagInt;
+                        ss << static_cast<int>(TiDB::CodecFlagInt);
                         ::DB::EncodeInt64(pk, ss);
                     }
-                    field = ss.str();
+                    field = ss.releaseStr();
                     m_col->insert(field);
                 }
                 else
@@ -329,17 +331,17 @@ public:
 
     static RowKeyRange getRowKeyRangeForClusteredIndex(Int64 start, Int64 end, size_t rowkey_column_size)
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         for (size_t i = 0; i < rowkey_column_size; i++)
         {
-            ss << TiDB::CodecFlagInt;
+            ss << static_cast<int>(TiDB::CodecFlagInt);
             EncodeInt64(start, ss);
         }
         RowKeyValue start_key = RowKeyValue(true, std::make_shared<String>(ss.str()));
-        ss.str("");
+        ss.restart();
         for (size_t i = 0; i < rowkey_column_size; i++)
         {
-            ss << TiDB::CodecFlagInt;
+            ss << static_cast<int>(TiDB::CodecFlagInt);
             EncodeInt64(end, ss);
         }
         RowKeyValue end_key = RowKeyValue(true, std::make_shared<String>(ss.str()));

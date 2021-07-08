@@ -1,6 +1,7 @@
 #include <optional>
 #include <Common/FailPoint.h>
 #include <Common/FieldVisitors.h>
+#include <Core/iostream_debug_helpers.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/MergeTree/MergeTreeBlockOutputStream.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>

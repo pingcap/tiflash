@@ -4,6 +4,7 @@
 
 #include <Common/SipHash.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <IO/Operators.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Quota.h>
@@ -66,17 +67,16 @@ String QuotaForInterval::toString() const
 
     auto loaded_rounded_time = rounded_time.load(std::memory_order_relaxed);
 
-    res << std::fixed << std::setprecision(3)
-        << "Interval:       " << LocalDateTime(loaded_rounded_time).toString() << " - " << LocalDateTime(loaded_rounded_time + duration).toString() << ".\n"
-        << "Queries:        " << used.queries         << ".\n"
-        << "Errors:         " << used.errors         << ".\n"
-        << "Result rows:    " << used.result_rows     << ".\n"
-        << "Result bytes:   " << used.result_bytes     << ".\n"
-        << "Read rows:      " << used.read_rows     << ".\n"
-        << "Read bytes:     " << used.read_bytes     << ".\n"
-        << "Execution time: " << used.execution_time_usec / 1000000.0 << " sec.\n";
+    res << "Interval:       " << LocalDateTime(loaded_rounded_time).toString() << " - " << LocalDateTime(loaded_rounded_time + duration).toString() << ".\n"
+        << "Queries:        " << used.queries.load(std::memory_order_relaxed) << ".\n"
+        << "Errors:         " << used.errors.load(std::memory_order_relaxed) << ".\n"
+        << "Result rows:    " << used.result_rows.load(std::memory_order_relaxed) << ".\n"
+        << "Result bytes:   " << used.result_bytes.load(std::memory_order_relaxed) << ".\n"
+        << "Read rows:      " << used.read_rows.load(std::memory_order_relaxed) << ".\n"
+        << "Read bytes:     " << used.read_bytes.load(std::memory_order_relaxed) << ".\n"
+        << "Execution time: " << DB::toString(used.execution_time_usec / 1000000.0, 3) << " sec.\n";
 
-    return res.str();
+    return res.releaseStr();
 }
 
 void QuotaForInterval::addQuery() noexcept
@@ -246,7 +246,7 @@ String QuotaForIntervals::toString() const
     WriteBufferFromOwnString res;
 
     for (Container::const_reverse_iterator it = cont.rbegin(); it != cont.rend(); ++it)
-        res << std::endl << it->second.toString();
+        res << '\n' << it->second.toString();
 
     return res.str();
 }

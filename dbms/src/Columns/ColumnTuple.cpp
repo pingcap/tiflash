@@ -2,6 +2,7 @@
 #include <ext/map.h>
 #include <ext/range.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <IO/Operators.h>
 
 
 namespace DB
@@ -28,7 +29,7 @@ std::string ColumnTuple::getName() const
         res << column->getName();
     }
     res << ")";
-    return res.str();
+    return res.releaseStr();
 }
 
 ColumnTuple::ColumnTuple(MutableColumns && mutable_columns)

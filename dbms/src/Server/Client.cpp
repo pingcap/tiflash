@@ -32,6 +32,7 @@
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromOStream.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
@@ -871,7 +872,8 @@ private:
         if (is_interactive)
         {
             std::cout << std::endl;
-            formatAST(*res, std::cout);
+            WriteBufferFromOStream buffer(std::cout);
+            formatAST(*res, buffer);
             std::cout << std::endl << std::endl;
         }
 
@@ -1180,7 +1182,7 @@ private:
         else
             std::cerr << SAVE_CURSOR_POSITION;
 
-        WriteBufferFromOwnString message;
+        std::stringstream message;
         message << indicators[increment % 8]
             << std::fixed << std::setprecision(3)
             << " Progress: ";

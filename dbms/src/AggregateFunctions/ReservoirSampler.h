@@ -181,7 +181,7 @@ public:
         DB::writeIntBinary<size_t>(sample_count, buf);
         DB::writeIntBinary<size_t>(total_values, buf);
 
-        WriteBufferFromOwnString rng_stream;
+        std::stringstream rng_stream;
         rng_stream << rng;
         DB::writeStringBinary(rng_stream.str(), buf);
 

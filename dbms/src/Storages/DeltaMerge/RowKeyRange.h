@@ -100,10 +100,10 @@ struct RowKeyValue
     {
         // FIXME: move this to TiKVRecordFormat.h
         WriteBufferFromOwnString ss;
-        ss.put('t');
+        ss.write('t');
         EncodeInt64(table_id, ss);
-        ss.put('_');
-        ss.put('r');
+        ss.write('_');
+        ss.write('r');
         String prefix = ss.str();
         return std::make_shared<DecodedTiKVKey>(prefix + *value);
     }
@@ -352,10 +352,10 @@ struct RowKeyRange
         TableRangeMinMax(TableID table_id, bool is_common_handle)
         {
             WriteBufferFromOwnString ss;
-            ss.put('t');
+            ss.write('t');
             EncodeInt64(table_id, ss);
-            ss.put('_');
-            ss.put('r');
+            ss.write('_');
+            ss.write('r');
             String prefix = ss.str();
             if (is_common_handle)
             {
@@ -582,10 +582,10 @@ struct RowKeyRange
     {
         // FIXME: move this to TiKVRecordFormat.h
         WriteBufferFromOwnString ss;
-        ss.put('t');
+        ss.write('t');
         EncodeInt64(table_id, ss);
-        ss.put('_');
-        ss.put('r');
+        ss.write('_');
+        ss.write('r');
         String            prefix    = ss.str();
         DecodedTiKVKeyPtr start_key = std::make_shared<DecodedTiKVKey>(prefix + *start.value);
         DecodedTiKVKeyPtr end_key   = std::make_shared<DecodedTiKVKey>(prefix + *end.value);
@@ -612,11 +612,11 @@ struct RowKeyRange
         }
         WriteBufferFromOwnString ss;
         DB::EncodeInt64(handle_range.start, ss);
-        String start = ss.str();
+        String start = ss.releaseStr();
 
-        ss.str(std::string());
+        ss.restart();
         DB::EncodeInt64(handle_range.end, ss);
-        String end = ss.str();
+        String end = ss.releaseStr();
         /// when handle_range.end == HandleRange::MAX, according to previous implementation, it should be +Inf
         return RowKeyRange(RowKeyValue(false, std::make_shared<String>(start), handle_range.start),
                            handle_range.end == HandleRange::MAX ? RowKeyValue::INT_HANDLE_MAX_KEY

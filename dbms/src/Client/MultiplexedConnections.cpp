@@ -1,4 +1,5 @@
 #include <Client/MultiplexedConnections.h>
+#include <IO/Operators.h>
 
 namespace DB
 {
@@ -223,7 +224,7 @@ std::string MultiplexedConnections::dumpAddressesUnlocked() const
         }
     }
 
-    return os.str();
+    return os.releaseStr();
 }
 
 Connection::Packet MultiplexedConnections::receivePacketUnlocked()

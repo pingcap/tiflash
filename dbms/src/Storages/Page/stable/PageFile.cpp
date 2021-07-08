@@ -2,7 +2,8 @@
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/WriteHelpers.h>
+#include <Common/hex.h>
+#include <IO/Operators.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -185,7 +186,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
         if (wb_checksum != checksum_calc)
         {
             WriteBufferFromOwnString ss;
-            ss << "expected: " << std::hex << wb_checksum << ", but: " << checksum_calc;
+            ss << "expected: " << getHexUIntLowercase(wb_checksum) << ", but: " << getHexUIntLowercase(checksum_calc);
             throw Exception("Write batch checksum not match, path: " + path + ", offset: " + DB::toString(wb_start_pos - meta_data)
                                 + ", bytes: " + DB::toString(wb_bytes) + ", " + ss.str(),
                             ErrorCodes::CHECKSUM_DOESNT_MATCH);

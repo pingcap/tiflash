@@ -2,6 +2,7 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <IO/Operators.h>
 
 
 namespace DB
@@ -33,7 +34,7 @@ String IBlockInputStream::getTreeID() const
         s << ")";
     }
 
-    return s.str();
+    return s.releaseStr();
 }
 
 
@@ -62,13 +63,13 @@ size_t IBlockInputStream::checkDepthImpl(size_t max_depth, size_t level) const
 }
 
 
-void IBlockInputStream::dumpTree(std::ostream & ostr, size_t indent, size_t multiplier)
+void IBlockInputStream::dumpTree(WriteBuffer & ostr, size_t indent, size_t multiplier)
 {
     ostr << String(indent, ' ') << getName();
     if (multiplier > 1)
         ostr << " × " << multiplier;
     //ostr << ": " << getHeader().dumpStructure();
-    ostr << std::endl;
+    ostr << '\n';
     ++indent;
 
     /// If the subtree is repeated several times, then we output it once with the multiplier.

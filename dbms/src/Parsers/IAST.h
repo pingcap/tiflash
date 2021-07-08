@@ -6,7 +6,6 @@
 #include <Core/Types.h>
 #include <Common/Exception.h>
 #include <IO/Operators.h>
-#include <IO/WriteBufferFromString.h>
 #include <Parsers/StringRange.h>
 
 

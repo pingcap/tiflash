@@ -1287,10 +1287,10 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
             << " If it is not an error, you could increase merge_tree/"
             << (forbidden_because_of_modify ? "max_files_to_modify_in_alter_columns" : "max_files_to_remove_in_alter_columns")
             << " parameter in configuration file (current value: "
-            << (forbidden_because_of_modify ? settings.max_files_to_modify_in_alter_columns : settings.max_files_to_remove_in_alter_columns)
+            << (forbidden_because_of_modify ? settings.max_files_to_modify_in_alter_columns.value : settings.max_files_to_remove_in_alter_columns.value)
             << ")";
 
-        throw Exception(exception_message.str(), ErrorCodes::TABLE_DIFFERS_TOO_MUCH);
+        throw Exception(exception_message.releaseStr(), ErrorCodes::TABLE_DIFFERS_TOO_MUCH);
     }
 
     DataPart::Checksums add_checksums;

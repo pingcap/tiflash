@@ -4,6 +4,7 @@
 #include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
 #include <Common/FieldVisitors.h>
+#include <IO/Operators.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
 
@@ -175,8 +176,8 @@ struct MinMaxValueFixed : public MinMaxValue
     String toString() const override
     {
         WriteBufferFromOwnString ss;
-        ss << "{\"type\":\"fixed\",\"min\":\"" << DB::toString(min) << "\",\"max\":\"" << DB::toString(max) << "\"}";
-        return ss.str();
+        ss << "{\"type\":\"fixed\",\"min\":\"" << min << "\",\"max\":\"" << max << "\"}";
+        return ss.releaseStr();
     }
 };
 
@@ -259,7 +260,7 @@ struct MinMaxValueString : public MinMaxValue
     {
         WriteBufferFromOwnString ss;
         ss << "{\"type\":\"string\",\"min\":\"" << min << "\",\"max\":\"" << max << "\"}";
-        return ss.str();
+        return ss.releaseStr();
     }
 };
 
@@ -337,7 +338,7 @@ struct MinMaxValueDataGeneric : public MinMaxValue
         WriteBufferFromOwnString ss;
         ss << "{\"type\":\"generic\",\"min\":\"" << applyVisitor(FieldVisitorToString(), min) << "\",\"max\":\""
            << applyVisitor(FieldVisitorToString(), max) << "\"}";
-        return ss.str();
+        return ss.releaseStr();
     }
 };
 

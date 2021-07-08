@@ -3,6 +3,7 @@
 #include <Parsers/ASTShowTablesQuery.h>
 #include <Parsers/ASTIdentifier.h>
 
+#include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
@@ -56,7 +57,7 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
         rewritten_query << "database = " << DB::quote << database;
 
     if (!query.like.empty())
-        rewritten_query << " AND name " << (query.not_like ? "NOT " : "") << "LIKE " << std::quoted(query.like, '\'');
+        rewritten_query << " AND name " << (query.not_like ? "NOT " : "") << "LIKE " << DB::quote << query.like;
 
     return rewritten_query.str();
 }

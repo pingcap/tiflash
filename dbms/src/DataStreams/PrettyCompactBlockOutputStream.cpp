@@ -1,3 +1,4 @@
+#include <IO/Operators.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <DataStreams/PrettyCompactBlockOutputStream.h>

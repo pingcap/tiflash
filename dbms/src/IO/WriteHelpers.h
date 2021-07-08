@@ -829,7 +829,7 @@ toString(const T & x, int precision)
 {
     DB::DoubleConverter<false>::BufferType buffer;
     double_conversion::StringBuilder builder{buffer, sizeof(buffer)};
-    const auto result = DB::DoubleConverter<false>::instance().ToFixed(x, precision, &builder);
+    DB::DoubleConverter<false>::instance().ToFixed(x, precision, &builder);
 
     WriteBufferFromOwnString ss;
     ss.write(buffer, builder.position());

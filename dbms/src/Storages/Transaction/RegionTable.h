@@ -225,6 +225,15 @@ struct RegionPreDecodeBlockData
         ss << ", block row: " << block.rows() << " col: " << block.columns() << " bytes: " << block.bytes();
         ss << " }";
     }
+
+    void toString(std::ostream & ss) const
+    {
+        ss << " {";
+        ss << " schema_version: " << schema_version;
+        ss << ", data_list size: " << data_list_read.size();
+        ss << ", block row: " << block.rows() << " col: " << block.columns() << " bytes: " << block.bytes();
+        ss << " }";
+    }
 };
 
 // A wrap of RegionPtr, could try to use its block cache while writing region data to storage.

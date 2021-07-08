@@ -287,7 +287,7 @@ try
 
 #ifndef NDEBUG
     // Check stringify in Debug mode
-    WriteBufferFromOwnString str;
+    std::stringstream str;
     json->stringify(str);
 #endif
 
@@ -359,7 +359,7 @@ try
 
 #ifndef NDEBUG
     // Check stringify in Debug mode
-    WriteBufferFromOwnString str;
+    std::stringstream str;
     json->stringify(str);
 #endif
 
@@ -408,7 +408,7 @@ try
 
 #ifndef NDEBUG
     // Check stringify in Debug mode
-    WriteBufferFromOwnString str;
+    std::stringstream str;
     json->stringify(str);
 #endif
 
@@ -455,7 +455,7 @@ try
 
 #ifndef NDEBUG
     // Check stringify in Debug mode
-    WriteBufferFromOwnString str;
+    std::stringstream str;
     json->stringify(str);
 #endif
 
@@ -485,7 +485,7 @@ catch (const Poco::Exception & e)
 String DBInfo::serialize() const
 try
 {
-    WriteBufferFromOwnString buf;
+    std::stringstream buf;
 
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);
@@ -547,7 +547,7 @@ try
     json->set("length", length);
 
 #ifndef NDEBUG
-    WriteBufferFromOwnString str;
+    std::stringstream str;
     json->stringify(str);
 #endif
 
@@ -609,7 +609,7 @@ try
     json->set("is_global", is_global);
 
 #ifndef NDEBUG
-    WriteBufferFromOwnString str;
+    std::stringstream str;
     json->stringify(str);
 #endif
 
@@ -664,7 +664,7 @@ TableInfo::TableInfo(const String & table_info_json) { deserialize(table_info_js
 String TableInfo::serialize() const
 try
 {
-    WriteBufferFromOwnString buf;
+    std::stringstream buf;
 
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);

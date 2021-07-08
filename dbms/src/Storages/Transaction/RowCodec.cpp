@@ -1,3 +1,4 @@
+#include <IO/Operators.h>
 #include <Storages/Transaction/RowCodec.h>
 
 namespace DB

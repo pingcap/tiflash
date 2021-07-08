@@ -1,4 +1,4 @@
-#include <IO/WriteHelpers.h>
+#include <IO/Operators.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Util/LayeredConfiguration.h>

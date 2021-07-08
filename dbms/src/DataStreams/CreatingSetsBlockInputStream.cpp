@@ -219,7 +219,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTr
             if (subquery.table)
                 msg << "Table with " << head_rows << " rows. ";
 
-            msg << "In " << watch.toString(elapsedSeconds()) << " sec. ";
+            msg << "In " << toString(watch.elapsedSeconds(), 3) << " sec. ";
             msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads ";
             msg << "for task " << std::to_string(mpp_task_id) << ".";
             LOG_DEBUG(log, msg.releaseStr());

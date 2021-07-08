@@ -55,14 +55,14 @@ protected:
         std::unique_ptr<WriteBufferFromFileBase> plain_file;
         WriteBufferFromOwnString substream_col_stream;
         WriteBufferFromOwnString substream_mark_stream;
-        std::unique_ptr<WriteBufferFromOStream> substream_ostream;
+        WriteBuffer* substream_ostream = nullptr;
         std::shared_ptr<HashingWriteBuffer> plain_hashing;
         CompressedWriteBuffer compressed_buf;
         HashingWriteBuffer compressed;
 
         /// marks -> marks_file
         std::unique_ptr<WriteBufferFromFile> marks_file;
-        std::unique_ptr<WriteBufferFromOStream> marks_sstream;
+        WriteBuffer* marks_sstream = nullptr;
         HashingWriteBuffer marks;
 
         void finalize();

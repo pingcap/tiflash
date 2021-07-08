@@ -1,4 +1,5 @@
 #include <DataTypes/DataTypeDecimal.h>
+#include <IO/Operators.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/JSONCodec.h>
 #include <Storages/Transaction/TiDB.h>
@@ -409,7 +410,7 @@ void EncodeBytes(const String & ori_str, WriteBuffer & ss)
             ss.write(ori_str.data() + index, remain);
             ss.write(ENC_ASC_PADDING, pad);
         }
-        ss.put(static_cast<char>(ENC_MARKER - (UInt8)pad));
+        ss.write(static_cast<char>(ENC_MARKER - (UInt8)pad));
         index += ENC_GROUP_SIZE;
     }
 }

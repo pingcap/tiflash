@@ -18,7 +18,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 #include <Functions/castTypeToEither.h>
-#include <IO/WriteHelpers.h>
+#include <IO/Operators.h>
 #include <Interpreters/ExpressionActions.h>
 #include <common/intExp.h>
 

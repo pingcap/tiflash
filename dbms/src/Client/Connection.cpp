@@ -4,10 +4,9 @@
 #include <Core/Defines.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
+#include <IO/Operators.h>
 #include <IO/ReadBufferFromPocoSocket.h>
 #include <IO/WriteBufferFromPocoSocket.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
 #include <IO/copyData.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
@@ -448,18 +447,17 @@ void Connection::sendExternalTablesData(ExternalTablesData & data)
     double elapsed = watch.elapsedSeconds();
 
     WriteBufferFromOwnString msg;
-    msg << std::fixed << std::setprecision(3);
     msg << "Sent data for " << data.size() << " external tables, total " << rows << " rows in " << elapsed << " sec., "
         << static_cast<size_t>(rows / watch.elapsedSeconds()) << " rows/sec., "
-        << maybe_compressed_out_bytes / 1048576.0 << " MiB (" << maybe_compressed_out_bytes / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)";
+        << DB::toString(maybe_compressed_out_bytes / 1048576.0, 3) << " MiB (" << DB::toString(maybe_compressed_out_bytes / 1048576.0 / watch.elapsedSeconds(), 3) << " MiB/sec.)";
 
     if (compression == Protocol::Compression::Enable)
-        msg << ", compressed " << static_cast<double>(maybe_compressed_out_bytes) / out_bytes << " times to "
-            << out_bytes / 1048576.0 << " MiB (" << out_bytes / 1048576.0 / watch.elapsedSeconds() << " MiB/sec.)";
+        msg << ", compressed " << DB::toString(static_cast<double>(maybe_compressed_out_bytes) / out_bytes, 3) << " times to "
+            << DB::toString(out_bytes / 1048576.0, 3) << " MiB (" << DB::toString(out_bytes / 1048576.0 / watch.elapsedSeconds(), 3) << " MiB/sec.)";
     else
         msg << ", no compression.";
 
-    LOG_DEBUG(log_wrapper.get(), msg.rdbuf());
+    LOG_DEBUG(log_wrapper.get(), msg.str());
 }
 
 

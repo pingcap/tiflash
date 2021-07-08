@@ -9,6 +9,7 @@
 #include <Core/SortCursor.h>
 
 #include <Common/ConcurrentBoundedQueue.h>
+#include <IO/Operators.h>
 
 
 namespace DB
@@ -157,10 +158,10 @@ public:
             ostr << block.rows() << "-" << deleted_rows;
         else
             ostr << "?";
-        return ostr.str();
+        return ostr.releaseStr();
     }
 
-    friend std::ostream & operator << (std::ostream & out, DedupingBlock & self)
+    friend WriteBuffer & operator << (WriteBuffer & out, DedupingBlock & self)
     {
         return out << self.str();
     }
@@ -218,7 +219,7 @@ public:
         return ostr.str();
     }
 
-    friend std::ostream & operator << (std::ostream & out, FifoPtrs & self)
+    friend WriteBuffer & operator << (WriteBuffer & out, FifoPtrs & self)
     {
         return out << self.str();
     }
@@ -434,7 +435,7 @@ public:
         return ostr.str();
     }
 
-    friend std::ostream & operator << (std::ostream & out, DedupCursor & self)
+    friend WriteBuffer & operator << (WriteBuffer & out, DedupCursor & self)
     {
         return out << self.str();
     }
@@ -476,7 +477,7 @@ struct CursorPlainPtr
         return (*ptr) < (*rhs.ptr);
     }
 
-    friend std::ostream & operator << (std::ostream & out, CursorPlainPtr & self)
+    friend WriteBuffer & operator << (WriteBuffer & out, CursorPlainPtr & self)
     {
         return (self.ptr == 0) ? (out << "null") : (out << (*self.ptr));
     }
@@ -501,7 +502,7 @@ public:
         return ostr.str();
     }
 
-    friend std::ostream & operator << (std::ostream & out, CursorQueue & self)
+    friend WriteBuffer & operator << (WriteBuffer & out, CursorQueue & self)
     {
         return out << self.str();
     }
@@ -547,7 +548,7 @@ struct DedupBound : public DedupCursor
         return ostr.str();
     }
 
-    friend std::ostream & operator << (std::ostream & out, DedupBound & self)
+    friend WriteBuffer & operator << (WriteBuffer & out, DedupBound & self)
     {
         return out << self.str();
     }
@@ -574,7 +575,7 @@ public:
         return ostr.str();
     }
 
-    friend std::ostream & operator << (std::ostream & out, BoundQueue & self)
+    friend WriteBuffer & operator << (WriteBuffer & out, BoundQueue & self)
     {
         return out << self.str();
     }
@@ -626,7 +627,7 @@ public:
         return ostr.str();
     }
 
-    friend std::ostream & operator << (std::ostream & out, StreamMasks & self)
+    friend WriteBuffer & operator << (WriteBuffer & out, StreamMasks & self)
     {
         return out << self.str();
     }
@@ -779,17 +780,17 @@ inline void readStreamToBlock(BlockInputStreamPtr input, Block & output)
 struct DebugPrinter
 {
     template <class T>
-    static void print(std::ostream & writer, const ColumnRawPtrs & columns)
+    static void print(WriteBuffer & writer, const ColumnRawPtrs & columns)
     {
         for (size_t i = 0; i < columns.size(); i++)
         {
             print<T>(writer, columns, i);
-            writer << std::endl;
+            writer << '\n';
         }
     }
 
     template <class T>
-    static void print(std::ostream & writer, const ColumnRawPtrs & columns, size_t i)
+    static void print(WriteBuffer & writer, const ColumnRawPtrs & columns, size_t i)
     {
         for (size_t j = 0; j < columns.size(); j++)
         {
@@ -799,16 +800,16 @@ struct DebugPrinter
         }
     }
 
-    static void print(std::ostream & writer, const Block & block)
+    static void print(WriteBuffer & writer, const Block & block)
     {
         for (size_t i = 0; i < block.rows(); i++)
         {
             print(writer, block, i);
-            writer << std::endl;
+            writer << '\n';
         }
     }
 
-    static void print(std::ostream & writer, const Block & block, size_t i)
+    static void print(WriteBuffer & writer, const Block & block, size_t i)
     {
         for (size_t j = 0; j < block.columns(); j++)
         {
@@ -817,7 +818,7 @@ struct DebugPrinter
         }
     }
 
-    static void print(std::ostream & writer, const IColumn * column, const IDataType * type, size_t i)
+    static void print(WriteBuffer & writer, const IColumn * column, const IDataType * type, size_t i)
     {
         auto name = type->getName();
 
@@ -855,7 +856,7 @@ struct DebugPrinter
 
 private:
     template <typename T>
-    static void print(std::ostream & writer, const T v)
+    static void print(WriteBuffer & writer, const T v)
     {
         writer << v << ", ";
     }

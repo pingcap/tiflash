@@ -32,9 +32,7 @@ inline std::string addrToHex(const void * addr)
 {
     if (!addr)
         return "null";
-    WriteBufferFromOwnString ss;
-    ss << addr;
-    return ss.str();
+    return ptrToString(addr);
 }
 
 
