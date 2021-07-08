@@ -5,6 +5,15 @@
 
 namespace DB
 {
+namespace
+{
+void writeAlias(const String & name, const ASTWithAlias::FormatSettings & settings)
+{
+    settings.ostr << (settings.hilite ? IAST::hilite_keyword : "") << " AS " << (settings.hilite ? IAST::hilite_alias : "");
+    writeProbablyBackQuotedString(name, settings.ostr);
+    settings.ostr << (settings.hilite ? IAST::hilite_none : "");
+}
+} // namespace
 
 void ASTWithAlias::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
@@ -13,8 +22,7 @@ void ASTWithAlias::formatImpl(const FormatSettings & settings, FormatState & sta
         /// If we have previously output this node elsewhere in the query, now it is enough to output only the alias.
         if (!state.printed_asts_with_alias.emplace(frame.current_select, alias).second)
         {
-            WriteBufferFromOStream wb(settings.ostr, 32);
-            writeProbablyBackQuotedString(alias, wb);
+            writeProbablyBackQuotedString(alias, settings.ostr);
             return;
         }
     }
@@ -27,7 +35,7 @@ void ASTWithAlias::formatImpl(const FormatSettings & settings, FormatState & sta
 
     if (!alias.empty())
     {
-        writeAlias(alias, settings.ostr, settings.hilite);
+        writeAlias(alias, settings);
         if (frame.need_parens)
             settings.ostr <<')';
     }

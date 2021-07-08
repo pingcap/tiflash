@@ -137,7 +137,7 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
                 << "PARTITION " << (settings.hilite ? hilite_none : "");
             p.partition->formatImpl(settings, state, frame);
             settings.ostr << (settings.hilite ? hilite_keyword : "")
-                << " FROM " << (settings.hilite ? hilite_none : "") << std::quoted(p.from, '\'');
+                << " FROM " << (settings.hilite ? hilite_none : "") << DB::quote << p.from;;
         }
         else if (p.type == ASTAlterQuery::FREEZE_PARTITION)
         {
@@ -147,7 +147,7 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
             if (!p.with_name.empty())
             {
                 settings.ostr << " " << (settings.hilite ? hilite_keyword : "") << "WITH NAME" << (settings.hilite ? hilite_none : "")
-                    << " " << std::quoted(p.with_name, '\'');
+                    << " " << DB::quote << p.with_name;
             }
         }
         else

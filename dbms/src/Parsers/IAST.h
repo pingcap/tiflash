@@ -2,10 +2,10 @@
 
 #include <set>
 #include <memory>
-#include <ostream>
 
 #include <Core/Types.h>
 #include <Common/Exception.h>
+#include <IO/Operators.h>
 #include <Parsers/StringRange.h>
 
 
@@ -74,10 +74,10 @@ public:
     Hash getTreeHash() const;
     void getTreeHashImpl(SipHash & hash_state) const;
 
-    void dumpTree(std::ostream & ostr, size_t indent = 0) const
+    void dumpTree(WriteBuffer & ostr, size_t indent = 0) const
     {
         String indent_str(indent, '-');
-        ostr << indent_str << getID() << ", " << this << std::endl;
+        ostr << indent_str << getID() << ", " << ptrToString(this) << '\n';
         for (const auto & child : children)
             child->dumpTree(ostr, indent + 1);
     }
@@ -145,13 +145,13 @@ public:
     /// Format settings.
     struct FormatSettings
     {
-        std::ostream & ostr;
+        WriteBuffer & ostr;
         bool hilite;
         bool one_line;
 
         char nl_or_ws;
 
-        FormatSettings(std::ostream & ostr_, bool hilite_, bool one_line_)
+        FormatSettings(WriteBuffer & ostr_, bool hilite_, bool one_line_)
             : ostr(ostr_), hilite(hilite_), one_line(one_line_)
         {
             nl_or_ws = one_line ? ' ' : '\n';
@@ -189,8 +189,6 @@ public:
                 : ""),
             ErrorCodes::UNKNOWN_ELEMENT_IN_AST);
     }
-
-    void writeAlias(const String & name, std::ostream & s, bool hilite) const;
 
 public:
     /// For syntax highlighting.

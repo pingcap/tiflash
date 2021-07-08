@@ -48,7 +48,7 @@ protected:
 
             if (!like.empty())
                 settings.ostr << (settings.hilite ? hilite_keyword : "") << " LIKE " << (settings.hilite ? hilite_none : "")
-                    << std::quoted(like, '\'');
+                    << DB::quote << like;
         }
     }
 };

@@ -5,10 +5,17 @@
 namespace DB
 {
 
-void formatAST(const IAST & ast, std::ostream & s, bool hilite, bool one_line)
+void formatAST(const IAST & ast, WriteBuffer & buf, bool hilite, bool one_line)
 {
-    IAST::FormatSettings settings(s, hilite, one_line);
+    IAST::FormatSettings settings(buf, hilite, one_line);
     ast.format(settings);
+}
+
+String serializeAST(const IAST & ast, bool one_line)
+{
+    WriteBufferFromOwnString buf;
+    formatAST(ast, buf, false, one_line);
+    return buf.str();
 }
 
 }

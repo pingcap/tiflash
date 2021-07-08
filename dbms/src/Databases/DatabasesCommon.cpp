@@ -1,6 +1,7 @@
 #include <Common/Stopwatch.h>
 #include <Databases/DatabasesCommon.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -51,10 +52,10 @@ String getTableDefinitionFromCreateQuery(const ASTPtr & query)
     create.format = nullptr;
     create.out_file = nullptr;
 
-    std::ostringstream statement_stream;
+    WriteBufferFromOwnString statement_stream;
     formatAST(create, statement_stream, false);
     statement_stream << '\n';
-    return statement_stream.str();
+    return statement_stream.releaseStr();
 }
 
 String getDatabaseDefinitionFromCreateQuery(const ASTPtr & query)
@@ -75,10 +76,10 @@ String getDatabaseDefinitionFromCreateQuery(const ASTPtr & query)
     create.format = nullptr;
     create.out_file = nullptr;
 
-    std::ostringstream statement_stream;
+    WriteBufferFromOwnString statement_stream;
     formatAST(create, statement_stream, false);
     statement_stream << '\n';
-    return statement_stream.str();
+    return statement_stream.releaseStr();
 }
 
 

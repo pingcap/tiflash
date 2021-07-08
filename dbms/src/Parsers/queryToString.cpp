@@ -11,7 +11,7 @@ namespace DB
 
     String queryToString(const IAST & query)
     {
-        std::ostringstream out;
+        WriteBufferFromOwnString out;
         formatAST(query, out, false, true);
         return out.str();
     }

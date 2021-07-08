@@ -97,10 +97,7 @@ void CollectAliases::dump(WriteBuffer & out) const
                 break;
         }
 
-        std::stringstream formatted_ast;
-        formatAST(*it->second.node, formatted_ast, false, true);
-        writeString(formatted_ast.str(), out);
-
+        formatAST(*it->second.node, out, false, true);
         writeChar('\n', out);
     }
 }
