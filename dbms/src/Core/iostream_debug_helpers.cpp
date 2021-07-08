@@ -101,7 +101,6 @@ std::ostream & operator<<(std::ostream & stream, const IAST & what)
     stream << "IAST{";
     WriteBufferFromOStream buffer(stream, 32);
     what.dumpTree(buffer);
-    buffer.next();
     stream << "}";
     return stream;
 }

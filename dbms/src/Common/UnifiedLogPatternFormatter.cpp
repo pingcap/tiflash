@@ -124,8 +124,7 @@ std::string UnifiedLogPatternFormatter::getTimestamp() const
 
     ss << buff;
 
-    std::string result = ss.str();
-    return result;
+    return ss.releaseStr();
 }
 
 void UnifiedLogPatternFormatter::writeEscapedString(DB::WriteBuffer & wb, const std::string & str)

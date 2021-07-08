@@ -14,7 +14,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/ASTSubquery.h>
-#include <IO/WriteBufferFromString.h>
+#include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <Common/FieldVisitors.h>
 #include <DataTypes/FieldToDataType.h>

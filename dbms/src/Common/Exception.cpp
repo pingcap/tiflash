@@ -117,7 +117,7 @@ std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded
         catch (...) {}
     }
 
-    return stream.str();
+    return stream.releaseStr();
 }
 
 
@@ -205,7 +205,7 @@ std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool 
     }
     catch (...) {}
 
-    return stream.str();
+    return stream.releaseStr();
 }
 
 std::string getExceptionMessage(std::exception_ptr e, bool with_stacktrace)

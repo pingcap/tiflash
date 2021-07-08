@@ -8,7 +8,7 @@
 #include <Parsers/ASTQualifiedAsterisk.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTFunction.h>
-#include <IO/WriteBufferFromString.h>
+#include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/String.h>
 #include <Common/typeid_cast.h>
