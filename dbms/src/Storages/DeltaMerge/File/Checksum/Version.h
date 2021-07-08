@@ -5,6 +5,7 @@
 #ifndef CLICKHOUSE_VERSION_H
 #define CLICKHOUSE_VERSION_H
 
+#include <Common/config_version.h>
 #include <Encryption/FileProvider.h>
 
 #include "Checksum.h"
@@ -120,10 +121,10 @@ public:
     [[nodiscard]] const std::map<std::string, std::string> & getInfoMap() const { return extraInfo; }
 
     DeserializedVersionInfo(FileVersion                        _version,
-                          ChecksumAlgo                       _checksumAlgo,
-                          size_t                             _checksumBlockSize,
-                          std::vector<FixedChecksumFrame>    _checksums,
-                          std::map<std::string, std::string> _extraInfo)
+                            ChecksumAlgo                       _checksumAlgo,
+                            size_t                             _checksumBlockSize,
+                            std::vector<FixedChecksumFrame>    _checksums,
+                            std::map<std::string, std::string> _extraInfo)
         : version(_version),
           checksumAlgo(_checksumAlgo),
           checksumBlockSize(_checksumBlockSize),
@@ -142,6 +143,26 @@ private:
     size_t                             checksumBlockSize{};
     std::vector<FixedChecksumFrame>    checksums;
     std::map<std::string, std::string> extraInfo;
+};
+
+struct VersionOption
+{
+    bool isSingleFileMode = false;
+};
+
+struct LegacyOption : public VersionOption
+{
+};
+
+struct FileV1Option : public VersionOption
+{
+    ChecksumAlgo                       checksumAlgo = ChecksumAlgo::CRC64;
+    size_t                             checksumBlockSize{};
+    std::map<std::string, std::string> extraInfo = {
+        {"creationCommitHash", TIFLASH_GIT_HASH},
+        {"creationReleaseVersion", TIFLASH_RELEASE_VERSION},
+        {"creationEdition", TIFLASH_EDITION},
+    };
 };
 
 
