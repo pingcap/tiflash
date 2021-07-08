@@ -2,11 +2,10 @@
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #include <gtest/gtest.h>
 #pragma GCC diagnostic pop
-#define TIFLASH_GTEST_ENABLE
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/WriteBufferFromVector.h>
 #include <Storages/DeltaMerge/File/Checksum/ChecksumBuffer.h>
-#include <Storages/DeltaMerge/File/Checksum/Version.h>
+#include <Storages/DeltaMerge/File/DMFileVersion.h>
 
 namespace DB
 {

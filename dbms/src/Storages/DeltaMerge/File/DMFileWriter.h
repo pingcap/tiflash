@@ -10,7 +10,7 @@
 #include <IO/WriteBufferProxy.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
-
+#include <Storages/DeltaMerge/File/DMFileOption.h>
 namespace DB
 {
 namespace DM

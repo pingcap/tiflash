@@ -9,7 +9,7 @@
 #include <Encryption/FileProvider.h>
 #include <IO/CompressionSettings.h>
 
-#include "Checksum.h"
+#include "Checksum/Checksum.h"
 /*!
  * On the filesystem, the `Version File` takes the following form:
  *
@@ -145,28 +145,6 @@ private:
     std::vector<FixedChecksumFrame>    checksums;
     std::map<std::string, std::string> extraInfo;
 };
-
-struct VersionOption
-{
-    bool                isSingleFileMode    = false;
-    CompressionSettings compressionSettings = {};
-};
-
-struct LegacyOption : public VersionOption
-{
-};
-
-struct FileV1Option : public VersionOption
-{
-    ChecksumAlgo                       checksumAlgo      = ChecksumAlgo::CRC64;
-    size_t                             checksumBlockSize = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE;
-    std::map<std::string, std::string> extraInfo         = {
-        {"creationCommitHash", TIFLASH_GIT_HASH},
-        {"creationReleaseVersion", TIFLASH_RELEASE_VERSION},
-        {"creationEdition", TIFLASH_EDITION},
-    };
-};
-
 
 } // namespace DB::DM
 
