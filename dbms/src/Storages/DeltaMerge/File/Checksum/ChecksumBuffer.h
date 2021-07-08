@@ -85,6 +85,7 @@ public:
           out(std::move(out_))
     {
         // adjust alignment, aligned memory boundary can make it fast for digesting
+        std::memset(this->working_buffer.begin(), 0, sizeof(ChecksumFrame<Backend>) + block_size_ + 512);
         auto shifted = this->working_buffer.begin() + sizeof(ChecksumFrame<Backend>);
         auto offset  = (-reinterpret_cast<uintptr_t>(shifted)) & (512u - 1u);
         auto result  = this->working_buffer.begin() + offset;
