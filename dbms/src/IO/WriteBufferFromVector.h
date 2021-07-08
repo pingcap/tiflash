@@ -22,6 +22,7 @@ namespace ErrorCodes
 template <typename VectorType, size_t initial_size = 32>
 class WriteBufferFromVector : public WriteBuffer
 {
+    static_assert(sizeof(typename VectorType::value_type) == sizeof(char));
 private:
     VectorType & vector;
     bool is_finished = false;
@@ -74,7 +75,7 @@ public:
             ((position() - reinterpret_cast<Position>(vector.data()))
                 + sizeof(typename VectorType::value_type) - 1)  /// Align up.
             / sizeof(typename VectorType::value_type));
-
+        bytes += offset();
         /// Prevent further writes.
         set(nullptr, 0);
     }
@@ -85,6 +86,7 @@ public:
     {
         if (vector.empty())
             vector.resize(initial_size);
+        bytes = 0;
         set(reinterpret_cast<Position>(vector.data()), vector.size());
         is_finished = false;
     }
