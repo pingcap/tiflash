@@ -394,10 +394,31 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         err->set_msg("fatal error");
         handleError(task, "fatal error");
     }
-    task->memory_tracker = current_memory_tracker;
-    std::thread worker(&MPPTask::runImpl, std::move(task));
-    worker.detach();
-    LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
+    try
+    {
+        task->memory_tracker = current_memory_tracker;
+        std::thread worker(&MPPTask::runImpl, std::move(task));
+        worker.detach();
+        LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
+    }
+    catch (Exception & e)
+    {
+        LOG_ERROR(log, "starting task meet error : " << e.displayText());
+        auto * err = response->mutable_error();
+        err->set_msg(e.displayText());
+    }
+    catch (std::exception & e)
+    {
+        LOG_ERROR(log, "starting task meet error : " << e.what());
+        auto * err = response->mutable_error();
+        err->set_msg(e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "starting task meet fatal error");
+        auto * err = response->mutable_error();
+        err->set_msg("fatal error");
+    }
     return grpc::Status::OK;
 }
 
