@@ -12,7 +12,7 @@ def copyLib(path):
     if baseName in copied:
         return
     subprocess.Popen(["install", "-vp", path, baseName], stdout=subprocess.PIPE).communicate()[0]
-    copied[path] = True
+    copied[baseName] = True
 
 def changeToLocal(path):
     baseName = os.path.basename(path)
@@ -34,7 +34,7 @@ def changeToLocal(path):
             lib = line.split()[0]
             libBaseName = os.path.basename(lib)
             rpath.add((lib, libBaseName, baseName))
-    done[path] = True
+    done[baseName] = True
     return res
 
 def run(path):
