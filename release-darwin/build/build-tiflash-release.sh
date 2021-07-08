@@ -36,10 +36,7 @@ FILE="$install_dir/tiflash"
 otool -L "$FILE"
 
 # copy dylib
-cp -f $SCRIPTPATH/copy-libs.py $install_dir
-cd $install_dir
-./copy-libs.py ./tiflash
-rm -f ./copy-libs.py
+./copy-libs.py $FILE
 otool -L $FILE
 
 set +e
