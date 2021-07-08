@@ -141,6 +141,11 @@ grpc::Status FlashService::Coprocessor(
     return mpp_handler.execute(context, response);
 }
 
+::grpc::Status FlashService::IsAlive(    ::grpc::ServerContext * context [[maybe_unused]], const ::mpp::IsAliveRequest * request [[maybe_unused]], ::mpp::IsAliveResponse * response [[maybe_unused]])
+{
+    return ::grpc::Status::OK;
+}
+
 ::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
     const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
 {
