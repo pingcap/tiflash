@@ -8,7 +8,46 @@
 #include <Encryption/FileProvider.h>
 
 #include "Checksum.h"
-
+/*!
+ * On the filesystem, the `Version File` takes the following form:
+ *
+ * -------------------------------------------------------------------------
+ * | - Endian                 <val = 0x04030201, size = 4>                 |
+ * | - FileVersion            <size = 8>                                   |
+ * -------------------------------------------------------------------------
+ * | - ChecksumAlgo           <size = 8>                                   |
+ * | - ChecksumBlockSize      <size = 8>                                   |
+ * -------------------------------------------------------------------------
+ * | - Embedded ChecksumArea  <size = 512>                                 |
+ * | --------------------------------------------------------------------- |
+ * | | > Fixed Checksum Frame                                            | |
+ * | | - Bytes                 <size = 8>                                | |
+ * | | - Data                  <size = 64>                               | |
+ * | --------------------------------------------------------------------- |
+ * |                 .....................................                 |
+ * |                < up to 7 frames, padded to 512 bytes >                |
+ * -------------------------------------------------------------------------
+ * | - Extra Count             <size = 8>                                  |
+ * -------------------------------------------------------------------------
+ * | - Extra Information Area                                              |
+ * | --------------------------------------------------------------------- |
+ * | | > Extra Information Header                                        | |
+ * | | - Length of Name        <size = 8>                                | |
+ * | | - Length of Body        <size = 8>                                | |
+ * | --------------------------------------------------------------------- |
+ * | | > Extra Information Data Area                                     | |
+ * | |               .....................................               | |
+ * | --------------------------------------------------------------------- |
+ * |                 .....................................                 |
+ * |                     < Up to Extra Count Blocks >                      |
+ * -------------------------------------------------------------------------
+ *
+ * The version storage file can be deserialized into `DeserializedVersionInfo` and vice versa.
+ *
+ * How many embedded checksum frames are used is determined by the file version; currently
+ * (in FileV1), only two fields are used: one for meta file, one for pack property file.
+ *
+ */
 namespace DB::DM
 {
 

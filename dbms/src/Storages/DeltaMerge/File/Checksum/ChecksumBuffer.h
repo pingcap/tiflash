@@ -18,9 +18,31 @@ namespace DB::DM::Checksum
 {
 
 
-/** Computes the hash from the data to write and passes it to the specified WriteBuffer.
-  * The buffer of the nested WriteBuffer is used as the main buffer.
-  */
+/*!
+ * A frame consists of a header and a body that conforms the following structure:
+ *
+ * <pre>{@code
+ * ---------------------------------
+ * | > header                      |
+ * |   - bytes                     |
+ * |   - checksum                  |
+ * ---------------------------------
+ * | > data (size = header.bytes)  |
+ * |             ...               |
+ * |             ...               |
+ * |             ...               |
+ * ---------------------------------
+ * }</pre>
+ *
+ * When writing a frame, we maintain the buffer than is of the exact size of the data part.
+ * Whenever the buffer is full, we digest the whole buffer and update the header info, write back
+ * the header and the body to the underlying file.
+ * A special case is the last frame where the body can be less than the buffer size; but no special
+ * handling of it is needed since the body length is already recorded in the header.
+ *
+ * The `FramedChecksumWriteBuffer` should be used directly on the file; the stream's ending has no
+ * special mark: that is it ends when the file reaches EOF mark.
+ */
 template <typename Backend>
 class FramedChecksumWriteBuffer : public BufferWithOwnMemory<WriteBuffer>
 {
@@ -28,7 +50,7 @@ private:
     WritableFilePtr out;
     void            nextImpl() override
     {
-        size_t len = this->offset();
+        size_t len   = this->offset();
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
         frame.bytes = len;
@@ -58,13 +80,11 @@ private:
     }
 
 public:
-    using HashType = typename Backend::HashType;
-
     explicit FramedChecksumWriteBuffer(WritableFilePtr out_, size_t block_size_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE)
         : BufferWithOwnMemory<WriteBuffer>(sizeof(ChecksumFrame<Backend>) + block_size_ + 512, nullptr, alignof(ChecksumFrame<Backend>)),
           out(std::move(out_))
     {
-        // adjust alignment, aligned memory boundary can makes it fast for digesting
+        // adjust alignment, aligned memory boundary can make it fast for digesting
         auto shifted = this->working_buffer.begin() + sizeof(ChecksumFrame<Backend>);
         auto offset  = (-reinterpret_cast<uintptr_t>(shifted)) & (512u - 1u);
         auto result  = this->working_buffer.begin() + offset;
@@ -75,9 +95,18 @@ public:
     ~FramedChecksumWriteBuffer() override { next(); }
 };
 
-/*
- * Calculates the hash from the read data. When reading, the data is read from the nested ReadBuffer.
- * Small pieces are copied into its own memory.
+/*!
+ * Similar to the `FramedChecksumWriteBuffer`, the reading buffer also directly operates on the file.
+ * It keeps a buffer with the length of header plus maximum body length.
+ *
+ * Everytime when the buffer is exhausted (or at the beginning state), the reader will first try loading
+ * the header; then according to the length information in the header, the body part will also be loaded
+ * from the file. The the reading operation succeeds, the whole body will be digested to generate the
+ * checksum, which is then compared with the checksum info in the header.
+ *
+ * Working together with the writing buffer, also read and write operations should be as normal as regular
+ * reading buffers. The checking part is hidden in the background, and an exception will thrown if anything
+ * bad is detected.
  */
 template <typename Backend>
 class FramedChecksumReadBuffer : public BufferWithOwnMemory<ReadBuffer>
@@ -87,7 +116,7 @@ public:
         : BufferWithOwnMemory<ReadBuffer>(sizeof(ChecksumFrame<Backend>) + block_size + 512, nullptr, alignof(ChecksumFrame<Backend>)),
           in(std::move(in_))
     {
-        // adjust alignment, aligned memory boundary can makes it fast for digesting
+        // adjust alignment, aligned memory boundary can make it fast for digesting
         auto shifted = this->working_buffer.begin() + sizeof(ChecksumFrame<Backend>);
         auto offset  = (-reinterpret_cast<uintptr_t>(shifted)) & (512u - 1u);
         auto result  = this->working_buffer.begin() + offset;
