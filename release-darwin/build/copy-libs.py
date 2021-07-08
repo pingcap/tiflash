@@ -7,12 +7,14 @@ copied = {}
 rpath = set()
 done = {}
 
+
 def copyLib(path):
     baseName = os.path.basename(path)
     if baseName in copied:
         return
     subprocess.Popen(["install", "-vp", path, baseName], stdout=subprocess.PIPE).communicate()[0]
     copied[baseName] = True
+
 
 def changeToLocal(path):
     baseName = os.path.basename(path)
@@ -37,14 +39,13 @@ def changeToLocal(path):
     done[baseName] = True
     return res
 
+
 def run(path):
     os.chdir(os.path.dirname(path))
-    libBaseName = os.path.basename(path)
     libs = changeToLocal(path)
     while len(libs) > 0 or len(rpath) > 0:
         while len(libs) > 0:
             path = libs.pop()
-            libBaseName = os.path.basename(path)
             copyLib(path)
             newLibs = changeToLocal(path)
             for lib in newLibs:
@@ -53,6 +54,7 @@ def run(path):
         while len(rpath) > 0:
             lib, libBaseName, baseName = rpath.pop()
             subprocess.Popen(["install_name_tool", "-change", lib, "@executable_path/%s" % libBaseName, baseName], stdout=subprocess.PIPE).communicate()[0]
+
 
 if __name__ == '__main__':
     run(sys.argv[1])
