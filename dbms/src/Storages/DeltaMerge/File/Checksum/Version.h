@@ -7,6 +7,7 @@
 
 #include <Common/config_version.h>
 #include <Encryption/FileProvider.h>
+#include <IO/CompressionSettings.h>
 
 #include "Checksum.h"
 /*!
@@ -147,7 +148,8 @@ private:
 
 struct VersionOption
 {
-    bool isSingleFileMode = false;
+    bool                isSingleFileMode    = false;
+    CompressionSettings compressionSettings = {};
 };
 
 struct LegacyOption : public VersionOption
@@ -156,9 +158,9 @@ struct LegacyOption : public VersionOption
 
 struct FileV1Option : public VersionOption
 {
-    ChecksumAlgo                       checksumAlgo = ChecksumAlgo::CRC64;
-    size_t                             checksumBlockSize{};
-    std::map<std::string, std::string> extraInfo = {
+    ChecksumAlgo                       checksumAlgo      = ChecksumAlgo::CRC64;
+    size_t                             checksumBlockSize = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE;
+    std::map<std::string, std::string> extraInfo         = {
         {"creationCommitHash", TIFLASH_GIT_HASH},
         {"creationReleaseVersion", TIFLASH_RELEASE_VERSION},
         {"creationEdition", TIFLASH_EDITION},
