@@ -95,6 +95,7 @@ TEST_STREAM(None)
 TEST_STREAM(CRC32)
 TEST_STREAM(CRC64)
 TEST_STREAM(City128)
+TEST_STREAM(XXH3)
 
 #define TEST_SEEK(ALGO)                                                                                                                  \
     TEST(DMChecksumBuffer, ALGO##Seeking)                                                                                                \
@@ -133,6 +134,7 @@ TEST_SEEK(None)
 TEST_SEEK(CRC32)
 TEST_SEEK(CRC64)
 TEST_SEEK(City128)
+TEST_SEEK(XXH3)
 
 } // namespace tests
 } // namespace DM

@@ -55,6 +55,7 @@ DB::DM::DeserializedVersionInfo::DeserializedVersionInfo(const DB::ReadBufferPtr
             CHECK_READ_FRAME(CRC32)
             CHECK_READ_FRAME(CRC64)
             CHECK_READ_FRAME(City128)
+            CHECK_READ_FRAME(XXH3)
         }
         checksums.push_back(frame);
     }
@@ -92,6 +93,7 @@ void DB::DM::DeserializedVersionInfo::writeToBuffer(const DB::WriteBufferPtr & f
             CHECK_WRITE_FRAME(CRC32)
             CHECK_WRITE_FRAME(CRC64)
             CHECK_WRITE_FRAME(City128)
+            CHECK_WRITE_FRAME(XXH3)
         }
     }
     filePtr->write(reinterpret_cast<char *>(&header), sizeof(header));

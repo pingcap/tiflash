@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Storages/AlterCommands.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 
 

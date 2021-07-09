@@ -261,3 +261,4 @@ libs/libtiflash-proxy
 tmp/
 
 CoverageReport
+.cache

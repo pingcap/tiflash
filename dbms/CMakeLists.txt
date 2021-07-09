@@ -244,7 +244,7 @@ target_include_directories (clickhouse_common_io BEFORE PUBLIC ${DOUBLE_CONVERSI
 # also for copy_headers.sh:
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
 
-target_link_libraries(dbms PUBLIC crc64)
+target_link_libraries(dbms PUBLIC crc64 xxHash::xxhash)
 
 add_subdirectory (tests)
 

@@ -62,3 +62,6 @@
 [submodule "contrib/crc64-cxx"]
 	path = contrib/crc64-cxx
 	url = https://github.com/schrodingerzhu/crc64-cxx
+[submodule "contrib/xxHash"]
+	path = contrib/xxHash
+	url = https://github.com/Cyan4973/xxHash

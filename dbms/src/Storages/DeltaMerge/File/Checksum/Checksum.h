@@ -6,6 +6,7 @@
 #define CLICKHOUSE_CHECKSUM_H
 #include <Common/Exception.h>
 #include <IO/HashingWriteBuffer.h>
+#include <xxh3.h>
 #include <zlib.h>
 
 #include <crc64.hpp>
@@ -21,7 +22,8 @@ enum class ChecksumAlgo : uint64_t
     None,
     CRC32,
     CRC64,
-    City128
+    City128,
+    XXH3,
 };
 
 namespace Digest
@@ -78,6 +80,19 @@ public:
 private:
     crc64::Digest state{};
 };
+
+class XXH3
+{
+public:
+    using HashType                    = XXH64_hash_t;
+    static constexpr size_t hash_size = sizeof(HashType);
+    static constexpr auto   algorithm = ::DB::DM::ChecksumAlgo::XXH3;
+    void                    update(const void * src, size_t length) { state = XXH_INLINE_XXH3_64bits_withSeed(src, length, state); }
+    [[nodiscard]] HashType  checksum() const { return state; }
+
+private:
+    XXH64_hash_t state = 0;
+};
 } // namespace Digest
 
 struct FixedChecksumFrame
@@ -103,6 +118,7 @@ BASIC_CHECK_FOR_FRAME(CRC32)
 BASIC_CHECK_FOR_FRAME(CRC64)
 BASIC_CHECK_FOR_FRAME(City128)
 BASIC_CHECK_FOR_FRAME(None)
+BASIC_CHECK_FOR_FRAME(XXH3)
 #undef BASIC_CHECK_FOR_FRAME
 
 } // namespace DB::DM
