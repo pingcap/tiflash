@@ -155,7 +155,7 @@ public:
                         WriteBufferFromOwnString ss;
                         for (size_t index = 0; index < rowkey_column_size; index++)
                         {
-                            ss << static_cast<int>(TiDB::CodecFlagInt);
+                            ::DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
                             ::DB::EncodeInt64(value, ss);
                         }
                         field = ss.releaseStr();
@@ -274,7 +274,7 @@ public:
                     WriteBufferFromOwnString ss;
                     for (size_t index = 0; index < rowkey_column_size; index++)
                     {
-                        ss << static_cast<int>(TiDB::CodecFlagInt);
+                        ::DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
                         ::DB::EncodeInt64(pk, ss);
                     }
                     field = ss.releaseStr();
@@ -334,17 +334,17 @@ public:
         WriteBufferFromOwnString ss;
         for (size_t i = 0; i < rowkey_column_size; i++)
         {
-            ss << static_cast<int>(TiDB::CodecFlagInt);
+            EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
             EncodeInt64(start, ss);
         }
-        RowKeyValue start_key = RowKeyValue(true, std::make_shared<String>(ss.str()));
+        RowKeyValue start_key = RowKeyValue(true, std::make_shared<String>(ss.releaseStr()));
         ss.restart();
         for (size_t i = 0; i < rowkey_column_size; i++)
         {
-            ss << static_cast<int>(TiDB::CodecFlagInt);
+            EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
             EncodeInt64(end, ss);
         }
-        RowKeyValue end_key = RowKeyValue(true, std::make_shared<String>(ss.str()));
+        RowKeyValue end_key = RowKeyValue(true, std::make_shared<String>(ss.releaseStr()));
         return RowKeyRange(start_key, end_key, true, rowkey_column_size);
     }
 

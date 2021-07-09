@@ -471,7 +471,8 @@ void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, WriteBuffer
         prec = frac;
     }
     constexpr Int32 decimal_mod = powers10[digitsPerWord];
-    ss << UInt8(prec) << UInt8(frac);
+    ss.write(UInt8(prec));
+    ss.write(UInt8(frac));
 
     int digitsInt = prec - frac;
     int wordsInt = digitsInt / digitsPerWord;

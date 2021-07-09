@@ -2829,15 +2829,16 @@ try
     const size_t num_deleted_rows = 64;
     {
         WriteBufferFromOwnString ss;
-        ss << static_cast<int>(TiDB::CodecFlagInt);
+        DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
         DB::EncodeInt64(Int64(0), ss);
-        ss << static_cast<int>(TiDB::CodecFlagInt);
+        DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
         DB::EncodeInt64(Int64(0), ss);
-        RowKeyValue start(true, std::make_shared<String>(ss.str()));
+        RowKeyValue start(true, std::make_shared<String>(ss.releaseStr()));
+
         ss.restart();
-        ss << static_cast<int>(TiDB::CodecFlagInt);
+        DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
         DB::EncodeInt64(Int64(num_deleted_rows), ss);
-        ss << static_cast<int>(TiDB::CodecFlagInt);
+        DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
         DB::EncodeInt64(Int64(num_deleted_rows), ss);
         RowKeyValue end(true, std::make_shared<String>(ss.str()));
         RowKeyRange range(start, end, true, 2);
