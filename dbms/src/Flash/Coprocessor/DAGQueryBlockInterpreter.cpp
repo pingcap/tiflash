@@ -99,7 +99,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
 }
 
 static std::tuple<std::optional<::tipb::DAGRequest>, std::optional<DAGSchema>> //
-buildRemoteTS(const std::unordered_map<RegionVerID, const RegionInfo &> & region_retry, const DAGQueryBlock & query_block,
+buildRemoteTS(const std::unordered_map<RegionID, const RegionInfo &> & region_retry, const DAGQueryBlock & query_block,
     const tipb::TableScan & ts, const String & handle_column_name, const TableStructureLockHolder &, const ManageableStoragePtr & storage,
     Context & context, Poco::Logger * log)
 {
@@ -114,7 +114,7 @@ buildRemoteTS(const std::unordered_map<RegionVerID, const RegionInfo &> & region
         std::stringstream ss;
         ss << "Start to retry " << region_retry.size() << " regions (";
         for (auto & r : region_retry)
-            ss << r.first.toString() << ",";
+            ss << r.first << ",";
         ss << ")";
         ss.str();
     }));
@@ -191,23 +191,23 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     mvcc_query_info->read_tso = settings.read_tso;
     // We need to validate regions snapshot after getting streams from storage.
     LearnerReadSnapshot learner_read_snapshot;
-    std::unordered_map<RegionVerID, const RegionInfo &> region_retry;
+    std::unordered_map<RegionID, const RegionInfo &> region_retry;
     if (!dag.isBatchCop())
     {
-        if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *mvcc_query_info, table_id, log); info_retry)
+        if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *mvcc_query_info, table_id); info_retry)
             throw RegionException({(*info_retry).begin()->first}, status);
 
         learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
     }
     else
     {
-        std::unordered_set<RegionVerID> force_retry;
+        std::unordered_set<RegionID> force_retry;
         for (;;)
         {
             try
             {
                 region_retry.clear();
-                auto [retry, status] = MakeRegionQueryInfos(dag.getRegions(), force_retry, tmt, *mvcc_query_info, table_id, log);
+                auto [retry, status] = MakeRegionQueryInfos(dag.getRegions(), force_retry, tmt, *mvcc_query_info, table_id);
                 std::ignore = status;
                 if (retry)
                 {
@@ -224,7 +224,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             {
                 // We can also use current thread to resolve lock, but it will block next process.
                 // So, force this region retry in another thread in CoprocessorBlockInputStream.
-                force_retry.emplace(e.region_ver_id);
+                force_retry.emplace(e.region_id);
             }
             catch (const RegionException & e)
             {
@@ -383,7 +383,7 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
     const TableStructureLockHolder &,                //
     const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
     const LearnerReadSnapshot & learner_read_snapshot, //
-    DAGPipeline & pipeline, std::unordered_map<RegionVerID, const RegionInfo &> & region_retry)
+    DAGPipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry)
 {
     QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
     auto & tmt = context.getTMTContext();
@@ -404,20 +404,20 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
             // Inject failpoint to throw RegionException
             fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
                 const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
-                RegionException::UnavailableRegions region_ver_ids;
+                RegionException::UnavailableRegions region_ids;
                 for (const auto & info : regions_info)
                 {
                     if (rand() % 100 > 50)
-                        region_ver_ids.insert(info.region_ver_id);
+                        region_ids.insert(info.region_id);
                 }
-                throw RegionException(std::move(region_ver_ids), RegionException::RegionReadStatus::NOT_FOUND);
+                throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
             });
             fiu_do_on(FailPoints::region_exception_after_read_from_storage_all_error, {
                 const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
-                RegionException::UnavailableRegions region_ver_ids;
+                RegionException::UnavailableRegions region_ids;
                 for (const auto & info : regions_info)
-                    region_ver_ids.insert(info.region_ver_id);
-                throw RegionException(std::move(region_ver_ids), RegionException::RegionReadStatus::NOT_FOUND);
+                    region_ids.insert(info.region_id);
+                throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
             });
             validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
             break;
@@ -440,13 +440,13 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
                     auto & regions_query_info = query_info.mvcc_query_info->regions_query_info;
                     for (auto iter = regions_query_info.begin(); iter != regions_query_info.end(); /**/)
                     {
-                        if (e.unavailable_region.find(iter->region_ver_id) != e.unavailable_region.end())
+                        if (e.unavailable_region.find(iter->region_id) != e.unavailable_region.end())
                         {
                             // move the error regions info from `query_info.mvcc_query_info->regions_query_info` to `region_retry`
-                            if (auto region_iter = dag_regions.find(iter->region_ver_id); likely(region_iter != dag_regions.end()))
+                            if (auto region_iter = dag_regions.find(iter->region_id); likely(region_iter != dag_regions.end()))
                             {
                                 region_retry.emplace(region_iter->first, region_iter->second);
-                                ss << region_iter->first.toString() << ",";
+                                ss << region_iter->first << ",";
                             }
                             iter = regions_query_info.erase(iter);
                         }
@@ -468,11 +468,11 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
                     // push all regions to `region_retry` to retry from other tiflash nodes
                     for (const auto & region : query_info.mvcc_query_info->regions_query_info)
                     {
-                        auto iter = dag_regions.find(region.region_ver_id);
+                        auto iter = dag_regions.find(region.region_id);
                         if (likely(iter != dag_regions.end()))
                         {
                             region_retry.emplace(iter->first, iter->second);
-                            ss << iter->first.toString() << ",";
+                            ss << iter->first << ",";
                         }
                     }
                     LOG_WARNING(log, "RegionException after read from storage, regions [" << ss.str() << "], message: " << e.message());
@@ -719,8 +719,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
-    right_pipeline.transform(
-        [&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++); });
+    right_pipeline.transform([&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++); });
     executeUnion(right_pipeline, max_streams);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;

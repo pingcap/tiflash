@@ -28,7 +28,7 @@ extern const int UNKNOWN_EXCEPTION;
 
 template <>
 DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_,
-    const std::unordered_map<RegionVerID, RegionInfo> & regions_, UInt64 start_ts, UInt64 schema_ver, tipb::SelectResponse * dag_response_,
+    const std::unordered_map<RegionID, RegionInfo> & regions_, UInt64 start_ts, UInt64 schema_ver, tipb::SelectResponse * dag_response_,
     bool internal_)
     : context(context_),
       dag_request(dag_request_),
@@ -47,7 +47,7 @@ DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_req
 
 template <>
 DAGDriver<true>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_,
-    const std::unordered_map<RegionVerID, RegionInfo> & regions_, UInt64 start_ts, UInt64 schema_ver,
+    const std::unordered_map<RegionID, RegionInfo> & regions_, UInt64 start_ts, UInt64 schema_ver,
     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_, bool internal_)
     : context(context_), dag_request(dag_request_), regions(regions_), writer(writer_), internal(internal_), log(&Logger::get("DAGDriver"))
 {
@@ -93,9 +93,9 @@ try
             for (auto region : dag_context.retry_regions)
             {
                 auto * retry_region = response.add_retry_regions();
-                retry_region->set_id(region.region_ver_id.id);
-                retry_region->mutable_region_epoch()->set_conf_ver(region.region_ver_id.conf_ver);
-                retry_region->mutable_region_epoch()->set_version(region.region_ver_id.ver);
+                retry_region->set_id(region.region_id);
+                retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
+                retry_region->mutable_region_epoch()->set_version(region.region_version);
             }
             writer->Write(response);
         }
