@@ -830,10 +830,7 @@ toString(const T & x, int precision)
     DB::DoubleConverter<false>::BufferType buffer;
     double_conversion::StringBuilder builder{buffer, sizeof(buffer)};
     DB::DoubleConverter<false>::instance().ToFixed(x, precision, &builder);
-
-    WriteBufferFromOwnString ss;
-    ss.write(buffer, builder.position());
-    return ss.releaseStr();
+    return String{buffer, static_cast<size_t>(builder.position())};
 }
 
 void writePointerHex(const void * ptr, WriteBuffer & buf);
