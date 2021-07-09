@@ -96,37 +96,43 @@ TEST_STREAM(CRC32)
 TEST_STREAM(CRC64)
 TEST_STREAM(City128)
 
-
-TEST(DMChecksumBuffer, Seeking)
-{
-    for (auto size = 1024; size <= 4096 * 1024; size <<= 1)
-    {
-        auto [data, seed] = randomData(size);
-        {
-            auto pWTFile = std::make_shared<PosixWritableFile>(DM_CHECKSUM_BUFFER_TEST_PATH, true, -1, 0755);
-            auto buffer  = Checksum::FramedChecksumWriteBuffer<Digest::CRC64>(pWTFile);
-            buffer.write(data.data(), data.size());
-        }
-        {
-            for (auto i = 0; i < 1024; ++i)
-            {
-                off_t current                       = 0;
-                auto  pRAFile                       = std::make_shared<PosixRandomAccessFile>(DM_CHECKSUM_BUFFER_TEST_PATH, -1);
-                auto  buffer                        = Checksum::FramedChecksumReadBuffer<Digest::CRC64>(pRAFile);
-                auto [offset, whence, length, next] = randomOperation(size, current);
-                current                             = next;
-                buffer.seek(offset, whence);
-                ASSERT_EQ(current, buffer.getPositionInFile());
-                std::vector<char> data_slice(length);
-                std::vector<char> file_slice(length);
-                std::copy(data.begin() + current, data.begin() + current + length, data_slice.begin());
-                buffer.read(file_slice.data(), length);
-                ASSERT_EQ(data_slice, file_slice) << "seed: " << seed << "size: " << size << ", whence: " << whence << ", off: " << offset
-                                                  << ", pos: " << current << ", length: " << length << std::endl;
-            }
-        };
+#define TEST_SEEK(ALGO)                                                                                                                  \
+    TEST(DMChecksumBuffer, ALGO##Seeking)                                                                                                \
+    {                                                                                                                                    \
+        for (auto size = 1024; size <= 4096 * 1024; size <<= 1)                                                                          \
+        {                                                                                                                                \
+            auto [data, seed] = randomData(size);                                                                                        \
+            {                                                                                                                            \
+                auto pWTFile = std::make_shared<PosixWritableFile>(DM_CHECKSUM_BUFFER_TEST_PATH, true, -1, 0755);                        \
+                auto buffer  = Checksum::FramedChecksumWriteBuffer<Digest::ALGO>(pWTFile);                                               \
+                buffer.write(data.data(), data.size());                                                                                  \
+            }                                                                                                                            \
+            {                                                                                                                            \
+                for (auto i = 0; i < 1024; ++i)                                                                                          \
+                {                                                                                                                        \
+                    off_t current                       = 0;                                                                             \
+                    auto  pRAFile                       = std::make_shared<PosixRandomAccessFile>(DM_CHECKSUM_BUFFER_TEST_PATH, -1);     \
+                    auto  buffer                        = Checksum::FramedChecksumReadBuffer<Digest::ALGO>(pRAFile);                     \
+                    auto [offset, whence, length, next] = randomOperation(size, current);                                                \
+                    current                             = next;                                                                          \
+                    buffer.seek(offset, whence);                                                                                         \
+                    ASSERT_EQ(current, buffer.getPositionInFile());                                                                      \
+                    std::vector<char> data_slice(length);                                                                                \
+                    std::vector<char> file_slice(length);                                                                                \
+                    std::copy(data.begin() + current, data.begin() + current + length, data_slice.begin());                              \
+                    buffer.read(file_slice.data(), length);                                                                              \
+                    ASSERT_EQ(data_slice, file_slice)                                                                                    \
+                        << "seed: " << seed << "size: " << size << ", whence: " << whence << ", off: " << offset << ", pos: " << current \
+                        << ", length: " << length << std::endl;                                                                          \
+                }                                                                                                                        \
+            };                                                                                                                           \
+        }                                                                                                                                \
     }
-}
+
+TEST_SEEK(None)
+TEST_SEEK(CRC32)
+TEST_SEEK(CRC64)
+TEST_SEEK(City128)
 
 } // namespace tests
 } // namespace DM
