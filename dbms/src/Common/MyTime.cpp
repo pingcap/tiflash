@@ -936,7 +936,7 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     {
         if (!allow_zero_in_date && (month == 0 || day == 0))
         {
-            char buff[] = "0000-00-00";
+            char buff[32] = "0000-00-00";
             std::sprintf(buff, "%04d-%02d-%02d", year, month, day);
             throw TiFlashException("Incorrect datetime value: " + String(buff), Errors::Types::WrongValue);
         }
@@ -960,7 +960,7 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     }
     if (day > max_day)
     {
-        char buff[] = "0000-00-00";
+        char buff[32] = "0000-00-00";
         std::sprintf(buff, "%04d-%02d-%02d", year, month, day);
         throw TiFlashException("Incorrect datetime value: " + String(buff), Errors::Types::WrongValue);
     }
