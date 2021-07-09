@@ -617,7 +617,13 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::IntDivideInt, "intDiv"},
     //{tipb::ScalarFuncSig::IntDivideDecimal, "divide"},
 
-    {tipb::ScalarFuncSig::ModReal, "modulo"}, {tipb::ScalarFuncSig::ModDecimal, "modulo"}, {tipb::ScalarFuncSig::ModInt, "modulo"},
+    // {tipb::ScalarFuncSig::ModReal, "modulo"}, {tipb::ScalarFuncSig::ModDecimal, "modulo"}, {tipb::ScalarFuncSig::ModInt, "modulo"},
+    {tipb::ScalarFuncSig::ModReal, "tidbModulo"},
+    {tipb::ScalarFuncSig::ModDecimal, "tidbModulo"},
+    {tipb::ScalarFuncSig::ModIntUnsignedUnsigned, "intModulo"},
+    {tipb::ScalarFuncSig::ModIntUnsignedSigned, "intModulo"},
+    {tipb::ScalarFuncSig::ModIntSignedUnsigned, "intModulo"},
+    {tipb::ScalarFuncSig::ModIntSignedSigned, "intModulo"},
 
     {tipb::ScalarFuncSig::MultiplyIntUnsigned, "multiply"}, {tipb::ScalarFuncSig::MinusIntUnsignedUnsigned, "minus"},
     {tipb::ScalarFuncSig::MinusIntUnsignedSigned, "minus"}, {tipb::ScalarFuncSig::MinusIntSignedUnsigned, "minus"},
