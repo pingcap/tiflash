@@ -331,19 +331,15 @@ void DMStressProxy::verify()
             LOG_ERROR(log, msg + " columns must be 1.");
             throw DB::Exception(msg + " columns must be 1.", ErrorCodes::LOGICAL_ERROR);
         }
-        else
-        {
-            LOG_INFO(log, msg);
-        }
 
         auto itr = block.begin();
         for (size_t i = 0; i < itr->column->size(); i++)
         {
             Int64 id = itr->column->getInt(i);
-            LOG_INFO(log, "Verify id " << id);
             if (!pks.exist(id))
             {
                 LOG_ERROR(log, "Verify id " << id << " not found from pks.");
+                throw DB::Exception("id " + std::to_string(id) + " not found from pks.", ErrorCodes::LOGICAL_ERROR);
             }
         }
     }
