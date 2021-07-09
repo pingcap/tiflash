@@ -140,10 +140,15 @@ public:
         auto offset  = (-reinterpret_cast<uintptr_t>(shifted)) & (512u - 1u);
         auto result  = this->working_buffer.begin() + offset;
         set(result + sizeof(ChecksumFrame<Backend>), block_size);
+        // read at least one frame
+        next();
+        currentFrame = 0;
     }
 
+    off_t getPositionInFile() override { return currentFrame * frameSize + offset(); }
+
 private:
-    size_t              currentFrame = 0;
+    size_t              currentFrame;
     const size_t        frameSize;
     RandomAccessFilePtr in;
     size_t              expectRead(Position pos, size_t size)
@@ -212,8 +217,6 @@ private:
         currentFrame++;
         return true;
     }
-
-    off_t getPositionInFile() override { return currentFrame * frameSize + offset(); }
 
     off_t doSeek(off_t offset, int whence) override
     {
