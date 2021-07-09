@@ -3,6 +3,7 @@
 #include <Common/FunctionTimerTask.h>
 #include <Common/ShellCommand.h>
 #include <Interpreters/Context.h>
+#include <IO/Operators.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <common/logger_useful.h>

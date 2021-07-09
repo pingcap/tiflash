@@ -144,7 +144,7 @@ public:
         return block;
     }
 
-    void stringfy(WriteBuffer & buf)
+    void stringfy(WriteBuffer & buf) const
     {
 
         buf << "#";
@@ -159,15 +159,15 @@ public:
             buf << "?";
     }
 
-    String str()
+    String str() const
     {
 
         WriteBufferFromOwnString buf;
         stringfy(buf);
-        return ostr.releaseStr();
+        return buf.releaseStr();
     }
 
-    friend std::ostream & operator << (std::ostream & out, DedupingBlock & self)
+    friend std::ostream & operator << (std::ostream & out, const DedupingBlock & self)
     {
         return out << self.str();
     }
@@ -188,7 +188,6 @@ using DedupingBlockPtr = std::shared_ptr<DedupingBlock>;
 inline void writeText(const DedupingBlock & block, WriteBuffer & buf)
 {
     block.stringfy(buf);
-    return buf;
 }
 
 template <typename T>
@@ -221,21 +220,21 @@ public:
             Self::operator[](i) = std::make_shared<Fifo>(queue_max_);
     }
 
-    void stringfy(WriteBuffer & buf)
+    void stringfy(WriteBuffer & buf) const
     {
         buf << Self::size() << "*" << queue_max << "Q";
         for (size_t i = 0; i < Self::size(); ++i)
             buf << ":" << Self::operator[](i)->size();
     }
 
-    String str()
+    String str() const
     {
         WriteBufferFromOwnString buf;
         stringfy(buf);
         return buf.releaseStr();
     }
 
-    friend std::ostream & operator << (std::ostream & out, FifoPtrs & self)
+    friend std::ostream & operator << (std::ostream & out, const FifoPtrs & self)
     {
         return out << self.str();
     }
@@ -248,7 +247,6 @@ template <typename Fifo>
 inline void writeText(const FifoPtrs<Fifo> & fifoPtrs, WriteBuffer & buf)
 {
     fifoPtrs.stringfy(buf);
-    return buf;
 }
 
 class BlocksFifo : public SmallObjectFifo<DedupingBlockPtr>
@@ -442,7 +440,7 @@ public:
         return const_cast<DedupCursor *>(this)->greater(rhs);
     }
 
-    void stringfy(WriteBuffer & buf)
+    void stringfy(WriteBuffer & buf) const
     {
         if (!block)
         {
@@ -454,14 +452,14 @@ public:
         buf << "/" << cursor.pos << "\\" << cursor.order;
     }
 
-    String str()
+    String str() const
     {
         WriteBufferFromOwnString buf;
         stringfy(buf);
-        return ostr.releaseStr();
+        return buf.releaseStr();
     }
 
-    friend std::ostream & operator << (std::ostream & out, DedupCursor & self)
+    friend std::ostream & operator << (std::ostream & out, const DedupCursor & self)
     {
         return out << self.str();
     }
@@ -476,7 +474,6 @@ protected:
 inline void writeText(const DedupCursor & cursor, WriteBuffer & buf)
 {
     cursor.stringfy(buf);
-    return buf;
 }
 
 
@@ -509,7 +506,7 @@ struct CursorPlainPtr
         return (*ptr) < (*rhs.ptr);
     }
 
-    friend std::ostream & operator << (std::ostream & out, CursorQueue & self)
+    friend std::ostream & operator << (std::ostream & out, const CursorPlainPtr & self)
     {
         return (self.ptr == 0) ? (out << "null") : (out << (*self.ptr));
     }
@@ -519,7 +516,7 @@ struct CursorPlainPtr
 class CursorQueue : public std::priority_queue<CursorPlainPtr>
 {
 public:
-    void stringfy(WriteBuffer & buf)
+    void stringfy(WriteBuffer & buf) const
     {
         buf << "Q:" << size();
 
@@ -532,14 +529,14 @@ public:
         }
     }
 
-    String str()
+    String str() const
     {
         WriteBufferFromOwnString buf;
         stringfy(buf);
         return buf.releaseStr();
     }
 
-    friend std::ostream & operator << (std::ostream & out, CursorQueue & self)
+    friend std::ostream & operator << (std::ostream & out, const CursorQueue & self)
     {
         return out << self.str();
     }
@@ -548,7 +545,6 @@ public:
 inline void writeText(const CursorQueue & x, WriteBuffer & buf)
 {
     x.stringfy(buf);
-    return buf;
 }
 
 struct DedupBound : public DedupCursor
@@ -582,21 +578,21 @@ struct DedupBound : public DedupCursor
         return DedupCursor::greater(rhs);
     }
 
-    void stringfy(WriteBuffer & buf)
+    void stringfy(WriteBuffer & buf) const
     {
         buf << DedupCursor::str();
         buf << (is_bottom ? "L" : "F");
     }
 
-    String str()
+    String str() const
     {
 
         WriteBufferFromOwnString buf;
         stringfy(buf);
-        return ostr.releaseStr();
+        return buf.releaseStr();
     }
 
-    friend std::ostream & operator << (std::ostream & out, DedupBound & self)
+    friend std::ostream & operator << (std::ostream & out, const DedupBound & self)
     {
         return out << self.str();
     }
@@ -607,14 +603,13 @@ using DedupBoundPtr = std::shared_ptr<DedupBound>;
 inline void writeText(const DedupBound & x, WriteBuffer & buf)
 {
     x.stringfy(buf);
-    return buf;
 }
 
 
 class BoundQueue : public std::priority_queue<DedupBound>
 {
 public:
-    void stringfy(WriteBuffer & buf)
+    void stringfy(WriteBuffer & buf) const
     {
         buf << "Q:" << size();
 
@@ -627,15 +622,15 @@ public:
         }
     }
 
-    String str()
+    String str() const
     {
 
         WriteBufferFromOwnString buf;
         stringfy(buf);
-        return ostr.releaseStr();
+        return buf.releaseStr();
     }
 
-    friend std::ostream & operator << (std::ostream & out, BoundQueue & self)
+    friend std::ostream & operator << (std::ostream & out, const BoundQueue & self)
     {
         return out << self.str();
     }
@@ -647,7 +642,6 @@ using DedupCursors = std::vector<DedupCursorPtr>;
 inline void writeText(const BoundQueue & x, WriteBuffer & buf)
 {
     x.stringfy(buf);
-    return buf;
 }
 
 
@@ -683,22 +677,22 @@ public:
         return data[i];
     }
 
-    void stringfy(WriteBuffer & buf)
+    void stringfy(WriteBuffer & buf) const
     {
         buf << "[";
-        for (Data::iterator it = data.begin(); it != data.end(); ++it)
+        for (auto it = data.begin(); it != data.end(); ++it)
             buf << ((*it) ? "+" : "-");
         buf << "]";
     }
 
-    String str()
+    String str() const
     {
         WriteBufferFromOwnString buf;
         stringfy(buf);
         return buf.releaseStr();
     }
 
-    friend std::ostream & operator << (std::ostream & out, StreamMasks & self)
+    friend std::ostream & operator << (std::ostream & out, const StreamMasks & self)
     {
         return out << self.str();
     }
@@ -711,7 +705,6 @@ private:
 inline void writeText(const StreamMasks & x, WriteBuffer & buf)
 {
     x.stringfy(buf);
-    return buf;
 }
 
 

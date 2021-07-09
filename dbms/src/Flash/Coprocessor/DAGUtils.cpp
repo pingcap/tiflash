@@ -5,6 +5,7 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
+#include <IO/Operators.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiDB.h>

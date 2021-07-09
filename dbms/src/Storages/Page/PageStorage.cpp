@@ -2,6 +2,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromMemory.h>
+#include <IO/Operators.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>

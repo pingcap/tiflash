@@ -1,4 +1,5 @@
 #include <IO/ReadBufferFromMemory.h>
+#include <IO/Operators.h>
 #include <Storages/Page/gc/DataCompactor.h>
 #include <Storages/PathPool.h>
 

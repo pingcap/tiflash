@@ -1,3 +1,4 @@
+#include <IO/Operators.h>
 #include <Storages/Page/gc/LegacyCompactor.h>
 #include <Storages/Page/gc/restoreFromCheckpoints.h>
 #include <Storages/PathPool.h>
