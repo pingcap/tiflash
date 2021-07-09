@@ -46,7 +46,7 @@ StressOptions parseStressOptions(int argc, char * argv[])
     stress_options.gen_concurrency      = options["gen_concurrency"].as<UInt32>();
     stress_options.table_name           = options["table_name"].as<String>();
     stress_options.verify               = options["verify"].as<bool>();
-    stress_options.verify_sleep_sec = options["verify_sleep_sec"].as<UInt32>();
+    stress_options.verify_sleep_sec     = options["verify_sleep_sec"].as<UInt32>();
 
     std::cout << " mode: " << stress_options.mode << " insert_concurrency: " << stress_options.insert_concurrency
               << " update_concurrency: " << stress_options.update_concurrency
@@ -54,7 +54,8 @@ StressOptions parseStressOptions(int argc, char * argv[])
               << " write_row_per_block: " << stress_options.write_rows_per_block << " read_concurrency: " << stress_options.read_concurrency
               << " read_sleep_us: " << stress_options.read_sleep_us << " gen_row_count: " << stress_options.gen_total_rows
               << " gen_row_per_block: " << stress_options.gen_rows_per_block << " gen_concurrency: " << stress_options.gen_concurrency
-              << " table_name: " << stress_options.table_name << " verify: " << stress_options.verify << "verify_sleep_sec: " << stress_options.verify_sleep_sec << std::endl;
+              << " table_name: " << stress_options.table_name << " verify: " << stress_options.verify
+              << "verify_sleep_sec: " << stress_options.verify_sleep_sec << std::endl;
 
     return stress_options;
 }
@@ -70,7 +71,7 @@ int main(int argc, char * argv[])
 {
     init();
     auto opts = parseStressOptions(argc, argv);
-    auto log = &Poco::Logger::get("DMStressProxy");
+    auto log  = &Poco::Logger::get("DMStressProxy");
     try
     {
         UInt64 run_count = 0;

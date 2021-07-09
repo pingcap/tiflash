@@ -358,13 +358,13 @@ void DMStressProxy::verify()
     if (pks_total_count >= max_total_count)
     {
         LOG_INFO(log, "pks_total_count: " << pks_total_count << " max_total_count: " << max_total_count);
-        stop.store(true);  // Stop the process to avoid use too much memory.
+        stop.store(true); // Stop the process to avoid use too much memory.
     }
 }
 
 void DMStressProxy::run()
 {
-    genMultiThread();      // Run the gennerate data threads with other read-write thread concurrently
+    genMultiThread(); // Run the gennerate data threads with other read-write thread concurrently
     readMultiThread();
     insertMultiThread();
     updateMultiThread();

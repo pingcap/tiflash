@@ -238,8 +238,8 @@ private:
     KeyLock key_lock; // Prevent the same key write concurrent.
     KeySet  pks;
 
-    std::atomic<bool> stop;
-    static constexpr UInt64 max_total_count = 200000000;  // 20kw
+    std::atomic<bool>       stop;
+    static constexpr UInt64 max_total_count = 200000000; // 20kw
 };
 } // namespace tests
 } // namespace DM
