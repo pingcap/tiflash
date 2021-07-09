@@ -1524,7 +1524,7 @@ public:
         {
             /// Will pass empty arena if agg_func does not allocate memory in arena
             agg_func.merge(place.get(), state_to_add, arena.get());
-            agg_func.insertResultInto(place.get(), result_column);
+            agg_func.insertResultInto(place.get(), result_column, arena.get());
         }
 
         block.getByPosition(result).column = std::move(result_column_ptr);

@@ -4,6 +4,7 @@
 
 #include <array>
 #include <DataTypes/DataTypesNumber.h>
+#include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnNullable.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <IO/WriteHelpers.h>
@@ -40,6 +41,39 @@ public:
         ++data(place).count;
     }
 
+    void addBatchSinglePlace(
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena *, ssize_t if_argument_pos) const override
+    {
+        if (if_argument_pos >= 0)
+        {
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            data(place).count += countBytesInFilter(flags);
+        }
+        else
+        {
+            data(place).count += batch_size;
+        }
+    }
+
+    void addBatchSinglePlaceNotNull(
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        const UInt8 * null_map,
+        Arena *,
+        ssize_t if_argument_pos) const override
+    {
+        if (if_argument_pos >= 0)
+        {
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            data(place).count += countBytesInFilterWithNull(flags, null_map);
+        }
+        else
+        {
+            data(place).count += batch_size - countBytesInFilter(null_map, batch_size);
+        }
+    }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         data(place).count += data(rhs).count;
@@ -55,7 +89,7 @@ public:
         readVarUInt(data(place).count, buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
     }
@@ -107,7 +141,7 @@ public:
         readVarUInt(data(place).count, buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
     }
@@ -166,7 +200,7 @@ public:
         readVarUInt(data(place).count, buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
     }

@@ -29,7 +29,7 @@ endif ()
 
 find_package (Threads)
 
-if (ENABLE_TESTS)
+if (ENABLE_FAILPOINTS)
     add_definitions(-DFIU_ENABLE)
 endif()
 
@@ -257,6 +257,7 @@ if (ENABLE_TESTS)
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestBasic.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)

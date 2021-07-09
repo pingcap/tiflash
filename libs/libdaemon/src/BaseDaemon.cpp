@@ -342,7 +342,11 @@ private:
         auto err_mask = context.uc_mcontext.gregs[REG_ERR];
         #endif
 #elif defined(__aarch64__)
-        caller_address = reinterpret_cast<void *>(context.uc_mcontext.pc);
+        #if defined(__arm64__) || defined(__arm64) /// Apple arm cpu
+            caller_address = reinterpret_cast<void *>(context.uc_mcontext->__ss.__pc);
+        #else /// arm server
+            caller_address = reinterpret_cast<void *>(context.uc_mcontext.pc);
+        #endif
 #endif
 
         switch (sig)

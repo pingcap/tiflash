@@ -248,7 +248,7 @@ struct DateAdd
     static const std::unordered_map<String, String> unit_to_func_name_map;
 };
 const std::unordered_map<String, String> DateAdd::unit_to_func_name_map = {{"DAY", "addDays"}, {"WEEK", "addWeeks"}, {"MONTH", "addMonths"},
-                                                                           {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}};
+    {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}};
 struct DateSub
 {
     static constexpr auto name = "date_sub";
@@ -256,7 +256,7 @@ struct DateSub
 };
 const std::unordered_map<String, String> DateSub::unit_to_func_name_map
     = {{"DAY", "subtractDays"}, {"WEEK", "subtractWeeks"}, {"MONTH", "subtractMonths"}, {"YEAR", "subtractYears"},
-       {"HOUR", "subtractHours"}, {"MINUTE", "subtractMinutes"}, {"SECOND", "subtractSeconds"}};
+        {"HOUR", "subtractHours"}, {"MINUTE", "subtractMinutes"}, {"SECOND", "subtractSeconds"}};
 
 template <typename Impl>
 static String buildDateAddOrSubFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
@@ -344,12 +344,10 @@ static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr &
 static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>>
     function_builder_map({{"in", buildInFunction}, {"notIn", buildInFunction}, {"globalIn", buildInFunction},
         {"globalNotIn", buildInFunction}, {"tidbIn", buildInFunction}, {"tidbNotIn", buildInFunction}, {"ifNull", buildIfNullFunction},
-        {"multiIf", buildMultiIfFunction}, {"tidb_cast", buildCastFunction},
-        {"and", buildLogicalFunction}, {"or", buildLogicalFunction}, {"xor", buildLogicalFunction}, {"not", buildLogicalFunction},
-        {"bitAnd", buildBitwiseFunction}, {"bitOr", buildBitwiseFunction}, {"bitXor", buildBitwiseFunction},
-        {"bitNot", buildBitwiseFunction}, {"leftUTF8", buildLeftUTF8Function},
-        {"date_add", buildDateAddOrSubFunction<DateAdd>}, {"date_sub", buildDateAddOrSubFunction<DateSub>}
-    });
+        {"multiIf", buildMultiIfFunction}, {"tidb_cast", buildCastFunction}, {"and", buildLogicalFunction}, {"or", buildLogicalFunction},
+        {"xor", buildLogicalFunction}, {"not", buildLogicalFunction}, {"bitAnd", buildBitwiseFunction}, {"bitOr", buildBitwiseFunction},
+        {"bitXor", buildBitwiseFunction}, {"bitNot", buildBitwiseFunction}, {"leftUTF8", buildLeftUTF8Function},
+        {"date_add", buildDateAddOrSubFunction<DateAdd>}, {"date_sub", buildDateAddOrSubFunction<DateSub>}});
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_)), context(context_), after_agg(false), implicit_cast_count(0)
@@ -362,6 +360,8 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> & sour
 {
     settings = context.getSettings();
 }
+
+extern const String CountSecondStage;
 
 void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregation_keys,
     TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions, bool group_by_collation_sensitive)
@@ -382,6 +382,13 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         if (expr.has_distinct() && agg_func_name_lowercase == "countdistinct")
         {
             agg_func_name = settings.count_distinct_implementation;
+        }
+        if (agg.group_by_size() == 0 && agg_func_name == "sum" && expr.has_field_type()
+            && !getDataTypeByFieldType(expr.field_type())->isNullable())
+        {
+            /// this is a little hack: if the query does not have group by column, and the result of sum is not nullable, then the sum
+            /// must be the second stage for count, in this case we should return 0 instead of null if the input is empty.
+            agg_func_name = CountSecondStage;
         }
 
         AggregateDescription aggregate;

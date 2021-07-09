@@ -18,7 +18,7 @@ void mergeConfigFromSettings(const DB::Settings & settings, PageStorage::Config 
     // Load config for expected number of max legacy files
     if (settings.dt_page_num_max_expect_legacy_files != 0)
         config.gc_max_expect_legacy_files = settings.dt_page_num_max_expect_legacy_files;
-    if (settings.dt_page_num_max_gc_valid_rate > 0.0 && settings.dt_page_num_max_gc_valid_rate < 1.0)
+    if (settings.dt_page_num_max_gc_valid_rate > 0.0)
         config.gc_max_valid_rate_bound = settings.dt_page_num_max_gc_valid_rate;
 }
 

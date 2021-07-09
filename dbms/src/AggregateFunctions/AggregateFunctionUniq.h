@@ -340,7 +340,7 @@ public:
         this->data(place).set.read(buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         static_cast<ColumnUInt64 &>(to).getData().push_back(this->data(place).set.size());
     }
@@ -401,7 +401,7 @@ public:
         this->data(place).set.read(buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         if constexpr (raw_result)
         {

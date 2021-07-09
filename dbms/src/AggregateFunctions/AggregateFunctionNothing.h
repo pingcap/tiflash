@@ -64,7 +64,7 @@ public:
     {
     }
 
-    void insertResultInto(ConstAggregateDataPtr, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr, IColumn & to, Arena *) const override
     {
         to.insertDefault();
     }

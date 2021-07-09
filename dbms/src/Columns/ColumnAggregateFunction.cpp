@@ -73,7 +73,7 @@ MutableColumnPtr ColumnAggregateFunction::convertToValues() const
     res->reserve(getData().size());
 
     for (auto val : getData())
-        function->insertResultInto(val, *res);
+        function->insertResultInto(val, *res, nullptr);
 
     return res;
 }
