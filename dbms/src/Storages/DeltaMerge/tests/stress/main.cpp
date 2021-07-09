@@ -9,7 +9,7 @@ StressOptions parseStressOptions(int argc, char * argv[])
 {
     using boost::program_options::value;
     boost::program_options::options_description desc("Allowed options");
-    desc.add_options()("help", "produce help message")("mode", value<String>()->default_value(""), "stress mode: wo, ro, rw")(
+    desc.add_options()("help", "produce help message")(
         "insert_concurrency", value<UInt32>()->default_value(58), "number of insert thread")(
         "update_concurrency", value<UInt32>()->default_value(40), "number of update thread")(
         "delete_concurrency", value<UInt32>()->default_value(1), "number of delete thread")(
@@ -33,7 +33,6 @@ StressOptions parseStressOptions(int argc, char * argv[])
     }
 
     StressOptions stress_options;
-    stress_options.mode                 = options["mode"].as<String>();
     stress_options.insert_concurrency   = options["insert_concurrency"].as<UInt32>();
     stress_options.update_concurrency   = options["update_concurrency"].as<UInt32>();
     stress_options.delete_concurrency   = options["delete_concurrency"].as<UInt32>();
@@ -48,7 +47,7 @@ StressOptions parseStressOptions(int argc, char * argv[])
     stress_options.verify               = options["verify"].as<bool>();
     stress_options.verify_sleep_sec     = options["verify_sleep_sec"].as<UInt32>();
 
-    std::cout << " mode: " << stress_options.mode << " insert_concurrency: " << stress_options.insert_concurrency
+    std::cout << " insert_concurrency: " << stress_options.insert_concurrency
               << " update_concurrency: " << stress_options.update_concurrency
               << " delete_concurrency: " << stress_options.delete_concurrency << " write_sleep_us: " << stress_options.write_sleep_us
               << " write_row_per_block: " << stress_options.write_rows_per_block << " read_concurrency: " << stress_options.read_concurrency

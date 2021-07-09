@@ -18,7 +18,6 @@ namespace tests
 
 struct StressOptions
 {
-    String mode;
     UInt32 insert_concurrency;
     UInt32 update_concurrency;
     UInt32 delete_concurrency;
