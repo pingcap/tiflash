@@ -36,8 +36,8 @@ private:
 
         size_t old_size = vector.size();
         /// pos may not be equal to vector.data() + old_size, because WriteBuffer::next() can be used to flush data
-        size_t pos_offset = pos - reinterpret_cast<Position>(vector.data());
-        vector.resize(old_size * size_multiplier);
+        size_t pos_offset = tellp();
+        vector.resize(std::max(old_size * size_multiplier, initial_size));
         internal_buffer = Buffer(reinterpret_cast<Position>(vector.data() + pos_offset), reinterpret_cast<Position>(vector.data() + vector.size()));
         working_buffer = internal_buffer;
     }
@@ -71,10 +71,7 @@ public:
         if (is_finished)
             return;
         is_finished = true;
-        vector.resize(
-            ((position() - reinterpret_cast<Position>(vector.data()))
-                + sizeof(typename VectorType::value_type) - 1)  /// Align up.
-            / sizeof(typename VectorType::value_type));
+        vector.resize(tellp());
         bytes += offset();
         /// Prevent further writes.
         set(nullptr, 0);
@@ -98,7 +95,7 @@ public:
 
     size_t tellp() const
     {
-        return vector.size();
+        return pos - reinterpret_cast<Position>(vector.data());
     }
 };
 

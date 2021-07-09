@@ -91,7 +91,7 @@ struct Handle
     {
         WriteBufferFromOwnString ss;
         toString(ss);
-        return ss.str();
+        return ss.releaseStr();
     }
 
     // we can not transfer it into HandleType directly

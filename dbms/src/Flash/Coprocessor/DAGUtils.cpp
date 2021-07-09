@@ -168,7 +168,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         }
         ss << ")";
     }
-    return ss.str();
+    return ss.releaseStr();
 }
 
 const String & getTypeName(const tipb::Expr & expr) { return tipb::ExprType_Name(expr.tp()); }

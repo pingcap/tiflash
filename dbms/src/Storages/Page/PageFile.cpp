@@ -321,7 +321,7 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     if (wb_checksum != checksum_calc)
     {
         WriteBufferFromOwnString ss;
-        ss << "[expecte_checksum=" << getHexUIntUppercase(wb_checksum) << "] [actual_checksum" << getHexUIntUppercase(checksum_calc) << "]";
+        ss << "[expecte_checksum=" << getHexUIntLowercase(wb_checksum) << "] [actual_checksum" << getHexUIntLowercase(checksum_calc) << "]";
         throw Exception("Write batch checksum not match {" + toString() + "} [path=" + page_file.folderPath()
                             + "] [batch_bytes=" + DB::toString(wb_bytes) + "] " + ss.str(),
                         ErrorCodes::CHECKSUM_DOESNT_MATCH);
@@ -578,7 +578,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
                 WriteBufferFromOwnString ss;
-                ss << ", expected: " << getHexUIntUppercase(entry.checksum) << ", but: " << getHexUIntUppercase(checksum);
+                ss << ", expected: " << getHexUIntLowercase(entry.checksum) << ", but: " << getHexUIntLowercase(checksum);
                 throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path + ss.str(),
                                 ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
@@ -631,7 +631,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
             if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
                 WriteBufferFromOwnString ss;
-                ss << ", expected: " << getHexUIntUppercase(entry.checksum) << ", but: " << getHexUIntUppercase(checksum);
+                ss << ", expected: " << getHexUIntLowercase(entry.checksum) << ", but: " << getHexUIntLowercase(checksum);
                 throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path + ss.str(),
                                 ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
@@ -711,7 +711,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
                 if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
                 {
                     WriteBufferFromOwnString ss;
-                    ss << ", expected: " << getHexUIntUppercase(expect_checksum) << ", but: " << getHexUIntUppercase(field_checksum);
+                    ss << ", expected: " << getHexUIntLowercase(expect_checksum) << ", but: " << getHexUIntLowercase(field_checksum);
                     throw Exception("Page[" + DB::toString(page_id) + "] field[" + DB::toString(field_index)
                                         + "] checksum not match, broken file: " + data_file_path + ss.str(),
                                     ErrorCodes::CHECKSUM_DOESNT_MATCH);

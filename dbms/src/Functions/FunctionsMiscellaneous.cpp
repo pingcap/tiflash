@@ -1924,7 +1924,7 @@ std::string FunctionVersion::getVersion() const
 {
     WriteBufferFromOwnString os;
     os << TiFlashBuildInfo::getVersion();
-    return os.str();
+    return os.releaseStr();
 }
 
 

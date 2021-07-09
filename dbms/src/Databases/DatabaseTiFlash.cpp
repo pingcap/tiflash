@@ -515,7 +515,7 @@ void DatabaseTiFlash::alterTombstone(const Context & context, Timestamp tombston
         WriteBufferFromOwnString stream;
         formatAST(*ast, stream, false, false);
         stream << '\n';
-        statement = stream.str();
+        statement = stream.releaseStr();
     }
 
     {

@@ -71,7 +71,7 @@ String DecodeBytes(size_t & cursor, const String & raw_value)
 {
     WriteBufferFromOwnString ss;
     DecodeBytes(cursor, raw_value, ss);
-    return ss.str();
+    return ss.releaseStr();
 }
 
 struct NullStringStream
@@ -593,7 +593,7 @@ void EncodeDatumForRow(const Field & field, TiDB::CodecFlag flag, WriteBuffer & 
 {
     if (flag == TiDB::CodecFlagDecimal && !field.isNull())
     {
-        ss << UInt8(flag);
+        EncodeUInt(UInt8(flag), ss);
         return EncodeDecimalForRow(field, ss, column_info);
     }
     return EncodeDatum(field, flag, ss);
@@ -603,7 +603,7 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, WriteBuffer & ss)
 {
     if (field.isNull())
         flag = TiDB::CodecFlagNil;
-    ss << UInt8(flag);
+    EncodeUInt(UInt8(flag), ss);
     switch (flag)
     {
         case TiDB::CodecFlagDecimal:

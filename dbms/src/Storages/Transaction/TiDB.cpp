@@ -1,7 +1,6 @@
 #include <Common/Decimal.h>
 #include <Common/MyTime.h>
 #include <IO/ReadBufferFromString.h>
-#include <IO/WriteBufferFromString.h>
 #include <Poco/Base64Decoder.h>
 #include <Poco/MemoryStream.h>
 #include <Poco/StreamCopier.h>
