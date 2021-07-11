@@ -10,6 +10,7 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <DataStreams/AsynchronousBlockInputStream.h>
 
 namespace DB
 {
@@ -103,6 +104,8 @@ void MPPTask::unregisterTask()
 
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
+    std::unique_lock<std::mutex> lock(mutex);
+
     auto start_time = Clock::now();
     dag_req = std::make_unique<tipb::DAGRequest>();
     if (!dag_req->ParseFromString(task_request.encoded_plan()))
@@ -247,6 +250,8 @@ String taskStatusToString(TaskStatus ts)
 }
 void MPPTask::runImpl()
 {
+    std::lock_guard<std::mutex> lock(mutex);
+
     auto current_status = static_cast<TaskStatus>(status.load());
     if (current_status != INITIALIZING)
     {
@@ -261,14 +266,40 @@ void MPPTask::runImpl()
     auto to = io.out;
     try
     {
-        from->readPrefix();
+
+        AsynchronousBlockInputStream async_in(from);
+        async_in.readPrefix();
+
         to->writePrefix();
         LOG_DEBUG(log, "begin read ");
 
         size_t count = 0;
 
-        while (Block block = from->read())
+
+        while(true)
         {
+            Block block;
+            while (true)
+            {
+                if (status == TaskStatus::CANCELLED)
+                {
+                    async_in.cancel(false);
+                    break;
+                }
+                else
+                {
+                    if (async_in.poll(100))
+                    {
+                        /// There is the following result block.
+                        block = async_in.read();
+                        break;
+                    }
+                }
+            }
+
+            if (!block)
+                break;
+
             count += block.rows();
             to->write(block);
             FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
@@ -282,6 +313,21 @@ void MPPTask::runImpl()
             }
         }
 
+        // while (Block block = from->read())
+        // {
+        //     count += block.rows();
+        //     to->write(block);
+        //     FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
+        //     if (dag_context->isRootMPPTask())
+        //     {
+        //         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
+        //     }
+        //     else
+        //     {
+        //         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
+        //     }
+        // }
+
         /// For outputting additional information in some formats.
         if (IProfilingBlockInputStream * input = dynamic_cast<IProfilingBlockInputStream *>(from.get()))
         {
@@ -292,7 +338,7 @@ void MPPTask::runImpl()
             to->setExtremes(input->getExtremes());
         }
 
-        from->readSuffix();
+        async_in.readSuffix();
         to->writeSuffix();
 
         finishWrite();
@@ -343,12 +389,12 @@ void MPPTask::writeErrToAllTunnel(const String & e)
     }
 }
 
-bool MPPTask::isTaskHanging()
-{
-    if (status.load() == RUNNING)
-        return task_progress.isTaskHanging(context);
-    return false;
-}
+// bool MPPTask::isTaskHanging()
+// {
+//     if (status.load() == RUNNING)
+//         return task_progress.isTaskHanging(context);
+//     return false;
+// }
 
 void MPPTask::cancel(const String & reason)
 {
@@ -360,28 +406,43 @@ void MPPTask::cancel(const String & reason)
         return;
     }
     LOG_WARNING(log, "Begin cancel task: " + id.toString());
-    /// step 1. cancel query streams if it is running
-    if (current_status == RUNNING)
-    {
-        context.getProcessList().sendCancelToQuery(context.getCurrentQueryId(), context.getClientInfo().current_user, true);
-    }
-    /// step 2. write Error msg and close the tunnel.
-    /// Here we use `closeAllTunnel` because currently, `cancel` is a query level cancel, which
-    /// means if this mpp task is cancelled, all the mpp tasks belonging to the same query are
-    /// cancelled at the same time, so there is no guarantee that the tunnel can be connected.
-    closeAllTunnel(reason);
-    LOG_WARNING(log, "Finish cancel task: " + id.toString());
+
+    /// step 1. cancel query streams
+    status = CANCELLED;
+
+    /// WARNING: Please do NOT do any more stupid things, especially updating status in this task.
+    /// Simply set the cancel status and let the working thread of this task to exit gracefully.
+
+    // auto process_list_element = context.getProcessListElement();
+    // if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
+    // {
+    //     BlockInputStreamPtr input_stream;
+    //     BlockOutputStreamPtr output_stream;
+    //     if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
+    //     {
+    //         IProfilingBlockInputStream * input_stream_casted;
+    //         if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
+    //         {
+    //             input_stream_casted->cancel(true);
+    //         }
+    //     }
+    // }
+    // /// step 2. write Error msg and close the tunnel.
+    // /// Here we use `closeAllTunnel` because currently, `cancel` is a query level cancel, which
+    // /// means if this mpp task is cancelled, all the mpp tasks belonging to the same query are
+    // /// cancelled at the same time, so there is no guarantee that the tunnel can be connected.
+    // closeAllTunnel(reason);
+    LOG_WARNING(log, "Finish cancel task: " << id.toString() << ", reason: " << reason);
 }
 
-void MPPHandler::handleError(MPPTaskPtr task, String error)
+void MPPTask::handleError(String error, Poco::Logger * log)
 {
+    std::lock_guard<std::mutex> lk(mutex);
+
     try
     {
-        if (task != nullptr)
-        {
-            task->closeAllTunnel(error);
-            task->unregisterTask();
-        }
+        closeAllTunnel(error);
+        unregisterTask();
     }
     catch (...)
     {
@@ -419,7 +480,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         LOG_ERROR(log, "dispatch task meet error : " << e.displayText());
         auto * err = response->mutable_error();
         err->set_msg(e.displayText());
-        handleError(task, e.displayText());
+        task->handleError(e.displayText(), log);
     	return grpc::Status::OK;
     }
     catch (std::exception & e)
@@ -427,7 +488,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         LOG_ERROR(log, "dispatch task meet error : " << e.what());
         auto * err = response->mutable_error();
         err->set_msg(e.what());
-        handleError(task, e.what());
+        task->handleError(e.what(), log);
     	return grpc::Status::OK;
     }
     catch (...)
@@ -435,7 +496,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         LOG_ERROR(log, "dispatch task meet fatal error");
         auto * err = response->mutable_error();
         err->set_msg("fatal error");
-        handleError(task, "fatal error");
+        task->handleError("fatal error", log);
     	return grpc::Status::OK;
     }
     try
@@ -523,19 +584,15 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
     LOG_WARNING(log, "Begin cancel query: " + std::to_string(query_id));
     std::stringstream ss;
     ss << "Remaining task in query " + std::to_string(query_id) + " are: ";
-    // TODO: cancel tasks in order rather than issuing so many threads to cancel tasks
-    std::vector<std::thread> cancel_workers;
+
     for (auto task_it = task_set.task_map.rbegin(); task_it != task_set.task_map.rend(); task_it++)
     {
         ss << task_it->first.toString() << " ";
-        std::thread t(&MPPTask::cancel, task_it->second, std::ref(reason));
-        cancel_workers.push_back(std::move(t));
+        auto task = task_it->second;
+        task->cancel(reason);
     }
     LOG_WARNING(log, ss.str());
-    for (auto & worker : cancel_workers)
-    {
-        worker.join();
-    }
+
     MPPQueryTaskSet canceled_task_set;
     {
         std::lock_guard<std::mutex> lock(mu);

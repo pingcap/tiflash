@@ -266,6 +266,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     Exception err;
 
+    std::mutex mutex;
     std::condition_variable cv;
 
     MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
@@ -275,49 +276,74 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         id.task_id = meta.task_id();
     }
 
-    void unregisterTask();
-
     void runImpl();
 
-    bool isTaskHanging();
+    // bool isTaskHanging();
+    void handleError(String error, Poco::Logger * log);
 
     void cancel(const String & reason);
+
+    std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
+
+    // void updateProgress(const Progress &) { 
+    //     task_progress.current_progress++; 
+    // }
+
+    // void run()
+    // {
+    //     std::lock_guard<std::mutex> lock(mutex);
+
+    //     std::thread worker(&MPPTask::runImpl, this->shared_from_this());
+    //     worker.detach();
+    // }
+
+    std::mutex tunnel_mutex;
+
+    MPPTunnelPtr getTunnelWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout)
+    {
+        MPPTaskId id{meta.start_ts(), meta.task_id()};
+        std::map<MPPTaskId, MPPTunnelPtr>::iterator it;
+
+        std::unique_lock<std::mutex> lk(tunnel_mutex);
+
+        auto ret = cv.wait_for(lk, timeout, [&] {
+            it = tunnel_map.find(id);
+            return it != tunnel_map.end();
+        });
+        return ret ? it->second : nullptr;
+    }
+
+    ~MPPTask()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        /// MPPTask maybe destructed by different thread, set the query memory_tracker
+        /// to current_memory_tracker in the destructor
+        current_memory_tracker = memory_tracker;
+        closeAllTunnel("");
+        LOG_DEBUG(log, "finish MPPTask: " << id.toString());
+    }
+
+private:
+
+    void unregisterTask();
 
     /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
     /// without waiting the tunnel to be connected
     void closeAllTunnel(const String & reason)
     {
+        std::unique_lock<std::mutex> lock(tunnel_mutex);
+
         for (auto & it : tunnel_map)
         {
             it.second->close(reason);
         }
     }
 
-    void finishWrite()
-    {
-        for (auto it : tunnel_map)
-        {
-            it.second->writeDone();
-        }
-    }
-
-    void writeErrToAllTunnel(const String & e);
-
-    std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
-
-    void updateProgress(const Progress &) { task_progress.current_progress++; }
-
-    void run()
-    {
-        std::thread worker(&MPPTask::runImpl, this->shared_from_this());
-        worker.detach();
-    }
-
-    std::mutex tunnel_mutex;
-
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
     {
-        std::unique_lock<std::mutex> lk(tunnel_mutex);
+        std::unique_lock<std::mutex> lock(tunnel_mutex);
+
         if (tunnel_map.find(id) != tunnel_map.end())
         {
             throw Exception("the tunnel " + tunnel->tunnel_id + " has been registered");
@@ -326,24 +352,14 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         cv.notify_all();
     }
 
-    MPPTunnelPtr getTunnelWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout)
+    void writeErrToAllTunnel(const String & e);
+
+    void finishWrite()
     {
-        MPPTaskId id{meta.start_ts(), meta.task_id()};
-        std::map<MPPTaskId, MPPTunnelPtr>::iterator it;
-        std::unique_lock<std::mutex> lk(tunnel_mutex);
-        auto ret = cv.wait_for(lk, timeout, [&] {
-            it = tunnel_map.find(id);
-            return it != tunnel_map.end();
-        });
-        return ret ? it->second : nullptr;
-    }
-    ~MPPTask()
-    {
-        /// MPPTask maybe destructed by different thread, set the query memory_tracker
-        /// to current_memory_tracker in the destructor
-        current_memory_tracker = memory_tracker;
-        closeAllTunnel("");
-        LOG_DEBUG(log, "finish MPPTask: " << id.toString());
+        for (auto it : tunnel_map)
+        {
+            it.second->writeDone();
+        }
     }
 };
 
