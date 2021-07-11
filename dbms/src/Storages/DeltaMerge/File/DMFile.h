@@ -10,6 +10,7 @@
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
+#include <Storages/DeltaMerge/File/DMConfigFile.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/FormatVersion.h>
 #include <common/logger_useful.h>

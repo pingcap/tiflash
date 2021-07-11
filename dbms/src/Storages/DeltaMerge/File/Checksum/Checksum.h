@@ -6,6 +6,8 @@
 #define CLICKHOUSE_CHECKSUM_H
 #include <Common/Exception.h>
 #include <IO/HashingWriteBuffer.h>
+#include <Poco/Base64Decoder.h>
+#include <Poco/Base64Encoder.h>
 #include <xxh3.h>
 #include <zlib.h>
 
@@ -120,6 +122,45 @@ BASIC_CHECK_FOR_FRAME(City128)
 BASIC_CHECK_FOR_FRAME(None)
 BASIC_CHECK_FOR_FRAME(XXH3)
 #undef BASIC_CHECK_FOR_FRAME
+
+
+struct B64DigestBase
+{
+    virtual void        update(const void * data, size_t length) = 0;
+    virtual bool        compare(const std::string & data)        = 0;
+    virtual std::string base64() const                           = 0;
+    virtual ~B64DigestBase()                                     = default;
+};
+template <class Backend>
+class B64Digest : public B64DigestBase
+{
+public:
+    void update(const void * data, size_t length) override { backend.update(data, length); }
+
+    bool compare(const std::string & data) override
+    {
+        auto               checksum = backend.checksum();
+        auto               input    = std::istringstream{data};
+        auto               decoder  = Poco::Base64Decoder{input};
+        decltype(checksum) target   = {};
+        decoder.read(reinterpret_cast<char *>(&target), sizeof(target));
+        return checksum == target;
+    }
+
+    [[nodiscard]] std::string base64() const override
+    {
+        auto output = std::ostringstream{};
+        {
+            auto encoder  = Poco::Base64Encoder{output};
+            auto checksum = backend.checksum();
+            encoder.write(reinterpret_cast<char *>(&checksum), sizeof(checksum));
+        }
+        return output.str();
+    }
+
+private:
+    Backend backend{};
+};
 
 } // namespace DB::DM
 #endif //CLICKHOUSE_CHECKSUM_H
