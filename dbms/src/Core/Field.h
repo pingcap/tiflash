@@ -881,11 +881,6 @@ struct NearestFieldType<Float64>
     using Type = Float64;
 };
 template <>
-struct NearestFieldType<const char*>
-{
-    using Type = String;
-};
-template <>
 struct NearestFieldType<String>
 {
     using Type = String;
