@@ -21,24 +21,24 @@ public:
         auto                           configObj         = configVar.extract<Poco::JSON::Object::Ptr>();
         auto                           uncheckedAlgo     = configObj->getValue<uint64_t>("checksumAlgorithm");
         auto                           dataFieldChecksum = configObj->getValue<std::string>("dataFieldChecksum");
-        std::shared_ptr<B64DigestBase> digest            = nullptr;
+        std::unique_ptr<B64DigestBase> digest            = nullptr;
         checksumFrameLength                              = configObj->getValue<size_t>("checksumFrameLength");
         switch (uncheckedAlgo)
         {
         case static_cast<uint64_t>(ChecksumAlgo::None):
-            digest = std::make_shared<B64Digest<Digest::None>>();
+            digest = std::make_unique<B64Digest<Digest::None>>();
             break;
         case static_cast<uint64_t>(ChecksumAlgo::CRC32):
-            digest = std::make_shared<B64Digest<Digest::CRC32>>();
+            digest = std::make_unique<B64Digest<Digest::CRC32>>();
             break;
         case static_cast<uint64_t>(ChecksumAlgo::CRC64):
-            digest = std::make_shared<B64Digest<Digest::CRC64>>();
+            digest = std::make_unique<B64Digest<Digest::CRC64>>();
             break;
         case static_cast<uint64_t>(ChecksumAlgo::City128):
-            digest = std::make_shared<B64Digest<Digest::City128>>();
+            digest = std::make_unique<B64Digest<Digest::City128>>();
             break;
         case static_cast<uint64_t>(ChecksumAlgo::XXH3):
-            digest = std::make_shared<B64Digest<Digest::XXH3>>();
+            digest = std::make_unique<B64Digest<Digest::XXH3>>();
             break;
         default:
             throw Poco::JSON::JSONException("unrecognized checksumAlgorithm");
@@ -109,24 +109,24 @@ private:
 inline std::ostream & operator<<(std::ostream & output, const DMConfiguration & config)
 {
     auto                           obj    = Poco::JSON::Object{};
-    std::shared_ptr<B64DigestBase> digest = nullptr;
+    std::unique_ptr<B64DigestBase> digest = nullptr;
 
     switch (config.checksumAlgorithm)
     {
     case ChecksumAlgo::None:
-        digest = std::make_shared<B64Digest<Digest::None>>();
+        digest = std::make_unique<B64Digest<Digest::None>>();
         break;
     case ChecksumAlgo::CRC32:
-        digest = std::make_shared<B64Digest<Digest::CRC32>>();
+        digest = std::make_unique<B64Digest<Digest::CRC32>>();
         break;
     case ChecksumAlgo::CRC64:
-        digest = std::make_shared<B64Digest<Digest::CRC64>>();
+        digest = std::make_unique<B64Digest<Digest::CRC64>>();
         break;
     case ChecksumAlgo::City128:
-        digest = std::make_shared<B64Digest<Digest::City128>>();
+        digest = std::make_unique<B64Digest<Digest::City128>>();
         break;
     case ChecksumAlgo::XXH3:
-        digest = std::make_shared<B64Digest<Digest::XXH3>>();
+        digest = std::make_unique<B64Digest<Digest::XXH3>>();
         break;
     default:
         throw Poco::JSON::JSONException("unrecognized checksumAlgorithm");
