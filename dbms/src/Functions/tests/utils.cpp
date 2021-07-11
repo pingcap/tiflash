@@ -2,27 +2,18 @@
 
 namespace DB
 {
+Table & Table::eval(const String & func_name, const Strings & args, const String & result)
+{
+    evalFunc(data, func_name, args, result);
+    return *this;
+}
+
+Table Table::clone() const { return data; }
 
 void insertColumnDef(Block & block, const String & col_name, const DataTypePtr data_type)
 {
     ColumnWithTypeAndName col_with_type_and_name(data_type, col_name);
     block.insert(col_with_type_and_name);
-}
-
-void validateFieldType(const Field & field, DataTypePtr data_type)
-{
-    if (field.getType() == Field::Types::Null)
-    {
-        if (!data_type->isNullable())
-        {
-            throw Exception("Cannot insert NULL into column with not null DataType");
-        }
-    }
-    else if (field.getTypeName() != removeNullable(data_type)->getName())
-    {
-        throw Exception(
-            "Inserted value doesn't match DataType. Field type: " + String(field.getTypeName()) + " DataType: " + data_type->getName());
-    }
 }
 
 void evalFunc(Block & block, const String & func_name, const Strings & args, const String & result)
