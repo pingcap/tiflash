@@ -37,6 +37,12 @@ public:
         return c;
     }
 
+    // STL's stream seems to call sync/overflow in a very eager manner (i.e. `std::endl` will trigger the sync);
+    // so we should not call `underlying.next()` each time a sync is issued, which will break the efficiency of buffer
+    // (an even evil problem is that some buffer like CH's `WriteBufferFromVector` doubles the space on each call
+    // of `next()`. P.S. maybe this is a bug? see dbms/src/IO/WriteBufferFromVector.h:40).
+    // Anyway, by updating the position, we can already make sure the update to notified to the underlying buffer.
+    // This is also more friendly for compressing or checksum framing.
     int sync() override
     {
         underlying.position() = this->gptr();
@@ -58,9 +64,9 @@ public:
 
     int underflow() override
     {
+        underlying.position() = this->gptr();
         if (this->gptr() == this->egptr())
         {
-            underlying.position() = this->gptr();
             underlying.next();
             auto gptr = underlying.buffer().begin();
             this->setg(gptr, gptr, underlying.buffer().end());
@@ -84,7 +90,9 @@ struct OutputStreamWrapperBase
 
 } // namespace detail
 
-
+// the problem here is that `std::ios` is the base class determining the buffer, but it is hard to
+// construct a buffer before `std::ios` unless we set the virtual base for the wrapper. By doing so,
+// we can construct the virtual base first and then pass the buffer to `std::ios`.
 class InputStreamWrapper : virtual detail::InputStreamWrapperBase, public std::istream
 {
 public:
