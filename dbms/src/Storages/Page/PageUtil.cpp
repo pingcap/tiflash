@@ -109,13 +109,17 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
 }
 
 
-void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes)
+void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes, const ReadLimiterPtr & read_limiter)
 {
     if (unlikely(expected_bytes == 0))
         return;
 
     ProfileEvents::increment(ProfileEvents::PSMReadCalls);
 
+    if (read_limiter != nullptr)
+    {
+        read_limiter->request(expected_bytes);
+    }
     size_t bytes_read = 0;
     while (bytes_read < expected_bytes)
     {

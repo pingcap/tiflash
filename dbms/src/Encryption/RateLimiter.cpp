@@ -257,6 +257,12 @@ RateLimiterPtr IORateLimiter::getWriteLimiter()
     return is_background_thread ? bg_write_limiter : fg_write_limiter;
 }
 
+ReadLimiterPtr IORateLimiter::getReadLimiter()
+{
+    std::lock_guard<std::mutex> lock(mtx_);
+    return is_background_thread ? bg_read_limiter : fg_read_limiter;
+}
+
 void IORateLimiter::updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_, Poco::Logger * log_)
 {
     StorageIORateLimitConfig new_io_config;

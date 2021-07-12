@@ -115,12 +115,15 @@ private:
     static constexpr UInt64 get_io_statistic_period_us = 2000;
 };
 
+using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
+
 class IORateLimiter
 {
 public:
     IORateLimiter() = default;
 
     RateLimiterPtr getWriteLimiter();
+    ReadLimiterPtr getReadLimiter();
 
     void updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_, Poco::Logger * log_);
     
@@ -155,8 +158,8 @@ private:
     StorageIORateLimitConfig io_config;
     RateLimiterPtr bg_write_limiter;
     RateLimiterPtr fg_write_limiter;
-    RateLimiterPtr bg_read_limiter;
-    RateLimiterPtr fg_read_limiter;
+    ReadLimiterPtr bg_read_limiter;
+    ReadLimiterPtr fg_read_limiter;
     std::mutex mtx_;
 
     std::vector<pid_t> bg_thread_ids;

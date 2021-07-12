@@ -11,9 +11,9 @@
 namespace DB
 {
 
-RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_, const EncryptionPath & encryption_path_, int flags) const
+RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_, const EncryptionPath & encryption_path_, const ReadLimiterPtr & read_limiter, int flags) const
 {
-    RandomAccessFilePtr file = std::make_shared<PosixRandomAccessFile>(file_path_, flags);
+    RandomAccessFilePtr file = std::make_shared<PosixRandomAccessFile>(file_path_, flags, read_limiter);
     auto encryption_info = key_manager->getFile(encryption_path_.full_path);
     if (encryption_info.res != FileEncryptionRes::Disabled && encryption_info.method != EncryptionMethod::Plaintext)
     {

@@ -29,7 +29,8 @@ public:
                const String & file_name_base,
                size_t         aio_threshold,
                size_t         max_read_buffer_size,
-               Logger *       log);
+               Logger *       log,
+               const ReadLimiterPtr & read_limiter);
 
         const bool                       single_file_mode;
         double                           avg_size_hint;
@@ -73,6 +74,7 @@ public:
                  size_t                      aio_threshold,
                  size_t                      max_read_buffer_size,
                  const FileProviderPtr &     file_provider_,
+                 const ReadLimiterPtr &      read_limiter,
                  size_t                      rows_threshold_per_read_  = DMFILE_READ_ROWS_THRESHOLD,
                  bool                        read_one_pack_every_time_ = false);
 

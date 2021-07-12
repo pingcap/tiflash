@@ -14,6 +14,8 @@ using String = std::string;
 
 class RateLimiter;
 using RateLimiterPtr = std::shared_ptr<RateLimiter>;
+class ReadLimiter;
+using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 
 class FileProvider
 {
@@ -22,7 +24,7 @@ public:
         : key_manager{std::move(key_manager_)}, encryption_enabled{encryption_enabled_}
     {}
 
-    RandomAccessFilePtr newRandomAccessFile(const String & file_path_, const EncryptionPath & encryption_path_, int flags = -1) const;
+    RandomAccessFilePtr newRandomAccessFile(const String & file_path_, const EncryptionPath & encryption_path_, const ReadLimiterPtr & read_limiter = nullptr, int flags = -1) const;
 
     WritableFilePtr newWritableFile(const String & file_path_, const EncryptionPath & encryption_path_, bool truncate_if_exists_ = true,
         bool create_new_encryption_info_ = true, const RateLimiterPtr & rate_limiter_ = nullptr, int flags = -1, mode_t mode = 0666) const;

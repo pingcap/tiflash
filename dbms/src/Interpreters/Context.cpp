@@ -1573,6 +1573,11 @@ IORateLimiter& Context::getIORateLimiter() const
     return shared->io_rate_limiter;
 }
 
+ReadLimiterPtr Context::getReadLimiter() const
+{
+    return getIORateLimiter().getReadLimiter();
+}
+
 void Context::setInterserverIOAddress(const String & host, UInt16 port)
 {
     shared->interserver_io_host = host;

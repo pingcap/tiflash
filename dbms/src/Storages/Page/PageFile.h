@@ -63,9 +63,9 @@ public:
 
         /// Read pages from files.
         /// After return, the items in to_read could be reordered, but won't be removed or added.
-        PageMap read(PageIdAndEntries & to_read);
+        PageMap read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter);
 
-        void read(PageIdAndEntries & to_read, const PageHandler & handler);
+        void read(PageIdAndEntries & to_read, const PageHandler & handler, const ReadLimiterPtr & read_limiter);
 
         struct FieldReadInfo
         {
@@ -76,7 +76,7 @@ public:
             FieldReadInfo(PageId id_, PageEntry entry_, std::vector<size_t> fields_) : page_id(id_), entry(entry_), fields(fields_) {}
         };
         using FieldReadInfos = std::vector<FieldReadInfo>;
-        PageMap read(FieldReadInfos & to_read);
+        PageMap read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter);
 
         bool isIdle(const Seconds & max_idle_time);
 
@@ -130,7 +130,7 @@ public:
     public:
         bool hasNext() const;
 
-        void moveNext(PageFormat::Version * v = nullptr);
+        void moveNext(const ReadLimiterPtr & read_limiter, PageFormat::Version * v = nullptr);
 
         PageEntriesEdit getEdits() { return std::move(curr_edit); }
 
@@ -164,7 +164,7 @@ public:
 
     private:
 
-        void initialize(std::optional<size_t> max_meta_offset);
+        void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter);
 
     private:
         PageFile & page_file;

@@ -1,6 +1,7 @@
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Encryption/PosixRandomAccessFile.h>
+#include <Encryption/RateLimiter.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -24,7 +25,8 @@ extern const int CANNOT_SEEK_THROUGH_FILE;
 extern const int CANNOT_SELECT;
 } // namespace ErrorCodes
 
-PosixRandomAccessFile::PosixRandomAccessFile(const std::string & file_name_, int flags) : file_name{file_name_}
+PosixRandomAccessFile::PosixRandomAccessFile(const std::string & file_name_, int flags, const ReadLimiterPtr & read_limiter_) 
+    : file_name{file_name_}, read_limiter(read_limiter_)
 {
     ProfileEvents::increment(ProfileEvents::FileOpen);
 
@@ -74,8 +76,22 @@ void PosixRandomAccessFile::close()
 
 off_t PosixRandomAccessFile::seek(off_t offset, int whence) { return ::lseek(fd, offset, whence); }
 
-ssize_t PosixRandomAccessFile::read(char * buf, size_t size) { return ::read(fd, buf, size); }
+ssize_t PosixRandomAccessFile::read(char * buf, size_t size) 
+{
+    if (read_limiter != nullptr)
+    {
+        read_limiter->request(size);
+    } 
+    return ::read(fd, buf, size); 
+}
 
-ssize_t PosixRandomAccessFile::pread(char * buf, size_t size, off_t offset) const { return ::pread(fd, buf, size, offset); }
+ssize_t PosixRandomAccessFile::pread(char * buf, size_t size, off_t offset) const 
+{
+    if (read_limiter != nullptr)
+    {
+        read_limiter->request(size);
+    } 
+    return ::pread(fd, buf, size, offset); 
+}
 
 } // namespace DB

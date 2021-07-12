@@ -122,6 +122,7 @@ LegacyCompactor::tryCompact(                 //
 std::tuple<PageFileSet, PageFileSet, WriteBatch::SequenceID, std::optional<PageFile>>
 LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const WritingFilesSnapshot & writing_files)
 {
+    auto read_limiter = global_context.getReadLimiter();
     PageStorage::MetaMergingQueue merging_queue;
     for (auto & page_file : page_files)
     {
@@ -135,7 +136,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         {
             reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file));
         }
-        if (reader->hasNext())
+        if (reader->hasNext(read_limiter))
         {
             // Read one valid WriteBatch
             reader->moveNext();
@@ -223,7 +224,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         }
         if (reader->hasNext())
         {
-            reader->moveNext();
+            reader->moveNext(read_limiter);
             merging_queue.push(std::move(reader));
         }
         else

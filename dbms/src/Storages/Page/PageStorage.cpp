@@ -124,7 +124,7 @@ PageFormat::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_
         while (reader->hasNext())
         {
             // Continue to read the binary version of next WriteBatch.
-            reader->moveNext(&temp_version);
+            reader->moveNext(nullptr, &temp_version);
             max_binary_version = std::max(max_binary_version, temp_version);
         }
         LOG_DEBUG(log, "getMaxDataVersion done from " + reader->toString() << " [max version=" << max_binary_version << "]");
@@ -267,7 +267,7 @@ void PageStorage::restore()
             reader->hasNext())
         {
             // Read one WriteBatch
-            reader->moveNext();
+            reader->moveNext(nullptr);
             merging_queue.push(std::move(reader));
         }
         // else the file doesn't contain any valid meta, just skip it.
@@ -331,7 +331,7 @@ void PageStorage::restore()
         if (reader->hasNext())
         {
             // Continue to merge next WriteBatch.
-            reader->moveNext();
+            reader->moveNext(nullptr);
             merging_queue.push(std::move(reader));
         }
         else
@@ -623,7 +623,7 @@ std::tuple<size_t, double, unsigned> PageStorage::getSnapshotsStat() const
     return versioned_page_entries.getSnapshotsStat();
 }
 
-Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
+Page PageStorage::read(PageId page_id, const ReadLimiterPtr& read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -636,10 +636,10 @@ Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
     const auto       file_id_level = page_entry->fileIdLevel();
     PageIdAndEntries to_read       = {{page_id, *page_entry}};
     auto             file_reader   = getReader(file_id_level);
-    return file_reader->read(to_read)[page_id];
+    return file_reader->read(to_read, read_limiter)[page_id];
 }
 
-PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot)
+PageMap PageStorage::read(const std::vector<PageId> & page_ids, const ReadLimiterPtr& read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -675,14 +675,14 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snap
         (void)file_id_level;
         auto & page_id_and_entries = entries_and_reader.first;
         auto & reader              = entries_and_reader.second;
-        auto   page_in_file        = reader->read(page_id_and_entries);
+        auto   page_in_file        = reader->read(page_id_and_entries, read_limiter);
         for (auto & [page_id, page] : page_in_file)
             page_map.emplace(page_id, page);
     }
     return page_map;
 }
 
-void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot)
+void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr& read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -718,11 +718,11 @@ void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler &
         auto & page_id_and_entries = entries_and_reader.first;
         auto & reader              = entries_and_reader.second;
 
-        reader->read(page_id_and_entries, handler);
+        reader->read(page_id_and_entries, handler, read_limiter);
     }
 }
 
-PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, SnapshotPtr snapshot)
+PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr& read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
         snapshot = this->getSnapshot();
@@ -757,7 +757,7 @@ PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, Snaps
         (void)file_id_level;
         auto & reader       = entries_and_reader.first;
         auto & fields_infos = entries_and_reader.second;
-        auto   page_in_file = reader->read(fields_infos);
+        auto   page_in_file = reader->read(fields_infos, read_limiter);
         for (auto & [page_id, page] : page_in_file)
             page_map.emplace(page_id, std::move(page));
     }
@@ -785,7 +785,7 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
 
     for (const auto & p : file_and_pages)
     {
-        auto pages = read(p.second, snapshot);
+        auto pages = read(p.second, nullptr, snapshot);
         for (const auto & id_page : pages)
         {
             acceptor(id_page.second);
