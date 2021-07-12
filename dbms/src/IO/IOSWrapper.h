@@ -28,10 +28,7 @@ public:
 
     int overflow(int_type c) override
     {
-        if (this->gptr() == this->egptr())
-        {
-            this->sync();
-        }
+        this->sync();
         if (c != std::char_traits<char>::eof())
         {
             underlying.write(static_cast<char>(c));
