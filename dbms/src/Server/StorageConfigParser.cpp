@@ -18,6 +18,7 @@
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Server/StorageConfigParser.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
 
 #include <set>
 #include <sstream>
@@ -295,14 +296,13 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
     return std::make_tuple(global_capacity_quota, storage_config);
 }
 
-void StorageIORateLimitConfig::parse(const String& storage_io_rate_limit, Poco::Logger* log)
+void StorageIORateLimitConfig::parse(const String & storage_io_rate_limit, Poco::Logger * log)
 {
     std::istringstream ss(storage_io_rate_limit);
     cpptoml::parser p(ss);
     auto config = p.parse();
 
-    auto readConfig = [&](const std::string& name, auto& value)
-    {
+    auto readConfig = [&](const std::string & name, auto & value) {
         if (auto p = config->get_qualified_as<typename std::remove_reference<decltype(value)>::type>(name); p)
         {
             value = *p;
@@ -315,39 +315,36 @@ void StorageIORateLimitConfig::parse(const String& storage_io_rate_limit, Poco::
     readConfig("foreground_write_weight", fg_write_weight);
     readConfig("background_write_weight", bg_write_weight);
     readConfig("foreground_read_weight", fg_read_weight);
-    readConfig("background_read_weight", bg_read_weight);
-    
+    readConfig("background_read_weight", bg_read_weight);    
+    readConfig("emergency_pct", emergency_pct);
+    readConfig("high_pct", high_pct);
+    readConfig("medium_pct", medium_pct);
+    readConfig("tune_base", tune_base);
+    readConfig("min_bytes_per_sec", min_bytes_per_sec);
+    readConfig("auto_tune_sec", auto_tune_sec);
+
     use_max_bytes_per_sec = (max_read_bytes_per_sec == 0 && max_write_bytes_per_sec == 0);
 
-    LOG_INFO(log, "storage.io_rate_limit " << toString());
+    LOG_DEBUG(log, "storage.io_rate_limit " << toString());
 }
 
 std::string StorageIORateLimitConfig::toString() const
 {
-    return " max_bytes_per_sec: " + std::to_string(max_bytes_per_sec) +
-        " max_read_bytes_per_sec: " + std::to_string(max_read_bytes_per_sec) +
-        " max_write_bytes_per_sec: " + std::to_string(max_write_bytes_per_sec) +
-        " use_max_bytes_per_sec: " + std::to_string(use_max_bytes_per_sec) +
-        " fg_write_weight: " + std::to_string(fg_write_weight) +
-        " bg_write_weight: " + std::to_string(bg_write_weight) +
-        " fg_read_weight: " + std::to_string(fg_read_weight) +
-        " bg_read_weight: " + std::to_string(bg_read_weight);
+    return fmt::format(
+        "max_bytes_per_sec {} max_read_bytes_per_sec {} max_write_bytes_per_sec {} use_max_bytes_per_sec {} "
+        "fg_write_weight {} bg_write_weight {} fg_read_weight {} bg_read_weight {} fg_write_max_bytes_per_sec {} "
+        "bg_write_max_bytes_per_sec {} fg_read_max_bytes_per_sec {} bg_read_max_bytes_per_sec {} emergency_pct {} high_pct {} "
+        "medium_pct {} tune_base {} min_bytes_per_sec {} auto_tune_sec {}",
+        max_bytes_per_sec, max_read_bytes_per_sec, max_write_bytes_per_sec, use_max_bytes_per_sec, fg_write_weight, bg_write_weight,
+        fg_read_weight, bg_read_weight, getFgWriteMaxBytesPerSec(), getBgWriteMaxBytesPerSec(), getFgReadMaxBytesPerSec(),
+        getBgReadMaxBytesPerSec(), emergency_pct, high_pct, medium_pct, tune_base, min_bytes_per_sec, auto_tune_sec);
 }
 
-UInt64 StorageIORateLimitConfig::readWeight() const
-{
-    return fg_read_weight + bg_read_weight;
-}
+UInt64 StorageIORateLimitConfig::readWeight() const { return fg_read_weight + bg_read_weight; }
 
-UInt64 StorageIORateLimitConfig::writeWeight() const
-{
-    return fg_write_weight + bg_write_weight;
-}
+UInt64 StorageIORateLimitConfig::writeWeight() const { return fg_write_weight + bg_write_weight; }
 
-UInt64 StorageIORateLimitConfig::totalWeight() const
-{
-    return readWeight() + writeWeight();
-}
+UInt64 StorageIORateLimitConfig::totalWeight() const { return readWeight() + writeWeight(); }
 
 UInt64 StorageIORateLimitConfig::getFgWriteMaxBytesPerSec() const
 {
@@ -355,7 +352,8 @@ UInt64 StorageIORateLimitConfig::getFgWriteMaxBytesPerSec() const
     {
         return 0;
     }
-    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * fg_write_weight : max_write_bytes_per_sec / writeWeight() * fg_write_weight;
+    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * fg_write_weight
+                                 : max_write_bytes_per_sec / writeWeight() * fg_write_weight;
 }
 
 UInt64 StorageIORateLimitConfig::getBgWriteMaxBytesPerSec() const
@@ -364,7 +362,8 @@ UInt64 StorageIORateLimitConfig::getBgWriteMaxBytesPerSec() const
     {
         return 0;
     }
-    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * bg_write_weight : max_write_bytes_per_sec / writeWeight() * bg_write_weight;
+    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * bg_write_weight
+                                 : max_write_bytes_per_sec / writeWeight() * bg_write_weight;
 }
 
 UInt64 StorageIORateLimitConfig::getFgReadMaxBytesPerSec() const
@@ -373,7 +372,8 @@ UInt64 StorageIORateLimitConfig::getFgReadMaxBytesPerSec() const
     {
         return 0;
     }
-    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * fg_read_weight : max_read_bytes_per_sec / readWeight() * fg_read_weight;
+    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * fg_read_weight
+                                 : max_read_bytes_per_sec / readWeight() * fg_read_weight;
 }
 
 UInt64 StorageIORateLimitConfig::getBgReadMaxBytesPerSec() const
@@ -382,17 +382,27 @@ UInt64 StorageIORateLimitConfig::getBgReadMaxBytesPerSec() const
     {
         return 0;
     }
-    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * bg_read_weight : max_read_bytes_per_sec / readWeight() * bg_read_weight;
+    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * bg_read_weight
+                                 : max_read_bytes_per_sec / readWeight() * bg_read_weight;
 }
 
-bool StorageIORateLimitConfig::operator ==(const StorageIORateLimitConfig& config) const
+UInt64 StorageIORateLimitConfig::getWriteMaxBytesPerSec() const { return getBgWriteMaxBytesPerSec() + getFgWriteMaxBytesPerSec(); }
+
+UInt64 StorageIORateLimitConfig::getReadMaxBytesPerSec() const { return getBgReadMaxBytesPerSec() + getFgReadMaxBytesPerSec(); }
+
+bool StorageIORateLimitConfig::needUpdateLimiter(const StorageIORateLimitConfig & config) const
 {
-    return config.max_bytes_per_sec == max_bytes_per_sec &&
-        config.max_read_bytes_per_sec == max_read_bytes_per_sec &&
-        config.max_write_bytes_per_sec == max_write_bytes_per_sec &&
-        config.bg_write_weight == bg_write_weight &&
-        config.fg_write_weight == fg_write_weight &&
-        config.bg_read_weight == bg_read_weight &&
-        config.fg_read_weight == fg_read_weight;
+    return !(config.max_bytes_per_sec == max_bytes_per_sec && config.max_read_bytes_per_sec == max_read_bytes_per_sec
+        && config.max_write_bytes_per_sec == max_write_bytes_per_sec && config.bg_write_weight == bg_write_weight
+        && config.fg_write_weight == fg_write_weight && config.bg_read_weight == bg_read_weight && config.fg_read_weight == fg_read_weight);
+}
+
+bool StorageIORateLimitConfig::operator==(const StorageIORateLimitConfig & config) const
+{
+    return config.max_bytes_per_sec == max_bytes_per_sec && config.max_read_bytes_per_sec == max_read_bytes_per_sec
+        && config.max_write_bytes_per_sec == max_write_bytes_per_sec && config.bg_write_weight == bg_write_weight
+        && config.fg_write_weight == fg_write_weight && config.bg_read_weight == bg_read_weight && config.fg_read_weight == fg_read_weight
+        && config.emergency_pct == emergency_pct && config.high_pct == high_pct && config.medium_pct == medium_pct
+        && config.tune_base == tune_base && config.min_bytes_per_sec == min_bytes_per_sec && config.auto_tune_sec == auto_tune_sec;
 }
 } // namespace DB
