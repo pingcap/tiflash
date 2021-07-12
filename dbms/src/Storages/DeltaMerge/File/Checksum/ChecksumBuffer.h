@@ -129,10 +129,13 @@ template <typename Backend>
 class FramedChecksumReadBuffer : public ReadBufferFromFileDescriptor
 {
 public:
-    explicit FramedChecksumReadBuffer(RandomAccessFilePtr in_, size_t block_size = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE)
+    explicit FramedChecksumReadBuffer(RandomAccessFilePtr in_,
+                                      size_t              block_size    = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE,
+                                      bool                skipChecksum_ = false)
         : ReadBufferFromFileDescriptor(
             in_->getFd(), sizeof(ChecksumFrame<Backend>) + block_size + 512, nullptr, alignof(ChecksumFrame<Backend>)),
           frameSize(block_size),
+          skipChecksum(skipChecksum_),
           in(std::move(in_))
     {
         // adjust alignment, aligned memory boundary can make it fast for digesting
@@ -150,6 +153,7 @@ public:
 private:
     size_t              currentFrame;
     const size_t        frameSize;
+    const bool          skipChecksum;
     RandomAccessFilePtr in;
     size_t              expectRead(Position pos, size_t size)
     {
@@ -188,13 +192,17 @@ private:
         }
 
         // examine checksum
-        auto digest = Backend{};
-        digest.update(frame.data, frame.bytes);
-        if (unlikely(frame.checksum != digest.checksum()))
+        if (!skipChecksum)
         {
-            // TODO: change throw behavior
-            throw Poco::ReadFileException("file corruption detected", -errno);
+            auto digest = Backend{};
+            digest.update(frame.data, frame.bytes);
+            if (unlikely(frame.checksum != digest.checksum()))
+            {
+                // TODO: change throw behavior
+                throw Poco::ReadFileException("file corruption detected", -errno);
+            }
         }
+
         // shift position, because the last frame may be of less length
         working_buffer.resize(length);
     }
