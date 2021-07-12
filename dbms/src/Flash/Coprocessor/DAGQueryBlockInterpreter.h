@@ -67,15 +67,18 @@ struct AnalysisResult
     bool need_timezone_cast_after_tablescan = false;
     bool has_where = false;
     bool need_aggregate = false;
+    bool has_having = false;
     bool has_order_by = false;
 
     ExpressionActionsPtr timezone_cast;
     ExpressionActionsPtr before_where;
     ExpressionActionsPtr before_aggregation;
+    ExpressionActionsPtr before_having;
     ExpressionActionsPtr before_order_and_select;
     ExpressionActionsPtr final_projection;
 
     String filter_column_name;
+    String having_column_name;
     std::vector<NameAndTypePair> order_columns;
     /// Columns from the SELECT list, before renaming them to aliases.
     Names selected_columns;
