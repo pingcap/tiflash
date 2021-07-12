@@ -376,11 +376,14 @@ struct MPPTaskHolder : std::enable_shared_from_this<MPPTaskHolder>
     MPPTaskPtr task;
     std::thread worker_thread;
 
-    MPPTaskHolder(const MPPTaskPtr & task_) : task(std::move(task_)) {}
+    Logger * log;
+
+    MPPTaskHolder(const MPPTaskPtr & task_) : task(std::move(task_)), log(&Logger::get("MPPTaskHolder")) {}
 
     void run()
     {
         // We make the worker thread holding a reference of this instance.
+        // Otherwise, this object will get released during the execution.
         auto myself = shared_from_this();
         std::thread t([=]() { myself->task->runImpl(); });
         worker_thread = std::move(t);
@@ -390,6 +393,10 @@ struct MPPTaskHolder : std::enable_shared_from_this<MPPTaskHolder>
     {
         // This could be the second time to call cancel, but never mind.
         task->cancel("MPPTaskHolder release");
+
+        LOG_DEBUG(
+            log, "worker_thread.get_id(): " << worker_thread.get_id() << ", std::this_thread::get_id(): " << std::this_thread::get_id());
+
         if (worker_thread.get_id() != std::this_thread::get_id() && worker_thread.joinable())
             worker_thread.join();
     }
