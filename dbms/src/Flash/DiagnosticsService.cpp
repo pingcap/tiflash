@@ -3,6 +3,7 @@
 #include <Flash/LogSearch.h>
 #include <Poco/Path.h>
 #include <Storages/PathPool.h>
+#include <fmt/core.h>
 #include <re2/re2.h>
 
 #ifdef __linux__
@@ -459,8 +460,7 @@ void DiagnosticsService::cpuLoadInfo(
         {
             ServerInfoPair pair;
             pair.set_key(p.first);
-            char buff[20];
-            std::sprintf(buff, "%.2lf", p.second);
+            auto buff = fmt::format("{0:.2f}", p.second);
             pair.set_value(buff);
             pairs.emplace_back(std::move(pair));
         }
@@ -495,19 +495,14 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
     uint64_t free_swap = meminfo.at("SwapFree") * KB;
     uint64_t used_swap = total_swap - free_swap;
 
-    char buffer[10];
     double used_memory_percent = static_cast<double>(used_memory) / static_cast<double>(total_memory);
-    std::sprintf(buffer, "%.2lf", used_memory_percent);
-    std::string used_memory_percent_str(buffer);
+    std::string used_memory_percent_str = fmt::format("{0:.2f}", used_memory_percent);
     double free_memory_percent = static_cast<double>(free_memory) / static_cast<double>(total_memory);
-    std::sprintf(buffer, "%.2lf", free_memory_percent);
-    std::string free_memory_percent_str(buffer);
+    std::string free_memory_percent_str = fmt::format("{0:.2f}", free_memory_percent);
     double used_swap_percent = static_cast<double>(used_swap) / static_cast<double>(total_swap);
-    std::sprintf(buffer, "%.2lf", used_swap_percent);
-    std::string used_swap_percent_str(buffer);
+    std::string used_swap_percent_str = fmt::format("{0:.2f}", used_swap_percent);
     double free_swap_percent = static_cast<double>(free_swap) / static_cast<double>(total_swap);
-    std::sprintf(buffer, "%.2lf", free_swap_percent);
-    std::string free_swap_percent_str(buffer);
+    std::string free_swap_percent_str = fmt::format("{0:.2f}", free_swap_percent);
 
     std::vector<std::pair<std::string, std::string>> memory_infos{//
         {"total", std::to_string(total_memory)},                  //
@@ -594,9 +589,8 @@ void DiagnosticsService::nicLoadInfo(const NICInfo & prev_nic, std::vector<diagn
         {
             ServerInfoPair pair;
             pair.set_key(info.first);
-            char buffer[10];
-            std::sprintf(buffer, "%.2lf", info.second);
-            pair.set_value(std::string(buffer));
+            std::string buffer = fmt::format("{0:.2lf}", info.second);
+            pair.set_value(buffer);
             pairs.emplace_back(std::move(pair));
         }
         ServerInfoItem item;
@@ -640,9 +634,8 @@ void DiagnosticsService::ioLoadInfo(
         {
             ServerInfoPair pair;
             pair.set_key(info.first);
-            char buffer[10];
-            std::sprintf(buffer, "%.2lf", info.second);
-            pair.set_value(std::string(buffer));
+            std::string buffer = fmt::format("{0:.2f}", info.second);
+            pair.set_value(buffer);
             pairs.emplace_back(std::move(pair));
         }
         ServerInfoItem item;
@@ -755,13 +748,10 @@ void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoI
         size_t free = disk.available_space;
         size_t used = total - free;
 
-        char buffer[10];
         double free_percent = static_cast<double>(free) / static_cast<double>(total);
-        std::sprintf(buffer, "%.2lf", free_percent);
-        std::string free_percent_str(buffer);
+        std::string free_percent_str = fmt::format("{0:.2f}", free_percent);
         double used_percent = static_cast<double>(used) / static_cast<double>(total);
-        std::sprintf(buffer, "%.2lf", used_percent);
-        std::string used_percent_str(buffer);
+        std::string used_percent_str = fmt::format("{0:.2f}", used_percent);
 
         std::vector<std::pair<std::string, std::string>> infos{{"type", disk.disk_type == disk.HDD ? "HDD" : "SSD"},
             {"fstype", disk.fs_type}, {"path", mount_point}, {"total", std::to_string(total)}, {"free", std::to_string(free)},
