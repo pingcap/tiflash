@@ -206,12 +206,18 @@ private:
 
     FileProviderPtr file_provider;
 
+    struct WritingPageFile
+    {
+        PageFile file;
+        // use to protect reading WriteBatches from writable PageFile's meta in GC
+        size_t last_persisted_meta_offset;
+    };
     std::mutex write_mutex; // A mutex protect `idle_writers`,`write_files` and `statistics`.
 
-    std::condition_variable write_mutex_cv;
-    std::vector<PageFile>   write_files;
-    std::deque<WriterPtr>   idle_writers;
-    StatisticsInfo          statistics;
+    std::condition_variable      write_mutex_cv;
+    std::vector<WritingPageFile> write_files;
+    std::deque<WriterPtr>        idle_writers;
+    StatisticsInfo               statistics;
 
     // A sequence number to keep ordering between multi-writers.
     std::atomic<WriteBatch::SequenceID> write_batch_seq = 0;
@@ -233,6 +239,12 @@ private:
 
     // For reporting metrics to prometheus
     TiFlashMetricsPtr metrics;
+
+private:
+    WriterPtr checkAndRenewWriter(WritingPageFile & page_file,
+                                  const String &    parent_path_hint,
+                                  WriterPtr &&      old_writer  = nullptr,
+                                  const String &    logging_msg = "");
 };
 
 class PageReader : private boost::noncopyable
