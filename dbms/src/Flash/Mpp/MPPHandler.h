@@ -367,7 +367,11 @@ private:
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;
 
-struct MPPTaskHolder
+struct MPPTaskHolder;
+using MPPTaskHolderPtr = std::shared_ptr<MPPTaskHolder>;
+using MPPTaskHolderWeakPtr = std::weak_ptr<MPPTaskHolder>;
+
+struct MPPTaskHolder : std::enable_shared_from_this<MPPTaskHolder>
 {
     MPPTaskPtr task;
     std::thread worker_thread;
@@ -376,7 +380,9 @@ struct MPPTaskHolder
 
     void run()
     {
-        std::thread t(&MPPTask::runImpl, task);
+        // We make the worker thread holding a reference of this instance.
+        auto myself = shared_from_this();
+        std::thread t([=]() { myself->task->runImpl(); });
         worker_thread = std::move(t);
     }
 
@@ -388,9 +394,9 @@ struct MPPTaskHolder
             worker_thread.join();
     }
 };
-using MPPTaskHolderPtr = std::shared_ptr<MPPTaskHolder>;
 
-using MPPTaskMap = std::map<MPPTaskId, MPPTaskHolderPtr>;
+
+using MPPTaskMap = std::map<MPPTaskId, MPPTaskHolderWeakPtr>;
 
 struct MPPQueryTaskSet
 {

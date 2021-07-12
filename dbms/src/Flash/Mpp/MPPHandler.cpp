@@ -529,7 +529,7 @@ MPPTaskManager::MPPTaskManager() : log(&Logger::get("TaskManager")) {}
 MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg)
 {
     MPPTaskId id{meta.start_ts(), meta.task_id()};
-    std::map<MPPTaskId, MPPTaskHolderPtr>::iterator it;
+    std::map<MPPTaskId, MPPTaskHolderWeakPtr>::iterator it;
     bool cancelled = false;
     std::unique_lock<std::mutex> lock(mu);
     auto ret = cv.wait_for(lock, timeout, [&] {
@@ -552,15 +552,19 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
     if (cancelled)
     {
         errMsg = "Task [" + DB::toString(meta.start_ts()) + "," + DB::toString(meta.task_id()) + "] has been cancelled.";
-        return nullptr;
+        return {};
     }
     else if (!ret)
     {
         errMsg = "Can't find task [" + DB::toString(meta.start_ts()) + "," + DB::toString(meta.task_id()) + "] within "
             + DB::toString(timeout.count()) + " s.";
-        return nullptr;
+        return {};
     }
-    return it->second->task;
+    auto task_holder = it->second.lock();
+    if (!task_holder)
+        errMsg = "Task already released [" + DB::toString(meta.start_ts()) + "," + DB::toString(meta.task_id()) + "] within "
+            + DB::toString(timeout.count()) + " s.";
+    return task_holder->task;
 }
 
 void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
@@ -585,8 +589,9 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
     for (auto task_it = task_set.task_map.rbegin(); task_it != task_set.task_map.rend(); task_it++)
     {
         ss << task_it->first.toString() << " ";
-        auto task = task_it->second;
-        task->task->cancel(reason);
+        auto task = task_it->second.lock();
+        if (task)
+            task->task->cancel(reason);
     }
     LOG_WARNING(log, ss.str());
 
@@ -621,7 +626,7 @@ bool MPPTaskManager::registerTask(const MPPTaskHolderPtr & task_holder)
     {
         throw Exception("The task " + task->id.toString() + " has been registered");
     }
-    mpp_query_map[task->id.start_ts].task_map.emplace(task->id, task_holder);
+    mpp_query_map[task->id.start_ts].task_map.emplace(task->id, MPPTaskHolderWeakPtr(task_holder));
     task->manager = this;
     cv.notify_all();
     return true;
