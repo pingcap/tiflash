@@ -68,7 +68,7 @@ constexpr char DM_CHECKSUM_BUFFER_TEST_PATH[] = "/tmp/tiflash_dm_checksum_buffer
 } // namespace
 
 #define TEST_STREAM(ALGO) \
-    TEST(DMChecksumBuffer, ALGO##Streaming) { runStreamingTest<Digest::ALGO>(); }
+    TEST(DMChecksumBuffer, ALGO##Streaming) { runStreamingTest<Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
 
 template <class D>
 void runStreamingTest()
@@ -101,7 +101,7 @@ TEST_STREAM(City128)
 TEST_STREAM(XXH3)
 
 #define TEST_SEEK(ALGO) \
-    TEST(DMChecksumBuffer, ALGO##Seeking) { runSeekingTest<Digest::ALGO>(); }
+    TEST(DMChecksumBuffer, ALGO##Seeking) { runSeekingTest<Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
 
 template <class D>
 void runSeekingTest()
