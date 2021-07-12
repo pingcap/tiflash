@@ -16,28 +16,6 @@ namespace DB
 namespace DM
 {
 
-
-class ProxyWriteBuffer : public DB::WriteBuffer
-{
-private:
-    WriteBuffer & out;
-
-    void nextImpl() override
-    {
-        out.position() = pos;
-        out.next();
-        working_buffer = out.buffer();
-    }
-
-public:
-    explicit ProxyWriteBuffer(DB::WriteBuffer & out_) : DB::WriteBuffer(nullptr, 0), out(out_)
-    {
-        out.next(); /// If something has already been written to `out` before us, we will not let the remains of this data affect the hash.
-        working_buffer = out.buffer();
-        pos            = working_buffer.begin();
-    }
-};
-
 class DMFileWriter
 {
 public:
@@ -87,7 +65,7 @@ public:
         // bytes of `minmaxes` won't be counted in this method.
         size_t getWrittenBytes() { return plain_file->getPositionInFile() + mark_file.getPositionInFile(); }
 
-        /// original_hashing -> compressed_buf -> plain_hashing -> plain_file
+        /// original_layer -> compressed_buf -> plain_layer -> plain_file
         WriteBufferFromFileBasePtr plain_file;
         WriteBufferProxy           plain_layer;
         CompressedWriteBuffer      compressed_buf;
