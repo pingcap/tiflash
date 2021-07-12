@@ -30,15 +30,15 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWr
 }
 
 template <class StreamWriterPtr>
-template <bool collect_execution_info>
+template <bool for_last_response>
 void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
 {
     tipb::SelectResponse response;
-    if constexpr (collect_execution_info)
+    if constexpr (for_last_response)
         addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
     if (exchange_type == tipb::ExchangeType::Hash)
     {
-        thread_pool.schedule(getEncodePartitionTask(blocks, response));
+        thread_pool.schedule(getEncodePartitionTask<for_last_response>(blocks, response));
     }
     else
     {
@@ -128,6 +128,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
 }
 
 template <class StreamWriterPtr>
+template <bool for_last_response>
 ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionTask(
     std::vector<Block> & input_blocks, tipb::SelectResponse & response) const
 {
@@ -135,6 +136,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
     return [this, input_blocks, response]() mutable {
         std::vector<std::unique_ptr<ChunkCodecStream>> chunk_codec_stream(partition_num);
         std::vector<tipb::SelectResponse> responses(partition_num);
+        std::vector<size_t> responses_row_count(partition_num);
         for (auto i = 0; i < partition_num; ++i)
         {
             if (encode_type == tipb::EncodeType::TypeDefault)
@@ -217,6 +219,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             // serialize each partitioned block and write it to its destination
             for (auto part_id = 0; part_id < partition_num; ++part_id)
             {
+                responses_row_count[part_id] += dest_blocks[part_id].rows();
                 dest_blocks[part_id].setColumns(std::move(dest_tbl_cols[part_id]));
                 chunk_codec_stream[part_id]->encode(dest_blocks[part_id], 0, dest_blocks[part_id].rows());
                 auto dag_chunk = responses[part_id].add_chunks();
@@ -227,7 +230,15 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
 
         for (auto part_id = 0; part_id < partition_num; ++part_id)
         {
-            writer->write(responses[part_id], part_id);
+            if constexpr (for_last_response)
+            {
+                writer->write(responses[part_id], part_id);
+            }
+            else
+            {
+                if (responses_row_count[part_id] > 0)
+                    writer->write(responses[part_id], part_id);
+            }
         }
     };
 }
@@ -244,7 +255,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     {
         blocks.push_back(block);
     }
-    if ((Int64)rows_in_blocks > records_per_chunk)
+    if (rows_in_blocks > 0 && (Int64)rows_in_blocks > records_per_chunk)
     {
         ScheduleEncodeTask<false>();
     }
