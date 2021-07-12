@@ -84,6 +84,10 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
     const ValidPages &                   files_valid_pages,
     const std::set<PageFileIdAndLevel> & writing_file_ids) const
 {
+#ifdef PAGE_STORAGE_UTIL_DEBUGGGING
+    LOG_TRACE(log, storage_name << " input size of candidates: " << page_files.size());
+#endif
+
     PageFileSet candidates;
     size_t      candidate_total_size = 0;
     size_t      num_migrate_pages    = 0;
