@@ -11,6 +11,8 @@
 // #include <linux/if_packet.h>
 // #include <sys/socket.h>
 #include <sys/statvfs.h>
+
+#include <memory>
 #endif
 
 namespace DB
@@ -50,6 +52,11 @@ static DiagnosticsService::AvgLoad getAvgLoadLinux()
     std::getline(file, str);
     std::vector<std::string> values;
     boost::split(values, str, boost::is_any_of(" "));
+    if (values.size() < 3)
+    {
+        LOG_WARNING(&Logger::get("DiagnosticsService"), "Cannot parse /proc/loadavg");
+        return DiagnosticsService::AvgLoad{};
+    }
     return DiagnosticsService::AvgLoad{std::stod(values[0]), std::stod(values[1]), std::stod(values[2])};
 }
 #endif
@@ -80,7 +87,7 @@ static MemoryInfo getMemoryInfoLinux()
     {
         std::string name;
         std::string kb_str;
-        if (RE2::FullMatch(line, "([\\w\\(\\)]+):\\s+([0-9]+).*", &name, &kb_str))
+        if (RE2::FullMatch(line, R"(([\w\(\)]+):\s+([0-9]+).*)", &name, &kb_str))
         {
             uint64_t kb = std::stoul(kb_str);
             memory_info.emplace(name, kb);
@@ -121,7 +128,7 @@ static DiagnosticsService::NICInfo getNICInfoLinux()
         });
         std::vector<Poco::File> stat_files;
         statistics->list(stat_files);
-        DiagnosticsService::NICLoad load_info;
+        DiagnosticsService::NICLoad load_info{};
         for (auto & stat : stat_files)
         {
             Poco::Path path(stat.path());
@@ -147,7 +154,7 @@ static DiagnosticsService::NICInfo getNICInfoLinux()
         }
 
         Poco::Path device_path(device.path());
-        nic_info.emplace(device_path.getFileName(), std::move(load_info));
+        nic_info.emplace(device_path.getFileName(), load_info);
     }
     return nic_info;
 }
@@ -184,13 +191,18 @@ static DiagnosticsService::IOInfo getIOInfoLinux()
         std::getline(file, value);
         std::vector<std::string> values;
         boost::split(values, value, boost::is_any_of("\t "), boost::token_compress_on);
+        if (values.size() < 11)
+        {
+            LOG_WARNING(&Logger::get("DiagnosticsService"), "Cannot parse /sys/block");
+            return io_info;
+        }
         /// TODO: better to initialize with field names
         DiagnosticsService::IOLoad load{std::stod(values[0]), std::stod(values[1]), std::stod(values[2]), std::stod(values[3]),
             std::stod(values[4]), std::stod(values[5]), std::stod(values[6]), std::stod(values[7]), std::stod(values[8]),
             std::stod(values[9]), std::stod(values[10])};
 
         Poco::Path device_path(device.path());
-        io_info.emplace(device_path.getFileName(), std::move(load));
+        io_info.emplace(device_path.getFileName(), load);
     }
     return io_info;
 }
@@ -552,11 +564,11 @@ void DiagnosticsService::cpuLoadInfo(
         auto avg_load = getAvgLoad();
         std::vector<std::pair<std::string, double>> names{{"load1", avg_load.one}, {"load5", avg_load.five}, {"load15", avg_load.fifteen}};
         std::vector<ServerInfoPair> pairs;
-        for (size_t i = 0; i < names.size(); i++)
+        for (auto & name : names)
         {
             ServerInfoPair pair;
-            pair.set_key(names[i].first);
-            pair.set_value(std::to_string(names[i].second));
+            pair.set_key(name.first);
+            pair.set_value(std::to_string(name.second));
             pairs.emplace_back(std::move(pair));
         }
         ServerInfoItem item;
@@ -584,7 +596,7 @@ void DiagnosticsService::cpuLoadInfo(
             return;
         }
 
-        LinuxCpuTime delta;
+        LinuxCpuTime delta{};
         delta.user = cpu_time->user - prev_cpu_time->user;
         delta.nice = cpu_time->nice - prev_cpu_time->nice;
         delta.system = cpu_time->system - prev_cpu_time->system;
@@ -596,7 +608,7 @@ void DiagnosticsService::cpuLoadInfo(
         delta.guest = cpu_time->guest - prev_cpu_time->guest;
         delta.guest_nice = cpu_time->guest_nice - prev_cpu_time->guest_nice;
 
-        double delta_total = static_cast<double>(delta.total());
+        auto delta_total = static_cast<double>(delta.total());
 
         std::vector<std::pair<std::string, double>> data{{"user", static_cast<double>(delta.user) / delta_total},
             {"nice", static_cast<double>(delta.nice) / delta_total}, {"system", static_cast<double>(delta.system) / delta_total},
@@ -687,11 +699,11 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
         ServerInfoItem item;
         item.set_name("virtual");
         item.set_tp("memory");
-        for (size_t i = 0; i < pairs.size(); i++)
+        for (auto & pair : pairs)
         {
             auto added_pair = item.add_pairs();
-            added_pair->set_key(pairs[i].key());
-            added_pair->set_value(pairs[i].value());
+            added_pair->set_key(pair.key());
+            added_pair->set_value(pair.value());
         }
         server_info_items.emplace_back(std::move(item));
     }
@@ -710,11 +722,11 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
         ServerInfoItem item;
         item.set_name("swap");
         item.set_tp("memory");
-        for (size_t i = 0; i < pairs.size(); i++)
+        for (auto & pair : pairs)
         {
             auto added_pair = item.add_pairs();
-            added_pair->set_key(pairs[i].key());
-            added_pair->set_value(pairs[i].value());
+            added_pair->set_key(pair.key());
+            added_pair->set_value(pair.value());
         }
         server_info_items.emplace_back(std::move(item));
     }
@@ -1000,7 +1012,7 @@ try
 
     // auto resp = ServerInfoResponse::default_instance();
     auto & resp = *response;
-    for (auto item : items)
+    for (auto & item : items)
     {
         auto added_item = resp.add_items();
         added_item->set_name(item.name());
@@ -1052,7 +1064,7 @@ catch (const Exception & e)
         patterns.push_back(pattern);
     }
 
-    auto in_ptr = std::shared_ptr<std::ifstream>(new std::ifstream(log_file.path()));
+    auto in_ptr = std::make_shared<std::ifstream>(log_file.path());
 
     LogIterator log_itr(start_time, end_time, levels, patterns, in_ptr);
 
