@@ -76,7 +76,8 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
         switch (current->tp())
         {
             case tipb::ExecType::TypeSelection:
-                if (current->selection().child().has_aggregation())
+                if (current->selection().child().tp() == tipb::ExecType::TypeAggregation
+                    || current->selection().child().tp() == tipb::ExecType::TypeStreamAgg)
                 {
                     /// if the selection is after the aggregation, then it is having, need to be
                     /// executed after aggregation.
