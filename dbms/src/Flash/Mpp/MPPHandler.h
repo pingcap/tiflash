@@ -429,28 +429,32 @@ public:
     MPPTaskManager();
     ~MPPTaskManager();
 
-    std::vector<UInt64> getCurrentQueries()
-    {
-        std::vector<UInt64> ret;
-        std::lock_guard<std::mutex> lock(mu);
-        for (auto & it : mpp_query_map)
-        {
-            ret.push_back(it.first);
-        }
-        return ret;
-    }
+//    std::vector<UInt64> getCurrentQueries()
+//    {
+//        std::vector<UInt64> ret;
+//        std::lock_guard<std::mutex> lock(mu);
+//        for (auto & it : mpp_query_map)
+//        {
+//            ret.push_back(it.first);
+//        }
+//        return ret;
+//    }
 
-    std::vector<MPPTaskPtr> getCurrentTasksForQuery(UInt64 query_id)
-    {
-        std::vector<MPPTaskPtr> ret;
-        std::lock_guard<std::mutex> lock(mu);
-        const auto & it = mpp_query_map.find(query_id);
-        if (it == mpp_query_map.end() || it->second.to_be_cancelled)
-            return ret;
-        for (const auto & task_it : it->second.task_map)
-            ret.push_back(task_it.second->task);
-        return ret;
-    }
+//    std::vector<MPPTaskPtr> getCurrentTasksForQuery(UInt64 query_id)
+//    {
+//        std::vector<MPPTaskPtr> ret;
+//        std::lock_guard<std::mutex> lock(mu);
+//        const auto & it = mpp_query_map.find(query_id);
+//        if (it == mpp_query_map.end() || it->second.to_be_cancelled)
+//            return ret;
+//        for (const auto & task_it : it->second.task_map)
+//        {
+//            auto task_holder = task_it.second.lock();
+//            if (task_holder)
+//                ret.push_back(task_holder->task);
+//        }
+//        return ret;
+//    }
 
     bool registerTask(const MPPTaskHolderPtr & task);
 
