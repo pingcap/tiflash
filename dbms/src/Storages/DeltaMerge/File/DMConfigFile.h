@@ -1,8 +1,10 @@
 #pragma once
+#include <Common/config_version.h>
 #include <Poco/DynamicStruct.h>
 #include <Poco/JSON/JSON.h>
 #include <Poco/JSON/Parser.h>
 #include <Storages/DeltaMerge/File/Checksum/Checksum.h>
+#include <Storages/DeltaMerge/File/Checksum/ChecksumBuffer.h>
 
 #include <map>
 #include <string>
@@ -80,10 +82,14 @@ public:
         }
     }
 
-    DMConfiguration(size_t                             checksumFrameLength_,
-                    ChecksumAlgo                       checksumAlgorithm_,
-                    std::map<std::string, std::string> embeddedChecksum_,
-                    std::map<std::string, std::string> debugInfo_)
+    explicit DMConfiguration(std::map<std::string, std::string> embeddedChecksum_,
+                             size_t                             checksumFrameLength_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE,
+                             ChecksumAlgo                       checksumAlgorithm_   = ChecksumAlgo::XXH3,
+                             std::map<std::string, std::string> debugInfo_           = {{"creationCommitHash", TIFLASH_GIT_HASH},
+                                                                              {"creationEdition", TIFLASH_EDITION},
+                                                                              {"creationVersion", TIFLASH_VERSION},
+                                                                              {"creationReleaseVersion", TIFLASH_RELEASE_VERSION},
+                                                                              {"creationBuildTime", TIFLASH_UTC_BUILD_TIME}})
         : checksumFrameLength(checksumFrameLength_),
           checksumAlgorithm(checksumAlgorithm_),
           embeddedChecksum(std::move(embeddedChecksum_)),
@@ -97,6 +103,16 @@ public:
     [[nodiscard]] ChecksumAlgo                               getChecksumAlgorithm() const { return checksumAlgorithm; }
     [[nodiscard]] const std::map<std::string, std::string> & getEmbeddedChecksum() const { return embeddedChecksum; }
     [[nodiscard]] const std::map<std::string, std::string> & getDebugInfo() const { return debugInfo; }
+
+    template <class T>
+    void addChecksum(std::string name, T checksum)
+    {
+        std::ostringstream  tmp;
+        Poco::Base64Encoder enc{tmp};
+        enc.write(reinterpret_cast<const char *>(&checksum), sizeof(std::decay_t<T>));
+        enc.flush();
+        embeddedChecksum.template emplace(std::move(name), tmp.str());
+    }
 
 private:
     size_t                             checksumFrameLength; // the length of checksum frame
@@ -170,4 +186,6 @@ inline std::ostream & operator<<(std::ostream & output, const DMConfiguration & 
     return output;
 };
 
+
+using DMConfigurationPtr = std::shared_ptr<DMConfiguration>;
 } // namespace DB::DM

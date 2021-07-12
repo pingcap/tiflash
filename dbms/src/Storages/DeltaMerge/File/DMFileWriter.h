@@ -8,6 +8,7 @@
 #include <IO/HashingWriteBuffer.h>
 #include <IO/WriteBufferFromOStream.h>
 #include <IO/WriteBufferProxy.h>
+#include <Storages/DeltaMerge/File/DMConfigFile.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 
@@ -157,22 +158,27 @@ public:
         size_t              min_compress_block_size;
         size_t              max_compress_block_size;
         Flags               flags;
+        DMConfigurationPtr  configuration;
 
-        Options() = default;
-
-        Options(CompressionSettings compression_settings_, size_t min_compress_block_size_, size_t max_compress_block_size_, Flags flags_)
+        Options(CompressionSettings compression_settings_,
+                size_t              min_compress_block_size_,
+                size_t              max_compress_block_size_,
+                Flags               flags_,
+                DMConfigurationPtr  configuration_)
             : compression_settings(compression_settings_),
               min_compress_block_size(min_compress_block_size_),
               max_compress_block_size(max_compress_block_size_),
-              flags(flags_)
+              flags(flags_),
+              configuration(std::move(configuration_))
         {
         }
 
-        Options(const Options & from, const DMFilePtr & file)
+        Options(const Options & from, const DMFilePtr & file, DMConfigurationPtr configuration_)
             : compression_settings(from.compression_settings),
               min_compress_block_size(from.min_compress_block_size),
               max_compress_block_size(from.max_compress_block_size),
-              flags(from.flags)
+              flags(from.flags),
+              configuration(std::move(configuration_))
         {
             flags.setSingleFile(file->isSingleFileMode());
         }

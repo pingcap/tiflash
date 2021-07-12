@@ -10,7 +10,7 @@ namespace DB::DM
 template <ChecksumAlgo algo>
 void runSerializationTest()
 {
-    DMConfiguration original{TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, algo, {{"abc", "abc"}, {"123", "123"}}, {{"abc", "abc"}, {"123", "123"}}};
+    DMConfiguration original{{{"abc", "abc"}, {"123", "123"}}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, algo};
 
     std::stringstream ss;
     ss << original;

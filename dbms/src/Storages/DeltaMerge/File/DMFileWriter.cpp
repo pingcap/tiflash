@@ -15,7 +15,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &             dmfile_,
                            const DMFileWriter::Options & options_)
     : dmfile(dmfile_),
       write_columns(write_columns_),
-      options(options_, dmfile),
+      options(options_, dmfile, nullptr), // TODO: import real settings
       // assume pack_stat_file is the first file created inside DMFile
       // it will create encryption info for the whole DMFile
       pack_stat_file((options.flags.isSingleFile()) //
