@@ -619,7 +619,7 @@ bool MPPTaskManager::registerTask(const MPPTaskHolderPtr & task_holder)
     {
         throw Exception("The task " + task->id.toString() + " has been registered");
     }
-    mpp_query_map[task->id.start_ts].task_map.emplace(task->id, task);
+    mpp_query_map[task->id.start_ts].task_map.emplace(task->id, task_holder);
     task->manager = this;
     cv.notify_all();
     return true;
