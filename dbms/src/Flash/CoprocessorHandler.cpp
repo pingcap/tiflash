@@ -66,13 +66,15 @@ grpc::Status CoprocessorHandler::execute()
                     throw TiFlashException(
                         "DAG request with rpn expression is not supported in TiFlash", Errors::Coprocessor::Unimplemented);
                 tipb::SelectResponse dag_response;
-                std::unordered_map<RegionID, RegionInfo> regions;
+                RegionInfoMap regions;
+                RegionInfoList retry_regions;
+
                 const std::unordered_set<UInt64> bypass_lock_ts(
                     cop_context.kv_context.resolved_locks().begin(), cop_context.kv_context.resolved_locks().end());
                 regions.emplace(cop_context.kv_context.region_id(),
                     RegionInfo(cop_context.kv_context.region_id(), cop_context.kv_context.region_epoch().version(),
                         cop_context.kv_context.region_epoch().conf_ver(), GenCopKeyRange(cop_request->ranges()), &bypass_lock_ts));
-                DAGDriver driver(cop_context.db_context, dag_request, regions,
+                DAGDriver driver(cop_context.db_context, dag_request, regions, retry_regions,
                     cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
                     &dag_response);
                 driver.execute();

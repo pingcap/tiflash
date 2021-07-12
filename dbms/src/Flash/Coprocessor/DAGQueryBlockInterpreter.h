@@ -27,7 +27,7 @@ using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 class DAGQuerySource;
 class DAGQueryBlock;
-class RegionInfo;
+struct RegionInfo;
 class ExchangeReceiver;
 class DAGExpressionAnalyzer;
 class ExpressionActions;

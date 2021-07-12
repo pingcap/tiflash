@@ -47,21 +47,23 @@ grpc::Status BatchCoprocessorHandler::execute()
                     dag_req.ParseFromString(cop_request->data());
                     std::move(dag_req);
                 });
-                std::unordered_map<RegionID, RegionInfo> regions;
+                RegionInfoMap regions;
+                RegionInfoList retry_regions;
                 for (auto & r : cop_request->regions())
                 {
                     auto res = regions.emplace(r.region_id(),
                         RegionInfo(
                             r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), GenCopKeyRange(r.ranges()), nullptr));
                     if (!res.second)
-                        throw TiFlashException(
-                            std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + std::to_string(r.region_id()),
-                            Errors::Coprocessor::BadRequest);
+                    {
+                        retry_regions.emplace_back(RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
+                            CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+                    }
                 }
                 LOG_DEBUG(log,
                     __PRETTY_FUNCTION__ << ": Handling " << regions.size() << " regions in DAG request: " << dag_request.DebugString());
 
-                DAGDriver<true> driver(cop_context.db_context, dag_request, regions,
+                DAGDriver<true> driver(cop_context.db_context, dag_request, regions, retry_regions,
                     cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
                     writer);
                 // batch execution;

@@ -29,8 +29,8 @@ RegionException::RegionReadStatus GetRegionReadStatus(
 }
 
 std::tuple<std::optional<std::unordered_map<RegionID, const RegionInfo &>>, RegionException::RegionReadStatus> //
-MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region_infos,
-    const std::unordered_set<RegionID> & region_force_retry, TMTContext & tmt, MvccQueryInfo & mvcc_info, TableID table_id)
+MakeRegionQueryInfos(const RegionInfoMap & dag_region_infos, const std::unordered_set<RegionID> & region_force_retry, TMTContext & tmt,
+    MvccQueryInfo & mvcc_info, TableID table_id)
 {
     mvcc_info.regions_query_info.clear();
     std::unordered_map<RegionID, const RegionInfo &> region_need_retry;

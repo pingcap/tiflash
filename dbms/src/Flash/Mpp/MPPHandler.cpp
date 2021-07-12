@@ -122,15 +122,18 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
                 Errors::Coprocessor::BadRequest);
         }
     }
-    std::unordered_map<RegionID, RegionInfo> regions;
+    RegionInfoMap regions;
+    RegionInfoList retry_regions;
     for (auto & r : task_request.regions())
     {
         auto res = regions.emplace(r.region_id(),
             RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
                 CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
         if (!res.second)
-            throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + std::to_string(r.region_id()),
-                Errors::Coprocessor::BadRequest);
+        {
+            retry_regions.emplace_back(RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
+                CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+        }
     }
     // set schema ver and start ts.
     auto schema_ver = task_request.schema_ver();
@@ -177,7 +180,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
 
-    DAGQuerySource dag(context, regions, *dag_req, true);
+    DAGQuerySource dag(context, regions, retry_regions, *dag_req, true);
 
     if (dag_context->isRootMPPTask())
     {
