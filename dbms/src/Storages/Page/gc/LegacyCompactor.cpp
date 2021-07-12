@@ -17,8 +17,8 @@ LegacyCompactor::LegacyCompactor(const PageStorage & storage)
 
 std::tuple<PageFileSet, PageFileSet, size_t> //
 LegacyCompactor::tryCompact(                 //
-    PageFileSet &&                       page_files,
-    const std::set<PageFileIdAndLevel> & writing_file_ids)
+    PageFileSet &&               page_files,
+    const WritingFilesSnapshot & writing_files)
 {
     // Select PageFiles to compact, all compacted WriteBatch will apply to `this->version_set`
     PageFileSet             page_files_to_remove;
@@ -26,7 +26,11 @@ LegacyCompactor::tryCompact(                 //
     WriteBatch::SequenceID  checkpoint_sequence = 0;
     std::optional<PageFile> old_checkpoint;
     std::tie(page_files_to_remove, page_files_to_compact, checkpoint_sequence, old_checkpoint)
-        = collectPageFilesToCompact(page_files, writing_file_ids);
+        = collectPageFilesToCompact(page_files, writing_files);
+
+    std::optional<PageFileIdAndLevel> min_writing_file_id_level = std::nullopt;
+    if (!writing_files.empty())
+        min_writing_file_id_level = writing_files.begin()->first;
 
     if (page_files_to_compact.size() < config.gc_min_legacy_num)
     {
@@ -35,10 +39,10 @@ LegacyCompactor::tryCompact(                 //
                   storage_name << " LegacyCompactor::tryCompact exit without compaction, candidates size: "
                                << page_files_to_compact.size() //
                                << ", compact_legacy_min_num: " << config.gc_min_legacy_num);
-        removePageFilesIf(page_files, [&writing_file_ids](const PageFile & pf) -> bool {
+        removePageFilesIf(page_files, [&min_writing_file_id_level](const PageFile & pf) -> bool {
             return
                 // Remove page files that maybe writing to
-                (!writing_file_ids.empty() && pf.fileIdLevel() >= *writing_file_ids.begin())
+                (min_writing_file_id_level && pf.fileIdLevel() >= *min_writing_file_id_level)
                 // Remove legacy/checkpoint files since we don't do gc on them later
                 || pf.getType() == PageFile::Type::Legacy || pf.getType() == PageFile::Type::Checkpoint;
         });
@@ -56,10 +60,10 @@ LegacyCompactor::tryCompact(                 //
         LOG_WARNING(log,
                     storage_name << " LegacyCompactor::tryCompact to checkpoint PageFile_" //
                                  << checkpoint_id.first << "_" << checkpoint_id.second << " is done before.");
-        removePageFilesIf(page_files, [&writing_file_ids](const PageFile & pf) -> bool {
+        removePageFilesIf(page_files, [&min_writing_file_id_level](const PageFile & pf) -> bool {
             return
                 // Remove page files that maybe writing to
-                (!writing_file_ids.empty() && pf.fileIdLevel() >= *writing_file_ids.begin())
+                (min_writing_file_id_level && pf.fileIdLevel() >= *min_writing_file_id_level)
                 // Remove legacy/checkpoint files since we don't do gc on them later
                 || pf.getType() == PageFile::Type::Legacy || pf.getType() == PageFile::Type::Checkpoint;
         });
@@ -102,12 +106,12 @@ LegacyCompactor::tryCompact(                 //
         for (const auto & pf : page_files_to_compact)
             page_files_to_remove.emplace(pf);
 
-        removePageFilesIf(page_files, [&page_files_to_remove, &writing_file_ids](const PageFile & pf) -> bool {
+        removePageFilesIf(page_files, [&page_files_to_remove, &min_writing_file_id_level](const PageFile & pf) -> bool {
             return //
                 // Remove page files have been compacted
                 page_files_to_remove.count(pf) > 0
                 // Remove page files that maybe writing to
-                || (!writing_file_ids.empty() && pf.fileIdLevel() >= *writing_file_ids.begin())
+                || (min_writing_file_id_level && pf.fileIdLevel() >= *min_writing_file_id_level)
                 // Remove legacy/checkpoint files since we don't do gc on them later
                 || pf.getType() == PageFile::Type::Legacy || pf.getType() == PageFile::Type::Checkpoint;
         });
@@ -117,15 +121,29 @@ LegacyCompactor::tryCompact(                 //
 }
 
 std::tuple<PageFileSet, PageFileSet, WriteBatch::SequenceID, std::optional<PageFile>>
-LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const std::set<PageFileIdAndLevel> & writing_file_ids)
+LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const WritingFilesSnapshot & writing_files)
 {
     PageStorage::MetaMergingQueue merging_queue;
     for (auto & page_file : page_files)
     {
-        auto reader = const_cast<PageFile &>(page_file).createMetaMergingReader();
-        // Read one valid WriteBatch
-        reader->moveNext();
-        merging_queue.push(std::move(reader));
+        PageFile::MetaMergingReaderPtr reader;
+        if (auto iter = writing_files.find(page_file.fileIdLevel()); iter != writing_files.end())
+        {
+            // create reader with max meta reading offset
+            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), iter->second);
+        }
+        else
+        {
+            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file));
+        }
+        if (reader->hasNext())
+        {
+            // Read one valid WriteBatch
+            reader->moveNext();
+            merging_queue.push(std::move(reader));
+        }
+        // else the file doesn't contain any valid meta, just skip it. Or the compaction will be
+        // stopped by a writable file that contains no valid meta.
     }
 
     std::optional<PageFile>               old_checkpoint_file;
@@ -151,7 +169,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         merging_queue.pop();
         // We don't want to do compaction on formal / writing files. If any, just stop collecting `page_files_to_remove`.
         if (reader->belongingPageFile().getType() == PageFile::Type::Formal //
-            || writing_file_ids.count(reader->fileIdLevel()) != 0)
+            || writing_files.count(reader->fileIdLevel()) != 0)
         {
             LOG_DEBUG(log,
                       storage_name << " collectPageFilesToCompact stop on " << reader->belongingPageFile().toString() //
