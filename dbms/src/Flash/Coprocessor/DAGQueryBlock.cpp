@@ -31,6 +31,7 @@ bool isSourceNode(const tipb::Executor * root)
 const static String SOURCE_NAME("source");
 const static String SEL_NAME("selection");
 const static String AGG_NAME("aggregation");
+const static String HAVING_NAME("having");
 const static String TOPN_NAME("topN");
 const static String LIMIT_NAME("limit");
 const static String EXCHANGE_SENDER_NAME("exchange_sender");
@@ -75,9 +76,18 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
         switch (current->tp())
         {
             case tipb::ExecType::TypeSelection:
-                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_sel).Increment();
-                assignOrThrowException(&selection, current, SEL_NAME);
-                selection_name = current->executor_id();
+                if (current->selection().child().has_aggregation())
+                {
+                    GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_sel).Increment();
+                    assignOrThrowException(&having, current, HAVING_NAME);
+                    having_name = current->executor_id();
+                }
+                else
+                {
+                    GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_sel).Increment();
+                    assignOrThrowException(&selection, current, SEL_NAME);
+                    selection_name = current->executor_id();
+                }
                 current = &current->selection().child();
                 break;
             case tipb::ExecType::TypeAggregation:
