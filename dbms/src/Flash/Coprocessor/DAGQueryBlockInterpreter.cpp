@@ -187,9 +187,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     const Settings & settings = context.getSettingsRef();
     auto & tmt = context.getTMTContext();
 
-    auto mvcc_query_info = std::make_unique<MvccQueryInfo>();
-    mvcc_query_info->resolve_locks = true;
-    mvcc_query_info->read_tso = settings.read_tso;
+    auto mvcc_query_info = std::make_unique<MvccQueryInfo>(true, settings.read_tso);
     // We need to validate regions snapshot after getting streams from storage.
     LearnerReadSnapshot learner_read_snapshot;
     std::unordered_map<RegionID, const RegionInfo &> region_retry;
@@ -314,6 +312,11 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     {
         readFromLocalStorage(
             table_structure_lock, table_id, required_columns, query_info, max_block_size, learner_read_snapshot, pipeline, region_retry);
+    }
+
+    for (auto & region_info : dag.getRetryRegions())
+    {
+        region_retry.emplace(region_info.region_id, region_info);
     }
 
     // Should build these vars under protect of `table_structure_lock`.
@@ -719,7 +722,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
-    right_pipeline.transform([&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++); });
+    right_pipeline.transform(
+        [&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++); });
     executeUnion(right_pipeline, max_streams);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
