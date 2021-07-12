@@ -30,14 +30,17 @@ LegacyCompactor::tryCompact(                 //
 
     if (page_files_to_compact.size() < config.gc_min_legacy_num)
     {
+        // Nothing to compact
         LOG_DEBUG(log,
                   storage_name << " LegacyCompactor::tryCompact exit without compaction, candidates size: "
                                << page_files_to_compact.size() //
                                << ", compact_legacy_min_num: " << config.gc_min_legacy_num);
-        // Nothing to compact, remove legacy/checkpoint page files since we
-        // don't do gc on them later.
-        removePageFilesIf(page_files, [](const PageFile & pf) -> bool {
-            return pf.getType() == PageFile::Type::Legacy || pf.getType() == PageFile::Type::Checkpoint;
+        removePageFilesIf(page_files, [&writing_file_ids](const PageFile & pf) -> bool {
+            return
+                // Remove page files that maybe writing to
+                (!writing_file_ids.empty() && pf.fileIdLevel() >= *writing_file_ids.begin())
+                // Remove legacy/checkpoint files since we don't do gc on them later
+                || pf.getType() == PageFile::Type::Legacy || pf.getType() == PageFile::Type::Checkpoint;
         });
         return {std::move(page_files), {}, 0};
     }
@@ -53,10 +56,12 @@ LegacyCompactor::tryCompact(                 //
         LOG_WARNING(log,
                     storage_name << " LegacyCompactor::tryCompact to checkpoint PageFile_" //
                                  << checkpoint_id.first << "_" << checkpoint_id.second << " is done before.");
-        // Nothing to compact, remove legacy/checkpoint page files since we
-        // don't do gc on them later.
-        removePageFilesIf(page_files, [](const PageFile & pf) -> bool {
-            return pf.getType() == PageFile::Type::Legacy || pf.getType() == PageFile::Type::Checkpoint;
+        removePageFilesIf(page_files, [&writing_file_ids](const PageFile & pf) -> bool {
+            return
+                // Remove page files that maybe writing to
+                (!writing_file_ids.empty() && pf.fileIdLevel() >= *writing_file_ids.begin())
+                // Remove legacy/checkpoint files since we don't do gc on them later
+                || pf.getType() == PageFile::Type::Legacy || pf.getType() == PageFile::Type::Checkpoint;
         });
         return {std::move(page_files), {}, 0};
     }

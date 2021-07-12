@@ -1023,6 +1023,15 @@ bool PageStorage::gc(bool not_skip)
                         ErrorCodes::LOGICAL_ERROR);
     }
 #endif
+
+    // Count how many PageFiles are "legacy" or "checkpoint", we need to adjust
+    // the GC param by `num_legacy_files`.
+    for (const auto & page_file : page_files)
+    {
+        gc_context.num_legacy_files
+            += static_cast<size_t>((page_file.getType() == PageFile::Type::Legacy) || (page_file.getType() == PageFile::Type::Checkpoint));
+    }
+
     {
         // Try to compact consecutive Legacy PageFiles into a snapshot.
         // Legacy and checkpoint files will be removed from `page_files` after `tryCompact`.
@@ -1032,8 +1041,6 @@ bool PageStorage::gc(bool not_skip)
             = compactor.tryCompact(std::move(page_files), writing_file_id_levels);
         archivePageFiles(page_files_to_archive);
         gc_context.num_files_archive_in_compact_legacy = page_files_to_archive.size();
-        if (gc_context.num_page_files > page_files.size())
-            gc_context.num_legacy_files = gc_context.num_page_files - page_files.size();
     }
 
     PageEntriesEdit gc_file_entries_edit;
