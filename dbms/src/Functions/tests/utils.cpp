@@ -2,12 +2,6 @@
 
 namespace DB
 {
-Table & Table::eval(const String & func_name, const Strings & args, const String & result)
-{
-    evalFunc(data, func_name, args, result);
-    return *this;
-}
-
 Table Table::clone() const { return data; }
 
 void insertColumnDef(Block & block, const String & col_name, const DataTypePtr data_type)

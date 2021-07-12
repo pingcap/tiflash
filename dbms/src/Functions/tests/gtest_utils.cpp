@@ -30,7 +30,7 @@ try
         CREATE_TABLE(t, {"a", "Int64"}, {"b", "Int32"});
         INSERT_INTO(t, 1l, 2);
         EVAL_FUNC(t, "plus", "a+b", {"a", "b"});
-        CREATE_COLUMN(expect, "Int64", {3l});
+        CREATE_COLUMN(expect, "Int64", 3l);
         auto actual = t.getByName("a+b").column;
         ASSERT_EQ(t.getByName("a+b").type->getName(), "Int64");
         ASSERT_EQ(*actual, *expect);
@@ -40,7 +40,7 @@ try
         CREATE_TABLE(t, {"a", "Decimal(10,2)"}, {"b", "Decimal(10,3)"});
         INSERT_INTO(t, NewDecimalField<10>(1'23), NewDecimalField<10>(1'111));
         EVAL_FUNC(t, "plus", "a+b", {"a", "b"});
-        CREATE_COLUMN(expect, "Decimal(12,3)", {NewDecimalField<12>(2'341)});
+        CREATE_COLUMN(expect, "Decimal(12,3)", NewDecimalField<12>(2'341));
         auto actual = t.getByName("a+b").column;
         ASSERT_EQ(t.getByName("a+b").type->getName(), "Decimal(12,3)");
         ASSERT_EQ(*actual, *expect);
@@ -50,7 +50,7 @@ try
         CREATE_TABLE(t, {"a", "String"});
         INSERT_INTO(t, "hello world");
         EVAL_FUNC(t, "length", "b", {"a"});
-        CREATE_COLUMN(expect, "UInt64", {11ul});
+        CREATE_COLUMN(expect, "UInt64", 11ul);
         auto actual = t.getByName("b").column;
         ASSERT_EQ(t.getByName("b").type->getName(), "UInt64");
         ASSERT_EQ(*actual, *expect);
@@ -59,10 +59,10 @@ try
     {
         CREATE_TABLE(t, {"a", "MyDatetime"});
         INSERT_INTO(t, MyDateTime(2021, 7, 9, 15, 26, 30, 0));
-        CREATE_COLUMN(fmt, "String", {"%Y-%m-%d"});
+        CREATE_COLUMN(fmt, "String", "%Y-%m-%d");
         ADD_COLUMN(t, "b", "String", ColumnConst::create(fmt, 1));
         EVAL_FUNC(t, "dateFormat", "c", {"a", "b"});
-        CREATE_COLUMN(expect, "String", {"2021-07-09"});
+        CREATE_COLUMN(expect, "String", "2021-07-09");
         auto actual = t.getByName("c").column;
         ASSERT_EQ(t.getByName("c").type->getName(), "String");
         ASSERT_EQ(*actual, *expect);
@@ -82,10 +82,26 @@ CATCH
 TEST_F(TestFunctionUtils, Table)
 try
 {
-    auto t = Table({{"a", "Int32"}, {"b", "Int64"}}).insert(1, 1).eval("plus", {"a", "b"}, "a+a").build();
-    auto expect = createColumn(DATA_TYPE(Int64), {2});
-    ASSERT_EQ(*t.getByName("a+a").column, *expect);
-    PRINT_TABLE(t);
+    {
+        auto t = Table({{"a", "Int32"}, {"b", "Int64"}}).insert(1, 1).eval("plus", "a+a", "a", "b").build();
+        auto expect = createColumn(DATA_TYPE("Int64"), 2);
+        ASSERT_EQ(t.getByName("a+a").type->getName(), "Int64");
+        ASSERT_EQ(*t.getByName("a+a").column, *expect);
+    }
+
+    {
+        auto t = Table({{"a", "Nullable(Int32)"}, {"b", "Int64"}}).insert(1, 1).insert(Null(), 1).eval("plus", "a+a", "a", "b").build();
+        auto expect = createColumn(DATA_TYPE("Nullable(Int64)"), 2, Null());
+        ASSERT_EQ(t.getByName("a+a").type->getName(), "Nullable(Int64)");
+        ASSERT_EQ(*t.getByName("a+a").column, *expect);
+    }
+
+    {
+        auto t = Table({{"a", "String"}}).insert("Hello, World").insert("Hello, World!\n").eval("length", "b", "a").build();
+        auto expect = createColumn(DATA_TYPE("UInt64"), 12, 14);
+        ASSERT_EQ(t.getByName("b").type->getName(), "UInt64");
+        ASSERT_EQ(*t.getByName("b").column, *expect);
+    }
 }
 CATCH
 

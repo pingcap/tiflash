@@ -14,6 +14,26 @@
 
 namespace DB
 {
+template <typename... Args>
+ColumnPtr createColumn(DataTypePtr data_type, Args &&... args)
+{
+    MutableColumnPtr column = data_type->createColumn();
+    (insert(data_type, column, args), ...);
+    return column;
+}
+
+template <typename... Args>
+void insertInto(Block & block, Args... args);
+
+void insertColumnDef(Block & block, const String & col_name, const DataTypePtr data_type);
+
+void evalFunc(Block & block, const String & func_name, const Strings & args, const String & result);
+
+void formatBlock(const Block & block, String & buff);
+
+bool operator==(const IColumn & lhs, const IColumn & rhs);
+
+std::ostream & operator<<(std::ostream & stream, IColumn const & column);
 
 #define APPLY_FOR_TYPE_LIST(M) \
     M(Int8)                    \
@@ -58,7 +78,7 @@ inline bool validateDataTypeForField(DataTypePtr data_type)
     throw Exception("Shouldn't reach here: DataType " + data_type->getName() + " Literal type " + typeid(T).name());
 }
 
-#define DATA_TYPE(data_type_name) DataTypeFactory::instance().get(#data_type_name)
+#define DATA_TYPE(data_type_name) DataTypeFactory::instance().get(data_type_name)
 
 // DecimalVal is a utility to help find the concrete DecimalField type.
 template <int scale>
@@ -103,7 +123,14 @@ public:
         return *this;
     }
 
-    Table & eval(const String & func_name, const Strings & args, const String & result);
+    template <typename... Args>
+    Table & eval(const String & func_name, const String & result, Args &&... arguments)
+    {
+        Strings args;
+        (args.push_back(std::forward<Args>(arguments)), ...);
+        evalFunc(data, func_name, args, result);
+        return *this;
+    }
 
     Table clone() const;
 
@@ -112,68 +139,59 @@ public:
     const Block & getData() { return data; }
 };
 
-using ColumnDefines = std::vector<std::tuple<String, String>>;
-
-// createColumn returns
-template <typename T>
-ColumnPtr createColumn(DataTypePtr data_type, std::initializer_list<T> args);
-
-template <typename... Args>
-void insertInto(Block & block, Args... args);
-
-void insertColumnDef(Block & block, const String & col_name, const DataTypePtr data_type);
-
-void validateFieldType(const Field & field, DataTypePtr data_type);
-
-void evalFunc(Block & block, const String & func_name, const Strings & args, const String & result);
-
-void formatBlock(const Block & block, String & buff);
-
-template <typename T>
-static void insert(DataTypePtr data_type, MutableColumnPtr & column, const std::initializer_list<T> & args)
+template <typename U>
+inline void insert(DataTypePtr data_type, MutableColumnPtr & column, U && arg)
 {
-    for (auto & arg : args)
+    using T = std::decay_t<U>;
+    (void)data_type;
+    //        if (!validateDataTypeForField<T>(data_type))
+    //            throw Exception("DataType doesn't match literal: " + data_type->getName() + ", " + typeid(T).name());
+    Field field;
+    if constexpr (std::is_same_v<T, const char *> || std::is_same_v<T, String>)
     {
-        (void)data_type;
-        //        if (!validateDataTypeForField<T>(data_type))
-        //            throw Exception("DataType doesn't match literal: " + data_type->getName() + ", " + typeid(T).name());
-        Field field;
-        if constexpr (std::is_same_v<T, const char *> || std::is_same_v<T, String>)
-        {
-            // String types: const char*, String
-            field = Field(String(arg));
-        }
-        else if constexpr (isDecimalField<T>())
-        {
-            // Pass DecimalField with Decimal types
-            // Decimal types: Decimal32, Decimal64, Decimal128, Decimal256
-            field = arg;
-        }
-        else if constexpr (std::is_same_v<T, MyDateTime> || std::is_same_v<T, MyDate>)
-        {
-            // Datetime types: MyDateTime, MyDate
-            field = toField(arg.toPackedUInt());
-        }
-        else if constexpr (std::is_floating_point_v<T> || std::is_integral_v<T>)
-        {
-            // Integral types: Int8, Int16, Int32, Int64, UInt8, UInt16, UInt64
-            // Float point types: Float32, Float64
-            field = toField(arg);
-        }
-        else
-        {
-            throw Exception("Unrecognized Literal type: " + String(typeid(T).name()));
-        }
-        column->insert(field);
+        // String types: const char*, String
+        field = Field(String(arg));
     }
+    else if constexpr (isDecimalField<T>())
+    {
+        // Pass DecimalField with Decimal types
+        // Decimal types: Decimal32, Decimal64, Decimal128, Decimal256
+        field = arg;
+    }
+    else if constexpr (std::is_same_v<T, MyDateTime> || std::is_same_v<T, MyDate>)
+    {
+        // Datetime types: MyDateTime, MyDate
+        field = toField(arg.toPackedUInt());
+    }
+    else if constexpr (std::is_floating_point_v<T> || std::is_integral_v<T>)
+    {
+        // Integral types: Int8, Int16, Int32, Int64, UInt8, UInt16, UInt64
+        // Float point types: Float32, Float64
+        field = toField(arg);
+    }
+    else if constexpr (std::is_same_v<T, Null>)
+    {
+        field = Null{};
+    }
+    else if constexpr (std::is_same_v<T, Field>)
+    {
+        // Given Field
+        field = arg;
+    }
+    else
+    {
+        throw Exception("Unrecognized Literal type: " + String(typeid(T).name()));
+    }
+    column->insert(field);
 }
 
 template <typename T>
-ColumnPtr createColumn(DataTypePtr data_type, std::initializer_list<T> args)
+inline void insert(DataTypePtr data_type, MutableColumnPtr & column, const std::initializer_list<T> & args)
 {
-    MutableColumnPtr column = data_type->createColumn();
-    insert(data_type, column, args);
-    return column;
+    for (auto & arg : args)
+    {
+        insert(data_type, column, std::move(arg));
+    }
 }
 
 template <size_t I = 0, typename T, typename... Args>
@@ -195,9 +213,6 @@ void insertInto(Block & block, Args... args)
     insertRow(block, args...);
 }
 
-bool operator==(const IColumn & lhs, const IColumn & rhs);
-
-std::ostream & operator<<(std::ostream & stream, IColumn const & column);
 
 #define CREATE_COLUMN(column, data_type_name, ...)                                   \
     ColumnPtr column{};                                                              \
