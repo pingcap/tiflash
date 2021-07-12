@@ -10,8 +10,8 @@
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
-#include <Storages/DeltaMerge/File/DMConfigFile.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/File/DMConfigFile.h>
 #include <Storages/FormatVersion.h>
 #include <common/logger_useful.h>
 
@@ -273,7 +273,7 @@ private:
 
     bool isSubFileExists(const String & name) const { return sub_file_stats.find(name) != sub_file_stats.end(); }
 
-    const String subFilePath(const String & file_name) const { return isSingleFileMode() ? path() : path() + "/" + file_name; }
+    String subFilePath(const String & file_name) const { return isSingleFileMode() ? path() : path() + "/" + file_name; }
 
     size_t subFileOffset(const String & file_name) const { return isSingleFileMode() ? getSubFileStat(file_name).offset : 0; }
 
@@ -291,8 +291,9 @@ private:
     PackProperties pack_properties;
     ColumnStats    column_stats;
 
-    Mode   mode;
-    Status status;
+    Mode               mode;
+    Status             status;
+    DMConfigurationPtr configuration; // configuration
 
     mutable std::mutex mutex;
     SubFileStats       sub_file_stats;
