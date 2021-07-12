@@ -140,6 +140,24 @@ grpc::Status FlashService::Coprocessor(
     return mpp_handler.execute(context, response);
 }
 
+::grpc::Status FlashService::IsAlive(::grpc::ServerContext * grpc_context [[maybe_unused]], const ::mpp::IsAliveRequest * request [[maybe_unused]], ::mpp::IsAliveResponse * response [[maybe_unused]])
+{
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+
+    auto & tmt_context = context.getTMTContext();
+    response->set_available(!tmt_context.getTerminated());
+    return ::grpc::Status::OK;
+}
+
 ::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
     const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
 {
