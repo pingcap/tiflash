@@ -363,20 +363,7 @@ void MPPTask::cancel(const String & reason)
     /// step 1. cancel query streams if it is running
     if (current_status == RUNNING)
     {
-        auto process_list_element = context.getProcessListElement();
-        if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
-        {
-            BlockInputStreamPtr input_stream;
-            BlockOutputStreamPtr output_stream;
-            if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
-            {
-                IProfilingBlockInputStream * input_stream_casted;
-                if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
-                {
-                    input_stream_casted->cancel(true);
-                }
-            }
-        }
+        context.getProcessList().sendCancelToQuery(context.getCurrentQueryId(), context.getClientInfo().current_user, true);
     }
     /// step 2. write Error msg and close the tunnel.
     /// Here we use `closeAllTunnel` because currently, `cancel` is a query level cancel, which
