@@ -6,6 +6,11 @@
 #include <Storages/DeltaMerge/File/Checksum/Checksum.h>
 #include <Storages/DeltaMerge/File/Checksum/ChecksumBuffer.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <dmfile.pb.h>
+#pragma GCC diagnostic pop
+
 #include <map>
 #include <string>
 
@@ -16,15 +21,17 @@ namespace DB::DM
 class DMConfiguration
 {
 public:
-    explicit DMConfiguration(std::istream & input, bool loadDebugInfo = true) : embeddedChecksum(), debugInfo()
+    explicit DMConfiguration(std::istream & input) : embeddedChecksum(), debugInfo()
     {
-        Poco::JSON::Parser             parser            = {};
-        auto                           configVar         = parser.parse(input);
-        auto                           configObj         = configVar.extract<Poco::JSON::Object::Ptr>();
-        auto                           uncheckedAlgo     = configObj->getValue<uint64_t>("checksumAlgorithm");
-        auto                           dataFieldChecksum = configObj->getValue<std::string>("dataFieldChecksum");
-        std::unique_ptr<B64DigestBase> digest            = nullptr;
-        checksumFrameLength                              = configObj->getValue<size_t>("checksumFrameLength");
+        dtpb::Configuration configuration;
+        if (unlikely(!configuration.ParseFromIstream(&input)))
+        {
+            throw Exception("cannot parse protobuf for DMConfiguration");
+        }
+
+        auto                           uncheckedAlgo = configuration.checksum_algorithm();
+        std::shared_ptr<B64DigestBase> digest        = nullptr;
+        checksumFrameLength                          = configuration.checksum_frame_length();
         switch (uncheckedAlgo)
         {
         case static_cast<uint64_t>(ChecksumAlgo::None):
@@ -43,7 +50,7 @@ public:
             digest = std::make_unique<B64Digest<Digest::XXH3>>();
             break;
         default:
-            throw Poco::JSON::JSONException("unrecognized checksumAlgorithm");
+            throw Poco::JSON::JSONException("unrecognized checksum algorithm");
         }
 
         // we cannot directly convert the value to enum;
@@ -53,31 +60,25 @@ public:
         digest->update(&checksumFrameLength, sizeof(checksumFrameLength));
         digest->update(&checksumAlgorithm, sizeof(checksumAlgorithm));
 
-        auto embeddedChecksumArray = configObj->getArray("embeddedChecksum");
-        for (const auto & var : *embeddedChecksumArray)
+        const auto & embeddedChecksumArray = configuration.embedded_checksum();
+        for (const auto & var : embeddedChecksumArray)
         {
-            auto obj      = var.extract<Poco::JSON::Object::Ptr>();
-            auto name     = obj->getValue<std::string>("name");
-            auto checksum = obj->getValue<std::string>("checksum");
-            digest->update(name.data(), name.length());
-            digest->update(checksum.data(), checksum.length());
-            embeddedChecksum.emplace(std::move(name), std::move(checksum));
+
+            digest->update(var.name().data(), var.name().length());
+            digest->update(var.checksum().data(), var.checksum().length());
+            embeddedChecksum.emplace(var.name(), var.checksum());
         }
 
-        if (unlikely(!digest->compare(dataFieldChecksum)))
+        if (unlikely(!digest->compare(configuration.data_field_checksum().data())))
         {
             throw Poco::JSON::JSONException("data field checksum broken");
         }
 
-        if (loadDebugInfo)
         {
-            auto debugInfoArray = configObj->getArray("debugInfo");
-            for (const auto & var : *debugInfoArray)
+            const auto & debugInfoArray = configuration.debug_info();
+            for (const auto & var : debugInfoArray)
             {
-                auto obj     = var.extract<Poco::JSON::Object::Ptr>();
-                auto name    = obj->getValue<std::string>("name");
-                auto content = obj->getValue<std::string>("content");
-                debugInfo.emplace(std::move(name), std::move(content));
+                debugInfo.emplace(var.name(), var.content());
             }
         }
     }
@@ -124,7 +125,7 @@ private:
 
 inline std::ostream & operator<<(std::ostream & output, const DMConfiguration & config)
 {
-    auto                           obj    = Poco::JSON::Object{};
+    dtpb::Configuration            configuration;
     std::unique_ptr<B64DigestBase> digest = nullptr;
 
     switch (config.checksumAlgorithm)
@@ -148,40 +149,36 @@ inline std::ostream & operator<<(std::ostream & output, const DMConfiguration & 
         throw Poco::JSON::JSONException("unrecognized checksumAlgorithm");
     }
 
-    obj.set("checksumAlgorithm", static_cast<uint64_t>(config.checksumAlgorithm));
-    obj.set("checksumFrameLength", config.checksumFrameLength);
+    configuration.set_checksum_algorithm(static_cast<uint64_t>(config.checksumAlgorithm));
+    configuration.set_checksum_frame_length(static_cast<uint64_t>(config.checksumFrameLength));
     digest->update(&config.checksumFrameLength, sizeof(config.checksumFrameLength));
     digest->update(&config.checksumAlgorithm, sizeof(config.checksumAlgorithm));
 
     {
-        auto embeddedChecksumArray = Poco::Dynamic::Array{};
         for (const auto & [name, checksum] : config.embeddedChecksum)
         {
             digest->update(name.data(), name.length());
             digest->update(checksum.data(), checksum.length());
-            auto tmp = Poco::JSON::Object{};
-            tmp.set("name", name);
-            tmp.set("checksum", checksum);
-            embeddedChecksumArray.emplace_back(tmp);
+            auto embeddedChecksum = configuration.add_embedded_checksum();
+            embeddedChecksum->set_name(name);
+            embeddedChecksum->set_checksum(checksum);
         }
-        obj.set("embeddedChecksum", embeddedChecksumArray); // TODO: maybe should move? but Poco is being silly here.
     }
 
-    obj.set("dataFieldChecksum", digest->base64());
+    configuration.set_data_field_checksum(digest->raw());
 
     {
-        auto debugInfoArray = Poco::Dynamic::Array{};
         for (const auto & [name, content] : config.debugInfo)
         {
-            auto tmp = Poco::JSON::Object{};
-            tmp.set("name", name);
-            tmp.set("content", content);
-            debugInfoArray.emplace_back(tmp);
+            auto tmp = configuration.add_debug_info();
+            tmp->set_name(name);
+            tmp->set_content(content);
         }
-        obj.set("debugInfo", debugInfoArray); // TODO: maybe should move? but Poco is being silly here.
     }
 
-    obj.stringify(output);
+    if(!configuration.SerializeToOstream(&output)) {
+        throw Exception("unable to serialize protobuf of configuration");
+    };
 
     return output;
 };

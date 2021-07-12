@@ -128,7 +128,9 @@ struct B64DigestBase
 {
     virtual void        update(const void * data, size_t length) = 0;
     virtual bool        compare(const std::string & data)        = 0;
+    virtual bool        compare(const void * data)               = 0;
     virtual std::string base64() const                           = 0;
+    virtual std::string raw() const                              = 0;
     virtual ~B64DigestBase()                                     = default;
 };
 template <class Backend>
@@ -145,6 +147,20 @@ public:
         decltype(checksum) target   = {};
         decoder.read(reinterpret_cast<char *>(&target), sizeof(target));
         return checksum == target;
+    }
+
+    bool compare(const void * data) override
+    {
+        auto checksum = backend.checksum();
+        return std::memcmp(data, &checksum, sizeof(checksum)) == 0;
+    }
+
+    [[nodiscard]] std::string raw() const override
+    {
+        auto        checksum = backend.checksum();
+        std::string data(sizeof(checksum), ' ');
+        ::memcpy(data.data(), &checksum, sizeof(checksum));
+        return data;
     }
 
     [[nodiscard]] std::string base64() const override

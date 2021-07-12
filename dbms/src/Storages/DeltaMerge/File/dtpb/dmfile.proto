@@ -3,12 +3,33 @@ syntax = "proto2";
 package dtpb;
 
 message PackProperty {
-    // when gc_safe_point exceed this version, there must be some data obsolete in this pack
-    required uint64 gc_hint_version = 1;
-    // effective rows(multiple versions of one row is count as one include delete)
-    required uint64 num_rows = 2;
+  // when gc_safe_point exceed this version, there must be some data obsolete in this pack
+  required uint64 gc_hint_version = 1;
+  // effective rows(multiple versions of one row is count as one include delete)
+  required uint64 num_rows = 2;
 }
 
 message PackProperties {
-    repeated PackProperty property = 1;
+  repeated PackProperty property = 1;
+}
+
+message EmbeddedChecksum {
+  required string name = 1;
+  required bytes checksum = 2;
+}
+
+message DebugInfo {
+  required string name = 1;
+  required string content = 2;
+}
+
+
+message Configuration {
+  required uint64 checksum_algorithm = 1;
+  required uint64 checksum_frame_length = 2;
+  repeated EmbeddedChecksum embedded_checksum = 3;
+  // checksum of the above field
+  required bytes data_field_checksum = 4;
+  // additional information
+  repeated DebugInfo debug_info = 5;
 }
