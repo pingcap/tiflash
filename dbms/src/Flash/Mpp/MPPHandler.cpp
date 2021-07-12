@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <DataStreams/AsynchronousBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
@@ -10,7 +11,6 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <DataStreams/AsynchronousBlockInputStream.h>
 
 namespace DB
 {
@@ -102,11 +102,11 @@ void MPPTask::unregisterTask()
     }
 }
 
-std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
+std::unordered_map<RegionVerID, RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     std::unique_lock<std::mutex> lock(mutex);
 
-    auto start_time = Clock::now();
+    //    auto start_time = Clock::now();
     dag_req = std::make_unique<tipb::DAGRequest>();
     if (!dag_req->ParseFromString(task_request.encoded_plan()))
     {
@@ -162,8 +162,8 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     context.setDAGContext(dag_context.get());
 
     // register task.
-    TMTContext & tmt_context = context.getTMTContext();
-    auto task_manager = tmt_context.getMPPTaskManager();
+    //    TMTContext & tmt_context = context.getTMTContext();
+    //    auto task_manager = tmt_context.getMPPTaskManager();
     LOG_DEBUG(log, "begin to register the task " << id.toString());
 
     if (dag_context->isRootMPPTask())
@@ -174,10 +174,17 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_non_root_mpp_task);
     }
-    if (!task_manager->registerTask(shared_from_this()))
-    {
-        throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
-    }
+}
+
+//    if (!task_manager->registerTask(shared_from_this()))
+//    {
+//        throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
+//    }
+
+std::vector<RegionInfo> MPPTask::initStreams(
+    const mpp::DispatchTaskRequest & task_request, std::unordered_map<RegionVerID, RegionInfo> & regions)
+{
+    auto start_time = Clock::now();
 
     DAGQuerySource dag(context, regions, *dag_req, true);
 
@@ -240,8 +247,8 @@ String taskStatusToString(TaskStatus ts)
             return "initializing";
         case RUNNING:
             return "running";
-        case FINISHED:
-            return "finished";
+            //        case FINISHED:
+            //            return "finished";
         case CANCELLED:
             return "cancelled";
         default:
@@ -276,7 +283,7 @@ void MPPTask::runImpl()
         size_t count = 0;
 
 
-        while(true)
+        while (true)
         {
             Block block;
             while (true)
@@ -365,7 +372,7 @@ void MPPTask::runImpl()
     auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
     GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_dispatch_mpp_task).Observe(peak_memory);
     unregisterTask();
-    status = FINISHED;
+    //    status = FINISHED;
 }
 
 void MPPTask::writeErrToAllTunnel(const String & e)
@@ -398,17 +405,17 @@ void MPPTask::writeErrToAllTunnel(const String & e)
 
 void MPPTask::cancel(const String & reason)
 {
-    auto current_status = status.exchange(CANCELLED);
-    if (current_status == FINISHED || current_status == CANCELLED)
-    {
-        if (current_status == FINISHED)
-            status = FINISHED;
-        return;
-    }
-    LOG_WARNING(log, "Begin cancel task: " + id.toString());
+    //    auto current_status = status.exchange(CANCELLED);
+    //    if (current_status == FINISHED || current_status == CANCELLED)
+    //    {
+    //        if (current_status == FINISHED)
+    //            status = FINISHED;
+    //        return;
+    //    }
 
-    /// step 1. cancel query streams
     status = CANCELLED;
+
+    LOG_WARNING(log, "Begin cancel task: " + id.toString());
 
     /// WARNING: Please do NOT do any more stupid things, especially updating status in this task.
     /// Simply set the cancel status and let the working thread of this task to exit gracefully.
@@ -452,13 +459,20 @@ void MPPTask::handleError(String error, Poco::Logger * log)
 // execute is responsible for making plan , register tasks and tunnels and start the running thread.
 grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * response)
 {
-    MPPTaskPtr task = nullptr;
+    MPPTaskHolderPtr task_holder;
     Stopwatch stopwatch;
     try
     {
-        task = std::make_shared<MPPTask>(task_request.meta(), context);
+        task_holder = std::make_shared<MPPTaskHolder>(std::make_shared<MPPTask>(task_request.meta(), context));
 
-        auto retry_regions = task->prepare(task_request);
+        auto regions = task_holder->task->prepare(task_request);
+
+        TMTContext & tmt_context = context.getTMTContext();
+        auto task_manager = tmt_context.getMPPTaskManager();
+        task_manager->registerTask(task_holder);
+
+        auto retry_regions = task_holder->task->initStreams(task_request, regions);
+
         for (auto region : retry_regions)
         {
             auto * retry_region = response->add_retry_regions();
@@ -466,7 +480,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
             retry_region->mutable_region_epoch()->set_conf_ver(region.region_ver_id.conf_ver);
             retry_region->mutable_region_epoch()->set_version(region.region_ver_id.ver);
         }
-        if (task->dag_context->isRootMPPTask())
+        if (task_holder->task->dag_context->isRootMPPTask())
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_root_task_run);
         }
@@ -480,50 +494,31 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         LOG_ERROR(log, "dispatch task meet error : " << e.displayText());
         auto * err = response->mutable_error();
         err->set_msg(e.displayText());
-        task->handleError(e.displayText(), log);
-    	return grpc::Status::OK;
+        task_holder->task->handleError(e.displayText(), log);
+        return grpc::Status::OK;
     }
     catch (std::exception & e)
     {
         LOG_ERROR(log, "dispatch task meet error : " << e.what());
         auto * err = response->mutable_error();
         err->set_msg(e.what());
-        task->handleError(e.what(), log);
-    	return grpc::Status::OK;
+        task_holder->task->handleError(e.what(), log);
+        return grpc::Status::OK;
     }
     catch (...)
     {
         LOG_ERROR(log, "dispatch task meet fatal error");
         auto * err = response->mutable_error();
         err->set_msg("fatal error");
-        task->handleError("fatal error", log);
-    	return grpc::Status::OK;
+        task_holder->task->handleError("fatal error", log);
+        return grpc::Status::OK;
     }
-    try
-    {
-        task->memory_tracker = current_memory_tracker;
-        std::thread worker(&MPPTask::runImpl, std::move(task));
-        worker.detach();
-        LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
-    }
-    catch (Exception & e)
-    {
-        LOG_ERROR(log, "starting task meet error : " << e.displayText());
-        auto * err = response->mutable_error();
-        err->set_msg(e.displayText());
-    }
-    catch (std::exception & e)
-    {
-        LOG_ERROR(log, "starting task meet error : " << e.what());
-        auto * err = response->mutable_error();
-        err->set_msg(e.what());
-    }
-    catch (...)
-    {
-        LOG_ERROR(log, "starting task meet fatal error");
-        auto * err = response->mutable_error();
-        err->set_msg("fatal error");
-    }
+
+    task_holder->task->memory_tracker = current_memory_tracker;
+    task_holder->run();
+
+    LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
+
     return grpc::Status::OK;
 }
 
@@ -532,7 +527,7 @@ MPPTaskManager::MPPTaskManager() : log(&Logger::get("TaskManager")) {}
 MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg)
 {
     MPPTaskId id{meta.start_ts(), meta.task_id()};
-    std::map<MPPTaskId, MPPTaskPtr>::iterator it;
+    std::map<MPPTaskId, MPPTaskHolderPtr>::iterator it;
     bool cancelled = false;
     std::unique_lock<std::mutex> lock(mu);
     auto ret = cv.wait_for(lock, timeout, [&] {
@@ -563,7 +558,7 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
             + DB::toString(timeout.count()) + " s.";
         return nullptr;
     }
-    return it->second;
+    return it->second->task;
 }
 
 void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
@@ -589,7 +584,7 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
     {
         ss << task_it->first.toString() << " ";
         auto task = task_it->second;
-        task->cancel(reason);
+        task->task->cancel(reason);
     }
     LOG_WARNING(log, ss.str());
 
@@ -609,8 +604,9 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
     LOG_WARNING(log, "Finish cancel query: " + std::to_string(query_id));
 }
 
-bool MPPTaskManager::registerTask(MPPTaskPtr task)
+bool MPPTaskManager::registerTask(const MPPTaskHolderPtr & task_holder)
 {
+    auto & task = task_holder->task;
     std::unique_lock<std::mutex> lock(mu);
     const auto & it = mpp_query_map.find(task->id.start_ts);
     if (it != mpp_query_map.end() && it->second.to_be_cancelled)

@@ -236,7 +236,7 @@ enum TaskStatus
 {
     INITIALIZING,
     RUNNING,
-    FINISHED,
+    //    FINISHED,
     CANCELLED,
 };
 
@@ -283,10 +283,13 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void cancel(const String & reason);
 
-    std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
+    std::unordered_map<RegionVerID, RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
 
-    // void updateProgress(const Progress &) { 
-    //     task_progress.current_progress++; 
+    std::vector<RegionInfo> initStreams(
+        const mpp::DispatchTaskRequest & task_request, std::unordered_map<RegionVerID, RegionInfo> & regions);
+
+    // void updateProgress(const Progress &) {
+    //     task_progress.current_progress++;
     // }
 
     // void run()
@@ -325,7 +328,6 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
     }
 
 private:
-
     void unregisterTask();
 
     /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
@@ -365,7 +367,30 @@ private:
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;
 
-using MPPTaskMap = std::map<MPPTaskId, MPPTaskPtr>;
+struct MPPTaskHolder
+{
+    MPPTaskPtr task;
+    std::thread worker_thread;
+
+    MPPTaskHolder(const MPPTaskPtr & task_) : task(std::move(task_)) {}
+
+    void run()
+    {
+        std::thread t(&MPPTask::runImpl, task);
+        worker_thread = std::move(t);
+    }
+
+    ~MPPTaskHolder()
+    {
+        // This could be the second time to call cancel, but never mind.
+        task->cancel("MPPTaskHolder release");
+        if (worker_thread.joinable())
+            worker_thread.join();
+    }
+};
+using MPPTaskHolderPtr = std::shared_ptr<MPPTaskHolder>;
+
+using MPPTaskMap = std::map<MPPTaskId, MPPTaskHolderPtr>;
 
 struct MPPQueryTaskSet
 {
@@ -417,11 +442,11 @@ public:
         if (it == mpp_query_map.end() || it->second.to_be_cancelled)
             return ret;
         for (const auto & task_it : it->second.task_map)
-            ret.push_back(task_it.second);
+            ret.push_back(task_it.second->task);
         return ret;
     }
 
-    bool registerTask(MPPTaskPtr task);
+    bool registerTask(const MPPTaskHolderPtr & task);
 
     void unregisterTask(MPPTask * task);
 
