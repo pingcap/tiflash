@@ -63,7 +63,9 @@ void init()
 {
     DB::tests::TiFlashTestEnv::setupLogger();
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
+#ifdef FIU_ENABLE
     fiu_init(0);
+#endif
 }
 
 int main(int argc, char * argv[])
