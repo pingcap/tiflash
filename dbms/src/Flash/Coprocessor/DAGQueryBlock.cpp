@@ -78,6 +78,10 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
             case tipb::ExecType::TypeSelection:
                 if (current->selection().child().has_aggregation())
                 {
+                    /// if the selection is after the aggregation, then it is having, need to be
+                    /// executed after aggregation.
+                    // todo We should refine the DAGQueryBlock so DAGQueryBlockInterpreter
+                    //  could compile the executor in DAG request directly without these preprocess.
                     GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_sel).Increment();
                     assignOrThrowException(&having, current, HAVING_NAME);
                     having_name = current->executor_id();
