@@ -521,7 +521,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     auto block_status = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
                         kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
                         mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, region_query_info.bypass_lock_ts,
-                        region_query_info.range_in_table, regions_executor_data[region_index].range_scan_filter);
+                        regions_executor_data[region_index].range_scan_filter);
 
                     std::visit(variant_op::overloaded{
                                    [&](Block & block) {
