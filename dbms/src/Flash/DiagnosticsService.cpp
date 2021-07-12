@@ -454,7 +454,11 @@ static std::vector<DiagnosticsService::Disk> getAllDisksLinux()
         std::vector<std::string> values;
         DiagnosticsService::Disk disk;
         boost::split(values, mount_info, boost::is_any_of("\t "), boost::token_compress_on);
-
+        if (values.size() < 3)
+        {
+            LOG_WARNING(&Logger::get("DiagnosticsService"), "Cannot parse /proc/mounts");
+            continue;
+        }
         static std::vector<std::string> fs_filter{
             "sysfs", // pseudo file system for kernel objects
             "proc",  // another pseudo file system
