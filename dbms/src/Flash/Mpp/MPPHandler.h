@@ -394,16 +394,20 @@ struct MPPTaskHolder : std::enable_shared_from_this<MPPTaskHolder>
         // This could be the second time to call cancel, but never mind.
         task->cancel("MPPTaskHolder release");
 
-        LOG_DEBUG(log, "Geting thread_id");
+        LOG_WARNING(log, "Geting thread_id");
 
         auto worker_thread_id = worker_thread.get_id();
-        LOG_DEBUG(log, "Geting thread_id 2");
+        LOG_WARNING(log, "Geting thread_id 2");
         auto my_thread_id = std::this_thread::get_id();
 
-        LOG_DEBUG(log, "worker_thread.get_id(): " << worker_thread_id << ", std::this_thread::get_id(): " << my_thread_id);
+        LOG_WARNING(log, "worker_thread.get_id(): " << worker_thread_id << ", std::this_thread::get_id(): " << my_thread_id);
 
         if (worker_thread.get_id() != std::this_thread::get_id() && worker_thread.joinable())
+        {
+            LOG_WARNING(log, "before join");
             worker_thread.join();
+            LOG_WARNING(log, "after join");
+        }
     }
 };
 
