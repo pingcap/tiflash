@@ -174,6 +174,8 @@ std::unordered_map<RegionVerID, RegionInfo> MPPTask::prepare(const mpp::Dispatch
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_non_root_mpp_task);
     }
+
+    return regions;
 }
 
 //    if (!task_manager->registerTask(shared_from_this()))
