@@ -171,7 +171,9 @@ int main(int argc, char * argv[])
     }
     DB::tests::TiFlashTestEnv::setupLogger();
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
-    fiu_init(0);
+#ifdef FIU_ENABLE
+    fiu_init(0); // init failpoint
+#endif
     UInt64 account = std::stoul(argv[1]);
     UInt64 balance = std::stoul(argv[2]);
     UInt64 worker  = std::stoul(argv[3]);
