@@ -98,12 +98,16 @@ struct AggregateFunctionSumKahanData
 };
 
 
+struct NameSum                { static constexpr auto name = "sum"; };
+struct NameCountSecondStage                { static constexpr auto name = "countSecondStage"; };
+extern const String CountSecondStage;
+
 /// Counts the sum of the numbers.
-template <typename T, typename TResult, typename Data>
-class AggregateFunctionSum final : public IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data>>
+template <typename T, typename TResult, typename Data, typename Name = NameSum>
+class AggregateFunctionSum final : public IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Name>>
 {
 public:
-    String getName() const override { return "sum"; }
+    String getName() const override { return Name::name; }
 
     ScaleType result_scale;
     PrecType result_prec;
@@ -122,11 +126,11 @@ public:
         }
     }
 
-    void create(AggregateDataPtr place) const override {
+    void create(AggregateDataPtr __restrict place) const override {
         new (place) Data;
     }
 
-    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         if constexpr (IsDecimal<T>)
             this->data(place).template add<T>(static_cast<const ColumnDecimal<T> &>(*columns[0]).getData()[row_num]);
@@ -134,22 +138,22 @@ public:
             this->data(place).add(static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         this->data(place).merge(this->data(rhs));
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         this->data(place).write(buf);
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena *) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena *) const override
     {
         this->data(place).read(buf);
     }
 
-    void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         if constexpr (IsDecimal<TResult>) {
             static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(this->data(place).get(), result_scale);

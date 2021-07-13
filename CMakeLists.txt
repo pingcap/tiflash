@@ -106,10 +106,12 @@ string(REGEX MATCH "-?[0-9]+(.[0-9]+)?$" COMPILER_POSTFIX ${CMAKE_CXX_COMPILER})
 find_program (LLD_PATH NAMES "lld${COMPILER_POSTFIX}" "lld")
 find_program (GOLD_PATH NAMES "gold")
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLD_PATH AND NOT LINKER_NAME)
-    set (LINKER_NAME "lld")
-elseif (GOLD_PATH)
-    set (LINKER_NAME "gold")
+if (NOT LINKER_NAME)
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLD_PATH)
+        set (LINKER_NAME "lld")
+    elseif (GOLD_PATH)
+        set (LINKER_NAME "gold")
+    endif ()
 endif ()
 
 if (LINKER_NAME)
@@ -309,6 +311,14 @@ add_subdirectory (contrib)
 
 option (TEST_COVERAGE "Enables flags for test coverage" OFF)
 option (ENABLE_TESTS "Enables tests" ${NOT_MSVC})
+
+# Enable failpoint injection by default if ENABLE_TESTS is turn ON.
+if (ENABLE_TESTS)
+    set (ENABLE_FAILPOINTS_DEFAULT "ON")
+else ()
+    set (ENABLE_FAILPOINTS_DEFAULT "OFF")
+endif()
+option (ENABLE_FAILPOINTS "Enables failpoints injection" ${ENABLE_FAILPOINTS_DEFAULT})
 
 # Flags for test coverage
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
