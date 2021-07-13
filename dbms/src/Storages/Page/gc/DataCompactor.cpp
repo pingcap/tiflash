@@ -209,7 +209,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
             }
 
             // Create meta reader and update `compact_seq`
-            auto meta_reader = const_cast<PageFile &>(page_file).createMetaMergingReader();
+            auto meta_reader = const_cast<PageFile &>(page_file).createMetaMergingReader(config.meta_file_reading_buf_size);
             while (meta_reader->hasNext())
             {
                 meta_reader->moveNext();

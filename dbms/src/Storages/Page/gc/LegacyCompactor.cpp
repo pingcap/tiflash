@@ -116,7 +116,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
     PageStorage::MetaMergingQueue merging_queue;
     for (auto & page_file : page_files)
     {
-        auto reader = const_cast<PageFile &>(page_file).createMetaMergingReader();
+        auto reader = const_cast<PageFile &>(page_file).createMetaMergingReader(config.meta_file_reading_buf_size);
         // Read one valid WriteBatch
         reader->moveNext();
         merging_queue.push(std::move(reader));

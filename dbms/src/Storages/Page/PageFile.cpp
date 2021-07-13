@@ -247,7 +247,9 @@ void PageFile::MetaMergingReader::initialize()
         status = Status::Finished;
         return;
     }
-    meta_reading_buffer = std::make_unique<ReadBufferFromFileProvider>(page_file.file_provider, path, page_file.metaEncryptionPath());
+    size_t reader_buffer_size = meta_file_buffer_size < meta_size ? meta_file_buffer_size : meta_size;
+    meta_reading_buffer
+        = std::make_unique<ReadBufferFromFileProvider>(page_file.file_provider, path, page_file.metaEncryptionPath(), reader_buffer_size);
     // File not exists.
     if (unlikely(meta_reading_buffer->getFD() < 0))
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);

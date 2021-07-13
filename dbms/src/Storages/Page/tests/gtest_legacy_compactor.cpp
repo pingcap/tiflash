@@ -11,11 +11,11 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
 #include <Storages/Page/WriteBatch.h>
-#include <Storages/PathPool.h>
-#include <common/logger_useful.h>
-#include <TestUtils/TiFlashTestBasic.h>
 #include <Storages/Page/gc/LegacyCompactor.h>
 #include <Storages/Page/gc/restoreFromCheckpoints.h>
+#include <Storages/PathPool.h>
+#include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -184,7 +184,7 @@ try
 
     PageStorage::MetaMergingQueue mergine_queue;
     {
-        auto reader = page_file.createMetaMergingReader();
+        auto reader = page_file.createMetaMergingReader(/*meta_file_buffer_size=*/DBMS_DEFAULT_BUFFER_SIZE);
         reader->moveNext();
         mergine_queue.push(std::move(reader));
     }

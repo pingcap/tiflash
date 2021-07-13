@@ -1,7 +1,4 @@
 #include <Encryption/MockKeyManager.h>
-#include <Storages/Page/PageStorage.h>
-#include <Storages/PathPool.h>
-#include <Storages/Page/gc/DataCompactor.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
@@ -9,6 +6,9 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+#include <Storages/Page/PageStorage.h>
+#include <Storages/Page/gc/DataCompactor.h>
+#include <Storages/PathPool.h>
 
 
 DB::WriteBatch::SequenceID debugging_recover_stop_sequence = 0;
@@ -244,7 +244,7 @@ void dump_all_entries(DB::PageFileSet & page_files, int32_t mode)
         DB::PageEntriesEdit  edit;
         DB::PageIdAndEntries id_and_caches;
 
-        auto reader = const_cast<DB::PageFile &>(page_file).createMetaMergingReader();
+        auto reader = const_cast<DB::PageFile &>(page_file).createMetaMergingReader(/*meta_file_buffer_size=*/DBMS_DEFAULT_BUFFER_SIZE);
 
         while (reader->hasNext())
         {

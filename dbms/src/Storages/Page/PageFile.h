@@ -111,7 +111,10 @@ public:
     class MetaMergingReader : private boost::noncopyable
     {
     public:
-        MetaMergingReader(PageFile & page_file_) : page_file(page_file_) {}
+        MetaMergingReader(PageFile & page_file_, size_t meta_file_buffer_size)
+            : page_file(page_file_), meta_file_buffer_size(meta_file_buffer_size)
+        {
+        }
 
         ~MetaMergingReader();
 
@@ -163,6 +166,7 @@ public:
 
     private:
         PageFile & page_file;
+        size_t     meta_file_buffer_size;
 
         Status status = Status::Uninitialized;
 
@@ -250,7 +254,10 @@ public:
     /// Destroy underlying system files.
     void destroy() const;
 
-    MetaMergingReaderPtr createMetaMergingReader() { return std::make_unique<MetaMergingReader>(*this); }
+    MetaMergingReaderPtr createMetaMergingReader(size_t meta_file_buffer_size)
+    {
+        return std::make_unique<MetaMergingReader>(*this, meta_file_buffer_size);
+    }
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
     /// And the meta_file_pos, data_file_pos should be properly set before creating writer.
