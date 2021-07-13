@@ -874,6 +874,12 @@ bool PageStorage::gc(const Context & global_context, bool not_skip)
     ListPageFilesOption opt;
     opt.remove_tmp_files = true;
     auto page_files      = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
+    if (unlikely(page_files.empty()))
+    {
+        // In case the directory are removed by accident
+        LOG_WARNING(log, storage_name << " There are no page files while running GC");
+        return false;
+    }
 
     GcContext gc_context;
     gc_context.min_file_id    = page_files.begin()->fileIdLevel();
