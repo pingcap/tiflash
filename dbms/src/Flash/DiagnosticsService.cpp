@@ -5,14 +5,12 @@
 #include <Storages/PathPool.h>
 #include <re2/re2.h>
 
+#include <memory>
+
 #ifdef __linux__
-// #include <arpa/inet.h>
-// #include <ifaddrs.h>
-// #include <linux/if_packet.h>
-// #include <sys/socket.h>
+
 #include <sys/statvfs.h>
 
-#include <memory>
 #endif
 
 namespace DB
@@ -503,52 +501,6 @@ static std::vector<DiagnosticsService::Disk> getAllDisks()
 #endif
     return {};
 }
-
-// std::vector<DiagnosticsService::NetworkInterface> getNetworkInterfaces()
-// {
-//     std::vector<DiagnosticsService::NetworkInterface> interfaces;
-
-//     // auto sockaddr_to_network_addr = [](const struct sockaddr * sa, std::vector<uint8_t> & mac, std::string & addr) {
-//     //     if (sa->sa_family == AF_PACKET)
-//     //     {
-//     //         auto sll = (struct sockaddr_ll *)sa;
-//     //         mac = {sll->sll_addr[0], sll->sll_addr[1], sll->sll_addr[2], sll->sll_addr[3], sll->sll_addr[4], sll->sll_addr[5]};
-//     //     }
-//     //     else if (sa->sa_family == AF_INET)
-//     //     {
-//     //         auto si = (struct sockaddr_in *)sa;
-//     //         char * addr_str = inet_ntoa(si->sin_addr);
-//     //         addr = std::string(addr_str);
-//     //     }
-//     //     else if (sa->sa_family == AF_INET6)
-//     //     {
-//     //         // TODO
-//     //     }
-//     // };
-
-//     // struct ifaddrs * addrs;
-//     // getifaddrs(&addrs);
-//     // auto cur = addrs;
-//     // while (cur)
-//     // {
-//     //     std::string name(cur->ifa_name);
-//     //     std::vector<uint8_t> mac;
-//     //     std::string ip;
-//     //     sockaddr_to_network_addr(cur->ifa_addr, mac, ip);
-//     //     std::string netmask;
-//     //     std::vector<uint8_t> temp;
-//     //     sockaddr_to_network_addr(cur->ifa_netmask, temp, netmask);
-
-//     //     DiagnosticsService::NetworkInterface interface;
-//     //     interface.name = name;
-//     //     interface.index = 0;
-//     //     interface.flag = cur->ifa_flags;
-//     //     interface.mac = mac;
-//     // }
-//     // freeifaddrs(addrs);
-
-//     return interfaces;
-// }
 
 void DiagnosticsService::cpuLoadInfo(
     std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
