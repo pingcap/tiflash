@@ -378,8 +378,11 @@ std::string Region::getDebugString(std::stringstream & ss) const
 
 RegionID Region::id() const { return meta.regionId(); }
 
+<<<<<<< HEAD
 pingcap::kv::RegionVerID Region::verID() const { return RegionVerID(id(), confVer(), version()); }
 
+=======
+>>>>>>> 4b4e7caf4... Optimize learner-read process by reduce times about read-index during retry (#2381)
 bool Region::isPendingRemove() const { return peerState() == raft_serverpb::PeerState::Tombstone; }
 
 bool Region::isMerging() const { return peerState() == raft_serverpb::PeerState::Merging; }
