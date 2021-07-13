@@ -95,7 +95,7 @@ private:
         }
 
         ReadBufferFromFile plain;
-        CompressedReadBuffer compressed;
+        CompressedReadBuffer<> compressed;
     };
 
     using FileStreams = std::map<std::string, Stream>;
@@ -146,7 +146,7 @@ private:
         }
 
         WriteBufferFromFile plain;
-        CompressedWriteBuffer compressed;
+        CompressedWriteBuffer<> compressed;
 
         size_t plain_offset;    /// How many bytes were in the file at the time the LogBlockOutputStream was created.
 

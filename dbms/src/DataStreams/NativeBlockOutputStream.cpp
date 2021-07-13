@@ -27,7 +27,7 @@ NativeBlockOutputStream::NativeBlockOutputStream(
 {
     if (index_ostr)
     {
-        ostr_concrete = typeid_cast<CompressedWriteBuffer *>(&ostr);
+        ostr_concrete = typeid_cast<CompressedWriteBuffer<> *>(&ostr);
         if (!ostr_concrete)
             throw Exception("When need to write index for NativeBlockOutputStream, ostr must be CompressedWriteBuffer.", ErrorCodes::LOGICAL_ERROR);
     }

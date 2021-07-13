@@ -108,7 +108,7 @@ private:
       * - to save RAM when using a large number of sources.
       */
     bool started = false;
-    std::optional<CompressedReadBufferFromFile> data_in;
+    std::optional<CompressedReadBufferFromFile<>> data_in;
     std::optional<NativeBlockInputStream> block_in;
 
     void start()
@@ -181,9 +181,9 @@ private:
     std::unique_lock<std::shared_mutex> lock;
 
     WriteBufferFromFile data_out_compressed;
-    CompressedWriteBuffer data_out;
+    CompressedWriteBuffer<> data_out;
     WriteBufferFromFile index_out_compressed;
-    CompressedWriteBuffer index_out;
+    CompressedWriteBuffer<> index_out;
     NativeBlockOutputStream block_out;
 
     bool done = false;

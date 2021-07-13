@@ -69,7 +69,7 @@ public:
         /// original_layer -> compressed_buf -> plain_layer -> plain_file
         WriteBufferFromFileBasePtr plain_file;
         WriteBufferProxy           plain_layer;
-        CompressedWriteBuffer      compressed_buf;
+        CompressedWriteBuffer<>    compressed_buf;
         WriteBufferProxy           original_layer;
 
         MinMaxIndexPtr              minmaxes;
@@ -126,7 +126,7 @@ public:
         /// original_layer -> compressed_buf -> plain_layer -> plain_file
         WriteBufferFromFileBasePtr plain_file;
         HashingWriteBuffer         plain_layer;
-        CompressedWriteBuffer      compressed_buf;
+        CompressedWriteBuffer<>    compressed_buf;
         HashingWriteBuffer         original_layer;
     };
     using SingleFileStreamPtr = std::shared_ptr<SingleFileStream>;

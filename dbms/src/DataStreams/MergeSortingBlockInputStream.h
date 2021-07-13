@@ -113,7 +113,7 @@ private:
     struct TemporaryFileStream
     {
         ReadBufferFromFile file_in;
-        CompressedReadBuffer compressed_in;
+        CompressedReadBuffer<> compressed_in;
         BlockInputStreamPtr block_in;
 
         TemporaryFileStream(const std::string & path, const Block & header)

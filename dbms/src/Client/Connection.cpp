@@ -377,7 +377,7 @@ void Connection::sendData(const Block & block, const String & name)
     if (!block_out)
     {
         if (compression == Protocol::Compression::Enable)
-            maybe_compressed_out = std::make_shared<CompressedWriteBuffer>(*out, compression_settings);
+            maybe_compressed_out = std::make_shared<CompressedWriteBuffer<>>(*out, compression_settings);
         else
             maybe_compressed_out = out;
 
@@ -560,7 +560,7 @@ void Connection::initBlockInput()
     if (!block_in)
     {
         if (compression == Protocol::Compression::Enable)
-            maybe_compressed_in = std::make_shared<CompressedReadBuffer>(*in);
+            maybe_compressed_in = std::make_shared<CompressedReadBuffer<>>(*in);
         else
             maybe_compressed_in = in;
 

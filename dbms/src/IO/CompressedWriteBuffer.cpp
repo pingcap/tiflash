@@ -21,7 +21,8 @@ namespace ErrorCodes
 }
 
 
-void CompressedWriteBuffer::nextImpl()
+template <bool add_checksum>
+void CompressedWriteBuffer<add_checksum>::nextImpl()
 {
     if (!offset())
         return;
@@ -122,14 +123,17 @@ void CompressedWriteBuffer::nextImpl()
             throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
     }
 
-    CityHash_v1_0_2::uint128 checksum = CityHash_v1_0_2::CityHash128(compressed_buffer_ptr, compressed_size);
-    out.write(reinterpret_cast<const char *>(&checksum), sizeof(checksum));
+    if constexpr (add_checksum)
+    {
+        CityHash_v1_0_2::uint128 checksum = CityHash_v1_0_2::CityHash128(compressed_buffer_ptr, compressed_size);
+        out.write(reinterpret_cast<const char *>(&checksum), sizeof(checksum));
+    }
 
     out.write(compressed_buffer_ptr, compressed_size);
 }
 
-
-CompressedWriteBuffer::CompressedWriteBuffer(
+template <bool add_checksum>
+CompressedWriteBuffer<add_checksum>::CompressedWriteBuffer(
     WriteBuffer & out_,
     CompressionSettings compression_settings_,
     size_t buf_size)
@@ -137,8 +141,8 @@ CompressedWriteBuffer::CompressedWriteBuffer(
 {
 }
 
-
-CompressedWriteBuffer::~CompressedWriteBuffer()
+template <bool add_checksum>
+CompressedWriteBuffer<add_checksum>::~CompressedWriteBuffer()
 {
     try
     {
@@ -150,4 +154,6 @@ CompressedWriteBuffer::~CompressedWriteBuffer()
     }
 }
 
+template class CompressedWriteBuffer<true>;
+template class CompressedWriteBuffer<false>;
 }

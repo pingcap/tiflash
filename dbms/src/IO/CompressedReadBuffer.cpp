@@ -4,23 +4,25 @@
 namespace DB
 {
 
-bool CompressedReadBuffer::nextImpl()
+template <bool has_checksum>
+bool CompressedReadBuffer<has_checksum>::nextImpl()
 {
     size_t size_decompressed;
     size_t size_compressed_without_checksum;
-    size_compressed = readCompressedData(size_decompressed, size_compressed_without_checksum);
+    size_compressed = this->readCompressedData(size_decompressed, size_compressed_without_checksum);
     if (!size_compressed)
         return false;
 
     memory.resize(size_decompressed);
     working_buffer = Buffer(&memory[0], &memory[size_decompressed]);
 
-    decompress(working_buffer.begin(), size_decompressed, size_compressed_without_checksum);
+    this->decompress(working_buffer.begin(), size_decompressed, size_compressed_without_checksum);
 
     return true;
 }
 
-size_t CompressedReadBuffer::readBig(char * to, size_t n)
+template <bool has_checksum>
+size_t CompressedReadBuffer<has_checksum>::readBig(char * to, size_t n)
 {
     size_t bytes_read = 0;
 
@@ -34,13 +36,13 @@ size_t CompressedReadBuffer::readBig(char * to, size_t n)
         size_t size_decompressed;
         size_t size_compressed_without_checksum;
 
-        if (!readCompressedData(size_decompressed, size_compressed_without_checksum))
+        if (!this->readCompressedData(size_decompressed, size_compressed_without_checksum))
             return bytes_read;
 
         /// If the decompressed block is placed entirely where it needs to be copied.
         if (size_decompressed <= n - bytes_read)
         {
-            decompress(to + bytes_read, size_decompressed, size_compressed_without_checksum);
+            this->decompress(to + bytes_read, size_decompressed, size_compressed_without_checksum);
             bytes_read += size_decompressed;
             bytes += size_decompressed;
         }
@@ -51,7 +53,7 @@ size_t CompressedReadBuffer::readBig(char * to, size_t n)
             working_buffer = Buffer(&memory[0], &memory[size_decompressed]);
             pos = working_buffer.begin();
 
-            decompress(working_buffer.begin(), size_decompressed, size_compressed_without_checksum);
+            this->decompress(working_buffer.begin(), size_decompressed, size_compressed_without_checksum);
 
             bytes_read += read(to + bytes_read, n - bytes_read);
             break;
@@ -61,4 +63,7 @@ size_t CompressedReadBuffer::readBig(char * to, size_t n)
     return bytes_read;
 }
 
-}
+template class CompressedReadBuffer<true>;
+template class CompressedReadBuffer<false>;
+
+} // namespace DB

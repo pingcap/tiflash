@@ -2,14 +2,11 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
+#include <IO/CompressedReadBufferFromFile.h>
 #include <Common/PODArray.h>
 
 namespace DB
 {
-
-class CompressedReadBufferFromFile;
-
-
 /** The Native format can contain a separately located index,
   *  which allows you to understand where what column is located,
   *  and skip unnecessary columns.
@@ -94,7 +91,7 @@ private:
     IndexOfBlockForNativeFormat::Columns::const_iterator index_column_it;
 
     /// If an index is specified, then `istr` must be CompressedReadBufferFromFile.
-    CompressedReadBufferFromFile * istr_concrete;
+    CompressedReadBufferFromFile<> * istr_concrete;
 
     PODArray<double> avg_value_size_hints;
 

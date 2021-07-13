@@ -1,11 +1,11 @@
 #pragma once
 
-#include <memory>
-#include <time.h>
-
-#include <IO/createReadBufferFromFileBase.h>
 #include <IO/CompressedReadBufferBase.h>
 #include <IO/UncompressedCache.h>
+#include <IO/createReadBufferFromFileBase.h>
+#include <time.h>
+
+#include <memory>
 
 
 namespace DB
@@ -18,7 +18,9 @@ namespace DB
   * Disadvantages:
   * - in case you need to read a lot of data in a row, but of them only a part is cached, you have to do seek-and.
   */
-class CachedCompressedReadBuffer : public CompressedReadBufferBase, public ReadBuffer
+
+template <bool has_checksum = true>
+class CachedCompressedReadBuffer : public CompressedReadBufferBase<has_checksum>, public ReadBuffer
 {
 private:
     const std::string path;
@@ -41,18 +43,18 @@ private:
     clockid_t clock_type;
 
 public:
-    CachedCompressedReadBuffer(
-        const std::string & path_, UncompressedCache * cache_, size_t estimated_size_, size_t aio_threshold_,
+    CachedCompressedReadBuffer(const std::string & path_, UncompressedCache * cache_, size_t estimated_size_, size_t aio_threshold_,
         size_t buf_size_ = DBMS_DEFAULT_BUFFER_SIZE);
 
 
     void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block);
 
-    void setProfileCallback(const ReadBufferFromFileBase::ProfileCallback & profile_callback_, clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE)
+    void setProfileCallback(
+        const ReadBufferFromFileBase::ProfileCallback & profile_callback_, clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE)
     {
         profile_callback = profile_callback_;
         clock_type = clock_type_;
     }
 };
 
-}
+} // namespace DB

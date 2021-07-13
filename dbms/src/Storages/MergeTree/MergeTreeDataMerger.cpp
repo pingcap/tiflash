@@ -591,7 +591,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
         Poco::File(new_part_tmp_path).createDirectories();
         rows_sources_file_path = new_part_tmp_path + "rows_sources";
         rows_sources_uncompressed_write_buf = std::make_unique<WriteBufferFromFile>(rows_sources_file_path);
-        rows_sources_write_buf = std::make_unique<CompressedWriteBuffer>(*rows_sources_uncompressed_write_buf);
+        rows_sources_write_buf = std::make_unique<CompressedWriteBuffer<>>(*rows_sources_uncompressed_write_buf);
     }
     else
     {
