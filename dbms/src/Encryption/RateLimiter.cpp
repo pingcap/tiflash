@@ -52,14 +52,8 @@ void RateLimiter::request(Int64 bytes)
     if (!refill_balance_per_period)
         return;
 
-    if (metrics)
-        GET_METRIC(metrics, tiflash_storage_rate_limiter_total_request_bytes).Increment(bytes);
-
     if (canGrant(bytes))
     {
-        if (metrics)
-            GET_METRIC(metrics, tiflash_storage_rate_limiter_total_alloc_bytes).Increment(bytes);
-
         consumeBytes(bytes);
         return;
     }
@@ -125,11 +119,19 @@ void RateLimiter::request(Int64 bytes)
 
 bool RateLimiter::canGrant(Int64 bytes)
 {
+    if (metrics)
+    {
+        GET_METRIC(metrics, tiflash_storage_rate_limiter_total_request_bytes).Increment(bytes);
+    }
     return available_balance >= bytes;
 }
 
 void RateLimiter::consumeBytes(Int64 bytes)
 {
+    if (metrics)
+    {
+        GET_METRIC(metrics, tiflash_storage_rate_limiter_total_alloc_bytes).Increment(bytes);
+    }
     total_bytes_through += bytes;
     available_balance -= bytes;
 }
