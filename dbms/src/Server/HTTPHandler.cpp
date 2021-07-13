@@ -333,7 +333,7 @@ void HTTPHandler::processQuery(
         request, response, keep_alive_timeout,
         client_supports_http_compression, http_response_compression_method, buffer_size_http);
     if (internal_compression)
-        used_output.out_maybe_compressed = std::make_shared<CompressedWriteBuffer>(*used_output.out);
+        used_output.out_maybe_compressed = std::make_shared<CompressedWriteBuffer<>>(*used_output.out);
     else
         used_output.out_maybe_compressed = used_output.out;
 
@@ -413,7 +413,7 @@ void HTTPHandler::processQuery(
     bool in_post_compressed = false;
     if (params.getParsed<bool>("decompress", false))
     {
-        in_post_maybe_compressed = std::make_unique<CompressedReadBuffer>(*in_post);
+        in_post_maybe_compressed = std::make_unique<CompressedReadBuffer<>>(*in_post);
         in_post_compressed = true;
     }
     else
@@ -510,7 +510,7 @@ void HTTPHandler::processQuery(
     /// If 'http_native_compression_disable_checksumming_on_decompress' setting is turned on,
     /// checksums of client data compressed with internal algorithm are not checked.
     if (in_post_compressed && settings.http_native_compression_disable_checksumming_on_decompress)
-        static_cast<CompressedReadBuffer &>(*in_post_maybe_compressed).disableChecksumming();
+        static_cast<CompressedReadBuffer<> &>(*in_post_maybe_compressed).disableChecksumming();
 
     /// Add CORS header if 'add_http_cors_header' setting is turned on and the client passed
     /// Origin header.

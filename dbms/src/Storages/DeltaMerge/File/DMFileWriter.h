@@ -67,7 +67,7 @@ public:
         /// original_hashing -> compressed_buf -> plain_hashing -> plain_file
         WriteBufferFromFileBasePtr plain_file;
         HashingWriteBuffer         plain_hashing;
-        CompressedWriteBuffer      compressed_buf;
+        CompressedWriteBuffer<>    compressed_buf;
         HashingWriteBuffer         original_hashing;
 
         MinMaxIndexPtr              minmaxes;
@@ -124,7 +124,7 @@ public:
         /// original_hashing -> compressed_buf -> plain_hashing -> plain_file
         WriteBufferFromFileBasePtr plain_file;
         HashingWriteBuffer         plain_hashing;
-        CompressedWriteBuffer      compressed_buf;
+        CompressedWriteBuffer<>    compressed_buf;
         HashingWriteBuffer         original_hashing;
     };
     using SingleFileStreamPtr = std::shared_ptr<SingleFileStream>;
@@ -139,7 +139,7 @@ public:
     struct Flags
     {
     private:
-        static constexpr size_t IS_SINGLE_FILE         = 0x01;
+        static constexpr size_t IS_SINGLE_FILE = 0x01;
 
         size_t value;
 

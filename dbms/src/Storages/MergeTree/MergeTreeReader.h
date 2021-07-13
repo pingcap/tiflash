@@ -4,6 +4,8 @@
 #include <Storages/MergeTree/MarkRange.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeRangeReader.h>
+#include <IO/CachedCompressedReadBuffer.h>
+#include <IO/CompressedReadBufferFromFile.h>
 #include <Core/NamesAndTypes.h>
 
 #include<IO/CompactContext.h>
@@ -13,8 +15,7 @@ namespace DB
 {
 
 class IDataType;
-class CachedCompressedReadBuffer;
-class CompressedReadBufferFromFile;
+
 
 
 /// Reads the data between pairs of marks in the same part. When reading consecutive ranges, avoids unnecessary seeks.
@@ -94,8 +95,8 @@ private:
         bool save_marks_in_cache;
         MarkCache::MappedPtr marks;
 
-        std::unique_ptr<CachedCompressedReadBuffer> cached_buffer;
-        std::unique_ptr<CompressedReadBufferFromFile> non_cached_buffer;
+        std::unique_ptr<CachedCompressedReadBuffer<>> cached_buffer;
+        std::unique_ptr<CompressedReadBufferFromFile<>> non_cached_buffer;
     };
 
     using FileStreams = std::map<std::string, std::unique_ptr<Stream>>;

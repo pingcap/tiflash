@@ -761,7 +761,7 @@ void TCPHandler::initBlockInput()
     if (!state.block_in)
     {
         if (state.compression == Protocol::Compression::Enable)
-            state.maybe_compressed_in = std::make_shared<CompressedReadBuffer>(*in);
+            state.maybe_compressed_in = std::make_shared<CompressedReadBuffer<>>(*in);
         else
             state.maybe_compressed_in = in;
 
@@ -777,7 +777,7 @@ void TCPHandler::initBlockOutput(const Block & block)
     if (!state.block_out)
     {
         if (state.compression == Protocol::Compression::Enable)
-            state.maybe_compressed_out = std::make_shared<CompressedWriteBuffer>(
+            state.maybe_compressed_out = std::make_shared<CompressedWriteBuffer<>>(
                 *out, CompressionSettings(query_context.getSettingsRef()));
         else
             state.maybe_compressed_out = out;

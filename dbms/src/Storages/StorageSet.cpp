@@ -43,7 +43,7 @@ private:
     String backup_tmp_path;
     String backup_file_name;
     WriteBufferFromFile backup_buf;
-    CompressedWriteBuffer compressed_backup_buf;
+    CompressedWriteBuffer<> compressed_backup_buf;
     NativeBlockOutputStream backup_stream;
 };
 

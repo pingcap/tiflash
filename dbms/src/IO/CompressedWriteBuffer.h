@@ -12,6 +12,7 @@
 namespace DB
 {
 
+template <bool add_checksum = true>
 class CompressedWriteBuffer : public BufferWithOwnMemory<WriteBuffer>
 {
 private:

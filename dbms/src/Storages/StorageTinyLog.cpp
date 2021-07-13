@@ -88,7 +88,7 @@ private:
         }
 
         ReadBufferFromFile plain;
-        CompressedReadBuffer compressed;
+        CompressedReadBuffer<> compressed;
     };
 
     using FileStreams = std::map<std::string, std::unique_ptr<Stream>>;
@@ -136,7 +136,7 @@ private:
         }
 
         WriteBufferFromFile plain;
-        CompressedWriteBuffer compressed;
+        CompressedWriteBuffer<> compressed;
 
         void finalize()
         {

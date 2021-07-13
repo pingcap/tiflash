@@ -46,7 +46,7 @@ public:
             return single_file_mode ? (*mark_with_sizes)[i].mark.offset_in_decompressed_block : (*marks)[i].offset_in_decompressed_block;
         }
 
-        std::unique_ptr<CompressedReadBufferFromFileProvider> buf;
+        std::unique_ptr<CompressedReadBufferFromFileProvider<>> buf;
     };
     using StreamPtr     = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
