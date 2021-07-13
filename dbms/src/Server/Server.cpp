@@ -446,6 +446,67 @@ void backgroundInitStores(Context & global_context, Logger * log)
     std::thread(initStores).detach();
 }
 
+class FlashGrpcServerHolder
+{
+public:
+    FlashGrpcServerHolder(const Server & server, const TiFlashRaftConfig & raft_config, Logger * log)
+    {
+        grpc::ServerBuilder builder;
+        if (server.securityConfig().has_tls_config)
+        {
+            grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
+            auto options = server.securityConfig().ReadAndCacheSecurityInfo();
+            server_cred.pem_root_certs = options.pem_root_certs;
+            server_cred.pem_key_cert_pairs.push_back(
+                grpc::SslServerCredentialsOptions::PemKeyCertPair{options.pem_private_key, options.pem_cert_chain});
+            builder.AddListeningPort(raft_config.flash_server_addr, grpc::SslServerCredentials(server_cred));
+        }
+        else
+        {
+            builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
+        }
+
+        /// Init and register flash service.
+        flash_service = std::make_unique<FlashService>(server);
+        diagnostics_service = std::make_unique<DiagnosticsService>(server);
+        builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_ping_interval_without_data_ms", 10 * 1000));
+        builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_time_between_pings_ms", 10 * 1000));
+        builder.RegisterService(flash_service.get());
+        LOG_INFO(log, "Flash service registered");
+        builder.RegisterService(diagnostics_service.get());
+        LOG_INFO(log, "Diagnostics service registered");
+
+        /// Kick off grpc server.
+        // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
+        builder.SetMaxReceiveMessageSize(-1);
+        builder.SetMaxSendMessageSize(-1);
+        flash_grpc_server = builder.BuildAndStart();
+        LOG_INFO(log, "Flash grpc server listening on [" << raft_config.flash_server_addr << "]");
+        Debug::setServiceAddr(raft_config.flash_server_addr);
+    }
+
+    ~FlashGrpcServerHolder()
+    {
+        /// Shut down grpc server.
+        // wait 5 seconds for pending rpcs to gracefully stop
+        gpr_timespec deadline{5, 0, GPR_TIMESPAN};
+        LOG_INFO(log, "Begin to shut down flash grpc server");
+        flash_grpc_server->Shutdown(deadline);
+        flash_grpc_server->Wait();
+        flash_grpc_server.reset();
+        LOG_INFO(log, "Shut down flash grpc server");
+
+        /// Close flash service.
+        LOG_INFO(log, "Begin to shut down flash service");
+        flash_service.reset();
+        LOG_INFO(log, "Shut down flash service");
+    }
+private:
+    std::unique_ptr<FlashService> flash_service = nullptr;
+    std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
+    std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
+};
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
@@ -877,59 +938,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
-    std::unique_ptr<FlashService> flash_service = nullptr;
-    std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
-    std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
-    {
-        grpc::ServerBuilder builder;
-        if (security_config.has_tls_config)
-        {
-            grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
-            auto options = security_config.ReadAndCacheSecurityInfo();
-            server_cred.pem_root_certs = options.pem_root_certs;
-            server_cred.pem_key_cert_pairs.push_back(
-                grpc::SslServerCredentialsOptions::PemKeyCertPair{options.pem_private_key, options.pem_cert_chain});
-            builder.AddListeningPort(raft_config.flash_server_addr, grpc::SslServerCredentials(server_cred));
-        }
-        else
-        {
-            builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
-        }
-
-        /// Init and register flash service.
-        flash_service = std::make_unique<FlashService>(*this);
-        diagnostics_service = std::make_unique<DiagnosticsService>(*this);
-        builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_ping_interval_without_data_ms", 10 * 1000));
-        builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_time_between_pings_ms", 10 * 1000));
-        builder.RegisterService(flash_service.get());
-        LOG_INFO(log, "Flash service registered");
-        builder.RegisterService(diagnostics_service.get());
-        LOG_INFO(log, "Diagnostics service registered");
-
-        /// Kick off grpc server.
-        // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
-        builder.SetMaxReceiveMessageSize(-1);
-        builder.SetMaxSendMessageSize(-1);
-        flash_grpc_server = builder.BuildAndStart();
-        LOG_INFO(log, "Flash grpc server listening on [" << raft_config.flash_server_addr << "]");
-        Debug::setServiceAddr(raft_config.flash_server_addr);
-    }
-
-    SCOPE_EXIT({
-        /// Shut down grpc server.
-        // wait 5 seconds for pending rpcs to gracefully stop
-        gpr_timespec deadline{5, 0, GPR_TIMESPAN};
-        LOG_INFO(log, "Begin to shut down flash grpc server");
-        flash_grpc_server->Shutdown(deadline);
-        flash_grpc_server->Wait();
-        flash_grpc_server.reset();
-        LOG_INFO(log, "Shut down flash grpc server");
-
-        /// Close flash service.
-        LOG_INFO(log, "Begin to shut down flash service");
-        flash_service.reset();
-        LOG_INFO(log, "Shut down flash service");
-    });
+    FlashGrpcServerHolder flashGrpcServerHolder(*this, raft_config, log);
 
     {
         Poco::Timespan keep_alive_timeout(config().getUInt("keep_alive_timeout", 10), 0);
