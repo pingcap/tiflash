@@ -3,6 +3,12 @@
 *\#
 .tramp_history
 
+# vscode clangd cache
+.cache
+
+# git patch reject report
+*.rej
+
 # vim cache files
 *.swp
 
