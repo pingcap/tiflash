@@ -56,3 +56,6 @@
 [submodule "contrib/libunwind"]
 	path = contrib/libunwind
 	url = https://github.com/libunwind/libunwind
+[submodule "contrib/fmtlib"]
+	path = contrib/fmtlib
+	url = https://github.com/fmtlib/fmt.git
