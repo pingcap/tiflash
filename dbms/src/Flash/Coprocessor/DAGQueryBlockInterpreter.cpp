@@ -236,8 +236,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             }
             catch (DB::Exception & e)
             {
-                e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                    + "`, table_id: " + DB::toString(table_id) + ")");
+                e.addMessage("(while doing learner read for table, table_id: " + DB::toString(table_id) + ")");
                 throw;
             }
         }
@@ -804,6 +803,16 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
 
         // add cast if type is not match
         analyzer->appendAggSelect(chain, query_block.aggregation->aggregation());
+        if (query_block.having != nullptr)
+        {
+            std::vector<const tipb::Expr *> having_conditions;
+            for (auto & c : query_block.having->selection().conditions())
+                having_conditions.push_back(&c);
+            analyzer->appendWhere(chain, having_conditions, res.having_column_name);
+            res.has_having = true;
+            res.before_having = chain.getLastActions();
+            chain.addStep();
+        }
     }
     // Or TopN, not both.
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
@@ -870,7 +879,6 @@ void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const 
     }
 
     Aggregator::Params params(header, keys, aggregates, false, settings.max_rows_to_group_by, settings.group_by_overflow_mode,
-        settings.compile && !has_collator ? &context.getCompiler() : nullptr, settings.min_count_to_compile,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
         settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath(),
@@ -1371,6 +1379,12 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         // execute aggregation
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
         recordProfileStreams(pipeline, query_block.aggregation_name);
+    }
+    if (res.has_having)
+    {
+        // execute having
+        executeWhere(pipeline, res.before_having, res.having_column_name);
+        recordProfileStreams(pipeline, query_block.having_name);
     }
     if (res.before_order_and_select)
     {
