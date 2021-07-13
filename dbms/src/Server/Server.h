@@ -18,6 +18,9 @@
 namespace DB
 {
 
+class FlashGrpcServerHolder;
+class TcpHttpServersHolder;
+
 class Server : public BaseDaemon, public IServer
 {
 public:
@@ -56,6 +59,9 @@ private:
     std::unique_ptr<Context> global_context;
 
     TiFlashSecurityConfig security_config;
+
+    friend class FlashGrpcServerHolder;
+    friend class TcpHttpServersHolder;
 };
 
 }
