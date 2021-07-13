@@ -99,22 +99,22 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
 }
 
 static std::tuple<std::optional<::tipb::DAGRequest>, std::optional<DAGSchema>> //
-buildRemoteTS(const std::unordered_map<RegionID, const RegionInfo &> & region_retry, const DAGQueryBlock & query_block,
-    const tipb::TableScan & ts, const String & handle_column_name, const TableStructureLockHolder &, const ManageableStoragePtr & storage,
-    Context & context, Poco::Logger * log)
+buildRemoteTS(const RegionRetryList & region_retry, const DAGQueryBlock & query_block, const tipb::TableScan & ts,
+    const String & handle_column_name, const TableStructureLockHolder &, const ManageableStoragePtr & storage, Context & context,
+    Poco::Logger * log)
 {
     if (region_retry.empty())
         return std::make_tuple(std::nullopt, std::nullopt);
 
-    for (auto it : region_retry)
+    for (auto & r : region_retry)
     {
-        context.getQueryContext().getDAGContext()->retry_regions.push_back(it.second);
+        context.getQueryContext().getDAGContext()->retry_regions.push_back(r.get());
     }
     LOG_DEBUG(log, ({
         std::stringstream ss;
         ss << "Start to retry " << region_retry.size() << " regions (";
         for (auto & r : region_retry)
-            ss << r.first << ",";
+            ss << r.get().region_id << ",";
         ss << ")";
         ss.str();
     }));
@@ -189,11 +189,14 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     auto mvcc_query_info = std::make_unique<MvccQueryInfo>(true, settings.read_tso);
     // We need to validate regions snapshot after getting streams from storage.
     LearnerReadSnapshot learner_read_snapshot;
-    std::unordered_map<RegionID, const RegionInfo &> region_retry;
+
+    // it should be hash map because duplicated region id may occur if merge regions to retry of dag.
+    RegionRetryList region_retry;
+
     if (!dag.isBatchCop())
     {
         if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *mvcc_query_info, table_id); info_retry)
-            throw RegionException({(*info_retry).begin()->first}, status);
+            throw RegionException({(*info_retry).begin()->get().region_id}, status);
 
         learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
     }
@@ -211,7 +214,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
                 {
                     region_retry = std::move(*retry);
                     for (auto & r : region_retry)
-                        force_retry.emplace(r.first);
+                        force_retry.emplace(r.get().region_id);
                 }
                 if (mvcc_query_info->regions_query_info.empty())
                     break;
@@ -316,7 +319,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
 
     for (auto & region_info : dag.getRetryRegions())
     {
-        region_retry.emplace(region_info.region_id, region_info);
+        region_retry.emplace_back(region_info);
     }
 
     // Should build these vars under protect of `table_structure_lock`.
@@ -338,7 +341,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
         std::vector<pingcap::coprocessor::KeyRange> ranges;
         for (auto & info : region_retry)
         {
-            for (auto & range : info.second.key_ranges)
+            for (auto & range : info.get().key_ranges)
                 ranges.emplace_back(*range.first, *range.second);
         }
         sort(ranges.begin(), ranges.end());
@@ -386,7 +389,7 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
     const TableStructureLockHolder &,                //
     const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
     const LearnerReadSnapshot & learner_read_snapshot, //
-    DAGPipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry)
+    DAGPipeline & pipeline, RegionRetryList & region_retry)
 {
     QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
     auto & tmt = context.getTMTContext();
@@ -448,7 +451,7 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
                             // move the error regions info from `query_info.mvcc_query_info->regions_query_info` to `region_retry`
                             if (auto region_iter = dag_regions.find(iter->region_id); likely(region_iter != dag_regions.end()))
                             {
-                                region_retry.emplace(region_iter->first, region_iter->second);
+                                region_retry.emplace_back(region_iter->second);
                                 ss << region_iter->first << ",";
                             }
                             iter = regions_query_info.erase(iter);
@@ -474,7 +477,7 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
                         auto iter = dag_regions.find(region.region_id);
                         if (likely(iter != dag_regions.end()))
                         {
-                            region_retry.emplace(iter->first, iter->second);
+                            region_retry.emplace_back(iter->second);
                             ss << iter->first << ",";
                         }
                     }
