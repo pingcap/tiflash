@@ -256,7 +256,7 @@ MergeTreeReader::Stream::Stream(
     /// Initialize the objects that shall be used to perform read operations.
     if (uncompressed_cache)
     {
-        auto buffer = std::make_unique<CachedCompressedReadBuffer>(
+        auto buffer = std::make_unique<CachedCompressedReadBuffer<>>(
             path, uncompressed_cache, estimated_size, aio_threshold, buffer_size);
 
         if (profile_callback)
@@ -267,7 +267,7 @@ MergeTreeReader::Stream::Stream(
     }
     else
     {
-        auto buffer = std::make_unique<CompressedReadBufferFromFile>(
+        auto buffer = std::make_unique<CompressedReadBufferFromFile<>>(
             path, estimated_size, aio_threshold, buffer_size);
 
         if (profile_callback)

@@ -57,7 +57,7 @@ protected:
         std::ostringstream substream_mark_stream;
         std::unique_ptr<WriteBufferFromOStream> substream_ostream;
         std::shared_ptr<HashingWriteBuffer> plain_hashing;
-        CompressedWriteBuffer compressed_buf;
+        CompressedWriteBuffer<> compressed_buf;
         HashingWriteBuffer compressed;
 
         /// marks -> marks_file

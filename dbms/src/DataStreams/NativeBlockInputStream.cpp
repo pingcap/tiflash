@@ -43,7 +43,7 @@ NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server
     : istr(istr_), server_revision(server_revision_),
     use_index(true), index_block_it(index_block_it_), index_block_end(index_block_end_)
 {
-    istr_concrete = typeid_cast<CompressedReadBufferFromFile *>(&istr);
+    istr_concrete = typeid_cast<CompressedReadBufferFromFile<> *>(&istr);
     if (!istr_concrete)
         throw Exception("When need to use index for NativeBlockInputStream, istr must be CompressedReadBufferFromFile.", ErrorCodes::LOGICAL_ERROR);
 

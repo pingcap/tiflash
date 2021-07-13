@@ -38,8 +38,8 @@ public:
 private:
     ReadBufferFromFile file_buf;
     HashingReadBuffer compressed_hashing_buf;
-    CompressedReadBuffer uncompressing_buf;
-
+    CompressedReadBuffer<> uncompressing_buf;
+    
 public:
     HashingReadBuffer uncompressed_hashing_buf;
 
