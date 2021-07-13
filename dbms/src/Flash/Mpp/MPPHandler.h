@@ -242,9 +242,10 @@ enum TaskStatus
 
 struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
+    Context context;
+
     /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
     BlockIO io;
-    Context context;
 
     std::unique_ptr<tipb::DAGRequest> dag_req;
     std::unique_ptr<DAGContext> dag_context;
