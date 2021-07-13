@@ -122,14 +122,18 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
                 Errors::Coprocessor::BadRequest);
         }
     }
-    std::unordered_map<RegionVerID, RegionInfo> regions;
+    RegionInfoMap regions;
+    RegionInfoList retry_regions;
     for (auto & r : task_request.regions())
     {
-        RegionVerID region_ver_id(r.region_id(), r.region_epoch().conf_ver(), r.region_epoch().version());
-        auto res = regions.emplace(region_ver_id, RegionInfo(region_ver_id, CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+        auto res = regions.emplace(r.region_id(),
+            RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
+                CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
         if (!res.second)
-            throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + region_ver_id.toString(),
-                Errors::Coprocessor::BadRequest);
+        {
+            retry_regions.emplace_back(RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
+                CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+        }
     }
     // set schema ver and start ts.
     auto schema_ver = task_request.schema_ver();
@@ -176,7 +180,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
 
-    DAGQuerySource dag(context, regions, *dag_req, true);
+    DAGQuerySource dag(context, regions, retry_regions, *dag_req, true);
 
     if (dag_context->isRootMPPTask())
     {
@@ -401,9 +405,9 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         for (auto region : retry_regions)
         {
             auto * retry_region = response->add_retry_regions();
-            retry_region->set_id(region.region_ver_id.id);
-            retry_region->mutable_region_epoch()->set_conf_ver(region.region_ver_id.conf_ver);
-            retry_region->mutable_region_epoch()->set_version(region.region_ver_id.ver);
+            retry_region->set_id(region.region_id);
+            retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
+            retry_region->mutable_region_epoch()->set_version(region.region_version);
         }
         if (task->dag_context->isRootMPPTask())
         {
