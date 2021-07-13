@@ -453,6 +453,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     setThreadName("TiFlashMain");
 
     Logger * log = &logger();
+
+    LOG_ERROR(log, "==================Starting up TiFlash!=================");
+
 #ifndef NDEBUG
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint

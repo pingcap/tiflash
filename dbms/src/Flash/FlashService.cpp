@@ -63,16 +63,25 @@ grpc::Status FlashService::Coprocessor(
         GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
-    grpc::Status ret = executeInThreadPool(cop_pool, [&] {
-        auto [context, status] = createDBContext(grpc_context);
-        if (!status.ok())
-        {
-            return status;
-        }
-        CoprocessorContext cop_context(context, request->context(), *grpc_context);
-        CoprocessorHandler cop_handler(cop_context, request, response);
-        return cop_handler.execute();
-    });
+    //    grpc::Status ret = executeInThreadPool(cop_pool, [&] {
+    //        auto [context, status] = createDBContext(grpc_context);
+    //        if (!status.ok())
+    //        {
+    //            return status;
+    //        }
+    //        CoprocessorContext cop_context(context, request->context(), *grpc_context);
+    //        CoprocessorHandler cop_handler(cop_context, request, response);
+    //        return cop_handler.execute();
+    //    });
+
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+    CoprocessorContext cop_context(context, request->context(), *grpc_context);
+    CoprocessorHandler cop_handler(cop_context, request, response);
+    auto ret = cop_handler.execute();
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done: " << ret.error_code() << ", " << ret.error_message());
     return ret;
@@ -97,16 +106,25 @@ grpc::Status FlashService::Coprocessor(
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
-    grpc::Status ret = executeInThreadPool(batch_cop_pool, [&] {
-        auto [context, status] = createDBContext(grpc_context);
-        if (!status.ok())
-        {
-            return status;
-        }
-        CoprocessorContext cop_context(context, request->context(), *grpc_context);
-        BatchCoprocessorHandler cop_handler(cop_context, request, writer);
-        return cop_handler.execute();
-    });
+    //    grpc::Status ret = executeInThreadPool(batch_cop_pool, [&] {
+    //        auto [context, status] = createDBContext(grpc_context);
+    //        if (!status.ok())
+    //        {
+    //            return status;
+    //        }
+    //        CoprocessorContext cop_context(context, request->context(), *grpc_context);
+    //        BatchCoprocessorHandler cop_handler(cop_context, request, writer);
+    //        return cop_handler.execute();
+    //    });
+
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+    CoprocessorContext cop_context(context, request->context(), *grpc_context);
+    BatchCoprocessorHandler cop_handler(cop_context, request, writer);
+    auto ret = cop_handler.execute();
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done: " << ret.error_code() << ", " << ret.error_message());
     return ret;
