@@ -201,6 +201,7 @@ TEST_STACKING(XXH3)
 template <ChecksumAlgo D>
 void runStackedSeekingTest()
 {
+    auto local_engine                                                 = std::mt19937_64{seed};
     auto [limiter, provider]                                          = prepareIO();
     auto                                                       config = DMConfiguration{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
     size_t                                                     size   = 1024 * 1024 * 1024;
@@ -216,6 +217,10 @@ void runStackedSeekingTest()
             std::vector<char> slice;
             slice.resize(length);
             std::copy(data.begin() + acc, data.begin() + acc + length, slice.begin());
+            if (local_engine() & 1)
+            {
+                compressBuffer.next();
+            }
             auto x = buffer->count();         // compressed position
             auto y = compressBuffer.offset(); // uncompressed position
             compressBuffer.write(slice.data(), slice.size());
@@ -224,7 +229,7 @@ void runStackedSeekingTest()
     }
     {
         auto buffer = CompressedReadBufferFromFileProvider<false>(provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, config);
-        std::shuffle(slices.begin(), slices.end(), eng);
+        std::shuffle(slices.begin(), slices.end(), local_engine);
         for (const auto & [x, y, z] : slices)
         {
             buffer.seek(y, z);
