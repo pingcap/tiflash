@@ -929,8 +929,8 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     {
         if (!allow_zero_in_date && (month == 0 || day == 0))
         {
-            String buff = fmt::format("{0:04d}-{1:02d}-{2:02d}", year, month, day);
-            throw TiFlashException("Incorrect datetime value: " + buff, Errors::Types::WrongValue);
+            throw TiFlashException(
+                fmt::format("Incorrect datetime value: {0:04d}-{1:02d}-{2:02d}", year, month, day), Errors::Types::WrongValue);
         }
     }
 
@@ -952,8 +952,8 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     }
     if (day > max_day)
     {
-        String buff = fmt::format("{0:04d}-{1:02d}-{2:02d}", year, month, day);
-        throw TiFlashException("Incorrect datetime value: " + buff, Errors::Types::WrongValue);
+        throw TiFlashException(
+            fmt::format("Incorrect datetime value: {0:04d}-{1:02d}-{2:02d}", year, month, day), Errors::Types::WrongValue);
     }
 
     if (hour < 0 || hour >= 24)
