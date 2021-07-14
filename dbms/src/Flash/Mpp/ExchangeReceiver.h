@@ -76,31 +76,7 @@ private:
 
     void ReadLoop(const String & meta_raw, size_t source_index);
 
-    bool decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info)
-    {
-        bool ret = true;
-        std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
-        if (!resp_ptr->ParseFromString(p.data()))
-        {
-            resp_ptr = nullptr;
-            ret = false;
-        }
-        std::unique_lock<std::mutex> lock(mu);
-        cv.wait(lock, [&] { return result_buffer.size() < max_buffer_size || state != NORMAL; });
-        if (state == NORMAL)
-        {
-            if (resp_ptr != nullptr)
-                result_buffer.emplace(resp_ptr, source_index, req_info);
-            else
-                result_buffer.emplace(resp_ptr, source_index, req_info, true, "Error while decoding MPPDataPacket");
-        }
-        else
-        {
-            ret = false;
-        }
-        cv.notify_all();
-        return ret;
-    }
+    bool decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info);
 
 public:
     ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_)
@@ -144,34 +120,7 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
-    ExchangeReceiverResult nextResult()
-    {
-        std::unique_lock<std::mutex> lk(mu);
-        cv.wait(lk, [&] { return !result_buffer.empty() || live_connections == 0 || state != NORMAL; });
-        ExchangeReceiverResult result;
-        if (state != NORMAL)
-        {
-            String msg;
-            if (state == CANCELED)
-                msg = "query canceled";
-            else if (state == CLOSED)
-                msg = "ExchangeReceiver closed";
-            else
-                msg = err.message();
-            result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
-        }
-        else if (result_buffer.empty())
-        {
-            result = {nullptr, 0, "ExchangeReceiver", false, "", true};
-        }
-        else
-        {
-            result = result_buffer.front();
-            result_buffer.pop();
-        }
-        cv.notify_all();
-        return result;
-    }
+    ExchangeReceiverResult nextResult();
 
     size_t getSourceNum() { return source_num; }
     String getName() { return "ExchangeReceiver"; }
