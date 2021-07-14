@@ -13,9 +13,9 @@ void encodeDAGFloat32(Float32 f, WriteBuffer & ss) { EncodeFloat64(f, ss); }
 
 void encodeDAGFloat64(Float64 f, WriteBuffer & ss) { EncodeFloat64(f, ss); }
 
-void encodeDAGString(const String & s, WriteBuffer & ss) { ss << s; }
+void encodeDAGString(const String & s, WriteBuffer & ss) { writeString(s, ss); }
 
-void encodeDAGBytes(const String & bytes, WriteBuffer & ss) { ss << bytes; }
+void encodeDAGBytes(const String & bytes, WriteBuffer & ss) { writeString(bytes, ss); }
 
 void encodeDAGDecimal(const Field & field, WriteBuffer & ss) { EncodeDecimal(field, ss); }
 

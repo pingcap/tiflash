@@ -125,7 +125,7 @@ inline TiKVKey genKey(const TiDB::TableInfo & table_info, std::vector<Field> key
     {
         DB::EncodeDatum(keys[i], table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset].getCodecFlag(), ss);
     }
-    return encodeAsTiKVKey(key + ss.str());
+    return encodeAsTiKVKey(key + ss.releaseStr());
 }
 
 inline bool checkKeyPaddingValid(const char * ptr, const UInt8 pad_size)

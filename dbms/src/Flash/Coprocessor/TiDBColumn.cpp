@@ -32,6 +32,7 @@ void TiDBColumn::clear()
     null_bitmap.clear();
     var_offsets.clear();
     var_offsets.push_back(0);
+    data.restart();
     current_data_size = 0;
 }
 
