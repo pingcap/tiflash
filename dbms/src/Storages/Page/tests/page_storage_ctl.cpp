@@ -244,7 +244,7 @@ void dump_all_entries(DB::PageFileSet & page_files, int32_t mode)
         DB::PageEntriesEdit  edit;
         DB::PageIdAndEntries id_and_caches;
 
-        auto reader = const_cast<DB::PageFile &>(page_file).createMetaMergingReader(/*meta_file_buffer_size=*/DBMS_DEFAULT_BUFFER_SIZE);
+        auto reader = const_cast<DB::PageFile &>(page_file).createMetaMergingReader(/*meta_file_buffer_size=*/DBMS_DEFAULT_META_READER_BUFFER_SIZE);
 
         while (reader->hasNext())
         {

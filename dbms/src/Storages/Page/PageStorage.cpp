@@ -99,7 +99,7 @@ PageFormat::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_
         return STORAGE_FORMAT_CURRENT.page;
 
     // Simply check the last PageFile is good enough
-    auto reader = const_cast<PageFile &>(*page_files.rbegin()).createMetaMergingReader(/*meta_file_buffer_size=*/DBMS_DEFAULT_BUFFER_SIZE);
+    auto reader = const_cast<PageFile &>(*page_files.rbegin()).createMetaMergingReader(/*meta_file_buffer_size=*/DBMS_DEFAULT_META_READER_BUFFER_SIZE);
 
     PageFormat::Version max_binary_version = PageFormat::V1;
     PageFormat::Version temp_version       = STORAGE_FORMAT_CURRENT.page;

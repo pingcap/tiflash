@@ -184,7 +184,7 @@ try
 
     PageStorage::MetaMergingQueue mergine_queue;
     {
-        auto reader = page_file.createMetaMergingReader(/*meta_file_buffer_size=*/DBMS_DEFAULT_BUFFER_SIZE);
+        auto reader = page_file.createMetaMergingReader(/*meta_file_buffer_size=*/DBMS_DEFAULT_META_READER_BUFFER_SIZE);
         reader->moveNext();
         mergine_queue.push(std::move(reader));
     }
