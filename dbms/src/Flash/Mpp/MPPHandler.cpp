@@ -320,12 +320,13 @@ void MPPTask::runImpl(const MPPTaskProxyPtr & task_proxy)
             while (!allTunnelConnected())
             {
                 auto [cancelled, has_new_writer, tunnel_map] = task_proxy->getNewTunnelWriters();
-                if (task_proxy->hasCancelled())
+                if (cancelled)
                 {
                     LOG_WARNING(log, "task has been cancelled, skip running");
                     return;
                 }
-                connectTunnelWriters(tunnel_map);
+                if (has_new_writer)
+                    connectTunnelWriters(tunnel_map);
             }
 
 
