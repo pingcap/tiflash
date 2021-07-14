@@ -141,7 +141,8 @@ grpc::Status FlashService::Coprocessor(
     return mpp_handler.execute(context, response);
 }
 
-::grpc::Status FlashService::IsAlive(::grpc::ServerContext * grpc_context [[maybe_unused]], const ::mpp::IsAliveRequest * request [[maybe_unused]], ::mpp::IsAliveResponse * response [[maybe_unused]])
+::grpc::Status FlashService::IsAlive(::grpc::ServerContext * grpc_context [[maybe_unused]],
+    const ::mpp::IsAliveRequest * request [[maybe_unused]], ::mpp::IsAliveResponse * response [[maybe_unused]])
 {
     if (!security_config.checkGrpcContext(grpc_context))
     {
@@ -155,7 +156,7 @@ grpc::Status FlashService::Coprocessor(
     }
 
     auto & tmt_context = context.getTMTContext();
-    response->set_available(!tmt_context.getTerminated());
+    response->set_available(tmt_context.getStoreStatus() == TMTContext::StoreStatus::Running);
     return ::grpc::Status::OK;
 }
 
