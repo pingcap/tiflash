@@ -63,7 +63,7 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
     {
         /// use max_streams * 5 as the default receiver buffer size, maybe make it more configurable
         mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
-            context, dag_query_block.source->exchange_receiver(), dag.getDAGContext().getMPPTaskMeta(), max_streams * 5);
+            context, dag_query_block.source->exchange_receiver(), dag.getDAGContext().getMPPTaskMeta(), max_streams);
     }
 }
 

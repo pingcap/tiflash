@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/ConcurrentBoundedQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
@@ -48,6 +49,16 @@ enum State
     CLOSED,
 };
 
+struct ReceivedPacket
+{
+    ReceivedPacket(){}
+    std::shared_ptr<mpp::MPPDataPacket> packet;
+    size_t source_index;
+    String* req_info;
+};
+
+using PacketsPool =  ConcurrentBoundedQueue<std::shared_ptr<ReceivedPacket>>;
+
 class ExchangeReceiver
 {
 public:
@@ -59,16 +70,16 @@ private:
     tipb::ExchangeReceiver pb_exchange_receiver;
     size_t source_num;
     ::mpp::TaskMeta task_meta;
+    size_t max_streams;
     size_t max_buffer_size;
     std::vector<std::thread> workers;
     DAGSchema schema;
-
-    // TODO: should be a concurrency bounded queue.
     std::mutex mu;
     std::condition_variable cv;
-    std::queue<ExchangeReceiverResult> result_buffer;
+    PacketsPool empty_packets;
+    PacketsPool full_packets;
     Int32 live_connections;
-    State state;
+    std::atomic<State> state;
     Exception err;
     Logger * log;
 
@@ -76,15 +87,16 @@ private:
 
     void ReadLoop(const String & meta_raw, size_t source_index);
 
-    bool decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info);
-
 public:
-    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_)
+    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_streams_)
         : cluster(context_.getTMTContext().getKVCluster()),
           pb_exchange_receiver(exc),
           source_num(pb_exchange_receiver.encoded_task_meta_size()),
           task_meta(meta),
-          max_buffer_size(max_buffer_size_),
+          max_streams(max_streams_),
+          max_buffer_size(max_streams_*10),
+          empty_packets(max_buffer_size),
+          full_packets(max_buffer_size),
           live_connections(0),
           state(NORMAL),
           log(&Logger::get("exchange_receiver"))
@@ -94,6 +106,13 @@ public:
             String name = "exchange_receiver_" + std::to_string(i);
             ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
             schema.push_back(std::make_pair(name, info));
+        }
+
+        /// init empty packets
+        for (size_t i=0;i< max_buffer_size;++i)
+        {
+            auto packet = std::make_shared<ReceivedPacket>();
+            empty_packets.push(packet);
         }
         setUpConnection();
     }

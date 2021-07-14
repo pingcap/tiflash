@@ -54,23 +54,29 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         grpc::ClientContext client_context;
         auto reader = cluster->rpc_client->sendStreamRequest(req->sender_meta().address(), &client_context, call);
         reader->WaitForInitialMetadata();
-        // Block until the next result is available in the completion queue "cq".
-        mpp::MPPDataPacket packet;
         String req_info = "tunnel" + std::to_string(sender_task->task_id()) + "+" + std::to_string(task_meta.task_id());
+        // Block until the next result is available in the completion queue "cq".
         for (;;)
         {
             LOG_TRACE(log, "begin next ");
-            bool success = reader->Read(&packet);
+            std::shared_ptr<ReceivedPacket> packet;
+            empty_packets.pop(packet);
+            packet->req_info = &req_info;
+            packet->source_index = source_index;
+            bool success = reader->Read(packet->packet.get());
             if (!success)
                 break;
-            if (packet.has_error())
+            if (packet->packet->has_error())
             {
-                throw Exception("exchange receiver meet error : " + packet.error().msg());
+                throw Exception("exchange receiver meet error : " + packet->packet->error().msg());
             }
-            if (!decodePacket(packet, source_index, req_info))
+            if (state == NORMAL)
             {
-                meet_error = true;
-                LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
+                full_packets.push(packet);
+            }
+            else
+            {
+                LOG_WARNING(log, "Receiver's status is not normal, exit from ReadLoop");
                 break;
             }
         }
@@ -94,41 +100,34 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
     std::lock_guard<std::mutex> lock(mu);
     live_connections--;
     if (meet_error && state == NORMAL)
+    {
         state = ERROR;
+    }
+    if (live_connections == 0)
+    {
+        if (state == NORMAL)
+        {
+            /// in normal case, notify each stream to stop by sending it a nullptr
+            for (size_t i = 0; i < max_streams; ++i)
+            {
+                full_packets.push(nullptr);
+            }
+        }
+        else
+        {
+            /// in error case, prevent a stream from being blocked when pop a packet
+            while ( full_packets.size() < max_streams)
+            {
+                full_packets.push(nullptr);
+            }
+        }
+    }
     cv.notify_all();
     LOG_DEBUG(log, "read thread end!!! live connections: " << std::to_string(live_connections));
 }
 
-bool ExchangeReceiver::decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info)
-{
-    bool ret = true;
-    std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
-    if (!resp_ptr->ParseFromString(p.data()))
-    {
-        resp_ptr = nullptr;
-        ret = false;
-    }
-    std::unique_lock<std::mutex> lock(mu);
-    cv.wait(lock, [&] { return result_buffer.size() < max_buffer_size || state != NORMAL; });
-    if (state == NORMAL)
-    {
-        if (resp_ptr != nullptr)
-            result_buffer.emplace(resp_ptr, source_index, req_info);
-        else
-            result_buffer.emplace(resp_ptr, source_index, req_info, true, "Error while decoding MPPDataPacket");
-    }
-    else
-    {
-        ret = false;
-    }
-    cv.notify_all();
-    return ret;
-}
-
 ExchangeReceiverResult ExchangeReceiver::nextResult()
 {
-    std::unique_lock<std::mutex> lk(mu);
-    cv.wait(lk, [&] { return !result_buffer.empty() || live_connections == 0 || state != NORMAL; });
     ExchangeReceiverResult result;
     if (state != NORMAL)
     {
@@ -141,16 +140,36 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
             msg = err.message();
         result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
     }
-    else if (result_buffer.empty())
+    else if (full_packets.size()==0 && live_connections==0)
     {
         result = {nullptr, 0, "ExchangeReceiver", false, "", true};
     }
     else
     {
-        result = result_buffer.front();
-        result_buffer.pop();
+        std::shared_ptr<ReceivedPacket> packet;
+        full_packets.pop(packet);
+        if (packet != nullptr)
+        {
+            std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
+            if (!resp_ptr->ParseFromString(packet->packet->data()))
+            {
+                result = {nullptr, 0, "ExchangeReceiver", true, "decode error", false};
+            }
+            else
+            {
+                result = {resp_ptr, packet->source_index, *packet->req_info};
+                packet->packet->Clear();
+                empty_packets.push(std::move(packet));
+            }
+        }
+        else if (packet == nullptr)
+        {
+            if(live_connections > 0)
+                result = {nullptr, 0, "ExchangeReceiver", true, "unknown errors", false};
+            else
+                result = {nullptr, 0, "ExchangeReceiver", false, "", true};
+        }
     }
-    cv.notify_all();
     return result;
 }
 
