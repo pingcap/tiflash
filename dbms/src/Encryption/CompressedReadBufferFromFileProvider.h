@@ -3,8 +3,9 @@
 #include <Encryption/FileProvider.h>
 #include <IO/CompressedReadBufferBase.h>
 #include <IO/ReadBufferFromFileBase.h>
-
+#include <Storages/DeltaMerge/File/DMConfigFile.h>
 #include <time.h>
+
 #include <memory>
 
 
@@ -33,6 +34,9 @@ private:
 public:
     CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider, const std::string & path, const EncryptionPath & encryption_path,
         size_t estimated_size, size_t aio_threshold, const ReadLimiterPtr & read_limiter_, size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE);
+
+    CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider, const std::string & path, const EncryptionPath & encryption_path,
+        const ::DB::DM::DMConfiguration & configuration);
 
     void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block);
 

@@ -111,6 +111,15 @@ size_t CompressedReadBufferFromFileProvider<has_checksum>::readBig(char * to, si
 
     return bytes_read;
 }
+template <bool has_checksum>
+CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider,
+    const std::string & path, const EncryptionPath & encryption_path, const DM::DMConfiguration & configuration)
+    : BufferWithOwnMemory<ReadBuffer>(0),
+      p_file_in(createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, configuration)),
+      file_in(*p_file_in)
+{
+    this->compressed_in = &file_in;
+}
 
 template class CompressedReadBufferFromFileProvider<true>;
 template class CompressedReadBufferFromFileProvider<false>;

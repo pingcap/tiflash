@@ -249,7 +249,7 @@ private:
         {
             // read the header
             auto headerOffset = targetFrame * (sizeof(ChecksumFrame<Backend>) + frameSize);
-            auto result       = ::lseek(getFD(), headerOffset, SEEK_SET);
+            auto result       = in->seek(static_cast<off_t>(headerOffset), SEEK_SET);
             if (result == -1)
             {
                 throwFromErrno("Cannot seek through file " + in->getFileName(), ErrorCodes::CANNOT_SEEK_THROUGH_FILE);

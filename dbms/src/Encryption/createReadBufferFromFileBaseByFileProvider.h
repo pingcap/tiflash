@@ -2,6 +2,8 @@
 
 #include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFileBase.h>
+#include <Storages/DeltaMerge/File/DMConfigFile.h>
+
 #include <memory>
 #include <string>
 
@@ -29,4 +31,11 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
     int flags_ = -1,
     char * existing_memory_ = nullptr,
     size_t alignment = 0);
+
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(FileProviderPtr & file_provider,
+    const std::string & filename_,
+    const EncryptionPath & encryption_path_,
+    const DM::DMConfiguration& configuration,
+    int flags_ = -1);
+
 } // namespace DB

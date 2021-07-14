@@ -5,6 +5,7 @@
 #include <IO/ReadBufferAIO.h>
 #endif
 #include <Common/ProfileEvents.h>
+#include <Storages/DeltaMerge/File/Checksum/ChecksumBuffer.h>
 
 
 namespace ProfileEvents
@@ -34,6 +35,27 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
         // TODO: support encryption when AIO enabled
         throw Exception("AIO is not implemented when create file using FileProvider", ErrorCodes::NOT_IMPLEMENTED);
     }
+}
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(FileProviderPtr & file_provider,
+    const std::string & filename_, const EncryptionPath & encryption_path_, const DM::DMConfiguration & configuration, int flags_)
+{
+
+    ProfileEvents::increment(ProfileEvents::CreatedReadBufferOrdinary);
+    auto filePtr = file_provider->newRandomAccessFile(filename_, encryption_path_, flags_);
+    switch (configuration.getChecksumAlgorithm())
+    {
+        case DM::ChecksumAlgo::None:
+            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::None>>(filePtr);
+        case DM::ChecksumAlgo::CRC32:
+            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::CRC32>>(filePtr);
+        case DM::ChecksumAlgo::CRC64:
+            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::CRC64>>(filePtr);
+        case DM::ChecksumAlgo::City128:
+            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::City128>>(filePtr);
+        case DM::ChecksumAlgo::XXH3:
+            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::XXH3>>(filePtr);
+    }
+    throw Exception("error creating framed checksum buffer instance: checksum unrecognized");
 }
 
 } // namespace DB
