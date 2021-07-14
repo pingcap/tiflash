@@ -1117,7 +1117,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
-            global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), *config, log);
+            global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), *config);
         },
         /* already_loaded = */ true);
 
@@ -1175,7 +1175,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Init Rate Limiter
     {
-        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), config(), log);
+        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), config());
     }
 
     /// Set path for format schema files

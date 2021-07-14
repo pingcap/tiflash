@@ -1,5 +1,4 @@
 #include <Encryption/RateLimiter.h>
-#include <Poco/Logger.h>
 #include <gtest/gtest.h>
 
 #include <ctime>
@@ -134,8 +133,7 @@ TEST(ReadLimiter_test, IOStat)
     //int ret = ::fsync(fd);
     //ASSERT_EQ(ret, 0) << strerror(errno);
 
-    auto log = &Poco::Logger::get("IOStat");
-    auto io_info = io_rate_limiter.getCurrentIOInfo(log);
+    auto io_info = io_rate_limiter.getCurrentIOInfo();
     ASSERT_GE(io_info.total_write_bytes, buf_size);
     ASSERT_GE(io_info.total_read_bytes, buf_size);
 }
@@ -202,8 +200,7 @@ TEST(ReadLimiter_test, IOStatMultiThread)
 
     IORateLimiter io_rate_limiter;
     io_rate_limiter.setBackgroundThreadIds(bg_pids);
-    auto log = &Poco::Logger::get("IOStat");
-    auto io_info = io_rate_limiter.getCurrentIOInfo(log);
+    auto io_info = io_rate_limiter.getCurrentIOInfo();
     std::cout << io_info.toString() << std::endl;
     ASSERT_GE(io_info.total_read_bytes, buf_size * (bg_thread_count + fg_thread_count));
     ASSERT_GE(io_info.total_write_bytes, buf_size * (bg_thread_count + fg_thread_count));

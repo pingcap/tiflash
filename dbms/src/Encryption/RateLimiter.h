@@ -21,6 +21,14 @@ namespace DB
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
+enum class LimiterType
+{
+    FG_WRITE = 1,
+    BG_WRITE = 2,
+    FG_READ = 3,
+    BG_READ = 4,
+};
+
 // RateLimiter is to control write rate of background tasks
 // constructor parameters:
 // `rate_limit_per_sec_`: controls the total write rate of background tasks in bytes per second, 0 means no limit
@@ -32,7 +40,7 @@ using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 class RateLimiter
 {
 public:
-    RateLimiter(TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, UInt64 refill_period_ms_ = 100);
+    RateLimiter(TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_ = 100);
 
     virtual ~RateLimiter();
 
@@ -82,6 +90,8 @@ protected:
 
     TiFlashMetricsPtr metrics;
     std::mutex request_mutex;
+
+    LimiterType type;
 };
 
 using RateLimiterPtr = std::shared_ptr<RateLimiter>;
@@ -89,7 +99,19 @@ using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 class ReadLimiter final : public RateLimiter
 {
 public:
-    ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, UInt64 refill_period_ms_ = 100);
+    ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_ = 100);
+
+    struct Statistics
+    {
+        UInt64 total_req_bytes = 0;
+        UInt64 stat_read_bytes = 0;
+    };
+
+    Statistics getReadStat()
+    {
+        std::lock_guard lock(request_mutex);
+        return read_stat;
+    }
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
@@ -105,14 +127,19 @@ private:
 
     Int64 getAvailableBalance();
     Int64 refreshAvailableBalance();
-
+    
     std::function<Int64()> getIOStatistic;
     Int64 last_stat_bytes;
-
-    using TimePoint = std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds>;
+    using TimePoint = std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds>; 
+    TimePoint now()
+    {
+        return std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
+    }
     TimePoint last_stat_time;
+    Poco::Logger* log;
 
-    static constexpr UInt64 get_io_statistic_period_us = 2000;
+    Statistics read_stat;
+    static constexpr Int64 get_io_statistic_period_us = 2000;
 };
 
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
@@ -120,12 +147,12 @@ using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 class IORateLimiter
 {
 public:
-    IORateLimiter() = default;
+    IORateLimiter();
 
     RateLimiterPtr getWriteLimiter();
     ReadLimiterPtr getReadLimiter();
 
-    void updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_, Poco::Logger * log_);
+    void updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_);
     
     void setBackgroundThreadIds(std::vector<pid_t> thread_ids); 
 
@@ -135,7 +162,7 @@ public:
         Int64 total_read_bytes;
         Int64 bg_write_bytes;
         Int64 bg_read_bytes;
-        std::chrono::time_point<std::chrono::system_clock> uptime_time;
+        std::chrono::time_point<std::chrono::system_clock> update_time;
 
         IOInfo() : total_write_bytes(0), total_read_bytes(0), bg_write_bytes(0), bg_read_bytes(0) {}
 
@@ -152,8 +179,8 @@ public:
 private:
 #endif
 
-    std::pair<Int64, Int64> getReadWriteBytes(const std::string& fname, Poco::Logger* log_);
-    IOInfo getCurrentIOInfo(Poco::Logger* log_);
+    std::pair<Int64, Int64> getReadWriteBytes(const std::string& fname);
+    IOInfo getCurrentIOInfo();
 
     StorageIORateLimitConfig io_config;
     RateLimiterPtr bg_write_limiter;
@@ -162,9 +189,11 @@ private:
     ReadLimiterPtr fg_read_limiter;
     std::mutex mtx_;
 
+    std::mutex bg_thread_ids_mtx;
     std::vector<pid_t> bg_thread_ids;
     IOInfo last_io_info;
-
+    
+    Poco::Logger* log;
     // Noncopyable and nonmovable.
     IORateLimiter(const IORateLimiter & limiter) = delete;
     IORateLimiter & operator=(const IORateLimiter & limiter) = delete;

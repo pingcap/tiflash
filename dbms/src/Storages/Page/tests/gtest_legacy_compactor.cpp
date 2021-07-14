@@ -186,7 +186,7 @@ try
         if (auto reader = PageFile::MetaMergingReader::createFrom(page_file); //
             reader->hasNext())
         {
-            reader->moveNext();
+            reader->moveNext(ctx.getReadLimiter());
             mergine_queue.push(std::move(reader));
         }
     }

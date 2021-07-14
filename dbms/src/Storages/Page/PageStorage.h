@@ -138,13 +138,13 @@ public:
     std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
 
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {});
-    Page      read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot = {});
-    PageMap   read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot = {});
-    void      read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot = {});
+    Page      read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
+    PageMap   read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
+    void      read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
 
     using FieldIndices   = std::vector<size_t>;
     using PageReadFields = std::pair<PageId, FieldIndices>;
-    PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot = {});
+    PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
 
     void traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = {});
     void traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
