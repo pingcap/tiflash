@@ -144,7 +144,7 @@ public:
     ReadIndexResult learnerRead(UInt64 start_ts);
 
     /// If server is terminating, return true (read logic should throw NOT_FOUND exception and let upper layer retry other store).
-    TerminateWaitIndex waitIndex(UInt64 index, const std::atomic_bool & terminated);
+    TerminateWaitIndex waitIndex(UInt64 index, const TMTContext & tmt);
 
     UInt64 appliedIndex() const;
 
