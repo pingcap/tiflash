@@ -213,44 +213,6 @@ void insertInto(Block & block, Args... args)
     insertRow(block, args...);
 }
 
-
-#define CREATE_COLUMN(column, data_type_name, ...)                                   \
-    ColumnPtr column{};                                                              \
-    do                                                                               \
-    {                                                                                \
-        DataTypePtr data_type_ptr = DataTypeFactory::instance().get(data_type_name); \
-        column = createColumn(data_type_ptr, __VA_ARGS__);                           \
-    } while (0)
-
-#define CREATE_TABLE(block, ...)                                                               \
-    Block block;                                                                               \
-    do                                                                                         \
-    {                                                                                          \
-        std::vector<std::tuple<String, String>> cols{__VA_ARGS__};                             \
-        for (auto & [col_name, data_type_name] : cols)                                         \
-        {                                                                                      \
-            insertColumnDef(block, col_name, DataTypeFactory::instance().get(data_type_name)); \
-        }                                                                                      \
-    } while (0)
-
-#define INSERT_INTO(block, ...)         \
-    do                                  \
-    {                                   \
-        insertInto(block, __VA_ARGS__); \
-    } while (0)
-
-#define ADD_COLUMN(block, name, data_type, column)                                           \
-    {                                                                                        \
-        ColumnWithTypeAndName col(column, DataTypeFactory::instance().get(data_type), name); \
-        block.insert(col);                                                                   \
-    }
-
-#define EVAL_FUNC(block, func_name, result, ...)                 \
-    do                                                           \
-    {                                                            \
-        evalFunc(block, func_name, Strings __VA_ARGS__, result); \
-    } while (0)
-
 #define PRINT_TABLE(block)              \
     do                                  \
     {                                   \
