@@ -13,9 +13,9 @@
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <IO/CompressedWriteBuffer.h>
+#include <Poco/File.h>
 #include <Storages/DeltaMerge/File/Checksum/ChecksumBuffer.h>
 
-#include <filesystem>
 #include <random>
 
 namespace DB
@@ -110,7 +110,8 @@ void runStreamingTest()
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
         }
     }
-    std::filesystem::remove_all(DM_CHECKSUM_BUFFER_TEST_PATH);
+    Poco::File file {"/tmp/test"};
+    file.remove();
 }
 
 TEST_STREAM(None)
@@ -154,7 +155,8 @@ void runSeekingTest()
             }
         };
     }
-    std::filesystem::remove_all(DM_CHECKSUM_BUFFER_TEST_PATH);
+    Poco::File file {"/tmp/test"};
+    file.remove();
 }
 
 TEST_SEEK(None)
@@ -185,7 +187,8 @@ void runStackingTest()
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
         }
     }
-    std::filesystem::remove_all("/tmp/test");
+    Poco::File file {"/tmp/test"};
+    file.remove();
 }
 
 #define TEST_STACKING(ALGO) \
@@ -238,7 +241,8 @@ void runStackedSeekingTest()
             ASSERT_EQ(x, cmp) << "random seed: " << seed << std::endl;
         }
     }
-    std::filesystem::remove_all("/tmp/test");
+    Poco::File file {"/tmp/test"};
+    file.remove();
 }
 
 #define TEST_STACKED_SEEKING(ALGO) \
