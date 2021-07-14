@@ -12,6 +12,8 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 
@@ -94,7 +96,7 @@ void MPPTask::unregisterTask()
     if (manager != nullptr)
     {
         LOG_DEBUG(log, "task unregistered");
-        manager->unregisterTask(this);
+        manager->unregisterTask(task_id);
     }
     else
     {
@@ -104,8 +106,6 @@ void MPPTask::unregisterTask()
 
 std::unordered_map<RegionVerID, RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
-    std::unique_lock<std::mutex> lock(mutex);
-
     //    auto start_time = Clock::now();
     dag_req = std::make_unique<tipb::DAGRequest>();
     if (!dag_req->ParseFromString(task_request.encoded_plan()))
@@ -164,7 +164,7 @@ std::unordered_map<RegionVerID, RegionInfo> MPPTask::prepare(const mpp::Dispatch
     // register task.
     //    TMTContext & tmt_context = context.getTMTContext();
     //    auto task_manager = tmt_context.getMPPTaskManager();
-    LOG_DEBUG(log, "begin to register the task " << id.toString());
+    LOG_DEBUG(log, "begin to register the task " << task_id.toString());
 
     if (dag_context->isRootMPPTask())
     {
@@ -209,7 +209,7 @@ std::vector<RegionInfo> MPPTask::initStreams(
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout);
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->tunnel_id);
-        registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
+        registerTunnel(MPPTaskId(task_meta), tunnel);
         tunnel_set->tunnels.emplace_back(tunnel);
         if (!dag_context->isRootMPPTask())
         {
@@ -257,20 +257,28 @@ String taskStatusToString(TaskStatus ts)
             return "unknown";
     }
 }
-void MPPTask::runImpl()
+void MPPTask::runImpl(const MPPTaskProxyPtr & task_proxy)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-
-    auto current_status = static_cast<TaskStatus>(status.load());
-    if (current_status != INITIALIZING)
-    {
-        LOG_WARNING(log, "task in " + taskStatusToString(current_status) + " state, skip running");
-        return;
-    }
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
+    SCOPE_EXIT(
+
+        LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
+        auto process_info = context.getProcessListElement()->getInfo();
+        auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
+        GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_dispatch_mpp_task).Observe(peak_memory);
+
+        unregisterTask(););
+
+
+    if (task_proxy->hasCancelled())
+    {
+        LOG_WARNING(log, "task has been cancelled, skip running");
+        return;
+    }
+
     LOG_INFO(log, "task starts running");
-    status = RUNNING;
+
     auto from = io.in;
     auto to = io.out;
     try
@@ -283,31 +291,43 @@ void MPPTask::runImpl()
         LOG_DEBUG(log, "begin read ");
 
         size_t count = 0;
-
-
+        int times = 0;
         while (true)
         {
             Block block;
             while (true)
             {
-                if (status == TaskStatus::CANCELLED)
+                if (task_proxy->hasCancelled())
                 {
-                    async_in.cancel(false);
+                    LOG_WARNING(log, "task has been cancelled, skip running");
+                    return;
+                }
+                if (async_in.poll((!times) ? 20 : 100))
+                {
+                    /// There is the following result block.
+                    block = async_in.read();
                     break;
                 }
-                else
-                {
-                    if (async_in.poll(100))
-                    {
-                        /// There is the following result block.
-                        block = async_in.read();
-                        break;
-                    }
-                }
+
+                times++;
             }
 
             if (!block)
                 break;
+
+            // Here we make sure that all tunnels are connected to their writers before continue.
+
+            while (!allTunnelConnected())
+            {
+                auto [cancelled, has_new_writer, tunnel_map] = task_proxy->getNewTunnelWriters();
+                if (task_proxy->hasCancelled())
+                {
+                    LOG_WARNING(log, "task has been cancelled, skip running");
+                    return;
+                }
+                connectTunnelWriters(tunnel_map);
+            }
+
 
             count += block.rows();
             to->write(block);
@@ -350,7 +370,7 @@ void MPPTask::runImpl()
         async_in.readSuffix();
         to->writeSuffix();
 
-        finishWrite();
+        //        finishWrite();
 
         LOG_DEBUG(log, "finish write with " + std::to_string(count) + " rows");
     }
@@ -369,18 +389,15 @@ void MPPTask::runImpl()
         LOG_ERROR(log, "unrecovered error");
         writeErrToAllTunnel("unrecovered fatal error");
     }
-    LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
-    auto process_info = context.getProcessListElement()->getInfo();
-    auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
-    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_dispatch_mpp_task).Observe(peak_memory);
-    unregisterTask();
-    //    status = FINISHED;
 }
 
 void MPPTask::writeErrToAllTunnel(const String & e)
 {
     for (auto & it : tunnel_map)
     {
+        MPPTunnelPtr tunnel = it.second;
+        if (!(tunnel->connected))
+            continue;
         try
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_write_err_to_tunnel);
@@ -388,66 +405,18 @@ void MPPTask::writeErrToAllTunnel(const String & e)
             auto err = new mpp::Error();
             err->set_msg(e);
             data.set_allocated_error(err);
-            it.second->write(data, true);
+            tunnel->write(data, true);
         }
         catch (...)
         {
-            it.second->close("Failed to write error msg to tunnel");
-            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->tunnel_id);
+            tunnel->close("Failed to write error msg to tunnel");
+            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + tunnel->tunnel_id);
         }
     }
 }
 
-// bool MPPTask::isTaskHanging()
-// {
-//     if (status.load() == RUNNING)
-//         return task_progress.isTaskHanging(context);
-//     return false;
-// }
-
-void MPPTask::cancel(const String & reason)
-{
-    //    auto current_status = status.exchange(CANCELLED);
-    //    if (current_status == FINISHED || current_status == CANCELLED)
-    //    {
-    //        if (current_status == FINISHED)
-    //            status = FINISHED;
-    //        return;
-    //    }
-
-    status = CANCELLED;
-
-    LOG_WARNING(log, "Begin cancel task: " + id.toString());
-
-    /// WARNING: Please do NOT do any more stupid things, especially updating status in this task.
-    /// Simply set the cancel status and let the working thread of this task to exit gracefully.
-
-    // auto process_list_element = context.getProcessListElement();
-    // if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
-    // {
-    //     BlockInputStreamPtr input_stream;
-    //     BlockOutputStreamPtr output_stream;
-    //     if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
-    //     {
-    //         IProfilingBlockInputStream * input_stream_casted;
-    //         if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
-    //         {
-    //             input_stream_casted->cancel(true);
-    //         }
-    //     }
-    // }
-    // /// step 2. write Error msg and close the tunnel.
-    // /// Here we use `closeAllTunnel` because currently, `cancel` is a query level cancel, which
-    // /// means if this mpp task is cancelled, all the mpp tasks belonging to the same query are
-    // /// cancelled at the same time, so there is no guarantee that the tunnel can be connected.
-    // closeAllTunnel(reason);
-    LOG_WARNING(log, "Finish cancel task: " << id.toString() << ", reason: " << reason);
-}
-
 void MPPTask::handleError(String error, Poco::Logger * log)
 {
-    std::lock_guard<std::mutex> lk(mutex);
-
     try
     {
         closeAllTunnel(error);
@@ -461,19 +430,22 @@ void MPPTask::handleError(String error, Poco::Logger * log)
 // execute is responsible for making plan , register tasks and tunnels and start the running thread.
 grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * response)
 {
-    MPPTaskHolderPtr task_holder;
+    MPPTaskPtr task;
+    MPPTaskProxyPtr task_proxy;
     Stopwatch stopwatch;
     try
     {
-        task_holder = std::make_shared<MPPTaskHolder>(std::make_shared<MPPTask>(task_request.meta(), context));
+        MPPTaskId task_id(task_request.meta());
+        task = std::make_shared<MPPTask>(task_id, context);
+        task_proxy = std::make_shared<MPPTaskProxy>(task_id);
 
-        auto regions = task_holder->task->prepare(task_request);
+        auto regions = task->prepare(task_request);
 
         TMTContext & tmt_context = context.getTMTContext();
         auto task_manager = tmt_context.getMPPTaskManager();
-        task_manager->registerTask(task_holder);
+        task_manager->registerTask(task, task_proxy);
 
-        auto retry_regions = task_holder->task->initStreams(task_request, regions);
+        auto retry_regions = task->initStreams(task_request, regions);
 
         for (auto region : retry_regions)
         {
@@ -482,7 +454,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
             retry_region->mutable_region_epoch()->set_conf_ver(region.region_ver_id.conf_ver);
             retry_region->mutable_region_epoch()->set_version(region.region_ver_id.ver);
         }
-        if (task_holder->task->dag_context->isRootMPPTask())
+        if (task->dag_context->isRootMPPTask())
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_root_task_run);
         }
@@ -496,7 +468,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         LOG_ERROR(log, "dispatch task meet error : " << e.displayText());
         auto * err = response->mutable_error();
         err->set_msg(e.displayText());
-        task_holder->task->handleError(e.displayText(), log);
+        task->handleError(e.displayText(), log);
         return grpc::Status::OK;
     }
     catch (std::exception & e)
@@ -504,7 +476,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         LOG_ERROR(log, "dispatch task meet error : " << e.what());
         auto * err = response->mutable_error();
         err->set_msg(e.what());
-        task_holder->task->handleError(e.what(), log);
+        task->handleError(e.what(), log);
         return grpc::Status::OK;
     }
     catch (...)
@@ -512,12 +484,14 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         LOG_ERROR(log, "dispatch task meet fatal error");
         auto * err = response->mutable_error();
         err->set_msg("fatal error");
-        task_holder->task->handleError("fatal error", log);
+        task->handleError("fatal error", log);
         return grpc::Status::OK;
     }
 
-    task_holder->task->memory_tracker = current_memory_tracker;
-    task_holder->run();
+    task->memory_tracker = current_memory_tracker;
+
+    std::thread t([task = std::move(task), task_proxy = std::move(task_proxy)]() { task->runImpl(task_proxy); });
+    t.detach();
 
     LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
 
@@ -526,10 +500,10 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
 
 MPPTaskManager::MPPTaskManager() : log(&Logger::get("TaskManager")) {}
 
-MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg)
+MPPTaskProxyPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg)
 {
-    MPPTaskId id{meta.start_ts(), meta.task_id()};
-    std::map<MPPTaskId, MPPTaskHolderWeakPtr>::iterator it;
+    MPPTaskId id(meta);
+    std::map<MPPTaskId, MPPTaskProxyWeakPtr>::iterator it;
     bool cancelled = false;
     std::unique_lock<std::mutex> lock(mu);
     auto ret = cv.wait_for(lock, timeout, [&] {
@@ -560,11 +534,11 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
             + DB::toString(timeout.count()) + " s.";
         return {};
     }
-    auto task_holder = it->second.lock();
-    if (!task_holder)
+    auto task_proxy = it->second.lock();
+    if (!task_proxy)
         errMsg = "Task already released [" + DB::toString(meta.start_ts()) + "," + DB::toString(meta.task_id()) + "] within "
             + DB::toString(timeout.count()) + " s.";
-    return task_holder->task;
+    return task_proxy;
 }
 
 void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
@@ -589,58 +563,60 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
     for (auto task_it = task_set.task_map.rbegin(); task_it != task_set.task_map.rend(); task_it++)
     {
         ss << task_it->first.toString() << " ";
-        auto task = task_it->second.lock();
-        if (task)
-            task->task->cancel(reason);
+        auto task_proxy_weak_ptr = task_it->second;
+        if (auto task_proxy_ptr = task_proxy_weak_ptr.lock())
+        {
+            task_proxy_ptr->cancelTask(reason);
+        }
     }
     LOG_WARNING(log, ss.str());
 
-    MPPQueryTaskSet canceled_task_set;
+    MPPQueryTaskSet cancelled_task_set;
     {
         std::lock_guard<std::mutex> lock(mu);
         /// just to double check the query still exists
         auto it = mpp_query_map.find(query_id);
         if (it != mpp_query_map.end())
         {
-            /// hold the canceled task set, so the mpp task will not be deconstruct when holding the
+            /// hold the cancelled task set, so the mpp task will not be deconstruct when holding the
             /// `mu` of MPPTaskManager, otherwise it might cause deadlock
-            canceled_task_set = it->second;
+            cancelled_task_set.swap(it->second);
             mpp_query_map.erase(it);
         }
     }
     LOG_WARNING(log, "Finish cancel query: " + std::to_string(query_id));
 }
 
-bool MPPTaskManager::registerTask(const MPPTaskHolderPtr & task_holder)
+bool MPPTaskManager::registerTask(const MPPTaskPtr & task, const MPPTaskProxyPtr & task_proxy)
 {
-    auto & task = task_holder->task;
+    auto & task_id = task->task_id;
     std::unique_lock<std::mutex> lock(mu);
-    const auto & it = mpp_query_map.find(task->id.start_ts);
+    const auto & it = mpp_query_map.find(task_id.start_ts);
     if (it != mpp_query_map.end() && it->second.to_be_cancelled)
     {
-        LOG_WARNING(log, "Do not register task: " + task->id.toString() + " because the query is to be cancelled.");
+        LOG_WARNING(log, "Do not register task: " + task_id.toString() + " because the query is to be cancelled.");
         cv.notify_all();
         return false;
     }
-    if (it != mpp_query_map.end() && it->second.task_map.find(task->id) != it->second.task_map.end())
+    if (it != mpp_query_map.end() && it->second.task_map.find(task_id) != it->second.task_map.end())
     {
-        throw Exception("The task " + task->id.toString() + " has been registered");
+        throw Exception("The task " + task_id.toString() + " has been registered");
     }
-    mpp_query_map[task->id.start_ts].task_map.emplace(task->id, MPPTaskHolderWeakPtr(task_holder));
+    mpp_query_map[task_id.start_ts].task_map.emplace(task_id, MPPTaskProxyWeakPtr(task_proxy));
     task->manager = this;
     cv.notify_all();
     return true;
 }
 
-void MPPTaskManager::unregisterTask(MPPTask * task)
+void MPPTaskManager::unregisterTask(const MPPTaskId & task_id)
 {
     std::unique_lock<std::mutex> lock(mu);
-    auto it = mpp_query_map.find(task->id.start_ts);
+    auto it = mpp_query_map.find(task_id.start_ts);
     if (it != mpp_query_map.end())
     {
         if (it->second.to_be_cancelled)
             return;
-        auto task_it = it->second.task_map.find(task->id);
+        auto task_it = it->second.task_map.find(task_id);
         if (task_it != it->second.task_map.end())
         {
             it->second.task_map.erase(task_it);
@@ -650,7 +626,7 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
             return;
         }
     }
-    LOG_ERROR(log, "The task " + task->id.toString() + " cannot be found and fail to unregister");
+    LOG_ERROR(log, "The task " + task_id.toString() + " cannot be found and fail to unregister");
 }
 
 MPPTaskManager::~MPPTaskManager() {}

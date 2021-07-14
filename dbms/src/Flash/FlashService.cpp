@@ -186,11 +186,13 @@ grpc::Status FlashService::Coprocessor(
 
     auto & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
+    auto & receiver_meta = request->receiver_meta();
+
     std::chrono::seconds timeout(10);
     std::string errMsg;
-    MPPTunnelPtr tunnel;
+    TunnelWriterStatusPtr tunel_writer_status;
     {
-        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, errMsg);
+        auto sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, errMsg);
         if (sender_task == nullptr)
         {
             LOG_ERROR(log, errMsg);
@@ -201,25 +203,26 @@ grpc::Status FlashService::Coprocessor(
             writer->Write(packet);
             return grpc::Status::OK;
         }
-        tunnel = sender_task->getTunnelWithTimeout(request->receiver_meta(), timeout);
+        tunel_writer_status = sender_task->setTunnelWriter(receiver_meta, writer);
     }
-    if (tunnel == nullptr)
-    {
-        errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + " + toString(request->sender_meta().task_id())
-            + " ) within " + toString(timeout.count()) + " s";
-        LOG_ERROR(log, errMsg);
-        mpp::MPPDataPacket packet;
-        auto err = new mpp::Error();
-        err->set_msg(errMsg);
-        packet.set_allocated_error(err);
-        writer->Write(packet);
-        return grpc::Status::OK;
-    }
+//    if (tunnel == nullptr)
+//    {
+//        errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + " + toString(request->sender_meta().task_id())
+//            + " ) within " + toString(timeout.count()) + " s";
+//        LOG_ERROR(log, errMsg);
+//        mpp::MPPDataPacket packet;
+//        auto err = new mpp::Error();
+//        err->set_msg(errMsg);
+//        packet.set_allocated_error(err);
+//        writer->Write(packet);
+//        return grpc::Status::OK;
+//    }
     Stopwatch stopwatch;
-    tunnel->connect(writer);
-    LOG_DEBUG(log, "connect tunnel successfully and begin to wait");
-    tunnel->waitForFinish();
-    LOG_INFO(log, "connection for " << tunnel->tunnel_id << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
+//    tunnel->connect(writer);
+//    LOG_DEBUG(log, "connect tunnel successfully and begin to wait");
+//    tunnel->waitForFinish();
+    tunel_writer_status->waitForFinished();
+    LOG_INFO(log, "connection for " << receiver_meta.task_id() << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     // TODO: Check if there are errors in task.
 
     return grpc::Status::OK;
