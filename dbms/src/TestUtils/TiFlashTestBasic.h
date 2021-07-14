@@ -10,6 +10,7 @@
 #include <Poco/Path.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/SortedDirectoryIterator.h>
+#include <unistd.h>
 
 #if !__clang__
 #pragma GCC diagnostic push
@@ -82,7 +83,13 @@ inline DataTypes typesFromString(const String & str)
 class TiFlashTestEnv
 {
 public:
-    static String getTemporaryPath() { return Poco::Path("./tmp/").absolute().toString(); }
+    static String getTemporaryPath()
+    {
+        std::ostringstream ostr;
+        ostr << "./tmp"
+             << ".p" << getpid() << ".t" << std::this_thread::get_id() << "/";
+        return Poco::Path(ostr.str()).absolute().toString();
+    }
 
     static std::pair<Strings, Strings> getPathPool(const Strings & testdata_path = {})
     {

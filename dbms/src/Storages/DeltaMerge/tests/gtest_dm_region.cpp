@@ -1,3 +1,4 @@
+#include <Storages/tests/gtest_storage_base.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -15,7 +16,7 @@ namespace tests
 {
 
 
-class DMRegion_test : public ::testing::Test
+class DMRegion_test : public DB::base::Tmp_path_base
 {
 public:
     DMRegion_test() : name("DMRegion_test"), log(&Logger::get("DMRegion_test"))
@@ -34,17 +35,9 @@ public:
 protected:
     static void SetUpTestCase() {}
 
-    void cleanUp()
-    {
-        // drop former-gen table's data in disk
-        Poco::File file(DB::tests::TiFlashTestEnv::getTemporaryPath());
-        if (file.exists())
-            file.remove(true);
-    }
-
     void SetUp() override
     {
-        cleanUp();
+        Tmp_path_base::SetUp();
 
         context = std::make_unique<Context>(DMTestEnv::getContext(settings));
         store   = std::make_shared<DeltaMergeStore>(

@@ -1,3 +1,4 @@
+#include <Storages/tests/gtest_storage_base.h>
 #include <Common/CurrentMetrics.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -34,18 +35,10 @@ extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, /
 namespace tests
 {
 
-class Segment_test : public ::testing::Test
+class Segment_test : public DB::base::Tmp_path_base
 {
 public:
     Segment_test() : name("tmp"), storage_pool() {}
-
-protected:
-    void dropDataOnDisk()
-    {
-        // drop former-gen table's data in disk
-        if (Poco::File file(DB::tests::TiFlashTestEnv::getTemporaryPath()); file.exists())
-            file.remove(true);
-    }
 
 public:
     static void SetUpTestCase() {}
@@ -54,11 +47,11 @@ public:
 
     void SetUp() override
     {
+        Tmp_path_base::SetUp();
         db_context        = std::make_unique<Context>(DMTestEnv::getContext(getSettings()));
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_path_pool->drop(true);
         table_columns_ = std::make_shared<ColumnDefines>();
-        dropDataOnDisk();
 
         segment = reload();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);

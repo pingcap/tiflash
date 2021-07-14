@@ -1,3 +1,4 @@
+#include <Storages/tests/gtest_storage_base.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -15,27 +16,19 @@ namespace DM
 namespace tests
 {
 
-class Segment_Common_Handle_test : public ::testing::Test
+class Segment_Common_Handle_test : public DB::base::Tmp_path_base
 {
 public:
     Segment_Common_Handle_test() : name("tmp"), storage_pool() {}
-
-private:
-    void dropDataOnDisk()
-    {
-        // drop former-gen table's data in disk
-        if (Poco::File file(DB::tests::TiFlashTestEnv::getTemporaryPath()); file.exists())
-            file.remove(true);
-    }
 
 public:
     static void SetUpTestCase() {}
 
     void SetUp() override
     {
+        Tmp_path_base::SetUp();
         db_context     = std::make_unique<Context>(DMTestEnv::getContext(DB::Settings()));
         table_columns_ = std::make_shared<ColumnDefines>();
-        dropDataOnDisk();
 
         segment = reload();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
