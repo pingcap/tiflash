@@ -20,6 +20,11 @@ DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStora
 {
 }
 
+// There could be a chance that one big PageFile contains many valid bytes, but we still need to rewrite it
+// with another PageFiles to a newer PageFile (so that they have the higher `compact_seq`) to make
+// GC move forward.
+static constexpr size_t GC_NUM_CANDIDATE_SIZE_LOWER_BOUND = 2;
+
 template <typename SnapshotPtr>
 std::tuple<typename DataCompactor<SnapshotPtr>::Result, PageEntriesEdit> //
 DataCompactor<SnapshotPtr>::tryMigrate(                                  //
@@ -35,8 +40,8 @@ DataCompactor<SnapshotPtr>::tryMigrate(                                  //
     std::tie(candidates, result.bytes_migrate, result.num_migrate_pages) = selectCandidateFiles(page_files, valid_pages, writing_files);
 
     result.candidate_size = candidates.size();
-    result.do_compaction
-        = result.candidate_size >= config.gc_min_files || (candidates.size() >= 2 && result.bytes_migrate >= config.gc_min_bytes);
+    result.do_compaction  = result.candidate_size >= config.gc_min_files
+        || (candidates.size() >= GC_NUM_CANDIDATE_SIZE_LOWER_BOUND && result.bytes_migrate >= config.gc_min_bytes);
 
     // Scan over all `candidates` and do migrate.
     PageEntriesEdit migrate_entries_edit;
@@ -47,7 +52,7 @@ DataCompactor<SnapshotPtr>::tryMigrate(                                  //
     else
     {
         LOG_DEBUG(log,
-                  storage_name << " DataCompactor::tryMigrate exit without compaction, [candidates size=" //
+                  storage_name << " DataCompactor::tryMigrate exit without compaction [candidates size=" //
                                << result.candidate_size << "] [total byte size=" << result.bytes_migrate << "], Config{ "
                                << config.toDebugString() << " }");
     }
@@ -87,9 +92,24 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
     LOG_TRACE(log, storage_name << " input size of candidates: " << page_files.size());
 #endif
 
+    /**
+     * Assume that there is few PageFile with lower <FileID, level> (and lower sequence number) but high valid rate,
+     * following by multiple PageFiles with higher <FileID, level> (and higher sequence number) but lower valid rate,
+     * we want to compact all them with a higher sequence to move GC forward. Or compacting one by one will greatly
+     * increase the write amplification.
+     *
+     * TODO: upper level (DeltaTree engine) may leave some pages undeleted after recovering from a crash, we should consider
+     * * how to clean up those pages after recovering from a crash in the upper level
+     * * new design for better handling for this situation
+     */
+
+    static constexpr double HIGH_RATE_THRESHOLD = 0.65;
+
     PageFileSet candidates;
-    size_t      candidate_total_size = 0;
-    size_t      num_migrate_pages    = 0;
+    size_t      candidate_total_size                 = 0;
+    size_t      num_migrate_pages                    = 0;
+    size_t      num_candidates_with_high_rate        = 0;
+    size_t      candidate_total_size_with_lower_rate = 0;
     for (auto & page_file : page_files)
     {
         if (unlikely(page_file.getType() != PageFile::Type::Formal))
@@ -129,7 +149,35 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
         candidates.emplace(page_file);
         num_migrate_pages += valid_page_count;
         candidate_total_size += valid_size;
-        if (candidate_total_size >= config.file_max_size)
+        if (valid_rate < HIGH_RATE_THRESHOLD)
+        {
+            candidate_total_size_with_lower_rate += valid_size;
+        }
+        else
+        {
+            num_candidates_with_high_rate++;
+            candidate_total_size_with_lower_rate += 0;
+            LOG_INFO(log,
+                     storage_name << " collect " << page_file.toString() << " with high valid rate as candidates [valid rate="
+                                  << DB::toString(valid_rate, 2) << "] [file size=" << file_size << "]");
+        }
+
+
+        bool stop = false;
+        if (num_candidates_with_high_rate == 0)
+        {
+            // If all candidates are in lower valid rate, we stop collecting the candidates until we can fully fill
+            // a new PageFile.
+            stop = candidate_total_size >= config.file_max_size;
+        }
+        else
+        {
+            // If there are candidates with high valid rate, we want to compact as many following lower rate as possible
+            // to move forward the GC and reduce the write amplification.
+            stop = candidate_total_size_with_lower_rate >= config.file_max_size;
+        }
+        // Note: should always add check for `GC_NUM_CANDIDATE_SIZE_LOWER_BOUND`
+        if (stop && candidates.size() >= GC_NUM_CANDIDATE_SIZE_LOWER_BOUND)
         {
             break;
         }
