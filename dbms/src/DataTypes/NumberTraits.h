@@ -183,7 +183,7 @@ struct ResultOfIf
                 : max(sizeof(A), sizeof(B))>::Type;
 };
 
-/** Before applying operator `%` and bitwise operations, operands are casted to whole numbers. */
+/** Before applying bitwise operations, operands are casted to whole numbers. */
 template <typename A> struct ToInteger
 {
     using Type = typename Construct<

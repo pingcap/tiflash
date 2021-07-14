@@ -519,28 +519,32 @@ struct DivideIntegralOrZeroImpl<A,B,true>
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct ModuloImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>> struct ModuloImpl;
 template <typename A, typename B>
-struct ModuloImpl<A,B,false>
+struct ModuloImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfModulo<A, B>::Type;
 
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<A>::Type(a), typename NumberTraits::ToInteger<B>::Type(b));
-        return static_cast<Result>( typename NumberTraits::ToInteger<A>::Type(a)
-            % typename NumberTraits::ToInteger<B>::Type(b));
+        return static_cast<Result>(a) % static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A a, B b, UInt8 & res_null)
     {
-        throw Exception("Should not reach here");
+        if (unlikely(b == 0))
+        {
+            res_null = 1;
+            return static_cast<Result>(0);
+        }
+
+        return apply(a, b);
     }
 };
 
 template <typename A, typename B>
-struct ModuloImpl<A,B,true>
+struct ModuloImpl<A, B, true>
 {
     using ResultPrecInferer = ModDecimalInferer;
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
@@ -548,23 +552,27 @@ struct ModuloImpl<A,B,true>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        Result x, y;
-        if constexpr (IsDecimal<A>) {
-            x = static_cast<Result>(a.value);
-        } else {
-            x = static_cast<Result>(a);
+        // C++ does not allow operator% between floating point
+        // values, so we call into std::fmod.
+        if (std::is_floating_point_v<Result>)
+        {
+            return std::fmod(static_cast<Result>(a), static_cast<Result>(b));
         }
-        if constexpr (IsDecimal<B>) {
-            y = static_cast<Result>(b.value);
-        } else {
-            y = static_cast<Result>(b);
+        else
+        {
+            return static_cast<Result>(a) % static_cast<Result>(b);
         }
-        return ModuloImpl<Result, Result>::apply(x, y);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A a, B b, UInt8 & res_null)
     {
-        throw Exception("Should not reach here");
+        if (unlikely(b == 0))
+        {
+            res_null = 1;
+            return static_cast<Result>(0);
+        }
+
+        return apply(a, b);
     }
 };
 
@@ -2486,7 +2494,7 @@ using FunctionDivideIntegral = FunctionBinaryArithmetic<DivideIntegralImpl_t, Na
 template<typename A, typename B> using DivideIntegralOrZeroImpl_t = DivideIntegralOrZeroImpl<A, B>;
 using FunctionDivideIntegralOrZero = FunctionBinaryArithmetic<DivideIntegralOrZeroImpl_t, NameDivideIntegralOrZero>;
 template<typename A, typename B> using ModuloImpl_t = ModuloImpl<A, B>;
-using FunctionModulo = FunctionBinaryArithmetic<ModuloImpl_t, NameModulo>;
+using FunctionModulo = FunctionBinaryArithmetic<ModuloImpl_t, NameModulo, false>;
 template<typename A, typename B> using BitAndImpl_t = BitAndImpl<A, B>;
 using FunctionBitAnd = FunctionBinaryArithmetic<BitAndImpl_t, NameBitAnd>;
 template<typename A, typename B> using BitOrImpl_t = BitOrImpl<A, B>;
