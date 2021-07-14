@@ -144,12 +144,12 @@ void RegionMeta::setPeerState(const raft_serverpb::PeerState peer_state_)
     region_state.setState(peer_state_);
 }
 
-TerminateWaitIndex RegionMeta::waitIndex(UInt64 index, const std::atomic_bool & terminated) const
+TerminateWaitIndex RegionMeta::waitIndex(UInt64 index, std::function<bool(void)> && check_terminated) const
 {
     std::unique_lock<std::mutex> lock(mutex);
     TerminateWaitIndex res = false;
     cv.wait(lock, [&] {
-        if (terminated)
+        if (check_terminated())
         {
             res = true;
             return true;

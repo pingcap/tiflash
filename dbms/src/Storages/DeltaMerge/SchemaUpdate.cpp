@@ -19,7 +19,7 @@ String astToDebugString(const IAST * const ast)
     return ss.str();
 }
 
-inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define)
+void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define)
 {
     std::function<Field(const Field &, const DataTypePtr &)> castDefaultValue; // for lazy bind
     castDefaultValue = [&](const Field & value, const DataTypePtr & type) -> Field {
@@ -182,7 +182,7 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
 }
 
 
-inline void setColumnDefineDefaultValue(const TiDB::TableInfo & table_info, ColumnDefine & define)
+void setColumnDefineDefaultValue(const TiDB::TableInfo & table_info, ColumnDefine & define)
 {
     // Check ConvertColumnType_test.GetDefaultValue for unit test.
     const auto & col_info = table_info.getColumnInfo(define.id);
