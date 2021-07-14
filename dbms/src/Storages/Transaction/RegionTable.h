@@ -150,7 +150,6 @@ public:
         bool resolve_locks,
         Timestamp start_ts,
         const std::unordered_set<UInt64> * bypass_lock_ts,
-        std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & handle_range,
         RegionScanFilterPtr scan_filter = nullptr);
 
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
@@ -163,7 +162,6 @@ public:
         const std::unordered_set<UInt64> * bypass_lock_ts,
         RegionVersion region_version,
         RegionVersion conf_version,
-        std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range,
         Logger * log);
 
     void checkTableOptimize();
