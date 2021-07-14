@@ -96,9 +96,12 @@ LegacyCompactor::tryCompact(                 //
         for (const auto & pf : page_files_to_compact)
             page_files_to_remove.emplace(pf);
 
-        removePageFilesIf(page_files, [&page_files_to_remove](const PageFile & pf) -> bool {
-            // Remove page files have been compacted
-            return page_files_to_remove.count(pf) > 0 //
+        removePageFilesIf(page_files, [&page_files_to_remove, &writing_file_ids](const PageFile & pf) -> bool {
+            return //
+                // Remove page files have been compacted
+                page_files_to_remove.count(pf) > 0
+                // Remove page files that maybe writing to
+                || (!writing_file_ids.empty() && pf.fileIdLevel() >= *writing_file_ids.begin())
                 // Remove legacy/checkpoint files since we don't do gc on them later
                 || pf.getType() == PageFile::Type::Legacy || pf.getType() == PageFile::Type::Checkpoint;
         });
@@ -239,9 +242,12 @@ WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::Snaps
     return wb;
 }
 
-size_t LegacyCompactor::writeToCheckpoint(
-    const String & storage_path, const PageFileIdAndLevel & file_id, WriteBatch && wb,
-    FileProviderPtr & file_provider, Poco::Logger * log, const Context& global_context)
+size_t LegacyCompactor::writeToCheckpoint(const String &             storage_path,
+                                          const PageFileIdAndLevel & file_id,
+                                          WriteBatch &&              wb,
+                                          FileProviderPtr &          file_provider,
+                                          Poco::Logger *             log,
+                                          const Context &            global_context)
 {
     size_t bytes_written   = 0;
     auto   checkpoint_file = PageFile::newPageFile(file_id.first, file_id.second, storage_path, file_provider, PageFile::Type::Temp, log);

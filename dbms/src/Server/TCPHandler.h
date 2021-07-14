@@ -12,7 +12,6 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Client/TimeoutSetter.h>
-#include <pingcap/kv/RegionCache.h>
 
 #include <Storages/Transaction/RegionLockInfo.h>
 
@@ -143,7 +142,7 @@ private:
     void sendHello();
     void sendData(const Block & block);    /// Write a block to the network.
     void sendException(const Exception & e);
-    void sendRegionException(const std::vector<pingcap::kv::RegionVerID> & region_ver_ids);
+    void sendRegionException(const std::vector<UInt64> & region_ids);
     void sendLockInfos(const LockInfoPtr & lock_info);
     void sendProgress();
     void sendEndOfStream();
