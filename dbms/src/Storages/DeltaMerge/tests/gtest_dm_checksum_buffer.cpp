@@ -15,6 +15,7 @@
 #include <IO/CompressedWriteBuffer.h>
 #include <Storages/DeltaMerge/File/Checksum/ChecksumBuffer.h>
 
+#include <filesystem>
 #include <random>
 
 namespace DB
@@ -109,6 +110,7 @@ void runStreamingTest()
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
         }
     }
+    std::filesystem::remove_all(DM_CHECKSUM_BUFFER_TEST_PATH);
 }
 
 TEST_STREAM(None)
@@ -152,6 +154,7 @@ void runSeekingTest()
             }
         };
     }
+    std::filesystem::remove_all(DM_CHECKSUM_BUFFER_TEST_PATH);
 }
 
 TEST_SEEK(None)
@@ -182,6 +185,7 @@ void runStackingTest()
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
         }
     }
+    std::filesystem::remove_all("/tmp/test");
 }
 
 #define TEST_STACKING(ALGO) \
@@ -199,7 +203,7 @@ void runStackedSeekingTest()
 {
     auto [limiter, provider]                                          = prepareIO();
     auto                                                       config = DMConfiguration{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
-    size_t                                                     size   = 4096 * 1024;
+    size_t                                                     size   = 1024 * 1024 * 1024;
     std::vector<std::tuple<std::vector<char>, size_t, size_t>> slices;
     auto [data, seed] = randomData(size);
     {
@@ -212,7 +216,7 @@ void runStackedSeekingTest()
             std::vector<char> slice;
             slice.resize(length);
             std::copy(data.begin() + acc, data.begin() + acc + length, slice.begin());
-            auto x = compressBuffer.getCompressedBytes(); // compressed position
+            auto x = buffer->count();         // compressed position
             auto y = compressBuffer.offset(); // uncompressed position
             compressBuffer.write(slice.data(), slice.size());
             slices.template emplace_back(std::move(slice), x, y);
@@ -229,6 +233,7 @@ void runStackedSeekingTest()
             ASSERT_EQ(x, cmp) << "random seed: " << seed << std::endl;
         }
     }
+    std::filesystem::remove_all("/tmp/test");
 }
 
 #define TEST_STACKED_SEEKING(ALGO) \
@@ -239,7 +244,6 @@ TEST_STACKED_SEEKING(CRC32)
 TEST_STACKED_SEEKING(CRC64)
 TEST_STACKED_SEEKING(City128)
 TEST_STACKED_SEEKING(XXH3)
-
 
 } // namespace tests
 } // namespace DM
