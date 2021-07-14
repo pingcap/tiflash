@@ -446,7 +446,7 @@ void backgroundInitStores(Context & global_context, Logger * log)
     std::thread(initStores).detach();
 }
 
-class FlashGrpcServerHolder
+class Server::FlashGrpcServerHolder
 {
 public:
     FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Logger * log_)
@@ -509,7 +509,7 @@ private:
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
 };
 
-class TcpHttpServersHolder
+class Server::TcpHttpServersHolder
 {
 public:
     TcpHttpServersHolder(Server & server_, const Settings & settings, Logger * log_)
