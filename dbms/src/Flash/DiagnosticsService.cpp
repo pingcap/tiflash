@@ -460,8 +460,7 @@ void DiagnosticsService::cpuLoadInfo(
         {
             ServerInfoPair pair;
             pair.set_key(p.first);
-            auto buff = fmt::format("{0:.2f}", p.second);
-            pair.set_value(buff);
+            pair.set_value(fmt::format("{0:.2f}", p.second));
             pairs.emplace_back(std::move(pair));
         }
         ServerInfoItem item;
@@ -496,27 +495,23 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
     uint64_t used_swap = total_swap - free_swap;
 
     double used_memory_percent = static_cast<double>(used_memory) / static_cast<double>(total_memory);
-    std::string used_memory_percent_str = fmt::format("{0:.2f}", used_memory_percent);
     double free_memory_percent = static_cast<double>(free_memory) / static_cast<double>(total_memory);
-    std::string free_memory_percent_str = fmt::format("{0:.2f}", free_memory_percent);
     double used_swap_percent = static_cast<double>(used_swap) / static_cast<double>(total_swap);
-    std::string used_swap_percent_str = fmt::format("{0:.2f}", used_swap_percent);
     double free_swap_percent = static_cast<double>(free_swap) / static_cast<double>(total_swap);
-    std::string free_swap_percent_str = fmt::format("{0:.2f}", free_swap_percent);
 
-    std::vector<std::pair<std::string, std::string>> memory_infos{//
-        {"total", std::to_string(total_memory)},                  //
-        {"free", std::to_string(free_memory)},                    //
-        {"used", std::to_string(used_memory)},                    //
-        {"free-percent", free_memory_percent_str},                //
-        {"used-percent", used_memory_percent_str}};
+    std::vector<std::pair<std::string, std::string>> memory_infos{     //
+        {"total", std::to_string(total_memory)},                       //
+        {"free", std::to_string(free_memory)},                         //
+        {"used", std::to_string(used_memory)},                         //
+        {"free-percent", fmt::format("{0:.2f}", free_memory_percent)}, //
+        {"used-percent", fmt::format("{0:.2f}", used_memory_percent)}};
 
-    std::vector<std::pair<std::string, std::string>> swap_infos{//
-        {"total", std::to_string(total_swap)},                  //
-        {"free", std::to_string(free_swap)},                    //
-        {"used", std::to_string(used_swap)},                    //
-        {"free-percent", free_swap_percent_str},                //
-        {"used-percent", used_swap_percent_str}};
+    std::vector<std::pair<std::string, std::string>> swap_infos{     //
+        {"total", std::to_string(total_swap)},                       //
+        {"free", std::to_string(free_swap)},                         //
+        {"used", std::to_string(used_swap)},                         //
+        {"free-percent", fmt::format("{0:.2f}", free_swap_percent)}, //
+        {"used-percent", fmt::format("{0:.2f}", used_swap_percent)}};
 
     // Add pairs for memory_infos
     {
@@ -589,8 +584,7 @@ void DiagnosticsService::nicLoadInfo(const NICInfo & prev_nic, std::vector<diagn
         {
             ServerInfoPair pair;
             pair.set_key(info.first);
-            std::string buffer = fmt::format("{0:.2lf}", info.second);
-            pair.set_value(buffer);
+            pair.set_value(fmt::format("{0:.2lf}", info.second));
             pairs.emplace_back(std::move(pair));
         }
         ServerInfoItem item;
@@ -634,8 +628,7 @@ void DiagnosticsService::ioLoadInfo(
         {
             ServerInfoPair pair;
             pair.set_key(info.first);
-            std::string buffer = fmt::format("{0:.2f}", info.second);
-            pair.set_value(buffer);
+            pair.set_value(fmt::format("{0:.2f}", info.second));
             pairs.emplace_back(std::move(pair));
         }
         ServerInfoItem item;
@@ -749,13 +742,17 @@ void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoI
         size_t used = total - free;
 
         double free_percent = static_cast<double>(free) / static_cast<double>(total);
-        std::string free_percent_str = fmt::format("{0:.2f}", free_percent);
         double used_percent = static_cast<double>(used) / static_cast<double>(total);
-        std::string used_percent_str = fmt::format("{0:.2f}", used_percent);
 
-        std::vector<std::pair<std::string, std::string>> infos{{"type", disk.disk_type == disk.HDD ? "HDD" : "SSD"},
-            {"fstype", disk.fs_type}, {"path", mount_point}, {"total", std::to_string(total)}, {"free", std::to_string(free)},
-            {"used", std::to_string(used)}, {"free-percent", free_percent_str}, {"used-percent", used_percent_str}};
+        std::vector<std::pair<std::string, std::string>> infos{     //
+            {"type", disk.disk_type == disk.HDD ? "HDD" : "SSD"},   //
+            {"fstype", disk.fs_type},                               //
+            {"path", mount_point},                                  //
+            {"total", std::to_string(total)},                       //
+            {"free", std::to_string(free)},                         //
+            {"used", std::to_string(used)},                         //
+            {"free-percent", fmt::format("{0:.2f}", free_percent)}, //
+            {"used-percent", fmt::format("{0:.2f}", used_percent)}};
 
         ServerInfoItem item;
         for (auto & info : infos)
