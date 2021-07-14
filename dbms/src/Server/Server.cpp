@@ -1299,6 +1299,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             GET_METRIC(metrics, tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
+        global_context->getTMTContext().setStoreStatusRunning();
         waitForTerminationRequest();
 
         {
