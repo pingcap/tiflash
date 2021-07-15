@@ -110,7 +110,7 @@ void runStreamingTest()
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
         }
     }
-    Poco::File file {"/tmp/test"};
+    Poco::File file{DM_CHECKSUM_BUFFER_TEST_PATH};
     file.remove();
 }
 
@@ -155,7 +155,7 @@ void runSeekingTest()
             }
         };
     }
-    Poco::File file {"/tmp/test"};
+    Poco::File file{DM_CHECKSUM_BUFFER_TEST_PATH};
     file.remove();
 }
 
@@ -187,7 +187,7 @@ void runStackingTest()
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
         }
     }
-    Poco::File file {"/tmp/test"};
+    Poco::File file{"/tmp/test"};
     file.remove();
 }
 
@@ -241,7 +241,7 @@ void runStackedSeekingTest()
             ASSERT_EQ(x, cmp) << "random seed: " << seed << std::endl;
         }
     }
-    Poco::File file {"/tmp/test"};
+    Poco::File file{"/tmp/test"};
     file.remove();
 }
 

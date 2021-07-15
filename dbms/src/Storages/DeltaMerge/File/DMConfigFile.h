@@ -69,7 +69,7 @@ public:
             embeddedChecksum.emplace(var.name(), var.checksum());
         }
 
-        if (unlikely(!digest->compare(configuration.data_field_checksum().data())))
+        if (unlikely(!digest->compare_raw(configuration.data_field_checksum())))
         {
             throw Exception("data field checksum broken");
         }

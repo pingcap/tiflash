@@ -6,6 +6,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
+#include <fmt/format.h>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -346,10 +347,29 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
 
 void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
-    String tmp_buf;
-    auto   buf = openForRead(file_provider, packPropertyPath(), encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
+    String     tmp_buf;
+    const auto path = packPropertyPath();
+    auto       buf  = openForRead(file_provider, path, encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
     buf.seek(meta_pack_info.pack_property_offset);
     readStringBinary(tmp_buf, buf);
+    if (configuration)
+    {
+        auto location = configuration->getEmbeddedChecksum().find(path);
+        if (location != configuration->getEmbeddedChecksum().end())
+        {
+            auto         digest = configuration->createUnifiedDigest();
+            const auto & target = location->second;
+            digest->update(tmp_buf.data(), tmp_buf.length());
+            if (unlikely(!digest->compare_raw(target)))
+            {
+                throw Exception(fmt::format("data corruption, checksum mismatch for {}", path));
+            }
+        }
+        else
+        {
+            log->warning(fmt::format("checksum for {} not found", path));
+        }
+    }
     pack_properties.ParseFromString(tmp_buf);
 }
 
