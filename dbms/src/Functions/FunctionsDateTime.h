@@ -1359,8 +1359,8 @@ public:
         const IColumn & y = *y_p;
 
         size_t rows = block.rows();
-        auto res = ColumnInt64::create(rows);
-        auto result_null_map = ColumnUInt8::create(rows);
+        auto res = ColumnInt64::create(rows, 0);
+        auto result_null_map = ColumnUInt8::create(rows, 0);
         if (unit == "year")
             dispatchForColumns<MonthDiffCalculatorImpl, YearDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
         else if (unit == "quarter")
@@ -1720,8 +1720,8 @@ public:
         const IColumn & y = *y_p;
 
         size_t rows = block.rows();
-        auto res = ColumnInt64::create(rows);
-        auto result_null_map = ColumnUInt8::create(rows);
+        auto res = ColumnInt64::create(rows, 0);
+        auto result_null_map = ColumnUInt8::create(rows, 0);
 
         dispatch(x, y, res->getData(), result_null_map->getData());
 
