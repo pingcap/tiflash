@@ -5,6 +5,7 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
+#include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
@@ -235,8 +236,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             }
             catch (DB::Exception & e)
             {
-                e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                    + "`, table_id: " + DB::toString(table_id) + ")");
+                e.addMessage("(while doing learner read for table, table_id: " + DB::toString(table_id) + ")");
                 throw;
             }
         }
@@ -716,6 +716,10 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness,
         join_build_concurrency, collators, left_filter_column_name, right_filter_column_name, other_filter_column_name,
         other_eq_filter_from_in_column_name, other_condition_expr, max_block_size_for_cross_join);
+
+    // add a HashJoinBuildBlockInputStream to build a shared hash table
+    size_t stream_index = 0;
+    right_pipeline.transform([&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++); });
     executeUnion(right_pipeline, max_streams);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
