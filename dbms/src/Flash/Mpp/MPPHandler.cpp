@@ -406,7 +406,7 @@ void MPPTask::writeErrToAllTunnel(const String & e)
             auto err = new mpp::Error();
             err->set_msg(e);
             data.set_allocated_error(err);
-            tunnel->write(data, true);
+            tunnel->write(data);
         }
         catch (...)
         {
