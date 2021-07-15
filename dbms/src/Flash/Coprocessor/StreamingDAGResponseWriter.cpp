@@ -22,44 +22,16 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWr
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_),
       exchange_type(exchange_type_),
       writer(writer_),
-      partition_col_ids(std::move(partition_col_ids_)),
-      thread_pool(dag_context.final_concurrency*3),
-      log(&Logger::get("StreamingDAGResponseWriter "+ std::to_string(uint64_t(this)) +" exchange type "+ std::to_string(exchange_type)))
+      partition_col_ids(std::move(partition_col_ids_))
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
 }
 
 template <class StreamWriterPtr>
-template <bool collect_execution_info>
-void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
-{
-    tipb::SelectResponse response;
-    if constexpr (collect_execution_info)
-        addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
-    if (exchange_type == tipb::ExchangeType::Hash)
-    {
-        thread_pool.schedule(getEncodePartitionTask(blocks, response));
-    }
-    else
-    {
-        thread_pool.schedule(getEncodeTask(blocks, response));
-    }
-    blocks.clear();
-    rows_in_blocks = 0;
-}
-
-template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
-#if OLD
-    /// always send a response back to send the final execute summaries
-    ScheduleEncodeTask<true>();
-    // wait all job finishes.
-    thread_pool.wait();
-#else
-    BatchWrite();
-#endif
+    BatchWrite<true>();
 }
 
 template <class StreamWriterPtr>
@@ -94,17 +66,11 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     {
         blocks.push_back(block);
     }
-#if OLD
-    if ((Int64)rows_in_blocks > records_per_chunk)
-    {
-        ScheduleEncodeTask();
-    }
-#else
+    /// limit rows for shuffle data among tiflash, except for tidb
     if ((Int64)rows_in_blocks > (records_per_chunk== -1? 2048:records_per_chunk))
     {
-        BatchWrite();
+        BatchWrite<false>();
     }
-#endif
 }
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::EncodeThenWriteBlock(
@@ -136,10 +102,10 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::EncodeThenWriteBlock(
         for (auto & block : input_blocks)
         {
             chunk_codec_stream->encode(block, 0, block.rows());
+            auto dag_chunk = response.add_chunks();
+            dag_chunk->set_rows_data(chunk_codec_stream->getString());
+            chunk_codec_stream->clear();
         }
-        auto dag_chunk = response.add_chunks();
-        dag_chunk->set_rows_data(chunk_codec_stream->getString());
-        chunk_codec_stream->clear();
         current_records_num = 0;
     }
     else
@@ -275,11 +241,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::PartitionAndEncodeThenWriteBlo
     }
 }
 template <class StreamWriterPtr>
+template <bool collect_execution_info>
 void StreamingDAGResponseWriter<StreamWriterPtr>::BatchWrite()
 {
     tipb::SelectResponse response;
-    //addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
-    LOG_WARNING(log, "[ENCODE] batch write, rows = "+ std::to_string(rows_in_blocks));
+    if constexpr (collect_execution_info)
+        addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
     if (exchange_type == tipb::ExchangeType::Hash)
     {
         PartitionAndEncodeThenWriteBlock(blocks,response);

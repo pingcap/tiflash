@@ -251,11 +251,9 @@ void MPPTask::runImpl()
     LOG_INFO(log, "task starts running");
     status = RUNNING;
     auto from = io.in;
-    //auto to = io.out;
     try
     {
         from->readPrefix();
-    //    to->writePrefix();
         LOG_DEBUG(log, "begin read ");
 
         size_t count = 0;
@@ -265,9 +263,6 @@ void MPPTask::runImpl()
             if(block)
             {
                 count += block.rows();
-#if OLD
-                to->write(block);
-#endif
                 FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
                 if (dag_context->isRootMPPTask())
                 {
@@ -280,18 +275,7 @@ void MPPTask::runImpl()
             }
         }
 
-        /// For outputting additional information in some formats.
-//        if (IProfilingBlockInputStream * input = dynamic_cast<IProfilingBlockInputStream *>(from.get()))
-//        {
-//            if (input->getProfileInfo().hasAppliedLimit())
-//                to->setRowsBeforeLimit(input->getProfileInfo().getRowsBeforeLimit());
-//
-//            to->setTotals(input->getTotals());
-//            to->setExtremes(input->getExtremes());
-//        }
-
         from->readSuffix();
-        //to->writeSuffix();
 
         finishWrite();
 
