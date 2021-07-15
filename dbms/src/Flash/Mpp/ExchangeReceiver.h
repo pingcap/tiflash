@@ -127,6 +127,12 @@ public:
             state = CLOSED;
             cv.notify_all();
         }
+        /// the full full_packets would block the read thread in abnormal cases.
+        while (full_packets.size() > 0) {
+            std::shared_ptr<ReceivedPacket> packet;
+            full_packets.pop(packet);
+        }
+
         for (auto & worker : workers)
         {
             worker.join();
