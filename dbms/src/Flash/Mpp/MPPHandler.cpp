@@ -66,30 +66,30 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
     return ret;
 }
 
-void MPPTunnel::close(const String & reason)
-{
-    std::unique_lock<std::mutex> lk(mu);
-    if (finished)
-        return;
-    if (connected)
-    {
-        try
-        {
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(reason);
-            data.set_allocated_error(err);
-            writer->Write(data);
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
-        }
-    }
-    finished = true;
-    cv_for_finished.notify_all();
-}
+//void MPPTunnel::close(const String & reason)
+//{
+//    std::unique_lock<std::mutex> lk(mu);
+//    if (finished)
+//        return;
+//    if (connected)
+//    {
+//        try
+//        {
+//            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
+//            mpp::MPPDataPacket data;
+//            auto err = new mpp::Error();
+//            err->set_msg(reason);
+//            data.set_allocated_error(err);
+//            writer->Write(data);
+//        }
+//        catch (...)
+//        {
+//            tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
+//        }
+//    }
+//    finished = true;
+//    cv_for_finished.notify_all();
+//}
 
 void MPPTask::unregisterTask()
 {
@@ -410,17 +410,17 @@ void MPPTask::writeErrToAllTunnel(const String & e)
         }
         catch (...)
         {
-            tunnel->close("Failed to write error msg to tunnel");
+            //            tunnel->close("Failed to write error msg to tunnel");
             tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + tunnel->tunnel_id);
         }
     }
 }
 
-void MPPTask::handleError(String error, Poco::Logger * log)
+void MPPTask::handleError(String error)
 {
     try
     {
-        closeAllTunnel(error);
+        writeErrToAllTunnel(error);
         unregisterTask();
     }
     catch (...)
@@ -469,7 +469,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         LOG_ERROR(log, "dispatch task meet error : " << e.displayText());
         auto * err = response->mutable_error();
         err->set_msg(e.displayText());
-        task->handleError(e.displayText(), log);
+        task->handleError(e.displayText());
         return grpc::Status::OK;
     }
     catch (std::exception & e)
@@ -477,7 +477,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         LOG_ERROR(log, "dispatch task meet error : " << e.what());
         auto * err = response->mutable_error();
         err->set_msg(e.what());
-        task->handleError(e.what(), log);
+        task->handleError(e.what());
         return grpc::Status::OK;
     }
     catch (...)
@@ -485,7 +485,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         LOG_ERROR(log, "dispatch task meet fatal error");
         auto * err = response->mutable_error();
         err->set_msg("fatal error");
-        task->handleError("fatal error", log);
+        task->handleError("fatal error");
         return grpc::Status::OK;
     }
 

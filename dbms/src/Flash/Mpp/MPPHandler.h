@@ -36,12 +36,12 @@ struct MPPTaskId
 struct MPPTunnel
 {
     std::mutex mu;
-    std::condition_variable cv_for_connected;
-    std::condition_variable cv_for_finished;
+    //    std::condition_variable cv_for_connected;
+    //    std::condition_variable cv_for_finished;
 
     bool connected; // if the exchange in has connected this tunnel.
 
-    bool finished; // if the tunnel has finished its connection.
+    //    bool finished; // if the tunnel has finished its connection.
 
     ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
 
@@ -54,7 +54,7 @@ struct MPPTunnel
 
     MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_, const std::chrono::seconds timeout_)
         : connected(false),
-          finished(false),
+          //          finished(false),
           timeout(timeout_),
           tunnel_id("tunnel" + std::to_string(sender_meta_.task_id()) + "+" + std::to_string(receiver_meta_.task_id())),
           log(&Logger::get(tunnel_id))
@@ -75,35 +75,14 @@ struct MPPTunnel
 
     // write a single packet to the tunnel, it will block if tunnel is not ready.
     // TODO: consider to hold a buffer
-    void write(const mpp::MPPDataPacket & data, bool close_after_write = false)
+    void write(const mpp::MPPDataPacket & data)
     {
-
         LOG_TRACE(log, "ready to write");
         std::unique_lock<std::mutex> lk(mu);
 
-        if (timeout.count() > 0)
-        {
-            if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
-            {
-                throw Exception(tunnel_id + " is timeout");
-            }
-        }
-        else
-        {
-            cv_for_connected.wait(lk, [&]() { return connected; });
-        }
-        if (finished)
-            throw Exception("write to tunnel which is already closed.");
+        if (!connected)
+            throw Exception("write to tunnel which is not yet connected.");
         writer->Write(data);
-        if (close_after_write)
-        {
-            finished = true;
-            cv_for_finished.notify_all();
-        }
-        if (close_after_write)
-            LOG_TRACE(log, "finish write and close the tunnel");
-        else
-            LOG_TRACE(log, "finish write");
     }
 
     //    // finish the writing.
@@ -130,21 +109,19 @@ struct MPPTunnel
 
     /// close() finishes the tunnel, if the tunnel is connected already, it will
     /// write the error message to the tunnel, otherwise it just close the tunnel
-    void close(const String & reason);
+    //    void close(const String & reason);
 
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
     {
-        if (connected)
-        {
-            throw Exception("has connected");
-        }
         std::lock_guard<std::mutex> lk(mu);
+
+        if (connected)
+            throw Exception("has connected");
+
         LOG_DEBUG(log, "ready to connect");
         connected = true;
         writer = writer_;
-
-        cv_for_connected.notify_all();
     }
 
     // wait until all the data has been transferred.
@@ -421,7 +398,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void runImpl(const MPPTaskProxyPtr & proxy);
 
-    void handleError(String error, Poco::Logger * log);
+    void handleError(String error);
 
     std::unordered_map<RegionVerID, RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
 
@@ -434,7 +411,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         /// MPPTask maybe destructed by different thread, set the query memory_tracker
         /// to current_memory_tracker in the destructor
         current_memory_tracker = memory_tracker;
-        closeAllTunnel("MPPTask release");
+        //        closeAllTunnel("MPPTask release");
         LOG_DEBUG(log, "finish MPPTask: " << task_id.toString());
     }
 
@@ -443,13 +420,13 @@ private:
 
     /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
     /// without waiting the tunnel to be connected
-    void closeAllTunnel(const String & reason)
-    {
-        for (auto & it : tunnel_map)
-        {
-            it.second->close(reason);
-        }
-    }
+    //    void closeAllTunnel(const String & reason)
+    //    {
+    //        for (auto & it : tunnel_map)
+    //        {
+    //            it.second->close(reason);
+    //        }
+    //    }
 
     void registerTunnel(const MPPTaskId & id_, MPPTunnelPtr tunnel)
     {
@@ -561,7 +538,6 @@ class MPPHandler
 public:
     MPPHandler(const mpp::DispatchTaskRequest & task_request_) : task_request(task_request_), log(&Logger::get("MPPHandler")) {}
     grpc::Status execute(Context & context, mpp::DispatchTaskResponse * response);
-    void handleError(MPPTaskPtr task, String error);
 };
 
 } // namespace DB
