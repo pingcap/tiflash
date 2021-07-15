@@ -97,12 +97,6 @@ private:
 };
 } // namespace Digest
 
-struct FixedChecksumFrame
-{
-    size_t  bytes;
-    uint8_t checksum[64];
-};
-
 template <typename Algorithm>
 struct ChecksumFrame
 {
@@ -124,22 +118,23 @@ BASIC_CHECK_FOR_FRAME(XXH3)
 #undef BASIC_CHECK_FOR_FRAME
 
 
-struct B64DigestBase
+struct UnifiedDigestBase
 {
-    virtual void        update(const void * data, size_t length) = 0;
-    virtual bool        compare(const std::string & data)        = 0;
-    virtual bool        compare(const void * data)               = 0;
-    virtual std::string base64() const                           = 0;
-    virtual std::string raw() const                              = 0;
-    virtual ~B64DigestBase()                                     = default;
+    virtual void                      update(const void * data, size_t length) = 0;
+    virtual bool                      compare_b64(const std::string & data)    = 0;
+    virtual bool                      compare(const void * data)               = 0;
+    [[nodiscard]] virtual std::string base64() const                           = 0;
+    [[nodiscard]] virtual std::string raw() const                              = 0;
+    virtual ~UnifiedDigestBase()                                               = default;
 };
+
 template <class Backend>
-class B64Digest : public B64DigestBase
+class UnifiedDigest : public UnifiedDigestBase
 {
 public:
     void update(const void * data, size_t length) override { backend.update(data, length); }
 
-    bool compare(const std::string & data) override
+    bool compare_b64(const std::string & data) override
     {
         auto               checksum = backend.checksum();
         auto               input    = std::istringstream{data};
@@ -177,6 +172,9 @@ public:
 private:
     Backend backend{};
 };
+
+using UnifiedDigestBaseBox = std::unique_ptr<UnifiedDigestBase>;
+using UnifiedDigestBasePtr = std::shared_ptr<UnifiedDigestBase>;
 
 } // namespace DB::DM
 #endif //CLICKHOUSE_CHECKSUM_H

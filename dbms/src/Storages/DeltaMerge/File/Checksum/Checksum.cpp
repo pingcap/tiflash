@@ -6,9 +6,9 @@
 
 namespace DB::DM
 {
-template class B64Digest<Digest::None>;
-template class B64Digest<Digest::CRC32>;
-template class B64Digest<Digest::CRC64>;
-template class B64Digest<Digest::City128>;
-template class B64Digest<Digest::XXH3>;
+template class UnifiedDigest<Digest::None>;
+template class UnifiedDigest<Digest::CRC32>;
+template class UnifiedDigest<Digest::CRC64>;
+template class UnifiedDigest<Digest::City128>;
+template class UnifiedDigest<Digest::XXH3>;
 } // namespace DB::DM

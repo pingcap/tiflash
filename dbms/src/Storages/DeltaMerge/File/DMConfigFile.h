@@ -29,25 +29,25 @@ public:
             throw Exception("cannot parse protobuf for DMConfiguration");
         }
 
-        auto                           uncheckedAlgo = configuration.checksum_algorithm();
-        std::shared_ptr<B64DigestBase> digest        = nullptr;
-        checksumFrameLength                          = configuration.checksum_frame_length();
+        auto                 uncheckedAlgo = configuration.checksum_algorithm();
+        UnifiedDigestBaseBox digest        = nullptr;
+        checksumFrameLength                = configuration.checksum_frame_length();
         switch (uncheckedAlgo)
         {
         case static_cast<uint64_t>(ChecksumAlgo::None):
-            digest = std::make_unique<B64Digest<Digest::None>>();
+            digest = std::make_unique<UnifiedDigest<Digest::None>>();
             break;
         case static_cast<uint64_t>(ChecksumAlgo::CRC32):
-            digest = std::make_unique<B64Digest<Digest::CRC32>>();
+            digest = std::make_unique<UnifiedDigest<Digest::CRC32>>();
             break;
         case static_cast<uint64_t>(ChecksumAlgo::CRC64):
-            digest = std::make_unique<B64Digest<Digest::CRC64>>();
+            digest = std::make_unique<UnifiedDigest<Digest::CRC64>>();
             break;
         case static_cast<uint64_t>(ChecksumAlgo::City128):
-            digest = std::make_unique<B64Digest<Digest::City128>>();
+            digest = std::make_unique<UnifiedDigest<Digest::City128>>();
             break;
         case static_cast<uint64_t>(ChecksumAlgo::XXH3):
-            digest = std::make_unique<B64Digest<Digest::XXH3>>();
+            digest = std::make_unique<UnifiedDigest<Digest::XXH3>>();
             break;
         default:
             throw Poco::JSON::JSONException("unrecognized checksum algorithm");
@@ -125,25 +125,25 @@ private:
 
 inline std::ostream & operator<<(std::ostream & output, const DMConfiguration & config)
 {
-    dtpb::Configuration            configuration;
-    std::unique_ptr<B64DigestBase> digest = nullptr;
+    dtpb::Configuration  configuration;
+    UnifiedDigestBaseBox digest = nullptr;
 
     switch (config.checksumAlgorithm)
     {
     case ChecksumAlgo::None:
-        digest = std::make_unique<B64Digest<Digest::None>>();
+        digest = std::make_unique<UnifiedDigest<Digest::None>>();
         break;
     case ChecksumAlgo::CRC32:
-        digest = std::make_unique<B64Digest<Digest::CRC32>>();
+        digest = std::make_unique<UnifiedDigest<Digest::CRC32>>();
         break;
     case ChecksumAlgo::CRC64:
-        digest = std::make_unique<B64Digest<Digest::CRC64>>();
+        digest = std::make_unique<UnifiedDigest<Digest::CRC64>>();
         break;
     case ChecksumAlgo::City128:
-        digest = std::make_unique<B64Digest<Digest::City128>>();
+        digest = std::make_unique<UnifiedDigest<Digest::City128>>();
         break;
     case ChecksumAlgo::XXH3:
-        digest = std::make_unique<B64Digest<Digest::XXH3>>();
+        digest = std::make_unique<UnifiedDigest<Digest::XXH3>>();
         break;
     default:
         throw Poco::JSON::JSONException("unrecognized checksumAlgorithm");
@@ -176,7 +176,8 @@ inline std::ostream & operator<<(std::ostream & output, const DMConfiguration & 
         }
     }
 
-    if(!configuration.SerializeToOstream(&output)) {
+    if (!configuration.SerializeToOstream(&output))
+    {
         throw Exception("unable to serialize protobuf of configuration");
     };
 
