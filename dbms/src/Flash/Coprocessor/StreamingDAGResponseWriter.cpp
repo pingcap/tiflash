@@ -30,10 +30,12 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWr
 }
 
 template <class StreamWriterPtr>
+template <bool collect_execution_info>
 void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
 {
     tipb::SelectResponse response;
-    addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
+    if constexpr (collect_execution_info)
+        addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
     if (exchange_type == tipb::ExchangeType::Hash)
     {
         thread_pool.schedule(getEncodePartitionTask(blocks, response));
@@ -49,10 +51,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
-    if (rows_in_blocks > 0)
-    {
-        ScheduleEncodeTask();
-    }
+    /// always send a response back to send the final execute summaries
+    ScheduleEncodeTask<true>();
     // wait all job finishes.
     thread_pool.wait();
 }
@@ -79,6 +79,11 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
 
         response.set_encode_type(encode_type);
         Int64 current_records_num = 0;
+        if (input_blocks.empty())
+        {
+            writer->write(response);
+            return;
+        }
         if (records_per_chunk == -1)
         {
             for (auto & block : input_blocks)
@@ -146,6 +151,14 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             }
             responses[i] = response;
             responses[i].set_encode_type(encode_type);
+        }
+        if (input_blocks.empty())
+        {
+            for (auto part_id = 0; part_id < partition_num; ++part_id)
+            {
+                writer->write(responses[part_id], part_id);
+            }
+            return;
         }
 
         // partition tuples in blocks
@@ -226,11 +239,15 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
     if (block.columns() != result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
-    rows_in_blocks += block.rows();
-    blocks.push_back(block);
+    size_t rows = block.rows();
+    rows_in_blocks += rows;
+    if (rows > 0)
+    {
+        blocks.push_back(block);
+    }
     if ((Int64)rows_in_blocks > records_per_chunk)
     {
-        ScheduleEncodeTask();
+        ScheduleEncodeTask<false>();
     }
 }
 
