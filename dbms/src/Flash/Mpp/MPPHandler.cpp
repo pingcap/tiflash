@@ -69,7 +69,7 @@ void MPPTunnel::close(const String & reason)
     std::unique_lock<std::mutex> lk(mu);
     if (finished)
         return;
-    if (connected)
+    if (connected && !reason.empty())
     {
         try
         {
