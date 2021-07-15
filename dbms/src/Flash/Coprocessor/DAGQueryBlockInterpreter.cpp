@@ -236,8 +236,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             }
             catch (DB::Exception & e)
             {
-                e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                    + "`, table_id: " + DB::toString(table_id) + ")");
+                e.addMessage("(while doing learner read for table, table_id: " + DB::toString(table_id) + ")");
                 throw;
             }
         }

@@ -1,6 +1,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/Page/ConfigSettings.h>
 #include <Storages/PathPool.h>
 
 namespace DB
@@ -23,14 +24,8 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     config.gc_min_legacy_num = settings.dt_storage_pool_##NAME##_gc_min_legacy_num; \
     config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate;
 
-    PageStorage::Config config;
-    config.open_file_max_idle_time = Seconds(settings.dt_open_file_max_idle_seconds);
-    {
-        // The probability is [0~1000] out of 1000
-        Int64 prob                          = settings.dt_page_gc_low_write_prob * 1000;
-        prob                                = std::max(0, std::min(1000, prob));
-        config.prob_do_gc_when_write_is_low = prob;
-    }
+    PageStorage::Config config = getConfigFromSettings(settings);
+
     switch (subtype)
     {
     case StorageType::Log:
