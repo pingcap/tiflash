@@ -370,6 +370,7 @@ void MPPTask::runImpl(const MPPTaskProxyPtr & task_proxy)
         async_in.readSuffix();
         to->writeSuffix();
 
+        task_proxy->notifyFinished();
         //        finishWrite();
 
         LOG_DEBUG(log, "finish write with " + std::to_string(count) + " rows");

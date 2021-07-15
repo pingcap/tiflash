@@ -302,15 +302,7 @@ private:
 public:
     MPPTaskProxy(const MPPTaskId & task_id_) : task_id(task_id_) {}
 
-    ~MPPTaskProxy()
-    {
-        // Set the finish status, to make the threads of FlashService::EstablishMPPConnection to continue.
-        for (auto [_, tunel_writer_status] : writer_status_map)
-        {
-            (void)_;
-            tunel_writer_status->setFinished();
-        }
-    }
+    ~MPPTaskProxy() { notifyFinished(); }
 
     void cancelTask(const String & cancel_reason_)
     {
@@ -320,6 +312,18 @@ public:
         cancel_reason = cancel_reason_;
 
         cv.notify_all();
+    }
+
+    void notifyFinished()
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+
+        // Set the finished status, to make the threads of FlashService::EstablishMPPConnection to continue.
+        for (auto [_, tunel_writer_status] : writer_status_map)
+        {
+            (void)_;
+            tunel_writer_status->setFinished();
+        }
     }
 
     TunnelWriterStatusPtr setTunnelWriter(
