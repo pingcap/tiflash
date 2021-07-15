@@ -312,9 +312,6 @@ void MPPTask::runImpl(const MPPTaskProxyPtr & task_proxy)
                 times++;
             }
 
-            if (!block)
-                break;
-
             // Here we make sure that all tunnels are connected to their writers before continue.
 
             while (!allTunnelConnected())
@@ -329,6 +326,8 @@ void MPPTask::runImpl(const MPPTaskProxyPtr & task_proxy)
                     connectTunnelWriters(tunnel_map);
             }
 
+            if (!block)
+                break;
 
             count += block.rows();
             to->write(block);
