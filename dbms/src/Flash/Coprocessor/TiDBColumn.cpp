@@ -20,6 +20,7 @@ void encodeLittleEndian(const T & value, WriteBuffer & ss)
 
 TiDBColumn::TiDBColumn(Int8 element_len_) : length(0), null_cnt(0), current_data_size(0), fixed_size(element_len_)
 {
+    data = std::make_unique<WriteBufferFromOwnString>();
     if (fixed_size != VAR_SIZE)
         default_value = String(fixed_size, '\0');
     var_offsets.push_back(0);
@@ -32,7 +33,7 @@ void TiDBColumn::clear()
     null_bitmap.clear();
     var_offsets.clear();
     var_offsets.push_back(0);
-    data.restart();
+    data = std::make_unique<WriteBufferFromOwnString>();
     current_data_size = 0;
 }
 
@@ -75,7 +76,7 @@ void TiDBColumn::appendNull()
     appendNullBitMap(false);
     if (isFixed())
     {
-        data << default_value;
+        *data << default_value;
     }
     else
     {
@@ -87,53 +88,53 @@ void TiDBColumn::appendNull()
 
 void TiDBColumn::append(Int64 value)
 {
-    encodeLittleEndian<Int64>(value, data);
+    encodeLittleEndian<Int64>(value, *data);
     finishAppendFixed();
 }
 
 void TiDBColumn::append(const TiDBEnum & ti_enum)
 {
-    encodeLittleEndian<UInt64>(ti_enum.value, data);
+    encodeLittleEndian<UInt64>(ti_enum.value, *data);
     UInt64 size = 8;
-    data.write(ti_enum.name.data, ti_enum.name.size);
+    data->write(ti_enum.name.data, ti_enum.name.size);
     size += ti_enum.name.size;
     finishAppendVar(size);
 }
 
 void TiDBColumn::append(const TiDBBit & bit)
 {
-    data.write(bit.val.data, bit.val.size);
+    data->write(bit.val.data, bit.val.size);
     finishAppendVar(bit.val.size);
 }
 
 void TiDBColumn::append(UInt64 value)
 {
-    encodeLittleEndian<UInt64>(value, data);
+    encodeLittleEndian<UInt64>(value, *data);
     finishAppendFixed();
 }
 
 void TiDBColumn::append(const TiDBTime & time)
 {
-    encodeLittleEndian<UInt64>(time.toChunkTime(), data);
+    encodeLittleEndian<UInt64>(time.toChunkTime(), *data);
     finishAppendFixed();
 }
 
 void TiDBColumn::append(const TiDBDecimal & decimal)
 {
-    encodeLittleEndian<UInt8>(decimal.digits_int, data);
-    encodeLittleEndian<UInt8>(decimal.digits_frac, data);
-    encodeLittleEndian<UInt8>(decimal.result_frac, data);
-    encodeLittleEndian<UInt8>((UInt8)decimal.negative, data);
+    encodeLittleEndian<UInt8>(decimal.digits_int, *data);
+    encodeLittleEndian<UInt8>(decimal.digits_frac, *data);
+    encodeLittleEndian<UInt8>(decimal.result_frac, *data);
+    encodeLittleEndian<UInt8>((UInt8)decimal.negative, *data);
     for (int i = 0; i < MAX_WORD_BUF_LEN; i++)
     {
-        encodeLittleEndian<Int32>(decimal.word_buf[i], data);
+        encodeLittleEndian<Int32>(decimal.word_buf[i], *data);
     }
     finishAppendFixed();
 }
 
 void TiDBColumn::append(const StringRef & value)
 {
-    data.write(value.data, value.size);
+    data->write(value.data, value.size);
     finishAppendVar(value.size);
 }
 
@@ -142,7 +143,7 @@ void TiDBColumn::append(DB::Float32 value)
     // use memcpy to avoid breaking strict-aliasing rules
     UInt32 u;
     std::memcpy(&u, &value, sizeof(value));
-    encodeLittleEndian<UInt32>(u, data);
+    encodeLittleEndian<UInt32>(u, *data);
     finishAppendFixed();
 }
 
@@ -151,7 +152,7 @@ void TiDBColumn::append(DB::Float64 value)
     // use memcpy to avoid breaking strict-aliasing rules
     UInt64 u;
     std::memcpy(&u, &value, sizeof(value));
-    encodeLittleEndian<UInt64>(u, data);
+    encodeLittleEndian<UInt64>(u, *data);
     finishAppendFixed();
 }
 
@@ -173,7 +174,7 @@ void TiDBColumn::encodeColumn(WriteBuffer & ss)
             encodeLittleEndian<Int64>(c, ss);
         }
     }
-    ss << data.str();
+    ss << data->str();
 }
 
 } // namespace DB

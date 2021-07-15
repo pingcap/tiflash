@@ -41,7 +41,8 @@ private:
     UInt32 null_cnt;
     std::vector<UInt8> null_bitmap;
     std::vector<Int64> var_offsets;
-    WriteBufferFromOwnString data;
+    // WriteBufferFromOwnString is not moveable.
+    std::unique_ptr<WriteBufferFromOwnString> data;
     std::string default_value;
     UInt64 current_data_size;
     Int8 fixed_size;
