@@ -3,6 +3,7 @@
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB
@@ -14,6 +15,8 @@ extern const char pause_when_reading_from_dt_stream[];
 
 namespace DM
 {
+class RSOperator;
+using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 class DMSegmentThreadInputStream : public IProfilingBlockInputStream
 {

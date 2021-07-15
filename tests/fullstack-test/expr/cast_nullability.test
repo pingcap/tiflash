@@ -15,6 +15,7 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash'; select * from test
 | 2 |
 +---+
 
+
 mysql> use test; set @@tidb_isolation_read_engines='tiflash'; select count(*) , cast(a * a as signed) as xx from t group by cast(a * a as signed);
 +----------+----+
 | count(*) | xx |

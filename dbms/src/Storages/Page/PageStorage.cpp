@@ -80,6 +80,8 @@ String PageStorage::Config::toDebugString() const
     std::stringstream ss;
     ss << "PageStorage::Config {gc_min_files:" << gc_min_files << ", gc_min_bytes:" << gc_min_bytes
        << ", gc_max_valid_rate:" << DB::toString(gc_max_valid_rate, 3) << ", gc_min_legacy_num:" << gc_min_legacy_num
+       << ", gc_max_expect_legacy: " << DB::toString(gc_max_expect_legacy_files)
+       << ", gc_max_valid_rate_bound: " << DB::toString(gc_max_valid_rate_bound, 3)
        << ", prob_do_gc_when_write_is_low:" << prob_do_gc_when_write_is_low
        << ", open_file_max_idle_time:" << open_file_max_idle_time.count() << "}";
     return ss.str();
@@ -555,9 +557,9 @@ PageStorage::SnapshotPtr PageStorage::getSnapshot()
     return versioned_page_entries.getSnapshot();
 }
 
-size_t PageStorage::getNumSnapshots() const
+std::tuple<size_t, double, unsigned> PageStorage::getSnapshotsStat() const
 {
-    return versioned_page_entries.numSnapshots();
+    return versioned_page_entries.getSnapshotsStat();
 }
 
 Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
@@ -815,10 +817,10 @@ struct GcContext
         // Do more agressive GC if there are too many Legacy files
         if (num_legacy_files > 50)
         {
-            if (num_legacy_files > 100)
+            if (num_legacy_files > config.gc_max_expect_legacy_files)
             {
-                // All files can be selected to migrate data to a new PageFile
-                res.gc_max_valid_rate = 1.0;
+                // Hope that almost all files can be selected to migrate data to a new PageFile
+                res.gc_max_valid_rate = config.gc_max_valid_rate_bound;
             }
             else
             {
