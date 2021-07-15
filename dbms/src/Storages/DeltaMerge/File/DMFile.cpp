@@ -222,11 +222,15 @@ DMFile::OffsetAndSize DMFile::writePackStatToBuffer(WriteBuffer & buffer)
     return std::make_tuple(pack_offset, pack_size);
 }
 
-DMFile::OffsetAndSize DMFile::writePackPropertyToBuffer(WriteBuffer & buffer)
+DMFile::OffsetAndSize DMFile::writePackPropertyToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest)
 {
     size_t offset = buffer.count();
     String tmp_buf;
     pack_properties.SerializeToString(&tmp_buf);
+    if (digest)
+    {
+        digest->update(tmp_buf.data(), tmp_buf.length());
+    }
     writeStringBinary(tmp_buf, buffer);
     size_t size = buffer.count() - offset;
     return std::make_tuple(offset, size);
@@ -244,7 +248,9 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const WriteLimiter
             auto digest = configuration->createUnifiedDigest();
             writeMetaToBuffer(buf, digest.get());
             configuration->addChecksum(meta_path, digest->raw());
-        } else {
+        }
+        else
+        {
             writeMetaToBuffer(buf);
         }
         buf.sync();
@@ -258,7 +264,16 @@ void DMFile::writePackProperty(const FileProviderPtr & file_provider, const Writ
     String tmp_property_path = property_path + ".tmp";
     {
         WriteBufferFromFileProvider buf(file_provider, tmp_property_path, encryptionPackPropertyPath(), false, write_limiter, 4096);
-        writePackPropertyToBuffer(buf);
+        if (configuration)
+        {
+            auto digest = configuration->createUnifiedDigest();
+            writePackPropertyToBuffer(buf, digest.get());
+            configuration->addChecksum(property_path, digest->raw());
+        }
+        else
+        {
+            writePackPropertyToBuffer(buf);
+        }
         buf.sync();
     }
     Poco::File(tmp_property_path).renameTo(property_path);
