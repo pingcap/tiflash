@@ -562,20 +562,14 @@ struct ModuloImpl<A, B, true>
     static inline Result apply(A a, B b)
     {
         Result x, y;
-        if constexpr (IsDecimal<A>)
-        {
+        if constexpr (IsDecimal<A>) {
             x = static_cast<Result>(a.value);
-        }
-        else
-        {
+        } else {
             x = static_cast<Result>(a);
         }
-        if constexpr (IsDecimal<B>)
-        {
+        if constexpr (IsDecimal<B>) {
             y = static_cast<Result>(b.value);
-        }
-        else
-        {
+        } else {
             y = static_cast<Result>(b);
         }
 
