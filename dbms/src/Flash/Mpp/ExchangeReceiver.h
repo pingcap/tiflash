@@ -51,10 +51,13 @@ enum State
 
 struct ReceivedPacket
 {
-    ReceivedPacket(){}
+    ReceivedPacket()
+    {
+        packet = std::make_shared<mpp::MPPDataPacket>();
+    }
     std::shared_ptr<mpp::MPPDataPacket> packet;
     size_t source_index;
-    String* req_info;
+    String req_info;
 };
 
 using PacketsPool =  ConcurrentBoundedQueue<std::shared_ptr<ReceivedPacket>>;

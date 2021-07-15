@@ -61,7 +61,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             LOG_TRACE(log, "begin next ");
             std::shared_ptr<ReceivedPacket> packet;
             empty_packets.pop(packet);
-            packet->req_info = &req_info;
+            packet->req_info = req_info;
             packet->source_index = source_index;
             bool success = reader->Read(packet->packet.get());
             if (!success)
@@ -77,6 +77,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             else
             {
                 LOG_WARNING(log, "Receiver's status is not normal, exit from ReadLoop");
+                meet_error =true;
                 break;
             }
         }
@@ -116,8 +117,10 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         else
         {
             /// in error case, prevent a stream from being blocked when pop a packet
-            while ( full_packets.size() < max_streams)
+            if ( full_packets.size() < max_streams)
             {
+                int num = max_streams - full_packets.size();
+                while (num--)
                 full_packets.push(nullptr);
             }
         }
@@ -157,7 +160,7 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
             }
             else
             {
-                result = {resp_ptr, packet->source_index, *packet->req_info};
+                result = {resp_ptr, packet->source_index, packet->req_info};
                 packet->packet->Clear();
                 empty_packets.push(std::move(packet));
             }
