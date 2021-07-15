@@ -352,7 +352,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
     const auto func_throw_retry_region = [&](RegionException::RegionReadStatus status) {
         RegionException::UnavailableRegions region_ids(regions_executor_data.size());
-        std::for_each(regions_executor_data.begin(), regions_executor_data.end(), [&](auto & x) { region_ids.emplace(x.info.region_id); });
+        std::for_each(regions_executor_data.begin(), regions_executor_data.end(), [&](auto & x) { region_ids.emplace(x.info.region_ver_id); });
         throw RegionException(std::move(region_ids), status);
     };
 
@@ -425,24 +425,24 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         {
             auto regions = tmt.getRegionTable().getRegionsByTable(data.table_info->id);
             regions_executor_data.reserve(regions.size());
-            for (const auto & [id, region] : regions)
+            for (const auto & region_info : regions)
             {
                 regions_executor_data.emplace_back(
-                    RegionQueryInfo{id, region->version(), region->confVer(), region->getRange()->rawKeys(), {}},
-                    getHandleRangeByTable(region->getRange()->rawKeys(), data.table_info->id));
+                    RegionQueryInfo{region_info.second->verID(), region_info.second->getRange()->rawKeys(), {}},
+                    getHandleRangeByTable(region_info.second->getRange()->rawKeys(), data.table_info->id));
             }
         }
 
         // check region is not null and store region map.
         for (const auto & query_info : regions_executor_data)
         {
-            auto region = kvstore->getRegion(query_info.info.region_id);
+            auto region = kvstore->getRegion(query_info.info.region_ver_id.id);
             if (region == nullptr)
             {
-                LOG_WARNING(log, "[region " << query_info.info.region_id << "] is not found in KVStore, try again");
+                LOG_WARNING(log, "[region " << query_info.info.region_ver_id.id << "] is not found in KVStore, try again");
                 func_throw_retry_region(RegionException::RegionReadStatus::NOT_FOUND);
             }
-            kvstore_region.emplace(query_info.info.region_id, std::move(region));
+            kvstore_region.emplace(query_info.info.region_ver_id.id, std::move(region));
         }
 
         // make sure regions are not duplicated.
@@ -471,7 +471,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     RegionQueryInfo & region_query_info = regions_executor_data[region_index].info;
                     HandleRange<HandleID> & handle_range = regions_executor_data[region_index].handle_range;
                     // wait learner read index
-                    auto region = kvstore_region[region_query_info.region_id];
+                    auto region = kvstore_region[region_query_info.region_ver_id.id];
 
                     if (region->getMappedTableID() != data.table_info->id)
                         throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id not match, expect "
@@ -503,7 +503,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                     if (read_index_result.lock_info)
                     {
-                        throw LockException(region->id(), std::move(read_index_result.lock_info));
+                        throw LockException(region->verID(), std::move(read_index_result.lock_info));
                         continue;
                     }
                     else
@@ -519,7 +519,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     }
 
                     auto block_status = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
-                        kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
+                        kvstore_region[region_query_info.region_ver_id.id], region_query_info.region_ver_id.ver, region_query_info.region_ver_id.conf_ver,
                         mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, region_query_info.bypass_lock_ts,
                         region_query_info.range_in_table, regions_executor_data[region_index].range_scan_filter);
 
@@ -531,8 +531,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                    [&](RegionException::RegionReadStatus & status) {
                                        assert(status != RegionException::RegionReadStatus::OK);
                                        LOG_WARNING(log,
-                                           "Check memory cache, region " << region_query_info.region_id << ", version "
-                                                                         << region_query_info.version << ", handle range ["
+                                           "Check memory cache, region " << region_query_info.region_ver_id.toString()
+                                                                         << ", handle range ["
                                                                          << handle_range.first.toString() << ", "
                                                                          << handle_range.second.toString() << ") , status "
                                                                          << RegionException::RegionReadStatusString(status));
@@ -608,7 +608,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     {
                         // move this region to end.
                         LOG_DEBUG(log,
-                            "Store special region " << regions_executor_data[i].info.region_id << " first"
+                            "Store special region " << regions_executor_data[i].info.region_ver_id.toString() << " first"
                                                     << ", handle range [" << regions_executor_data[i].handle_range.first.toString() << ", "
                                                     << regions_executor_data[i].handle_range.second.toString() << ")");
 
@@ -1021,11 +1021,11 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             const auto & handle_range = executor_data.handle_range;
             // check all data, include special region.
             {
-                auto region = tmt.getKVStore()->getRegion(region_query_info.region_id);
+                auto region = tmt.getKVStore()->getRegion(region_query_info.region_ver_id.id);
                 RegionException::RegionReadStatus status = RegionException::RegionReadStatus::OK;
-                if (region != kvstore_region[region_query_info.region_id])
+                if (region != kvstore_region[region_query_info.region_ver_id.id])
                     status = RegionException::RegionReadStatus::NOT_FOUND;
-                else if (region->version() != region_query_info.version)
+                else if (region->version() != region_query_info.region_ver_id.ver)
                     status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
 
                 if (status != RegionException::RegionReadStatus::OK)
@@ -1034,7 +1034,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     // if the version of region is changed, the part may has less data because of compaction.
                     LOG_WARNING(log,
                         "Check after getDataPartsVector, region "
-                            << region_query_info.region_id << ", version " << region_query_info.version << ", handle range ["
+                            << region_query_info.region_ver_id.toString() << ", handle range ["
                             << handle_range.first.toString() << ", " << handle_range.second.toString() << ") , status "
                             << RegionException::RegionReadStatusString(status));
                     // throw exception and exit.
@@ -1331,7 +1331,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         }
                         LOG_DEBUG(log,
                             "[PK_IS_UINT64] special region "
-                                << special_region_info.info.region_id << ", split range into " << ranges.size() << ": " << ss.str() << ", "
+                                << special_region_info.info.region_ver_id.toString() << ", split range into " << ranges.size() << ": " << ss.str() << ", "
                                 << region_sum_marks << " marks to read from " << region_sum_ranges << " ranges, read "
                                 << regions_executor_data[special_region_index].block.rows() << " rows from memory");
                     }
