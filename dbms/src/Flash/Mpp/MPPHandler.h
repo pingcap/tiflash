@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Server/Terminated.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
@@ -339,7 +340,7 @@ public:
         // TODO: put into configuration.
         std::chrono::seconds timeout(10);
 
-        if (!cv.wait_for(lock, timeout, [&]() { return has_new_writer || cancelled; }))
+        if (!cv.wait_for(lock, timeout, [&]() { return has_new_writer || cancelled || Terminated::server_terminated; }))
         {
             throw Exception(__FUNCTION__ + task_id.toString() + " is timeout");
         }

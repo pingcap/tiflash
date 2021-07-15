@@ -271,7 +271,7 @@ void MPPTask::runImpl(const MPPTaskProxyPtr & task_proxy)
         unregisterTask(););
 
 
-    if (task_proxy->hasCancelled())
+    if (task_proxy->hasCancelled() || Terminated::server_terminated)
     {
         LOG_WARNING(log, "task has been cancelled, skip running");
         return;
@@ -297,7 +297,7 @@ void MPPTask::runImpl(const MPPTaskProxyPtr & task_proxy)
             Block block;
             while (true)
             {
-                if (task_proxy->hasCancelled())
+                if (task_proxy->hasCancelled() || Terminated::server_terminated)
                 {
                     LOG_WARNING(log, "task has been cancelled, skip running");
                     return;
@@ -317,7 +317,7 @@ void MPPTask::runImpl(const MPPTaskProxyPtr & task_proxy)
             while (!allTunnelConnected())
             {
                 auto [cancelled, has_new_writer, tunnel_map] = task_proxy->getNewTunnelWriters();
-                if (cancelled)
+                if (cancelled || Terminated::server_terminated)
                 {
                     LOG_WARNING(log, "task has been cancelled, skip running");
                     return;

@@ -1,5 +1,6 @@
 #include "Server.h"
 
+#include <Server/Terminated.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
@@ -1269,6 +1270,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         waitForTerminationRequest();
 
+        Terminated::server_terminated = true;
         {
             global_context->getTMTContext().setTerminated();
             LOG_INFO(log, "Set tmt context terminated");
