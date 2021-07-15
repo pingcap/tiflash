@@ -3,14 +3,15 @@
 #include <Flash/LogSearch.h>
 #include <Poco/Path.h>
 #include <Storages/PathPool.h>
+#include <fmt/core.h>
 #include <re2/re2.h>
 
+#include <memory>
+
 #ifdef __linux__
-// #include <arpa/inet.h>
-// #include <ifaddrs.h>
-// #include <linux/if_packet.h>
-// #include <sys/socket.h>
+
 #include <sys/statvfs.h>
+
 #endif
 
 namespace DB
@@ -23,20 +24,18 @@ using diagnosticspb::ServerInfoPair;
 using diagnosticspb::ServerInfoResponse;
 using diagnosticspb::ServerInfoType;
 
-using MemoryInfo = std::unordered_map<std::string, uint64_t>;
-
 namespace ErrorCodes
 {
 extern const int UNKNOWN_EXCEPTION;
 }
 
-namespace
-{
+using MemoryInfo = std::map<std::string, uint64_t>;
 
 static constexpr uint KB = 1024;
 // static constexpr uint MB = 1024 * 1024;
 
-DiagnosticsService::AvgLoad getAvgLoad()
+#ifdef __linux__
+static DiagnosticsService::AvgLoad getAvgLoadLinux()
 {
     {
         Poco::File avg_load_file("/proc/loadavg");
@@ -52,17 +51,33 @@ DiagnosticsService::AvgLoad getAvgLoad()
     std::getline(file, str);
     std::vector<std::string> values;
     boost::split(values, str, boost::is_any_of(" "));
+    if (values.size() < 3)
+    {
+        LOG_WARNING(&Logger::get("DiagnosticsService"), "Cannot parse /proc/loadavg");
+        return DiagnosticsService::AvgLoad{};
+    }
     return DiagnosticsService::AvgLoad{std::stod(values[0]), std::stod(values[1]), std::stod(values[2])};
 }
+#endif
 
-void getMemoryInfo(MemoryInfo & memory_info)
+static DiagnosticsService::AvgLoad getAvgLoad()
 {
+#ifdef __linux__
+    return getAvgLoadLinux();
+#endif
+    return {};
+}
+
+#ifdef __linux__
+static MemoryInfo getMemoryInfoLinux()
+{
+    MemoryInfo memory_info;
     {
         Poco::File meminfo_file("/proc/meminfo");
         if (!meminfo_file.exists())
         {
             LOG_WARNING(&Logger::get("DiagnosticsService"), "/proc/meminfo doesn't exist");
-            return;
+            return memory_info;
         }
     }
     std::ifstream file("/proc/meminfo");
@@ -71,15 +86,26 @@ void getMemoryInfo(MemoryInfo & memory_info)
     {
         std::string name;
         std::string kb_str;
-        if (RE2::FullMatch(line, "([\\w\\(\\)]+):\\s+([0-9]+).*", &name, &kb_str))
+        if (RE2::FullMatch(line, R"(([\w\(\)]+):\s+([0-9]+).*)", &name, &kb_str))
         {
             uint64_t kb = std::stoul(kb_str);
             memory_info.emplace(name, kb);
         }
     }
+    return memory_info;
+}
+#endif
+
+static MemoryInfo getMemoryInfo()
+{
+#ifdef __linux__
+    return getMemoryInfoLinux();
+#endif
+    return {};
 }
 
-DiagnosticsService::NICInfo getNICInfo()
+#ifdef __linux__
+static DiagnosticsService::NICInfo getNICInfoLinux()
 {
     DiagnosticsService::NICInfo nic_info;
     Poco::File net_dir("/sys/class/net");
@@ -101,7 +127,7 @@ DiagnosticsService::NICInfo getNICInfo()
         });
         std::vector<Poco::File> stat_files;
         statistics->list(stat_files);
-        DiagnosticsService::NICLoad load_info;
+        DiagnosticsService::NICLoad load_info{};
         for (auto & stat : stat_files)
         {
             Poco::Path path(stat.path());
@@ -127,12 +153,22 @@ DiagnosticsService::NICInfo getNICInfo()
         }
 
         Poco::Path device_path(device.path());
-        nic_info.emplace(device_path.getFileName(), std::move(load_info));
+        nic_info.emplace(device_path.getFileName(), load_info);
     }
     return nic_info;
 }
+#endif
 
-DiagnosticsService::IOInfo getIOInfo()
+static DiagnosticsService::NICInfo getNICInfo()
+{
+#ifdef __linux__
+    return getNICInfoLinux();
+#endif
+    return {};
+}
+
+#ifdef __linux__
+static DiagnosticsService::IOInfo getIOInfoLinux()
 {
     DiagnosticsService::IOInfo io_info;
     Poco::File io_dir("/sys/block");
@@ -154,18 +190,33 @@ DiagnosticsService::IOInfo getIOInfo()
         std::getline(file, value);
         std::vector<std::string> values;
         boost::split(values, value, boost::is_any_of("\t "), boost::token_compress_on);
+        if (values.size() < 11)
+        {
+            LOG_WARNING(&Logger::get("DiagnosticsService"), "Cannot parse /sys/block");
+            return io_info;
+        }
         /// TODO: better to initialize with field names
         DiagnosticsService::IOLoad load{std::stod(values[0]), std::stod(values[1]), std::stod(values[2]), std::stod(values[3]),
             std::stod(values[4]), std::stod(values[5]), std::stod(values[6]), std::stod(values[7]), std::stod(values[8]),
             std::stod(values[9]), std::stod(values[10])};
 
         Poco::Path device_path(device.path());
-        io_info.emplace(device_path.getFileName(), std::move(load));
+        io_info.emplace(device_path.getFileName(), load);
     }
     return io_info;
 }
+#endif
 
-size_t getPhysicalCoreNumber()
+static DiagnosticsService::IOInfo getIOInfo()
+{
+#ifdef __linux__
+    return getIOInfoLinux();
+#endif
+    return {};
+}
+
+#ifdef __linux__
+static size_t getPhysicalCoreNumberLinux()
 {
     {
         Poco::File info_file("/proc/cpuinfo");
@@ -220,8 +271,18 @@ size_t getPhysicalCoreNumber()
     }
     return count;
 }
+#endif
 
-uint64_t getCPUFrequency()
+static size_t getPhysicalCoreNumber()
+{
+#ifdef __linux__
+    return getPhysicalCoreNumberLinux();
+#endif
+    return 0;
+}
+
+#ifdef __linux__
+static uint64_t getCPUFrequencyLinux()
 {
     {
         Poco::File info_file("/proc/cpuinfo");
@@ -252,8 +313,18 @@ uint64_t getCPUFrequency()
     }
     return 0;
 }
+#endif
 
-void getCacheSize(const uint & level, size_t & size, size_t & line_size)
+static uint64_t getCPUFrequency()
+{
+#ifdef __linux__
+    return getCPUFrequencyLinux();
+#endif
+    return 0;
+}
+
+#ifdef __linux__
+static void getCacheSizeLinux(const uint & level, size_t & size, size_t & line_size)
 {
     Poco::Path cache_dir("/sys/devices/system/cpu/cpu0/cache/index" + std::to_string(level));
     Poco::Path size_path = cache_dir;
@@ -273,11 +344,90 @@ void getCacheSize(const uint & level, size_t & size, size_t & line_size)
     std::getline(line_size_file, line_size_str);
     line_size = std::stoul(line_size_str);
 }
+#endif
 
-std::vector<DiagnosticsService::Disk> getAllDisks()
+static void getCacheSize(const uint & level, size_t & size, size_t & line_size)
+{
+#ifdef __linux__
+    getCacheSizeLinux(level, size, line_size);
+#else
+    size = 0;
+    line_size = 0;
+#endif
+    return;
+}
+
+#ifdef __linux__
+static DiagnosticsService::Disk::DiskType getDiskTypeByNameLinux(const std::string & name)
+{
+    // Reference: https://github.com/GuillaumeGomez/sysinfo/blob/28c9e1071eb26c02154d584759f3ddd1e1da4ddf/src/linux/disk.rs#L101-L110
+    // The format of devices are as follows:
+    //  - name_path is symbolic link in the case of /dev/mapper/
+    //     and /dev/root, and the target is corresponding device under
+    //     /sys/block/
+    //  - In the case of /dev/sd, the format is /dev/sd[a-z][1-9],
+    //     corresponding to /sys/block/sd[a-z]
+    //  - In the case of /dev/nvme, the format is /dev/nvme[0-9]n[0-9]p[0-9],
+    //     corresponding to /sys/block/nvme[0-9]n[0-9]
+    //  - In the case of /dev/mmcblk, the format is /dev/mmcblk[0-9]p[0-9],
+    //     corresponding to /sys/block/mmcblk[0-9]
+    std::string real_path = Poco::Path(name).absolute().toString();
+    if (boost::starts_with(name, "/dev/mapper/"))
+    {
+        // Recursively solve, for example /dev/dm-0
+        if (real_path != name)
+            return getDiskTypeByNameLinux(real_path);
+    }
+    else if (boost::starts_with(name, "/dev/sd") || boost::starts_with(name, "/dev/vd"))
+    {
+        // Turn "sda1" into "sda"
+        if (boost::starts_with(real_path, "/dev/"))
+            real_path = real_path.substr(5);
+        boost::trim_right_if(real_path, boost::is_digit());
+    }
+    else if (boost::starts_with(name, "/dev/nvme"))
+    {
+        // Turn "nvme0n1p1" into "nvme0n1"
+        if (boost::starts_with(real_path, "/dev/"))
+            real_path = real_path.substr(5);
+        boost::trim_right_if(real_path, boost::is_digit());
+        boost::trim_right_if(real_path, boost::is_any_of("p"));
+    }
+    else if (boost::starts_with(name, "/dev/root"))
+    {
+        // Recursively solve, for example /dev/mmcblk0p1
+        if (real_path != name)
+            return getDiskTypeByNameLinux(real_path);
+    }
+    else if (boost::starts_with(name, "/dev/mmcblk"))
+    {
+        // Recursively solve, for example /dev/dm-0
+        if (boost::starts_with(real_path, "/dev/"))
+            real_path = real_path.substr(5);
+        boost::trim_right_if(real_path, boost::is_digit());
+        boost::trim_right_if(real_path, boost::is_any_of("p"));
+    }
+    else
+    {
+        // Trim /dev/ by default
+        if (boost::starts_with(real_path, "/dev/"))
+            real_path = real_path.substr(5);
+    }
+    Poco::Path rotational_file_path("/sys/block/" + real_path + "/queue/rotational");
+    if (Poco::File(rotational_file_path).exists())
+    {
+        std::ifstream rotational_file(rotational_file_path.toString());
+        std::string rotational_buffer;
+        std::getline(rotational_file, rotational_buffer);
+        int rotational = std::stoi(rotational_buffer);
+        return rotational == 1 ? DiagnosticsService::Disk::DiskType::HDD : DiagnosticsService::Disk::DiskType::SSD;
+    }
+    return DiagnosticsService::Disk::DiskType::UNKNOWN;
+}
+
+static std::vector<DiagnosticsService::Disk> getAllDisksLinux()
 {
     std::vector<DiagnosticsService::Disk> disks;
-#ifdef __linux__
     {
         Poco::File mount_file("/proc/mounts");
         if (!mount_file.exists())
@@ -287,101 +437,71 @@ std::vector<DiagnosticsService::Disk> getAllDisks()
         }
     }
 
+    // http://man7.org/linux/man-pages/man5/fstab.5.html
+    // /proc/mounts fields(from left to right):
+    // - fs_spec: Device specification(e.g. /dev/sda)
+    // - fs_file: Mount point
+    // - fs_vfstype: File system
+    // - fs_mntops: Read-only(ro), Read-write(rw) or else
+    // - fs_freq
+    // - fs_passno
     std::ifstream mount_file("/proc/mounts");
-    std::string line;
-    while (std::getline(mount_file, line))
+    std::string mount_info;
+    while (std::getline(mount_file, mount_info))
     {
-        boost::trim_left(line);
-        if (boost::starts_with(line, "/dev/sd") || boost::starts_with(line, "/dev/nvme") || boost::starts_with(line, "/dev/mapper")
-            || boost::starts_with(line, "/dev/root") || boost::starts_with(line, "/dev/mmcblk") || boost::starts_with(line, "/dev-mapper"))
+        // TODO: use string_view instead
+        std::vector<std::string> values;
+        DiagnosticsService::Disk disk;
+        boost::split(values, mount_info, boost::is_any_of("\t "), boost::token_compress_on);
+        if (values.size() < 3)
         {
-            std::vector<std::string> values;
-            boost::split(values, line, boost::is_any_of(" "), boost::token_compress_on);
-            DiagnosticsService::Disk disk;
-
-            disk.name = values[0].substr(5, values[0].size() - 5); // trim '/dev/' prefix
-            boost::trim_if(disk.name, boost::is_digit());          // trim partition number
-
-            disk.mount_point = values[1];
-
-            Poco::Path rotational_file_path("/sys/block/" + disk.name + "/queue/rotational");
-            if (Poco::File(rotational_file_path).exists())
-            {
-                std::ifstream rotational_file(rotational_file_path.toString());
-                std::string line;
-                std::getline(rotational_file, line);
-                int rotational = std::stoi(line);
-                disk.disk_type = rotational == 1 ? DiagnosticsService::Disk::DiskType::HDD : DiagnosticsService::Disk::DiskType::SSD;
-            }
-            else
-            {
-                disk.disk_type = DiagnosticsService::Disk::DiskType::UNKNOWN;
-            }
-
-            disk.fs_type = values[2];
-
-            struct statvfs stat;
-            statvfs(disk.mount_point.data(), &stat);
-            size_t total = static_cast<size_t>(stat.f_blocks) * static_cast<size_t>(stat.f_bsize);
-            size_t available = static_cast<size_t>(stat.f_bavail) * static_cast<size_t>(stat.f_bsize);
-
-            disk.total_space = total;
-            disk.available_space = available;
-
-            disks.emplace_back(std::move(disk));
+            LOG_WARNING(&Logger::get("DiagnosticsService"), "Cannot parse /proc/mounts");
+            continue;
         }
+        static std::vector<std::string> fs_filter{
+            "sysfs", // pseudo file system for kernel objects
+            "proc",  // another pseudo file system
+            "tmpfs", "devtmpfs", "cgroup", "cgroup2",
+            "pstore",     // https://www.kernel.org/doc/Documentation/ABI/testing/pstore
+            "squashfs",   // squashfs is a compressed read-only file system (for snaps)
+            "rpc_pipefs", // The pipefs pseudo file system service
+            "iso9660"     // optical media
+        };
+        if (std::find(fs_filter.begin(), fs_filter.end(), values[2]) != fs_filter.end() || boost::starts_with(values[1], "/sys")
+            || boost::starts_with(values[1], "/proc")
+            || (boost::starts_with(values[1], "/run") && !boost::starts_with(values[1], "/run/media"))
+            || boost::starts_with(values[1], "sunrpc"))
+        {
+            // Ignore unsupported fs type
+            continue;
+        }
+
+        disk.name = values[0];
+        disk.mount_point = values[1];
+        disk.disk_type = getDiskTypeByNameLinux(disk.name);
+        disk.fs_type = values[2];
+
+        struct statvfs stat;
+        statvfs(disk.mount_point.data(), &stat);
+        size_t total = static_cast<size_t>(stat.f_blocks) * static_cast<size_t>(stat.f_bsize);
+        size_t available = static_cast<size_t>(stat.f_bavail) * static_cast<size_t>(stat.f_bsize);
+
+        disk.total_space = total;
+        disk.available_space = available;
+
+        disks.emplace_back(std::move(disk));
     }
-#endif
     return disks;
 }
+#endif
 
-// std::vector<DiagnosticsService::NetworkInterface> getNetworkInterfaces()
-// {
-//     std::vector<DiagnosticsService::NetworkInterface> interfaces;
-
-//     // auto sockaddr_to_network_addr = [](const struct sockaddr * sa, std::vector<uint8_t> & mac, std::string & addr) {
-//     //     if (sa->sa_family == AF_PACKET)
-//     //     {
-//     //         auto sll = (struct sockaddr_ll *)sa;
-//     //         mac = {sll->sll_addr[0], sll->sll_addr[1], sll->sll_addr[2], sll->sll_addr[3], sll->sll_addr[4], sll->sll_addr[5]};
-//     //     }
-//     //     else if (sa->sa_family == AF_INET)
-//     //     {
-//     //         auto si = (struct sockaddr_in *)sa;
-//     //         char * addr_str = inet_ntoa(si->sin_addr);
-//     //         addr = std::string(addr_str);
-//     //     }
-//     //     else if (sa->sa_family == AF_INET6)
-//     //     {
-//     //         // TODO
-//     //     }
-//     // };
-
-//     // struct ifaddrs * addrs;
-//     // getifaddrs(&addrs);
-//     // auto cur = addrs;
-//     // while (cur)
-//     // {
-//     //     std::string name(cur->ifa_name);
-//     //     std::vector<uint8_t> mac;
-//     //     std::string ip;
-//     //     sockaddr_to_network_addr(cur->ifa_addr, mac, ip);
-//     //     std::string netmask;
-//     //     std::vector<uint8_t> temp;
-//     //     sockaddr_to_network_addr(cur->ifa_netmask, temp, netmask);
-
-//     //     DiagnosticsService::NetworkInterface interface;
-//     //     interface.name = name;
-//     //     interface.index = 0;
-//     //     interface.flag = cur->ifa_flags;
-//     //     interface.mac = mac;
-//     // }
-//     // freeifaddrs(addrs);
-
-//     return interfaces;
-// }
-
-} // namespace
+static std::vector<DiagnosticsService::Disk> getAllDisks()
+{
+#ifdef __linux__
+    return getAllDisksLinux();
+#endif
+    return {};
+}
 
 void DiagnosticsService::cpuLoadInfo(
     std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
@@ -401,11 +521,11 @@ void DiagnosticsService::cpuLoadInfo(
         auto avg_load = getAvgLoad();
         std::vector<std::pair<std::string, double>> names{{"load1", avg_load.one}, {"load5", avg_load.five}, {"load15", avg_load.fifteen}};
         std::vector<ServerInfoPair> pairs;
-        for (size_t i = 0; i < names.size(); i++)
+        for (auto & name : names)
         {
             ServerInfoPair pair;
-            pair.set_key(names[i].first);
-            pair.set_value(std::to_string(names[i].second));
+            pair.set_key(name.first);
+            pair.set_value(std::to_string(name.second));
             pairs.emplace_back(std::move(pair));
         }
         ServerInfoItem item;
@@ -433,7 +553,7 @@ void DiagnosticsService::cpuLoadInfo(
             return;
         }
 
-        LinuxCpuTime delta;
+        LinuxCpuTime delta{};
         delta.user = cpu_time->user - prev_cpu_time->user;
         delta.nice = cpu_time->nice - prev_cpu_time->nice;
         delta.system = cpu_time->system - prev_cpu_time->system;
@@ -445,7 +565,7 @@ void DiagnosticsService::cpuLoadInfo(
         delta.guest = cpu_time->guest - prev_cpu_time->guest;
         delta.guest_nice = cpu_time->guest_nice - prev_cpu_time->guest_nice;
 
-        double delta_total = static_cast<double>(delta.total());
+        auto delta_total = static_cast<double>(delta.total());
 
         std::vector<std::pair<std::string, double>> data{{"user", static_cast<double>(delta.user) / delta_total},
             {"nice", static_cast<double>(delta.nice) / delta_total}, {"system", static_cast<double>(delta.system) / delta_total},
@@ -459,9 +579,7 @@ void DiagnosticsService::cpuLoadInfo(
         {
             ServerInfoPair pair;
             pair.set_key(p.first);
-            char buff[20];
-            std::sprintf(buff, "%.2lf", p.second);
-            pair.set_value(buff);
+            pair.set_value(fmt::format("{0:.2f}", p.second));
             pairs.emplace_back(std::move(pair));
         }
         ServerInfoItem item;
@@ -480,8 +598,7 @@ void DiagnosticsService::cpuLoadInfo(
 /// TODO: wrap MemoryInfo with struct
 void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
-    MemoryInfo meminfo;
-    getMemoryInfo(meminfo);
+    auto meminfo = getMemoryInfo();
 
     /// TODO: we should check both cgroup quota and MemTotal, then pick the less one
 
@@ -495,33 +612,24 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
     uint64_t free_swap = meminfo.at("SwapFree") * KB;
     uint64_t used_swap = total_swap - free_swap;
 
-    char buffer[10];
     double used_memory_percent = static_cast<double>(used_memory) / static_cast<double>(total_memory);
-    std::sprintf(buffer, "%.2lf", used_memory_percent);
-    std::string used_memory_percent_str(buffer);
     double free_memory_percent = static_cast<double>(free_memory) / static_cast<double>(total_memory);
-    std::sprintf(buffer, "%.2lf", free_memory_percent);
-    std::string free_memory_percent_str(buffer);
     double used_swap_percent = static_cast<double>(used_swap) / static_cast<double>(total_swap);
-    std::sprintf(buffer, "%.2lf", used_swap_percent);
-    std::string used_swap_percent_str(buffer);
     double free_swap_percent = static_cast<double>(free_swap) / static_cast<double>(total_swap);
-    std::sprintf(buffer, "%.2lf", free_swap_percent);
-    std::string free_swap_percent_str(buffer);
 
-    std::vector<std::pair<std::string, std::string>> memory_infos{//
-        {"total", std::to_string(total_memory)},                  //
-        {"free", std::to_string(free_memory)},                    //
-        {"used", std::to_string(used_memory)},                    //
-        {"free-percent", free_memory_percent_str},                //
-        {"used-percent", used_memory_percent_str}};
+    std::vector<std::pair<std::string, std::string>> memory_infos{     //
+        {"total", std::to_string(total_memory)},                       //
+        {"free", std::to_string(free_memory)},                         //
+        {"used", std::to_string(used_memory)},                         //
+        {"free-percent", fmt::format("{0:.2f}", free_memory_percent)}, //
+        {"used-percent", fmt::format("{0:.2f}", used_memory_percent)}};
 
-    std::vector<std::pair<std::string, std::string>> swap_infos{//
-        {"total", std::to_string(total_swap)},                  //
-        {"free", std::to_string(free_swap)},                    //
-        {"used", std::to_string(used_swap)},                    //
-        {"free-percent", free_swap_percent_str},                //
-        {"used-percent", used_swap_percent_str}};
+    std::vector<std::pair<std::string, std::string>> swap_infos{     //
+        {"total", std::to_string(total_swap)},                       //
+        {"free", std::to_string(free_swap)},                         //
+        {"used", std::to_string(used_swap)},                         //
+        {"free-percent", fmt::format("{0:.2f}", free_swap_percent)}, //
+        {"used-percent", fmt::format("{0:.2f}", used_swap_percent)}};
 
     // Add pairs for memory_infos
     {
@@ -537,11 +645,11 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
         ServerInfoItem item;
         item.set_name("virtual");
         item.set_tp("memory");
-        for (size_t i = 0; i < pairs.size(); i++)
+        for (auto & pair : pairs)
         {
             auto added_pair = item.add_pairs();
-            added_pair->set_key(pairs[i].key());
-            added_pair->set_value(pairs[i].value());
+            added_pair->set_key(pair.key());
+            added_pair->set_value(pair.value());
         }
         server_info_items.emplace_back(std::move(item));
     }
@@ -560,11 +668,11 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
         ServerInfoItem item;
         item.set_name("swap");
         item.set_tp("memory");
-        for (size_t i = 0; i < pairs.size(); i++)
+        for (auto & pair : pairs)
         {
             auto added_pair = item.add_pairs();
-            added_pair->set_key(pairs[i].key());
-            added_pair->set_value(pairs[i].value());
+            added_pair->set_key(pair.key());
+            added_pair->set_value(pair.value());
         }
         server_info_items.emplace_back(std::move(item));
     }
@@ -594,9 +702,7 @@ void DiagnosticsService::nicLoadInfo(const NICInfo & prev_nic, std::vector<diagn
         {
             ServerInfoPair pair;
             pair.set_key(info.first);
-            char buffer[10];
-            std::sprintf(buffer, "%.2lf", info.second);
-            pair.set_value(std::string(buffer));
+            pair.set_value(fmt::format("{0:.2lf}", info.second));
             pairs.emplace_back(std::move(pair));
         }
         ServerInfoItem item;
@@ -640,9 +746,7 @@ void DiagnosticsService::ioLoadInfo(
         {
             ServerInfoPair pair;
             pair.set_key(info.first);
-            char buffer[10];
-            std::sprintf(buffer, "%.2lf", info.second);
-            pair.set_value(std::string(buffer));
+            pair.set_value(fmt::format("{0:.2f}", info.second));
             pairs.emplace_back(std::move(pair));
         }
         ServerInfoItem item;
@@ -702,8 +806,7 @@ void DiagnosticsService::cpuHardwareInfo(std::vector<diagnosticspb::ServerInfoIt
 
 void DiagnosticsService::memHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
-    MemoryInfo mem_info;
-    getMemoryInfo(mem_info);
+    auto mem_info = getMemoryInfo();
     size_t total_mem = mem_info.at("MemTotal");
 
     ServerInfoItem item;
@@ -755,17 +858,18 @@ void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoI
         size_t free = disk.available_space;
         size_t used = total - free;
 
-        char buffer[10];
         double free_percent = static_cast<double>(free) / static_cast<double>(total);
-        std::sprintf(buffer, "%.2lf", free_percent);
-        std::string free_percent_str(buffer);
         double used_percent = static_cast<double>(used) / static_cast<double>(total);
-        std::sprintf(buffer, "%.2lf", used_percent);
-        std::string used_percent_str(buffer);
 
-        std::vector<std::pair<std::string, std::string>> infos{{"type", disk.disk_type == disk.HDD ? "HDD" : "SSD"},
-            {"fstype", disk.fs_type}, {"path", mount_point}, {"total", std::to_string(total)}, {"free", std::to_string(free)},
-            {"used", std::to_string(used)}, {"free-percent", free_percent_str}, {"used-percent", used_percent_str}};
+        std::vector<std::pair<std::string, std::string>> infos{     //
+            {"type", disk.disk_type == disk.HDD ? "HDD" : "SSD"},   //
+            {"fstype", disk.fs_type},                               //
+            {"path", mount_point},                                  //
+            {"total", std::to_string(total)},                       //
+            {"free", std::to_string(free)},                         //
+            {"used", std::to_string(used)},                         //
+            {"free-percent", fmt::format("{0:.2f}", free_percent)}, //
+            {"used-percent", fmt::format("{0:.2f}", used_percent)}};
 
         ServerInfoItem item;
         for (auto & info : infos)
@@ -851,7 +955,7 @@ try
 
     // auto resp = ServerInfoResponse::default_instance();
     auto & resp = *response;
-    for (auto item : items)
+    for (auto & item : items)
     {
         auto added_item = resp.add_items();
         added_item->set_name(item.name());
@@ -903,7 +1007,7 @@ catch (const Exception & e)
         patterns.push_back(pattern);
     }
 
-    auto in_ptr = std::shared_ptr<std::ifstream>(new std::ifstream(log_file.path()));
+    auto in_ptr = std::make_shared<std::ifstream>(log_file.path());
 
     LogIterator log_itr(start_time, end_time, levels, patterns, in_ptr);
 
