@@ -454,7 +454,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     Logger * log = &logger();
 
-    LOG_ERROR(log, "==================Starting up TiFlash!=================");
+    LOG_WARNING(log, "==================Starting up TiFlash!=================");
 
 #ifndef NDEBUG
 #ifdef FIU_ENABLE
