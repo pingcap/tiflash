@@ -101,8 +101,8 @@ template <typename A, typename B> struct ResultOfModulo
 {
     using Type = typename Construct<
         std::is_signed_v<A> || std::is_signed_v<B>,
-        false,
-        sizeof(B)>::Type;
+        std::is_floating_point_v<A> || std::is_floating_point_v<B>,
+        nextSize(max(sizeof(A), sizeof(B)))>::Type;
 };
 
 template <typename A> struct ResultOfNegate

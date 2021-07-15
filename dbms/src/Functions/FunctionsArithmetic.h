@@ -528,7 +528,16 @@ struct ModuloImpl<A, B, false>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        return static_cast<Result>(a) % static_cast<Result>(b);
+        if constexpr (std::is_floating_point_v<Result>)
+        {
+            // C++ does not allow operator% between floating point
+            // values, so we call into std::fmod.
+            return std::fmod(static_cast<Result>(a), static_cast<Result>(b));
+        }
+        else
+        {
+            return static_cast<Result>(a) % static_cast<Result>(b);
+        }
     }
     template <typename Result = ResultType>
     static inline Result apply(A a, B b, UInt8 & res_null)
@@ -552,16 +561,25 @@ struct ModuloImpl<A, B, true>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        // C++ does not allow operator% between floating point
-        // values, so we call into std::fmod.
-        if (std::is_floating_point_v<Result>)
+        Result x, y;
+        if constexpr (IsDecimal<A>)
         {
-            return std::fmod(static_cast<Result>(a), static_cast<Result>(b));
+            x = static_cast<Result>(a.value);
         }
         else
         {
-            return static_cast<Result>(a) % static_cast<Result>(b);
+            x = static_cast<Result>(a);
         }
+        if constexpr (IsDecimal<B>)
+        {
+            y = static_cast<Result>(b.value);
+        }
+        else
+        {
+            y = static_cast<Result>(b);
+        }
+
+        return ModuloImpl<Result, Result>::apply(x, y);
     }
     template <typename Result = ResultType>
     static inline Result apply(A a, B b, UInt8 & res_null)
@@ -1283,7 +1301,7 @@ struct DecimalBinaryOperation
     static constexpr bool is_plus_minus =   std::is_same_v<Operation<Int32, Int32>, PlusImpl<Int32, Int32>> ||
                                             std::is_same_v<Operation<Int32, Int32>, MinusImpl<Int32, Int32>>;
     static constexpr bool is_multiply =     std::is_same_v<Operation<Int32, Int32>, MultiplyImpl<Int32, Int32>>;
-    static constexpr bool is_mod =     std::is_same_v<Operation<Int32, Int32>, ModuloImpl<Int32, Int32>>;
+    static constexpr bool is_modulo =     std::is_same_v<Operation<Int32, Int32>, ModuloImpl<Int32, Int32>>;
     static constexpr bool is_float_division = std::is_same_v<Operation<Int32, Int32>, DivideFloatingImpl<Int32, Int32>> ||
                                               std::is_same_v<Operation<Int32, Int32>, TiDBDivideFloatingImpl<Int32, Int32>>;
     static constexpr bool is_int_division = std::is_same_v<Operation<Int32, Int32>, DivideIntegralImpl<Int32, Int32>> ||
@@ -1312,7 +1330,7 @@ struct DecimalBinaryOperation
                                         NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
-        if constexpr (is_plus_minus_compare || is_mod)
+        if constexpr (is_plus_minus_compare)
         {
             if (scale_a != 1)
             {
@@ -1349,30 +1367,47 @@ struct DecimalBinaryOperation
         ArrayC & c, typename ColumnUInt8::Container & res_null, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
+
+        if (a_nullmap != nullptr && b_nullmap != nullptr)
+        {
+            auto & a_nullmap_data = a_nullmap->getData();
+            auto & b_nullmap_data = b_nullmap->getData();
+            for (size_t i = 0; i < size; ++i)
+            {
+                res_null[i] = a_nullmap_data[i] || b_nullmap_data[i];
+            }
+        }
+        else if (a_nullmap != nullptr || b_nullmap != nullptr)
+        {
+            auto & nullmap_data = a_nullmap != nullptr ? a_nullmap->getData() : b_nullmap->getData();
+            for (size_t i = 0; i < size; ++i)
+            {
+                res_null[i] = nullmap_data[i];
+            }
+        }
+
         if constexpr (is_division)
         {
-            if (a_nullmap != nullptr && b_nullmap != nullptr)
-            {
-                auto & a_nullmap_data = a_nullmap->getData();
-                auto & b_nullmap_data = b_nullmap->getData();
-                for (size_t i = 0; i < size; ++i)
-                {
-                    res_null[i] = a_nullmap_data[i] || b_nullmap_data[i];
-                }
-            }
-            else if (a_nullmap != nullptr || b_nullmap != nullptr)
-            {
-                auto & nullmap_data = a_nullmap != nullptr ? a_nullmap->getData() : b_nullmap->getData();
-                for (size_t i = 0; i < size; ++i)
-                {
-                    res_null[i] = nullmap_data[i];
-                }
-            }
-
             for (size_t i = 0; i < size; ++i)
                 c[i] = applyScaled<true>(a[i], b[i], scale_a, res_null[i]);
             return;
         }
+        else if constexpr (is_modulo)
+        {
+            if (scale_a != 1)
+            {
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = applyScaled<true>(a[i], b[i], scale_a, res_null[i]);
+            }
+            else
+            {
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = applyScaled<false>(a[i], b[i], scale_b, res_null[i]);
+            }
+
+            return;
+        }
+
         throw Exception("Should not reach here");
     }
 
@@ -1380,7 +1415,7 @@ struct DecimalBinaryOperation
                                         NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
-        if constexpr (is_plus_minus_compare || is_mod)
+        if constexpr (is_plus_minus_compare)
         {
             if (scale_a != 1)
             {
@@ -1417,20 +1452,38 @@ struct DecimalBinaryOperation
                                           NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
+
+        if (a_nullmap != nullptr)
+        {
+            auto & nullmap_data = a_nullmap->getData();
+            for (size_t i = 0; i < size; ++i)
+            {
+                res_null[i] = nullmap_data[i];
+            }
+        }
+
         if constexpr (is_division)
         {
-            if (a_nullmap != nullptr)
-            {
-                auto & nullmap_data = a_nullmap->getData();
-                for (size_t i = 0; i < size; ++i)
-                {
-                    res_null[i] = nullmap_data[i];
-                }
-            }
             for (size_t i = 0; i < size; ++i)
                 c[i] = applyScaled<true>(a[i], b, scale_a, res_null[i]);
             return;
         }
+        else if constexpr (is_modulo)
+        {
+            if (scale_a != 1)
+            {
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = applyScaled<true>(a[i], b, scale_a, res_null[i]);
+            }
+            else
+            {
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = applyScaled<false>(a[i], b, scale_b, res_null[i]);
+            }
+
+            return;
+        }
+
         throw Exception("Should not reach here");
     }
 
@@ -1438,7 +1491,7 @@ struct DecimalBinaryOperation
                                         NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = b.size();
-        if constexpr (is_plus_minus_compare || is_mod)
+        if constexpr (is_plus_minus_compare)
         {
             if (scale_a != 1)
             {
@@ -1474,27 +1527,44 @@ struct DecimalBinaryOperation
                                           NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = b.size();
+
+        if (b_nullmap != nullptr)
+        {
+            auto & nullmap_data = b_nullmap->getData();
+            for (size_t i = 0; i < size; ++i)
+            {
+                res_null[i] = nullmap_data[i];
+            }
+        }
+
         if constexpr (is_division)
         {
-            if (b_nullmap != nullptr)
-            {
-                auto & nullmap_data = b_nullmap->getData();
-                for (size_t i = 0; i < size; ++i)
-                {
-                    res_null[i] = nullmap_data[i];
-                }
-            }
-
             for (size_t i = 0; i < size; ++i)
                 c[i] = applyScaled<true>(a, b[i], scale_a, res_null[i]);
             return;
         }
+        else if constexpr (is_modulo)
+        {
+            if (scale_a != 1)
+            {
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = applyScaled<true>(a, b[i], scale_a, res_null[i]);
+            }
+            else
+            {
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = applyScaled<false>(a, b[i], scale_b, res_null[i]);
+            }
+
+            return;
+        }
+
         throw Exception("Should not reach here");
     }
 
     static ResultType constant_constant(A a, B b, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
-        if constexpr (is_plus_minus_compare || is_mod)
+        if constexpr (is_plus_minus_compare)
         {
             if (scale_a != 1)
                 return applyScaled<true>(a, b, scale_a);
@@ -1516,10 +1586,15 @@ struct DecimalBinaryOperation
         {
             return applyScaled<true>(a, b, scale_a, res_null);
         }
-        else
+        else if constexpr (is_modulo)
         {
-            throw Exception("Should not reach here");
+            if (scale_a != 1)
+                return applyScaled<true>(a, b, scale_a, res_null);
+            else
+                return applyScaled<false>(a, b, scale_b, res_null);
         }
+
+        throw Exception("Should not reach here");
     }
 
 private:
@@ -1564,7 +1639,7 @@ private:
     template <bool scale_left>
     static NativeResultType applyScaled(InputType a, InputType b, InputType scale)
     {
-        if constexpr (is_plus_minus_compare || is_division || is_mod)
+        if constexpr (is_plus_minus_compare || is_division || is_modulo)
         {
             InputType res;
 
@@ -1588,7 +1663,7 @@ private:
     template <bool scale_left>
     static NativeResultType applyScaled(InputType a, InputType b, InputType scale, UInt8 & res_null)
     {
-        if constexpr (is_division)
+        if constexpr (is_division || is_modulo)
         {
             InputType res;
 
