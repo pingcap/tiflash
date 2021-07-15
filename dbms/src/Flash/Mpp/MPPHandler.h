@@ -322,13 +322,18 @@ public:
         cv.notify_all();
     }
 
-    TunnelWriterStatusPtr setTunnelWriter(const mpp::TaskMeta & meta, grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
+    TunnelWriterStatusPtr setTunnelWriter(
+        const mpp::TaskMeta & receiver_meta, grpc::ServerWriter<::mpp::MPPDataPacket> * writer, Logger * logger)
     {
         std::unique_lock<std::mutex> lock(mutex);
 
-        MPPTaskId id(meta);
+        MPPTaskId id(receiver_meta);
         if (writer_status_map.count(id))
-            throw Exception("Tunnel writer conflict: " + id.toString());
+        {
+            String msg = "Tunnel writer conflict: " + id.toString();
+            LOG_ERROR(logger, msg);
+            throw Exception(msg);
+        }
 
         auto tunnel_writer_status = std::make_shared<TunnelWriterStatus>(writer);
 
@@ -407,7 +412,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
     //    std::condition_variable cv;
 
     MPPTask(const MPPTaskId & task_id_, const Context & context_)
-        : context(context_), task_id(task_id_), log(&Logger::get("task " + std::to_string(task_id.task_id)))
+        : context(context_), task_id(task_id_), log(&Logger::get("task " + task_id.toString()))
     {}
 
     void runImpl(const MPPTaskProxyPtr & proxy);
@@ -425,7 +430,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         /// MPPTask maybe destructed by different thread, set the query memory_tracker
         /// to current_memory_tracker in the destructor
         current_memory_tracker = memory_tracker;
-        closeAllTunnel("");
+        closeAllTunnel("MPPTask release");
         LOG_DEBUG(log, "finish MPPTask: " << task_id.toString());
     }
 
@@ -482,55 +487,6 @@ private:
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;
 
-//struct MPPTaskHolder;
-//using MPPTaskHolderPtr = std::shared_ptr<MPPTaskHolder>;
-//using MPPTaskHolderWeakPtr = std::weak_ptr<MPPTaskHolder>;
-//
-//struct MPPTaskHolder : std::enable_shared_from_this<MPPTaskHolder>
-//{
-//    MPPTaskPtr task;
-//    std::thread worker_thread;
-//    std::atomic<Int32> status{INITIALIZING};
-//
-//    Logger * log;
-//
-//    MPPTaskHolder(const MPPTaskPtr & task_) : task(std::move(task_)), log(&Logger::get("MPPTaskHolder")) {}
-//
-//    void run()
-//    {
-//        // We make the worker thread holding a reference of this instance.
-//        // Otherwise, this object will get released during the execution.
-//        auto myself = shared_from_this();
-//        std::thread t([=]() { myself->task->runImpl(); });
-//        worker_thread = std::move(t);
-//    }
-//
-//    ~MPPTaskHolder()
-//    {
-//        // This could be the second time to call cancel, but never mind.
-//        task->cancel("MPPTaskHolder release");
-//
-//
-//        auto worker_thread_id = worker_thread.get_id();
-//        auto my_thread_id = std::this_thread::get_id();
-//
-//        if (worker_thread_id == my_thread_id)
-//        {
-//            LOG_WARNING(log, "detach");
-//            worker_thread.detach();
-//        }
-//        else
-//        {
-//            if (worker_thread.joinable())
-//            {
-//                LOG_WARNING(log, "join");
-//                worker_thread.join();
-//            }
-//        }
-//
-//        LOG_WARNING(log, "done");
-//    }
-//};
 
 using MPPTaskMap = std::map<MPPTaskId, MPPTaskProxyWeakPtr>;
 
