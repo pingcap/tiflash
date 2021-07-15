@@ -244,7 +244,7 @@ private:
     static String colMarkFileName(const FileNameBase & file_name_base) { return file_name_base + ".mrk"; }
 
     using OffsetAndSize = std::tuple<size_t, size_t>;
-    OffsetAndSize writeMetaToBuffer(WriteBuffer & buffer);
+    OffsetAndSize writeMetaToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest = nullptr);
     OffsetAndSize writePackStatToBuffer(WriteBuffer & buffer);
     OffsetAndSize writePackPropertyToBuffer(WriteBuffer & buffer);
 

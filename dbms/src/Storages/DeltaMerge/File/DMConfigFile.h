@@ -50,7 +50,7 @@ public:
             digest = std::make_unique<UnifiedDigest<Digest::XXH3>>();
             break;
         default:
-            throw Poco::JSON::JSONException("unrecognized checksum algorithm");
+            throw Exception("unrecognized checksum algorithm");
         }
 
         // we cannot directly convert the value to enum;
@@ -71,7 +71,7 @@ public:
 
         if (unlikely(!digest->compare(configuration.data_field_checksum().data())))
         {
-            throw Poco::JSON::JSONException("data field checksum broken");
+            throw Exception("data field checksum broken");
         }
 
         {
@@ -105,14 +105,25 @@ public:
     [[nodiscard]] const std::map<std::string, std::string> & getEmbeddedChecksum() const { return embeddedChecksum; }
     [[nodiscard]] const std::map<std::string, std::string> & getDebugInfo() const { return debugInfo; }
 
-    template <class T>
-    void addChecksum(std::string name, T checksum)
+    void addChecksum(std::string name, std::string value) { embeddedChecksum.template emplace(std::move(name), std::move(value)); }
+
+    [[nodiscard]] UnifiedDigestBaseBox createUnifiedDigest() const
     {
-        std::ostringstream  tmp;
-        Poco::Base64Encoder enc{tmp};
-        enc.write(reinterpret_cast<const char *>(&checksum), sizeof(std::decay_t<T>));
-        enc.flush();
-        embeddedChecksum.template emplace(std::move(name), tmp.str());
+        switch (checksumAlgorithm)
+        {
+        case ChecksumAlgo::None:
+            return std::make_unique<UnifiedDigest<Digest::None>>();
+        case ChecksumAlgo::CRC32:
+            return std::make_unique<UnifiedDigest<Digest::CRC32>>();
+        case ChecksumAlgo::CRC64:
+            return std::make_unique<UnifiedDigest<Digest::CRC64>>();
+        case ChecksumAlgo::City128:
+            return std::make_unique<UnifiedDigest<Digest::City128>>();
+        case ChecksumAlgo::XXH3:
+            return std::make_unique<UnifiedDigest<Digest::XXH3>>();
+        default:
+            throw Exception("unrecognized checksumAlgorithm");
+        }
     }
 
 private:
@@ -126,28 +137,7 @@ private:
 inline std::ostream & operator<<(std::ostream & output, const DMConfiguration & config)
 {
     dtpb::Configuration  configuration;
-    UnifiedDigestBaseBox digest = nullptr;
-
-    switch (config.checksumAlgorithm)
-    {
-    case ChecksumAlgo::None:
-        digest = std::make_unique<UnifiedDigest<Digest::None>>();
-        break;
-    case ChecksumAlgo::CRC32:
-        digest = std::make_unique<UnifiedDigest<Digest::CRC32>>();
-        break;
-    case ChecksumAlgo::CRC64:
-        digest = std::make_unique<UnifiedDigest<Digest::CRC64>>();
-        break;
-    case ChecksumAlgo::City128:
-        digest = std::make_unique<UnifiedDigest<Digest::City128>>();
-        break;
-    case ChecksumAlgo::XXH3:
-        digest = std::make_unique<UnifiedDigest<Digest::XXH3>>();
-        break;
-    default:
-        throw Poco::JSON::JSONException("unrecognized checksumAlgorithm");
-    }
+    UnifiedDigestBaseBox digest = config.createUnifiedDigest();
 
     configuration.set_checksum_algorithm(static_cast<uint64_t>(config.checksumAlgorithm));
     configuration.set_checksum_frame_length(static_cast<uint64_t>(config.checksumFrameLength));

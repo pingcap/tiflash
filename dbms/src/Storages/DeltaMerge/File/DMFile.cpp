@@ -196,13 +196,17 @@ const EncryptionPath DMFile::encryptionPackPropertyPath() const
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packPropertyFileName());
 }
 
-DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer)
+DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest)
 {
     size_t meta_offset = buffer.count();
     writeString("DTFile format: ", buffer);
     writeIntText(STORAGE_FORMAT_CURRENT.dm_file, buffer);
+    if (digest)
+    {
+        digest->update(STORAGE_FORMAT_CURRENT.dm_file);
+    }
     writeString("\n", buffer);
-    writeText(column_stats, STORAGE_FORMAT_CURRENT.dm_file, buffer);
+    writeText(column_stats, STORAGE_FORMAT_CURRENT.dm_file, buffer, digest);
     size_t meta_size = buffer.count() - meta_offset;
     return std::make_tuple(meta_offset, meta_size);
 }
@@ -235,7 +239,14 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const WriteLimiter
 
     {
         WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, write_limiter, 4096);
-        writeMetaToBuffer(buf);
+        if (configuration)
+        {
+            auto digest = configuration->createUnifiedDigest();
+            writeMetaToBuffer(buf, digest.get());
+            configuration->addChecksum(meta_path, digest->raw());
+        } else {
+            writeMetaToBuffer(buf);
+        }
         buf.sync();
     }
     Poco::File(tmp_meta_path).renameTo(meta_path);

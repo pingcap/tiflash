@@ -126,6 +126,12 @@ struct UnifiedDigestBase
     [[nodiscard]] virtual std::string base64() const                           = 0;
     [[nodiscard]] virtual std::string raw() const                              = 0;
     virtual ~UnifiedDigestBase()                                               = default;
+
+    template <class T>
+    void update(const T & val)
+    {
+        update(std::addressof(val), sizeof(T));
+    }
 };
 
 template <class Backend>
