@@ -88,6 +88,7 @@ void MPPTunnel::close(const String & reason)
         }
     }
     finished = true;
+    send_queue.push(nullptr);
     cv_for_finished.notify_all();
 }
 

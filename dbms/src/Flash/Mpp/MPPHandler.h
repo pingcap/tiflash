@@ -52,20 +52,20 @@ struct MPPTunnel
 
     int input_num;
 
-    std::unique_ptr<std::thread> send_th;
+    std::unique_ptr<std::thread> send_thr;
 
     ConcurrentBoundedQueue<std::shared_ptr<mpp::MPPDataPacket>>send_queue;
 
     Logger * log;
 
-    MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_, const std::chrono::seconds timeout_, int input_num_=40)
+    MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_, const std::chrono::seconds timeout_, int input_num_)
         : connected(false),
           finished(false),
           timeout(timeout_),
           tunnel_id("tunnel" + std::to_string(sender_meta_.task_id()) + "+" + std::to_string(receiver_meta_.task_id())),
           input_num(input_num_),
-          send_th(nullptr),
-          send_queue(input_num_*5), /// TODO(fzh)
+          send_thr(nullptr),
+          send_queue(input_num_*5), /// TODO(fzh) set a reasonable parameter
           log(&Logger::get(tunnel_id))
     {}
 
@@ -75,9 +75,9 @@ struct MPPTunnel
         {
             if (!finished)
                 writeDone();
-            if(nullptr != send_th)
+            if(nullptr != send_thr)
             {
-                send_th->join();
+                send_thr->join();
             }
         }
         catch (...)
@@ -86,31 +86,10 @@ struct MPPTunnel
         }
     }
 
-    void write( std::shared_ptr<mpp::MPPDataPacket> data, bool close_after_write = false)
-    {
-        if (finished)
-            throw Exception("write to tunnel which is already closed.");
-        send_queue.push(std::move(data));
-        if (close_after_write)
-        {
-            std::unique_lock<std::mutex> lk(mu);
-            if (!finished)
-            {
-                finished = true;
-                send_queue.push(nullptr);
-                cv_for_finished.notify_all();
-                LOG_TRACE(log, "finish write and close the tunnel");
-            }
-        }
-    }
-    // write a single packet to the tunnel, it will block if tunnel is not ready.
-    // TODO: consider to hold a buffer
     void write(const mpp::MPPDataPacket & data, bool close_after_write = false)
     {
-
         LOG_TRACE(log, "ready to write");
         std::unique_lock<std::mutex> lk(mu);
-
         if (timeout.count() > 0)
         {
             if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
@@ -124,19 +103,25 @@ struct MPPTunnel
         }
         if (finished)
             throw Exception("write to tunnel which is already closed.");
-        writer->Write(data);
+        lk.unlock();
+
+        send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
         if (close_after_write)
         {
-            finished = true;
-            cv_for_finished.notify_all();
+            lk.lock();
+            if (!finished)
+            {
+                /// in abnormal cases, finished can be set in advance and pushing nullptr is also necessary
+                finished = true;
+                send_queue.push(nullptr);
+                cv_for_finished.notify_all();
+                LOG_TRACE(log, "finish write and close the tunnel");
+            }
+            lk.unlock();
         }
-        if (close_after_write)
-            LOG_TRACE(log, "finish write and close the tunnel");
-        else
-            LOG_TRACE(log, "finish write");
     }
 
-    // finish the writing which should be strictly after all packets are written
+    /// finish the writing which should be strictly after all packets are written
     void writeDone()
     {
         std::unique_lock<std::mutex> lk(mu);
@@ -154,23 +139,27 @@ struct MPPTunnel
         {
             cv_for_connected.wait(lk, [&]() { return connected; });
         }
-        finished = true;
+        lk.unlock();
+        /// in normal cases, send nullptr to notify finish
         send_queue.push(nullptr);
-        cv_for_finished.notify_all();
     }
 
     /// close() finishes the tunnel, if the tunnel is connected already, it will
     /// write the error message to the tunnel, otherwise it just close the tunnel
     void close(const String & reason);
 
+    /// to avoid being blocked when pop(), we should send nullptr into send_queue
     void send()
     {
-        while(connected)
+        while (connected && !finished)
         {
+            /// TODO(fzh) reuse it later
             auto res = std::shared_ptr<mpp::MPPDataPacket>();
             send_queue.pop(res);
             if (nullptr == res)
             {
+                finished = true;
+                cv_for_finished.notify_all();
                 return;
             }
             else
@@ -191,11 +180,11 @@ struct MPPTunnel
         {
             LOG_DEBUG(log, "ready to connect");
             connected = true;
+            finished = false;
             writer = writer_;
-
             cv_for_connected.notify_all();
         }
-        send_th = std::make_unique<std::thread>([this]{send();});
+        send_thr = std::make_unique<std::thread>([this]{ send();});
     }
 
     // wait until all the data has been transferred.
