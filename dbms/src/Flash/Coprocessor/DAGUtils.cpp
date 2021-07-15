@@ -617,7 +617,6 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::IntDivideInt, "intDiv"},
     //{tipb::ScalarFuncSig::IntDivideDecimal, "divide"},
 
-    // {tipb::ScalarFuncSig::ModReal, "modulo"}, {tipb::ScalarFuncSig::ModDecimal, "modulo"}, {tipb::ScalarFuncSig::ModInt, "modulo"},
     {tipb::ScalarFuncSig::ModReal, "modulo"},
     {tipb::ScalarFuncSig::ModDecimal, "modulo"},
     {tipb::ScalarFuncSig::ModIntUnsignedUnsigned, "modulo"},
