@@ -24,18 +24,20 @@ public:
     // Read stream for single column
     struct Stream
     {
-        Stream(DMFileReader & reader, //
-               ColId          col_id,
-               const String & file_name_base,
-               size_t         aio_threshold,
-               size_t         max_read_buffer_size,
-               Logger *       log,
-               const ReadLimiterPtr & read_limiter);
+        Stream(DMFileReader &                   reader,
+               ColId                            col_id,
+               const String &                   file_name_base,
+               size_t                           aio_threshold,
+               size_t                           max_read_buffer_size,
+               Logger *                         log,
+               const ReadLimiterPtr &           read_limiter,
+               std::shared_ptr<DMConfiguration> configuration_ = nullptr);
 
         const bool                       single_file_mode;
         double                           avg_size_hint;
         MarksInCompressedFilePtr         marks;
         MarkWithSizesInCompressedFilePtr mark_with_sizes;
+        std::shared_ptr<DMConfiguration> configuration;
 
         size_t getOffsetInFile(size_t i) const
         {

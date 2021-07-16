@@ -127,6 +127,7 @@ struct UnifiedDigestBase
     [[nodiscard]] virtual std::string base64() const                           = 0;
     [[nodiscard]] virtual std::string raw() const                              = 0;
     virtual ~UnifiedDigestBase()                                               = default;
+    virtual size_t hashSize() const                                            = 0;
 
     template <class T>
     void update(const T & val)
@@ -181,6 +182,8 @@ public:
         }
         return output.str();
     }
+
+    [[nodiscard]] size_t hashSize() const override { return Backend::hash_size; }
 
 private:
     Backend backend{};

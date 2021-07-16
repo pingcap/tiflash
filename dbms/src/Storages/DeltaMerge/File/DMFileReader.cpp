@@ -5,6 +5,7 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
+#include <fmt/format.h>
 
 namespace CurrentMetrics
 {
@@ -16,14 +17,17 @@ namespace DB
 namespace DM
 {
 
-DMFileReader::Stream::Stream(DMFileReader & reader, //
-                             ColId          col_id,
-                             const String & file_name_base,
-                             size_t         aio_threshold,
-                             size_t         max_read_buffer_size,
-                             Logger *       log,
-                             const ReadLimiterPtr & read_limiter)
-    : single_file_mode(reader.single_file_mode), avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
+DMFileReader::Stream::Stream(DMFileReader &                   reader,
+                             ColId                            col_id,
+                             const String &                   file_name_base,
+                             size_t                           aio_threshold,
+                             size_t                           max_read_buffer_size,
+                             Logger *                         log,
+                             const ReadLimiterPtr &           read_limiter,                   
+                             std::shared_ptr<DMConfiguration> configuration_)
+    : single_file_mode(reader.single_file_mode),
+      avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size),
+      configuration(std::move(configuration_))
 {
     // load mark data
     if (reader.single_file_mode)
@@ -58,13 +62,28 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
             size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
             auto   file = reader.file_provider->newRandomAccessFile(reader.dmfile->colMarkPath(file_name_base),
                                                                   reader.dmfile->encryptionMarkPath(file_name_base));
-            PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size, read_limiter);
+            if (!configuration)
+            {
+                PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size, read_limiter);
+            }
+            else
+            {
+                auto digest = configuration->createUnifiedDigest();
+                char hashData[512];
+                PageUtil::readFile(file, 0, hashData, digest->hashSize(), read_limiter);
+                PageUtil::readFile(file, static_cast<off_t>(digest->hashSize()), reinterpret_cast<char *>(res->data()), size, read_limiter);
+                digest->update(res->data(), size);
+                if (unlikely(!digest->compare_raw(static_cast<void *>(hashData))))
+                {
+                    throw Exception(
+                        fmt::format("data corruption detcted: checksums mismatch for {}.", reader.dmfile->colMarkPath(file_name_base)));
+                }
+            }
 
             return res;
         };
         if (reader.mark_cache)
-            marks
-                = reader.mark_cache->getOrSet(reader.dmfile->colMarkCacheKey(file_name_base), mark_load);
+            marks = reader.mark_cache->getOrSet(reader.dmfile->colMarkCacheKey(file_name_base), mark_load);
         else
             marks = mark_load();
     }
@@ -130,12 +149,12 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
                             << " (aio_threshold: " << aio_threshold << ", max_read_buffer_size: " << max_read_buffer_size << ")");
 
     buf = std::make_unique<CompressedReadBufferFromFileProvider<>>(reader.file_provider,
-                                                                 reader.dmfile->colDataPath(file_name_base),
-                                                                 reader.dmfile->encryptionDataPath(file_name_base),
-                                                                 estimated_size,
-                                                                 aio_threshold,
-                                                                 read_limiter,
-                                                                 buffer_size);
+                                                                   reader.dmfile->colDataPath(file_name_base),
+                                                                   reader.dmfile->encryptionDataPath(file_name_base),
+                                                                   estimated_size,
+                                                                   aio_threshold,
+                                                                   read_limiter,
+                                                                   buffer_size);
 }
 
 DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
