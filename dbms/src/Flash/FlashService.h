@@ -36,6 +36,9 @@ public:
     ::grpc::Status DispatchMPPTask(
         ::grpc::ServerContext * context, const ::mpp::DispatchTaskRequest * request, ::mpp::DispatchTaskResponse * response) override;
 
+    ::grpc::Status IsAlive(
+        ::grpc::ServerContext * context, const ::mpp::IsAliveRequest * request, ::mpp::IsAliveResponse * response) override;
+
     ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * context,
         const ::mpp::EstablishMPPConnectionRequest * request,
         ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer) override;
