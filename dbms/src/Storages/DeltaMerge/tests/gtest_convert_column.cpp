@@ -1,6 +1,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -10,7 +11,6 @@ namespace DB
 {
 namespace DM
 {
-extern void setColumnDefineDefaultValue(const TiDB::TableInfo & table_info, ColumnDefine & define);
 
 namespace tests
 {
