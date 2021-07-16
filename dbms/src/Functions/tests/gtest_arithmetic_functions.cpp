@@ -122,6 +122,7 @@ protected:
     // e.g. data_type = DataTypeUInt64, NativeType = UInt64.
     // if data vector contains only 1 element, a const column will be created.
     // otherwise, two columns are expected to be of the same size.
+    // use std::nullopt for null values.
     // expected decimal scale is optional.
     template <typename NativeType1, typename NativeType2, typename ResultNativeType>
     void executeFunctionWithData(const String & function_name, const DataTypePtr data_type_1, const DataTypePtr data_type_2,
@@ -808,15 +809,26 @@ try
 {
     const String func_name = "modulo";
 
+    using uint64_limits = std::numeric_limits<UInt64>;
+    using int64_limits = std::numeric_limits<Int64>;
+
     // "{}" is similar to std::nullopt.
     executeFunctionWithData<UInt64, UInt64, UInt64>(func_name, makeDataType<DataTypeUInt64>(), makeDataType<DataTypeUInt64>(),
-        {5, 3, std::numeric_limits<UInt64>::max(), 1, 0, 0, {}, 0, {}},
-        {3, 5, std::numeric_limits<UInt64>::max() - 1, 0, 1, 0, 0, {}, {}},
+        {5, 3, uint64_limits::max(), 1, 0, 0, {}, 0, {}},
+        {3, 5, uint64_limits::max() - 1, 0, 1, 0, 0, {}, {}},
         {2, 3, 1, {}, 0, {}, {}, {}, {}});
     executeFunctionWithData<UInt64, Int64, UInt64>(func_name, makeDataType<DataTypeUInt64>(), makeDataType<DataTypeInt64>(),
-        {5, 5},
-        {3, -3},
-        {2, 2});
+        {5, 5, uint64_limits::max(), uint64_limits::max(), uint64_limits::max(), 1, 0, 0, {}, 0, {}},
+        {3, -3, int64_limits::max(), int64_limits::max() - 1, int64_limits::min(), 0, 1, 0, 0, {}, {}},
+        {2, 2, 1, 3, int64_limits::max(), {}, 0, {}, {}, {}, {}});
+    executeFunctionWithData<Int64, UInt64, Int64>(func_name, makeDataType<DataTypeInt64>(), makeDataType<DataTypeUInt64>(),
+        {5, -5, int64_limits::max(), int64_limits::min(), 1, 0, 0, {}, 0, {}},
+        {3, 3, 998244353, 998244353, 0, 1, 0, 0, {}, {}},
+        {2, -2, 466025954, -466025955, {}, 0, {}, {}, {}, {}});
+    executeFunctionWithData<Int64, Int64, Int64>(func_name, makeDataType<DataTypeInt64>(), makeDataType<DataTypeInt64>(),
+        {5, -5, 5, -5, int64_limits::max(), int64_limits::min(), 1, 0, 0, {}, 0, {}},
+        {3, 3, -3, -3, int64_limits::min(), int64_limits::max(), 0, 1, 0, 0, {}, {}},
+        {2, -2, 2, -2, int64_limits::max(), -1, {}, 0, {}, {}, {}, {}});
 }
 CATCH
 

@@ -545,7 +545,6 @@ struct ModuloImpl<A, B, false>
             // convert to unsigned before computing.
             // we have to prevent wrong result like UInt64(5) = UInt64(5) % Int64(-3).
             // in MySQL, UInt64(5) % Int64(-3) evaluates to UInt64(2).
-
             UnsignedResultType x, y;
 
             if (std::is_signed_v<A> && a < 0)
@@ -558,7 +557,12 @@ struct ModuloImpl<A, B, false>
             else
                 y = static_cast<UnsignedResultType>(b);
 
-            return static_cast<ResultType>(x % y);
+            auto result = static_cast<ResultType>(x % y);
+
+            if (std::is_signed_v<Result> && a < 0)
+                return -result;
+            else
+                return result;
         }
     }
     template <typename Result = ResultType>
