@@ -207,7 +207,7 @@ DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer, UnifiedDig
 {
     size_t meta_offset = buffer.count();
     writeString("DTFile format: ", buffer);
-    writeIntText(STORAGE_FORMAT_CURRENT.dm_file, buffer);
+    writeIntText(configuration ? STORAGE_FORMAT_CURRENT.dm_file : DMFileFormat::V1, buffer);
     if (digest)
     {
         digest->update(STORAGE_FORMAT_CURRENT.dm_file);
@@ -518,7 +518,7 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
 
     if (STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2 && !configuration)
     {
-        configuration = std::make_shared<DMConfiguration>();
+        log->warning("checksum disabled due to lack of configuration");
     }
     writeMetadata(file_provider, write_limiter);
     if (unlikely(status != Status::WRITING))
