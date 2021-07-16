@@ -56,13 +56,8 @@ public:
 
     void SetUp() override
     {
-        Strings test_paths;
-        dropDataOnDisk(TiFlashTestEnv::getTemporaryPath());
-        test_paths.push_back(TiFlashTestEnv::getTemporaryPath(testing::UnitTest::GetInstance()->current_test_info()->name()));
+        dropDataOnDisk(TiFlashTestEnv::getTemporaryPath(testing::UnitTest::GetInstance()->current_test_info()->name()));
 
-        db_context        = std::make_unique<Context>(TiFlashTestEnv::getContext(DB::Settings(), test_paths));
-        storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        storage_path_pool->drop(true);
         table_columns_ = std::make_shared<ColumnDefines>();
 
         segment = reload();
@@ -74,15 +69,14 @@ protected:
     {
         Strings test_paths;
         test_paths.push_back(TiFlashTestEnv::getTemporaryPath(testing::UnitTest::GetInstance()->current_test_info()->name()));
-        *db_context       = TiFlashTestEnv::getContext(std::move(db_settings), test_paths);
+        db_context        = std::make_unique<Context>(TiFlashTestEnv::getContext(db_settings, test_paths));
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_pool      = std::make_unique<StoragePool>("test.t1", *storage_path_pool, *db_context, db_context->getSettingsRef());
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
-        auto segment_id = storage_pool->newMetaPageId();
-        return Segment::newSegment(*dm_context_, table_columns_, RowKeyRange::newAll(false, 1), segment_id, 0);
+        return Segment::newSegment(*dm_context_, table_columns_, RowKeyRange::newAll(false, 1), storage_pool->newMetaPageId(), 0);
     }
 
     // setColumns should update dm_context at the same time
