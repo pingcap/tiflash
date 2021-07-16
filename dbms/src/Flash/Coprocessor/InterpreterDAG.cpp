@@ -86,26 +86,28 @@ BlockIO InterpreterDAG::execute()
     DAGPipeline pipeline;
     pipeline.streams = streams;
 
-    /// add exchange sender on the top of operators
-    const auto & exchangeSender = dag.getDAGRequest().root_executor().exchange_sender();
-    // get partition column ids
-    auto part_keys = exchangeSender.partition_keys();
-    std::vector<Int64> partition_col_id;
-    for (const auto & expr : part_keys)
+    /// only run in MPP
+    if(context.getDAGContext()->tunnel_set != nullptr)
     {
-        assert(isColumnExpr(expr));
-        auto column_index = decodeDAGInt64(expr.val());
-        partition_col_id.emplace_back(column_index);
-    }
-    pipeline.transform([&](auto & stream)
+        /// add exchange sender on the top of operators
+        const auto & exchangeSender = dag.getDAGRequest().root_executor().exchange_sender();
+        // get partition column ids
+        auto part_keys = exchangeSender.partition_keys();
+        std::vector<Int64> partition_col_id;
+        for (const auto & expr : part_keys)
         {
-        // construct writer
-        std::unique_ptr<DAGResponseWriter> response_writer
-                                               = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(context.getDAGContext()->tunnel_set, partition_col_id, exchangeSender.tp(),
-            context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), dag.getDAGContext());
-        stream = std::make_shared<ExchangeSender>(stream,std::move(response_writer));
-       }
-    );
+            assert(isColumnExpr(expr));
+            auto column_index = decodeDAGInt64(expr.val());
+            partition_col_id.emplace_back(column_index);
+        }
+        pipeline.transform([&](auto & stream) {
+            // construct writer
+            std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
+                context.getDAGContext()->tunnel_set, partition_col_id, exchangeSender.tp(), context.getSettings().dag_records_per_chunk,
+                dag.getEncodeType(), dag.getResultFieldTypes(), dag.getDAGContext());
+            stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer));
+        });
+    }
 
     /// add union to run in parallel if needed
     DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams);
