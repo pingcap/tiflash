@@ -84,6 +84,12 @@ class TiFlashTestEnv
 public:
     static String getTemporaryPath() { return Poco::Path("./tmp/").absolute().toString(); }
 
+    static void cleanTemporaryPath()
+    {
+        if (Poco::File file(getTemporaryPath()); file.exists())
+            file.remove(true);
+    }
+
     static std::pair<Strings, Strings> getPathPool(const Strings & testdata_path = {})
     {
         Strings result;

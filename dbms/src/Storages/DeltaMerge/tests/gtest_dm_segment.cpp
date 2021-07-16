@@ -4,6 +4,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ctime>
@@ -34,31 +35,57 @@ extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, /
 namespace tests
 {
 
+using namespace DB::tests;
+
 class Segment_test : public ::testing::Test
 {
 public:
-    Segment_test() : name("tmp"), storage_pool() {}
+    Segment_test() : name("tmp"), storage_pool(), log(&Logger::get("Segment_test")) {}
 
 protected:
-    void dropDataOnDisk()
+    bool dropDataOnDisk(String path)
     {
-        // drop former-gen table's data in disk
-        if (Poco::File file(DB::tests::TiFlashTestEnv::getTemporaryPath()); file.exists())
+        if (Poco::File file(path); file.exists())
+        {
             file.remove(true);
+            return true;
+        }
+        return false;
     }
 
 public:
     static void SetUpTestCase() {}
 
-    virtual DB::Settings getSettings() { return DB::Settings(); }
+    String getTemporaryPath()
+    {
+        auto test_path = std::string(testing::UnitTest::GetInstance()->current_test_info()->name());
+        return Poco::Path(TiFlashTestEnv::getTemporaryPath() + test_path + "/").absolute().toString();
+    }
+
+    virtual Context & getContext(DB::Settings && db_settings = DB::Settings())
+    {
+        Strings paths;
+        auto &  context = TiFlashTestEnv::getGlobalContext();
+        context.setPath(getTemporaryPath());
+        paths.push_back(getTemporaryPath());
+
+        context.setPathPool(paths, paths, paths, true, context.getPathCapacity(), context.getFileProvider());
+        context.getSettingsRef() = db_settings;
+        context.getTMTContext().restore();
+        return context;
+    }
 
     void SetUp() override
     {
-        db_context        = std::make_unique<Context>(DMTestEnv::getContext(getSettings()));
+        if (dropDataOnDisk(getTemporaryPath()))
+        {
+            LOG_WARNING(log, "Temporary parh : " << getTemporaryPath() << " is not empty");
+        }
+
+        db_context        = std::make_unique<Context>(getContext());
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_path_pool->drop(true);
         table_columns_ = std::make_shared<ColumnDefines>();
-        dropDataOnDisk();
 
         segment = reload();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -67,7 +94,7 @@ public:
 protected:
     SegmentPtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
-        *db_context       = DMTestEnv::getContext(db_settings);
+        *db_context       = getContext(std::move(db_settings));
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_pool      = std::make_unique<StoragePool>("test.t1", *storage_path_pool, *db_context, db_context->getSettingsRef());
         storage_pool->restore();
@@ -112,6 +139,7 @@ protected:
 
     // the segment we are going to test
     SegmentPtr segment;
+    Logger *   log;
 };
 
 TEST_F(Segment_test, WriteRead)
@@ -276,7 +304,7 @@ CATCH
 class SegmentDeletionRelevantPlace_test : public Segment_test, //
                                           public testing::WithParamInterface<bool>
 {
-    DB::Settings getSettings() override
+    DB::Settings getSettings()
     {
         DB::Settings settings;
         auto         enable_relevant_place = GetParam();
