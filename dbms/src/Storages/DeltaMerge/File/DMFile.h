@@ -205,6 +205,7 @@ private:
     String metaPath() const { return subFilePath(metaFileName()); }
     String packStatPath() const { return subFilePath(packStatFileName()); }
     String packPropertyPath() const { return subFilePath(packPropertyFileName()); }
+    String configurationPath() const { return subFilePath(configurationFileName()); }
 
     using FileNameBase = String;
     String colDataPath(const FileNameBase & file_name_base) const { return subFilePath(colDataFileName(file_name_base)); }
@@ -229,6 +230,7 @@ private:
     const EncryptionPath encryptionMetaPath() const;
     const EncryptionPath encryptionPackStatPath() const;
     const EncryptionPath encryptionPackPropertyPath() const;
+    const EncryptionPath encryptionConfigurationPath() const;
 
     static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
     {
@@ -238,6 +240,7 @@ private:
     static String metaFileName() { return "meta.txt"; }
     static String packStatFileName() { return "pack"; }
     static String packPropertyFileName() { return "property"; }
+    static String configurationFileName() { return "config"; }
 
     static String colDataFileName(const FileNameBase & file_name_base) { return file_name_base + ".dat"; }
     static String colIndexFileName(const FileNameBase & file_name_base) { return file_name_base + ".idx"; }
@@ -250,9 +253,11 @@ private:
 
     void writeMeta(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
     void writePackProperty(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
+    void writeConfiguration(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
     void readMeta(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
     void readPackStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
     void readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
+    void readConfiguration(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
 
     void writeMetadata(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
     void readMetadata(const FileProviderPtr & file_provider);

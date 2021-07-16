@@ -1,6 +1,7 @@
 #include <Common/FailPoint.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
+#include <IO/IOSWrapper.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
@@ -197,6 +198,11 @@ const EncryptionPath DMFile::encryptionPackPropertyPath() const
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packPropertyFileName());
 }
 
+const EncryptionPath DMFile::encryptionConfigurationPath() const
+{
+    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : configurationFileName());
+}
+
 DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest)
 {
     size_t meta_offset = buffer.count();
@@ -284,10 +290,31 @@ void DMFile::writePackProperty(const FileProviderPtr & file_provider, const Writ
     Poco::File(tmp_property_path).renameTo(property_path);
 }
 
+
+void DMFile::writeConfiguration(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
+{
+    assert(configuration);
+    String config_path     = configurationPath();
+    String tmp_config_path = config_path + ".tmp";
+    {
+        WriteBufferFromFileProvider buf(file_provider, tmp_config_path, encryptionPackPropertyPath(), false, write_limiter, 4096);
+        {
+            auto stream = OutputStreamWrapper{buf};
+            stream << *configuration;
+        }
+        buf.sync();
+    }
+    Poco::File(tmp_config_path).renameTo(config_path);
+}
+
 void DMFile::writeMetadata(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
 {
     writePackProperty(file_provider, write_limiter);
     writeMeta(file_provider, write_limiter);
+    if (configuration)
+    {
+        writeConfiguration(file_provider, write_limiter);
+    }
 }
 
 void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver)
@@ -362,6 +389,12 @@ void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo 
     // No need to upgrade meta when mode is Mode::SINGLE_FILE
     if (mode == Mode::FOLDER)
     {
+        // for V2, we do not apply in-place upgrade for now
+        // but it should not affect the normal read procedure
+        if (ver >= DMFileFormat::V2)
+        {
+            readConfiguration(file_provider, meta_pack_info);
+        } // TODO: Checksum for single file mode
         upgradeMetaIfNeed(file_provider, ver);
     }
 }
@@ -395,6 +428,15 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
         }
     }
 }
+
+void DMFile::readConfiguration(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
+{
+    UNUSED(meta_pack_info); // currently unused;
+    auto file     = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
+    auto stream   = InputStreamWrapper{file};
+    configuration = std::make_shared<DMConfiguration>(stream);
+}
+
 
 void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
@@ -473,6 +515,11 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
 
 void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
 {
+
+    if (STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2 && !configuration)
+    {
+        configuration = std::make_shared<DMConfiguration>();
+    }
     writeMetadata(file_provider, write_limiter);
     if (unlikely(status != Status::WRITING))
         throw Exception("Expected WRITING status, now " + statusString(status));

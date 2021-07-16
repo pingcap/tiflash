@@ -83,7 +83,7 @@ public:
         }
     }
 
-    explicit DMConfiguration(std::map<std::string, std::string> embeddedChecksum_,
+    explicit DMConfiguration(std::map<std::string, std::string> embeddedChecksum_    = {},
                              size_t                             checksumFrameLength_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE,
                              ChecksumAlgo                       checksumAlgorithm_   = ChecksumAlgo::XXH3,
                              std::map<std::string, std::string> debugInfo_           = {{"creationCommitHash", TIFLASH_GIT_HASH},
@@ -102,7 +102,7 @@ public:
 
     [[nodiscard]] size_t                                     getChecksumFrameLength() const { return checksumFrameLength; }
     [[nodiscard]] ChecksumAlgo                               getChecksumAlgorithm() const { return checksumAlgorithm; }
-    [[nodiscard]] const std::map<std::string, std::string> & getEmbeddedChecksum() const { return embeddedChecksum; }
+    [[nodiscard]] std::map<std::string, std::string> &       getEmbeddedChecksum() { return embeddedChecksum; }
     [[nodiscard]] const std::map<std::string, std::string> & getDebugInfo() const { return debugInfo; }
 
     void addChecksum(std::string name, std::string value) { embeddedChecksum.template emplace(std::move(name), std::move(value)); }
