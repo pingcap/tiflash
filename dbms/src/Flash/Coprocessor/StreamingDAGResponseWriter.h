@@ -23,14 +23,17 @@ class StreamingDAGResponseWriter : public DAGResponseWriter
 public:
     StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_, tipb::ExchangeType exchange_type_,
         Int64 records_per_chunk_, tipb::EncodeType encodeType_, std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_);
+    ~StreamingDAGResponseWriter()
+    {
+        // wait all job finishes.
+        thread_pool.wait();
+    }
+
     void write(const Block & block) override;
     void finishWrite() override;
 
 private:
     void ScheduleEncodeTask();
-
-    void sendBatch();
-
     ThreadPool::Job getEncodeTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
     ThreadPool::Job getEncodePartitionTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
@@ -40,7 +43,7 @@ private:
     std::vector<Int64> partition_col_ids;
     size_t rows_in_blocks;
     uint16_t partition_num;
-//    ThreadPool thread_pool;
+    ThreadPool thread_pool;
 };
 
 } // namespace DB
