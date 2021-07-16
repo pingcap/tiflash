@@ -354,6 +354,10 @@ void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo 
             readText(column_stats, ver, buf);
         }
     }
+    else
+    {
+        readText(column_stats, ver, buf);
+    }
 
     // No need to upgrade meta when mode is Mode::SINGLE_FILE
     if (mode == Mode::FOLDER)
