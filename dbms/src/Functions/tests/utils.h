@@ -35,6 +35,8 @@ bool operator==(const IColumn & lhs, const IColumn & rhs);
 
 std::ostream & operator<<(std::ostream & stream, IColumn const & column);
 
+std::ostream & operator<<(std::ostream & stream, Block const & block);
+
 #define APPLY_FOR_TYPE_LIST(M) \
     M(Int8)                    \
     M(Int16)                   \
@@ -77,6 +79,8 @@ inline bool validateDataTypeForField(DataTypePtr data_type)
 
     throw Exception("Shouldn't reach here: DataType " + data_type->getName() + " Literal type " + typeid(T).name());
 }
+
+#undef APPLY_FOR_TYPE_LIST
 
 #define DATA_TYPE(data_type_name) DataTypeFactory::instance().get(data_type_name)
 
@@ -197,8 +201,9 @@ inline void insert(DataTypePtr data_type, MutableColumnPtr & column, const std::
 template <size_t I = 0, typename T, typename... Args>
 void insertRow(Block & block, T arg, Args... args)
 {
-    //    if (!validateDataTypeForField<T>(block.getByPosition(I).type))
-    //        throw Exception("DataType doesn't match literal: " + block.getByPosition(I).type->getName() + ", " + typeid(T).name());
+    // TODO: Enable type check for literals
+    // if (!validateDataTypeForField<T>(block.getByPosition(I).type))
+    //     throw Exception("DataType doesn't match literal: " + block.getByPosition(I).type->getName() + ", " + typeid(T).name());
     MutableColumnPtr column = std::move(*block.getByPosition(I).column).mutate();
     insert(block.getByPosition(I).type, column, {arg});
     block.getByPosition(I).column = std::move(column);

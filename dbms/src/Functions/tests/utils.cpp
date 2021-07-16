@@ -95,4 +95,11 @@ std::ostream & operator<<(std::ostream & stream, IColumn const & column)
     return stream;
 }
 
+std::ostream & operator<<(std::ostream & stream, Block const & block)
+{
+    String buff;
+    formatBlock(block, buff);
+    stream << buff;
+}
+
 } // namespace DB
