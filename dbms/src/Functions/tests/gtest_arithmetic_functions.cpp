@@ -123,17 +123,20 @@ protected:
     // if data vector contains only 1 element, a const column will be created.
     // otherwise, two columns are expected to be of the same size.
     // use std::nullopt for null values.
-    // expected decimal scale is optional.
     template <typename NativeType1, typename NativeType2, typename ResultNativeType>
-    void executeFunctionWithData(const String & function_name, const DataTypePtr data_type_1, const DataTypePtr data_type_2,
+    void executeFunctionWithData(size_t line, const String & function_name, const DataTypePtr data_type_1, const DataTypePtr data_type_2,
         const DataVector<NativeType1> & column_data_1, const DataVector<NativeType2> & column_data_2,
-        const DataVector<ResultNativeType> & expected_data, const std::optional<ScaleType> & expected_scale = {})
+        const DataVector<ResultNativeType> & expected_data)
     {
+        static_assert(std::is_integral_v<NativeType1> || std::is_floating_point_v<NativeType1> || isDecimalField<NativeType1>());
+        static_assert(std::is_integral_v<NativeType2> || std::is_floating_point_v<NativeType2> || isDecimalField<NativeType2>());
+        static_assert(std::is_integral_v<ResultNativeType> || std::is_floating_point_v<ResultNativeType> || isDecimalField<ResultNativeType>());
+
         size_t size = std::max(column_data_1.size(), column_data_2.size());
-        ASSERT_GT(size, 0);
-        ASSERT_TRUE(column_data_1.size() == size || column_data_1.size() == 1);
-        ASSERT_TRUE(column_data_2.size() == size || column_data_2.size() == 1);
-        ASSERT_EQ(size, expected_data.size());
+        ASSERT_GT(size, 0) << "at line " << line;
+        ASSERT_TRUE(column_data_1.size() == size || column_data_1.size() == 1) << "at line " << line;
+        ASSERT_TRUE(column_data_2.size() == size || column_data_2.size() == 1) << "at line " << line;
+        ASSERT_EQ(size, expected_data.size()) << "at line " << line;
 
         auto input_1 = makeInputColumn("input_1", size, data_type_1, column_data_1);
         auto input_2 = makeInputColumn("input_2", size, data_type_2, column_data_2);
@@ -142,7 +145,7 @@ protected:
         executeFunction(block, input_1, input_2, function_name);
 
         auto result_column = block.getByName("res").column.get();
-        ASSERT_EQ(size, result_column->size());
+        ASSERT_EQ(size, result_column->size()) << "at line " << line;
 
         Field result_field;
 
@@ -154,22 +157,15 @@ protected:
 
             if (expected.has_value())
             {
-                ASSERT_FALSE(result_field.isNull()) << "expect not null, at index " << i;
+                ASSERT_FALSE(result_field.isNull()) << "at line " << line << ", expect not null, at index " << i;
 
                 auto got = result_field.safeGet<ResultNativeType>();
-                ASSERT_EQ(expected.value(), got) << "at index " << i;
 
-                if constexpr (isDecimalField<ResultNativeType>())
-                {
-                    if (expected_scale.has_value())
-                    {
-                        ASSERT_EQ(expected_scale.value(), got.getScale()) << "at index " << i;
-                    }
-                }
+                ASSERT_EQ(expected.value(), got) << "at line " << line << ", at index " << i;
             }
             else
             {
-                ASSERT_TRUE(result_field.isNull()) << "expect null, at index " << i;
+                ASSERT_TRUE(result_field.isNull()) << "at line " << line << ", expect null, at index " << i;
             }
         }
     }
@@ -813,22 +809,105 @@ try
     using int64_limits = std::numeric_limits<Int64>;
 
     // "{}" is similar to std::nullopt.
-    executeFunctionWithData<UInt64, UInt64, UInt64>(func_name, makeDataType<DataTypeUInt64>(), makeDataType<DataTypeUInt64>(),
+
+    // integer modulo
+
+    executeFunctionWithData<UInt64, UInt64, UInt64>(__LINE__, func_name,
+        makeDataType<DataTypeUInt64>(), makeDataType<DataTypeUInt64>(),
         {5, 3, uint64_limits::max(), 1, 0, 0, {}, 0, {}},
         {3, 5, uint64_limits::max() - 1, 0, 1, 0, 0, {}, {}},
         {2, 3, 1, {}, 0, {}, {}, {}, {}});
-    executeFunctionWithData<UInt64, Int64, UInt64>(func_name, makeDataType<DataTypeUInt64>(), makeDataType<DataTypeInt64>(),
+    executeFunctionWithData<UInt64, Int64, UInt64>(__LINE__, func_name,
+        makeDataType<DataTypeUInt64>(), makeDataType<DataTypeInt64>(),
         {5, 5, uint64_limits::max(), uint64_limits::max(), uint64_limits::max(), 1, 0, 0, {}, 0, {}},
         {3, -3, int64_limits::max(), int64_limits::max() - 1, int64_limits::min(), 0, 1, 0, 0, {}, {}},
         {2, 2, 1, 3, int64_limits::max(), {}, 0, {}, {}, {}, {}});
-    executeFunctionWithData<Int64, UInt64, Int64>(func_name, makeDataType<DataTypeInt64>(), makeDataType<DataTypeUInt64>(),
+    executeFunctionWithData<Int64, UInt64, Int64>(__LINE__, func_name,
+        makeDataType<DataTypeInt64>(), makeDataType<DataTypeUInt64>(),
         {5, -5, int64_limits::max(), int64_limits::min(), 1, 0, 0, {}, 0, {}},
         {3, 3, 998244353, 998244353, 0, 1, 0, 0, {}, {}},
         {2, -2, 466025954, -466025955, {}, 0, {}, {}, {}, {}});
-    executeFunctionWithData<Int64, Int64, Int64>(func_name, makeDataType<DataTypeInt64>(), makeDataType<DataTypeInt64>(),
+    executeFunctionWithData<Int64, Int64, Int64>(__LINE__, func_name,
+        makeDataType<DataTypeInt64>(), makeDataType<DataTypeInt64>(),
         {5, -5, 5, -5, int64_limits::max(), int64_limits::min(), 1, 0, 0, {}, 0, {}},
         {3, 3, -3, -3, int64_limits::min(), int64_limits::max(), 0, 1, 0, 0, {}, {}},
         {2, -2, 2, -2, int64_limits::max(), -1, {}, 0, {}, {}, {}, {}});
+
+    // decimal modulo
+
+    using DecimalField32 = DecimalField<Decimal32>;
+    using DecimalField64 = DecimalField<Decimal64>;
+    using DecimalField128 = DecimalField<Decimal128>;
+
+    executeFunctionWithData<DecimalField32, DecimalField32, DecimalField32>(__LINE__, func_name,
+        makeDataType<Decimal32>(7, 3), makeDataType<Decimal32>(7, 3),
+        {
+            DecimalField32(3300, 3), DecimalField32(-3300, 3), DecimalField32(3300, 3),
+            DecimalField32(-3300, 3), DecimalField32(1000, 3), {}, DecimalField32(0,3), {}
+        },
+        {
+            DecimalField32(1300, 3), DecimalField32(1300, 3), DecimalField32(-1300, 3),
+            DecimalField32(-1300, 3), DecimalField32(0, 3), DecimalField32(0, 3), {}, {}
+        },
+        {
+            DecimalField32(700, 3), DecimalField32(-700, 3), DecimalField32(700, 3),
+            DecimalField32(-700, 3), {}, {}, {}, {}
+        });
+
+    // Int64 has a precision of 20, which is larger than the precision of Decimal64.
+    executeFunctionWithData<DecimalField32, Int64, DecimalField128>(__LINE__, func_name,
+        makeDataType<Decimal32>(7, 3), makeDataType<DataTypeInt64>(),
+        {DecimalField32(3300, 3), DecimalField32(3300, 3), {}}, {1, 0, {}}, {DecimalField128(300, 3), {}, {}});
+
+    executeFunctionWithData<DecimalField32, DecimalField64, DecimalField64>(__LINE__, func_name,
+        makeDataType<Decimal32>(7, 5), makeDataType<Decimal64>(15, 3),
+        {DecimalField32(3223456, 5)}, {DecimalField64(9244, 3)}, {DecimalField64(450256, 5)});
+
+    // real modulo
+
+    executeFunctionWithData<Float64, Float64, Float64>(__LINE__, func_name,
+        makeDataType<DataTypeFloat64>(), makeDataType<DataTypeFloat64>(),
+        {1.3, -1.3, 1.3, -1.3, 3.3, -3.3, 3.3, -3.3, 12.34, 0.0, 0.0, 0.0, {}, {}},
+        {1.1, 1.1, -1.1, -1.1, 1.1, 1.1, -1.1, -1.1, 0.0, 12.34, 0.0, {}, 0.0, {}},
+        {
+            0.19999999999999996, -0.19999999999999996, 0.19999999999999996, -0.19999999999999996,
+            1.0999999999999996, -1.0999999999999996, 1.0999999999999996, -1.0999999999999996,
+            {}, 0.0, {}, {}, {}, {}
+        });
+    executeFunctionWithData<Float64, Int64, Float64>(__LINE__, func_name,
+        makeDataType<DataTypeFloat64>(), makeDataType<DataTypeInt64>(),
+        {1.55, 1.55, {}, 0.0, {}}, {-1, 0, 0, {}, {}}, {0.55, {}, {}, {}, {}});
+    executeFunctionWithData<DecimalField32, Float64, Float64>(__LINE__, func_name,
+        makeDataType<Decimal32>(7, 3), makeDataType<DataTypeFloat64>(),
+        {DecimalField32(1250, 3), DecimalField32(1250, 3), {}, DecimalField32(0, 3), {}},
+        {1.0, 0.0, 0.0, {}, {}}, {0.25, {}, {}, {}, {}});
+
+    // const-vector modulo
+
+    executeFunctionWithData<Int64, Int64, Int64>(__LINE__, func_name,
+        makeDataType<DataTypeInt64>(), makeDataType<DataTypeInt64>(),
+        {3}, {0, 1, 2, 3, 4, 5, 6}, {{}, 0, 1, 0, 3, 3, 3});
+
+    // vector-const modulo
+
+    executeFunctionWithData<Int64, Int64, Int64>(__LINE__, func_name,
+        makeDataType<DataTypeInt64>(), makeDataType<DataTypeInt64>(),
+        {0, 1, 2, 3}, {0}, {{}, {}, {}, {}});
+    executeFunctionWithData<Int64, Int64, Int64>(__LINE__, func_name,
+        makeDataType<DataTypeInt64>(), makeDataType<DataTypeInt64>(),
+        {0, 1, 2, 3, 4, 5, 6}, {3}, {0, 1, 2, 0, 1, 2, 0});
+
+    // const-const modulo
+    executeFunctionWithData<Int64, Int64, Int64>(__LINE__, func_name,
+        makeDataType<DataTypeInt64>(), makeDataType<DataTypeInt64>(), {5}, {-3}, {2});
+    executeFunctionWithData<Int64, Int64, Int64>(__LINE__, func_name,
+        makeDataType<DataTypeInt64>(), makeDataType<DataTypeInt64>(), {0}, {0}, {{}});
+    executeFunctionWithData<Int64, Int64, Int64>(__LINE__, func_name,
+        makeDataType<DataTypeInt64>(), makeDataType<DataTypeInt64>(), {{}}, {0}, {{}});
+    executeFunctionWithData<Int64, Int64, Int64>(__LINE__, func_name,
+        makeDataType<DataTypeInt64>(), makeDataType<DataTypeInt64>(), {0}, {{}}, {{}});
+    executeFunctionWithData<Int64, Int64, Int64>(__LINE__, func_name,
+        makeDataType<DataTypeInt64>(), makeDataType<DataTypeInt64>(), {{}}, {{}}, {{}});
 }
 CATCH
 
