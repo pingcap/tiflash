@@ -56,33 +56,16 @@ protected:
 public:
     static void SetUpTestCase() {}
 
-    String getTemporaryPath()
-    {
-        auto test_path = std::string(testing::UnitTest::GetInstance()->current_test_info()->name());
-        return Poco::Path(TiFlashTestEnv::getTemporaryPath() + test_path + "/").absolute().toString();
-    }
-
-    virtual Context & getContext(DB::Settings && db_settings = DB::Settings())
-    {
-        Strings paths;
-        auto &  context = TiFlashTestEnv::getGlobalContext();
-        context.setPath(getTemporaryPath());
-        paths.push_back(getTemporaryPath());
-
-        context.setPathPool(paths, paths, paths, true, context.getPathCapacity(), context.getFileProvider());
-        context.getSettingsRef() = db_settings;
-        context.getTMTContext().restore();
-        return context;
-    }
-
     void SetUp() override
     {
-        if (dropDataOnDisk(getTemporaryPath()))
+        if (dropDataOnDisk(TiFlashTestEnv::getTemporaryPath()))
         {
-            LOG_WARNING(log, "Temporary parh : " << getTemporaryPath() << " is not empty");
+            LOG_WARNING(log, "Temporary parh : " << TiFlashTestEnv::getTemporaryPath() << " is not empty");
         }
+        Strings test_paths;
+        test_paths.push_back(TiFlashTestEnv::getTemporaryPath(testing::UnitTest::GetInstance()->current_test_info()->name()));
 
-        db_context        = std::make_unique<Context>(getContext());
+        db_context        = std::make_unique<Context>(TiFlashTestEnv::getContext(DB::Settings(), test_paths));
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_path_pool->drop(true);
         table_columns_ = std::make_shared<ColumnDefines>();
@@ -94,7 +77,9 @@ public:
 protected:
     SegmentPtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
-        *db_context       = getContext(std::move(db_settings));
+        Strings test_paths;
+        test_paths.push_back(TiFlashTestEnv::getTemporaryPath(testing::UnitTest::GetInstance()->current_test_info()->name()));
+        *db_context       = TiFlashTestEnv::getContext(std::move(db_settings), test_paths);
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_pool      = std::make_unique<StoragePool>("test.t1", *storage_path_pool, *db_context, db_context->getSettingsRef());
         storage_pool->restore();

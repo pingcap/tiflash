@@ -82,7 +82,14 @@ inline DataTypes typesFromString(const String & str)
 class TiFlashTestEnv
 {
 public:
-    static String getTemporaryPath() { return Poco::Path("./tmp/").absolute().toString(); }
+    static String getTemporaryPath(const char * test_case = nullptr)
+    {
+        String path = "./tmp/";
+        if (test_case)
+            path += std::string(test_case);
+
+        return Poco::Path(path).absolute().toString();
+    }
 
     static void cleanTemporaryPath()
     {
