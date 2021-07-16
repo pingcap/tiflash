@@ -26,6 +26,9 @@ namespace tests
 class TestBinaryArithmeticFunctions : public ::testing::Test
 {
 protected:
+    template <typename T>
+    using DataVector = std::vector<std::optional<T>>;
+
     static void SetUpTestCase()
     {
         try
@@ -64,6 +67,109 @@ protected:
         {
             res_col->get(i, res_field);
             ASSERT_TRUE(res_field.isNull());
+        }
+    }
+
+    template <typename DataType, typename ... Args>
+    DataTypePtr makeDataType(const Args & ... args) {
+        if constexpr (IsDecimal<DataType>)
+        {
+            return std::make_shared<DataTypeDecimal<DataType>>(args...);
+        }
+        else
+        {
+            return std::make_shared<DataType>(args...);
+        }
+    }
+
+    template <typename NativeType>
+    Field makeField(const std::optional<NativeType> & value)
+    {
+        if (value.has_value())
+        {
+            return Field(static_cast<NativeType>(value.value()));
+        }
+        else
+        {
+            return Null();
+        }
+    }
+
+    template <typename NativeType>
+    ColumnWithTypeAndName makeInputColumn(
+        const String & name, size_t size, const DataTypePtr data_type, const DataVector<NativeType> & column_data)
+    {
+        auto nullable_data_type = makeNullable(data_type);
+
+        if (column_data.size() == 1)
+        {
+            auto column = nullable_data_type->createColumnConst(size, makeField(column_data[0]));
+            return ColumnWithTypeAndName(std::move(column), nullable_data_type, name);
+        }
+        else
+        {
+            auto column = nullable_data_type->createColumn();
+
+            for (auto & data : column_data)
+            {
+                column->insert(makeField(data));
+            }
+
+            return ColumnWithTypeAndName(std::move(column), nullable_data_type, name);
+        }
+    }
+
+    // e.g. data_type = DataTypeUInt64, NativeType = UInt64.
+    // if data vector contains only 1 element, a const column will be created.
+    // otherwise, two columns are expected to be of the same size.
+    // expected decimal scale is optional.
+    template <typename NativeType1, typename NativeType2, typename ResultNativeType>
+    void executeFunctionWithData(const String & function_name, const DataTypePtr data_type_1, const DataTypePtr data_type_2,
+        const DataVector<NativeType1> & column_data_1, const DataVector<NativeType2> & column_data_2,
+        const DataVector<ResultNativeType> & expected_data, const std::optional<ScaleType> & expected_scale = {})
+    {
+        size_t size = std::max(column_data_1.size(), column_data_2.size());
+        ASSERT_GT(size, 0);
+        ASSERT_TRUE(column_data_1.size() == size || column_data_1.size() == 1);
+        ASSERT_TRUE(column_data_2.size() == size || column_data_2.size() == 1);
+        ASSERT_EQ(size, expected_data.size());
+
+        auto input_1 = makeInputColumn("input_1", size, data_type_1, column_data_1);
+        auto input_2 = makeInputColumn("input_2", size, data_type_2, column_data_2);
+
+        Block block;
+        executeFunction(block, input_1, input_2, function_name);
+
+        auto result_column = block.getByName("res").column.get();
+        ASSERT_EQ(size, result_column->size());
+
+        Field result_field;
+
+        for (size_t i = 0; i < size; ++i)
+        {
+            result_column->get(i, result_field);
+
+            auto expected = expected_data[i];
+
+            if (expected.has_value())
+            {
+                ASSERT_FALSE(result_field.isNull()) << "expect not null, at index " << i;
+
+                auto got = result_field.safeGet<ResultNativeType>();
+                ASSERT_EQ(expected.value(), got) << "at index " << i;
+
+                if constexpr (isDecimalField<ResultNativeType>())
+                {
+                    if (expected_scale.has_value())
+                    {
+                        ASSERT_EQ(expected_scale.value(), got.getScale()) << "at index " << i;
+                    }
+                }
+            }
+            else
+            {
+                ASSERT_TRUE(result_field.isNull()) << "expect null, at index " << i;
+            }
         }
     }
 };
@@ -694,6 +800,23 @@ try
             }
         }
     }
+}
+CATCH
+
+TEST_F(TestBinaryArithmeticFunctions, Modulo)
+try
+{
+    const String func_name = "modulo";
+
+    // "{}" is similar to std::nullopt.
+    executeFunctionWithData<UInt64, UInt64, UInt64>(func_name, makeDataType<DataTypeUInt64>(), makeDataType<DataTypeUInt64>(),
+        {5, 3, std::numeric_limits<UInt64>::max(), 1, 0, 0, {}, 0, {}},
+        {3, 5, std::numeric_limits<UInt64>::max() - 1, 0, 1, 0, 0, {}, {}},
+        {2, 3, 1, {}, 0, {}, {}, {}, {}});
+    executeFunctionWithData<UInt64, Int64, UInt64>(func_name, makeDataType<DataTypeUInt64>(), makeDataType<DataTypeInt64>(),
+        {5, 5},
+        {3, -3},
+        {2, 2});
 }
 CATCH
 

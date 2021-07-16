@@ -534,9 +534,31 @@ struct ModuloImpl<A, B, false>
             // values, so we call into std::fmod.
             return std::fmod(static_cast<Result>(a), static_cast<Result>(b));
         }
-        else
+        else if constexpr (IsDecimal<Result>)
         {
             return static_cast<Result>(a) % static_cast<Result>(b);
+        }
+        else  // both A and B are integrals.
+        {
+            using UnsignedResultType = std::make_unsigned_t<Result>;
+
+            // convert to unsigned before computing.
+            // we have to prevent wrong result like UInt64(5) = UInt64(5) % Int64(-3).
+            // in MySQL, UInt64(5) % Int64(-3) evaluates to UInt64(2).
+
+            UnsignedResultType x, y;
+
+            if (std::is_signed_v<A> && a < 0)
+                x = static_cast<UnsignedResultType>(-a);
+            else
+                x = static_cast<UnsignedResultType>(a);
+
+            if (std::is_signed_v<B> && b < 0)
+                y = static_cast<UnsignedResultType>(-b);
+            else
+                y = static_cast<UnsignedResultType>(b);
+
+            return static_cast<ResultType>(x % y);
         }
     }
     template <typename Result = ResultType>
@@ -573,7 +595,7 @@ struct ModuloImpl<A, B, true>
             y = static_cast<Result>(b);
         }
 
-        return ModuloImpl<Result, Result>::apply(x, y);
+        return ModuloImpl<Result, Result, false>::apply(x, y);
     }
     template <typename Result = ResultType>
     static inline Result apply(A a, B b, UInt8 & res_null)

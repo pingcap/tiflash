@@ -100,7 +100,8 @@ template <typename A, typename B> struct ResultOfIntegerDivision
 template <typename A, typename B> struct ResultOfModulo
 {
     using Type = typename Construct<
-        std::is_signed_v<A> || std::is_signed_v<B>,
+        // in MySQL 5.7, unsigned % signed evaluates to unsigned, but signed % unsigned evaluates to signed.
+        std::is_signed_v<A>,
         std::is_floating_point_v<A> || std::is_floating_point_v<B>,
         nextSize(max(sizeof(A), sizeof(B)))>::Type;
 };
