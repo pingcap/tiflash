@@ -245,7 +245,7 @@ private:
 
     using OffsetAndSize = std::tuple<size_t, size_t>;
     OffsetAndSize writeMetaToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest = nullptr);
-    OffsetAndSize writePackStatToBuffer(WriteBuffer & buffer);
+    OffsetAndSize writePackStatToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest = nullptr);
     OffsetAndSize writePackPropertyToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest = nullptr);
 
     void writeMeta(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);

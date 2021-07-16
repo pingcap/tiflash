@@ -212,12 +212,16 @@ DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer, UnifiedDig
     return std::make_tuple(meta_offset, meta_size);
 }
 
-DMFile::OffsetAndSize DMFile::writePackStatToBuffer(WriteBuffer & buffer)
+DMFile::OffsetAndSize DMFile::writePackStatToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest)
 {
     size_t pack_offset = buffer.count();
     for (auto & stat : pack_stats)
     {
         writePODBinary(stat, buffer);
+        if (digest)
+        {
+            digest->update(stat);
+        }
     }
     size_t pack_size = buffer.count() - pack_offset;
     return std::make_tuple(pack_offset, pack_size);
@@ -321,14 +325,36 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileForm
 
 void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
-    auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.meta_size);
+    const auto path = metaPath();
+    auto       buf  = openForRead(file_provider, path, encryptionMetaPath(), meta_pack_info.meta_size);
     buf.seek(meta_pack_info.meta_offset);
 
     DMFileFormat::Version ver; // Binary version
     assertString("DTFile format: ", buf);
     DB::readText(ver, buf);
     assertString("\n", buf);
-    readText(column_stats, ver, buf);
+
+    // checksum examination
+    if (configuration)
+    {
+        auto location = configuration->getEmbeddedChecksum().find(path);
+        if (location != configuration->getEmbeddedChecksum().end())
+        {
+            auto digest = configuration->createUnifiedDigest();
+            digest->update(ver);
+            readText(column_stats, ver, buf, digest.get());
+            if (unlikely(!digest->compare_raw(location->second)))
+            {
+                throw Exception(fmt::format("data corruption, checksum mismatch for {}", path));
+            }
+        }
+        else
+        {
+            log->warning(fmt::format("checksum for {} not found", path));
+            readText(column_stats, ver, buf);
+        }
+    }
+
     // No need to upgrade meta when mode is Mode::SINGLE_FILE
     if (mode == Mode::FOLDER)
     {
