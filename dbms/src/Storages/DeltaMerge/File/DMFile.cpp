@@ -370,9 +370,30 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
 {
     size_t packs = meta_pack_info.pack_stat_size / sizeof(PackStat);
     pack_stats.resize(packs);
-    auto buf = openForRead(file_provider, packStatPath(), encryptionPackStatPath(), meta_pack_info.pack_stat_size);
+    const auto path = packStatPath();
+    auto       buf  = openForRead(file_provider, path, encryptionPackStatPath(), meta_pack_info.pack_stat_size);
     buf.seek(meta_pack_info.pack_stat_offset);
     buf.readStrict((char *)pack_stats.data(), sizeof(PackStat) * packs);
+    if (configuration)
+    {
+        auto location = configuration->getEmbeddedChecksum().find(path);
+        if (location != configuration->getEmbeddedChecksum().end())
+        {
+            auto digest = configuration->createUnifiedDigest();
+            for (auto i : pack_stats)
+            {
+                digest->update(i);
+            }
+            if (unlikely(!digest->compare_raw(location->second)))
+            {
+                throw Exception(fmt::format("data corruption, checksum mismatch for {}", path));
+            }
+        }
+        else
+        {
+            log->warning(fmt::format("checksum for {} not found", path));
+        }
+    }
 }
 
 void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
