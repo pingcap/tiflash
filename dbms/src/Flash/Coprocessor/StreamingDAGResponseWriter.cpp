@@ -22,39 +22,40 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWr
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_),
       exchange_type(exchange_type_),
       writer(writer_),
-      partition_col_ids(std::move(partition_col_ids_)),
-      thread_pool(dag_context.final_concurrency)
+      partition_col_ids(std::move(partition_col_ids_))
+//      thread_pool(dag_context.final_concurrency)
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
 }
 
-template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
-{
-    tipb::SelectResponse response;
-    addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
-    if (exchange_type == tipb::ExchangeType::Hash)
-    {
-        thread_pool.schedule(getEncodePartitionTask(blocks, response));
-    }
-    else
-    {
-        thread_pool.schedule(getEncodeTask(blocks, response));
-    }
-    blocks.clear();
-    rows_in_blocks = 0;
-}
+//template <class StreamWriterPtr>
+//void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
+//{
+//    tipb::SelectResponse response;
+//    addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
+//    if (exchange_type == tipb::ExchangeType::Hash)
+//    {
+//        thread_pool.schedule(getEncodePartitionTask(blocks, response));
+//    }
+//    else
+//    {
+//        thread_pool.schedule(getEncodeTask(blocks, response));
+//    }
+//    blocks.clear();
+//    rows_in_blocks = 0;
+//}
 
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
     if (rows_in_blocks > 0)
     {
-        ScheduleEncodeTask();
+        sendBatch();
+        //        ScheduleEncodeTask();
     }
     // wait all job finishes.
-    thread_pool.wait();
+    //    thread_pool.wait();
 }
 
 template <class StreamWriterPtr>
@@ -220,17 +221,35 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
     };
 }
 
+template <class StreamWriterPtr>
+void StreamingDAGResponseWriter<StreamWriterPtr>::sendBatch()
+{
+    tipb::SelectResponse response;
+    addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
+    if (exchange_type == tipb::ExchangeType::Hash)
+    {
+        getEncodePartitionTask(blocks, response)();
+    }
+    else
+    {
+        getEncodeTask(blocks, response)();
+    }
+    blocks.clear();
+    rows_in_blocks = 0;
+}
 
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
     if (block.columns() != result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
+
     rows_in_blocks += block.rows();
     blocks.push_back(block);
     if ((Int64)rows_in_blocks > records_per_chunk)
     {
-        ScheduleEncodeTask();
+        sendBatch();
+        //        ScheduleEncodeTask();
     }
 }
 

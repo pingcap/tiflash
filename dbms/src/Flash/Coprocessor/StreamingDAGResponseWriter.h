@@ -28,6 +28,9 @@ public:
 
 private:
     void ScheduleEncodeTask();
+
+    void sendBatch();
+
     ThreadPool::Job getEncodeTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
     ThreadPool::Job getEncodePartitionTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
@@ -37,7 +40,7 @@ private:
     std::vector<Int64> partition_col_ids;
     size_t rows_in_blocks;
     uint16_t partition_num;
-    ThreadPool thread_pool;
+//    ThreadPool thread_pool;
 };
 
 } // namespace DB
