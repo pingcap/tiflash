@@ -53,6 +53,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
     {
         ScheduleEncodeTask();
     }
+    thread_pool.wait();
 }
 
 template <class StreamWriterPtr>
@@ -60,7 +61,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
     std::vector<Block> & input_blocks, tipb::SelectResponse & response) const
 {
     /// todo find a way to avoid copying input_blocks
-    return [this, input_blocks, response]() mutable {
+    return [this, input_blocks = input_blocks, response = response]() mutable {
         std::unique_ptr<ChunkCodecStream> chunk_codec_stream = nullptr;
         if (encode_type == tipb::EncodeType::TypeDefault)
         {
@@ -125,7 +126,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
     std::vector<Block> & input_blocks, tipb::SelectResponse & response) const
 {
     /// todo find a way to avoid copying input_blocks
-    return [this, input_blocks, response]() mutable {
+    return [this, input_blocks = input_blocks, response = response]() mutable {
         std::vector<std::unique_ptr<ChunkCodecStream>> chunk_codec_stream(partition_num);
         std::vector<tipb::SelectResponse> responses(partition_num);
         for (auto i = 0; i < partition_num; ++i)

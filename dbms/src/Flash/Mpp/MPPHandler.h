@@ -1,10 +1,10 @@
 #pragma once
 
-#include <Server/Terminated.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Interpreters/Context.h>
+#include <Server/Terminated.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
 
@@ -469,6 +469,23 @@ private:
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;
 
+
+struct MPPTaskWorker
+{
+private:
+    /// The order below is critical. Make sure task is released before task_proxy.
+    MPPTaskProxyPtr task_proxy;
+    MPPTaskPtr task;
+
+public:
+    MPPTaskWorker(MPPTaskProxyPtr && task_proxy_, MPPTaskPtr && task_) : task_proxy(std::move(task_proxy_)), task(std::move(task_)) {}
+
+    static void start(MPPTaskWorker && worker)
+    {
+        std::thread t([worker = std::move(worker)]() { worker.task->runImpl(worker.task_proxy); });
+        t.detach();
+    }
+};
 
 using MPPTaskMap = std::map<MPPTaskId, MPPTaskProxyWeakPtr>;
 

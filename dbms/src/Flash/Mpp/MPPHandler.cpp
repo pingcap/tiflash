@@ -370,7 +370,6 @@ void MPPTask::runImpl(const MPPTaskProxyPtr & task_proxy)
         async_in.readSuffix();
         to->writeSuffix();
 
-        task_proxy->notifyFinished();
         //        finishWrite();
 
         LOG_DEBUG(log, "finish write with " + std::to_string(count) + " rows");
@@ -491,8 +490,8 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
 
     task->memory_tracker = current_memory_tracker;
 
-    std::thread t([task = std::move(task), task_proxy = std::move(task_proxy)]() { task->runImpl(task_proxy); });
-    t.detach();
+    MPPTaskWorker worker(std::move(task_proxy), std::move(task));
+    MPPTaskWorker::start(std::move(worker));
 
     LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
 
