@@ -78,9 +78,5 @@ int main(int argc, char ** argv)
 
     DB::tests::TiFlashTestEnv::shutdown();
 
-    // Need stoped gc before cleanup clean up `TemporaryPath`
-    // In storage UTs , `TemporaryPath` need clean
-    DB::tests::TiFlashTestEnv::cleanTemporaryPath();
-
     return ret;
 }

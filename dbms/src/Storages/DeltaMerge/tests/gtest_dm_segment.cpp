@@ -40,17 +40,15 @@ using namespace DB::tests;
 class Segment_test : public ::testing::Test
 {
 public:
-    Segment_test() : name("tmp"), storage_pool(), log(&Logger::get("Segment_test")) {}
+    Segment_test() : name("tmp"), storage_pool() {}
 
 protected:
-    bool dropDataOnDisk(String path)
+    void dropDataOnDisk(String path)
     {
         if (Poco::File file(path); file.exists())
         {
             file.remove(true);
-            return true;
         }
-        return false;
     }
 
 public:
@@ -58,11 +56,8 @@ public:
 
     void SetUp() override
     {
-        if (dropDataOnDisk(TiFlashTestEnv::getTemporaryPath()))
-        {
-            LOG_WARNING(log, "Temporary parh : " << TiFlashTestEnv::getTemporaryPath() << " is not empty");
-        }
         Strings test_paths;
+        dropDataOnDisk(TiFlashTestEnv::getTemporaryPath());
         test_paths.push_back(TiFlashTestEnv::getTemporaryPath(testing::UnitTest::GetInstance()->current_test_info()->name()));
 
         db_context        = std::make_unique<Context>(TiFlashTestEnv::getContext(DB::Settings(), test_paths));
@@ -124,7 +119,6 @@ protected:
 
     // the segment we are going to test
     SegmentPtr segment;
-    Logger *   log;
 };
 
 TEST_F(Segment_test, WriteRead)
