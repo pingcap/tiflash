@@ -428,7 +428,6 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         auto * err = response->mutable_error();
         err->set_msg(e.displayText());
         handleError(task, e.displayText());
-    	return grpc::Status::OK;
     }
     catch (std::exception & e)
     {
@@ -436,7 +435,6 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         auto * err = response->mutable_error();
         err->set_msg(e.what());
         handleError(task, e.what());
-    	return grpc::Status::OK;
     }
     catch (...)
     {
@@ -444,7 +442,6 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         auto * err = response->mutable_error();
         err->set_msg("fatal error");
         handleError(task, "fatal error");
-    	return grpc::Status::OK;
     }
     return grpc::Status::OK;
 }
