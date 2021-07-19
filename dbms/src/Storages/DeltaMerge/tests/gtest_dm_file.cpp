@@ -5,6 +5,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
+#include <Storages/tests/TiFlashStorageTestBasic.h>
 
 #include "dm_basic_include.h"
 
@@ -57,49 +58,37 @@ String paramToString(const ::testing::TestParamInfo<DMFile::Mode> & info)
 using DMFileBlockOutputStreamPtr = std::shared_ptr<DMFileBlockOutputStream>;
 using DMFileBlockInputStreamPtr  = std::shared_ptr<DMFileBlockInputStream>;
 
-class DMFile_Test : public ::testing::Test, //
-                    public testing::WithParamInterface<DMFile::Mode>
+class DMFile_Test : public DB::base::TiFlashStorageTestBasic, public testing::WithParamInterface<DMFile::Mode>
 {
 public:
-    DMFile_Test() : parent_path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "/dm_file_tests"), dm_file(nullptr) {}
+    DMFile_Test() : dm_file(nullptr) {}
 
     static void SetUpTestCase() {}
 
     void SetUp() override
     {
-        dropFiles();
+        TiFlashStorageTestBasic::SetUp();
+        parent_path = TiFlashStorageTestBasic::getTemporaryPath();
 
         auto mode             = GetParam();
         bool single_file_mode = mode == DMFile::Mode::SINGLE_FILE;
 
-        auto ctx       = DMTestEnv::getContext();
-        auto settings  = DB::Settings();
-        path_pool      = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t1", false));
-        storage_pool   = std::make_unique<StoragePool>("test.t1", *path_pool, ctx, settings);
+        path_pool      = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
+        storage_pool   = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
         dm_file        = DMFile::create(1, parent_path, single_file_mode);
-        db_context     = std::make_unique<Context>(DMTestEnv::getContext(settings));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_  = std::make_shared<ColumnCache>();
 
         reload();
     }
 
-    void dropFiles()
-    {
-        if (Poco::File file(parent_path); file.exists())
-        {
-            file.remove(true);
-        }
-    }
-
     // Update dm_context.
     void reload(const ColumnDefinesPtr & cols = DMTestEnv::getDefaultColumns())
     {
+        TiFlashStorageTestBasic::reload();
         if (table_columns_ != cols)
             *table_columns_ = *cols;
-
-        auto ctx   = DMTestEnv::getContext();
-        *path_pool = ctx.getPathPool().withTable("test", "t1", false);
+        *path_pool = db_context->getPathPool().withTable("test", "t1", false);
         dm_context = std::make_unique<DMContext>( //
             *db_context,
             *path_pool,
@@ -127,7 +116,6 @@ public:
     Context & dbContext() { return *db_context; }
 
 private:
-    std::unique_ptr<Context>   db_context;
     std::unique_ptr<DMContext> dm_context;
     /// all these var live as ref in dm_context
     std::unique_ptr<StoragePathPool> path_pool;
@@ -136,7 +124,7 @@ private:
     DeltaMergeStore::Settings        settings;
 
 protected:
-    const String   parent_path;
+    String         parent_path;
     DMFilePtr      dm_file;
     ColumnCachePtr column_cache_;
 };
@@ -1117,17 +1105,16 @@ INSTANTIATE_TEST_CASE_P(DTFileMode, //
 
 
 /// DMFile test for clustered index
-class DMFile_Clustered_Index_Test : public ::testing::Test, //
+class DMFile_Clustered_Index_Test : public DB::base::TiFlashStorageTestBasic, //
                                     public testing::WithParamInterface<DMFile::Mode>
 {
 public:
-    DMFile_Clustered_Index_Test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "/dm_file_clustered_index_tests"), dm_file(nullptr)
-    {
-    }
+    DMFile_Clustered_Index_Test() : dm_file(nullptr) {}
 
     void SetUp() override
     {
-        dropFiles();
+        TiFlashStorageTestBasic::SetUp();
+        path = TiFlashStorageTestBasic::getTemporaryPath();
 
         auto mode             = GetParam();
         bool single_file_mode = mode == DMFile::Mode::SINGLE_FILE;
@@ -1144,18 +1131,10 @@ public:
         reload();
     }
 
-    void dropFiles()
-    {
-        Poco::File file(path);
-        if (file.exists())
-        {
-            file.remove(true);
-        }
-    }
-
     // Update dm_context.
     void reload(ColumnDefinesPtr cols = {})
     {
+        TiFlashStorageTestBasic::reload();
         if (!cols)
             cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
 
@@ -1180,7 +1159,6 @@ public:
 
 private:
     String                     path;
-    std::unique_ptr<Context>   db_context;
     std::unique_ptr<DMContext> dm_context;
     /// all these var live as ref in dm_context
     std::unique_ptr<StoragePathPool> path_pool;

@@ -5,6 +5,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ctime>
@@ -37,27 +38,17 @@ namespace tests
 
 using namespace DB::tests;
 
-class Segment_test : public ::testing::Test
+class Segment_test : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    Segment_test() : name("tmp"), storage_pool() {}
-
-protected:
-    void dropDataOnDisk(String path)
-    {
-        if (Poco::File file(path); file.exists())
-        {
-            file.remove(true);
-        }
-    }
+    Segment_test() : storage_pool() {}
 
 public:
     static void SetUpTestCase() {}
 
     void SetUp() override
     {
-        dropDataOnDisk(TiFlashTestEnv::getTemporaryPath(testing::UnitTest::GetInstance()->current_test_info()->name()));
-
+        TiFlashStorageTestBasic::SetUp();
         table_columns_ = std::make_shared<ColumnDefines>();
 
         segment = reload();
@@ -67,9 +58,7 @@ public:
 protected:
     SegmentPtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
-        Strings test_paths;
-        test_paths.push_back(TiFlashTestEnv::getTemporaryPath(testing::UnitTest::GetInstance()->current_test_info()->name()));
-        db_context        = std::make_unique<Context>(TiFlashTestEnv::getContext(db_settings, test_paths));
+        TiFlashStorageTestBasic::reload(std::move(db_settings));
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_pool      = std::make_unique<StoragePool>("test.t1", *storage_path_pool, *db_context, db_context->getSettingsRef());
         storage_pool->restore();
@@ -100,9 +89,6 @@ protected:
     DMContext & dmContext() { return *dm_context_; }
 
 protected:
-    std::unique_ptr<Context> db_context;
-    // the table name
-    String name;
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePathPool> storage_path_pool;
     std::unique_ptr<StoragePool>     storage_pool;
