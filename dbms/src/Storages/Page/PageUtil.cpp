@@ -149,7 +149,7 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
 }
 
 void readChecksumFramedFile(
-    RandomAccessFilePtr & file, off_t offset, char * buf, size_t expected_bytes, DM::DMConfiguration & configuration)
+    RandomAccessFilePtr & file, off_t offset, char * buf, size_t expected_bytes, DM::DMConfiguration & configuration, const ReadLimiterPtr & read_limiter)
 {
     DM::FrameUnion headerStorage;
     auto           digest = configuration.createUnifiedDigest();
@@ -159,7 +159,7 @@ void readChecksumFramedFile(
     off_t realOffset = static_cast<off_t>(frameNo) * static_cast<off_t>(configuration.getChecksumFrameLength() + digest->headerSize());
 
     auto loadHeader = [&]() -> size_t {
-        readFile(file, realOffset, reinterpret_cast<char *>(&headerStorage), digest->headerSize());
+        readFile(file, realOffset, reinterpret_cast<char *>(&headerStorage), digest->headerSize(), read_limiter);
         realOffset = realOffset + static_cast<off_t>(digest->headerSize());
         return *reinterpret_cast<size_t *>(&headerStorage);
     };
@@ -180,7 +180,7 @@ void readChecksumFramedFile(
 
         // read frame
         auto frameSize = loadHeader();
-        readFile(file, realOffset, tmpBuffer, frameSize);
+        readFile(file, realOffset, tmpBuffer, frameSize, read_limiter);
 
         // examine checksum
         examineChecksum(tmpBuffer, frameSize);
@@ -204,7 +204,7 @@ void readChecksumFramedFile(
     while (expected_bytes && expected_bytes >= frameSize)
     {
         // read body
-        readFile(file, realOffset, buf, frameSize);
+        readFile(file, realOffset, buf, frameSize, read_limiter);
 
         // examine checksum
         examineChecksum(buf, frameSize);
@@ -223,7 +223,7 @@ void readChecksumFramedFile(
         auto tmpBuffer = reinterpret_cast<char *>(::operator new (frameSize, std::align_val_t{512}));
 
         // read body
-        readFile(file, realOffset, tmpBuffer, frameSize);
+        readFile(file, realOffset, tmpBuffer, frameSize, read_limiter);
 
         // examine checksum
         examineChecksum(tmpBuffer, frameSize);

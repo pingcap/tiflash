@@ -61,21 +61,14 @@ DMFileReader::Stream::Stream(DMFileReader &                   reader,
             size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
             auto   file = reader.file_provider->newRandomAccessFile(reader.dmfile->colMarkPath(file_name_base),
                                                                   reader.dmfile->encryptionMarkPath(file_name_base));
-            PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size, read_limiter);
-
             if (configuration)
             {
-                auto digest = configuration->createUnifiedDigest();
-                char hashData[512]; // so let us
-                digest->update(res->data(), size);
-                PageUtil::readFile(file, static_cast<off_t>(size), hashData, digest->hashSize(), read_limiter);
-                if (unlikely(!digest->compare_raw(static_cast<void *>(hashData)))) // make sure compare_raw(void *) is called
-                {
-                    throw Exception(
-                        fmt::format("data corruption detected: checksums mismatch for {}.", reader.dmfile->colMarkPath(file_name_base)));
-                }
+                PageUtil::readChecksumFramedFile(file, 0, reinterpret_cast<char *>(res->data()), size, *configuration, read_limiter);
             }
-
+            else
+            {
+                PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size, read_limiter);
+            }
             return res;
         };
         if (reader.mark_cache)
