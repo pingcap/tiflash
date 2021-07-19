@@ -82,12 +82,12 @@ protected:
         }
     }
 
-    template <typename NativeType>
-    Field makeField(const std::optional<NativeType> & value)
+    template <typename FieldType>
+    Field makeField(const std::optional<FieldType> & value)
     {
         if (value.has_value())
         {
-            return Field(static_cast<NativeType>(value.value()));
+            return Field(static_cast<FieldType>(value.value()));
         }
         else
         {
@@ -95,9 +95,9 @@ protected:
         }
     }
 
-    template <typename NativeType>
+    template <typename FieldType>
     ColumnWithTypeAndName makeInputColumn(
-        const String & name, size_t size, const DataTypePtr data_type, const DataVector<NativeType> & column_data)
+        const String & name, size_t size, const DataTypePtr data_type, const DataVector<FieldType> & column_data)
     {
         auto nullable_data_type = makeNullable(data_type);
 
@@ -119,18 +119,18 @@ protected:
         }
     }
 
-    // e.g. data_type = DataTypeUInt64, NativeType = UInt64.
+    // e.g. data_type = DataTypeUInt64, FieldType = UInt64.
     // if data vector contains only 1 element, a const column will be created.
     // otherwise, two columns are expected to be of the same size.
     // use std::nullopt for null values.
-    template <typename NativeType1, typename NativeType2, typename ResultNativeType>
+    template <typename FieldType1, typename FieldType2, typename ResultFieldType>
     void executeFunctionWithData(size_t line, const String & function_name, const DataTypePtr data_type_1, const DataTypePtr data_type_2,
-        const DataVector<NativeType1> & column_data_1, const DataVector<NativeType2> & column_data_2,
-        const DataVector<ResultNativeType> & expected_data)
+        const DataVector<FieldType1> & column_data_1, const DataVector<FieldType2> & column_data_2,
+        const DataVector<ResultFieldType> & expected_data)
     {
-        static_assert(std::is_integral_v<NativeType1> || std::is_floating_point_v<NativeType1> || isDecimalField<NativeType1>());
-        static_assert(std::is_integral_v<NativeType2> || std::is_floating_point_v<NativeType2> || isDecimalField<NativeType2>());
-        static_assert(std::is_integral_v<ResultNativeType> || std::is_floating_point_v<ResultNativeType> || isDecimalField<ResultNativeType>());
+        static_assert(std::is_integral_v<FieldType1> || std::is_floating_point_v<FieldType1> || isDecimalField<FieldType1>());
+        static_assert(std::is_integral_v<FieldType2> || std::is_floating_point_v<FieldType2> || isDecimalField<FieldType2>());
+        static_assert(std::is_integral_v<ResultFieldType> || std::is_floating_point_v<ResultFieldType> || isDecimalField<ResultFieldType>());
 
         size_t size = std::max(column_data_1.size(), column_data_2.size());
         ASSERT_GT(size, 0) << "at line " << line;
@@ -159,7 +159,7 @@ protected:
             {
                 ASSERT_FALSE(result_field.isNull()) << "at line " << line << ", expect not null, at index " << i;
 
-                auto got = result_field.safeGet<ResultNativeType>();
+                auto got = result_field.safeGet<ResultFieldType>();
 
                 ASSERT_EQ(expected.value(), got) << "at line " << line << ", at index " << i;
             }
