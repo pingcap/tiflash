@@ -42,6 +42,7 @@ void ExchangeReceiver::setUpConnection()
 void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 {
     bool meet_error = false;
+    String local_err_msg;
     try
     {
         auto sender_task = new mpp::TaskMeta();
@@ -65,11 +66,12 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                 break;
             if (packet.has_error())
             {
-                throw Exception("exchange receiver meet error : " + packet.error().msg());
+                throw Exception("Exchange receiver meet error : " + packet.error().msg());
             }
             if (!decodePacket(packet, source_index, req_info))
             {
                 meet_error = true;
+                local_err_msg = "Decode packet meet error";
                 LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
                 break;
             }
@@ -79,22 +81,24 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
     catch (Exception & e)
     {
         meet_error = true;
-        err = e;
+        local_err_msg = e.message();
     }
     catch (std::exception & e)
     {
         meet_error = true;
-        err = Exception(e.what());
+        local_err_msg = e.what();
     }
     catch (...)
     {
         meet_error = true;
-        err = Exception("fatal error");
+        local_err_msg = "fatal error";
     }
     std::lock_guard<std::mutex> lock(mu);
     live_connections--;
     if (meet_error && state == NORMAL)
         state = ERROR;
+    if (meet_error && err_msg.empty())
+        err_msg = local_err_msg;
     cv.notify_all();
     LOG_DEBUG(log, "read thread end!!! live connections: " << std::to_string(live_connections));
 }

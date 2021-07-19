@@ -1,6 +1,5 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
-#include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -10,6 +9,8 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
+
+#include <DataStreams/SquashingBlockOutputStream.h>
 
 namespace DB
 {
@@ -68,7 +69,7 @@ void MPPTunnel::close(const String & reason)
     std::unique_lock<std::mutex> lk(mu);
     if (finished)
         return;
-    if (connected)
+    if (connected && !reason.empty())
     {
         try
         {
@@ -251,16 +252,15 @@ String taskStatusToString(TaskStatus ts)
 }
 void MPPTask::runImpl()
 {
-    auto current_status = static_cast<TaskStatus>(status.load());
-    if (current_status != INITIALIZING)
+    auto old_status = static_cast<Int32>(INITIALIZING);
+    if (!status.compare_exchange_strong(old_status, static_cast<Int32>(RUNNING)))
     {
-        LOG_WARNING(log, "task in " + taskStatusToString(current_status) + " state, skip running");
+        LOG_WARNING(log, "task not in initializing state, skip running");
         return;
     }
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
     LOG_INFO(log, "task starts running");
-    status = RUNNING;
     auto from = io.in;
     auto to = io.out;
     try
@@ -396,9 +396,9 @@ void MPPHandler::handleError(MPPTaskPtr task, String error)
 grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * response)
 {
     MPPTaskPtr task = nullptr;
-    Stopwatch stopwatch;
     try
     {
+        Stopwatch stopwatch;
         task = std::make_shared<MPPTask>(task_request.meta(), context);
 
         auto retry_regions = task->prepare(task_request);
@@ -417,6 +417,9 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
         }
+        task->memory_tracker = current_memory_tracker;
+        task->run();
+        LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
     }
     catch (Exception & e)
     {
@@ -424,7 +427,6 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         auto * err = response->mutable_error();
         err->set_msg(e.displayText());
         handleError(task, e.displayText());
-    	return grpc::Status::OK;
     }
     catch (std::exception & e)
     {
@@ -432,7 +434,6 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         auto * err = response->mutable_error();
         err->set_msg(e.what());
         handleError(task, e.what());
-    	return grpc::Status::OK;
     }
     catch (...)
     {
@@ -440,32 +441,6 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         auto * err = response->mutable_error();
         err->set_msg("fatal error");
         handleError(task, "fatal error");
-    	return grpc::Status::OK;
-    }
-    try
-    {
-        task->memory_tracker = current_memory_tracker;
-        std::thread worker(&MPPTask::runImpl, std::move(task));
-        worker.detach();
-        LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
-    }
-    catch (Exception & e)
-    {
-        LOG_ERROR(log, "starting task meet error : " << e.displayText());
-        auto * err = response->mutable_error();
-        err->set_msg(e.displayText());
-    }
-    catch (std::exception & e)
-    {
-        LOG_ERROR(log, "starting task meet error : " << e.what());
-        auto * err = response->mutable_error();
-        err->set_msg(e.what());
-    }
-    catch (...)
-    {
-        LOG_ERROR(log, "starting task meet fatal error");
-        auto * err = response->mutable_error();
-        err->set_msg("fatal error");
     }
     return grpc::Status::OK;
 }
