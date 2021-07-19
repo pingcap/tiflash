@@ -38,6 +38,11 @@ struct Construct
     using Type = Error;
 };
 
+/**
+ * TODO:
+ * * 128-bit and 256-bit integers. And it seems that Visitor::visit doesn't welcome them as well.
+ * * all floating-point arithmetic evalutes to Float64.
+ */
 template <> struct Construct<false, false, 1> { using Type = UInt8; };
 template <> struct Construct<false, false, 2> { using Type = UInt16; };
 template <> struct Construct<false, false, 4> { using Type = UInt32; };
@@ -99,11 +104,18 @@ template <typename A, typename B> struct ResultOfIntegerDivision
     */
 template <typename A, typename B> struct ResultOfModulo
 {
-    using Type = typename Construct<
-        // in MySQL 5.7, unsigned % signed evaluates to unsigned, but signed % unsigned evaluates to signed.
-        std::is_signed_v<A>,
-        std::is_floating_point_v<A> || std::is_floating_point_v<B>,
-        nextSize(max(sizeof(A), sizeof(B)))>::Type;
+    /**
+     * in MySQL:
+     * * if A or B is floating-point, A % B evalutes to Float64.
+     * * unsigned int % signed int evaluates to unsigned int, but signed int % unsigned int evaluates to signed int.
+     * * the precision of A % B is the maximum precision of A and B.
+     *
+     * TODO:
+     * * remove 8 bytes size limitation implied by Construct.
+     */
+    using Type = std::conditional_t<std::is_floating_point_v<A> || std::is_floating_point_v<B>,
+        Float64,
+        typename Construct<std::is_signed_v<A>, false, min(8, max(sizeof(A), sizeof(B)))>::Type>;
 };
 
 template <typename A> struct ResultOfNegate

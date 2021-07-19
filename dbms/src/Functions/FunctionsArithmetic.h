@@ -530,37 +530,54 @@ struct ModuloImpl<A, B, false>
     {
         if constexpr (std::is_floating_point_v<Result>)
         {
+            auto x = static_cast<Result>(a);
+            auto y = static_cast<Result>(b);
+
+            // assert no infinite or NaN values.
+            assert(std::isfinite(x) && std::isfinite(y));
+
             // C++ does not allow operator% between floating point
             // values, so we call into std::fmod.
-            return std::fmod(static_cast<Result>(a), static_cast<Result>(b));
-        }
-        else if constexpr (IsDecimal<Result>)
-        {
-            return static_cast<Result>(a) % static_cast<Result>(b);
+            return std::fmod(x, y);
         }
         else  // both A and B are integrals.
         {
-            using UnsignedResultType = std::make_unsigned_t<Result>;
+            // decimals are expected to be converted to integers or floating point values before computations.
+            static_assert(is_integer_v<Result>);
+
+            using UnsignedResultType = make_unsigned_t<Result>;
 
             // convert to unsigned before computing.
             // we have to prevent wrong result like UInt64(5) = UInt64(5) % Int64(-3).
             // in MySQL, UInt64(5) % Int64(-3) evaluates to UInt64(2).
-            UnsignedResultType x, y;
 
-            if (std::is_signed_v<A> && a < 0)
-                x = static_cast<UnsignedResultType>(-a);
-            else
-                x = static_cast<UnsignedResultType>(a);
+            // both overflow of unsigned integers and signed to unsigned conversion are well defined in C++.
+            auto x = static_cast<UnsignedResultType>(a);
+            auto y = static_cast<UnsignedResultType>(b);
 
-            if (std::is_signed_v<B> && b < 0)
-                y = static_cast<UnsignedResultType>(-b);
-            else
-                y = static_cast<UnsignedResultType>(b);
+            if constexpr (is_signed_v<A>)
+            {
+                if (a < 0)
+                    x = -x;
+            }
+
+            if constexpr (is_signed_v<B>)
+            {
+                if (b < 0)
+                    y = -y;
+            }
 
             auto result = static_cast<ResultType>(x % y);
 
-            if (std::is_signed_v<Result> && a < 0)
-                return -result;
+            // in MySQL, the sign of a % b is the same as that of a.
+            // e.g. 5 % -3 = 2, -5 % 3 = -2.
+            if constexpr (is_signed_v<Result>)
+            {
+                if (a < 0)
+                    return -result;
+                else
+                    return result;
+            }
             else
                 return result;
         }
@@ -1346,6 +1363,22 @@ struct DecimalBinaryOperation
     using InputType = std::conditional_t<need_promote_type, PromoteResultType, NativeResultType>;
     using Op = Operation<InputType, InputType>;
 
+    static void inline evaluateNullmap(size_t size, const ColumnUInt8 * a_nullmap, const ColumnUInt8 * b_nullmap, typename ColumnUInt8::Container & res_null) {
+        if (a_nullmap != nullptr && b_nullmap != nullptr)
+        {
+            auto & a_nullmap_data = a_nullmap->getData();
+            auto & b_nullmap_data = b_nullmap->getData();
+            for (size_t i = 0; i < size; ++i)
+                res_null[i] = a_nullmap_data[i] || b_nullmap_data[i];
+        }
+        else if (a_nullmap != nullptr || b_nullmap != nullptr)
+        {
+            auto & nullmap_data = a_nullmap != nullptr ? a_nullmap->getData() : b_nullmap->getData();
+            for (size_t i = 0; i < size; ++i)
+                res_null[i] = nullmap_data[i];
+        }
+    }
+
     static void NO_INLINE vector_vector(const ArrayA & a, const ArrayB & b, ArrayC & c,
                                         NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
@@ -1372,6 +1405,9 @@ struct DecimalBinaryOperation
             return;
         }
 
+        if constexpr (is_division || is_modulo)
+            throw Exception("Should not reach here");
+
         /// default: use it if no return before
         for (size_t i = 0; i < size; ++i)
             c[i] = apply(a[i], b[i]);
@@ -1382,23 +1418,7 @@ struct DecimalBinaryOperation
     {
         size_t size = a.size();
 
-        if (a_nullmap != nullptr && b_nullmap != nullptr)
-        {
-            auto & a_nullmap_data = a_nullmap->getData();
-            auto & b_nullmap_data = b_nullmap->getData();
-            for (size_t i = 0; i < size; ++i)
-            {
-                res_null[i] = a_nullmap_data[i] || b_nullmap_data[i];
-            }
-        }
-        else if (a_nullmap != nullptr || b_nullmap != nullptr)
-        {
-            auto & nullmap_data = a_nullmap != nullptr ? a_nullmap->getData() : b_nullmap->getData();
-            for (size_t i = 0; i < size; ++i)
-            {
-                res_null[i] = nullmap_data[i];
-            }
-        }
+        evaluateNullmap(size, a_nullmap, b_nullmap, res_null);
 
         if constexpr (is_division)
         {
@@ -1451,6 +1471,9 @@ struct DecimalBinaryOperation
             return;
         }
 
+        if constexpr (is_division || is_modulo)
+            throw Exception("Should not reach here");
+
         /// default: use it if no return before
         for (size_t i = 0; i < size; ++i)
             c[i] = apply(a[i], b);
@@ -1461,14 +1484,7 @@ struct DecimalBinaryOperation
     {
         size_t size = a.size();
 
-        if (a_nullmap != nullptr)
-        {
-            auto & nullmap_data = a_nullmap->getData();
-            for (size_t i = 0; i < size; ++i)
-            {
-                res_null[i] = nullmap_data[i];
-            }
-        }
+        evaluateNullmap(size, a_nullmap, nullptr, res_null);
 
         if constexpr (is_division)
         {
@@ -1520,6 +1536,9 @@ struct DecimalBinaryOperation
             return;
         }
 
+        if constexpr (is_division || is_modulo)
+            throw Exception("Should not reach here");
+
         /// default: use it if no return before
         for (size_t i = 0; i < size; ++i)
             c[i] = apply(a, b[i]);
@@ -1530,14 +1549,7 @@ struct DecimalBinaryOperation
     {
         size_t size = b.size();
 
-        if (b_nullmap != nullptr)
-        {
-            auto & nullmap_data = b_nullmap->getData();
-            for (size_t i = 0; i < size; ++i)
-            {
-                res_null[i] = nullmap_data[i];
-            }
-        }
+        evaluateNullmap(size, nullptr, b_nullmap, res_null);
 
         if constexpr (is_division)
         {
@@ -1576,6 +1588,10 @@ struct DecimalBinaryOperation
         else if constexpr (is_multiply) {
             return applyScaledMul(a, b, scale_result);
         }
+
+        if constexpr (is_division || is_modulo)
+            throw Exception("Should not reach here");
+
         return apply(a, b);
     }
 

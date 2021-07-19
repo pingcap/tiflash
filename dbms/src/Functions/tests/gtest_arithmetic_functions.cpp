@@ -126,7 +126,7 @@ protected:
     template <typename FieldType1, typename FieldType2, typename ResultFieldType>
     void executeFunctionWithData(size_t line, const String & function_name, const DataTypePtr data_type_1, const DataTypePtr data_type_2,
         const DataVector<FieldType1> & column_data_1, const DataVector<FieldType2> & column_data_2,
-        const DataVector<ResultFieldType> & expected_data)
+        const DataVector<ResultFieldType> & expected_data, PrecType expected_prec = 0, ScaleType expected_scale = 0)
     {
         static_assert(std::is_integral_v<FieldType1> || std::is_floating_point_v<FieldType1> || isDecimalField<FieldType1>());
         static_assert(std::is_integral_v<FieldType2> || std::is_floating_point_v<FieldType2> || isDecimalField<FieldType2>());
@@ -146,6 +146,16 @@ protected:
 
         auto result_column = block.getByName("res").column.get();
         ASSERT_EQ(size, result_column->size()) << "at line " << line;
+
+        auto result_type = block.getByName("res").type;
+        if (auto ptr = typeid_cast<const DataTypeNullable *>(result_type.get()))
+            result_type = ptr->getNestedType();
+
+        if (IsDecimalDataType(result_type))
+        {
+            ASSERT_EQ(expected_prec, getDecimalPrecision(*result_type)) << "at line " << line;
+            ASSERT_EQ(expected_scale, getDecimalScale(*result_type)) << "at line " << line;
+        }
 
         Field result_field;
 
@@ -852,16 +862,16 @@ try
         {
             DecimalField32(700, 3), DecimalField32(-700, 3), DecimalField32(700, 3),
             DecimalField32(-700, 3), {}, {}, {}, {}
-        });
+        }, 7, 3);
 
-    // Int64 has a precision of 20, which is larger than the precision of Decimal64.
     executeFunctionWithData<DecimalField32, Int64, DecimalField128>(__LINE__, func_name,
         makeDataType<Decimal32>(7, 3), makeDataType<DataTypeInt64>(),
-        {DecimalField32(3300, 3), DecimalField32(3300, 3), {}}, {1, 0, {}}, {DecimalField128(300, 3), {}, {}});
+        {DecimalField32(3300, 3), DecimalField32(3300, 3), {}}, {1, 0, {}},
+        {DecimalField128(300, 3), {}, {}}, 18, 3);
 
     executeFunctionWithData<DecimalField32, DecimalField64, DecimalField64>(__LINE__, func_name,
         makeDataType<Decimal32>(7, 5), makeDataType<Decimal64>(15, 3),
-        {DecimalField32(3223456, 5)}, {DecimalField64(9244, 3)}, {DecimalField64(450256, 5)});
+        {DecimalField32(3223456, 5)}, {DecimalField64(9244, 3)}, {DecimalField64(450256, 5)}, 15, 5);
 
     // real modulo
 

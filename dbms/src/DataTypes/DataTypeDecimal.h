@@ -209,7 +209,20 @@ typename std::enable_if_t<(sizeof(T) < sizeof(U)), const DataTypeDecimal<U>> dec
     return DataTypeDecimal<U>(maxDecimalPrecision<U>(), scale);
 }
 
-inline UInt32 getDecimalScale(const IDataType & data_type, UInt32 default_value = std::numeric_limits<UInt32>::max())
+inline PrecType getDecimalPrecision(const IDataType & data_type, UInt32 default_value = std::numeric_limits<PrecType>::max())
+{
+    if (auto * decimal_type = checkDecimal<Decimal32>(data_type))
+        return decimal_type->getPrec();
+    if (auto * decimal_type = checkDecimal<Decimal64>(data_type))
+        return decimal_type->getPrec();
+    if (auto * decimal_type = checkDecimal<Decimal128>(data_type))
+        return decimal_type->getPrec();
+    if (auto * decimal_type = checkDecimal<Decimal256>(data_type))
+        return decimal_type->getPrec();
+    return default_value;
+}
+
+inline ScaleType getDecimalScale(const IDataType & data_type, UInt32 default_value = std::numeric_limits<ScaleType>::max())
 {
     if (auto * decimal_type = checkDecimal<Decimal32>(data_type))
         return decimal_type->getScale();
