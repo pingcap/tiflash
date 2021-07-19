@@ -3,14 +3,11 @@
 
 #include <Common/FailPoint.h>
 #include <IO/WriteHelpers.h>
-<<<<<<< HEAD
 
 #define private public
 #include <Storages/Page/gc/DataCompactor.h>
 #undef private
 
-=======
->>>>>>> 114c55c3c... PageStorage add PageFileID existence check for multi disk deployment (#2412)
 #include <Interpreters/Context.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/gc/DataCompactor.h>
