@@ -112,9 +112,7 @@ struct MPPTunnel
             if (!finished)
             {
                 /// in abnormal cases, finished can be set in advance and pushing nullptr is also necessary
-                finished = true;
                 send_queue.push(nullptr);
-                cv_for_finished.notify_all();
                 LOG_TRACE(log, "finish write and close the tunnel");
             }
             lk.unlock();
@@ -142,6 +140,7 @@ struct MPPTunnel
         lk.unlock();
         /// in normal cases, send nullptr to notify finish
         send_queue.push(nullptr);
+        waitForFinish();
     }
 
     /// close() finishes the tunnel, if the tunnel is connected already, it will
@@ -180,7 +179,6 @@ struct MPPTunnel
         {
             LOG_DEBUG(log, "ready to connect");
             connected = true;
-            finished = false;
             writer = writer_;
             cv_for_connected.notify_all();
         }
