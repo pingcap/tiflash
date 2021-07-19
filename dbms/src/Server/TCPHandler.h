@@ -142,11 +142,7 @@ private:
     void sendHello();
     void sendData(const Block & block);    /// Write a block to the network.
     void sendException(const Exception & e);
-<<<<<<< HEAD
-    void sendRegionException(const std::vector<RegionVerID> & region_ver_ids);
-=======
     void sendRegionException(const std::vector<UInt64> & region_ids);
->>>>>>> 4b4e7caf4... Optimize learner-read process by reduce times about read-index during retry (#2381)
     void sendLockInfos(const LockInfoPtr & lock_info);
     void sendProgress();
     void sendEndOfStream();
