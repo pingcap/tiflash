@@ -244,6 +244,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
     std::unique_ptr<DAGContext> dag_context;
 
     /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
+    /// BlockIO contains some information stored in Context and DAGContext, so need deconstruct it before Context and DAGContext
     BlockIO io;
     MemoryTracker * memory_tracker = nullptr;
 
