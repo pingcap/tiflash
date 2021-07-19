@@ -574,7 +574,7 @@ struct ModuloImpl<A, B, false>
             auto x = to_unsigned<Result>(a);
             auto y = to_unsigned<Result>(b);
 
-            auto result = static_cast<ResultType>(x % y);
+            auto result = static_cast<Result>(x % y);
 
             // in MySQL, the sign of a % b is the same as that of a.
             // e.g. 5 % -3 = 2, -5 % 3 = -2.
