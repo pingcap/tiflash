@@ -692,7 +692,7 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr &        dm_context,
                 updated_segments.push_back(segment);
                 fiu_do_on(FailPoints::segment_merge_after_ingest_packs, {
                     segment->flushCache(*dm_context);
-                    segmentMergeDelta(*dm_context, segment, TaskRunThread::Thread_BG_Thread_Pool);
+                    segmentMergeDelta(*dm_context, segment, TaskRunThread::BackgroundThreadPool);
                     storage_pool.gc(global_context.getSettingsRef(), StoragePool::Seconds(0));
                 });
                 break;
@@ -1494,7 +1494,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
 
             segment           = segment_it->second;
             next_gc_check_key = segment_it->first.toRowKeyValue();
-            segment_snap      = segment->createSnapshot(*dm_context, /* for_update */ true);
+            segment_snap      = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
         }
 
         assert(segment != nullptr);
@@ -1527,11 +1527,12 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         {
             // Check whether we should apply gc on this segment
             const bool should_compact
-                = GC::shouldCompact(segment, gc_safe_point, global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc, log);
+                = GC::shouldCompact(segment, gc_safe_point, global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc, log)
+                || GC::shouldCompactWithStable(*dm_context, segment_snap);
             bool finish_gc_on_segment = false;
             if (should_compact)
             {
-                if (segment = segmentMergeDelta(*dm_context, segment, TaskRunThread::BackgroundGCThread); segment)
+                if (segment = segmentMergeDelta(*dm_context, segment, TaskRunThread::BackgroundGCThread, segment_snap); segment)
                 {
                     // Continue to check whether we need to apply more tasks on this segment
                     checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
