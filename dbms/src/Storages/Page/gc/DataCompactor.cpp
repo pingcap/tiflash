@@ -37,7 +37,9 @@ DataCompactor<SnapshotPtr>::tryMigrate(                                  //
     // Select gc candidate files
     Result      result;
     PageFileSet candidates;
-    std::tie(candidates, result.bytes_migrate, result.num_migrate_pages) = selectCandidateFiles(page_files, valid_pages, writing_files);
+    PageFileSet files_without_valid_pages;
+    std::tie(candidates, files_without_valid_pages, result.bytes_migrate, result.num_migrate_pages)
+        = selectCandidateFiles(page_files, valid_pages, writing_files);
 
     result.candidate_size = candidates.size();
     result.do_compaction  = result.candidate_size >= config.gc_min_files
@@ -47,14 +49,15 @@ DataCompactor<SnapshotPtr>::tryMigrate(                                  //
     PageEntriesEdit migrate_entries_edit;
     if (result.do_compaction)
     {
-        std::tie(migrate_entries_edit, result.bytes_written) = migratePages(snapshot, valid_pages, candidates, result.num_migrate_pages);
+        std::tie(migrate_entries_edit, result.bytes_written)
+            = migratePages(snapshot, valid_pages, candidates, files_without_valid_pages, result.num_migrate_pages);
     }
     else
     {
         LOG_DEBUG(log,
                   storage_name << " DataCompactor::tryMigrate exit without compaction [candidates size=" //
-                               << result.candidate_size << "] [total byte size=" << result.bytes_migrate << "], Config{ "
-                               << config.toDebugString() << " }");
+                               << result.candidate_size << "] [total byte size=" << result.bytes_migrate << "], [files without valid page="
+                               << files_without_valid_pages.size() << "] Config{ " << config.toDebugString() << " }");
     }
 
     return {result, std::move(migrate_entries_edit)};
@@ -82,8 +85,8 @@ DataCompactor<SnapshotPtr>::collectValidPagesInPageFile(const SnapshotPtr & snap
 }
 
 template <typename SnapshotPtr>
-std::tuple<PageFileSet, size_t, size_t>           //
-DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
+std::tuple<PageFileSet, PageFileSet, size_t, size_t> //
+DataCompactor<SnapshotPtr>::selectCandidateFiles(    // keep readable indent
     const PageFileSet &          page_files,
     const ValidPages &           files_valid_pages,
     const WritingFilesSnapshot & writing_files) const
@@ -105,7 +108,10 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
 
     static constexpr double HIGH_RATE_THRESHOLD = 0.65;
 
+    // Those files with valid pages, we need to migrate those pages into a new PageFile
     PageFileSet candidates;
+    // Those files without valid pages, we need to log them down later
+    PageFileSet files_without_valid_pages;
     size_t      candidate_total_size                 = 0;
     size_t      num_migrate_pages                    = 0;
     size_t      num_candidates_with_high_rate        = 0;
@@ -146,6 +152,15 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
             continue;
         }
 
+        if (valid_size == 0)
+        {
+            // Do not collect page_files without valid pages, since it can not set the compact sequence to a bigger one
+            // and move GC forward. Instead, it cause higher write amplification while rewriting one PageFile to a
+            // new one.
+            files_without_valid_pages.emplace(page_file);
+            continue;
+        }
+
         candidates.emplace(page_file);
         num_migrate_pages += valid_page_count;
         candidate_total_size += valid_size;
@@ -161,7 +176,6 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
                      storage_name << " collect " << page_file.toString() << " with high valid rate as candidates [valid rate="
                                   << DB::toString(valid_rate, 2) << "] [file size=" << file_size << "]");
         }
-
 
         bool stop = false;
         if (num_candidates_with_high_rate == 0)
@@ -182,7 +196,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
             break;
         }
     }
-    return {candidates, candidate_total_size, num_migrate_pages};
+    return {candidates, files_without_valid_pages, candidate_total_size, num_migrate_pages};
 }
 
 template <typename SnapshotPtr>
@@ -191,6 +205,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
     const SnapshotPtr & snapshot,
     const ValidPages &  files_valid_pages,
     const PageFileSet & candidates,
+    const PageFileSet & files_without_valid_pages,
     const size_t        migrate_page_count) const
 {
     if (candidates.empty())
@@ -249,10 +264,24 @@ DataCompactor<SnapshotPtr>::migratePages( //
     size_t          bytes_written = 0;
     MigrateInfos    migrate_infos;
     {
+        for (auto & page_file : files_without_valid_pages)
+        {
+            if (auto it = files_valid_pages.find(page_file.fileIdLevel()); it == files_valid_pages.end())
+            {
+                // This file does not contain any valid page.
+                migrate_infos.emplace_back(page_file.fileIdLevel(), 0);
+            }
+            else
+            {
+                throw Exception("The page file " + page_file.toString()
+                                + " in files_without_valid_pages actually contains unexpected pages");
+            }
+        }
+    }
+    WriteBatch::SequenceID compact_seq = 0;
+    {
         PageStorage::OpenReadFiles data_readers;
         // To keep the order of all PageFiles' meta, `compact_seq` should be maximum of all candidates.
-        // No matter we merge valid page(s) from it or not.
-        WriteBatch::SequenceID compact_seq = 0;
         for (auto & page_file : candidates)
         {
             if (page_file.getType() != PageFile::Type::Formal)
@@ -304,8 +333,8 @@ DataCompactor<SnapshotPtr>::migratePages( //
             num_migrate_pages += num_pages;
         }
         LOG_INFO(log,
-                 storage_name << " GC have migrated " << num_migrate_pages //
-                              << " Pages to PageFile_" << migrate_file_id.first << "_" << migrate_file_id.second);
+                 storage_name << " GC have migrated " << num_migrate_pages << " Pages with sequence " << compact_seq //
+                              << " to PageFile_" << migrate_file_id.first << "_" << migrate_file_id.second);
     }
     return {std::move(gc_file_edit), bytes_written};
 }
