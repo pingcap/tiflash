@@ -864,10 +864,11 @@ try
             DecimalField32(-700, 3), {}, {}, {}, {}
         }, 7, 3);
 
+    // Int64 has a precision of 20, which is larger than Decimal64.
     executeFunctionWithData<DecimalField32, Int64, DecimalField128>(__LINE__, func_name,
         makeDataType<Decimal32>(7, 3), makeDataType<DataTypeInt64>(),
         {DecimalField32(3300, 3), DecimalField32(3300, 3), {}}, {1, 0, {}},
-        {DecimalField128(300, 3), {}, {}}, 18, 3);
+        {DecimalField128(300, 3), {}, {}}, 20, 3);
 
     executeFunctionWithData<DecimalField32, DecimalField64, DecimalField64>(__LINE__, func_name,
         makeDataType<Decimal32>(7, 5), makeDataType<Decimal64>(15, 3),
