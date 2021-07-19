@@ -31,7 +31,7 @@ public:
                size_t                           max_read_buffer_size,
                Logger *                         log,
                const ReadLimiterPtr &           read_limiter,
-               std::shared_ptr<DMConfiguration> configuration_ = nullptr);
+               DMConfiguration *                configuration_ = nullptr);
 
         const bool                       single_file_mode;
         double                           avg_size_hint;
@@ -49,7 +49,7 @@ public:
             return single_file_mode ? (*mark_with_sizes)[i].mark.offset_in_decompressed_block : (*marks)[i].offset_in_decompressed_block;
         }
 
-        std::unique_ptr<CompressedReadBufferFromFileProvider<>> buf;
+        std::unique_ptr<CompressedSeekableReaderBuffer> buf;
     };
     using StreamPtr     = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;

@@ -31,7 +31,7 @@ bool CompressedReadBufferFromFileProvider<has_checksum>::nextImpl()
 template <bool has_checksum>
 CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider,
     const std::string & path, const EncryptionPath & encryption_path, size_t estimated_size, size_t aio_threshold, const ReadLimiterPtr & read_limiter_, size_t buf_size)
-    : BufferWithOwnMemory<ReadBuffer>(0),
+    : CompressedSeekableReaderBuffer(),
       p_file_in(createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, estimated_size, aio_threshold, read_limiter_, buf_size)),
       file_in(*p_file_in)
 {
@@ -113,9 +113,9 @@ size_t CompressedReadBufferFromFileProvider<has_checksum>::readBig(char * to, si
 }
 template <bool has_checksum>
 CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider,
-    const std::string & path, const EncryptionPath & encryption_path, const DM::DMConfiguration & configuration)
-    : BufferWithOwnMemory<ReadBuffer>(0),
-      p_file_in(createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, configuration)),
+    const std::string & path, const EncryptionPath & encryption_path, const DM::DMConfiguration & configuration, const ReadLimiterPtr & read_limiter_)
+    : CompressedSeekableReaderBuffer(),
+      p_file_in(createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, configuration, read_limiter_)),
       file_in(*p_file_in)
 {
     this->compressed_in = &file_in;

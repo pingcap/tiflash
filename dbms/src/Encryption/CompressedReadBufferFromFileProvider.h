@@ -13,9 +13,20 @@ namespace DB
 {
 
 
+struct CompressedSeekableReaderBuffer : public BufferWithOwnMemory<ReadBuffer>
+{
+    virtual void setProfileCallback(
+        const ReadBufferFromFileBase::ProfileCallback & profile_callback_, clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE)
+        = 0;
+
+    virtual void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block) = 0;
+
+    CompressedSeekableReaderBuffer() : BufferWithOwnMemory<ReadBuffer>(0) {}
+};
+
 /// Unlike CompressedReadBuffer, it can do seek.
 template <bool has_checksum = true>
-class CompressedReadBufferFromFileProvider : public CompressedReadBufferBase<has_checksum>, public BufferWithOwnMemory<ReadBuffer>
+class CompressedReadBufferFromFileProvider : public CompressedReadBufferBase<has_checksum>, public CompressedSeekableReaderBuffer
 {
 private:
     /** At any time, one of two things is true:
@@ -36,14 +47,13 @@ public:
         size_t estimated_size, size_t aio_threshold, const ReadLimiterPtr & read_limiter_, size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE);
 
     CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider, const std::string & path, const EncryptionPath & encryption_path,
-        const ::DB::DM::DMConfiguration & configuration);
+        const ::DB::DM::DMConfiguration & configuration, const ReadLimiterPtr & read_limiter);
 
-    void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block);
+    void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block) override;
 
     size_t readBig(char * to, size_t n) override;
 
-    void setProfileCallback(
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback_, clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE)
+    void setProfileCallback(const ReadBufferFromFileBase::ProfileCallback & profile_callback_, clockid_t clock_type_) override
     {
         file_in.setProfileCallback(profile_callback_, clock_type_);
     }

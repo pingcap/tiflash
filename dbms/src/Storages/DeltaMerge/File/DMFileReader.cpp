@@ -1,5 +1,6 @@
 #include <Common/CurrentMetrics.h>
 #include <DataTypes/IDataType.h>
+#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -23,10 +24,10 @@ DMFileReader::Stream::Stream(DMFileReader &                   reader,
                              size_t                           max_read_buffer_size,
                              Logger *                         log,
                              const ReadLimiterPtr &           read_limiter,                   
-                             std::shared_ptr<DMConfiguration> configuration_)
+                             DMConfiguration *                configuration_)
     : single_file_mode(reader.single_file_mode),
       avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size),
-      configuration(std::move(configuration_))
+      configuration(configuration_)
 {
     // load mark data
     if (reader.single_file_mode)
@@ -137,13 +138,24 @@ DMFileReader::Stream::Stream(DMFileReader &                   reader,
               "file size: " << data_file_size << ", estimated read size: " << estimated_size << ", buffer_size: " << buffer_size
                             << " (aio_threshold: " << aio_threshold << ", max_read_buffer_size: " << max_read_buffer_size << ")");
 
-    buf = std::make_unique<CompressedReadBufferFromFileProvider<>>(reader.file_provider,
-                                                                   reader.dmfile->colDataPath(file_name_base),
-                                                                   reader.dmfile->encryptionDataPath(file_name_base),
-                                                                   estimated_size,
-                                                                   aio_threshold,
-                                                                   read_limiter,
-                                                                   buffer_size);
+    if (!configuration)
+    {
+        buf = std::make_unique<CompressedReadBufferFromFileProvider<true>>(reader.file_provider,
+                                                                           reader.dmfile->colDataPath(file_name_base),
+                                                                           reader.dmfile->encryptionDataPath(file_name_base),
+                                                                           estimated_size,
+                                                                           aio_threshold,
+                                                                           read_limiter,
+                                                                           buffer_size);
+    }
+    else
+    {
+        buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(reader.file_provider,
+                                                                            reader.dmfile->colDataPath(file_name_base),
+                                                                            reader.dmfile->encryptionDataPath(file_name_base),
+                                                                            *configuration, 
+                                                                            read_limiter);
+    }
 }
 
 DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
@@ -208,6 +220,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                 aio_threshold,
                 max_read_buffer_size,
                 log,
+                dmfile->configuration.get(),
                 read_limiter);
             column_streams.emplace(stream_name, std::move(stream));
         };
