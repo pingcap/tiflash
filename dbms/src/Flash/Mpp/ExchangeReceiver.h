@@ -56,7 +56,7 @@ public:
 private:
     pingcap::kv::Cluster * cluster;
 
-    const tipb::ExchangeReceiver & pb_exchange_receiver;
+    tipb::ExchangeReceiver pb_exchange_receiver;
     size_t source_num;
     ::mpp::TaskMeta task_meta;
     size_t max_buffer_size;
