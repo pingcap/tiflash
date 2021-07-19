@@ -1,6 +1,5 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
-#include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -10,6 +9,8 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
+
+#include <DataStreams/SquashingBlockOutputStream.h>
 
 namespace DB
 {
@@ -396,9 +397,9 @@ void MPPHandler::handleError(MPPTaskPtr task, String error)
 grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * response)
 {
     MPPTaskPtr task = nullptr;
-    Stopwatch stopwatch;
     try
     {
+        Stopwatch stopwatch;
         task = std::make_shared<MPPTask>(task_request.meta(), context);
 
         auto retry_regions = task->prepare(task_request);
@@ -417,6 +418,9 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
         }
+        task->memory_tracker = current_memory_tracker;
+        task->run();
+        LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
     }
     catch (Exception & e)
     {
@@ -441,31 +445,6 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         err->set_msg("fatal error");
         handleError(task, "fatal error");
     	return grpc::Status::OK;
-    }
-    try
-    {
-        task->memory_tracker = current_memory_tracker;
-        std::thread worker(&MPPTask::runImpl, std::move(task));
-        worker.detach();
-        LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
-    }
-    catch (Exception & e)
-    {
-        LOG_ERROR(log, "starting task meet error : " << e.displayText());
-        auto * err = response->mutable_error();
-        err->set_msg(e.displayText());
-    }
-    catch (std::exception & e)
-    {
-        LOG_ERROR(log, "starting task meet error : " << e.what());
-        auto * err = response->mutable_error();
-        err->set_msg(e.what());
-    }
-    catch (...)
-    {
-        LOG_ERROR(log, "starting task meet fatal error");
-        auto * err = response->mutable_error();
-        err->set_msg("fatal error");
     }
     return grpc::Status::OK;
 }
