@@ -782,9 +782,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         SelectQueryInfo query_info;
         query_info.query = query_ptr;
         query_info.sets = query_analyzer->getPreparedSets();
-        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
-        query_info.mvcc_query_info->resolve_locks = settings.resolve_locks;
-        query_info.mvcc_query_info->read_tso = settings.read_tso;
+        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(settings.resolve_locks, settings.read_tso);
 
         const String & request_str = settings.regions;
 
@@ -803,7 +801,10 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 ::google::protobuf::TextFormat::ParseFromString(str, &region);
 
                 RegionQueryInfo info;
-                info.region_ver_id = RegionVerID(region.id(), region.region_epoch().conf_ver(), region.region_epoch().version());
+                info.region_id = region.id();
+                const auto & epoch = region.region_epoch();
+                info.version = epoch.version();
+                info.conf_version = epoch.conf_ver();
                 if (const auto & managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage))
                 {
                     // Extract the handle range according to current table

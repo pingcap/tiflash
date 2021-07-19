@@ -5,6 +5,7 @@
 #include <Poco/String.h>
 #include <common/StringRef.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
 
 #include <cctype>
 #include <initializer_list>
@@ -928,9 +929,8 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     {
         if (!allow_zero_in_date && (month == 0 || day == 0))
         {
-            char buff[32] = "0000-00-00";
-            std::sprintf(buff, "%04d-%02d-%02d", year, month, day);
-            throw TiFlashException("Incorrect datetime value: " + String(buff), Errors::Types::WrongValue);
+            throw TiFlashException(
+                fmt::format("Incorrect datetime value: {0:04d}-{1:02d}-{2:02d}", year, month, day), Errors::Types::WrongValue);
         }
     }
 
@@ -952,9 +952,8 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     }
     if (day > max_day)
     {
-        char buff[32] = "0000-00-00";
-        std::sprintf(buff, "%04d-%02d-%02d", year, month, day);
-        throw TiFlashException("Incorrect datetime value: " + String(buff), Errors::Types::WrongValue);
+        throw TiFlashException(
+            fmt::format("Incorrect datetime value: {0:04d}-{1:02d}-{2:02d}", year, month, day), Errors::Types::WrongValue);
     }
 
     if (hour < 0 || hour >= 24)
