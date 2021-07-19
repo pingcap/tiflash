@@ -69,7 +69,7 @@ void MPPTunnel::close(const String & reason)
     std::unique_lock<std::mutex> lk(mu);
     if (finished)
         return;
-    if (connected)
+    if (connected && !reason.empty())
     {
         try
         {
@@ -252,16 +252,15 @@ String taskStatusToString(TaskStatus ts)
 }
 void MPPTask::runImpl()
 {
-    auto current_status = static_cast<TaskStatus>(status.load());
-    if (current_status != INITIALIZING)
+    auto old_status = static_cast<Int32>(INITIALIZING);
+    if (!status.compare_exchange_strong(old_status, static_cast<Int32>(RUNNING)))
     {
-        LOG_WARNING(log, "task in " + taskStatusToString(current_status) + " state, skip running");
+        LOG_WARNING(log, "task not in initializing state, skip running");
         return;
     }
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
     LOG_INFO(log, "task starts running");
-    status = RUNNING;
     auto from = io.in;
     auto to = io.out;
     try
