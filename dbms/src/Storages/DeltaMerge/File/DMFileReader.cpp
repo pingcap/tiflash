@@ -1,6 +1,5 @@
 #include <Common/CurrentMetrics.h>
 #include <DataTypes/IDataType.h>
-#include <IO/ReadBufferFromFile.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -67,7 +66,7 @@ DMFileReader::Stream::Stream(DMFileReader &                   reader,
             if (configuration)
             {
                 auto digest = configuration->createUnifiedDigest();
-                char hashData[512];
+                char hashData[512]; // so let us
                 digest->update(res->data(), size);
                 PageUtil::readFile(file, static_cast<off_t>(size), hashData, digest->hashSize(), read_limiter);
                 if (unlikely(!digest->compare_raw(static_cast<void *>(hashData)))) // make sure compare_raw(void *) is called

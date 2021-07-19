@@ -7,6 +7,7 @@
 #include <Common/TiFlashException.h>
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/DeltaMerge/File/DMConfigFile.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -115,6 +116,9 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
 #endif
 
 void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes, const ReadLimiterPtr & read_limiter);
+
+void readChecksumFramedFile(
+    RandomAccessFilePtr & file, off_t offset, char * buf, size_t expected_bytes, DM::DMConfiguration & configuration);
 
 /// Write and advance sizeof(T) bytes.
 template <typename T>

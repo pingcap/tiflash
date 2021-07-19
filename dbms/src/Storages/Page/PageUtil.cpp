@@ -148,5 +148,91 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
         throw DB::TiFlashException("Not enough data in file " + file->getFileName(), Errors::PageStorage::FileSizeNotMatch);
 }
 
+void readChecksumFramedFile(
+    RandomAccessFilePtr & file, off_t offset, char * buf, size_t expected_bytes, DM::DMConfiguration & configuration)
+{
+    DM::FrameUnion headerStorage;
+    auto           digest = configuration.createUnifiedDigest();
+
+    auto  frameNo    = offset / configuration.getChecksumFrameLength();
+    auto  frameShift = offset % configuration.getChecksumFrameLength();
+    off_t realOffset = static_cast<off_t>(frameNo) * static_cast<off_t>(configuration.getChecksumFrameLength() + digest->headerSize());
+
+    auto loadHeader = [&]() -> size_t {
+        readFile(file, realOffset, reinterpret_cast<char *>(&headerStorage), digest->headerSize());
+        realOffset = realOffset + static_cast<off_t>(digest->headerSize());
+        return *reinterpret_cast<size_t *>(&headerStorage);
+    };
+
+    auto examineChecksum = [&](const char * data, size_t size) {
+        digest->update(data, size);
+        if (unlikely(!digest->compare_frame(headerStorage)))
+        {
+            throw DB::Exception("Data corruption detected! checksum mismatch in file " + file->getFileName());
+        }
+        digest->reset();
+    };
+
+    if (frameShift)
+    {
+        // in this case, we allocate memory for the first frame on ourselves and then examine the checksum
+        auto tmpBuffer = reinterpret_cast<char *>(::operator new (configuration.getChecksumFrameLength(), std::align_val_t{512}));
+
+        // read frame
+        auto frameSize = loadHeader();
+        readFile(file, realOffset, tmpBuffer, frameSize);
+
+        // examine checksum
+        examineChecksum(tmpBuffer, frameSize);
+
+        // transfer data
+        auto bytesToCopy = std::min(frameSize - frameShift, expected_bytes);
+        std::memcpy(buf, tmpBuffer + frameShift, bytesToCopy);
+
+        // update statistics
+        realOffset     = realOffset + static_cast<off_t>(frameSize); // we are now at frame end
+        expected_bytes = expected_bytes - bytesToCopy;
+        buf            = buf + bytesToCopy;
+        assert(realOffset % (configuration.getChecksumFrameLength() + digest->headerSize()) == 0
+               || frameSize < configuration.getChecksumFrameLength());
+
+        // clean up
+        ::operator delete (tmpBuffer, std::align_val_t{512});
+    }
+
+    auto frameSize = expected_bytes ? loadHeader() : 0;
+    while (expected_bytes && expected_bytes >= frameSize)
+    {
+        // read body
+        readFile(file, realOffset, buf, frameSize);
+
+        // examine checksum
+        examineChecksum(buf, frameSize);
+
+        // update for next turn
+        realOffset     = realOffset + static_cast<off_t>(frameSize);
+        expected_bytes = expected_bytes - frameSize;
+        buf            = buf + frameSize;
+        frameSize      = expected_bytes ? loadHeader() : 0;
+    }
+
+    if (expected_bytes)
+    {
+        // there are still some bytes in current frame. However, the frame is larger than the remaining buffer,
+        // so we have to read the data to a temporal buffer.
+        auto tmpBuffer = reinterpret_cast<char *>(::operator new (frameSize, std::align_val_t{512}));
+
+        // read body
+        readFile(file, realOffset, tmpBuffer, frameSize);
+
+        // examine checksum
+        examineChecksum(tmpBuffer, frameSize);
+
+        // transfer data
+        std::memcpy(buf, tmpBuffer, expected_bytes);
+        ::operator delete (tmpBuffer, std::align_val_t{512});
+    }
+}
+
 } // namespace PageUtil
 } // namespace DB

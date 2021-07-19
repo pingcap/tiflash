@@ -15,6 +15,7 @@
 #include <IO/CompressedWriteBuffer.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/Checksum/ChecksumBuffer.h>
+#include <Storages/Page/PageUtil.h>
 
 #include <random>
 
@@ -253,6 +254,44 @@ TEST_STACKED_SEEKING(CRC32)
 TEST_STACKED_SEEKING(CRC64)
 TEST_STACKED_SEEKING(City128)
 TEST_STACKED_SEEKING(XXH3)
+
+template <ChecksumAlgo D>
+void runLargeReadingTest()
+{
+    auto local_engine        = std::mt19937_64{seed};
+    auto [limiter, provider] = prepareIO();
+    auto   config            = DMConfiguration{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
+    size_t size              = 1024 * 1024 * 4;
+    auto [data, seed]        = randomData(size);
+    {
+        auto buffer
+            = createWriteBufferFromFileBaseByFileProvider(provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, true, limiter, config);
+        buffer->write(data.data(), data.size());
+    }
+    {
+        auto file = provider->newRandomAccessFile("/tmp/test", {"/tmp/test.enc", "test.enc"});
+        for (auto trial = 0; trial < 10000; ++trial)
+        {
+            auto              offset = std::uniform_int_distribution<off_t>(0, static_cast<off_t>(size))(local_engine);
+            auto              length = std::uniform_int_distribution<off_t>(0, static_cast<off_t>(size) - offset)(local_engine);
+            std::vector<char> buffer(length);
+            PageUtil::readChecksumFramedFile(file,offset, buffer.data(), length, config);
+            ASSERT_EQ(std::memcmp(buffer.data(), data.data() + offset, length), 0) << "seed: " << seed;
+        }
+    }
+    Poco::File file{"/tmp/test"};
+    file.remove();
+}
+
+#define TEST_LARGE_READING(ALGO) \
+    TEST(DMChecksumBuffer, ALGO##LargeReading) { runLargeReadingTest<ChecksumAlgo::ALGO>(); } // NOLINT(cert-err58-cpp)
+
+TEST_LARGE_READING(None)
+TEST_LARGE_READING(CRC32)
+TEST_LARGE_READING(CRC64)
+TEST_LARGE_READING(City128)
+TEST_LARGE_READING(XXH3)
+
 
 } // namespace tests
 } // namespace DM

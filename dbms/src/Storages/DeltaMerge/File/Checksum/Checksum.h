@@ -117,6 +117,13 @@ BASIC_CHECK_FOR_FRAME(None)
 BASIC_CHECK_FOR_FRAME(XXH3)
 #undef BASIC_CHECK_FOR_FRAME
 
+using FrameUnion = std::aligned_union_t<256,
+                                        ChecksumFrame<Digest::None>,
+                                        ChecksumFrame<Digest::CRC32>,
+                                        ChecksumFrame<Digest::CRC64>,
+                                        ChecksumFrame<Digest::City128>,
+                                        ChecksumFrame<Digest::XXH3>>;
+
 
 struct UnifiedDigestBase
 {
@@ -124,11 +131,13 @@ struct UnifiedDigestBase
     virtual bool                      compare_b64(const std::string & data)    = 0;
     virtual bool                      compare_raw(std::string_view data)       = 0;
     virtual bool                      compare_raw(const void * data)           = 0;
+    virtual bool                      compare_frame(const FrameUnion & frame)  = 0;
     [[nodiscard]] virtual std::string base64() const                           = 0;
     [[nodiscard]] virtual std::string raw() const                              = 0;
     virtual ~UnifiedDigestBase()                                               = default;
     virtual size_t hashSize() const                                            = 0;
-
+    virtual size_t headerSize() const                                          = 0;
+    virtual void   reset()                                                     = 0;
     template <class T>
     void update(const T & val)
     {
@@ -164,6 +173,13 @@ public:
         return data.length() == sizeof(checksum) && ::memcmp(data.begin(), &checksum, sizeof(checksum)) == 0;
     }
 
+    bool compare_frame(const FrameUnion & frame) override
+    {
+        auto checksum  = backend.checksum();
+        auto realFrame = reinterpret_cast<const ChecksumFrame<Backend> &>(frame);
+        return checksum == realFrame.checksum;
+    }
+
     [[nodiscard]] std::string raw() const override
     {
         auto        checksum = backend.checksum();
@@ -184,6 +200,8 @@ public:
     }
 
     [[nodiscard]] size_t hashSize() const override { return Backend::hash_size; }
+    [[nodiscard]] size_t headerSize() const override { return sizeof(ChecksumFrame<Backend>); }
+    void                 reset() override { backend = Backend{}; }
 
 private:
     Backend backend{};
