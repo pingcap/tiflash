@@ -100,6 +100,7 @@ std::ostream & operator<<(std::ostream & stream, Block const & block)
     String buff;
     formatBlock(block, buff);
     stream << buff;
+    return stream;
 }
 
 } // namespace DB
