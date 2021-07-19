@@ -198,7 +198,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
                 // from writing, so just skip the hole and continue the compaction.
                 // FIXME: rethink the multi-threads writing support.
                 LOG_WARNING(log,
-                            storage_name << " collectPageFilesToCompact skip sequence hole from " << last_sequence << " to "
+                            storage_name << " collectPageFilesToCompact skip non-continuous sequence from " << last_sequence << " to "
                                          << reader_wb_seq << ", {" << reader->toString() << "}");
             }
 
