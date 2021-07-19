@@ -19,6 +19,13 @@
 #include <set>
 #include <utility>
 
+#ifdef FIU_ENABLE
+#include <Common/FailPoint.h>
+#include <Common/randomSeed.h>
+
+#include <pcg_random.hpp>
+#endif
+
 // #define PAGE_STORAGE_UTIL_DEBUGGGING
 
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
@@ -32,6 +39,12 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char random_slow_page_storage_write[];
+extern const char random_exception_after_page_storage_sequence_acquired[];
+} // namespace FailPoints
 
 void PageStorage::StatisticsInfo::mergeEdits(const PageEntriesEdit & edit)
 {
@@ -284,6 +297,13 @@ void PageStorage::restore()
         if (!checkpoint_sequence.has_value() || //
             (checkpoint_sequence.has_value() && (*checkpoint_sequence == 0 || *checkpoint_sequence <= cur_sequence)))
         {
+            if (unlikely(cur_sequence > write_batch_seq + 1))
+            {
+                LOG_WARNING(log,
+                            storage_name << " restore skip non-continuous sequence from " << write_batch_seq << " to " << cur_sequence
+                                         << ", {" << reader->toString() << "}");
+            }
+
             try
             {
                 // LOG_TRACE(log, storage_name << " recovering from " + reader->toString());
@@ -511,6 +531,27 @@ void PageStorage::write(WriteBatch && wb, const RateLimiterPtr & rate_limiter)
     try
     {
         wb.setSequence(++write_batch_seq); // Set sequence number to keep ordering between writers.
+#ifdef FIU_ENABLE
+        static int num_call = 0;
+        num_call++;
+#endif
+        fiu_do_on(FailPoints::random_slow_page_storage_write, {
+            if (num_call % 10 == 7)
+            {
+                pcg64                     rng(randomSeed());
+                std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
+                LOG_WARNING(log,
+                            "Failpoint random_slow_page_storage_write sleep for " //
+                                << ms.count() << "ms, WriteBatch with sequence=" << wb.getSequence());
+                std::this_thread::sleep_for(ms);
+            }
+        });
+        fiu_do_on(FailPoints::random_exception_after_page_storage_sequence_acquired, {
+            if (num_call % 10 == 7)
+                throw Exception("Failpoint random_exception_after_page_storage_sequence_acquired is triggered, WriteBatch with sequence="
+                                    + DB::toString(wb.getSequence()) + " has been canceled",
+                                ErrorCodes::FAIL_POINT_ERROR);
+        });
         size_t bytes_written = file_to_write->write(wb, edit, rate_limiter);
         delegator->addPageFileUsedSize(file_to_write->fileIdLevel(),
                                        bytes_written,
