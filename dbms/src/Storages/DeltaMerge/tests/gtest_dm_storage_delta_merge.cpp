@@ -124,9 +124,7 @@ try
     QueryProcessingStage::Enum stage2;
     SelectQueryInfo            query_info;
     query_info.query                          = std::make_shared<ASTSelectQuery>();
-    query_info.mvcc_query_info                = std::make_unique<MvccQueryInfo>();
-    query_info.mvcc_query_info->resolve_locks = ctx.getSettingsRef().resolve_locks;
-    query_info.mvcc_query_info->read_tso      = std::numeric_limits<UInt64>::max();
+    query_info.mvcc_query_info                = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max());
     BlockInputStreams ins                     = storage->read(column_names, query_info, ctx, stage2, 8192, 1);
     ASSERT_EQ(ins.size(), 1UL);
     BlockInputStreamPtr in = ins[0];

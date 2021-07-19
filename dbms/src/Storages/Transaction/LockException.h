@@ -9,11 +9,9 @@ namespace DB
 class LockException : public Exception
 {
 public:
-    explicit LockException(const RegionVerID & region_ver_id_, LockInfoPtr lock_info)
-        : region_ver_id(region_ver_id_), lock_info(std::move(lock_info))
-    {}
+    explicit LockException(RegionID region_id_, LockInfoPtr lock_info) : region_id(region_id_), lock_info(std::move(lock_info)) {}
 
-    RegionVerID region_ver_id;
+    RegionID region_id;
     LockInfoPtr lock_info;
 };
 
