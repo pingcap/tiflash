@@ -525,6 +525,29 @@ struct ModuloImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfModulo<A, B>::Type;
 
+    template <typename To, typename From>
+    static inline make_unsigned_t<To> to_unsigned(const From &value) {
+        using ReturnType = make_unsigned_t<To>;
+
+        if constexpr (is_signed_v<From>)
+        {
+            if (value < 0)
+            {
+                if constexpr (is_boost_number_v<ReturnType>)
+                    return static_cast<ReturnType>(-static_cast<Int512>(value));
+                else
+                {
+                    // both overflow of unsigned integers and signed to unsigned conversion are well defined in C++.
+                    return -static_cast<ReturnType>(value);
+                }
+            }
+            else
+                return static_cast<ReturnType>(value);
+        }
+        else
+            return static_cast<ReturnType>(value);
+    }
+
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
@@ -545,27 +568,11 @@ struct ModuloImpl<A, B, false>
             // decimals are expected to be converted to integers or floating point values before computations.
             static_assert(is_integer_v<Result>);
 
-            using UnsignedResultType = make_unsigned_t<Result>;
-
             // convert to unsigned before computing.
             // we have to prevent wrong result like UInt64(5) = UInt64(5) % Int64(-3).
             // in MySQL, UInt64(5) % Int64(-3) evaluates to UInt64(2).
-
-            // both overflow of unsigned integers and signed to unsigned conversion are well defined in C++.
-            auto x = static_cast<UnsignedResultType>(a);
-            auto y = static_cast<UnsignedResultType>(b);
-
-            if constexpr (is_signed_v<A>)
-            {
-                if (a < 0)
-                    x = -x;
-            }
-
-            if constexpr (is_signed_v<B>)
-            {
-                if (b < 0)
-                    y = -y;
-            }
+            auto x = to_unsigned<Result>(a);
+            auto y = to_unsigned<Result>(b);
 
             auto result = static_cast<ResultType>(x % y);
 

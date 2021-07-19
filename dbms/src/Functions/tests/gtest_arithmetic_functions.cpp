@@ -848,6 +848,7 @@ try
     using DecimalField32 = DecimalField<Decimal32>;
     using DecimalField64 = DecimalField<Decimal64>;
     using DecimalField128 = DecimalField<Decimal128>;
+    using DecimalField256 = DecimalField<Decimal256>;
 
     executeFunctionWithData<DecimalField32, DecimalField32, DecimalField32>(__LINE__, func_name,
         makeDataType<Decimal32>(7, 3), makeDataType<Decimal32>(7, 3),
@@ -863,6 +864,21 @@ try
             DecimalField32(700, 3), DecimalField32(-700, 3), DecimalField32(700, 3),
             DecimalField32(-700, 3), {}, {}, {}, {}
         }, 7, 3);
+
+    Int128 large_number_1 = static_cast<Int128>(std::numeric_limits<UInt64>::max()) * 100000;
+    executeFunctionWithData<DecimalField128, DecimalField128, DecimalField128>(__LINE__, func_name,
+        makeDataType<Decimal128>(38, 5), makeDataType<Decimal128>(38, 5),
+        {DecimalField128(large_number_1, 5), DecimalField128(large_number_1, 5), DecimalField128(large_number_1, 5)},
+        {DecimalField128(100000, 5), DecimalField128(large_number_1 - 1, 5), DecimalField128(large_number_1 / 2 + 1, 5)},
+        {DecimalField128(large_number_1 % 100000, 5), DecimalField128(1, 5), DecimalField128(large_number_1 / 2 - 1, 5)}, 38, 5);
+
+    Int256 large_number_2 = static_cast<Int256>(large_number_1) * large_number_1;
+    executeFunctionWithData<DecimalField256, DecimalField256, DecimalField256>(__LINE__, func_name,
+        makeDataType<Decimal256>(65, 5), makeDataType<Decimal256>(65, 5),
+        {DecimalField256(large_number_2, 5), DecimalField256(large_number_2, 5), DecimalField256(large_number_2, 5)},
+        {DecimalField256(static_cast<Int256>(100000), 5), DecimalField256(large_number_2 - 1, 5), DecimalField256(large_number_2 / 2 + 1, 5)},
+        {DecimalField256(large_number_2 % 100000, 5), DecimalField256(static_cast<Int256>(1), 5), DecimalField256(large_number_2 / 2 - 1, 5)}, 65, 5);
+
 
     // Int64 has a precision of 20, which is larger than Decimal64.
     executeFunctionWithData<DecimalField32, Int64, DecimalField128>(__LINE__, func_name,

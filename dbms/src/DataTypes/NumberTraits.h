@@ -104,18 +104,33 @@ template <typename A, typename B> struct ResultOfIntegerDivision
     */
 template <typename A, typename B> struct ResultOfModulo
 {
+    static constexpr auto result_size = max(actual_size_v<A>, actual_size_v<B>);
+
+    template <size_t size>
+    struct ConstructInteger
+    {
+        using Type = Error;
+    };
+
+    template <> struct ConstructInteger<1> { using Type = Int8; };
+    template <> struct ConstructInteger<2> { using Type = Int16; };
+    template <> struct ConstructInteger<4> { using Type = Int32; };
+    template <> struct ConstructInteger<8> { using Type = Int64; };
+    template <> struct ConstructInteger<16> { using Type = Int128; };
+    template <> struct ConstructInteger<32> { using Type = Int256; };
+    template <> struct ConstructInteger<64> { using Type = Int512; };
+
+    using IntegerType = typename ConstructInteger<result_size>::Type;
+
     /**
      * in MySQL:
      * * if A or B is floating-point, A % B evalutes to Float64.
      * * unsigned int % signed int evaluates to unsigned int, but signed int % unsigned int evaluates to signed int.
      * * the precision of A % B is the maximum precision of A and B.
-     *
-     * TODO:
-     * * remove 8 bytes size limitation implied by Construct.
      */
     using Type = std::conditional_t<std::is_floating_point_v<A> || std::is_floating_point_v<B>,
         Float64,
-        typename Construct<std::is_signed_v<A>, false, min(8, max(sizeof(A), sizeof(B)))>::Type>;
+        std::conditional_t<is_signed_v<A>, IntegerType, make_unsigned_t<IntegerType>>>;
 };
 
 template <typename A> struct ResultOfNegate
