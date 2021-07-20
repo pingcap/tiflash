@@ -526,7 +526,8 @@ struct ModuloImpl<A, B, false>
     using ResultType = typename NumberTraits::ResultOfModulo<A, B>::Type;
 
     template <typename To, typename From>
-    static inline make_unsigned_t<To> to_unsigned(const From &value) {
+    static inline make_unsigned_t<To> to_unsigned(const From & value)
+    {
         using ReturnType = make_unsigned_t<To>;
 
         if constexpr (is_signed_v<From>)
@@ -563,7 +564,7 @@ struct ModuloImpl<A, B, false>
             // values, so we call into std::fmod.
             return std::fmod(x, y);
         }
-        else  // both A and B are integrals.
+        else // both A and B are integrals.
         {
             // decimals are expected to be converted to integers or floating point values before computations.
             static_assert(is_integer_v<Result>);
@@ -612,18 +613,16 @@ struct ModuloImpl<A, B, true>
     static inline Result apply(A a, B b)
     {
         Result x, y;
-        if constexpr (IsDecimal<A>) {
+        if constexpr (IsDecimal<A>)
             x = static_cast<Result>(a.value);
-        } else {
+        else
             x = static_cast<Result>(a);
-        }
-        if constexpr (IsDecimal<B>) {
+        if constexpr (IsDecimal<B>)
             y = static_cast<Result>(b.value);
-        } else {
+        else
             y = static_cast<Result>(b);
-        }
 
-        return ModuloImpl<Result, Result, false>::apply(x, y);
+        return ModuloImpl<Result, Result>::apply(x, y);
     }
     template <typename Result = ResultType>
     static inline Result apply(A a, B b, UInt8 & res_null)
