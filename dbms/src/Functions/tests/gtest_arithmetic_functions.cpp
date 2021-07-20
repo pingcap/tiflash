@@ -70,29 +70,22 @@ protected:
         }
     }
 
-    template <typename DataType, typename ... Args>
-    DataTypePtr makeDataType(const Args & ... args) {
+    template <typename DataType, typename... Args>
+    DataTypePtr makeDataType(const Args &... args)
+    {
         if constexpr (IsDecimal<DataType>)
-        {
             return std::make_shared<DataTypeDecimal<DataType>>(args...);
-        }
         else
-        {
             return std::make_shared<DataType>(args...);
-        }
     }
 
     template <typename FieldType>
     Field makeField(const std::optional<FieldType> & value)
     {
         if (value.has_value())
-        {
             return Field(static_cast<FieldType>(value.value()));
-        }
         else
-        {
             return Null();
-        }
     }
 
     template <typename FieldType>

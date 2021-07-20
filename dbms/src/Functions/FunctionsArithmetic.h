@@ -543,7 +543,11 @@ struct ModuloImpl<A, B, false>
                 }
                 else
                 {
-                    // both overflow of unsigned integers and signed to unsigned conversion are well defined in C++.
+                    // both signed to unsigned conversion [1] and negation of unsigned integers [2] are well defined in C++.
+                    //
+                    // see:
+                    // [1]: https://en.cppreference.com/w/c/language/conversion#Integer_conversions
+                    // [2]: https://en.cppreference.com/w/cpp/language/operator_arithmetic#Unary_arithmetic_operators
                     return -static_cast<ReturnType>(value);
                 }
             }
@@ -1374,7 +1378,8 @@ struct DecimalBinaryOperation
     using InputType = std::conditional_t<need_promote_type, PromoteResultType, NativeResultType>;
     using Op = Operation<InputType, InputType>;
 
-    static void inline evaluateNullmap(size_t size, const ColumnUInt8 * a_nullmap, const ColumnUInt8 * b_nullmap, typename ColumnUInt8::Container & res_null) {
+    static void inline evaluateNullmap(size_t size, const ColumnUInt8 * a_nullmap, const ColumnUInt8 * b_nullmap, typename ColumnUInt8::Container & res_null)
+    {
         if (a_nullmap != nullptr && b_nullmap != nullptr)
         {
             auto & a_nullmap_data = a_nullmap->getData();
