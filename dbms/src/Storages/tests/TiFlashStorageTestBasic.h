@@ -15,7 +15,7 @@ public:
         std::string buffer;
         if (!testing::UnitTest::GetInstance())
         {
-            throw "not in GTEST context scope.";
+            throw DB::Exception("not in GTEST context scope.", DB::ErrorCodes::LOGICAL_ERROR);
         }
 
         if (const auto * info = testing::UnitTest::GetInstance()->current_test_info())
@@ -37,7 +37,7 @@ public:
         }
         else
         {
-            throw "Can not get current test info";
+            throw DB::Exception("Can not get current test info", DB::ErrorCodes::LOGICAL_ERROR);
         }
         return buffer;
     }
