@@ -171,7 +171,6 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     const std::unordered_set<UInt64> * bypass_lock_ts,
     RegionVersion region_version,
     RegionVersion conf_version,
-    std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range,
     bool resolve_locks,
     bool need_data_value)
 {
@@ -202,8 +201,6 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
                 throw Exception("Should not happen, region not belong to table: table id in region is " + std::to_string(mapped_table_id)
                         + ", expected table id is " + std::to_string(table_id),
                     ErrorCodes::LOGICAL_ERROR);
-
-            range = meta_snap.range->rawKeys();
         }
 
         /// Deal with locks.
@@ -311,7 +308,6 @@ RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::Tab
     bool resolve_locks,
     Timestamp start_ts,
     const std::unordered_set<UInt64> * bypass_lock_ts,
-    std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range,
     RegionScanFilterPtr scan_filter)
 {
     if (!region)
@@ -320,7 +316,7 @@ RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::Tab
     // Tiny optimization for queries that need only handle, tso, delmark.
     bool need_value = column_names_to_read.size() != 3;
     auto region_data_lock = resolveLocksAndReadRegionData(
-        table_info.id, region, start_ts, bypass_lock_ts, region_version, conf_version, range, resolve_locks, need_value);
+        table_info.id, region, start_ts, bypass_lock_ts, region_version, conf_version, resolve_locks, need_value);
 
     return std::visit(variant_op::overloaded{
                           [&](RegionDataReadInfoList & data_list_read) -> ReadBlockByRegionRes {
@@ -356,7 +352,6 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
     const std::unordered_set<UInt64> * bypass_lock_ts,
     RegionVersion region_version,
     RegionVersion conf_version,
-    std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range,
     Logger * log)
 {
     auto region_data_lock = resolveLocksAndReadRegionData(table_id,
@@ -365,7 +360,6 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
         bypass_lock_ts,
         region_version,
         conf_version,
-        range,
         /* resolve_locks */ true,
         /* need_data_value */ true);
 
