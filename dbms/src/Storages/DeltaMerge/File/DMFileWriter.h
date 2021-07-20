@@ -32,20 +32,35 @@ public:
                FileProviderPtr &      file_provider,
                const WriteLimiterPtr & write_limiter_,
                bool                   do_index)
-            : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                                     dmfile->colDataPath(file_base_name),
-                                                                     dmfile->encryptionDataPath(file_base_name),
-                                                                     false,
-                                                                     write_limiter_,
-                                                                     0,
-                                                                     0,
-                                                                     max_compress_block_size)),
+            : plain_file(dmfile->configuration ? createWriteBufferFromFileBaseByFileProvider(file_provider,
+                                                                                             dmfile->colDataPath(file_base_name),
+                                                                                             dmfile->encryptionDataPath(file_base_name),
+                                                                                             false,
+                                                                                             write_limiter_,
+                                                                                             *dmfile->configuration)
+                                               : createWriteBufferFromFileBaseByFileProvider(file_provider,
+                                                                                             dmfile->colDataPath(file_base_name),
+                                                                                             dmfile->encryptionDataPath(file_base_name),
+                                                                                             false,
+                                                                                             write_limiter_,
+                                                                                             0,
+                                                                                             0,
+                                                                                             max_compress_block_size)),
               plain_layer(*plain_file),
               compressed_buf(plain_layer, compression_settings),
               original_layer(compressed_buf),
               minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr),
-              mark_file(
-                  file_provider, dmfile->colMarkPath(file_base_name), dmfile->encryptionMarkPath(file_base_name), false, write_limiter_)
+              mark_file(dmfile->configuration ? createWriteBufferFromFileBaseByFileProvider(file_provider,
+                                                                                            dmfile->colMarkPath(file_base_name),
+                                                                                            dmfile->encryptionMarkPath(file_base_name),
+                                                                                            false,
+                                                                                            write_limiter_,
+                                                                                            *dmfile->configuration)
+                                              : std::make_unique<WriteBufferFromFileProvider>(file_provider,
+                                                                                              dmfile->colMarkPath(file_base_name),
+                                                                                              dmfile->encryptionMarkPath(file_base_name),
+                                                                                              false,
+                                                                                              write_limiter_))
         {
         }
 
@@ -58,13 +73,13 @@ public:
             plain_file->next();
 
             plain_file->sync();
-            mark_file.sync();
+            mark_file->sync();
         }
 
         // Get written bytes of `plain_file` && `mark_file`. Should be called after `flush`.
         // Note that this class don't take responsible for serializing `minmaxes`,
         // bytes of `minmaxes` won't be counted in this method.
-        size_t getWrittenBytes() { return plain_file->getPositionInFile() + mark_file.getPositionInFile(); }
+        size_t getWrittenBytes() { return plain_file->getPositionInFile() + mark_file->getPositionInFile(); }
 
         /// original_layer -> compressed_buf -> plain_layer -> plain_file
         WriteBufferFromFileBasePtr plain_file;
@@ -72,8 +87,8 @@ public:
         CompressedWriteBuffer<>    compressed_buf;
         WriteBufferProxy           original_layer;
 
-        MinMaxIndexPtr              minmaxes;
-        WriteBufferFromFileProvider mark_file;
+        MinMaxIndexPtr             minmaxes;
+        WriteBufferFromFileBasePtr mark_file;
     };
     using StreamPtr     = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;

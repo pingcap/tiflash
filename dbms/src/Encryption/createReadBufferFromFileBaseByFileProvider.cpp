@@ -20,7 +20,7 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(FileProviderPtr & file_provider,
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(const FileProviderPtr & file_provider,
     const std::string & filename_, const EncryptionPath & encryption_path_, size_t estimated_size, size_t aio_threshold,
     const ReadLimiterPtr & read_limiter, size_t buffer_size_, int flags_, char * existing_memory_, size_t alignment)
 {
@@ -36,12 +36,13 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
         throw Exception("AIO is not implemented when create file using FileProvider", ErrorCodes::NOT_IMPLEMENTED);
     }
 }
-std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(FileProviderPtr & file_provider,
-    const std::string & filename_, const EncryptionPath & encryption_path_, const DM::DMConfiguration & configuration, int flags_)
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(const FileProviderPtr & file_provider,
+    const std::string & filename_, const EncryptionPath & encryption_path_, const ReadLimiterPtr & read_limiter, 
+    const DM::DMConfiguration & configuration, int flags_)
 {
 
     ProfileEvents::increment(ProfileEvents::CreatedReadBufferOrdinary);
-    auto filePtr = file_provider->newRandomAccessFile(filename_, encryption_path_, flags_);
+    auto filePtr = file_provider->newRandomAccessFile(filename_, encryption_path_, read_limiter, flags_);
     switch (configuration.getChecksumAlgorithm())
     {
         case DM::ChecksumAlgo::None:

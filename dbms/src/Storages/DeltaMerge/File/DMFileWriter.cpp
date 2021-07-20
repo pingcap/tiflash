@@ -18,16 +18,19 @@ DMFileWriter::DMFileWriter(const DMFilePtr &             dmfile_,
       options(options_, dmfile, nullptr), // TODO: import real settings
       // assume pack_stat_file is the first file created inside DMFile
       // it will create encryption info for the whole DMFile
-      pack_stat_file((options.flags.isSingleFile()) //
-                         ? nullptr
-                         : createWriteBufferFromFileBaseByFileProvider(file_provider_,
-                                                                       dmfile->packStatPath(),
-                                                                       dmfile->encryptionPackStatPath(),
-                                                                       true,
-                                                                       write_limiter_,
-                                                                       0,
-                                                                       0,
-                                                                       options.max_compress_block_size)),
+      pack_stat_file(
+          (options.flags.isSingleFile()) //
+              ? nullptr
+              : (dmfile->configuration ? createWriteBufferFromFileBaseByFileProvider(
+                     file_provider_, dmfile->packStatPath(), dmfile->encryptionPackStatPath(), true, write_limiter_, *dmfile->configuration)
+                                       : createWriteBufferFromFileBaseByFileProvider(file_provider_,
+                                                                                     dmfile->packStatPath(),
+                                                                                     dmfile->encryptionPackStatPath(),
+                                                                                     true,
+                                                                                     write_limiter_,
+                                                                                     0,
+                                                                                     0,
+                                                                                     options.max_compress_block_size))),
       single_file_stream((!options.flags.isSingleFile())
                              ? nullptr
                              : new SingleFileStream(
@@ -225,8 +228,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
                 auto offset_in_compressed_block = stream->original_layer.offset();
 
-                writeIntBinary(stream->plain_layer.count(), stream->mark_file);
-                writeIntBinary(offset_in_compressed_block, stream->mark_file);
+                writeIntBinary(stream->plain_layer.count(), *stream->mark_file);
+                writeIntBinary(offset_in_compressed_block, *stream->mark_file);
             },
             {});
 
