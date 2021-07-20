@@ -69,7 +69,7 @@ private:
     std::queue<ExchangeReceiverResult> result_buffer;
     Int32 live_connections;
     State state;
-    Exception err;
+    String err_msg;
     Logger * log;
 
     void setUpConnection();
@@ -153,11 +153,13 @@ public:
         {
             String msg;
             if (state == CANCELED)
-                msg = "query canceled";
+                msg = "Query canceled";
             else if (state == CLOSED)
                 msg = "ExchangeReceiver closed";
+            else if (!err_msg.empty())
+                msg = err_msg;
             else
-                msg = err.message();
+                msg = "Unknown error";
             result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
         }
         else if (result_buffer.empty())
