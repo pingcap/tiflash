@@ -212,3 +212,31 @@ mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b
 |    9 |       NULL |
 |   10 |       NULL |
 +------+------------+
+
+# big decimals: decimal128 & decimal256
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a decimal(30, 5), b decimal(30, 5))
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 12345678912345678912345.12345, 12345678912345678912345), (2, 12345678912345678912345, 6172839456172839456172.6)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b) from test.t group by id order by id
++------+------------------------------+
+| id   | sum(a % b)                   |
++------+------------------------------+
+|    1 |                      0.12345 |
+|    2 | 6172839456172839456172.40000 |
++------+------------------------------+
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a decimal(60, 5), b decimal(60, 5))
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 12345678912345678912345678912345678912345678912345.12345, 12345678912345678912345678912345678912345678912345), (2, 12345678912345678912345678912345678912345678912345, 6172839456172839456172839456172839456172839456172.6)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b) from test.t group by id order by id
++------+---------------------------------------------------------+
+| id   | sum(a % b)                                              |
++------+---------------------------------------------------------+
+|    1 |                                                 0.12345 |
+|    2 | 6172839456172839456172839456172839456172839456172.40000 |
++------+---------------------------------------------------------+
