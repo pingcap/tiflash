@@ -24,6 +24,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     static constexpr bool is_streaming_reader = RemoteReader::is_streaming_reader;
 
     std::shared_ptr<RemoteReader> remote_reader;
+    size_t source_num;
 
     Block sample_block;
     DataTypes expected_types;
@@ -32,45 +33,52 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     String name;
 
-    /// this atomic var is kind of a lock for the struct of execution_summaries:
-    /// if execution_summaries_inited = true, the map itself will not be modified,
-    /// so DAGResponseWriter can read it safely, otherwise, DAGResponseWriter
-    /// will just skip this InputStream
-    std::atomic<bool> execution_summaries_inited;
-    std::unordered_map<String, std::vector<ExecutionSummary>> execution_summaries;
+    /// this atomic variable is kind of a lock for the struct of execution_summaries:
+    /// if execution_summaries_inited[index] = true, the map execution_summaries[index]
+    /// itself will not be modified, so DAGResponseWriter can read it safely, otherwise,
+    /// DAGResponseWriter will just skip execution_summaries[index]
+    std::vector<std::atomic<bool>> execution_summaries_inited;
+    std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
 
     Logger * log;
 
-    void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t concurrency)
+    void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
         for (auto & execution_summary : resp.execution_summaries())
         {
             if (execution_summary.has_executor_id())
             {
                 auto & executor_id = execution_summary.executor_id();
-                execution_summaries[executor_id].resize(concurrency);
+                execution_summaries[index][executor_id].time_processed_ns = execution_summary.time_processed_ns();
+                execution_summaries[index][executor_id].num_produced_rows = execution_summary.num_produced_rows();
+                execution_summaries[index][executor_id].num_iterations = execution_summary.num_iterations();
+                execution_summaries[index][executor_id].concurrency = execution_summary.concurrency();
             }
         }
-        execution_summaries_inited.store(true);
+        execution_summaries_inited[index].store(true);
     }
 
-    void addRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index, size_t concurrency, bool is_streaming_call)
+    void addRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index, bool is_streaming_call)
     {
-        if (!execution_summaries_inited.load())
+        if (resp.execution_summaries_size() == 0)
+            return;
+        if (!execution_summaries_inited[index].load())
         {
-            initRemoteExecutionSummaries(resp, concurrency);
+            initRemoteExecutionSummaries(resp, index);
+            return;
         }
+        auto & execution_summaries_map = execution_summaries[index];
         for (auto & execution_summary : resp.execution_summaries())
         {
             if (execution_summary.has_executor_id())
             {
                 auto & executor_id = execution_summary.executor_id();
-                if (unlikely(execution_summaries.find(executor_id) == execution_summaries.end()))
+                if (unlikely(execution_summaries_map.find(executor_id) == execution_summaries_map.end()))
                 {
                     LOG_WARNING(log, "execution " + executor_id + " not found in execution_summaries, this should not happen");
                     continue;
                 }
-                auto & current_execution_summary = execution_summaries[executor_id][index];
+                auto & current_execution_summary = execution_summaries_map[executor_id];
                 if (is_streaming_call)
                 {
                     current_execution_summary.time_processed_ns
@@ -112,11 +120,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
         if constexpr (is_streaming_reader)
         {
-            addRemoteExecutionSummaries(*result.resp, result.call_index, remote_reader->getSourceNum(), true);
+            addRemoteExecutionSummaries(*result.resp, result.call_index, true);
         }
         else
         {
-            addRemoteExecutionSummaries(*result.resp, 0, 1, false);
+            addRemoteExecutionSummaries(*result.resp, 0, false);
         }
 
         int chunk_size = result.resp->chunks_size();
@@ -155,8 +163,9 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 public:
     explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_)
         : remote_reader(remote_reader_),
+          source_num(remote_reader->getSourceNum()),
           name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")"),
-          execution_summaries_inited(false),
+          execution_summaries_inited(source_num),
           log(&Logger::get(name))
     {
         // generate sample block
@@ -168,6 +177,11 @@ public:
             expected_types.push_back(col.type);
             columns.emplace_back(col);
         }
+        for (size_t i = 0; i < source_num; i++)
+        {
+            execution_summaries_inited[i].store(false);
+        }
+        execution_summaries.resize(source_num);
         sample_block = Block(columns);
     }
 
@@ -193,11 +207,12 @@ public:
         return block;
     }
 
-    const std::unordered_map<String, std::vector<ExecutionSummary>> * getRemoteExecutionSummaries()
+    const std::unordered_map<String, ExecutionSummary> * getRemoteExecutionSummaries(size_t index)
     {
-        return execution_summaries_inited.load() ? &execution_summaries : nullptr;
+        return execution_summaries_inited[index].load() ? &execution_summaries[index] : nullptr;
     }
 
+    size_t getSourceNum() const { return source_num; }
     bool isStreamingCall() const { return is_streaming_reader; }
 };
 

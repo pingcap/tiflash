@@ -28,6 +28,8 @@ extern const char exception_before_mpp_non_root_task_run[];
 extern const char exception_before_mpp_root_task_run[];
 extern const char exception_during_mpp_non_root_task_run[];
 extern const char exception_during_mpp_root_task_run[];
+extern const char exception_during_mpp_write_err_to_tunnel[];
+extern const char exception_during_mpp_close_tunnel[];
 } // namespace FailPoints
 
 bool MPPTaskProgress::isTaskHanging(const Context & context)
@@ -61,6 +63,31 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
     }
     progress_on_last_check = current_progress_value;
     return ret;
+}
+
+void MPPTunnel::close(const String & reason)
+{
+    std::unique_lock<std::mutex> lk(mu);
+    if (finished)
+        return;
+    if (connected)
+    {
+        try
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
+            mpp::MPPDataPacket data;
+            auto err = new mpp::Error();
+            err->set_msg(reason);
+            data.set_allocated_error(err);
+            writer->Write(data);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
+        }
+    }
+    finished = true;
+    cv_for_finished.notify_all();
 }
 
 void MPPTask::unregisterTask()
@@ -97,15 +124,18 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
                 Errors::Coprocessor::BadRequest);
         }
     }
-    std::unordered_map<RegionID, RegionInfo> regions;
+    RegionInfoMap regions;
+    RegionInfoList retry_regions;
     for (auto & r : task_request.regions())
     {
         auto res = regions.emplace(r.region_id(),
             RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
                 CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
         if (!res.second)
-            throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + std::to_string(r.region_id()),
-                Errors::Coprocessor::BadRequest);
+        {
+            retry_regions.emplace_back(RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
+                CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+        }
     }
     // set schema ver and start ts.
     auto schema_ver = task_request.schema_ver();
@@ -152,7 +182,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
 
-    DAGQuerySource dag(context, regions, *dag_req, true);
+    DAGQuerySource dag(context, regions, retry_regions, *dag_req, true);
 
     if (dag_context->isRootMPPTask())
     {
@@ -296,6 +326,27 @@ void MPPTask::runImpl()
     GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_dispatch_mpp_task).Observe(peak_memory);
     unregisterTask();
     status = FINISHED;
+}
+
+void MPPTask::writeErrToAllTunnel(const String & e)
+{
+    for (auto & it : tunnel_map)
+    {
+        try
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_write_err_to_tunnel);
+            mpp::MPPDataPacket data;
+            auto err = new mpp::Error();
+            err->set_msg(e);
+            data.set_allocated_error(err);
+            it.second->write(data, true);
+        }
+        catch (...)
+        {
+            it.second->close("Failed to write error msg to tunnel");
+            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->tunnel_id);
+        }
+    }
 }
 
 bool MPPTask::isTaskHanging()
