@@ -76,7 +76,7 @@ void TiDBColumn::appendNull()
     appendNullBitMap(false);
     if (isFixed())
     {
-        *data << default_value;
+        writeString(default_value, *data);
     }
     else
     {
@@ -174,7 +174,7 @@ void TiDBColumn::encodeColumn(WriteBuffer & ss)
             encodeLittleEndian<Int64>(c, ss);
         }
     }
-    ss << data->str();
+    writeString(data->str(), ss);
 }
 
 } // namespace DB

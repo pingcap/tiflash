@@ -3,7 +3,7 @@
 #include <Common/Decimal.h>
 #include <Core/Field.h>
 #include <IO/Endian.h>
-#include <IO/WriteBufferFromString.h>
+#include <IO/WriteBuffer.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 
