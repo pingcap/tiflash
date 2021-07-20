@@ -1421,7 +1421,7 @@ bool shouldCompact(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ra
         return true;
 
     auto & property = seg->getStable()->getStableProperty();
-    LOG_DEBUG(log, property.toDebugString());
+    LOG_TRACE(log, property.toDebugString());
     // No data older than safe_point to GC.
     if (property.gc_hint_version > gc_safepoint)
         return false;
@@ -1434,13 +1434,19 @@ bool shouldCompact(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ra
     return false;
 }
 
-bool shouldCompactWithStable(const DMContext & context, const SegmentSnapshotPtr & snap)
+bool shouldCompactWithStable(const DMContext & context, const SegmentSnapshotPtr & snap, Logger * log)
 {
     auto delete_range                = snap->delta->getSquashDeleteRange();
     auto [delete_rows, delete_bytes] = snap->stable->getApproxRowsAndBytes(context, delete_range);
 
+    auto stable_rows = snap->stable->getRows();
+    auto stable_bytes = snap->stable->getBytes();
+
+    // TODO: change to trace level
+    LOG_DEBUG(log, "delete range " << delete_range.toDebugString() << " delete range rows " << delete_rows << ", delete_bytes " << delete_bytes << " stable_rows " << stable_rows << " stable_bytes " << stable_bytes);
+
     // TODO: magic number of 0.8
-    bool should_compact = (delete_rows > snap->stable->getRows() * 0.8) || (delete_bytes > snap->stable->getBytes() * 0.8);
+    bool should_compact = (delete_rows > stable_rows * 0.8) || (delete_bytes > stable_bytes * 0.8);
     return should_compact;
 }
 } // namespace GC
