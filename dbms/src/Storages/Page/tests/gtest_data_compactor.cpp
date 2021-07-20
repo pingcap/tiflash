@@ -10,8 +10,10 @@
 
 #include <Interpreters/Context.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/gc/DataCompactor.h>
 #include <Storages/Page/mock/MockUtils.h>
 #include <Storages/PathPool.h>
+#include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
@@ -35,15 +37,20 @@ try
     config.num_write_slots = 2;
 #ifndef GENERATE_TEST_DATA
     const Strings test_paths = TiFlashTestEnv::findTestDataPath("page_storage_compactor_migrate");
+    ASSERT_EQ(test_paths.size(), 2);
 #else
-    const String  test_path = TiFlashTestEnv::getTemporaryPath() + "/data_compactor_test";
-    const Strings test_paths{test_path};
+    const String  test_path  = TiFlashTestEnv::getTemporaryPath() + "page_storage_compactor_migrate";
+    if (Poco::File f(test_path); f.exists())
+        f.remove(true);
+    const Strings test_paths = Strings{
+        test_path + "/data0",
+        test_path + "/data1",
+    };
 #endif
 
-    auto       ctx           = TiFlashTestEnv::getContext(DB::Settings(), test_paths);
-    const auto file_provider = ctx.getFileProvider();
-    auto       pool          = ctx.getPathPool().withTable("test", "t", false);
-    auto       delegate      = pool.getPSDiskDelegatorMulti("log");
+    auto               ctx           = TiFlashTestEnv::getContext(DB::Settings());
+    const auto         file_provider = ctx.getFileProvider();
+    PSDiskDelegatorPtr delegate      = std::make_shared<MockDiskDelegatorMulti>(test_paths);
 
     PageStorage storage("data_compact_test", delegate, config, file_provider);
 
@@ -91,17 +98,12 @@ try
 
     // snapshot contains {1, 2, 6}
     // Not contains 3, 4 since it's deleted, 5 is a ref to 2.
-    auto      snapshot = std::make_shared<MockSnapshot>();
-    PageEntry entry;
-    entry.file_id = 1;
-    entry.tag     = 2;
-    snapshot->version()->put(1, entry);
-    entry.file_id = 2;
-    entry.tag     = 0;
-    snapshot->version()->put(2, entry);
-    entry.file_id = 1;
-    entry.tag     = 0;
-    snapshot->version()->put(6, entry);
+    auto snapshot = MockSnapshot::createFrom({
+        // pid, entry
+        {1, PageEntry{.file_id = 1}},
+        {2, PageEntry{.file_id = 2}},
+        {6, PageEntry{.file_id = 1}},
+    });
 
     // valid_pages
     DataCompactor<MockSnapshotPtr> compactor(storage, config);
@@ -130,6 +132,7 @@ try
         }
     }
 
+    for (size_t i = 0; i < delegate->numPaths(); ++i)
     {
         // Try to apply migration again, should be ignore because PageFile_2_1 exists
         size_t bytes_written                 = 0;
@@ -137,6 +140,7 @@ try
         ASSERT_EQ(bytes_written, 0) << "should not apply migration";
     }
 
+    for (size_t i = 0; i < delegate->numPaths(); ++i)
     {
         // Mock that PageFile_2_1 have been "Legacy", try to apply migration again, should be ignore because legacy.PageFile_2_1 exists
         FailPointHelper::enableFailPoint(FailPoints::force_formal_page_file_not_exists);
@@ -153,11 +157,9 @@ try
         // Page 1, 2 have been migrated to PageFile_2_1
         PageEntry entry = ps.getEntry(1);
         EXPECT_EQ(entry.fileIdLevel(), target_id_lvl);
-        EXPECT_EQ(entry.tag, 2);
 
         entry = ps.getEntry(2);
         EXPECT_EQ(entry.fileIdLevel(), target_id_lvl);
-        EXPECT_EQ(entry.tag, 0);
 
         // Page 5 -ref-> 2
         auto entry5 = ps.getEntry(5);
@@ -173,7 +175,6 @@ try
         // Page 6 have been migrated to PageFile_2_1
         entry = ps.getEntry(6);
         EXPECT_EQ(entry.fileIdLevel(), target_id_lvl);
-        EXPECT_EQ(entry.tag, 0);
     }
 }
 CATCH
