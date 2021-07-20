@@ -1509,13 +1509,6 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
 
         const auto  segment_id    = segment->segmentId();
         RowKeyRange segment_range = segment->getRowKeyRange();
-        if (segment->getDelta()->isUpdating())
-        {
-            LOG_DEBUG(log,
-                      "GC is skipped Segment [" << segment_id << "] [range=" << segment_range.toDebugString() << "] [table=" << table_name
-                                                << "]");
-            continue;
-        }
 
         // Avoid recheck this segment when gc_safe_point doesn't change regardless whether we trigger this segment's DeltaMerge or not.
         // Because after we calculate StableProperty and compare it with this gc_safe_point,
@@ -1546,6 +1539,12 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     finish_gc_on_segment = true;
                     LOG_INFO(log,
                              "GC-merge-delta done Segment [" << segment_id << "] [range=" << segment_range.toDebugString()
+                                                             << "] [table=" << table_name << "]");
+                }
+                else
+                {
+                    LOG_INFO(log,
+                             "GC aborted on Segment [" << segment_id << "] [range=" << segment_range.toDebugString()
                                                              << "] [table=" << table_name << "]");
                 }
             }
