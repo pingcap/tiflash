@@ -1137,17 +1137,26 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     auto try_add_background_task = [&](const BackgroundTask & task) {
         // Prevent too many tasks.
-        if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3))
-        {
-            if (shutdown_called.load(std::memory_order_relaxed))
-                return;
+//        if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3))
+//        {
+//            if (shutdown_called.load(std::memory_order_relaxed))
+//                return;
+//
+//            auto heavy = background_tasks.addTask(task, thread_type, log);
+//            if (heavy)
+//                blockable_background_pool_handle->wake();
+//            else
+//                background_task_handle->wake();
+//        }
 
-            auto heavy = background_tasks.addTask(task, thread_type, log);
-            if (heavy)
-                blockable_background_pool_handle->wake();
-            else
-                background_task_handle->wake();
-        }
+        if (shutdown_called.load(std::memory_order_relaxed))
+            return;
+
+        auto heavy = background_tasks.addTask(task, thread_type, log);
+        if (heavy)
+            blockable_background_pool_handle->wake();
+        else
+            background_task_handle->wake();
     };
 
     /// Flush is always try first.
