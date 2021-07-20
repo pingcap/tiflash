@@ -535,7 +535,12 @@ struct ModuloImpl<A, B, false>
             if (value < 0)
             {
                 if constexpr (is_boost_number_v<ReturnType>)
-                    return static_cast<ReturnType>(-static_cast<Int512>(value));
+                {
+                    // boost multiprecision doesn't allow negation of unsigned integers.
+                    using PromotedType = typename PromoteType<make_signed_t<From>>::Type;
+
+                    return static_cast<ReturnType>(-static_cast<PromotedType>(value));
+                }
                 else
                 {
                     // both overflow of unsigned integers and signed to unsigned conversion are well defined in C++.
