@@ -33,11 +33,13 @@ struct StreamWriter
     void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
     {
         std::string dag_data;
-        response.SerializeToString(&dag_data);
+        if(!response.SerializeToString(&dag_data))
+            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
         ::coprocessor::BatchResponse resp;
         resp.set_data(dag_data);
         std::lock_guard<std::mutex> lk(write_mutex);
-        writer->Write(resp);
+        if (!writer->Write(resp))
+            throw Exception("Failed to write resp");
     }
     // a helper function
     uint16_t getPartitionNum() { return 0; }
