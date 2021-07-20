@@ -185,27 +185,19 @@ struct MPPTunnelSet
     void write(tipb::SelectResponse & response)
     {
         std::string data;
-        response.SerializeToString(&data);
-        mpp::MPPDataPacket packet;
-<<<<<<< HEAD
-        packet.set_data(data);
-=======
-        if (!response.SerializeToString(packet.mutable_data()))
+        if (!response.SerializeToString(&data))
             throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
->>>>>>> edef437cb... check return value of grpc method, and throw error explicitly (#2441)
+        mpp::MPPDataPacket packet;
+        packet.set_data(data);
         tunnels[0]->write(packet);
 
         if (tunnels.size() > 1)
         {
             clearExecutionSummaries(response);
-<<<<<<< HEAD
             data.clear();
-            response.SerializeToString(&data);
-            packet.set_data(data);
-=======
-            if (!response.SerializeToString(packet.mutable_data()))
+            if (!response.SerializeToString(&data))
                 throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
->>>>>>> edef437cb... check return value of grpc method, and throw error explicitly (#2441)
+            packet.set_data(data);
             for (size_t i = 1; i < tunnels.size(); i++)
             {
                 tunnels[i]->write(packet);
@@ -221,14 +213,10 @@ struct MPPTunnelSet
             clearExecutionSummaries(response);
         }
         std::string data;
-        response.SerializeToString(&data);
-        mpp::MPPDataPacket packet;
-<<<<<<< HEAD
-        packet.set_data(data);
-=======
-        if (!response.SerializeToString(packet.mutable_data()))
+        if (!response.SerializeToString(&data))
             throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
->>>>>>> edef437cb... check return value of grpc method, and throw error explicitly (#2441)
+        mpp::MPPDataPacket packet;
+        packet.set_data(data);
         tunnels[partition_id]->write(packet);
     }
 
