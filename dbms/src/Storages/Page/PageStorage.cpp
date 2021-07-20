@@ -847,6 +847,11 @@ enum class GCType
     LowWrite,
 };
 
+static String fileInfoToString(const PageFileIdAndLevel & id, const PageFile::Type type)
+{
+    return "[" + DB::toString(id.first) + "," + DB::toString(id.second) + "," + PageFile::typeToString(type) + "]";
+}
+
 bool PageStorage::gc(bool not_skip)
 {
     // If another thread is running gc, just return;
@@ -870,6 +875,13 @@ bool PageStorage::gc(bool not_skip)
     opt.remove_tmp_files = true;
     auto page_files      = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
+    GcContext gc_context;
+    gc_context.min_file_id    = page_files.begin()->fileIdLevel();
+    gc_context.min_file_type  = page_files.begin()->getType();
+    gc_context.max_file_id    = page_files.rbegin()->fileIdLevel();
+    gc_context.max_file_type  = page_files.rbegin()->getType();
+    gc_context.num_page_files = page_files.size();
+
     std::set<PageFileIdAndLevel> writing_file_id_levels;
     PageFileIdAndLevel           min_writing_file_id_level;
     StatisticsInfo               statistics_snapshot; // statistics snapshot copy with lock protection
@@ -890,7 +902,6 @@ bool PageStorage::gc(bool not_skip)
     }
     LOG_TRACE(log, storage_name << " Before gc, " << statistics_snapshot.toString());
 
-    GcContext gc_context;
     // Helper function for apply edits and clean up before gc exit.
     auto apply_and_cleanup = [&, this](PageEntriesEdit && gc_edits) -> void {
         /// Here we have to apply edit to versioned_page_entries and generate a new version, then return all files that are in used
@@ -942,15 +953,6 @@ bool PageStorage::gc(bool not_skip)
     // Ignore page files that maybe writing to.
     do
     {
-        PageFileSet removed_page_files;
-        for (const auto & pf : page_files)
-        {
-            if (pf.fileIdLevel() >= min_writing_file_id_level)
-                continue;
-            removed_page_files.emplace(pf);
-        }
-        page_files.swap(removed_page_files);
-
         if (not_skip) // For page_storage_ctl, don't skip the GC
         {
             gc_type = GCType::Normal;
@@ -997,12 +999,24 @@ bool PageStorage::gc(bool not_skip)
         }
     });
 
-    gc_context.min_file_id    = page_files.begin()->fileIdLevel();
-    gc_context.min_file_type  = page_files.begin()->getType();
-    gc_context.max_file_id    = page_files.rbegin()->fileIdLevel();
-    gc_context.max_file_type  = page_files.rbegin()->getType();
-    gc_context.num_page_files = page_files.size();
 
+#if !defined(NDEBUG)
+    // Should not remove any {Formal/Legacy/Checkpoint} PageFiles before running LegacyCompactor, or we may skip some
+    // WriteBatches while compacting legacy files.
+    if (gc_context.num_page_files != page_files.size()                                                                              //
+        || gc_context.min_file_id != page_files.begin()->fileIdLevel() || gc_context.min_file_type != page_files.begin()->getType() //
+        || gc_context.max_file_id != page_files.rbegin()->fileIdLevel() || gc_context.max_file_type != page_files.rbegin()->getType())
+    {
+        throw Exception("Some page files are removed before running GC, should not happen [num_files="
+                            + DB::toString(gc_context.num_page_files) + "] from "
+                            + fileInfoToString(gc_context.min_file_id, gc_context.min_file_type) + " to "
+                            + fileInfoToString(gc_context.max_file_id, gc_context.max_file_type) //
+                            + " [real_num_files=" + DB::toString(page_files.size()) + "] from "
+                            + fileInfoToString(page_files.begin()->fileIdLevel(), page_files.begin()->getType()) + " to "
+                            + fileInfoToString(page_files.rbegin()->fileIdLevel(), page_files.rbegin()->getType()),
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+#endif
     {
         // Try to compact consecutive Legacy PageFiles into a snapshot.
         // Legacy and checkpoint files will be removed from `page_files` after `tryCompact`.
@@ -1038,15 +1052,23 @@ bool PageStorage::gc(bool not_skip)
     // Simply copy without any locks, it should be fine since we only use it to skip useless GC routine when this PageStorage is cold.
     last_gc_statistics = statistics_snapshot;
 
-    LOG_INFO(log,
-             storage_name << " GC exit within " << DB::toString(watch.elapsedSeconds(), 2) << " sec. PageFiles from ["                //
-                          << gc_context.min_file_id.first << "," << gc_context.min_file_id.second                                     //
-                          << "," << PageFile::typeToString(gc_context.min_file_type) << "] to ["                                      //
-                          << gc_context.max_file_id.first << "," << gc_context.max_file_id.second                                     //
-                          << "," << PageFile::typeToString(gc_context.max_file_type) << "], num files: " << gc_context.num_page_files //
-                          << ", num legacy:" << gc_context.num_legacy_files << ", compact legacy archive files: "
-                          << gc_context.num_files_archive_in_compact_legacy << ", remove data files: " << gc_context.num_files_remove_data
-                          << ", gc apply: " << gc_context.gc_apply_stat.toString());
+    {
+        std::stringstream ss;
+        const auto        elapsed_sec = watch.elapsedSeconds();
+        ss << storage_name << " GC exit within " << DB::toString(elapsed_sec, 2) << " sec. PageFiles from " //
+           << fileInfoToString(gc_context.min_file_id, gc_context.min_file_type) << " to "
+           << fileInfoToString(gc_context.max_file_id, gc_context.max_file_type) //
+           << ", min writing " << fileInfoToString(min_writing_file_id_level, PageFile::Type::Formal)
+           << ", num files: " << gc_context.num_page_files << ", num legacy:" << gc_context.num_legacy_files
+           << ", compact legacy archive files: " << gc_context.num_files_archive_in_compact_legacy
+           << ", remove data files: " << gc_context.num_files_remove_data << ", gc apply: " << gc_context.gc_apply_stat.toString();
+        // Log warning if the GC run for a long time.
+        constexpr double EXIST_LONG_GC = 30.0;
+        if (elapsed_sec > EXIST_LONG_GC)
+            LOG_WARNING(log, ss.str());
+        else
+            LOG_INFO(log, ss.str());
+    }
     return gc_context.compact_result.do_compaction;
 }
 
