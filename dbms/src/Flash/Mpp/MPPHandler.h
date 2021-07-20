@@ -92,7 +92,8 @@ struct MPPTunnel
         }
         if (finished)
             throw Exception("write to tunnel which is already closed.");
-        writer->Write(data);
+        if (!writer->Write(data))
+            throw Exception("Failed to write data");
         if (close_after_write)
         {
             finished = true;
@@ -186,15 +187,25 @@ struct MPPTunnelSet
         std::string data;
         response.SerializeToString(&data);
         mpp::MPPDataPacket packet;
+<<<<<<< HEAD
         packet.set_data(data);
+=======
+        if (!response.SerializeToString(packet.mutable_data()))
+            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
+>>>>>>> edef437cb... check return value of grpc method, and throw error explicitly (#2441)
         tunnels[0]->write(packet);
 
         if (tunnels.size() > 1)
         {
             clearExecutionSummaries(response);
+<<<<<<< HEAD
             data.clear();
             response.SerializeToString(&data);
             packet.set_data(data);
+=======
+            if (!response.SerializeToString(packet.mutable_data()))
+                throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
+>>>>>>> edef437cb... check return value of grpc method, and throw error explicitly (#2441)
             for (size_t i = 1; i < tunnels.size(); i++)
             {
                 tunnels[i]->write(packet);
@@ -212,7 +223,12 @@ struct MPPTunnelSet
         std::string data;
         response.SerializeToString(&data);
         mpp::MPPDataPacket packet;
+<<<<<<< HEAD
         packet.set_data(data);
+=======
+        if (!response.SerializeToString(packet.mutable_data()))
+            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
+>>>>>>> edef437cb... check return value of grpc method, and throw error explicitly (#2441)
         tunnels[partition_id]->write(packet);
     }
 

@@ -35,9 +35,15 @@ struct StreamWriter
         std::string dag_data;
         response.SerializeToString(&dag_data);
         ::coprocessor::BatchResponse resp;
+<<<<<<< HEAD
         resp.set_data(dag_data);
+=======
+        if (!response.SerializeToString(resp.mutable_data()))
+            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
+>>>>>>> edef437cb... check return value of grpc method, and throw error explicitly (#2441)
         std::lock_guard<std::mutex> lk(write_mutex);
-        writer->Write(resp);
+        if (!writer->Write(resp))
+            throw Exception("Failed to write resp");
     }
     // a helper function
     uint16_t getPartitionNum() { return 0; }

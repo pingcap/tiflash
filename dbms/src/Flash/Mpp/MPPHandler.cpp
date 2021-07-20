@@ -79,7 +79,8 @@ void MPPTunnel::close(const String & reason)
             auto err = new mpp::Error();
             err->set_msg(reason);
             data.set_allocated_error(err);
-            writer->Write(data);
+            if (!writer->Write(data))
+                throw Exception("Failed to write err");
         }
         catch (...)
         {
