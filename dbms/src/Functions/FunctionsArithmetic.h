@@ -1411,9 +1411,12 @@ struct DecimalBinaryOperation
                 c[i] = applyScaledMul(a[i], b[i], scale_result);
             return;
         }
-
-        if constexpr (is_division || is_modulo)
-            throw Exception("Should not reach here");
+        else if constexpr (is_division)
+        {
+            for (size_t i = 0; i < size; ++i)
+                c[i] = applyScaled<true>(a[i], b[i], scale_a);
+            return;
+        }
 
         /// default: use it if no return before
         for (size_t i = 0; i < size; ++i)
@@ -1477,9 +1480,12 @@ struct DecimalBinaryOperation
                 c[i] = applyScaledMul(a[i], b, scale_result);
             return;
         }
-
-        if constexpr (is_division || is_modulo)
-            throw Exception("Should not reach here");
+        else if constexpr (is_division)
+        {
+            for (size_t i = 0; i < size; ++i)
+                c[i] = applyScaled<true>(a[i], b, scale_a);
+            return;
+        }
 
         /// default: use it if no return before
         for (size_t i = 0; i < size; ++i)
@@ -1542,9 +1548,12 @@ struct DecimalBinaryOperation
                 c[i] = applyScaledMul(a, b[i], scale_result);
             return;
         }
-
-        if constexpr (is_division || is_modulo)
-            throw Exception("Should not reach here");
+        else if constexpr (is_division)
+        {
+            for (size_t i = 0; i < size; ++i)
+                c[i] = applyScaled<true>(a, b[i], scale_a);
+            return;
+        }
 
         /// default: use it if no return before
         for (size_t i = 0; i < size; ++i)
@@ -1595,9 +1604,8 @@ struct DecimalBinaryOperation
         else if constexpr (is_multiply) {
             return applyScaledMul(a, b, scale_result);
         }
-
-        if constexpr (is_division || is_modulo)
-            throw Exception("Should not reach here");
+        else if constexpr (is_division)
+            return applyScaled<true>(a, b, scale_a);
 
         return apply(a, b);
     }
