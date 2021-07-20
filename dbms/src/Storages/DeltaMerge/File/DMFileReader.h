@@ -30,14 +30,12 @@ public:
                size_t                           aio_threshold,
                size_t                           max_read_buffer_size,
                Logger *                         log,
-               const ReadLimiterPtr &           read_limiter,
-               DMConfiguration *                configuration_ = nullptr);
+               const ReadLimiterPtr &           read_limiter);
 
         const bool                       single_file_mode;
         double                           avg_size_hint;
         MarksInCompressedFilePtr         marks;
         MarkWithSizesInCompressedFilePtr mark_with_sizes;
-        std::shared_ptr<DMConfiguration> configuration;
 
         size_t getOffsetInFile(size_t i) const
         {

@@ -23,11 +23,9 @@ DMFileReader::Stream::Stream(DMFileReader &                   reader,
                              size_t                           aio_threshold,
                              size_t                           max_read_buffer_size,
                              Logger *                         log,
-                             const ReadLimiterPtr &           read_limiter,                   
-                             DMConfiguration *                configuration_)
+                             const ReadLimiterPtr &           read_limiter)
     : single_file_mode(reader.single_file_mode),
-      avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size),
-      configuration(configuration_)
+      avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
 {
     // load mark data
     if (reader.single_file_mode)
@@ -62,9 +60,9 @@ DMFileReader::Stream::Stream(DMFileReader &                   reader,
             size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
             auto   file = reader.file_provider->newRandomAccessFile(reader.dmfile->colMarkPath(file_name_base),
                                                                   reader.dmfile->encryptionMarkPath(file_name_base));
-            if (configuration)
+            if (reader.dmfile->configuration)
             {
-                PageUtil::readChecksumFramedFile(file, 0, reinterpret_cast<char *>(res->data()), size, *configuration, read_limiter);
+                PageUtil::readChecksumFramedFile(file, 0, reinterpret_cast<char *>(res->data()), size, *reader.dmfile->configuration, read_limiter);
             }
             else
             {
@@ -138,7 +136,7 @@ DMFileReader::Stream::Stream(DMFileReader &                   reader,
               "file size: " << data_file_size << ", estimated read size: " << estimated_size << ", buffer_size: " << buffer_size
                             << " (aio_threshold: " << aio_threshold << ", max_read_buffer_size: " << max_read_buffer_size << ")");
 
-    if (!configuration)
+    if (!reader.dmfile->configuration)
     {
         buf = std::make_unique<CompressedReadBufferFromFileProvider<true>>(reader.file_provider,
                                                                            reader.dmfile->colDataPath(file_name_base),
@@ -153,8 +151,8 @@ DMFileReader::Stream::Stream(DMFileReader &                   reader,
         buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(reader.file_provider,
                                                                             reader.dmfile->colDataPath(file_name_base),
                                                                             reader.dmfile->encryptionDataPath(file_name_base),
-                                                                            *configuration, 
-                                                                            read_limiter);
+                                                                            read_limiter,
+                                                                            reader.dmfile->configuration);
     }
 }
 
@@ -220,7 +218,6 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                 aio_threshold,
                 max_read_buffer_size,
                 log,
-                dmfile->configuration.get(),
                 read_limiter);
             column_streams.emplace(stream_name, std::move(stream));
         };
