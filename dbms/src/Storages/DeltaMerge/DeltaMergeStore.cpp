@@ -1067,7 +1067,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 {
     if (segment->hasAbandoned())
         return;
-
+    LOG_DEBUG(log, "check segment 1");
     auto & delta = segment->getDelta();
 
     size_t delta_saved_rows  = delta->getRows(/* use_unsaved */ false);
@@ -1152,6 +1152,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (shutdown_called.load(std::memory_order_relaxed))
             return;
 
+        // TODO: remove this log
+        LOG_DEBUG(log, "add background task " << toString(task.type) << " by thread " << toString(thread_type));
         auto heavy = background_tasks.addTask(task, thread_type, log);
         if (heavy)
             blockable_background_pool_handle->wake();
@@ -1176,11 +1178,15 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment, {}});
         }
     }
+    LOG_DEBUG(log, "check segment 2");
 
     // Need to check the latest delta (maybe updated after foreground flush). If it is updating by another thread,
     // give up adding more tasks on this version of delta.
     if (segment->getDelta()->isUpdating())
         return;
+
+    // TODO: remove this log
+    LOG_DEBUG(log, "check segment 3");
 
     /// Now start trying structure update.
 
