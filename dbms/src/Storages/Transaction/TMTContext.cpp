@@ -38,7 +38,7 @@ void TMTContext::restore(const TiFlashRaftProxyHelper * proxy_helper)
 {
     kvstore->restore(proxy_helper);
     region_table.restore();
-    initialized = true;
+    store_status = StoreStatus::Ready;
 
     background_service = std::make_unique<BackgroundService>(*this);
 }
@@ -62,7 +62,11 @@ const BackgroundService & TMTContext::getBackgroundService() const { return *bac
 
 Context & TMTContext::getContext() { return context; }
 
-bool TMTContext::isInitialized() const { return initialized; }
+bool TMTContext::isInitialized() const { return getStoreStatus() != StoreStatus::Idle; }
+
+void TMTContext::setStoreStatusRunning() { store_status = StoreStatus::Running; }
+
+TMTContext::StoreStatus TMTContext::getStoreStatus(std::memory_order memory_order) const { return store_status.load(memory_order); }
 
 SchemaSyncerPtr TMTContext::getSchemaSyncer() const
 {
@@ -105,11 +109,11 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     }
 }
 
-const std::atomic_bool & TMTContext::getTerminated() const { return terminated; }
+bool TMTContext::getTerminated(std::memory_order memory_order) const { return getStoreStatus(memory_order) == StoreStatus::Terminated; }
 
 void TMTContext::setTerminated()
 {
-    terminated = true;
+    store_status = StoreStatus::Terminated;
     // notify all region to stop learner read.
     kvstore->traverseRegions([](const RegionID, const RegionPtr & region) { region->notifyApplied(); });
 }
