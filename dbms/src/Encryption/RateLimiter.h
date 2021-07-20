@@ -23,6 +23,7 @@ using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
 enum class LimiterType
 {
+    UNKNOW = 0,
     FG_WRITE = 1,
     BG_WRITE = 2,
     FG_READ = 3,

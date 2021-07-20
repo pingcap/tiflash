@@ -42,6 +42,8 @@ inline void metricRequestBytes(TiFlashMetricsPtr & metrics, LimiterType type, In
         case LimiterType::BG_WRITE:
             GET_METRIC(metrics, tiflash_storage_io_limiter, type_bg_write_req_bytes).Increment(bytes);
             break;
+        default:
+            break;
     }
 }
 
@@ -64,6 +66,8 @@ inline void metricAllocBytes([[maybe_unused]] TiFlashMetricsPtr & metrics, [[may
             break;
         case LimiterType::BG_WRITE:
             GET_METRIC(metrics, tiflash_storage_io_limiter, type_bg_write_alloc_bytes).Increment(bytes);
+            break;
+        default:
             break;
     }
 }

@@ -32,7 +32,7 @@ TEST(RateLimiter_test, Rate)
     {
         UInt64 target = i * 1024 * 10;
         // refill ten times every second
-        auto rate_limiter = std::make_shared<RateLimiter>(nullptr, target, 100);
+        auto rate_limiter = std::make_shared<RateLimiter>(nullptr, target, LimiterType::UNKNOW, 100);
         AtomicStopwatch watch;
         std::vector<std::thread> threads;
         // create multiple threads to perform request command
@@ -74,7 +74,7 @@ TEST(ReadLimiter_test, Read)
     using TimePointMS = std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds>;
     Int64 bytes_per_sec = 1000;
     UInt64 refill_period_ms = 20;
-    ReadLimiter limiter(getStat, nullptr, bytes_per_sec, refill_period_ms);
+    ReadLimiter limiter(getStat, nullptr, bytes_per_sec, LimiterType::UNKNOW, refill_period_ms);
 
     TimePointMS t0 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     // Refill 20 every 20ms.
