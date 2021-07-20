@@ -40,8 +40,9 @@ struct Construct
 
 /**
  * TODO:
- * * 128-bit and 256-bit integers. And it seems that Visitor::visit doesn't welcome them as well.
- * * all floating-point arithmetic evalutes to Float64.
+ * * add 128-bit and 256-bit integers.
+ * * change Float32 to Float64.
+ *   * all floating-point arithmetics should evaluate to Float64.
  */
 template <> struct Construct<false, false, 1> { using Type = UInt8; };
 template <> struct Construct<false, false, 2> { using Type = UInt16; };
@@ -101,18 +102,18 @@ template <typename A, typename B> struct ResultOfIntegerDivision
 };
 
 template <size_t size>
-struct ConstructInteger
+struct ConstructIntegerBySize
 {
     using Type = Error;
 };
 
-template <> struct ConstructInteger<1> { using Type = Int8; };
-template <> struct ConstructInteger<2> { using Type = Int16; };
-template <> struct ConstructInteger<4> { using Type = Int32; };
-template <> struct ConstructInteger<8> { using Type = Int64; };
-template <> struct ConstructInteger<16> { using Type = Int128; };
-template <> struct ConstructInteger<32> { using Type = Int256; };
-template <> struct ConstructInteger<64> { using Type = Int512; };
+template <> struct ConstructIntegerBySize<1> { using Type = Int8; };
+template <> struct ConstructIntegerBySize<2> { using Type = Int16; };
+template <> struct ConstructIntegerBySize<4> { using Type = Int32; };
+template <> struct ConstructIntegerBySize<8> { using Type = Int64; };
+template <> struct ConstructIntegerBySize<16> { using Type = Int128; };
+template <> struct ConstructIntegerBySize<32> { using Type = Int256; };
+template <> struct ConstructIntegerBySize<64> { using Type = Int512; };
 
 /** Division with remainder you get a number with the same number of bits as in divisor.
     */
@@ -120,7 +121,7 @@ template <typename A, typename B> struct ResultOfModulo
 {
     static constexpr auto result_size = max(actual_size_v<A>, actual_size_v<B>);
 
-    using IntegerType = typename ConstructInteger<result_size>::Type;
+    using IntegerType = typename ConstructIntegerBySize<result_size>::Type;
 
     /**
      * in MySQL:

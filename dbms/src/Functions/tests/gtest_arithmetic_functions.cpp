@@ -153,8 +153,8 @@ protected:
 
         if (IsDecimalDataType(result_type))
         {
-            ASSERT_EQ(expected_prec, getDecimalPrecision(*result_type)) << "at line " << line;
-            ASSERT_EQ(expected_scale, getDecimalScale(*result_type)) << "at line " << line;
+            ASSERT_EQ(expected_prec, getDecimalPrecision(*result_type, 0)) << "at line " << line;
+            ASSERT_EQ(expected_scale, getDecimalScale(*result_type, 0)) << "at line " << line;
         }
 
         Field result_field;
