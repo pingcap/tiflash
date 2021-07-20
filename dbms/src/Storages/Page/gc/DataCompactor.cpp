@@ -111,7 +111,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
         }
 
         // Don't gc writing page file.
-        bool is_candidate = (writing_files.count(page_file.fileIdLevel()) == 0)
+        bool is_candidate = !writing_files.contains(page_file.fileIdLevel())
             && (valid_rate < config.gc_max_valid_rate //
                 || file_size < config.file_small_size //
                 || config.gc_max_valid_rate >= 1.0    // all page file will be picked

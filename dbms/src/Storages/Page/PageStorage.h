@@ -171,6 +171,28 @@ public:
 
     static PageFormat::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
 
+    struct PersistState
+    {
+        // use to protect reading WriteBatches from writable PageFile's meta in GC
+        size_t meta_offset = 0;
+        // use to protect that legacy compactor won't exceed the sequence of minimum persisted
+        WriteBatch::SequenceID sequence = 0;
+    };
+
+    struct WritingFilesSnapshot
+    {
+        using const_iterator = std::map<PageFileIdAndLevel, PersistState>::const_iterator;
+
+        PageFileIdAndLevel     minFileIDLevel() const;
+        WriteBatch::SequenceID minPersistedSequence() const;
+
+        const_iterator find(const PageFileIdAndLevel & id) const { return states.find(id); }
+        const_iterator end() const { return states.end(); }
+        bool           contains(const PageFileIdAndLevel & id) const { return states.count(id) > 0; }
+
+        std::map<PageFileIdAndLevel, PersistState> states;
+    };
+
 private:
     WriterPtr checkAndRenewWriter(PageFile &     page_file,
                                   const String & parent_path_hint,
@@ -187,6 +209,8 @@ private:
                          const PageFileIdAndLevel &           writing_file_id_level,
                          const std::set<PageFileIdAndLevel> & live_files);
 
+    void getWritingSnapshot(std::lock_guard<std::mutex> &, WritingFilesSnapshot & writing_snapshot) const;
+
     friend class LegacyCompactor;
 
     template <typename SnapshotPtr>
@@ -201,9 +225,8 @@ private:
 
     struct WritingPageFile
     {
-        PageFile file;
-        // use to protect reading WriteBatches from writable PageFile's meta in GC
-        size_t last_persisted_meta_offset;
+        PageFile     file;
+        PersistState persisted{};
     };
     std::mutex write_mutex; // A mutex protect `idle_writers`,`write_files` and `statistics`.
 
