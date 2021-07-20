@@ -16,3 +16,6 @@
 │  4 │            119 │
 │  5 │            136 │
 └────┴────────────────┘
+
+# Clean up
+>> drop table if exists json_test
