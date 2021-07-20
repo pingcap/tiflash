@@ -111,18 +111,28 @@ PageFormat::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_
     if (page_files.empty())
         return STORAGE_FORMAT_CURRENT.page;
 
-    // Simply check the last PageFile is good enough
-    auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(*page_files.rbegin()));
-
+    bool                all_empty          = true;
     PageFormat::Version max_binary_version = PageFormat::V1;
     PageFormat::Version temp_version       = STORAGE_FORMAT_CURRENT.page;
-    while (reader->hasNext())
+    // Simply check the last PageFile is good enough
+    for (auto iter = page_files.rbegin(); iter != page_files.rend(); ++iter)
     {
-        // Continue to read the binary version of next WriteBatch.
-        reader->moveNext(&temp_version);
-        max_binary_version = std::max(max_binary_version, temp_version);
+        // Skip those files without valid meta
+        if (iter->getMetaFileSize() == 0)
+            continue;
+
+        all_empty   = false;
+        auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(*iter));
+        while (reader->hasNext())
+        {
+            // Continue to read the binary version of next WriteBatch.
+            reader->moveNext(&temp_version);
+            max_binary_version = std::max(max_binary_version, temp_version);
+        }
+        LOG_DEBUG(log, "getMaxDataVersion done from " + reader->toString() << " [max version=" << max_binary_version << "]");
+        break;
     }
-    LOG_DEBUG(log, "getMaxDataVersion done from " + reader->toString() << " [max version=" << max_binary_version << "]");
+    max_binary_version = (all_empty ? STORAGE_FORMAT_CURRENT.page : max_binary_version);
     return max_binary_version;
 }
 
