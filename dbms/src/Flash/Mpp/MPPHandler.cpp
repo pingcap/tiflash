@@ -60,6 +60,31 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
     return ret;
 }
 
+void MPPTunnel::close(const String & reason)
+{
+    std::unique_lock<std::mutex> lk(mu);
+    if (finished)
+        return;
+    if (connected && !reason.empty())
+    {
+        try
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
+            mpp::MPPDataPacket data;
+            auto err = new mpp::Error();
+            err->set_msg(reason);
+            data.set_allocated_error(err);
+            writer->Write(data);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
+        }
+    }
+    finished = true;
+    cv_for_finished.notify_all();
+}
+
 void MPPTask::unregisterTask()
 {
     if (manager != nullptr)
@@ -218,16 +243,15 @@ String taskStatusToString(TaskStatus ts)
 }
 void MPPTask::runImpl()
 {
-    auto current_status = static_cast<TaskStatus>(status.load());
-    if (current_status != INITIALIZING)
+    auto old_status = static_cast<Int32>(INITIALIZING);
+    if (!status.compare_exchange_strong(old_status, static_cast<Int32>(RUNNING)))
     {
-        LOG_WARNING(log, "task in " + taskStatusToString(current_status) + " state, skip running");
+        LOG_WARNING(log, "task not in initializing state, skip running");
         return;
     }
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
     LOG_INFO(log, "task starts running");
-    status = RUNNING;
     auto from = io.in;
     auto to = io.out;
     try
