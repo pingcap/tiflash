@@ -100,25 +100,25 @@ template <typename A, typename B> struct ResultOfIntegerDivision
         sizeof(A)>::Type;
 };
 
+template <size_t size>
+struct ConstructInteger
+{
+    using Type = Error;
+};
+
+template <> struct ConstructInteger<1> { using Type = Int8; };
+template <> struct ConstructInteger<2> { using Type = Int16; };
+template <> struct ConstructInteger<4> { using Type = Int32; };
+template <> struct ConstructInteger<8> { using Type = Int64; };
+template <> struct ConstructInteger<16> { using Type = Int128; };
+template <> struct ConstructInteger<32> { using Type = Int256; };
+template <> struct ConstructInteger<64> { using Type = Int512; };
+
 /** Division with remainder you get a number with the same number of bits as in divisor.
     */
 template <typename A, typename B> struct ResultOfModulo
 {
     static constexpr auto result_size = max(actual_size_v<A>, actual_size_v<B>);
-
-    template <size_t size>
-    struct ConstructInteger
-    {
-        using Type = Error;
-    };
-
-    template <> struct ConstructInteger<1> { using Type = Int8; };
-    template <> struct ConstructInteger<2> { using Type = Int16; };
-    template <> struct ConstructInteger<4> { using Type = Int32; };
-    template <> struct ConstructInteger<8> { using Type = Int64; };
-    template <> struct ConstructInteger<16> { using Type = Int128; };
-    template <> struct ConstructInteger<32> { using Type = Int256; };
-    template <> struct ConstructInteger<64> { using Type = Int512; };
 
     using IntegerType = typename ConstructInteger<result_size>::Type;
 
