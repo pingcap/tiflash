@@ -77,11 +77,11 @@ constexpr char DM_CHECKSUM_BUFFER_TEST_PATH[] = "/tmp/tiflash_dm_checksum_buffer
 
 auto prepareIO()
 {
-    auto metric       = std::make_shared<DB::TiFlashMetrics>();
-    auto rateLimiter  = std::make_shared<DB::RateLimiter>(metric, 0);
-    auto keyManager   = std::make_shared<DB::MockKeyManager>();
-    auto fileProvider = std::make_shared<DB::FileProvider>(keyManager, true);
-    return std::make_pair(std::move(rateLimiter), std::move(fileProvider));
+    auto metric        = std::make_shared<DB::TiFlashMetrics>();
+    auto rate_limiter  = std::make_shared<DB::RateLimiter>(metric, 0);
+    auto key_manager   = std::make_shared<DB::MockKeyManager>();
+    auto file_provider = std::make_shared<DB::FileProvider>(key_manager, true);
+    return std::make_pair(std::move(rate_limiter), std::move(file_provider));
 }
 
 } // namespace
@@ -97,16 +97,16 @@ void runStreamingTest()
         auto [data, seed] = randomData(size);
         {
 
-            auto pWTFile = std::make_shared<PosixWritableFile>(DM_CHECKSUM_BUFFER_TEST_PATH, true, -1, 0755);
-            auto buffer  = Checksum::FramedChecksumWriteBuffer<D>(pWTFile);
+            auto writable_file_ptr = std::make_shared<PosixWritableFile>(DM_CHECKSUM_BUFFER_TEST_PATH, true, -1, 0755);
+            auto buffer            = Checksum::FramedChecksumWriteBuffer<D>(writable_file_ptr);
             buffer.write(data.data(), data.size());
         }
 
         {
 
-            auto pRAFile = std::make_shared<PosixRandomAccessFile>(DM_CHECKSUM_BUFFER_TEST_PATH, -1);
-            auto buffer  = Checksum::FramedChecksumReadBuffer<D>(pRAFile);
-            auto cmp     = std::vector<char>(size);
+            auto readable_file_ptr = std::make_shared<PosixRandomAccessFile>(DM_CHECKSUM_BUFFER_TEST_PATH, -1);
+            auto buffer            = Checksum::FramedChecksumReadBuffer<D>(readable_file_ptr);
+            auto cmp               = std::vector<char>(size);
             ASSERT_EQ(buffer.read(cmp.data(), size), size) << "random seed: " << seed << std::endl;
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
         }
@@ -131,14 +131,14 @@ void runSeekingTest()
     {
         auto [data, seed] = randomData(size);
         {
-            auto pWTFile = std::make_shared<PosixWritableFile>(DM_CHECKSUM_BUFFER_TEST_PATH, true, -1, 0755);
-            auto buffer  = Checksum::FramedChecksumWriteBuffer<D>(pWTFile);
+            auto writable_file_ptr = std::make_shared<PosixWritableFile>(DM_CHECKSUM_BUFFER_TEST_PATH, true, -1, 0755);
+            auto buffer            = Checksum::FramedChecksumWriteBuffer<D>(writable_file_ptr);
             buffer.write(data.data(), data.size());
         }
         {
-            auto  pRAFile = std::make_shared<PosixRandomAccessFile>(DM_CHECKSUM_BUFFER_TEST_PATH, -1);
-            auto  buffer  = Checksum::FramedChecksumReadBuffer<D>(pRAFile);
-            off_t current = 0;
+            auto  readable_file_ptr = std::make_shared<PosixRandomAccessFile>(DM_CHECKSUM_BUFFER_TEST_PATH, -1);
+            auto  buffer            = Checksum::FramedChecksumReadBuffer<D>(readable_file_ptr);
+            off_t current           = 0;
             for (auto i = 0; i < 1024; ++i)
             {
                 auto [offset, whence, length, next] = randomOperation(size, current);
@@ -178,8 +178,8 @@ void runStackingTest()
         {
             auto buffer
                 = createWriteBufferFromFileBaseByFileProvider(provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, true, limiter, config);
-            auto compressBuffer = CompressedWriteBuffer<false>(*buffer);
-            compressBuffer.write(data.data(), data.size());
+            auto compression_buffer = CompressedWriteBuffer<false>(*buffer);
+            compression_buffer.write(data.data(), data.size());
         }
         {
             auto buffer = CompressedReadBufferFromFileProvider<false>(provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, config);
@@ -214,8 +214,8 @@ void runStackedSeekingTest()
     {
         auto buffer
             = createWriteBufferFromFileBaseByFileProvider(provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, true, limiter, config);
-        auto   compressBuffer = CompressedWriteBuffer<false>(*buffer);
-        size_t acc            = 0;
+        auto   compression_buffer = CompressedWriteBuffer<false>(*buffer);
+        size_t acc                = 0;
         for (size_t length = 1; acc + length <= size; acc += length, length <<= 1)
         {
             std::vector<char> slice;
@@ -223,11 +223,11 @@ void runStackedSeekingTest()
             std::copy(data.begin() + acc, data.begin() + acc + length, slice.begin());
             if (local_engine() & 1)
             {
-                compressBuffer.next();
+                compression_buffer.next();
             }
-            auto x = buffer->count();         // compressed position
-            auto y = compressBuffer.offset(); // uncompressed position
-            compressBuffer.write(slice.data(), slice.size());
+            auto x = buffer->count();             // compressed position
+            auto y = compression_buffer.offset(); // uncompressed position
+            compression_buffer.write(slice.data(), slice.size());
             slices.template emplace_back(std::move(slice), x, y);
         }
     }
@@ -275,7 +275,7 @@ void runLargeReadingTest()
             auto              offset = std::uniform_int_distribution<off_t>(0, static_cast<off_t>(size))(local_engine);
             auto              length = std::uniform_int_distribution<off_t>(0, static_cast<off_t>(size) - offset)(local_engine);
             std::vector<char> buffer(length);
-            PageUtil::readChecksumFramedFile(file,offset, buffer.data(), length, config);
+            PageUtil::readChecksumFramedFile(file, offset, buffer.data(), length, config);
             ASSERT_EQ(std::memcmp(buffer.data(), data.data() + offset, length), 0) << "seed: " << seed;
         }
     }

@@ -151,86 +151,87 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
 void readChecksumFramedFile(
     RandomAccessFilePtr & file, off_t offset, char * buf, size_t expected_bytes, DM::DMConfiguration & configuration, const ReadLimiterPtr & read_limiter)
 {
-    DM::FrameUnion headerStorage;
+    DM::FrameUnion header_storage;
     auto           digest = configuration.createUnifiedDigest();
 
-    auto  frameNo    = offset / configuration.getChecksumFrameLength();
-    auto  frameShift = offset % configuration.getChecksumFrameLength();
-    off_t realOffset = static_cast<off_t>(frameNo) * static_cast<off_t>(configuration.getChecksumFrameLength() + digest->headerSize());
+    auto  frame_number = offset / configuration.getChecksumFrameLength();
+    auto  frame_shift  = offset % configuration.getChecksumFrameLength();
+    off_t real_offset
+        = static_cast<off_t>(frame_number) * static_cast<off_t>(configuration.getChecksumFrameLength() + digest->headerSize());
 
-    auto loadHeader = [&]() -> size_t {
-        readFile(file, realOffset, reinterpret_cast<char *>(&headerStorage), digest->headerSize(), read_limiter);
-        realOffset = realOffset + static_cast<off_t>(digest->headerSize());
-        return *reinterpret_cast<size_t *>(&headerStorage);
+    auto load = [&]() -> size_t {
+        readFile(file, real_offset, reinterpret_cast<char *>(&header_storage), digest->headerSize(), read_limiter);
+        real_offset = real_offset + static_cast<off_t>(digest->headerSize());
+        return *reinterpret_cast<size_t *>(&header_storage);
     };
 
-    auto examineChecksum = [&](const char * data, size_t size) {
+    auto examine = [&](const char * data, size_t size) {
         digest->update(data, size);
-        if (unlikely(!digest->compare_frame(headerStorage)))
+        if (unlikely(!digest->compareFrame(header_storage)))
         {
             throw DB::Exception("Data corruption detected! checksum mismatch in file " + file->getFileName());
         }
         digest->reset();
     };
 
-    if (frameShift)
+    if (frame_shift)
     {
         // in this case, we allocate memory for the first frame on ourselves and then examine the checksum
-        auto tmpBuffer = reinterpret_cast<char *>(::operator new (configuration.getChecksumFrameLength(), std::align_val_t{512}));
+        auto temporal_buffer = reinterpret_cast<char *>(::operator new (configuration.getChecksumFrameLength(), std::align_val_t{512}));
 
         // read frame
-        auto frameSize = loadHeader();
-        readFile(file, realOffset, tmpBuffer, frameSize, read_limiter);
+        auto frame_size = load();
+        readFile(file, real_offset, temporal_buffer, frame_size, read_limiter);
 
         // examine checksum
-        examineChecksum(tmpBuffer, frameSize);
+        examine(temporal_buffer, frame_size);
 
         // transfer data
-        auto bytesToCopy = std::min(frameSize - frameShift, expected_bytes);
-        std::memcpy(buf, tmpBuffer + frameShift, bytesToCopy);
+        auto target_bytes = std::min(frame_size - frame_shift, expected_bytes);
+        std::memcpy(buf, temporal_buffer + frame_shift, target_bytes);
 
         // update statistics
-        realOffset     = realOffset + static_cast<off_t>(frameSize); // we are now at frame end
-        expected_bytes = expected_bytes - bytesToCopy;
-        buf            = buf + bytesToCopy;
-        assert(realOffset % (configuration.getChecksumFrameLength() + digest->headerSize()) == 0
-               || frameSize < configuration.getChecksumFrameLength());
+        real_offset    = real_offset + static_cast<off_t>(frame_size); // we are now at frame end
+        expected_bytes = expected_bytes - target_bytes;
+        buf            = buf + target_bytes;
+        assert(real_offset % (configuration.getChecksumFrameLength() + digest->headerSize()) == 0
+               || frame_size < configuration.getChecksumFrameLength());
 
         // clean up
-        ::operator delete (tmpBuffer, std::align_val_t{512});
+        ::operator delete (temporal_buffer, std::align_val_t{512});
     }
 
-    auto frameSize = expected_bytes ? loadHeader() : 0;
-    while (expected_bytes && expected_bytes >= frameSize)
+    auto frame_size = expected_bytes ? load() : 0;
+    while (expected_bytes && expected_bytes >= frame_size)
     {
         // read body
-        readFile(file, realOffset, buf, frameSize, read_limiter);
+        readFile(file, real_offset, buf, frame_size, read_limiter);
 
         // examine checksum
-        examineChecksum(buf, frameSize);
+        examine(buf, frame_size);
 
         // update for next turn
-        realOffset     = realOffset + static_cast<off_t>(frameSize);
-        expected_bytes = expected_bytes - frameSize;
-        buf            = buf + frameSize;
-        frameSize      = expected_bytes ? loadHeader() : 0;
+        real_offset    = real_offset + static_cast<off_t>(frame_size);
+        expected_bytes = expected_bytes - frame_size;
+        buf            = buf + frame_size;
+        frame_size     = expected_bytes ? load() : 0;
     }
 
     if (expected_bytes)
     {
         // there are still some bytes in current frame. However, the frame is larger than the remaining buffer,
         // so we have to read the data to a temporal buffer.
-        auto tmpBuffer = reinterpret_cast<char *>(::operator new (frameSize, std::align_val_t{512}));
+        auto temporal_buffer = reinterpret_cast<char *>(::operator new (frame_size, std::align_val_t{512}));
 
         // read body
-        readFile(file, realOffset, tmpBuffer, frameSize, read_limiter);
+        readFile(file, real_offset, temporal_buffer, frame_size, read_limiter);
 
         // examine checksum
-        examineChecksum(tmpBuffer, frameSize);
+        examine(temporal_buffer, frame_size);
 
         // transfer data
-        std::memcpy(buf, tmpBuffer, expected_bytes);
-        ::operator delete (tmpBuffer, std::align_val_t{512});
+        std::memcpy(buf, temporal_buffer, expected_bytes);
+        ::operator delete (temporal_buffer, std::align_val_t{512});
     }
 }
 

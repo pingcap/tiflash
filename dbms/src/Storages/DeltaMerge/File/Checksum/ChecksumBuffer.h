@@ -60,8 +60,8 @@ class FramedChecksumWriteBuffer : public WriteBufferFromFileDescriptor
 {
 private:
     WritableFilePtr out;
-    size_t          currentFrame = 0;
-    const size_t    frameSize;
+    size_t          current_frame = 0;
+    const size_t    frame_size;
     void            nextImpl() override
     {
         size_t len   = this->offset();
@@ -92,19 +92,19 @@ private:
             expected -= count;
         }
 
-        currentFrame++;
+        current_frame++;
     }
 
     off_t doSeek(off_t, int) override { throw Poco::FileException("framed file is not seekable in writing mode"); }
 
-    off_t getPositionInFile() override { return currentFrame * frameSize + offset(); }
+    off_t getPositionInFile() override { return current_frame * frame_size + offset(); }
 
 public:
     explicit FramedChecksumWriteBuffer(WritableFilePtr out_, size_t block_size_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE)
         : WriteBufferFromFileDescriptor(
             out_->getFd(), sizeof(ChecksumFrame<Backend>) + block_size_ + 512, nullptr, alignof(ChecksumFrame<Backend>)),
           out(std::move(out_)),
-          frameSize(block_size_)
+          frame_size(block_size_)
     {
         // adjust alignment, aligned memory boundary can make it fast for digesting
         std::memset(this->working_buffer.begin(), 0, sizeof(ChecksumFrame<Backend>) + block_size_ + 512);
@@ -136,12 +136,12 @@ class FramedChecksumReadBuffer : public ReadBufferFromFileDescriptor
 {
 public:
     explicit FramedChecksumReadBuffer(RandomAccessFilePtr in_,
-                                      size_t              block_size    = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE,
-                                      bool                skipChecksum_ = false)
+                                      size_t              block_size     = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE,
+                                      bool                skip_checksum_ = false)
         : ReadBufferFromFileDescriptor(
             in_->getFd(), sizeof(ChecksumFrame<Backend>) + block_size + 512, nullptr, alignof(ChecksumFrame<Backend>)),
-          frameSize(block_size),
-          skipChecksum(skipChecksum_),
+          frame_size(block_size),
+          skip_checksum(skip_checksum_),
           in(std::move(in_))
     {
         // adjust alignment, aligned memory boundary can make it fast for digesting
@@ -151,15 +151,15 @@ public:
         set(result + sizeof(ChecksumFrame<Backend>), block_size);
         // read at least one frame
         next();
-        currentFrame = 0;
+        current_frame = 0;
     }
 
-    off_t getPositionInFile() override { return currentFrame * frameSize + offset(); }
+    off_t getPositionInFile() override { return current_frame * frame_size + offset(); }
 
 private:
-    size_t              currentFrame;
-    const size_t        frameSize;
-    const bool          skipChecksum;
+    size_t              current_frame;
+    const size_t        frame_size;
+    const bool          skip_checksum;
     RandomAccessFilePtr in;
     size_t              expectRead(Position pos, size_t size)
     {
@@ -198,7 +198,7 @@ private:
         }
 
         // examine checksum
-        if (!skipChecksum)
+        if (!skip_checksum)
         {
             auto digest = Backend{};
             digest.update(frame.data, frame.bytes);
@@ -228,7 +228,7 @@ private:
         readAndCheckBody();
 
         // update statistics
-        currentFrame++;
+        current_frame++;
         return true;
     }
 
@@ -243,28 +243,28 @@ private:
             throw Poco::FileException("FramedChecksumReadBuffer::seek expects SEEK_SET or SEEK_CUR as whence",
                                       ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         }
-        auto targetFrame  = offset / frameSize;
-        auto targetOffset = offset % frameSize;
+        auto target_frame  = offset / frame_size;
+        auto target_offset = offset % frame_size;
 
-        if (targetFrame == currentFrame)
+        if (target_frame == current_frame)
         {
-            pos = working_buffer.begin() + targetOffset;
+            pos = working_buffer.begin() + target_offset;
             return offset;
         }
         else
         {
             // read the header
-            auto headerOffset = targetFrame * (sizeof(ChecksumFrame<Backend>) + frameSize);
-            auto result       = in->seek(static_cast<off_t>(headerOffset), SEEK_SET);
+            auto header_offset = target_frame * (sizeof(ChecksumFrame<Backend>) + frame_size);
+            auto result        = in->seek(static_cast<off_t>(header_offset), SEEK_SET);
             if (result == -1)
             {
                 throwFromErrno("Cannot seek through file " + in->getFileName(), ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
             }
             auto length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>));
-            if (length == 0 && targetOffset == 0)
+            if (length == 0 && target_offset == 0)
             {
-                currentFrame = targetFrame;
-                pos          = working_buffer.begin();
+                current_frame = target_frame;
+                pos           = working_buffer.begin();
                 working_buffer.resize(0);
                 return offset; // EOF
             }
@@ -277,8 +277,8 @@ private:
             readAndCheckBody();
 
             // update statistics
-            currentFrame = targetFrame;
-            pos          = working_buffer.begin() + targetOffset;
+            current_frame = target_frame;
+            pos           = working_buffer.begin() + target_offset;
         }
 
         return offset;

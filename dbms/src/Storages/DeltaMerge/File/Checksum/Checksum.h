@@ -128,10 +128,10 @@ using FrameUnion = std::aligned_union_t<256,
 struct UnifiedDigestBase
 {
     virtual void                      update(const void * data, size_t length) = 0;
-    virtual bool                      compare_b64(const std::string & data)    = 0;
-    virtual bool                      compare_raw(std::string_view data)       = 0;
-    virtual bool                      compare_raw(const void * data)           = 0;
-    virtual bool                      compare_frame(const FrameUnion & frame)  = 0;
+    virtual bool                      compareB64(const std::string & data)     = 0;
+    virtual bool                      compareRaw(std::string_view data)        = 0;
+    virtual bool                      compareRaw(const void * data)            = 0;
+    virtual bool                      compareFrame(const FrameUnion & frame)   = 0;
     [[nodiscard]] virtual std::string base64() const                           = 0;
     [[nodiscard]] virtual std::string raw() const                              = 0;
     virtual ~UnifiedDigestBase()                                               = default;
@@ -151,7 +151,7 @@ class UnifiedDigest : public UnifiedDigestBase
 public:
     void update(const void * data, size_t length) override { backend.update(data, length); }
 
-    bool compare_b64(const std::string & data) override
+    bool compareB64(const std::string & data) override
     {
         auto               checksum = backend.checksum();
         auto               input    = std::istringstream{data};
@@ -161,19 +161,19 @@ public:
         return checksum == target;
     }
 
-    bool compare_raw(const void * data) override
+    bool compareRaw(const void * data) override
     {
         auto checksum = backend.checksum();
         return std::memcmp(data, &checksum, sizeof(checksum)) == 0;
     }
 
-    bool compare_raw(const std::string_view data) override
+    bool compareRaw(const std::string_view data) override
     {
         auto checksum = backend.checksum();
         return data.length() == sizeof(checksum) && ::memcmp(data.begin(), &checksum, sizeof(checksum)) == 0;
     }
 
-    bool compare_frame(const FrameUnion & frame) override
+    bool compareFrame(const FrameUnion & frame) override
     {
         auto checksum  = backend.checksum();
         auto realFrame = reinterpret_cast<const ChecksumFrame<Backend> &>(frame);

@@ -123,8 +123,7 @@ DMFilePtr DMFile::restore(const FileProviderPtr & file_provider,
                           UInt64                  file_id,
                           UInt64                  ref_id,
                           const String &          parent_path,
-                          bool                    read_meta,
-                          DMConfigurationPtr      configuration)
+                          bool                    read_meta)
 {
     String    path             = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
     bool      single_file_mode = Poco::File(path).isFile();
@@ -133,8 +132,7 @@ DMFilePtr DMFile::restore(const FileProviderPtr & file_provider,
                                 parent_path,
                                 single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER,
                                 Status::READABLE,
-                                &Logger::get("DMFile"),
-                                std::move(configuration)));
+                                &Logger::get("DMFile")));
     if (read_meta)
         dmfile->readMetadata(file_provider);
     return dmfile;
@@ -388,7 +386,7 @@ void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo 
             auto digest = configuration->createUnifiedDigest();
             digest->update(ver);
             readText(column_stats, ver, buf, digest.get());
-            if (unlikely(!digest->compare_raw(location->second)))
+            if (unlikely(!digest->compareRaw(location->second)))
             {
                 throw Exception(fmt::format("data corruption, checksum mismatch for {}", name));
             }
@@ -460,7 +458,7 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
             auto         digest = configuration->createUnifiedDigest();
             const auto & target = location->second;
             digest->update(tmp_buf.data(), tmp_buf.length());
-            if (unlikely(!digest->compare_raw(target)))
+            if (unlikely(!digest->compareRaw(target)))
             {
                 throw Exception(fmt::format("data corruption, checksum mismatch for {}", name));
             }
