@@ -275,7 +275,7 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const WriteLimiter
         {
             auto digest = configuration->createUnifiedDigest();
             writeMetaToBuffer(buf, digest.get());
-            configuration->addChecksum(meta_path, digest->raw());
+            configuration->addChecksum(metaFileName(), digest->raw());
         }
         else
         {
@@ -296,7 +296,7 @@ void DMFile::writePackProperty(const FileProviderPtr & file_provider, const Writ
         {
             auto digest = configuration->createUnifiedDigest();
             writePackPropertyToBuffer(buf, digest.get());
-            configuration->addChecksum(property_path, digest->raw());
+            configuration->addChecksum(packPropertyFileName(), digest->raw());
         }
         else
         {
@@ -370,8 +370,8 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileForm
 
 void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
-    const auto path = metaPath();
-    auto       buf  = openForRead(file_provider, path, encryptionMetaPath(), meta_pack_info.meta_size);
+    const auto name = metaFileName();
+    auto       buf  = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.meta_size);
     buf.seek(meta_pack_info.meta_offset);
 
     DMFileFormat::Version ver; // Binary version
@@ -382,7 +382,7 @@ void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo 
     // checksum examination
     if (configuration)
     {
-        auto location = configuration->getEmbeddedChecksum().find(path);
+        auto location = configuration->getEmbeddedChecksum().find(name);
         if (location != configuration->getEmbeddedChecksum().end())
         {
             auto digest = configuration->createUnifiedDigest();
@@ -390,12 +390,12 @@ void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo 
             readText(column_stats, ver, buf, digest.get());
             if (unlikely(!digest->compare_raw(location->second)))
             {
-                throw Exception(fmt::format("data corruption, checksum mismatch for {}", path));
+                throw Exception(fmt::format("data corruption, checksum mismatch for {}", name));
             }
         }
         else
         {
-            log->warning(fmt::format("checksum for {} not found", path));
+            log->warning(fmt::format("checksum for {} not found", name));
             readText(column_stats, ver, buf);
         }
     }
@@ -448,13 +448,13 @@ void DMFile::readConfiguration(const FileProviderPtr & file_provider, const Meta
 void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
     String     tmp_buf;
-    const auto path = packPropertyPath();
-    auto       buf  = openForRead(file_provider, path, encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
+    const auto name = packPropertyFileName();
+    auto       buf  = openForRead(file_provider, packPropertyPath(), encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
     buf.seek(meta_pack_info.pack_property_offset);
     readStringBinary(tmp_buf, buf);
     if (configuration)
     {
-        auto location = configuration->getEmbeddedChecksum().find(path);
+        auto location = configuration->getEmbeddedChecksum().find(name);
         if (location != configuration->getEmbeddedChecksum().end())
         {
             auto         digest = configuration->createUnifiedDigest();
@@ -462,12 +462,12 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
             digest->update(tmp_buf.data(), tmp_buf.length());
             if (unlikely(!digest->compare_raw(target)))
             {
-                throw Exception(fmt::format("data corruption, checksum mismatch for {}", path));
+                throw Exception(fmt::format("data corruption, checksum mismatch for {}", name));
             }
         }
         else
         {
-            log->warning(fmt::format("checksum for {} not found", path));
+            log->warning(fmt::format("checksum for {} not found", name));
         }
     }
     pack_properties.ParseFromString(tmp_buf);
