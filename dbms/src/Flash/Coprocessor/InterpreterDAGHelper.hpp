@@ -28,12 +28,12 @@ RegionException::RegionReadStatus GetRegionReadStatus(
     return RegionException::RegionReadStatus::OK;
 }
 
-std::tuple<std::optional<std::unordered_map<RegionID, const RegionInfo &>>, RegionException::RegionReadStatus> //
-MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region_infos,
-    const std::unordered_set<RegionID> & region_force_retry, TMTContext & tmt, MvccQueryInfo & mvcc_info, TableID table_id)
+std::tuple<std::optional<RegionRetryList>, RegionException::RegionReadStatus> //
+MakeRegionQueryInfos(const RegionInfoMap & dag_region_infos, const std::unordered_set<RegionID> & region_force_retry, TMTContext & tmt,
+    MvccQueryInfo & mvcc_info, TableID table_id)
 {
     mvcc_info.regions_query_info.clear();
-    std::unordered_map<RegionID, const RegionInfo &> region_need_retry;
+    RegionRetryList region_need_retry;
     RegionException::RegionReadStatus status_res = RegionException::RegionReadStatus::OK;
     for (auto & [id, r] : dag_region_infos)
     {
@@ -44,7 +44,7 @@ MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region
         }
         if (region_force_retry.count(id))
         {
-            region_need_retry.emplace(id, r);
+            region_need_retry.emplace_back(r);
             status_res = RegionException::RegionReadStatus::NOT_FOUND;
             continue;
         }
@@ -52,7 +52,7 @@ MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region
         if (auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id), region_range);
             status != RegionException::RegionReadStatus::OK)
         {
-            region_need_retry.emplace(id, r);
+            region_need_retry.emplace_back(r);
             status_res = status;
             continue;
         }

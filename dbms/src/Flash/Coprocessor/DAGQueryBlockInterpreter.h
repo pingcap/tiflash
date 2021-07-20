@@ -27,7 +27,7 @@ using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 class DAGQuerySource;
 class DAGQueryBlock;
-class RegionInfo;
+struct RegionInfo;
 class ExchangeReceiver;
 class DAGExpressionAnalyzer;
 class ExpressionActions;
@@ -37,6 +37,7 @@ class IManageableStorage;
 using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
 using NameWithAlias = std::pair<std::string, std::string>;
 using NamesWithAliases = std::vector<NameWithAlias>;
+using RegionRetryList = std::list<std::reference_wrapper<const RegionInfo>>;
 
 struct DAGPipeline
 {
@@ -121,7 +122,7 @@ private:
         const TableStructureLockHolder &, //
         const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
         const LearnerReadSnapshot & learner_read_snapshot, //
-        DAGPipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry);
+        DAGPipeline & pipeline, RegionRetryList & region_retry);
     std::tuple<ManageableStoragePtr, TableStructureLockHolder> getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
     AnalysisResult analyzeExpressions();
