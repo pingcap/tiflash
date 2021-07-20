@@ -483,14 +483,14 @@ ReadIndexResult Region::learnerRead(UInt64 start_ts)
     return {};
 }
 
-TerminateWaitIndex Region::waitIndex(UInt64 index, const std::atomic_bool & terminated)
+TerminateWaitIndex Region::waitIndex(UInt64 index, const TMTContext & tmt)
 {
     if (proxy_helper != nullptr)
     {
         if (!meta.checkIndex(index))
         {
             LOG_DEBUG(log, toString() << " need to wait learner index: " << index);
-            if (meta.waitIndex(index, terminated))
+            if (meta.waitIndex(index, [&tmt]() { return tmt.getTerminated(); }))
                 return true;
             LOG_DEBUG(log, toString(false) << " wait learner index " << index << " done");
         }
