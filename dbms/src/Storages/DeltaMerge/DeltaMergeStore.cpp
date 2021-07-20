@@ -1534,7 +1534,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             // Check whether we should apply gc on this segment
             const bool should_compact
                 = GC::shouldCompact(segment, gc_safe_point, global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc, log)
-                || GC::shouldCompactWithStable(*dm_context, segment_snap);
+                || GC::shouldCompactWithStable(*dm_context, segment_snap, log);
             bool finish_gc_on_segment = false;
             if (should_compact)
             {
