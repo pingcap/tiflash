@@ -358,9 +358,9 @@ void PageStorage::restore()
             // Try best to reuse writable page files
             if (page_file.reusableForWrite() && isPageFileSizeFitsWritable(page_file, config))
             {
-                auto & writing_files                     = write_files[next_write_fill_idx[idx_in_delta_paths]];
-                writing_files.file                       = page_file;
-                writing_files.last_persisted_meta_offset = page_file.getMetaFileAppendPos();
+                auto & writing_files    = write_files[next_write_fill_idx[idx_in_delta_paths]];
+                writing_files.file      = page_file;
+                writing_files.persisted = PersistState{.meta_offset = page_file.getMetaFileAppendPos(), .sequence = write_batch_seq};
 
                 // Next slot for writing files
                 next_write_fill_idx[idx_in_delta_paths] = (next_write_fill_idx[idx_in_delta_paths] + num_delta_paths) % write_files.size();
@@ -484,10 +484,12 @@ PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
         LOG_DEBUG(log,
                   storage_name << logging_msg << " create new PageFile_" << DB::toString(max_writing_id_lvl.first + 1)
                                << "_0 for write [path=" << pf_parent_path << "]");
+        // Renew the `file` and `persisted.meta_offset`, keep `persisted.sequence` unchanged.
         writing_file.file
             = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log);
-        writing_file.last_persisted_meta_offset = 0;
-        write_file_writer                       = writing_file.file.createWriter(config.sync_on_write, true);
+        writing_file.persisted.meta_offset = 0;
+
+        write_file_writer = writing_file.file.createWriter(config.sync_on_write, true);
     }
     return write_file_writer;
 }
@@ -577,8 +579,8 @@ void PageStorage::write(WriteBatch && wb, const RateLimiterPtr & rate_limiter)
                 break;
             }
         }
-        auto & writing_file                     = write_files[index];
-        writing_file.last_persisted_meta_offset = writing_file.file.getMetaFileAppendPos();
+        auto & writing_file    = write_files[index];
+        writing_file.persisted = PersistState{.meta_offset = writing_file.file.getMetaFileAppendPos(), .sequence = wb.getSequence()};
 
         // Check whether we need to roll to new PageFile and its writer
         const auto logging_msg = " PageFile_" + DB::toString(writing_file.file.getFileId()) + "_0 is full,";
@@ -901,6 +903,34 @@ static String fileInfoToString(const PageFileIdAndLevel & id, const PageFile::Ty
     return "[" + DB::toString(id.first) + "," + DB::toString(id.second) + "," + PageFile::typeToString(type) + "]";
 }
 
+void PageStorage::getWritingSnapshot(std::lock_guard<std::mutex> &, WritingFilesSnapshot & writing_snapshot) const
+{
+    for (const auto & wf : write_files)
+    {
+        writing_snapshot.states.emplace(wf.file.fileIdLevel(), wf.persisted);
+    }
+}
+
+PageFileIdAndLevel PageStorage::WritingFilesSnapshot::minFileIDLevel() const
+{
+    if (likely(!states.empty()))
+        return states.cbegin()->first;
+    throw Exception("There is no writing files!", ErrorCodes::LOGICAL_ERROR);
+}
+
+WriteBatch::SequenceID PageStorage::WritingFilesSnapshot::minPersistedSequence() const
+{
+    if (unlikely(states.empty()))
+        throw Exception("There is no writing files! Can not get min persisted sequence", ErrorCodes::LOGICAL_ERROR);
+    WriteBatch::SequenceID seq = 0;
+    for (const auto & [id, st] : states)
+    {
+        (void)id;
+        seq = std::min(seq, st.sequence);
+    }
+    return seq;
+}
+
 bool PageStorage::gc(bool not_skip, const RateLimiterPtr & rate_limiter)
 {
     // If another thread is running gc, just return;
@@ -937,17 +967,11 @@ bool PageStorage::gc(bool not_skip, const RateLimiterPtr & rate_limiter)
     gc_context.max_file_type  = page_files.rbegin()->getType();
     gc_context.num_page_files = page_files.size();
 
-    using WritingFilesSnapshot = std::map<PageFileIdAndLevel, size_t>;
     WritingFilesSnapshot writing_files_snapshot;
-    PageFileIdAndLevel   min_writing_file_id_level;
     StatisticsInfo       statistics_snapshot; // statistics snapshot copy with lock protection
     {
         std::lock_guard<std::mutex> lock(write_mutex);
-        for (size_t i = 0; i < write_files.size(); ++i)
-        {
-            writing_files_snapshot.emplace(write_files[i].file.fileIdLevel(), write_files[i].last_persisted_meta_offset);
-        }
-        min_writing_file_id_level = writing_files_snapshot.begin()->first;
+        getWritingSnapshot(lock, writing_files_snapshot);
 
         /// If writer has not been used for too long, close the opened file fd of them.
         // Only close the idle fds in `idle_writers` under the `write_mutex` protection,
@@ -959,6 +983,7 @@ bool PageStorage::gc(bool not_skip, const RateLimiterPtr & rate_limiter)
         }
         statistics_snapshot = statistics;
     }
+    PageFileIdAndLevel min_writing_file_id_level = writing_files_snapshot.minFileIDLevel();
     LOG_TRACE(log, storage_name << " Before gc, " << statistics_snapshot.toString());
 
     // Helper function for apply edits and clean up before gc exit.

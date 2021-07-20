@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <Interpreters/Context.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
@@ -16,7 +17,7 @@ namespace DB
 class PSDiskDelegator;
 using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 
-using WritingFilesSnapshot = std::map<PageFileIdAndLevel, size_t>;
+using WritingFilesSnapshot = PageStorage::WritingFilesSnapshot;
 
 class LegacyCompactor : private boost::noncopyable
 {

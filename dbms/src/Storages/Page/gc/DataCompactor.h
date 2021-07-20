@@ -7,7 +7,7 @@
 
 namespace DB
 {
-using WritingFilesSnapshot = std::map<PageFileIdAndLevel, size_t>;
+using WritingFilesSnapshot = PageStorage::WritingFilesSnapshot;
 
 template <typename SnapshotPtr>
 class DataCompactor : private boost::noncopyable
