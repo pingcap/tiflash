@@ -1067,7 +1067,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 {
     if (segment->hasAbandoned())
         return;
-    LOG_DEBUG(log, "check segment 1");
     auto & delta = segment->getDelta();
 
     size_t delta_saved_rows  = delta->getRows(/* use_unsaved */ false);
@@ -1178,7 +1177,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment, {}});
         }
     }
-    LOG_DEBUG(log, "check segment 2");
 
     // Need to check the latest delta (maybe updated after foreground flush). If it is updating by another thread,
     // give up adding more tasks on this version of delta.
@@ -1186,7 +1184,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         return;
 
     // TODO: remove this log
-    LOG_DEBUG(log, "check segment 3");
+    LOG_DEBUG(log, "check segment");
 
     /// Now start trying structure update.
 
@@ -1196,6 +1194,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         // The last segment cannot be merged.
         if (segment->getRowKeyRange().isEndInfinite())
             return {};
+        LOG_DEBUG(log, "getMergeSibling 1");
         SegmentPtr next_segment;
         {
             std::shared_lock read_write_lock(read_write_mutex);
@@ -1204,15 +1203,18 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             // check legality
             if (it == segments.end())
                 return {};
+            LOG_DEBUG(log, "getMergeSibling it legal");
             auto & cur_segment = it->second;
             if (cur_segment.get() != segment.get())
                 return {};
+            LOG_DEBUG(log, "getMergeSibling find current segment");
             ++it;
             if (it == segments.end())
                 return {};
             next_segment = it->second;
-
+            LOG_DEBUG(log, "getMergeSibling find next segment");
             auto limit = dm_context->segment_limit_rows / 5;
+            LOG_DEBUG(log, "limit " << limit << " next segment estimated rows " << next_segment->getEstimatedRows());
             if (next_segment->getEstimatedRows() >= limit)
                 return {};
         }
@@ -1273,6 +1275,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     };
     auto try_bg_merge = [&]() {
         SegmentPtr merge_sibling;
+        LOG_DEBUG(log, "try bg merge " << should_merge);
         if (should_merge && (merge_sibling = getMergeSibling()))
         {
             try_add_background_task(BackgroundTask{TaskType::Merge, dm_context, segment, merge_sibling});
