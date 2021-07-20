@@ -10,11 +10,7 @@ namespace DB
 {
 
 template <typename SnapshotPtr>
-<<<<<<< HEAD
 DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStorage::Config gc_config)
-=======
-DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const Context & global_ctx)
->>>>>>> 114c55c3c... PageStorage add PageFileID existence check for multi disk deployment (#2412)
     : storage_name(storage.storage_name),
       delegator(storage.delegator),
       file_provider(storage.getFileProvider()),
@@ -114,12 +110,8 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
         bool is_candidate = (writing_file_ids.count(page_file.fileIdLevel()) == 0)
             && (valid_rate < config.gc_max_valid_rate //
                 || file_size < config.file_small_size //
-<<<<<<< HEAD
-                || (std::fabs(config.gc_max_valid_rate - 1.0) < std::numeric_limits<double>::epsilon()));
-=======
                 || config.gc_max_valid_rate >= 1.0    // all page file will be picked
             );
->>>>>>> 114c55c3c... PageStorage add PageFileID existence check for multi disk deployment (#2412)
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
         LOG_TRACE(log,
                   storage_name << " " << page_file.toString() << " [valid rate=" << DB::toString(valid_rate, 2)
