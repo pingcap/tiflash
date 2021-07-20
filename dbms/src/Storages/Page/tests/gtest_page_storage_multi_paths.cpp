@@ -26,8 +26,6 @@
 #include <memory>
 #include <random>
 
-#include "gtest/gtest.h"
-
 namespace DB
 {
 namespace tests

@@ -19,8 +19,6 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
-#include "gtest/gtest.h"
-
 namespace DB
 {
 namespace FailPoints

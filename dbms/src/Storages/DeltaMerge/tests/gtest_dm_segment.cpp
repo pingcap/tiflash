@@ -36,8 +36,6 @@ extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, /
 namespace tests
 {
 
-using namespace DB::tests;
-
 class Segment_test : public DB::base::TiFlashStorageTestBasic
 {
 public:

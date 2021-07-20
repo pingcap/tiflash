@@ -42,7 +42,15 @@ public:
         return buffer;
     }
 
-    static String getTemporaryPath() { return TiFlashTestEnv::getTemporaryPath(getCurrentFullTestName().c_str()); }
+    static String getTemporaryPath()
+    {
+        /**
+         * Sometimes we need to generate some data for testing and move them to "tests/testdata". And run test with those files by
+         * TiFlashTestEnv::findTestDataPath. We may need to check the files on "./tmp/xxx" if some storage test failed.
+         * So instead of dropping data after cases run, we drop data before running each test case.
+         */
+        return TiFlashTestEnv::getTemporaryPath(getCurrentFullTestName().c_str());
+    }
 
 protected:
     void dropDataOnDisk(String path)
@@ -58,8 +66,6 @@ protected:
         dropDataOnDisk(getTemporaryPath());
         reload();
     }
-
-    void TearDown() override { std::cout << "getTemporaryPath : " << getTemporaryPath() << std::endl; }
 
     void reload(DB::Settings && db_settings = DB::Settings())
     {
