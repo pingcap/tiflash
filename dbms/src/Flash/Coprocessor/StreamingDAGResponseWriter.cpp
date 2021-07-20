@@ -23,7 +23,8 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWr
       exchange_type(exchange_type_),
       writer(writer_),
       partition_col_ids(std::move(partition_col_ids_)),
-      thread_pool(dag_context.final_concurrency)
+      thread_pool(dag_context.final_concurrency),
+      log(&Poco::Logger::get("StreamDAGResponseWriter"))
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
