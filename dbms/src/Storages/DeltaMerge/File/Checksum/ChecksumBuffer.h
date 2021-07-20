@@ -60,6 +60,8 @@ class FramedChecksumWriteBuffer : public WriteBufferFromFileDescriptor
 {
 private:
     WritableFilePtr out;
+    size_t          currentFrame = 0;
+    const size_t    frameSize;
     void            nextImpl() override
     {
         size_t len   = this->offset();
@@ -89,16 +91,20 @@ private:
             iter += count;
             expected -= count;
         }
+
+        currentFrame++;
     }
 
     off_t doSeek(off_t, int) override { throw Poco::FileException("framed file is not seekable in writing mode"); }
 
+    off_t getPositionInFile() override { return currentFrame * frameSize + offset(); }
 
 public:
     explicit FramedChecksumWriteBuffer(WritableFilePtr out_, size_t block_size_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE)
         : WriteBufferFromFileDescriptor(
             out_->getFd(), sizeof(ChecksumFrame<Backend>) + block_size_ + 512, nullptr, alignof(ChecksumFrame<Backend>)),
-          out(std::move(out_))
+          out(std::move(out_)),
+          frameSize(block_size_)
     {
         // adjust alignment, aligned memory boundary can make it fast for digesting
         std::memset(this->working_buffer.begin(), 0, sizeof(ChecksumFrame<Backend>) + block_size_ + 512);

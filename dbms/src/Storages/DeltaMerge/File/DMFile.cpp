@@ -12,6 +12,7 @@
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <utility>
 
 namespace DB
 {
@@ -77,12 +78,17 @@ String DMFile::ngcPath() const
     return getNGCPath(parent_path, file_id, status, isSingleFileMode());
 }
 
-DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single_file_mode)
+DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single_file_mode, DMConfigurationPtr configuration)
 {
     Logger * log = &Logger::get("DMFile");
     // On create, ref_id is the same as file_id.
-    DMFilePtr new_dmfile(
-        new DMFile(file_id, file_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::WRITABLE, log));
+    DMFilePtr new_dmfile(new DMFile(file_id,
+                                    file_id,
+                                    parent_path,
+                                    single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER,
+                                    Status::WRITABLE,
+                                    log,
+                                    std::move(configuration)));
 
     auto       path = new_dmfile->path();
     Poco::File file(path);
@@ -113,12 +119,22 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     return new_dmfile;
 }
 
-DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta)
+DMFilePtr DMFile::restore(const FileProviderPtr & file_provider,
+                          UInt64                  file_id,
+                          UInt64                  ref_id,
+                          const String &          parent_path,
+                          bool                    read_meta,
+                          DMConfigurationPtr      configuration)
 {
     String    path             = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
     bool      single_file_mode = Poco::File(path).isFile();
-    DMFilePtr dmfile(new DMFile(
-        file_id, ref_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::READABLE, &Logger::get("DMFile")));
+    DMFilePtr dmfile(new DMFile(file_id,
+                                ref_id,
+                                parent_path,
+                                single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER,
+                                Status::READABLE,
+                                &Logger::get("DMFile"),
+                                std::move(configuration)));
     if (read_meta)
         dmfile->readMetadata(file_provider);
     return dmfile;
@@ -298,7 +314,8 @@ void DMFile::writeConfiguration(const FileProviderPtr & file_provider, const Wri
     String config_path     = configurationPath();
     String tmp_config_path = config_path + ".tmp";
     {
-        WriteBufferFromFileProvider buf(file_provider, tmp_config_path, encryptionPackPropertyPath(), false, write_limiter, 4096);
+        WriteBufferFromFileProvider buf(
+            file_provider, tmp_config_path, encryptionPackPropertyPath(), false, write_limiter, DBMS_DEFAULT_BUFFER_SIZE);
         {
             auto stream = OutputStreamWrapper{buf};
             stream << *configuration;

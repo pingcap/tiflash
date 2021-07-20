@@ -15,6 +15,8 @@
 #include <Storages/FormatVersion.h>
 #include <common/logger_useful.h>
 
+#include <utility>
+
 namespace DB
 {
 namespace DM
@@ -116,10 +118,15 @@ public:
     // `PackProperties` is similar to `PackStats` except it uses protobuf to do serialization
     using PackProperties = dtpb::PackProperties;
 
-    static DMFilePtr create(UInt64 file_id, const String & parent_path, bool single_file_mode = false);
-
     static DMFilePtr
-    restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
+    create(UInt64 file_id, const String & parent_path, bool single_file_mode = false, DMConfigurationPtr configuration = nullptr);
+
+    static DMFilePtr restore(const FileProviderPtr & file_provider,
+                             UInt64                  file_id,
+                             UInt64                  ref_id,
+                             const String &          parent_path,
+                             bool                    read_meta     = true,
+                             DMConfigurationPtr      configuration = nullptr);
 
     struct ListOptions
     {
@@ -186,15 +193,29 @@ public:
     bool isColumnExist(ColId col_id) const { return column_stats.find(col_id) != column_stats.end(); }
     bool isSingleFileMode() const { return mode == Mode::SINGLE_FILE; }
 
-    String toString()
+    String toString() const
     {
         return "{DMFile, packs: " + DB::toString(getPacks()) + ", rows: " + DB::toString(getRows()) + ", bytes: " + DB::toString(getBytes())
             + ", file size: " + DB::toString(getBytesOnDisk()) + "}";
     }
 
+    DMConfigurationPtr getConfiguration() const { return configuration; }
+
 private:
-    DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Mode mode_, Status status_, Logger * log_)
-        : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), mode(mode_), status(status_), log(log_)
+    DMFile(UInt64             file_id_,
+           UInt64             ref_id_,
+           String             parent_path_,
+           Mode               mode_,
+           Status             status_,
+           Logger *           log_,
+           DMConfigurationPtr configuration_ = nullptr)
+        : file_id(file_id_),
+          ref_id(ref_id_),
+          parent_path(std::move(parent_path_)),
+          mode(mode_),
+          status(status_),
+          configuration(std::move(configuration_)),
+          log(log_)
     {
     }
 

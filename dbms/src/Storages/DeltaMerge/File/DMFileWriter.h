@@ -47,8 +47,10 @@ public:
                                                                                              0,
                                                                                              max_compress_block_size)),
               plain_layer(*plain_file),
-              compressed_buf(plain_layer, compression_settings),
-              original_layer(compressed_buf),
+              compressed_buf(dmfile->configuration
+                                 ? std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<false>(plain_layer, compression_settings))
+                                 : std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<true>(plain_layer, compression_settings))),
+              original_layer(*compressed_buf),
               minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr),
               mark_file(dmfile->configuration ? createWriteBufferFromFileBaseByFileProvider(file_provider,
                                                                                             dmfile->colMarkPath(file_base_name),
@@ -68,7 +70,7 @@ public:
         {
             // Note that this method won't flush minmaxes.
             original_layer.next();
-            compressed_buf.next();
+            compressed_buf->next();
             plain_layer.next();
             plain_file->next();
 
@@ -84,7 +86,7 @@ public:
         /// original_layer -> compressed_buf -> plain_layer -> plain_file
         WriteBufferFromFileBasePtr plain_file;
         WriteBufferProxy           plain_layer;
-        CompressedWriteBuffer<>    compressed_buf;
+        WriteBufferPtr             compressed_buf;
         WriteBufferProxy           original_layer;
 
         MinMaxIndexPtr             minmaxes;

@@ -100,7 +100,24 @@ public:
 
     friend std::ostream & operator<<(std::ostream &, const DMConfiguration &);
 
-    [[nodiscard]] size_t                                     getChecksumFrameLength() const { return checksumFrameLength; }
+    [[nodiscard]] size_t getChecksumFrameLength() const { return checksumFrameLength; }
+    [[nodiscard]] size_t getChecksumHeaderLength() const
+    {
+        switch (checksumAlgorithm)
+        {
+        case ChecksumAlgo::None:
+            return sizeof(ChecksumFrame<Digest::None>);
+        case ChecksumAlgo::CRC32:
+            return sizeof(ChecksumFrame<Digest::CRC32>);
+        case ChecksumAlgo::CRC64:
+            return sizeof(ChecksumFrame<Digest::CRC64>);
+        case ChecksumAlgo::City128:
+            return sizeof(ChecksumFrame<Digest::City128>);
+        case ChecksumAlgo::XXH3:
+            return sizeof(ChecksumFrame<Digest::XXH3>);
+        }
+        return 0;
+    }
     [[nodiscard]] ChecksumAlgo                               getChecksumAlgorithm() const { return checksumAlgorithm; }
     [[nodiscard]] std::map<std::string, std::string> &       getEmbeddedChecksum() { return embeddedChecksum; }
     [[nodiscard]] const std::map<std::string, std::string> & getDebugInfo() const { return debugInfo; }

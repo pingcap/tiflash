@@ -302,11 +302,26 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
             if (stream->minmaxes)
             {
-                WriteBufferFromFileProvider buf(
-                    file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name), false, write_limiter);
-                stream->minmaxes->write(*type, buf);
-                buf.sync();
-                bytes_written += buf.getPositionInFile();
+                if (!dmfile->configuration)
+                {
+                    WriteBufferFromFileProvider buf(
+                        file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name), false, write_limiter);
+                    stream->minmaxes->write(*type, buf);
+                    buf.sync();
+                    bytes_written += buf.getPositionInFile();
+                }
+                else
+                {
+                    auto buf = createWriteBufferFromFileBaseByFileProvider(file_provider,
+                                                                           dmfile->colIndexPath(stream_name),
+                                                                           dmfile->encryptionIndexPath(stream_name),
+                                                                           false,
+                                                                           write_limiter,
+                                                                           *dmfile->configuration);
+                    stream->minmaxes->write(*type, *buf);
+                    buf->sync();
+                    bytes_written += buf->getPositionInFile();
+                }
             }
         };
         type->enumerateStreams(callback, {});
