@@ -8,6 +8,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
@@ -34,17 +35,45 @@ protected:
     using DecimalField128 = DecimalField<Decimal128>;
     using DecimalField256 = DecimalField<Decimal256>;
 
-    template <typename T>
-    struct DataTypeToFieldType {};
+    template <typename T, ScaleType scale>
+    struct GetValue
+    {
+        // only decimals have scale.
+        static_assert(scale == 0);
 
-    template <typename T>
-    struct DataTypeToFieldType<DataTypeNumber<T>> {
-        using Type = T;
+        static constexpr T Max() { return std::numeric_limits<T>::max(); }
+        static constexpr T Zero() { return 0; }
+        static constexpr T One() { return 1; }
     };
 
-    template <typename T>
-    struct DataTypeToFieldType<DataTypeDecimal<T>> {
-        using Type = DecimalField<T>;
+    template <typename TDecimal, ScaleType scale>
+    struct GetValue<DecimalField<TDecimal>, scale>
+    {
+        using ReturnType = DecimalField<TDecimal>;
+
+        static constexpr PrecType MaxPrecision = maxDecimalPrecision<TDecimal>();
+        static_assert(MaxPrecision > 0);
+
+        static constexpr ReturnType Max()
+        {
+            TDecimal value(0);
+            for (PrecType i = 0; i < MaxPrecision; ++i)
+            {
+                value *= TDecimal(10);
+                value += TDecimal(9);
+            }
+            return ReturnType(value, scale);
+        }
+
+        static constexpr ReturnType Zero() { return ReturnType(TDecimal(0), scale); }
+
+        static constexpr ReturnType One()
+        {
+            TDecimal value(1);
+            for (ScaleType i = 0; i < scale; ++i)
+                value *= TDecimal(10);
+            return ReturnType(value, scale);
+        }
     };
 
     static void SetUpTestCase()
@@ -944,23 +973,88 @@ try
 }
 CATCH
 
-#define MODULO_TESTCASE(Left, Right, Result, precision, scale) \
-    executeFunctionWithData<Left, Right, Result>(__LINE__, "modulo", \
-        makeDataType<DataTypeInt64>(), \
-        makeDataType<DataTypeInt64>(), \
-        {5}, \
-        {-3}, \
-        {2}, \
-        (precision), (scale));
-
 TEST_F(TestBinaryArithmeticFunctions, ModuloExtra)
 try
 {
+    std::unordered_map<String, DataTypePtr> data_type_map =
+    {
+        {"Int64", makeDataType<DataTypeInt64>()},
+        {"UInt64", makeDataType<DataTypeUInt64>()},
+        {"Float64", makeDataType<DataTypeFloat64>()},
+        {"DecimalField32", makeDataType<DataTypeDecimal32>(9, 3)},
+        {"DecimalField64", makeDataType<DataTypeDecimal64>(18, 6)},
+        {"DecimalField128", makeDataType<DataTypeDecimal128>(38, 10)},
+        {"DecimalField256", makeDataType<DataTypeDecimal256>(65, 20)},
+    };
 
+#define MODULO_TESTCASE(Left, Right, Result, precision, left_scale, right_scale, result_scale) \
+    executeFunctionWithData<Left, Right, Result>(__LINE__, "modulo", \
+        data_type_map[#Left], data_type_map[#Right], \
+        {GetValue<Left, left_scale>::Max(), GetValue<Left, left_scale>::Zero(),GetValue<Left, left_scale>::One(), GetValue<Left, left_scale>::Zero(), {}, {}, {}}, \
+        {GetValue<Right, right_scale>::Zero(), GetValue<Right, right_scale>::Max(), GetValue<Right, right_scale>::One(), {}, GetValue<Right, right_scale>::Zero(), GetValue<Right, right_scale>::Max(), {}}, \
+        {{}, GetValue<Result, result_scale>::Zero(), GetValue<Result, result_scale>::Zero(), {}, {}, {}, {}}, \
+        (precision), (result_scale));
+
+    MODULO_TESTCASE(Int64, Int64, Int64, 0, 0, 0, 0);
+    MODULO_TESTCASE(Int64, UInt64, Int64, 0, 0, 0, 0);
+    MODULO_TESTCASE(Int64, Float64, Float64, 0, 0, 0, 0);
+    MODULO_TESTCASE(Int64, DecimalField32, DecimalField128, 20, 0, 3, 3);
+    MODULO_TESTCASE(Int64, DecimalField64, DecimalField128, 20, 0, 6, 6);
+    MODULO_TESTCASE(Int64, DecimalField128, DecimalField128, 38, 0, 10, 10);
+    MODULO_TESTCASE(Int64, DecimalField256, DecimalField256, 65, 0, 20, 20);
+
+    MODULO_TESTCASE(UInt64, Int64, UInt64, 0, 0, 0, 0);
+    MODULO_TESTCASE(UInt64, UInt64, UInt64, 0, 0, 0, 0);
+    MODULO_TESTCASE(UInt64, Float64, Float64, 0, 0, 0, 0);
+    MODULO_TESTCASE(UInt64, DecimalField32, DecimalField128, 20, 0, 3, 3);
+    MODULO_TESTCASE(UInt64, DecimalField64, DecimalField128, 20, 0, 6, 6);
+    MODULO_TESTCASE(UInt64, DecimalField128, DecimalField128, 38, 0, 10, 10);
+    MODULO_TESTCASE(UInt64, DecimalField256, DecimalField256, 65, 0, 20, 20);
+
+    MODULO_TESTCASE(Float64, Int64, Float64, 0, 0, 0, 0);
+    MODULO_TESTCASE(Float64, UInt64, Float64, 0, 0, 0, 0);
+    MODULO_TESTCASE(Float64, Float64, Float64, 0, 0, 0, 0);
+    MODULO_TESTCASE(Float64, DecimalField32, Float64, 0, 0, 3, 0);
+    MODULO_TESTCASE(Float64, DecimalField64, Float64, 0, 0, 6, 0);
+    MODULO_TESTCASE(Float64, DecimalField128, Float64, 0, 0, 10, 0);
+    MODULO_TESTCASE(Float64, DecimalField256, Float64, 0, 0, 20, 0);
+
+    MODULO_TESTCASE(DecimalField32, Int64, DecimalField128, 20, 3, 0, 3);
+    MODULO_TESTCASE(DecimalField32, UInt64, DecimalField128, 20, 3, 0, 3);
+    MODULO_TESTCASE(DecimalField32, Float64, Float64, 0, 3, 0, 0);
+    MODULO_TESTCASE(DecimalField32, DecimalField32, DecimalField32, 9, 3, 3, 3);
+    MODULO_TESTCASE(DecimalField32, DecimalField64, DecimalField64, 18, 3, 6, 6);
+    MODULO_TESTCASE(DecimalField32, DecimalField128, DecimalField128, 38, 3, 10, 10);
+    MODULO_TESTCASE(DecimalField32, DecimalField256, DecimalField256, 65, 3, 20, 20);
+
+    MODULO_TESTCASE(DecimalField64, Int64, DecimalField128, 20, 6, 0, 6);
+    MODULO_TESTCASE(DecimalField64, UInt64, DecimalField128, 20, 6, 0, 6);
+    MODULO_TESTCASE(DecimalField64, Float64, Float64, 0, 6, 0, 0);
+    MODULO_TESTCASE(DecimalField64, DecimalField32, DecimalField64, 18, 6, 3, 6);
+    MODULO_TESTCASE(DecimalField64, DecimalField64, DecimalField64, 18, 6, 6, 6);
+    MODULO_TESTCASE(DecimalField64, DecimalField128, DecimalField128, 38, 6, 10, 10);
+    MODULO_TESTCASE(DecimalField64, DecimalField256, DecimalField256, 65, 6, 20, 20);
+
+    MODULO_TESTCASE(DecimalField128, Int64, DecimalField128, 38, 10, 0, 10);
+    MODULO_TESTCASE(DecimalField128, UInt64, DecimalField128, 38, 10, 0, 10);
+    MODULO_TESTCASE(DecimalField128, Float64, Float64, 0, 10, 0, 0);
+    MODULO_TESTCASE(DecimalField128, DecimalField32, DecimalField128, 38, 10, 3, 10);
+    MODULO_TESTCASE(DecimalField128, DecimalField64, DecimalField128, 38, 10, 6, 10);
+    MODULO_TESTCASE(DecimalField128, DecimalField128, DecimalField128, 38, 10, 10, 10);
+    MODULO_TESTCASE(DecimalField128, DecimalField256, DecimalField256, 65, 10, 20, 20);
+
+    MODULO_TESTCASE(DecimalField256, Int64, DecimalField256, 65, 20, 0, 20);
+    MODULO_TESTCASE(DecimalField256, UInt64, DecimalField256, 65, 20, 0, 20);
+    MODULO_TESTCASE(DecimalField256, Float64, Float64, 0, 20, 0, 0);
+    MODULO_TESTCASE(DecimalField256, DecimalField32, DecimalField256, 65, 20, 3, 20);
+    MODULO_TESTCASE(DecimalField256, DecimalField64, DecimalField256, 65, 20, 6, 20);
+    MODULO_TESTCASE(DecimalField256, DecimalField128, DecimalField256, 65, 20, 10, 20);
+    MODULO_TESTCASE(DecimalField256, DecimalField256, DecimalField256, 65, 20, 20, 20);
+
+#undef MODULO_TESTCASE
 }
 CATCH
 
-#undef MODULO_TESTCASE
 
 } // namespace tests
 } // namespace DB
