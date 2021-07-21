@@ -293,6 +293,13 @@ static String buildDateAddOrSubFunction(DAGExpressionAnalyzer * analyzer, const 
         arg_names.push_back(delta_column);
         delta_column = analyzer->applyFunction("toInt64OrNull", arg_names, actions, nullptr);
     }
+    else if (!delta_column_type->isInteger())
+    {
+        // convert to integer
+        Names arg_names;
+        arg_names.push_back(delta_column);
+        delta_column = analyzer->applyFunction("round", arg_names, actions, nullptr);
+    }
     Names argument_names;
     argument_names.push_back(date_column);
     argument_names.push_back(delta_column);
