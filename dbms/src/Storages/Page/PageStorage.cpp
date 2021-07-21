@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
@@ -20,7 +21,6 @@
 #include <utility>
 
 #ifdef FIU_ENABLE
-#include <Common/FailPoint.h>
 #include <Common/randomSeed.h>
 
 #include <pcg_random.hpp>
@@ -112,13 +112,13 @@ PageFormat::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_
     bool                all_empty          = true;
     PageFormat::Version max_binary_version = PageFormat::V1;
     PageFormat::Version temp_version       = STORAGE_FORMAT_CURRENT.page;
-    // Simply check the last PageFile is good enough
     for (auto iter = page_files.rbegin(); iter != page_files.rend(); ++iter)
     {
         // Skip those files without valid meta
         if (iter->getMetaFileSize() == 0)
             continue;
 
+        // Simply check the last non-empty PageFile is good enough
         all_empty   = false;
         auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(*iter));
         while (reader->hasNext())
@@ -932,11 +932,12 @@ WriteBatch::SequenceID PageStorage::WritingFilesSnapshot::minPersistedSequence()
 {
     if (unlikely(states.empty()))
         throw Exception("There is no writing files! Can not get min persisted sequence", ErrorCodes::LOGICAL_ERROR);
-    WriteBatch::SequenceID seq = 0;
-    for (const auto & [id, st] : states)
+
+    auto                   iter = states.begin();
+    WriteBatch::SequenceID seq  = iter->second.sequence;
+    for (/**/; iter != states.end(); ++iter)
     {
-        (void)id;
-        seq = std::min(seq, st.sequence);
+        seq = std::min(seq, iter->second.sequence);
     }
     return seq;
 }

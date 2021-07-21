@@ -237,6 +237,7 @@ private:
     };
     std::mutex write_mutex; // A mutex protect `idle_writers`,`write_files` and `statistics`.
 
+    // TODO: Wrap `write_mutex_cv`, `write_files`, `idle_writers` to be a standalone class
     std::condition_variable      write_mutex_cv;
     std::vector<WritingPageFile> write_files;
     std::deque<WriterPtr>        idle_writers;
