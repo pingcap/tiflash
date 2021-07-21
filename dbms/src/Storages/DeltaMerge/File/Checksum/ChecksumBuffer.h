@@ -187,15 +187,10 @@ private:
         return size - expected;
     }
 
-    void readAndCheckBody()
+    void checkBody()
     {
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
-        auto length = expectRead(reinterpret_cast<Position>(frame.data), frame.bytes);
-        if (unlikely(length != frame.bytes))
-        {
-            throwReadAfterEOF();
-        }
 
         // examine checksum
         if (!skip_checksum)
@@ -210,22 +205,25 @@ private:
         }
 
         // shift position, because the last frame may be of less length
-        working_buffer.resize(length);
+        working_buffer.resize(frame.bytes);
     }
 
     bool nextImpl() override
     {
-        // first, read frame header
-        auto length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>));
+        auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
+            *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
+
+        // read header and body
+        auto length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>) + frame_size);
         if (length == 0)
             return false; // EOF
-        if (unlikely(length != sizeof(ChecksumFrame<Backend>)))
+        if (unlikely(length != sizeof(ChecksumFrame<Backend>) + frame.bytes))
         {
             throwReadAfterEOF();
         }
 
-        // now read the body
-        readAndCheckBody();
+        // body checksum examination
+        checkBody();
 
         // update statistics
         current_frame++;
@@ -234,6 +232,9 @@ private:
 
     off_t doSeek(off_t offset, int whence) override
     {
+        auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
+            *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
+
         if (whence == SEEK_CUR)
         {
             offset = getPositionInFile() + offset;
@@ -253,14 +254,14 @@ private:
         }
         else
         {
-            // read the header
+            // read the header and the body
             auto header_offset = target_frame * (sizeof(ChecksumFrame<Backend>) + frame_size);
             auto result        = in->seek(static_cast<off_t>(header_offset), SEEK_SET);
             if (result == -1)
             {
                 throwFromErrno("Cannot seek through file " + in->getFileName(), ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
             }
-            auto length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>));
+            auto length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>) + frame_size);
             if (length == 0 && target_offset == 0)
             {
                 current_frame = target_frame;
@@ -268,13 +269,13 @@ private:
                 working_buffer.resize(0);
                 return offset; // EOF
             }
-            if (unlikely(length != sizeof(ChecksumFrame<Backend>)))
+            if (unlikely(length != sizeof(ChecksumFrame<Backend>) + frame.bytes))
             {
                 throwReadAfterEOF();
             }
 
-            // read the body
-            readAndCheckBody();
+            // body checksum examination
+            checkBody();
 
             // update statistics
             current_frame = target_frame;
