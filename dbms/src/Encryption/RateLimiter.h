@@ -102,18 +102,6 @@ class ReadLimiter final : public RateLimiter
 public:
     ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_ = 100);
 
-    struct Statistics
-    {
-        UInt64 total_req_bytes = 0;
-        UInt64 stat_read_bytes = 0;
-    };
-
-    Statistics getReadStat()
-    {
-        std::lock_guard lock(request_mutex);
-        return read_stat;
-    }
-
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #endif
@@ -139,7 +127,6 @@ private:
     TimePoint last_stat_time;
     Poco::Logger* log;
 
-    Statistics read_stat;
     static constexpr Int64 get_io_statistic_period_us = 2000;
 };
 

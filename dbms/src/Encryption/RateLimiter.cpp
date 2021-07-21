@@ -47,7 +47,7 @@ inline void metricRequestBytes(TiFlashMetricsPtr & metrics, LimiterType type, In
     }
 }
 
-inline void metricAllocBytes([[maybe_unused]] TiFlashMetricsPtr & metrics, [[maybe_unused]] LimiterType type, [[maybe_unused]] Int64 bytes)
+inline void metricAllocBytes(TiFlashMetricsPtr & metrics, LimiterType type, Int64 bytes)
 {
     if (unlikely(metrics == nullptr))
     {
@@ -246,7 +246,6 @@ Int64 ReadLimiter::refreshAvailableBalance()
         Int64 real_alloc_bytes = bytes - last_stat_bytes;
         metricAllocBytes(metrics, type, real_alloc_bytes);
         available_balance -= real_alloc_bytes;
-        read_stat.stat_read_bytes += real_alloc_bytes;
     }
     last_stat_bytes = bytes;
     last_stat_time = us;
@@ -261,7 +260,6 @@ void ReadLimiter::consumeBytes(Int64 bytes)
 
 bool ReadLimiter::canGrant([[maybe_unused]] Int64 bytes)
 {
-    read_stat.total_req_bytes += bytes;
     return getAvailableBalance() > 0;
 }
 
