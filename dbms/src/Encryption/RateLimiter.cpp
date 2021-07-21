@@ -194,6 +194,7 @@ void RateLimiter::refillAndAlloc()
             // Decrease remaining_bytes to avoid starvation of this request
             next_req->remaining_bytes -= available_balance;
             total_bytes_through += available_balance;
+            metricAllocBytes(metrics, type, available_balance);
             available_balance = 0;
             break;
         }
