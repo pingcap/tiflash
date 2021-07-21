@@ -354,9 +354,10 @@ public:
 
     RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
-
 private:
+
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id="");
+
     bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
