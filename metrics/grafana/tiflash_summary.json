@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1624440142159,
+  "iteration": 1626834446186,
   "links": [],
   "panels": [
     {
@@ -3857,7 +3857,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The request size and allocated bytes of Rate Limiter",
+          "description": "The storage I/O limiter metrics.",
           "fill": 1,
           "gridPos": {
             "h": 8,
@@ -3891,32 +3891,19 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(tiflash_storage_rate_limiter_total_request_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30s])",
+              "expr": "sum(rate(tiflash_storage_io_limiter{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "request_bytes-{{instance}}",
+              "instant": false,
+              "intervalFactor": 2,
+              "legendFormat": "{{type}}",
               "refId": "A"
-            },
-            {
-              "expr": "rate(tiflash_storage_rate_limiter_total_alloc_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30s])",
-              "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "alloc_bytes-{{instance}}",
-              "refId": "B"
-            },
-            {
-              "expr": "tiflash_storage_rate_limiter_total_request_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"} - tiflash_storage_rate_limiter_total_alloc_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
-              "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "pending_bytes-{{instance}}",
-              "refId": "C"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Rate Limiter",
+          "title": "I/O Limiter",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -3933,7 +3920,7 @@
           "yaxes": [
             {
               "decimals": 0,
-              "format": "decbytes",
+              "format": "Bps",
               "label": null,
               "logBase": 1,
               "max": null,
