@@ -934,11 +934,12 @@ WriteBatch::SequenceID PageStorage::WritingFilesSnapshot::minPersistedSequence()
 {
     if (unlikely(states.empty()))
         throw Exception("There is no writing files! Can not get min persisted sequence", ErrorCodes::LOGICAL_ERROR);
-    WriteBatch::SequenceID seq = 0;
-    for (const auto & [id, st] : states)
+
+    auto                   iter = states.begin();
+    WriteBatch::SequenceID seq  = iter->second.sequence;
+    for (/**/; iter != states.end(); ++iter)
     {
-        (void)id;
-        seq = std::min(seq, st.sequence);
+        seq = std::min(seq, iter->second.sequence);
     }
     return seq;
 }
