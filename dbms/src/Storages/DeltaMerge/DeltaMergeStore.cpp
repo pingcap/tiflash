@@ -1535,6 +1535,13 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         const auto  segment_id    = segment->segmentId();
         RowKeyRange segment_range = segment->getRowKeyRange();
 
+        // meet empty segment, try merge it
+        if (segment_snap->getRows() == 0)
+        {
+            checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
+            continue;
+        }
+
         // Avoid recheck this segment when gc_safe_point doesn't change regardless whether we trigger this segment's DeltaMerge or not.
         // Because after we calculate StableProperty and compare it with this gc_safe_point,
         // there is no need to recheck it again using the same gc_safe_point.
