@@ -139,3 +139,4 @@ if (USE_INTERNAL_POCO_LIBRARY)
 endif ()
 
 add_subdirectory (prometheus-cpp)
+add_subdirectory (fmtlib-cmake)

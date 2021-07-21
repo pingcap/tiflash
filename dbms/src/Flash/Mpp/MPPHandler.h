@@ -94,7 +94,8 @@ struct MPPTunnel
         }
         if (finished)
             throw Exception("write to tunnel which is already closed.");
-        writer->Write(data);
+        if (!writer->Write(data))
+            throw Exception("Failed to write data");
         if (close_after_write)
         {
             finished = true;
@@ -186,13 +187,15 @@ struct MPPTunnelSet
     void write(tipb::SelectResponse & response)
     {
         mpp::MPPDataPacket packet;
-        response.SerializeToString(packet.mutable_data());
+        if (!response.SerializeToString(packet.mutable_data()))
+            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
         tunnels[0]->write(packet);
 
         if (tunnels.size() > 1)
         {
             clearExecutionSummaries(response);
-            response.SerializeToString(packet.mutable_data());
+            if (!response.SerializeToString(packet.mutable_data()))
+                throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
             for (size_t i = 1; i < tunnels.size(); i++)
             {
                 tunnels[i]->write(packet);
@@ -208,7 +211,8 @@ struct MPPTunnelSet
             clearExecutionSummaries(response);
         }
         mpp::MPPDataPacket packet;
-        response.SerializeToString(packet.mutable_data());
+        if (!response.SerializeToString(packet.mutable_data()))
+            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
         tunnels[partition_id]->write(packet);
     }
 
@@ -238,12 +242,14 @@ enum TaskStatus
 
 struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
-    /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
-    BlockIO io;
     Context context;
 
     std::unique_ptr<tipb::DAGRequest> dag_req;
     std::unique_ptr<DAGContext> dag_context;
+
+    /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
+    /// BlockIO contains some information stored in Context and DAGContext, so need deconstruct it before Context and DAGContext
+    BlockIO io;
     MemoryTracker * memory_tracker = nullptr;
 
     MPPTaskId id;
@@ -313,6 +319,8 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
     {
+        if (status == CANCELLED)
+            throw Exception("the tunnel " + tunnel->tunnel_id + " can not been registered, because the task is cancelled");
         std::unique_lock<std::mutex> lk(tunnel_mutex);
         if (tunnel_map.find(id) != tunnel_map.end())
         {

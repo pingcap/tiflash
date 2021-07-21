@@ -46,6 +46,8 @@ LegacyCompactor::tryCompact(                 //
     // Use the largest id-level in page_files_to_compact as Checkpoint's file
     const PageFileIdAndLevel checkpoint_id = page_files_to_compact.rbegin()->fileIdLevel();
 
+    // We only store the checkpoint file to `defaultPath` for convenience. If we store the checkpoint
+    // to multi disk one day, don't forget to check existence for multi disks deployment.
     const String storage_path = delegator->defaultPath();
     if (PageFile::isPageFileExist(checkpoint_id, storage_path, file_provider, PageFile::Type::Checkpoint, page_file_log))
     {
@@ -96,9 +98,12 @@ LegacyCompactor::tryCompact(                 //
         for (const auto & pf : page_files_to_compact)
             page_files_to_remove.emplace(pf);
 
-        removePageFilesIf(page_files, [&page_files_to_remove](const PageFile & pf) -> bool {
-            // Remove page files have been compacted
-            return page_files_to_remove.count(pf) > 0 //
+        removePageFilesIf(page_files, [&page_files_to_remove, &writing_file_ids](const PageFile & pf) -> bool {
+            return //
+                // Remove page files have been compacted
+                page_files_to_remove.count(pf) > 0
+                // Remove page files that maybe writing to
+                || (!writing_file_ids.empty() && pf.fileIdLevel() >= *writing_file_ids.begin())
                 // Remove legacy/checkpoint files since we don't do gc on them later
                 || pf.getType() == PageFile::Type::Legacy || pf.getType() == PageFile::Type::Checkpoint;
         });
@@ -239,9 +244,12 @@ WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::Snaps
     return wb;
 }
 
-size_t LegacyCompactor::writeToCheckpoint(
-    const String & storage_path, const PageFileIdAndLevel & file_id, WriteBatch && wb,
-    FileProviderPtr & file_provider, Poco::Logger * log, const Context& global_context)
+size_t LegacyCompactor::writeToCheckpoint(const String &             storage_path,
+                                          const PageFileIdAndLevel & file_id,
+                                          WriteBatch &&              wb,
+                                          FileProviderPtr &          file_provider,
+                                          Poco::Logger *             log,
+                                          const Context &            global_context)
 {
     size_t bytes_written   = 0;
     auto   checkpoint_file = PageFile::newPageFile(file_id.first, file_id.second, storage_path, file_provider, PageFile::Type::Temp, log);
