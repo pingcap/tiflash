@@ -55,3 +55,4 @@
 # Clean up.
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
+=> drop table if exists logical_op_test
