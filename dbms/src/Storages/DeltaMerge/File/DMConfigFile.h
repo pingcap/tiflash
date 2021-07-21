@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/TiFlashException.h>
 #include <Common/config_version.h>
 #include <Poco/DynamicStruct.h>
 #include <Poco/JSON/JSON.h>
@@ -26,7 +27,7 @@ public:
         dtpb::Configuration configuration;
         if (unlikely(!configuration.ParseFromIstream(&input)))
         {
-            throw Exception("cannot parse protobuf for DMConfiguration");
+            throw TiFlashException("failed to parse configuration proto from input stream", Errors::Checksum::LowLevelFailure);
         }
 
         auto                 unchecked_algorithm = configuration.checksum_algorithm();
@@ -50,7 +51,7 @@ public:
             digest = std::make_unique<UnifiedDigest<Digest::XXH3>>();
             break;
         default:
-            throw Exception("unrecognized checksum algorithm");
+            throw TiFlashException("unrecognized checksum algorithm", Errors::Checksum::Internal);
         }
 
         // we cannot directly convert the value to enum;
@@ -71,7 +72,7 @@ public:
 
         if (unlikely(!digest->compareRaw(configuration.data_field_checksum())))
         {
-            throw Exception("data field checksum broken");
+            throw TiFlashException("critical fields of configuration corrupted", Errors::Checksum::DataCorruption);
         }
 
         {
@@ -116,7 +117,7 @@ public:
         case ChecksumAlgo::XXH3:
             return sizeof(ChecksumFrame<Digest::XXH3>);
         }
-        return 0;
+        throw TiFlashException("unrecognized checksum algorithm", Errors::Checksum::Internal);
     }
     [[nodiscard]] ChecksumAlgo                               getChecksumAlgorithm() const { return checksum_algorihm; }
     [[nodiscard]] std::map<std::string, std::string> &       getEmbeddedChecksum() { return embedded_checksum; }
@@ -139,7 +140,7 @@ public:
         case ChecksumAlgo::XXH3:
             return std::make_unique<UnifiedDigest<Digest::XXH3>>();
         default:
-            throw Exception("unrecognized checksum_algorihm");
+            throw TiFlashException("unrecognized checksum algorithm", Errors::Checksum::Internal);
         }
     }
 
@@ -185,7 +186,7 @@ inline std::ostream & operator<<(std::ostream & output, const DMConfiguration & 
 
     if (!configuration.SerializeToOstream(&output))
     {
-        throw Exception("unable to serialize protobuf of configuration");
+        throw TiFlashException("failed to output configuration proto to stream", Errors::Checksum::LowLevelFailure);
     };
 
     return output;

@@ -169,7 +169,7 @@ void readChecksumFramedFile(
         digest->update(data, size);
         if (unlikely(!digest->compareFrame(header_storage)))
         {
-            throw DB::Exception("Data corruption detected! checksum mismatch in file " + file->getFileName());
+            throw TiFlashException("checksum mismatch for " + file->getFileName(), Errors::Checksum::DataCorruption);
         }
         digest->reset();
     };

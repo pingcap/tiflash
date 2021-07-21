@@ -387,7 +387,7 @@ void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo 
             readText(column_stats, ver, buf, digest.get());
             if (unlikely(!digest->compareRaw(location->second)))
             {
-                throw Exception(fmt::format("data corruption, checksum mismatch for {}", name));
+                throw TiFlashException(fmt::format("checksum mismatch for {}", name), Errors::Checksum::DataCorruption);
             }
         }
         else
@@ -408,7 +408,7 @@ void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo 
         // but it should not affect the normal read procedure
         if (unlikely(ver >= DMFileFormat::V2 && !configuration))
         {
-            throw Exception("configuration expected but not found");
+            throw TiFlashException("configuration expected but not loaded", Errors::Checksum::Missing);
         } // TODO: Checksum for single file mode
         upgradeMetaIfNeed(file_provider, ver);
     }
@@ -478,7 +478,7 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
             }
             if (unlikely(!digest->compareRaw(target)))
             {
-                throw Exception(fmt::format("data corruption, checksum mismatch for {}", name));
+                throw TiFlashException(fmt::format("checksum mismatch for {}", name), Errors::Checksum::DataCorruption);
             }
         }
         else

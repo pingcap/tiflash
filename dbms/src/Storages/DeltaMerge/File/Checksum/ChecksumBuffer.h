@@ -12,6 +12,7 @@
 #include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
+#include <fmt/format.h>
 
 #include "Checksum.h"
 
@@ -84,8 +85,8 @@ private:
                     continue;
                 else
                 {
-                    // TODO: change throw behavior
-                    throw Poco::WriteFileException("failed to flush data to file", -errno);
+                    throw TiFlashException(fmt::format("cannot flush checksum framed data to {} (errno = {})", out->getFileName(), errno),
+                                           Errors::Checksum::LowLevelFailure);
                 }
             }
             iter += count;
@@ -175,8 +176,8 @@ private:
                     continue;
                 else
                 {
-                    // TODO: change throw behavior
-                    throw Poco::ReadFileException("failed to read data from file", -errno);
+                    throw TiFlashException(fmt::format("cannot load checksum framed data from {} (errno = {})", in->getFileName(), errno),
+                                           Errors::Checksum::LowLevelFailure);
                 }
             }
             expected -= count;
@@ -197,8 +198,7 @@ private:
             digest.update(frame.data, frame.bytes);
             if (unlikely(frame.checksum != digest.checksum()))
             {
-                // TODO: change throw behavior
-                throw Poco::ReadFileException("file corruption detected", -errno);
+                throw TiFlashException("checksum mismatch for " + in->getFileName(), Errors::Checksum::DataCorruption);
             }
         }
 
@@ -217,7 +217,7 @@ private:
             return false; // EOF
         if (unlikely(length != sizeof(ChecksumFrame<Backend>) + frame.bytes))
         {
-            throwReadAfterEOF();
+            throw TiFlashException("frame length mismatch for " + in->getFileName(), Errors::Checksum::DataCorruption);
         }
 
         // body checksum examination
@@ -239,8 +239,7 @@ private:
         }
         else if (whence != SEEK_SET)
         {
-            throw Poco::FileException("FramedChecksumReadBuffer::seek expects SEEK_SET or SEEK_CUR as whence",
-                                      ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw TiFlashException("FramedChecksumReadBuffer::seek expects SEEK_SET or SEEK_CUR as whence", Errors::Checksum::Internal);
         }
         auto target_frame  = offset / frame_size;
         auto target_offset = offset % frame_size;
@@ -257,7 +256,7 @@ private:
             auto result        = in->seek(static_cast<off_t>(header_offset), SEEK_SET);
             if (result == -1)
             {
-                throwFromErrno("Cannot seek through file " + in->getFileName(), ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
+                throw TiFlashException("checksum framed file " + in->getFileName() + " is not seekable", Errors::Checksum::LowLevelFailure);
             }
             auto length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>) + frame_size);
             if (length == 0 && target_offset == 0)
@@ -269,7 +268,7 @@ private:
             }
             if (unlikely(length != sizeof(ChecksumFrame<Backend>) + frame.bytes))
             {
-                throwReadAfterEOF();
+                throw TiFlashException("frame length mismatch for " + in->getFileName(), Errors::Checksum::DataCorruption);
             }
 
             // body checksum examination
