@@ -27,15 +27,15 @@ void insertInto(Block & block, Args... args);
 
 void insertColumnDef(Block & block, const String & col_name, const DataTypePtr data_type);
 
-void evalFunc(Block & block, const String & func_name, const Strings & args, const String & result);
+void evalFuncByName(Block & block, const String & func_name, const Strings & args, const String & result);
 
 void formatBlock(const Block & block, String & buff);
 
 bool operator==(const IColumn & lhs, const IColumn & rhs);
 
-std::ostream & operator<<(std::ostream & stream, IColumn const & column);
+std::ostream & operator<<(std::ostream & stream, const IColumn & column);
 
-std::ostream & operator<<(std::ostream & stream, Block const & block);
+std::ostream & operator<<(std::ostream & stream, const Block & block);
 
 #define APPLY_FOR_TYPE_LIST(M) \
     M(Int8)                    \
@@ -116,9 +116,9 @@ public:
 
     Table(const Table &) = delete;
 
-    Table(const Block & block) : data(block) {}
+    explicit Table(const Block & block) : data(block) {}
 
-    Table(Block && block) : data(block) {}
+    explicit Table(Block && block) : data(block) {}
 
     template <typename... Args>
     Table & insert(Args... args)
@@ -131,6 +131,8 @@ public:
     Table & eval(const String & func_name, const String & result, Args &&... arguments)
     {
         Strings args;
+        // C++17 fold expression
+        // https://en.cppreference.com/w/cpp/language/fold
         (args.push_back(std::forward<Args>(arguments)), ...);
         evalFunc(data, func_name, args, result);
         return *this;
@@ -144,7 +146,7 @@ public:
 };
 
 template <typename U>
-inline void insert(DataTypePtr data_type, MutableColumnPtr & column, U && arg)
+inline void insertSingleValue(DataTypePtr data_type, MutableColumnPtr & column, U && arg)
 {
     using T = std::decay_t<U>;
     (void)data_type;
@@ -190,11 +192,11 @@ inline void insert(DataTypePtr data_type, MutableColumnPtr & column, U && arg)
 }
 
 template <typename T>
-inline void insert(DataTypePtr data_type, MutableColumnPtr & column, const std::initializer_list<T> & args)
+inline void insertValuesIntoColumn(DataTypePtr data_type, MutableColumnPtr & column, const std::initializer_list<T> & args)
 {
     for (auto & arg : args)
     {
-        insert(data_type, column, std::move(arg));
+        insertSingleValue(data_type, column, std::move(arg));
     }
 }
 
@@ -205,7 +207,7 @@ void insertRow(Block & block, T arg, Args... args)
     // if (!validateDataTypeForField<T>(block.getByPosition(I).type))
     //     throw Exception("DataType doesn't match literal: " + block.getByPosition(I).type->getName() + ", " + typeid(T).name());
     MutableColumnPtr column = std::move(*block.getByPosition(I).column).mutate();
-    insert(block.getByPosition(I).type, column, {arg});
+    insertValuesIntoColumn(block.getByPosition(I).type, column, {arg});
     block.getByPosition(I).column = std::move(column);
 
     if constexpr (0 != sizeof...(Args))

@@ -2,7 +2,7 @@
 
 namespace DB
 {
-Table Table::clone() const { return data; }
+Table Table::clone() const { return Table(data); }
 
 void insertColumnDef(Block & block, const String & col_name, const DataTypePtr data_type)
 {
@@ -10,7 +10,7 @@ void insertColumnDef(Block & block, const String & col_name, const DataTypePtr d
     block.insert(col_with_type_and_name);
 }
 
-void evalFunc(Block & block, const String & func_name, const Strings & args, const String & result)
+void evalFuncByName(Block & block, const String & func_name, const Strings & args, const String & result)
 {
     for (auto & name : block.getNames())
     {
@@ -35,7 +35,6 @@ void formatBlock(const Block & block, String & buff)
 {
     WriteBufferFromString wb(buff);
 
-    std::vector<size_t> aligns(block.columns());
     for (auto & col : block)
     {
         writeString(col.name, wb);
@@ -48,7 +47,7 @@ void formatBlock(const Block & block, String & buff)
     Field field;
     for (size_t i = 0; i < block.rows(); i++)
     {
-        for (auto & col : block)
+        for (const auto & col : block)
         {
             col.column->get(i, field);
             String str = applyVisitor(FieldVisitorToString(), field);
@@ -57,7 +56,6 @@ void formatBlock(const Block & block, String & buff)
         }
         writeChar('\n', wb);
     }
-    buff.resize(wb.count());
 }
 
 bool operator==(const IColumn & lhs, const IColumn & rhs)
@@ -78,7 +76,7 @@ bool operator==(const IColumn & lhs, const IColumn & rhs)
     return false;
 }
 
-std::ostream & operator<<(std::ostream & stream, IColumn const & column)
+std::ostream & operator<<(std::ostream & stream, const IColumn & column)
 {
     stream << "[";
     Field buff;
@@ -95,7 +93,7 @@ std::ostream & operator<<(std::ostream & stream, IColumn const & column)
     return stream;
 }
 
-std::ostream & operator<<(std::ostream & stream, Block const & block)
+std::ostream & operator<<(std::ostream & stream, const Block & block)
 {
     String buff;
     formatBlock(block, buff);
