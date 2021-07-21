@@ -914,7 +914,6 @@ try
         {DecimalField256(static_cast<Int256>(100000), 5), DecimalField256(large_number_2 - 1, 5), DecimalField256(large_number_2 / 2 + 1, 5)},
         {DecimalField256(large_number_2 % 100000, 5), DecimalField256(static_cast<Int256>(1), 5), DecimalField256(large_number_2 / 2 - 1, 5)}, 65, 5);
 
-
     // Int64 has a precision of 20, which is larger than Decimal64.
     executeFunctionWithData<DecimalField32, Int64, DecimalField128>(__LINE__, func_name,
         makeDataType<Decimal32>(7, 3), makeDataType<DataTypeInt64>(),
