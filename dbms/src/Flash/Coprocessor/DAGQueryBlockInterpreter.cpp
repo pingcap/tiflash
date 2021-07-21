@@ -64,6 +64,7 @@ namespace FailPoints
 extern const char region_exception_after_read_from_storage_some_error[];
 extern const char region_exception_after_read_from_storage_all_error[];
 extern const char pause_after_learner_read[];
+extern const char pause_after_copr_streams_acquired[];
 extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
 
@@ -383,6 +384,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             }
         });
     }
+    FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
 }
 
 void DAGQueryBlockInterpreter::readFromLocalStorage( //
