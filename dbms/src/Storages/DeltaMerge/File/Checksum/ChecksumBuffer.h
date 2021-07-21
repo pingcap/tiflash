@@ -149,12 +149,10 @@ public:
         auto offset  = (-reinterpret_cast<uintptr_t>(shifted)) & (512u - 1u);
         auto result  = this->working_buffer.begin() + offset;
         set(result + sizeof(ChecksumFrame<Backend>), block_size);
-        // read at least one frame
-        next();
-        current_frame = 0;
+        current_frame = -1;
     }
 
-    off_t getPositionInFile() override { return current_frame * frame_size + offset(); }
+    off_t getPositionInFile() override { return (current_frame == -1ull) ? 0 : current_frame * frame_size + offset(); }
 
 private:
     size_t              current_frame;
