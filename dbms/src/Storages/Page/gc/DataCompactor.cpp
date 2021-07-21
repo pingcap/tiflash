@@ -374,28 +374,70 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
         if (reader_iter == data_readers.end())
             continue;
 
-        // One WriteBatch for one candidate.
         auto page_id_and_entries = collectValidEntries(valid_page_ids_in_file, snapshot);
         if (!page_id_and_entries.empty())
         {
-            auto &        data_reader = reader_iter->second;
-            const PageMap pages       = data_reader->read(page_id_and_entries);
-            WriteBatch    wb;
-            wb.setSequence(compact_sequence);
-            for (const auto & [page_id, entry] : page_id_and_entries)
-            {
-                // Upsert page to gc_file
-                const auto page = pages.find(page_id)->second;
-                wb.upsertPage(page_id,
-                              entry.tag,
-                              gc_file_id,
-                              std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
-                              page.data.size(),
-                              entry.field_offsets);
-            }
-            bytes_written += gc_file_writer->write(wb, gc_file_edit, rate_limiter);
-        }
+            auto & data_reader = reader_iter->second;
+            // A helper to read entries from `data_reader` and migrate the pages to `gc_file_writer`.
+            // The changes will be recorded by `gc_file_edit` and the bytes written will be return.
+            auto migrate_entries =
+                [compact_sequence, &data_reader, &gc_file_id, &gc_file_writer, &gc_file_edit, this](PageIdAndEntries & entries) -> size_t {
+                const PageMap pages = data_reader->read(entries);
+                WriteBatch    wb;
+                wb.setSequence(compact_sequence);
+                for (const auto & [page_id, entry] : entries)
+                {
+                    // Upsert page to gc_file
+                    const auto page = pages.find(page_id)->second;
+                    wb.upsertPage(page_id,
+                                  entry.tag,
+                                  gc_file_id,
+                                  std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
+                                  page.data.size(),
+                                  entry.field_offsets);
+                }
+                return gc_file_writer->write(wb, gc_file_edit, rate_limiter);
+            };
 
+            constexpr size_t MAX_BATCH_PER_MOVEMENT = 1000;
+            if (page_id_and_entries.size() <= MAX_BATCH_PER_MOVEMENT)
+            {
+                bytes_written += migrate_entries(page_id_and_entries);
+            }
+            else
+            {
+                // There could be one candidate contains many pages, split the `page_id_and_entries`
+                // and try to control the memory peak.
+#ifndef NDEBUG
+                size_t entries_migrated = 0;
+#endif
+                PageIdAndEntries entries_batch;
+                entries_batch.reserve(MAX_BATCH_PER_MOVEMENT);
+                for (size_t start_idx = 0; start_idx < page_id_and_entries.size(); /**/)
+                {
+                    size_t end_idx = std::min(start_idx + MAX_BATCH_PER_MOVEMENT, page_id_and_entries.size());
+                    entries_batch.clear();
+                    std::copy(page_id_and_entries.begin() + start_idx, page_id_and_entries.begin() + end_idx, entries_batch.begin());
+#ifndef NDEBUG
+                    entries_migrated += entries_batch.size();
+#endif
+                    const auto curr_bytes_written = migrate_entries(entries_batch);
+                    LOG_DEBUG(log,
+                              storage_name << " DataCompactor::mergeValidPages run with a samller batch [start_idx=" << start_idx
+                                           << "] [end_idx=" << end_idx << "], [curr_bytes_written=" << curr_bytes_written << "]");
+                    bytes_written += curr_bytes_written;
+
+                    start_idx = end_idx;
+                }
+#ifndef NDEBUG
+                if (entries_migrated != page_id_and_entries.size())
+                {
+                    throw Exception("Expect migrate " + DB::toString(page_id_and_entries.size()) + " but only migrate "
+                                    + DB::toString(entries_migrated) + " pages!");
+                }
+#endif
+            }
+        }
         migrate_infos.emplace_back(file_id_level, page_id_and_entries.size());
     }
 
