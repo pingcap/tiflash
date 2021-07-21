@@ -83,11 +83,11 @@ public:
 
         auto mode             = GetParam();
         bool single_file_mode = mode == DMFileMode::SingleFile;
-        auto configuration    = mode == DMFileMode::DirectoryChecksum ? std::make_shared<DMConfiguration>() : nullptr;
+        auto configuration    = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMConfiguration>() : std::nullopt;
 
         path_pool      = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_pool   = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
-        dm_file        = DMFile::create(1, parent_path, single_file_mode, configuration);
+        dm_file        = DMFile::create(1, parent_path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_  = std::make_shared<ColumnCache>();
 
@@ -265,9 +265,9 @@ try
 
     auto mode             = GetParam();
     bool single_file_mode = mode == DMFileMode::SingleFile;
-    auto configuration    = mode == DMFileMode::DirectoryChecksum ? std::make_shared<DMConfiguration>() : nullptr;
+    auto configuration    = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMConfiguration>() : std::nullopt;
 
-    dm_file = DMFile::create(id, parent_path, single_file_mode, configuration);
+    dm_file = DMFile::create(id, parent_path, single_file_mode, std::move(configuration));
     // Right after created, the fil is not abled to GC and it is ignored by `listAllInPath`
     EXPECT_FALSE(dm_file->canGC());
     DMFile::ListOptions options;
@@ -1131,11 +1131,11 @@ public:
 
         auto mode             = GetParam();
         bool single_file_mode = mode == DMFileMode::SingleFile;
-        auto configuration    = mode == DMFileMode::DirectoryChecksum ? std::make_shared<DMConfiguration>() : nullptr;
+        auto configuration    = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMConfiguration>() : std::nullopt;
 
         path_pool      = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
         storage_pool   = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, DB::Settings());
-        dm_file        = DMFile::create(0, path, single_file_mode, configuration);
+        dm_file        = DMFile::create(0, path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_  = std::make_shared<ColumnCache>();
 

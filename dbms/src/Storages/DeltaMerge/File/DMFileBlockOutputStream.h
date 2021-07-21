@@ -34,8 +34,7 @@ public:
                 CompressionMethod::LZ4, // context.chooseCompressionSettings(0, 0), TODO: should enable this, and make unit testes work.
                 context.getSettingsRef().min_compress_block_size,
                 context.getSettingsRef().max_compress_block_size,
-                flags,
-                nullptr}) // TODO: import real settings
+                flags})
     {
     }
 

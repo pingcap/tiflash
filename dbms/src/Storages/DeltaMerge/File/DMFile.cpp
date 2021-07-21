@@ -78,7 +78,7 @@ String DMFile::ngcPath() const
     return getNGCPath(parent_path, file_id, status, isSingleFileMode());
 }
 
-DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single_file_mode, DMConfigurationPtr configuration)
+DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single_file_mode, DMConfigurationOpt configuration)
 {
     Logger * log = &Logger::get("DMFile");
     // On create, ref_id is the same as file_id.
@@ -119,20 +119,12 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     return new_dmfile;
 }
 
-DMFilePtr DMFile::restore(const FileProviderPtr & file_provider,
-                          UInt64                  file_id,
-                          UInt64                  ref_id,
-                          const String &          parent_path,
-                          bool                    read_meta)
+DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta)
 {
     String    path             = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
     bool      single_file_mode = Poco::File(path).isFile();
-    DMFilePtr dmfile(new DMFile(file_id,
-                                ref_id,
-                                parent_path,
-                                single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER,
-                                Status::READABLE,
-                                &Logger::get("DMFile")));
+    DMFilePtr dmfile(new DMFile(
+        file_id, ref_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::READABLE, &Logger::get("DMFile")));
     if (read_meta)
         dmfile->readMetadata(file_provider);
     return dmfile;
@@ -439,7 +431,7 @@ void DMFile::readConfiguration(const FileProviderPtr & file_provider, const Meta
     UNUSED(meta_pack_info); // currently unused;
     auto file     = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
     auto stream   = InputStreamWrapper{file};
-    configuration = std::make_shared<DMConfiguration>(stream);
+    configuration.emplace(stream);
 }
 
 

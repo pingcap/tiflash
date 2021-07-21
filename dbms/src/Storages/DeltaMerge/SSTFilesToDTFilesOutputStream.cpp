@@ -121,7 +121,9 @@ bool SSTFilesToDTFilesOutputStream::newDTFileStream()
         // Can no allocate path and id for storing DTFiles (the storage may be dropped / shutdown)
         return false;
     }
-    auto dt_file = DMFile::create(file_id, parent_path, flags.isSingleFile());
+    auto config  = !flags.isSingleFile() && STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2 ? std::make_optional<DMConfiguration>()
+                                                                                               : std::nullopt;
+    auto dt_file = DMFile::create(file_id, parent_path, flags.isSingleFile(), std::move(config));
     LOG_INFO(log,
              "Create file for snapshot data " << child->getRegion()->toString(true) << " [file=" << dt_file->path()
                                               << "] [single_file_mode=" << flags.isSingleFile() << "]");

@@ -119,7 +119,7 @@ public:
     using PackProperties = dtpb::PackProperties;
 
     static DMFilePtr
-    create(UInt64 file_id, const String & parent_path, bool single_file_mode = false, DMConfigurationPtr configuration = nullptr);
+    create(UInt64 file_id, const String & parent_path, bool single_file_mode = false, DMConfigurationOpt configuration = std::nullopt);
 
     static DMFilePtr
     restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
@@ -195,7 +195,7 @@ public:
             + ", file size: " + DB::toString(getBytesOnDisk()) + "}";
     }
 
-    DMConfigurationPtr getConfiguration() const { return configuration; }
+    DMConfigurationOpt getConfiguration() const { return configuration; }
 
 private:
     DMFile(UInt64             file_id_,
@@ -204,7 +204,7 @@ private:
            Mode               mode_,
            Status             status_,
            Logger *           log_,
-           DMConfigurationPtr configuration_ = nullptr)
+           DMConfigurationOpt configuration_ = std::nullopt)
         : file_id(file_id_),
           ref_id(ref_id_),
           parent_path(std::move(parent_path_)),
@@ -315,7 +315,7 @@ private:
 
     Mode               mode;
     Status             status;
-    DMConfigurationPtr configuration; // configuration
+    DMConfigurationOpt configuration; // configuration
 
     mutable std::mutex mutex;
     SubFileStats       sub_file_stats;

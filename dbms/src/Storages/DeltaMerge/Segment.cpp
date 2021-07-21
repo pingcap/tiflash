@@ -86,7 +86,9 @@ DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
                              const String &                 parent_path,
                              DMFileBlockOutputStream::Flags flags)
 {
-    auto   dmfile        = DMFile::create(file_id, parent_path, flags.isSingleFile());
+    auto   config = !flags.isSingleFile() && STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2 ? std::make_optional<DMConfiguration>()
+                                                                                                : std::nullopt;
+    auto   dmfile = DMFile::create(file_id, parent_path, flags.isSingleFile(), std::move(config));
     auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, flags);
     auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 

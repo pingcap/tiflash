@@ -192,5 +192,5 @@ inline std::ostream & operator<<(std::ostream & output, const DMConfiguration & 
 };
 
 
-using DMConfigurationPtr = std::shared_ptr<DMConfiguration>;
+using DMConfigurationOpt = std::optional<DMConfiguration>;
 } // namespace DB::DM
