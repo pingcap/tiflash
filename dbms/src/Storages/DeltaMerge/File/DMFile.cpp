@@ -125,6 +125,10 @@ DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id,
     bool      single_file_mode = Poco::File(path).isFile();
     DMFilePtr dmfile(new DMFile(
         file_id, ref_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::READABLE, &Logger::get("DMFile")));
+    if (!single_file_mode)
+    {
+        dmfile->readConfiguration(file_provider);
+    }
     if (read_meta)
         dmfile->readMetadata(file_provider);
     return dmfile;
@@ -244,6 +248,7 @@ DMFile::OffsetAndSize DMFile::writePackPropertyToBuffer(WriteBuffer & buffer, Un
 {
     size_t offset = buffer.count();
     auto   data   = pack_properties.SerializeAsString();
+    writeStringBinary(data, buffer);
     if (digest)
     {
         for (const auto & i : pack_properties.property())
@@ -251,11 +256,6 @@ DMFile::OffsetAndSize DMFile::writePackPropertyToBuffer(WriteBuffer & buffer, Un
             digest->update(i.gc_hint_version());
             digest->update(i.num_rows());
         }
-        writeBinary(data, buffer);
-    }
-    else
-    {
-        writeStringBinary(data, buffer);
     }
     size_t size = buffer.count() - offset;
     return std::make_tuple(offset, size);
@@ -406,9 +406,9 @@ void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo 
     {
         // for V2, we do not apply in-place upgrade for now
         // but it should not affect the normal read procedure
-        if (ver >= DMFileFormat::V2)
+        if (unlikely(ver >= DMFileFormat::V2 && !configuration))
         {
-            readConfiguration(file_provider, meta_pack_info);
+            throw Exception("configuration expected but not found");
         } // TODO: Checksum for single file mode
         upgradeMetaIfNeed(file_provider, ver);
     }
@@ -434,12 +434,23 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
     }
 }
 
-void DMFile::readConfiguration(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
+void DMFile::readConfiguration(const FileProviderPtr & file_provider)
 {
-    UNUSED(meta_pack_info); // currently unused;
-    auto file   = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
-    auto stream = InputStreamWrapper{file};
-    configuration.emplace(stream);
+    bool exist;
+    {
+        auto tester = Poco::File(configurationPath());
+        exist       = tester.exists();
+    }
+    if (exist)
+    {
+        auto file   = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
+        auto stream = InputStreamWrapper{file};
+        configuration.emplace(stream);
+    }
+    else
+    {
+        configuration.reset();
+    }
 }
 
 
@@ -450,11 +461,11 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
     auto       buf  = openForRead(file_provider, packPropertyPath(), encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
     buf.seek(meta_pack_info.pack_property_offset);
 
+    readStringBinary(tmp_buf, buf);
+    pack_properties.ParseFromString(tmp_buf);
+
     if (configuration)
     {
-        tmp_buf.resize(meta_pack_info.pack_property_size);
-        buf.readBig(tmp_buf.data(), tmp_buf.length());
-        pack_properties.ParseFromString(tmp_buf);
         auto location = configuration->getEmbeddedChecksum().find(name);
         if (location != configuration->getEmbeddedChecksum().end())
         {
@@ -474,11 +485,6 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
         {
             log->warning(fmt::format("checksum for {} not found", name));
         }
-    }
-    else
-    {
-        readStringBinary(tmp_buf, buf);
-        pack_properties.ParseFromString(tmp_buf);
     }
 }
 

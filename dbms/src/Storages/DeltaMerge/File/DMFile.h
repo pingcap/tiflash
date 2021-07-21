@@ -274,7 +274,7 @@ private:
     void readMeta(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
     void readPackStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
     void readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
-    void readConfiguration(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
+    void readConfiguration(const FileProviderPtr & file_provider);
 
     void writeMetadata(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
     void readMetadata(const FileProviderPtr & file_provider);
