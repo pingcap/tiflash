@@ -360,7 +360,7 @@ void DeltaMergeStore::shutdown()
     LOG_TRACE(log, "Shutdown DeltaMerge end [" << db_name << "." << table_name << "]");
 }
 
-DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings)
+DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id)
 {
     std::shared_lock lock(read_write_mutex);
 
@@ -375,7 +375,8 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                settings.not_compress_columns,
                                is_common_handle,
                                rowkey_column_size,
-                               db_settings);
+                               db_settings,
+                               query_id);
     return DMContextPtr(ctx);
 }
 
@@ -920,7 +921,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
 {
     SegmentReadTasks tasks;
 
-    auto dm_context = newDMContext(db_context, db_settings);
+    auto dm_context = newDMContext(db_context, db_settings, db_context.getCurrentQueryId());
 
     {
         std::shared_lock lock(read_write_mutex);
@@ -972,9 +973,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                         size_t                expected_block_size,
                                         const SegmentIdSet &  read_segments)
 {
-    LOG_DEBUG(log, "Read with " << sorted_ranges.size() << " ranges");
-
-    auto dm_context = newDMContext(db_context, db_settings);
+    auto dm_context = newDMContext(db_context, db_settings, db_context.getCurrentQueryId());
 
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments);
 
@@ -2273,7 +2272,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext &          dm_c
 
     LOG_DEBUG(log,
               __FUNCTION__ << " [sorted_ranges: " << sorted_ranges.size() << "] [tasks before split: " << tasks.size()
-                           << "] [tasks final : " << result_tasks.size() << "] [ranges final: " << total_ranges << "]");
+                           << "] [tasks final: " << result_tasks.size() << "] [ranges final: " << total_ranges << "]");
 
     return result_tasks;
 }
