@@ -90,7 +90,7 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 
 void DMFileWriter::write(const Block & block, const BlockProperty & block_property)
 {
-    DMFile::PackStat stat;
+    DMFile::PackStat stat {};
     stat.rows      = block.rows();
     stat.not_clean = block_property.not_clean_rows;
     stat.bytes     = block.bytes(); // This is bytes of pack data in memory.
