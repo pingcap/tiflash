@@ -29,6 +29,24 @@ protected:
     template <typename T>
     using DataVector = std::vector<std::optional<T>>;
 
+    using DecimalField32 = DecimalField<Decimal32>;
+    using DecimalField64 = DecimalField<Decimal64>;
+    using DecimalField128 = DecimalField<Decimal128>;
+    using DecimalField256 = DecimalField<Decimal256>;
+
+    template <typename T>
+    struct DataTypeToFieldType {};
+
+    template <typename T>
+    struct DataTypeToFieldType<DataTypeNumber<T>> {
+        using Type = T;
+    };
+
+    template <typename T>
+    struct DataTypeToFieldType<DataTypeDecimal<T>> {
+        using Type = DecimalField<T>;
+    };
+
     static void SetUpTestCase()
     {
         try
@@ -838,11 +856,6 @@ try
 
     // decimal modulo
 
-    using DecimalField32 = DecimalField<Decimal32>;
-    using DecimalField64 = DecimalField<Decimal64>;
-    using DecimalField128 = DecimalField<Decimal128>;
-    using DecimalField256 = DecimalField<Decimal256>;
-
     executeFunctionWithData<DecimalField32, DecimalField32, DecimalField32>(__LINE__, func_name,
         makeDataType<Decimal32>(7, 3), makeDataType<Decimal32>(7, 3),
         {
@@ -930,6 +943,24 @@ try
         makeDataType<DataTypeInt64>(), makeDataType<DataTypeInt64>(), {{}}, {{}}, {{}});
 }
 CATCH
+
+#define MODULO_TESTCASE(Left, Right, Result, precision, scale) \
+    executeFunctionWithData<Left, Right, Result>(__LINE__, "modulo", \
+        makeDataType<DataTypeInt64>(), \
+        makeDataType<DataTypeInt64>(), \
+        {5}, \
+        {-3}, \
+        {2}, \
+        (precision), (scale));
+
+TEST_F(TestBinaryArithmeticFunctions, ModuloExtra)
+try
+{
+
+}
+CATCH
+
+#undef MODULO_TESTCASE
 
 } // namespace tests
 } // namespace DB
