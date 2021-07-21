@@ -820,6 +820,7 @@ struct GcContext
             if (num_legacy_files > config.gc_max_expect_legacy_files)
             {
                 // Hope that almost all files can be selected to migrate data to a new PageFile
+                // Note that it should be 1.0 so that we can compact legacy files under extremely situation.
                 res.gc_max_valid_rate = config.gc_max_valid_rate_bound;
             }
             else
