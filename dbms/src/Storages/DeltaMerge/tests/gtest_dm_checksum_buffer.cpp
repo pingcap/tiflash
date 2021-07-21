@@ -182,8 +182,9 @@ void runStackingTest()
             compression_buffer.write(data.data(), data.size());
         }
         {
-            auto buffer = CompressedReadBufferFromFileProvider<false>(provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, config);
-            auto cmp    = std::vector<char>(size);
+            auto buffer = CompressedReadBufferFromFileProvider<false>(
+                provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, config.getChecksumFrameLength(), config);
+            auto cmp = std::vector<char>(size);
             ASSERT_EQ(buffer.read(cmp.data(), size), size) << "random seed: " << seed << std::endl;
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
         }
@@ -232,7 +233,8 @@ void runStackedSeekingTest()
         }
     }
     {
-        auto buffer = CompressedReadBufferFromFileProvider<false>(provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, config);
+        auto buffer = CompressedReadBufferFromFileProvider<false>(
+            provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, config.getChecksumFrameLength(), config);
         std::shuffle(slices.begin(), slices.end(), local_engine);
         for (const auto & [x, y, z] : slices)
         {

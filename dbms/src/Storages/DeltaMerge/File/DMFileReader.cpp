@@ -151,8 +151,9 @@ DMFileReader::Stream::Stream(DMFileReader &                   reader,
         buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(reader.file_provider,
                                                                             reader.dmfile->colDataPath(file_name_base),
                                                                             reader.dmfile->encryptionDataPath(file_name_base),
+                                                                            estimated_size,
                                                                             read_limiter,
-                                                                            reader.dmfile->configuration);
+                                                                            *reader.dmfile->configuration);
     }
 }
 

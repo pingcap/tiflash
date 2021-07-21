@@ -35,6 +35,7 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
 std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(const FileProviderPtr & file_provider,
     const std::string & filename_,
     const EncryptionPath & encryption_path_,
+    size_t estimated_size,
     const ReadLimiterPtr & read_limiter,
     const DM::DMConfiguration & configuration,
     int flags_ = -1);

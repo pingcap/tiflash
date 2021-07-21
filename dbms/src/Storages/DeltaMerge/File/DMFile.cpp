@@ -414,7 +414,8 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
     const auto path = packStatPath();
     if (configuration)
     {
-        auto buf = createReadBufferFromFileBaseByFileProvider(file_provider, path, encryptionPackStatPath(), *configuration);
+        auto buf = createReadBufferFromFileBaseByFileProvider(
+            file_provider, path, encryptionPackStatPath(), configuration->getChecksumFrameLength(), *configuration);
         buf->seek(meta_pack_info.pack_stat_offset);
         buf->readStrict((char *)pack_stats.data(), sizeof(PackStat) * packs);
     }
@@ -429,8 +430,8 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
 void DMFile::readConfiguration(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
     UNUSED(meta_pack_info); // currently unused;
-    auto file     = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
-    auto stream   = InputStreamWrapper{file};
+    auto file   = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
+    auto stream = InputStreamWrapper{file};
     configuration.emplace(stream);
 }
 

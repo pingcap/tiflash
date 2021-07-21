@@ -37,24 +37,25 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
     }
 }
 std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(const FileProviderPtr & file_provider,
-    const std::string & filename_, const EncryptionPath & encryption_path_, const ReadLimiterPtr & read_limiter, 
+    const std::string & filename_, const EncryptionPath & encryption_path_, size_t estimated_size, const ReadLimiterPtr & read_limiter,
     const DM::DMConfiguration & configuration, int flags_)
 {
 
     ProfileEvents::increment(ProfileEvents::CreatedReadBufferOrdinary);
-    auto filePtr = file_provider->newRandomAccessFile(filename_, encryption_path_, read_limiter, flags_);
+    auto file = file_provider->newRandomAccessFile(filename_, encryption_path_, read_limiter, flags_);
+    auto allocation_size = std::min(estimated_size, configuration.getChecksumFrameLength());
     switch (configuration.getChecksumAlgorithm())
     {
         case DM::ChecksumAlgo::None:
-            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::None>>(filePtr);
+            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::None>>(file, allocation_size);
         case DM::ChecksumAlgo::CRC32:
-            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::CRC32>>(filePtr);
+            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::CRC32>>(file, allocation_size);
         case DM::ChecksumAlgo::CRC64:
-            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::CRC64>>(filePtr);
+            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::CRC64>>(file, allocation_size);
         case DM::ChecksumAlgo::City128:
-            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::City128>>(filePtr);
+            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::City128>>(file, allocation_size);
         case DM::ChecksumAlgo::XXH3:
-            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::XXH3>>(filePtr);
+            return std::make_unique<DM::Checksum::FramedChecksumReadBuffer<DM::Digest::XXH3>>(file, allocation_size);
     }
     throw Exception("error creating framed checksum buffer instance: checksum unrecognized");
 }

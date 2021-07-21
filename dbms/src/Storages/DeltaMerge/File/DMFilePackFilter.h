@@ -206,6 +206,7 @@ private:
                 auto index_buf = createReadBufferFromFileBaseByFileProvider(file_provider,
                                                                             dmfile->colIndexPath(file_name_base),
                                                                             dmfile->encryptionIndexPath(file_name_base),
+                                                                            dmfile->colIndexSize(file_name_base),
                                                                             read_limiter,
                                                                             *dmfile->configuration);
                 index_buf->seek(dmfile->colIndexOffset(file_name_base));
