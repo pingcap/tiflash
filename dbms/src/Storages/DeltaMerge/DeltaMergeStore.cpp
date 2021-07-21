@@ -1184,7 +1184,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         return;
 
     // TODO: remove this log
-    LOG_DEBUG(log, "check segment");
+    if (thread_type == ThreadType::BG_GC)
+        LOG_DEBUG(log, "bg gc check segment");
 
     /// Now start trying structure update.
 
@@ -1275,7 +1276,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     };
     auto try_bg_merge = [&]() {
         SegmentPtr merge_sibling;
-        LOG_DEBUG(log, "try bg merge " << should_merge);
+        LOG_DEBUG(log, "try bg merge " << should_merge << " segment_rows " << segment_rows << " segment_limit_rows " << segment_limit_rows << " segment_bytes " << segment_bytes << " segment_limit_bytes " << segment_limit_bytes);
+        //segment_rows < segment_limit_rows / 3 && segment_bytes < segment_limit_bytes / 3
         if (should_merge && (merge_sibling = getMergeSibling()))
         {
             try_add_background_task(BackgroundTask{TaskType::Merge, dm_context, segment, merge_sibling});
@@ -1461,7 +1463,8 @@ bool shouldCompactWithStable(const DMContext & context, const SegmentSnapshotPtr
     auto stable_bytes = snap->stable->getBytes();
 
     // TODO: change to trace level
-    LOG_DEBUG(log, "delete range " << delete_range.toDebugString() << " delete range rows " << delete_rows << ", delete_bytes " << delete_bytes << " stable_rows " << stable_rows << " stable_bytes " << stable_bytes);
+    // TODO: remove delete_range.toString()
+    LOG_DEBUG(log, "delete range " << delete_range.toString() << " delete range rows " << delete_rows << ", delete_bytes " << delete_bytes << " stable_rows " << stable_rows << " stable_bytes " << stable_bytes);
 
     // TODO: magic number of 0.8
     bool should_compact = (delete_rows > stable_rows * 0.8) || (delete_bytes > stable_bytes * 0.8);
