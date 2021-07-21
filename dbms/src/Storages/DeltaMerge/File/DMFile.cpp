@@ -243,13 +243,20 @@ DMFile::OffsetAndSize DMFile::writePackStatToBuffer(WriteBuffer & buffer, Unifie
 DMFile::OffsetAndSize DMFile::writePackPropertyToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest)
 {
     size_t offset = buffer.count();
-    String tmp_buf;
-    pack_properties.SerializeToString(&tmp_buf);
+    auto   data   = pack_properties.SerializeAsString();
     if (digest)
     {
-        digest->update(tmp_buf.data(), tmp_buf.length());
+        for (const auto & i : pack_properties.property())
+        {
+            digest->update(i.gc_hint_version());
+            digest->update(i.num_rows());
+        }
+        writeBinary(data, buffer);
     }
-    writeStringBinary(tmp_buf, buffer);
+    else
+    {
+        writeStringBinary(data, buffer);
+    }
     size_t size = buffer.count() - offset;
     return std::make_tuple(offset, size);
 }
@@ -442,15 +449,22 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
     const auto name = packPropertyFileName();
     auto       buf  = openForRead(file_provider, packPropertyPath(), encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
     buf.seek(meta_pack_info.pack_property_offset);
-    readStringBinary(tmp_buf, buf);
+
     if (configuration)
     {
+        tmp_buf.resize(meta_pack_info.pack_property_size);
+        buf.readBig(tmp_buf.data(), tmp_buf.length());
+        pack_properties.ParseFromString(tmp_buf);
         auto location = configuration->getEmbeddedChecksum().find(name);
         if (location != configuration->getEmbeddedChecksum().end())
         {
             auto         digest = configuration->createUnifiedDigest();
             const auto & target = location->second;
-            digest->update(tmp_buf.data(), tmp_buf.length());
+            for (const auto & i : pack_properties.property())
+            {
+                digest->update(i.gc_hint_version());
+                digest->update(i.num_rows());
+            }
             if (unlikely(!digest->compareRaw(target)))
             {
                 throw Exception(fmt::format("data corruption, checksum mismatch for {}", name));
@@ -461,7 +475,11 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
             log->warning(fmt::format("checksum for {} not found", name));
         }
     }
-    pack_properties.ParseFromString(tmp_buf);
+    else
+    {
+        readStringBinary(tmp_buf, buf);
+        pack_properties.ParseFromString(tmp_buf);
+    }
 }
 
 void DMFile::readMetadata(const FileProviderPtr & file_provider)
