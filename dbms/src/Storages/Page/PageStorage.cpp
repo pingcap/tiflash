@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
@@ -20,7 +21,6 @@
 #include <utility>
 
 #ifdef FIU_ENABLE
-#include <Common/FailPoint.h>
 #include <Common/randomSeed.h>
 
 #include <pcg_random.hpp>
