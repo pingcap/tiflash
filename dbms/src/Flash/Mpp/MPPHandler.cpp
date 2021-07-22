@@ -250,10 +250,16 @@ String taskStatusToString(TaskStatus ts)
             return "unknown";
     }
 }
+
+bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
+{
+    auto expect = static_cast<Int32>(from);
+    return status.compare_exchange_strong(expect, static_cast<Int32>(to));
+}
+
 void MPPTask::runImpl()
 {
-    auto old_status = static_cast<Int32>(INITIALIZING);
-    if (!status.compare_exchange_strong(old_status, static_cast<Int32>(RUNNING)))
+    if (!switchStatus(INITIALIZING, RUNNING))
     {
         LOG_WARNING(log, "task not in initializing state, skip running");
         return;
@@ -326,7 +332,15 @@ void MPPTask::runImpl()
     auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
     GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_dispatch_mpp_task).Observe(peak_memory);
     unregisterTask();
-    status = FINISHED;
+
+    if (switchStatus(RUNNING, FINISHED))
+    {
+        LOG_INFO(log, "finish task");
+    }
+    else
+    {
+        LOG_WARNING(log, "finish task which is cancelled before");
+    }
 }
 
 void MPPTask::writeErrToAllTunnel(const String & e)
@@ -350,6 +364,22 @@ void MPPTask::writeErrToAllTunnel(const String & e)
     }
 }
 
+void MPPTask::closeAllTunnels(const String & reason)
+{
+    for (auto & it : tunnel_map)
+    {
+        it.second->close(reason);
+    }
+}
+
+void MPPTask::finishWrite()
+{
+    for (auto it : tunnel_map)
+    {
+        it.second->writeDone();
+    }
+}
+
 bool MPPTask::isTaskHanging()
 {
     if (status.load() == RUNNING)
@@ -359,48 +389,50 @@ bool MPPTask::isTaskHanging()
 
 void MPPTask::cancel(const String & reason)
 {
-    auto current_status = status.exchange(CANCELLED);
-    if (current_status == FINISHED || current_status == CANCELLED)
+    while (true)
     {
-        if (current_status == FINISHED)
-            status = FINISHED;
-        return;
-    }
-    LOG_WARNING(log, "Begin cancel task: " + id.toString());
-    /// step 1. cancel query streams if it is running
-    if (current_status == RUNNING)
-    {
-        auto process_list_element = context.getProcessListElement();
-        if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
+        auto previous_status = status.load();
+        if (previous_status == FINISHED || previous_status == CANCELLED)
         {
-            BlockInputStreamPtr input_stream;
-            BlockOutputStreamPtr output_stream;
-            if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
+            return;
+        }
+        else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, CANCELLED))
+        {
+            closeAllTunnels(reason);
+            unregisterTask();
+            return;
+        }
+        else if (previous_status == RUNNING && switchStatus(RUNNING, CANCELLED))
+        {
+            LOG_WARNING(log, "Begin set cancel status on running task: " + id.toString());
+            auto process_list_element = context.getProcessListElement();
+            if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
             {
-                IProfilingBlockInputStream * input_stream_casted;
-                if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
+                BlockInputStreamPtr input_stream;
+                BlockOutputStreamPtr output_stream;
+                if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
                 {
-                    input_stream_casted->cancel(true);
+                    IProfilingBlockInputStream * input_stream_casted;
+                    if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
+                    {
+                        input_stream_casted->cancel(true);
+                    }
                 }
             }
+            /// leave remaining work to runImpl
+            LOG_WARNING(log, "Finish set cancel status on running task: " + id.toString());
+            return;
         }
     }
-    /// step 2. write Error msg and close the tunnel.
-    /// Here we use `closeAllTunnel` because currently, `cancel` is a query level cancel, which
-    /// means if this mpp task is cancelled, all the mpp tasks belonging to the same query are
-    /// cancelled at the same time, so there is no guarantee that the tunnel can be connected.
-    closeAllTunnel(reason);
-    LOG_WARNING(log, "Finish cancel task: " + id.toString());
 }
 
-void MPPHandler::handleError(MPPTaskPtr task, String error)
+void MPPHandler::handleError(const MPPTaskPtr & task, const String & error)
 {
     try
     {
-        if (task != nullptr)
+        if (task)
         {
-            task->closeAllTunnel(error);
-            task->unregisterTask();
+            task->cancel(error);
         }
     }
     catch (...)

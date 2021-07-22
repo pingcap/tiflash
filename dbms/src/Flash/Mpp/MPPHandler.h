@@ -277,33 +277,11 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         id.task_id = meta.task_id();
     }
 
-    void unregisterTask();
-
     void runImpl();
 
     bool isTaskHanging();
 
     void cancel(const String & reason);
-
-    /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
-    /// without waiting the tunnel to be connected
-    void closeAllTunnel(const String & reason)
-    {
-        for (auto & it : tunnel_map)
-        {
-            it.second->close(reason);
-        }
-    }
-
-    void finishWrite()
-    {
-        for (auto it : tunnel_map)
-        {
-            it.second->writeDone();
-        }
-    }
-
-    void writeErrToAllTunnel(const String & e);
 
     std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
 
@@ -346,9 +324,21 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         /// MPPTask maybe destructed by different thread, set the query memory_tracker
         /// to current_memory_tracker in the destructor
         current_memory_tracker = memory_tracker;
-        closeAllTunnel("");
-        LOG_DEBUG(log, "finish MPPTask: " << id.toString());
+        /// tunnels will close themselves in their dtor
+        LOG_DEBUG(log, "destruct MPPTask");
     }
+private:
+    void unregisterTask();
+
+    void writeErrToAllTunnel(const String & e);
+
+    /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
+    /// without waiting the tunnel to be connected
+    void closeAllTunnels(const String & reason);
+
+    void finishWrite();
+
+    bool switchStatus(TaskStatus from, TaskStatus to);
 };
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;
@@ -439,7 +429,7 @@ class MPPHandler
 public:
     MPPHandler(const mpp::DispatchTaskRequest & task_request_) : task_request(task_request_), log(&Logger::get("MPPHandler")) {}
     grpc::Status execute(Context & context, mpp::DispatchTaskResponse * response);
-    void handleError(MPPTaskPtr task, String error);
+    void handleError(const MPPTaskPtr & task, const String & error);
 };
 
 } // namespace DB
