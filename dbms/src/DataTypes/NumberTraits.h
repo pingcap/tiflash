@@ -119,7 +119,7 @@ template <> struct ConstructIntegerBySize<64> { using Type = Int512; };
     */
 template <typename A, typename B> struct ResultOfModulo
 {
-    static constexpr auto result_size = max(actual_size_v<A>, actual_size_v<B>);
+    static constexpr auto result_size = std::max(actual_size_v<A>, actual_size_v<B>);
 
     using IntegerType = typename ConstructIntegerBySize<result_size>::Type;
 
