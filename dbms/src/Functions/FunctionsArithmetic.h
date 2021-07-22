@@ -526,7 +526,7 @@ struct ModuloImpl<A, B, false>
     using ResultType = typename NumberTraits::ResultOfModulo<A, B>::Type;
 
     template <typename To, typename From>
-    static inline make_unsigned_t<To> to_unsigned(const From & value)
+    static make_unsigned_t<To> to_unsigned(const From & value)
     {
         using ReturnType = make_unsigned_t<To>;
 
