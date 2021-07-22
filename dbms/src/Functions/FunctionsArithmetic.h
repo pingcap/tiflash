@@ -525,6 +525,42 @@ struct ModuloImpl<A,B,false>
 {
     using ResultType = typename NumberTraits::ResultOfModulo<A, B>::Type;
 
+<<<<<<< HEAD
+=======
+    template <typename To, typename From>
+    static make_unsigned_t<To> to_unsigned(const From & value)
+    {
+        using ReturnType = make_unsigned_t<To>;
+
+        if constexpr (is_signed_v<From>)
+        {
+            if constexpr (is_boost_number_v<ReturnType>)
+            {
+                // assert that negation of std::numeric_limits<From>::min() will not result in overflow.
+                // TODO: find credible source that describes numeric limits of boost multiprecision *checked* integers.
+                static_assert(-std::numeric_limits<From>::max() == std::numeric_limits<From>::min());
+                return static_cast<ReturnType>(boost::multiprecision::abs(value));
+            }
+            else
+            {
+                if (value < 0)
+                {
+                    // both signed to unsigned conversion [1] and negation of unsigned integers [2] are well defined in C++.
+                    //
+                    // see:
+                    // [1]: https://en.cppreference.com/w/c/language/conversion#Integer_conversions
+                    // [2]: https://en.cppreference.com/w/cpp/language/operator_arithmetic#Unary_arithmetic_operators
+                    return -static_cast<ReturnType>(value);
+                }
+                else
+                    return static_cast<ReturnType>(value);
+            }
+        }
+        else
+            return static_cast<ReturnType>(value);
+    }
+
+>>>>>>> c407b167c... Fix function `mod` decimal scale overflow (#2462)
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
@@ -1286,7 +1322,7 @@ struct DecimalBinaryOperation
     static constexpr bool is_plus_minus_compare = is_plus_minus || is_compare;
     static constexpr bool can_overflow = is_plus_minus || is_multiply;
 
-    static constexpr bool need_promote_type = (std::is_same_v<ResultType_, A> || std::is_same_v<ResultType_, B>) && (is_plus_minus_compare || is_division || is_multiply) ; // And is multiple / division
+    static constexpr bool need_promote_type = (std::is_same_v<ResultType_, A> || std::is_same_v<ResultType_, B>) && (is_plus_minus_compare || is_division || is_multiply || is_modulo) ; // And is multiple / division / modulo
     static constexpr bool check_overflow = need_promote_type && std::is_same_v<ResultType_, Decimal256>; // Check if exceeds 10 * 66;
 
     using ResultType = ResultType_;
