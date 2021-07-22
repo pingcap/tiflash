@@ -782,9 +782,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         SelectQueryInfo query_info;
         query_info.query = query_ptr;
         query_info.sets = query_analyzer->getPreparedSets();
-        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
-        query_info.mvcc_query_info->resolve_locks = settings.resolve_locks;
-        query_info.mvcc_query_info->read_tso = settings.read_tso;
+        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(settings.resolve_locks, settings.read_tso);
 
         const String & request_str = settings.regions;
 

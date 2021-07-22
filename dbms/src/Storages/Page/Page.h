@@ -79,7 +79,7 @@ struct PageEntry
     UInt32     ref      = 1; // for ref counting
 
     // The offset to the begining of specify field.
-    PageFieldOffsetChecksums field_offsets;
+    PageFieldOffsetChecksums field_offsets{};
 
 public:
     inline bool               isValid() const { return file_id != 0; }
