@@ -66,7 +66,7 @@ Context & TMTContext::getContext() { return context; }
 
 bool TMTContext::isInitialized() const { return getStoreStatus() != StoreStatus::Idle; }
 
-void TMTContext::setStoreStatusRunning() { store_status = StoreStatus::Running; }
+void TMTContext::setStatusRunning() { store_status = StoreStatus::Running; }
 
 TMTContext::StoreStatus TMTContext::getStoreStatus(std::memory_order memory_order) const { return store_status.load(memory_order); }
 
@@ -111,14 +111,18 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     }
 }
 
-bool TMTContext::getTerminated(std::memory_order memory_order) const { return getStoreStatus(memory_order) == StoreStatus::Terminated; }
+bool TMTContext::checkShuttingDown(std::memory_order memory_order) const { return getStoreStatus(memory_order) >= StoreStatus::Stopping; }
+bool TMTContext::checkTerminated(std::memory_order memory_order) const { return getStoreStatus(memory_order) == StoreStatus::Terminated; }
+bool TMTContext::checkRunning(std::memory_order memory_order) const { return getStoreStatus(memory_order) == StoreStatus::Running; }
 
-void TMTContext::setTerminated()
+void TMTContext::setStatusStopping()
 {
-    store_status = StoreStatus::Terminated;
+    store_status = StoreStatus::Stopping;
     // notify all region to stop learner read.
     kvstore->traverseRegions([](const RegionID, const RegionPtr & region) { region->notifyApplied(); });
 }
+
+void TMTContext::setStatusTerminated() { store_status = StoreStatus::Terminated; }
 
 UInt64 TMTContext::replicaReadMaxThread() const { return replica_read_max_thread.load(std::memory_order::memory_order_relaxed); }
 UInt64 TMTContext::batchReadIndexTimeout() const { return batch_read_index_timeout_ms.load(std::memory_order::memory_order_relaxed); }

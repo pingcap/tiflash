@@ -27,10 +27,12 @@ public:
     DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input,
                                     const ColumnDefines &       read_columns,
                                     UInt64                      version_limit_,
-                                    bool                        is_common_handle_)
+                                    bool                        is_common_handle_,
+                                    const String &              query_id_ = "")
         : version_limit(version_limit_),
           is_common_handle(is_common_handle_),
           header(toEmptyBlock(read_columns)),
+          query_id(query_id_),
           log(&Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">"))
     {
         children.push_back(input);
@@ -48,8 +50,10 @@ public:
                   "Total rows: " << total_rows << ", pass: " << DB::toString((Float64)passed_rows * 100 / total_rows, 2)
                                  << "%, complete pass: " << DB::toString((Float64)complete_passed * 100 / total_blocks, 2)
                                  << "%, complete not pass: " << DB::toString((Float64)complete_not_passed * 100 / total_blocks, 2)
-                                 << "%, not clean: " << DB::toString((Float64)not_clean_rows * 100 / passed_rows, 2)
-                                 << "%, effective: " << DB::toString((Float64)effective_num_rows * 100 / passed_rows, 2) << "%");
+                                 << "%, not clean: " << DB::toString((Float64)not_clean_rows * 100 / passed_rows, 2)     //
+                                 << "%, effective: " << DB::toString((Float64)effective_num_rows * 100 / passed_rows, 2) //
+                                 << "%, read tso: " << version_limit
+                                 << ", query id: " << (query_id.empty() ? String("<non-query>") : query_id));
     }
 
     void readPrefix() override;
@@ -89,8 +93,7 @@ private:
             not_clean[i] = filter[i] && (compare(cur_handle, next_handle) == 0 || deleted);
             effective[i] = filter[i] && (compare(cur_handle, next_handle) != 0);
             if (filter[i])
-                gc_hint_version
-                    = std::min(gc_hint_version, calculateRowGcHintVersion(cur_handle, cur_version, next_handle, true, deleted));
+                gc_hint_version = std::min(gc_hint_version, calculateRowGcHintVersion(cur_handle, cur_version, next_handle, true, deleted));
         }
         else
         {
@@ -167,9 +170,10 @@ private:
     }
 
 private:
-    UInt64 version_limit;
-    bool   is_common_handle;
-    Block  header;
+    const UInt64 version_limit;
+    const bool   is_common_handle;
+    const Block  header;
+    const String query_id;
 
     size_t handle_col_pos;
     size_t version_col_pos;
@@ -207,7 +211,7 @@ private:
     size_t not_clean_rows      = 0;
     size_t effective_num_rows  = 0;
 
-    Logger * log;
+    Poco::Logger * const log;
 };
 } // namespace DM
 } // namespace DB
