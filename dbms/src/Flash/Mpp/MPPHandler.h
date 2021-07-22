@@ -8,6 +8,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
 
 #include <boost/noncopyable.hpp>
 #include <condition_variable>
@@ -56,7 +57,7 @@ struct MPPTunnel
         : connected(false),
           finished(false),
           timeout(timeout_),
-          tunnel_id("tunnel" + std::to_string(sender_meta_.task_id()) + "+" + std::to_string(receiver_meta_.task_id())),
+          tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id())),
           log(&Logger::get(tunnel_id))
     {}
 
@@ -65,7 +66,7 @@ struct MPPTunnel
         try
         {
             if (!finished)
-                writeDone();
+                finish();
         }
         catch (...)
         {
@@ -77,29 +78,20 @@ struct MPPTunnel
     // TODO: consider to hold a buffer
     void write(const mpp::MPPDataPacket & data, bool close_after_write = false)
     {
-
         LOG_TRACE(log, "ready to write");
-        std::unique_lock<std::mutex> lk(mu);
+        {
+            std::unique_lock<std::mutex> lk(mu);
 
-        if (timeout.count() > 0)
-        {
-            if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
-            {
-                throw Exception(tunnel_id + " is timeout");
-            }
-        }
-        else
-        {
-            cv_for_connected.wait(lk, [&]() { return connected; });
-        }
-        if (finished)
-            throw Exception("write to tunnel which is already closed.");
-        if (!writer->Write(data))
-            throw Exception("Failed to write data");
-        if (close_after_write)
-        {
-            finished = true;
-            cv_for_finished.notify_all();
+            waitForConnectedWithLock();
+
+            if (finished)
+                throw Exception("write to tunnel which is already closed.");
+
+            if (!writer->Write(data))
+                throw Exception("Failed to write data");
+
+            if (close_after_write)
+                finishWithLock();
         }
         if (close_after_write)
             LOG_TRACE(log, "finish write and close the tunnel");
@@ -108,25 +100,21 @@ struct MPPTunnel
     }
 
     // finish the writing.
-    void writeDone()
+    void finish()
     {
-        std::unique_lock<std::mutex> lk(mu);
-        if (finished)
-            throw Exception("has finished");
-        /// make sure to finish the tunnel after it is connected
-        if (timeout.count() > 0)
+        LOG_TRACE(log, "ready to finish");
         {
-            if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
-            {
-                throw Exception(tunnel_id + " is timeout");
-            }
+            std::unique_lock<std::mutex> lk(mu);
+
+            /// make sure to finish the tunnel after it is connected
+            waitForConnectedWithLock();
+
+            if (finished)
+                throw Exception("has finished");
+
+            finishWithLock();
         }
-        else
-        {
-            cv_for_connected.wait(lk, [&]() { return connected; });
-        }
-        finished = true;
-        cv_for_finished.notify_all();
+        LOG_TRACE(log, "done to finish");
     }
 
     /// close() finishes the tunnel, if the tunnel is connected already, it will
@@ -136,12 +124,12 @@ struct MPPTunnel
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
     {
-        if (connected)
-        {
-            throw Exception("has connected");
-        }
-        std::lock_guard<std::mutex> lk(mu);
         LOG_DEBUG(log, "ready to connect");
+
+        std::lock_guard<std::mutex> lk(mu);
+
+        if (connected)
+            throw Exception("has connected");
         connected = true;
         writer = writer_;
 
@@ -154,6 +142,28 @@ struct MPPTunnel
         std::unique_lock<std::mutex> lk(mu);
 
         cv_for_finished.wait(lk, [&]() { return finished; });
+    }
+private:
+    // must under mu's protection
+    void waitForConnectedWithLock()
+    {
+        auto connected_func = [&]() { return connected; };
+        if (timeout.count() > 0)
+        {
+            if (!cv_for_connected.wait_for(lk, timeout, connected_func))
+                throw Exception(tunnel_id + " is timeout");
+        }
+        else
+        {
+            cv_for_connected.wait(lk, connected_func);
+        }
+    }
+
+    // must under mu's protection
+    void finishWithLock()
+    {
+        finished = true;
+        cv_for_finished.notify_all();
     }
 };
 

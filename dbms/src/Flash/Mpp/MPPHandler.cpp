@@ -63,6 +63,18 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
     return ret;
 }
 
+namespace
+{
+mpp::MPPDataPacket getPacketWithError(String reason)
+{
+    mpp::MPPDataPacket data;
+    auto err = new mpp::Error();
+    err->set_msg(std::move(reason));
+    data.set_allocated_error(err);
+    return data;
+}
+} // namespace
+
 void MPPTunnel::close(const String & reason)
 {
     std::unique_lock<std::mutex> lk(mu);
@@ -73,11 +85,8 @@ void MPPTunnel::close(const String & reason)
         try
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(reason);
-            data.set_allocated_error(err);
-            if (!writer->Write(data))
+
+            if (!writer->Write(getPacketWith(reason)))
                 throw Exception("Failed to write err");
         }
         catch (...)
@@ -85,8 +94,7 @@ void MPPTunnel::close(const String & reason)
             tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
         }
     }
-    finished = true;
-    cv_for_finished.notify_all();
+    finishWithLock();
 }
 
 void MPPTask::unregisterTask()
@@ -163,26 +171,6 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
     context.setDAGContext(dag_context.get());
 
-    // register task.
-    TMTContext & tmt_context = context.getTMTContext();
-    auto task_manager = tmt_context.getMPPTaskManager();
-    LOG_DEBUG(log, "begin to register the task " << id.toString());
-
-    if (dag_context->isRootMPPTask())
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_root_mpp_task);
-    }
-    else
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_non_root_mpp_task);
-    }
-    if (!task_manager->registerTask(shared_from_this()))
-    {
-        throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
-    }
-
-    DAGQuerySource dag(context, regions, retry_regions, *dag_req, true);
-
     if (dag_context->isRootMPPTask())
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_root_mpp_task);
@@ -191,6 +179,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_non_root_mpp_task);
     }
+
     // register tunnels
     MPPTunnelSetPtr tunnel_set = std::make_shared<MPPTunnelSet>();
     const auto & exchangeSender = dag_req->root_executor().exchange_sender();
@@ -209,6 +198,27 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
         }
     }
+
+    // register task.
+    auto task_manager = context.getTMTContext().getMPPTaskManager();
+    LOG_DEBUG(log, "begin to register the task " << id);
+
+    if (dag_context->isRootMPPTask())
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_root_mpp_task);
+    }
+    else
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_non_root_mpp_task);
+    }
+
+    if (!task_manager->registerTask(shared_from_this()))
+    {
+        throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
+    }
+
+    DAGQuerySource dag(context, regions, retry_regions, *dag_req, true);
+
     // read index , this may take a long time.
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
 
@@ -350,11 +360,7 @@ void MPPTask::writeErrToAllTunnel(const String & e)
         try
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_write_err_to_tunnel);
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(e);
-            data.set_allocated_error(err);
-            it.second->write(data, true);
+            it.second->write(getPacketWithError(e), true);
         }
         catch (...)
         {
@@ -376,15 +382,13 @@ void MPPTask::finishWrite()
 {
     for (auto it : tunnel_map)
     {
-        it.second->writeDone();
+        it.second->finish();
     }
 }
 
 bool MPPTask::isTaskHanging()
 {
-    if (status.load() == RUNNING)
-        return task_progress.isTaskHanging(context);
-    return false;
+    return status.load() == RUNNING && task_progress.isTaskHanging(context);
 }
 
 void MPPTask::cancel(const String & reason)
