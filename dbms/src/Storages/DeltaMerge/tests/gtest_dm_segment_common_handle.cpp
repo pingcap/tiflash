@@ -1,6 +1,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ctime>
@@ -15,27 +16,18 @@ namespace DM
 namespace tests
 {
 
-class Segment_Common_Handle_test : public ::testing::Test
+class Segment_Common_Handle_test : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    Segment_Common_Handle_test() : name("tmp"), storage_pool() {}
-
-private:
-    void dropDataOnDisk()
-    {
-        // drop former-gen table's data in disk
-        if (Poco::File file(DB::tests::TiFlashTestEnv::getTemporaryPath()); file.exists())
-            file.remove(true);
-    }
+    Segment_Common_Handle_test() : storage_pool() {}
 
 public:
     static void SetUpTestCase() {}
 
     void SetUp() override
     {
-        db_context     = std::make_unique<Context>(DMTestEnv::getContext(DB::Settings()));
+        TiFlashStorageTestBasic::SetUp();
         table_columns_ = std::make_shared<ColumnDefines>();
-        dropDataOnDisk();
 
         segment = reload();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -44,7 +36,7 @@ public:
 protected:
     SegmentPtr reload(ColumnDefinesPtr cols = {}, DB::Settings && db_settings = DB::Settings())
     {
-        *db_context  = DMTestEnv::getContext(db_settings);
+        TiFlashStorageTestBasic::reload(std::move(db_settings));
         path_pool    = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
         storage_pool->restore();
@@ -77,9 +69,6 @@ protected:
     DMContext & dmContext() { return *dm_context_; }
 
 private:
-    std::unique_ptr<Context> db_context;
-    // the table name
-    String name;
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePathPool> path_pool;
     std::unique_ptr<StoragePool>     storage_pool;
