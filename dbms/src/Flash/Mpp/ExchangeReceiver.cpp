@@ -82,9 +82,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             status = reader->Finish();
             if (status.ok())
             {
-                meet_error = true;
-                local_err_msg = "Decode packet meet error";
-                LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
+                LOG_DEBUG(log, "finish read : " << req->DebugString());
                 break;
             }
             else
