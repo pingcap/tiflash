@@ -48,12 +48,14 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_formal_page_file_not_exists)                          \
     M(force_legacy_or_checkpoint_page_file_exists)
 
-#define APPLY_FOR_FAILPOINTS(M)             \
-    M(force_set_page_file_write_errno)      \
-    M(minimum_block_size_for_cross_join)    \
-    M(random_exception_after_dt_write_done) \
-    M(random_slow_page_storage_write)       \
-    M(random_exception_after_page_storage_sequence_acquired)
+#define APPLY_FOR_FAILPOINTS(M)                              \
+    M(force_set_page_file_write_errno)                       \
+    M(minimum_block_size_for_cross_join)                     \
+    M(random_exception_after_dt_write_done)                  \
+    M(random_slow_page_storage_write)                        \
+    M(random_exception_after_page_storage_sequence_acquired) \
+    M(random_slow_page_storage_remove_expired_snapshots)     \
+    M(random_slow_page_storage_list_all_live_files)
 
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_after_learner_read)                   \
