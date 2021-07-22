@@ -189,33 +189,24 @@ grpc::Status FlashService::Coprocessor(
     auto & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
-    std::string errMsg;
-    MPPTunnelPtr tunnel;
+    std::string err_msg;
+    MPPTunnelPtr tunnel = nullptr;
     {
-        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, errMsg);
-        if (sender_task == nullptr)
+        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
+        if (sender_task != nullptr)
         {
-            LOG_ERROR(log, errMsg);
+            tunnel = sender_task->getTunnelWithTimeout(request, timeout, err_msg);
+        }
+        if (tunnel == nullptr)
+        {
+            LOG_ERROR(log, err_msg);
             mpp::MPPDataPacket packet;
             auto err = new mpp::Error();
-            err->set_msg(errMsg);
+            err->set_msg(err_msg);
             packet.set_allocated_error(err);
             writer->Write(packet);
             return grpc::Status::OK;
         }
-        tunnel = sender_task->getTunnelWithTimeout(request->receiver_meta(), timeout);
-    }
-    if (tunnel == nullptr)
-    {
-        errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + " + toString(request->sender_meta().task_id())
-            + " ) within " + toString(timeout.count()) + " s";
-        LOG_ERROR(log, errMsg);
-        mpp::MPPDataPacket packet;
-        auto err = new mpp::Error();
-        err->set_msg(errMsg);
-        packet.set_allocated_error(err);
-        writer->Write(packet);
-        return grpc::Status::OK;
     }
     Stopwatch stopwatch;
     tunnel->connect(writer);
