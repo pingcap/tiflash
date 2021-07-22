@@ -410,9 +410,9 @@ void constructStringLiteralTiExpr(tipb::Expr & expr, const String & value)
 void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value)
 {
     expr.set_tp(tipb::ExprType::Int64);
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     encodeDAGInt64(value, ss);
-    expr.set_val(ss.str());
+    expr.set_val(ss.releaseStr());
     auto * field_type = expr.mutable_field_type();
     field_type->set_tp(TiDB::TypeLongLong);
     field_type->set_flag(TiDB::ColumnFlagNotNull);
@@ -421,9 +421,9 @@ void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value)
 void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value)
 {
     expr.set_tp(tipb::ExprType::MysqlTime);
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     encodeDAGUInt64(packed_value, ss);
-    expr.set_val(ss.str());
+    expr.set_val(ss.releaseStr());
     auto * field_type = expr.mutable_field_type();
     field_type->set_tp(TiDB::TypeDatetime);
     field_type->set_flag(TiDB::ColumnFlagNotNull);
@@ -617,7 +617,12 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::IntDivideInt, "intDiv"},
     //{tipb::ScalarFuncSig::IntDivideDecimal, "divide"},
 
-    {tipb::ScalarFuncSig::ModReal, "modulo"}, {tipb::ScalarFuncSig::ModDecimal, "modulo"}, {tipb::ScalarFuncSig::ModInt, "modulo"},
+    {tipb::ScalarFuncSig::ModReal, "modulo"},
+    {tipb::ScalarFuncSig::ModDecimal, "modulo"},
+    {tipb::ScalarFuncSig::ModIntUnsignedUnsigned, "modulo"},
+    {tipb::ScalarFuncSig::ModIntUnsignedSigned, "modulo"},
+    {tipb::ScalarFuncSig::ModIntSignedUnsigned, "modulo"},
+    {tipb::ScalarFuncSig::ModIntSignedSigned, "modulo"},
 
     {tipb::ScalarFuncSig::MultiplyIntUnsigned, "multiply"}, {tipb::ScalarFuncSig::MinusIntUnsignedUnsigned, "minus"},
     {tipb::ScalarFuncSig::MinusIntUnsignedSigned, "minus"}, {tipb::ScalarFuncSig::MinusIntSignedUnsigned, "minus"},
