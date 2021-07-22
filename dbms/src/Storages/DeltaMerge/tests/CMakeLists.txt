@@ -47,3 +47,5 @@ add_executable(dm_test_delta_index_manager EXCLUDE_FROM_ALL gtest_dm_delta_index
 target_link_libraries(dm_test_delta_index_manager dbms gtest_main clickhouse_functions)
 
 add_subdirectory (bank EXCLUDE_FROM_ALL)
+
+add_subdirectory (stress EXCLUDE_FROM_ALL)
