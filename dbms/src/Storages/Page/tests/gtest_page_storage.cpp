@@ -12,13 +12,12 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
+#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
-
-#include "gtest/gtest.h"
-#include <Storages/Page/PageStorage.h>
 
 namespace DB
 {
@@ -36,31 +35,19 @@ extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
 namespace tests
 {
 
-class PageStorage_test : public ::testing::Test
+class PageStorage_test : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    PageStorage_test()
-        : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "page_storage_test"),
-          storage(),
-          file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
-    {
-    }
+    PageStorage_test() : storage(), file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()} {}
 
 protected:
     static void SetUpTestCase() {}
 
     void SetUp() override
     {
+        TiFlashStorageTestBasic::SetUp();
         // drop dir if exists
-        auto ctx  = TiFlashTestEnv::getContext();
-        path_pool = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t1", false));
-        for (const auto & p : path_pool->getPSDiskDelegatorSingle("log")->listPaths())
-        {
-            if (Poco::File file(p); file.exists())
-            {
-                file.remove(true);
-            }
-        }
+        path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         // default test config
         config.file_roll_size = 512;
         config.gc_min_files   = 1;
@@ -70,15 +57,13 @@ protected:
 
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
-        auto ctx       = TiFlashTestEnv::getContext();
         auto delegator = path_pool->getPSDiskDelegatorSingle("log");
-        auto storage   = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider, ctx.getTiFlashMetrics());
+        auto storage   = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider, db_context->getTiFlashMetrics());
         storage->restore();
         return storage;
     }
 
 protected:
-    String                           path;
     PageStorage::Config              config;
     std::shared_ptr<PageStorage>     storage;
     std::unique_ptr<StoragePathPool> path_pool;

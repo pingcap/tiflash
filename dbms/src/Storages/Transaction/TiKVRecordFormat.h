@@ -3,6 +3,7 @@
 #include <Common/Exception.h>
 #include <Core/Types.h>
 #include <IO/Endian.h>
+#include <IO/WriteBufferFromString.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/TiKVHandle.h>
@@ -63,9 +64,9 @@ static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
 // https://github.com/tikv/tikv/blob/289ce2ddac505d7883ec616c078e184c00844d17/src/util/codec/bytes.rs#L33-L63
 inline TiKVKey encodeAsTiKVKey(const String & ori_str)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     EncodeBytes(ori_str, ss);
-    return TiKVKey(ss.str());
+    return TiKVKey(ss.releaseStr());
 }
 
 inline UInt64 encodeUInt64(const UInt64 x) { return toBigEndian(x); }
@@ -80,13 +81,13 @@ inline UInt64 decodeUInt64Desc(const UInt64 x) { return ~decodeUInt64(x); }
 
 inline Int64 decodeInt64(const UInt64 x) { return static_cast<Int64>(decodeUInt64(x) ^ SIGN_MASK); }
 
-inline void encodeInt64(const Int64 x, std::stringstream & ss)
+inline void encodeInt64(const Int64 x, WriteBuffer & ss)
 {
     auto u = RecordKVFormat::encodeInt64(x);
     ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
 }
 
-inline void encodeUInt64(const UInt64 x, std::stringstream & ss)
+inline void encodeUInt64(const UInt64 x, WriteBuffer & ss)
 {
     auto u = RecordKVFormat::encodeUInt64(x);
     ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
@@ -119,12 +120,12 @@ inline TiKVKey genKey(const TiDB::TableInfo & table_info, std::vector<Field> key
     auto big_endian_table_id = encodeInt64(table_info.id);
     memcpy(key.data() + 1, reinterpret_cast<const char *>(&big_endian_table_id), 8);
     memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     for (size_t i = 0; i < keys.size(); i++)
     {
         DB::EncodeDatum(keys[i], table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset].getCodecFlag(), ss);
     }
-    return encodeAsTiKVKey(key + ss.str());
+    return encodeAsTiKVKey(key + ss.releaseStr());
 }
 
 inline bool checkKeyPaddingValid(const char * ptr, const UInt8 pad_size)
@@ -202,24 +203,24 @@ inline TiKVKey genKey(TableID tableId, HandleID handleId, Timestamp ts)
 inline TiKVValue encodeLockCfValue(
     UInt8 lock_type, const String & primary, Timestamp ts, UInt64 ttl, const String * short_value = nullptr, Timestamp min_commit_ts = 0)
 {
-    std::stringstream res;
-    res.put(lock_type);
+    WriteBufferFromOwnString res;
+    res.write(lock_type);
     TiKV::writeVarInt(static_cast<Int64>(primary.size()), res);
     res.write(primary.data(), primary.size());
     TiKV::writeVarUInt(ts, res);
     TiKV::writeVarUInt(ttl, res);
     if (short_value)
     {
-        res.put(SHORT_VALUE_PREFIX);
-        res.put(static_cast<char>(short_value->size()));
+        res.write(SHORT_VALUE_PREFIX);
+        res.write(static_cast<char>(short_value->size()));
         res.write(short_value->data(), short_value->size());
     }
     if (min_commit_ts)
     {
-        res.put(MIN_COMMIT_TS_PREFIX);
+        res.write(MIN_COMMIT_TS_PREFIX);
         encodeUInt64(min_commit_ts, res);
     }
-    return TiKVValue(res.str());
+    return TiKVValue(res.releaseStr());
 }
 
 struct DecodedLockCFValue : boost::noncopyable
@@ -360,23 +361,23 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
 
 inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts, std::string_view short_value = {}, bool gc_fence = false)
 {
-    std::stringstream res;
-    res.put(write_type);
+    WriteBufferFromOwnString res;
+    res.write(write_type);
     TiKV::writeVarUInt(ts, res);
     if (!short_value.empty())
     {
-        res.put(SHORT_VALUE_PREFIX);
-        res.put(static_cast<char>(short_value.size()));
+        res.write(SHORT_VALUE_PREFIX);
+        res.write(static_cast<char>(short_value.size()));
         res.write(short_value.data(), short_value.size());
     }
     // just for test
-    res.put(FLAG_OVERLAPPED_ROLLBACK);
+    res.write(FLAG_OVERLAPPED_ROLLBACK);
     if (gc_fence)
     {
-        res.put(GC_FENCE_PREFIX);
+        res.write(GC_FENCE_PREFIX);
         encodeUInt64(8888, res);
     }
-    return TiKVValue(res.str());
+    return TiKVValue(res.releaseStr());
 }
 
 template <bool start>
