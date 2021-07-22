@@ -449,8 +449,7 @@ void backgroundInitStores(Context & global_context, Logger * log)
 class Server::FlashGrpcServerHolder
 {
 public:
-    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Logger * log_)
-        : log(log_)
+    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Logger * log_) : log(log_)
     {
         grpc::ServerBuilder builder;
         if (server.security_config.has_tls_config)
@@ -502,6 +501,7 @@ public:
         flash_service.reset();
         LOG_INFO(log, "Shut down flash service");
     }
+
 private:
     Logger * log;
     std::unique_ptr<FlashService> flash_service = nullptr;
@@ -744,8 +744,9 @@ public:
         }
 
         LOG_DEBUG(log,
-            "Closed all listening sockets."
-                << (current_connections ? " Waiting for " + toString(current_connections) + " outstanding connections." : ""));
+            "Closed all listening sockets." << (current_connections
+                    ? " Waiting for " + toString(current_connections) + " outstanding connections."
+                    : ""));
 
         if (current_connections)
         {
@@ -771,16 +772,13 @@ public:
                                                           : ""));
     }
 
-    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const
-    {
-        return servers;
-    }
+    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const { return servers; }
+
 private:
     Server & server;
     Logger * log;
     Poco::ThreadPool server_pool;
     std::vector<std::unique_ptr<Poco::Net::TCPServer>> servers;
-
 };
 
 int Server::main(const std::vector<std::string> & /*args*/)
@@ -1273,9 +1271,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         SessionCleaner session_cleaner(*global_context);
         ClusterManagerService cluster_manager_service(*global_context, config_path);
 
+        auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
         {
-            tiflash_instance_wrap.tmt = &global_context->getTMTContext();
+            tiflash_instance_wrap.tmt = &tmt_context;
             LOG_INFO(log, "let tiflash proxy start all services");
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
@@ -1299,12 +1298,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
             GET_METRIC(metrics, tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
-        global_context->getTMTContext().setStoreStatusRunning();
+        tmt_context.setStatusRunning();
         waitForTerminationRequest();
 
         {
-            global_context->getTMTContext().setTerminated();
-            LOG_INFO(log, "Set tmt context terminated");
+            LOG_INFO(log, "Set store status Stopping");
+            tmt_context.setStatusStopping();
+            {
+                // Wait until there is no read-index task.
+                while (tmt_context.getKVStore()->getReadIndexEvent())
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            }
+            tmt_context.setStatusTerminated();
+            LOG_INFO(log, "Set store status Terminated");
             // wait proxy to stop services
             if (proxy_conf.is_proxy_runnable)
             {

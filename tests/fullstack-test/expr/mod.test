@@ -1,0 +1,242 @@
+# vector % const / const % vector
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a decimal(20, 5))
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 0), (2, 2.3890)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % 0), sum(0 % a) from test.t group by id order by id
++------+------------+------------+
+| id   | sum(a % 0) | sum(0 % a) |
++------+------------+------------+
+|    1 |       NULL |       NULL |
+|    2 |       NULL |    0.00000 |
++------+------------+------------+
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a decimal(20, 5))
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 1.23456), (2, 2.3890), (3, -1.99999), (4, -2.256)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % 1.1), sum(a % -1.1), sum(2.3890 % a), sum(9982.44353 % a) from test.t group by id order by id
++------+--------------+---------------+-----------------+---------------------+
+| id   | sum(a % 1.1) | sum(a % -1.1) | sum(2.3890 % a) | sum(9982.44353 % a) |
++------+--------------+---------------+-----------------+---------------------+
+|    1 |      0.13456 |       0.13456 |         1.15444 |             1.02593 |
+|    2 |      0.18900 |       0.18900 |         0.00000 |             1.20153 |
+|    3 |     -0.89999 |      -0.89999 |         0.38901 |             0.49344 |
+|    4 |     -0.05600 |      -0.05600 |         0.13300 |             1.89953 |
++------+--------------+---------------+-----------------+---------------------+
+
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % null), sum(null % a) from test.t group by id order by id
++------+---------------+---------------+
+| id   | sum(a % null) | sum(null % a) |
++------+---------------+---------------+
+|    1 |          NULL |          NULL |
+|    2 |          NULL |          NULL |
+|    3 |          NULL |          NULL |
+|    4 |          NULL |          NULL |
++------+---------------+---------------+
+
+# decimal % decimal with different scales
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a decimal(20, 5), b decimal(20, 10))
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 1.23456, 2.34567890), (2, 1.99999, 2.234), (3, 2.23456, 1.34567890), (4, 2.99999, 1.234)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b) from test.t group by id order by id
++------+--------------+
+| id   | sum(a % b)   |
++------+--------------+
+|    1 | 1.2345600000 |
+|    2 | 1.9999900000 |
+|    3 | 0.8888811000 |
+|    4 | 0.5319900000 |
++------+--------------+
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a decimal(20, 10), b decimal(20, 5))
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 2.34567890, 1.23456), (2, 2.234, 1.99999), (3, 1.34567890, 2.23456), (4, 1.234, 2.99999)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b) from test.t group by id order by id
++------+--------------+
+| id   | sum(a % b)   |
++------+--------------+
+|    1 | 1.1111189000 |
+|    2 | 0.2340100000 |
+|    3 | 1.3456789000 |
+|    4 | 1.2340000000 |
++------+--------------+
+
+# unsigned % signed extreme value
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a bigint unsigned, b bigint)
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 9223372036854775808, -9223372036854775808)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b) from test.t group by id order by id
++------+------------+
+| id   | sum(a % b) |
++------+------------+
+|    1 |          0 |
++------+------------+
+
+# real % real
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a real, b real)
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 1.3, 1.1), (2, -1.3, 1.1), (3, 1.3, -1.1), (4, -1.3, -1.1), (5, 3.3, 1.1), (6, 3.3, -1.1), (7, -3.3, 1.1), (8, -3.3, -1.1), (9, 1.2, 0.0), (10, null, 0)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b) from test.t group by id order by id
++------+----------------------+
+| id   | sum(a % b)           |
++------+----------------------+
+|    1 |  0.19999999999999996 |
+|    2 | -0.19999999999999996 |
+|    3 |  0.19999999999999996 |
+|    4 | -0.19999999999999996 |
+|    5 |   1.0999999999999996 |
+|    6 |   1.0999999999999996 |
+|    7 |  -1.0999999999999996 |
+|    8 |  -1.0999999999999996 |
+|    9 |                 NULL |
+|   10 |                 NULL |
++------+----------------------+
+
+# unsigned % unsigned
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a bigint unsigned, b bigint unsigned)
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 1, 1), (2, 3, 2), (3, 3, 0), (4, 0, 4), (5, null, 0), (6, 0, null), (7, null, null)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b) from test.t group by id order by id
++------+------------+
+| id   | sum(a % b) |
++------+------------+
+|    1 |          0 |
+|    2 |          1 |
+|    3 |       NULL |
+|    4 |          0 |
+|    5 |       NULL |
+|    6 |       NULL |
+|    7 |       NULL |
++------+------------+
+
+# unsigned % signed
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a bigint unsigned, b bigint signed)
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 13, 11), (2, 13, -11), (3, 12, 6), (4, 12, -6), (5, 12, 0), (6, 0, null), (7, null, 0), (8, null, null)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b) from test.t group by id order by id
++------+------------+
+| id   | sum(a % b) |
++------+------------+
+|    1 |          2 |
+|    2 |          2 |
+|    3 |          0 |
+|    4 |          0 |
+|    5 |       NULL |
+|    6 |       NULL |
+|    7 |       NULL |
+|    8 |       NULL |
++------+------------+
+
+# signed % unsigned
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a bigint signed, b bigint unsigned)
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 13, 11), (2, -13, 11), (3, 12, 6), (4, -12, 6), (5, -6, 12), (6, 0, null), (7, null, 0), (8, null, null)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b) from test.t group by id order by id
++------+------------+
+| id   | sum(a % b) |
++------+------------+
+|    1 |          2 |
+|    2 |         -2 |
+|    3 |          0 |
+|    4 |          0 |
+|    5 |         -6 |
+|    6 |       NULL |
+|    7 |       NULL |
+|    8 |       NULL |
++------+------------+
+
+# signed % signed
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a bigint signed, b bigint signed)
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 13, 11), (2, -13, 11), (3, 13, -11), (4, -13, -11), (5, -6, -12), (6, 0, null), (7, null, 0), (8, null, null)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b) from test.t group by id order by id
++------+------------+
+| id   | sum(a % b) |
++------+------------+
+|    1 |          2 |
+|    2 |         -2 |
+|    3 |          2 |
+|    4 |         -2 |
+|    5 |         -6 |
+|    6 |       NULL |
+|    7 |       NULL |
+|    8 |       NULL |
++------+------------+
+
+# decimal % decimal
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a decimal(10, 5), b decimal(10, 5))
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 1.3, 1.1), (2, -1.3, 1.1), (3, 1.3, -1.1), (4, -1.3, -1.1), (5, 3.3, 1.1), (6, 3.3, -1.1), (7, -3.3, 1.1), (8, -3.3, -1.1), (9, 1.2, 0.0), (10, null, 0)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b) from test.t group by id order by id
++------+------------+
+| id   | sum(a % b) |
++------+------------+
+|    1 |    0.20000 |
+|    2 |   -0.20000 |
+|    3 |    0.20000 |
+|    4 |   -0.20000 |
+|    5 |    0.00000 |
+|    6 |    0.00000 |
+|    7 |    0.00000 |
+|    8 |    0.00000 |
+|    9 |       NULL |
+|   10 |       NULL |
++------+------------+
+
+# big decimals: decimal128 & decimal256
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a decimal(30, 5), b decimal(30, 5))
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 12345678912345678912345.12345, 12345678912345678912345), (2, 12345678912345678912345, 6172839456172839456172.6)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b) from test.t group by id order by id
++------+------------------------------+
+| id   | sum(a % b)                   |
++------+------------------------------+
+|    1 |                      0.12345 |
+|    2 | 6172839456172839456172.40000 |
++------+------------------------------+
+
+mysql> drop table if exists test.t
+mysql> create table test.t (id int, a decimal(60, 5), b decimal(60, 5))
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 12345678912345678912345678912345678912345678912345.12345, 12345678912345678912345678912345678912345678912345), (2, 12345678912345678912345678912345678912345678912345, 6172839456172839456172839456172839456172839456172.6)
+func> wait_table test t
+mysql> set @@session.tidb_isolation_read_engines='tiflash'; select id, sum(a % b) from test.t group by id order by id
++------+---------------------------------------------------------+
+| id   | sum(a % b)                                              |
++------+---------------------------------------------------------+
+|    1 |                                                 0.12345 |
+|    2 | 6172839456172839456172839456172839456172839456172.40000 |
++------+---------------------------------------------------------+
