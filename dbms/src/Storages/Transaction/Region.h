@@ -143,8 +143,8 @@ public:
 
     ReadIndexResult learnerRead(UInt64 start_ts);
 
-    /// If server is terminating, return true (read logic should throw NOT_FOUND exception and let upper layer retry other store).
-    TerminateWaitIndex waitIndex(UInt64 index, const TMTContext & tmt);
+    // Return time cost(seconds) about wait-index. If peer-state is NOT Normal or store-status is Terminated, wait-index process will be stopped as well.
+    double waitIndex(UInt64 index, const TMTContext & tmt);
 
     UInt64 appliedIndex() const;
 
