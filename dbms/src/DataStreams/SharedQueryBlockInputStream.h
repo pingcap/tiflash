@@ -26,8 +26,15 @@ public:
 
     ~SharedQueryBlockInputStream()
     {
-        cancel(false);
-        readSuffix();
+        try
+        {
+            cancel(false);
+            readSuffix();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
     }
 
     String getName() const override
@@ -60,9 +67,12 @@ public:
             return;
         read_suffixed = true;
 
-        thread.join();
+        if (thread.joinable())
+            thread.join();
         if (exception)
+        {
             std::rethrow_exception(exception);
+        }
     }
 
 protected:
