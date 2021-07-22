@@ -1,7 +1,7 @@
-#include <TestUtils/TiFlashTestBasic.h>
 #include <Encryption/MockKeyManager.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::tests
 {
@@ -58,7 +58,7 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
 
 void TiFlashTestEnv::shutdown()
 {
-    global_context->getTMTContext().setTerminated();
+    global_context->getTMTContext().setStatusTerminated();
     global_context->shutdown();
     global_context.reset();
 }
