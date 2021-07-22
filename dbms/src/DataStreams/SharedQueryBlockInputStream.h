@@ -70,9 +70,7 @@ public:
         if (thread.joinable())
             thread.join();
         if (exception)
-        {
             std::rethrow_exception(exception);
-        }
     }
 
 protected:
