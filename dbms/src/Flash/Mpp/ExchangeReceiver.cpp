@@ -42,6 +42,7 @@ void ExchangeReceiver::setUpConnection()
 void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 {
     bool meet_error = false;
+    String local_err_msg;
     try
     {
         auto sender_task = new mpp::TaskMeta();
@@ -50,51 +51,75 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
         req->set_allocated_sender_meta(sender_task);
         LOG_DEBUG(log, "begin start and read : " << req->DebugString());
-        pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
-        grpc::ClientContext client_context;
-        auto reader = cluster->rpc_client->sendStreamRequest(req->sender_meta().address(), &client_context, call);
-        reader->WaitForInitialMetadata();
-        // Block until the next result is available in the completion queue "cq".
-        mpp::MPPDataPacket packet;
-        String req_info = "tunnel" + std::to_string(sender_task->task_id()) + "+" + std::to_string(task_meta.task_id());
-        for (;;)
+        ::grpc::Status status;
+        for (int i = 0; i < 10; i++)
         {
-            LOG_TRACE(log, "begin next ");
-            bool success = reader->Read(&packet);
-            if (!success)
-                break;
-            if (packet.has_error())
+            pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
+            grpc::ClientContext client_context;
+            auto reader = cluster->rpc_client->sendStreamRequest(req->sender_meta().address(), &client_context, call);
+            reader->WaitForInitialMetadata();
+            // Block until the next result is available in the completion queue "cq".
+            mpp::MPPDataPacket packet;
+            String req_info = "tunnel" + std::to_string(sender_task->task_id()) + "+" + std::to_string(task_meta.task_id());
+            for (;;)
             {
-                throw Exception("exchange receiver meet error : " + packet.error().msg());
+                LOG_TRACE(log, "begin next ");
+                bool success = reader->Read(&packet);
+                if (!success)
+                    break;
+                if (packet.has_error())
+                {
+                    throw Exception("Exchange receiver meet error : " + packet.error().msg());
+                }
+                if (!decodePacket(packet, source_index, req_info))
+                {
+                    meet_error = true;
+                    local_err_msg = "Decode packet meet error";
+                    LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
+                    break;
+                }
             }
-            if (!decodePacket(packet, source_index, req_info))
+            status = reader->Finish();
+            if (status.ok())
             {
-                meet_error = true;
-                LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
+                LOG_DEBUG(log, "finish read : " << req->DebugString());
                 break;
+            }
+            else
+            {
+                LOG_WARNING(log, "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info "<< req_info);
+
+                using namespace std::chrono_literals;
+                std::this_thread::sleep_for(1s);
             }
         }
-        LOG_DEBUG(log, "finish read : " << req->DebugString());
+        if (!status.ok())
+        {
+            meet_error = true;
+            local_err_msg = status.error_message();
+        }
     }
     catch (Exception & e)
     {
         meet_error = true;
-        err = e;
+        local_err_msg = e.message();
     }
     catch (std::exception & e)
     {
         meet_error = true;
-        err = Exception(e.what());
+        local_err_msg = e.what();
     }
     catch (...)
     {
         meet_error = true;
-        err = Exception("fatal error");
+        local_err_msg = "fatal error";
     }
     std::lock_guard<std::mutex> lock(mu);
     live_connections--;
     if (meet_error && state == NORMAL)
         state = ERROR;
+    if (meet_error && err_msg.empty())
+        err_msg = local_err_msg;
     cv.notify_all();
     LOG_DEBUG(log, "read thread end!!! live connections: " << std::to_string(live_connections));
 }
