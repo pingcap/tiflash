@@ -40,9 +40,8 @@ struct Construct
 
 /**
  * TODO:
- * * add 128-bit and 256-bit integers.
- * * change Float32 to Float64.
- *   * all floating-point arithmetics should evaluate to Float64.
+ * 1. support wide integers (Int128/Int256) needed by Decimal.
+ * 2. for floating point numbers Type should always be Float64.
  */
 template <> struct Construct<false, false, 1> { using Type = UInt8; };
 template <> struct Construct<false, false, 2> { using Type = UInt16; };
