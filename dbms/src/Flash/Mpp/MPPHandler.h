@@ -92,7 +92,8 @@ struct MPPTunnel
         }
         if (finished)
             throw Exception("write to tunnel which is already closed.");
-        writer->Write(data);
+        if (!writer->Write(data))
+            throw Exception("Failed to write data");
         if (close_after_write)
         {
             finished = true;
@@ -184,7 +185,8 @@ struct MPPTunnelSet
     void write(tipb::SelectResponse & response)
     {
         std::string data;
-        response.SerializeToString(&data);
+        if (!response.SerializeToString(&data))
+            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
         mpp::MPPDataPacket packet;
         packet.set_data(data);
         tunnels[0]->write(packet);
@@ -193,7 +195,8 @@ struct MPPTunnelSet
         {
             clearExecutionSummaries(response);
             data.clear();
-            response.SerializeToString(&data);
+            if (!response.SerializeToString(&data))
+                throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
             packet.set_data(data);
             for (size_t i = 1; i < tunnels.size(); i++)
             {
@@ -210,7 +213,8 @@ struct MPPTunnelSet
             clearExecutionSummaries(response);
         }
         std::string data;
-        response.SerializeToString(&data);
+        if (!response.SerializeToString(&data))
+            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
         mpp::MPPDataPacket packet;
         packet.set_data(data);
         tunnels[partition_id]->write(packet);
