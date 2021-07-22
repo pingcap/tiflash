@@ -97,6 +97,9 @@ public:
 
     TiDB::SnapshotApplyMethod applyMethod() const { return snapshot_apply_method; }
 
+    void addReadIndexEvent(Int64 f) { read_index_event_flag += f; }
+    Int64 getReadIndexEvent() const { return read_index_event_flag; }
+
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
@@ -166,6 +169,7 @@ private:
     std::list<RegionDataReadInfoList> bg_gc_region_data;
 
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
+    std::atomic_int64_t read_index_event_flag{0};
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

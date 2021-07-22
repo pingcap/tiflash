@@ -1238,9 +1238,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         SessionCleaner session_cleaner(*global_context);
         ClusterManagerService cluster_manager_service(*global_context, config_path);
 
+        auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
         {
-            tiflash_instance_wrap.tmt = &global_context->getTMTContext();
+            tiflash_instance_wrap.tmt = &tmt_context;
             LOG_INFO(log, "let tiflash proxy start all services");
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
@@ -1264,12 +1265,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
             GET_METRIC(metrics, tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
-        global_context->getTMTContext().setStoreStatusRunning();
+        tmt_context.setStatusRunning();
         waitForTerminationRequest();
 
         {
-            global_context->getTMTContext().setTerminated();
-            LOG_INFO(log, "Set tmt context terminated");
+            LOG_INFO(log, "Set store status Stopping");
+            tmt_context.setStatusStopping();
+            {
+                // Wait until there is no read-index task.
+                while (tmt_context.getKVStore()->getReadIndexEvent())
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            }
+            tmt_context.setStatusTerminated();
+            LOG_INFO(log, "Set store status Terminated");
             // wait proxy to stop services
             if (proxy_conf.is_proxy_runnable)
             {
