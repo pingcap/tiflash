@@ -32,6 +32,16 @@ struct TiFlashRaftConfig;
 class TMTContext : private boost::noncopyable
 {
 public:
+    enum class StoreStatus : uint8_t
+    {
+        Idle = 0,
+        Ready,
+        Running,
+        Stopping,
+        Terminated,
+    };
+
+public:
     const KVStorePtr & getKVStore() const;
     KVStorePtr & getKVStore();
 
@@ -47,7 +57,6 @@ public:
     GCManager & getGCManager();
 
     Context & getContext();
-    bool isInitialized() const;
 
     bool isBgFlushDisabled() const { return disable_bg_flush; }
 
@@ -70,8 +79,14 @@ public:
 
     void reloadConfig(const Poco::Util::AbstractConfiguration & config);
 
-    const std::atomic_bool & getTerminated() const;
-    void setTerminated();
+    bool isInitialized() const;
+    StoreStatus getStoreStatus(std::memory_order = std::memory_order_seq_cst) const;
+    void setStatusRunning();
+    void setStatusStopping();
+    void setStatusTerminated();
+    bool checkShuttingDown(std::memory_order = std::memory_order_seq_cst) const;
+    bool checkTerminated(std::memory_order = std::memory_order_seq_cst) const;
+    bool checkRunning(std::memory_order = std::memory_order_seq_cst) const;
 
     const KVClusterPtr & getCluster() const { return cluster; }
 
@@ -86,11 +101,11 @@ private:
     BackGroundServicePtr background_service;
     GCManager gc_manager;
 
-private:
     KVClusterPtr cluster;
 
     mutable std::mutex mutex;
-    std::atomic_bool initialized = false;
+
+    std::atomic<StoreStatus> store_status{StoreStatus::Idle};
 
     const std::unordered_set<std::string> ignore_databases;
     SchemaSyncerPtr schema_syncer;
@@ -100,7 +115,6 @@ private:
 
     bool disable_bg_flush;
 
-    std::atomic_bool terminated{false};
     std::atomic_uint64_t replica_read_max_thread;
     std::atomic_uint64_t batch_read_index_timeout_ms;
 };

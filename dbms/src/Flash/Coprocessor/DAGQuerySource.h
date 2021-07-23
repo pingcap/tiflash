@@ -33,9 +33,11 @@ struct StreamWriter
     void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
     {
         ::coprocessor::BatchResponse resp;
-        response.SerializeToString(resp.mutable_data());
+        if (!response.SerializeToString(resp.mutable_data()))
+            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
         std::lock_guard<std::mutex> lk(write_mutex);
-        writer->Write(resp);
+        if (!writer->Write(resp))
+            throw Exception("Failed to write resp");
     }
     // a helper function
     uint16_t getPartitionNum() { return 0; }
@@ -48,8 +50,8 @@ using StreamWriterPtr = std::shared_ptr<StreamWriter>;
 class DAGQuerySource : public IQuerySource
 {
 public:
-    DAGQuerySource(Context & context_, const std::unordered_map<RegionVerID, RegionInfo> & regions_, const tipb::DAGRequest & dag_request_,
-        const bool is_batch_cop_ = false);
+    DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_,
+        const tipb::DAGRequest & dag_request_, const bool is_batch_cop_ = false);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
@@ -64,7 +66,8 @@ public:
     tipb::EncodeType getEncodeType() const { return encode_type; }
 
     std::shared_ptr<DAGQueryBlock> getQueryBlock() const { return root_query_block; }
-    const std::unordered_map<RegionVerID, RegionInfo> & getRegions() const { return regions; }
+    const RegionInfoMap & getRegions() const { return regions; }
+    const RegionInfoList & getRetryRegions() const { return retry_regions; }
 
     bool isBatchCop() const { return is_batch_cop; }
 
@@ -76,7 +79,8 @@ protected:
 protected:
     Context & context;
 
-    const std::unordered_map<RegionVerID, RegionInfo> & regions;
+    const RegionInfoMap & regions;
+    const RegionInfoList & retry_regions;
 
     const tipb::DAGRequest & dag_request;
 

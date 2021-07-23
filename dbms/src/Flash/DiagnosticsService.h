@@ -1,14 +1,13 @@
 #pragma once
 
-#include <fstream>
-
-#include <Server/IServer.h>
-
 #include <Poco/File.h>
+#include <Server/IServer.h>
 #include <common/logger_useful.h>
+
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/noncopyable.hpp>
+#include <fstream>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

@@ -16,7 +16,7 @@ class TiDBChunk
 public:
     TiDBChunk(const std::vector<tipb::FieldType> & field_types);
 
-    void encodeChunk(std::stringstream & ss)
+    void encodeChunk(WriteBuffer & ss)
     {
         for (auto & c : columns)
             c.encodeColumn(ss);

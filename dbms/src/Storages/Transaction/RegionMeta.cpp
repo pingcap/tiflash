@@ -144,12 +144,12 @@ void RegionMeta::setPeerState(const raft_serverpb::PeerState peer_state_)
     region_state.setState(peer_state_);
 }
 
-TerminateWaitIndex RegionMeta::waitIndex(UInt64 index, const std::atomic_bool & terminated) const
+TerminateWaitIndex RegionMeta::waitIndex(UInt64 index, std::function<bool(void)> && check_running) const
 {
     std::unique_lock<std::mutex> lock(mutex);
     TerminateWaitIndex res = false;
     cv.wait(lock, [&] {
-        if (terminated)
+        if (!check_running())
         {
             res = true;
             return true;
@@ -167,7 +167,7 @@ bool RegionMeta::checkIndex(UInt64 index) const
 
 bool RegionMeta::doCheckIndex(UInt64 index) const
 {
-    return region_state.getState() == raft_serverpb::PeerState::Tombstone || apply_state.applied_index() >= index;
+    return region_state.getState() != raft_serverpb::PeerState::Normal || apply_state.applied_index() >= index;
 }
 
 UInt64 RegionMeta::version() const

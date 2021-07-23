@@ -28,7 +28,7 @@ Regions createRegions(TableID table_id, size_t region_num, size_t key_num_each_r
 RegionPtr createRegion(
     const TiDB::TableInfo & table_info, RegionID region_id, std::vector<Field> & start_keys, std::vector<Field> & end_keys);
 
-void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, std::stringstream & ss);
+void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 
 void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin,
     ASTs::const_iterator end, Context & context, const std::optional<std::tuple<Timestamp, UInt8>> & tso_del = {});

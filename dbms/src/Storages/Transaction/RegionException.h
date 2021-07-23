@@ -2,7 +2,6 @@
 
 #include <Common/Exception.h>
 #include <Storages/Transaction/Types.h>
-#include <pingcap/kv/RegionCache.h>
 
 namespace DB
 {
@@ -33,7 +32,7 @@ public:
         return "Unknown";
     };
 
-    using UnavailableRegions = std::unordered_set<pingcap::kv::RegionVerID>;
+    using UnavailableRegions = std::unordered_set<RegionID>;
 
 public:
     RegionException(UnavailableRegions && unavailable_region_, RegionReadStatus status_)

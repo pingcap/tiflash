@@ -19,8 +19,6 @@
 #include <set>
 #include <utility>
 
-// #define PAGE_STORAGE_UTIL_DEBUGGGING
-
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
 extern DB::WriteBatch::SequenceID debugging_recover_stop_sequence;
 #endif
@@ -852,7 +850,7 @@ static String fileInfoToString(const PageFileIdAndLevel & id, const PageFile::Ty
     return "[" + DB::toString(id.first) + "," + DB::toString(id.second) + "," + PageFile::typeToString(type) + "]";
 }
 
-bool PageStorage::gc(const Context & global_context, bool not_skip)
+bool PageStorage::gc(bool not_skip, const RateLimiterPtr & rate_limiter)
 {
     // If another thread is running gc, just return;
     bool v = false;
@@ -874,6 +872,12 @@ bool PageStorage::gc(const Context & global_context, bool not_skip)
     ListPageFilesOption opt;
     opt.remove_tmp_files = true;
     auto page_files      = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
+    if (unlikely(page_files.empty()))
+    {
+        // In case the directory are removed by accident
+        LOG_WARNING(log, storage_name << " There are no page files while running GC");
+        return false;
+    }
 
     GcContext gc_context;
     gc_context.min_file_id    = page_files.begin()->fileIdLevel();
@@ -1020,7 +1024,7 @@ bool PageStorage::gc(const Context & global_context, bool not_skip)
     {
         // Try to compact consecutive Legacy PageFiles into a snapshot.
         // Legacy and checkpoint files will be removed from `page_files` after `tryCompact`.
-        LegacyCompactor compactor(*this, global_context);
+        LegacyCompactor compactor(*this, rate_limiter);
         PageFileSet     page_files_to_archive;
         std::tie(page_files, page_files_to_archive, gc_context.num_bytes_written_in_compact_legacy)
             = compactor.tryCompact(std::move(page_files), writing_file_id_levels);
@@ -1037,7 +1041,7 @@ bool PageStorage::gc(const Context & global_context, bool not_skip)
         Stopwatch watch_migrate;
 
         // Calculate a config by the gc context, maybe do a more aggressive GC
-        DataCompactor<PageStorage::SnapshotPtr> compactor(*this, gc_context.calculateGcConfig(config), global_context);
+        DataCompactor<PageStorage::SnapshotPtr> compactor(*this, gc_context.calculateGcConfig(config), rate_limiter);
         std::tie(gc_context.compact_result, gc_file_entries_edit) = compactor.tryMigrate(page_files, getSnapshot(), writing_file_id_levels);
 
         // We only care about those time cost in actually doing compaction on page data.
