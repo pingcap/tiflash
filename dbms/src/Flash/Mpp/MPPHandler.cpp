@@ -410,7 +410,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
     try
     {
         Stopwatch stopwatch;
-        task = std::make_shared<MPPTask>(task_request.meta(), context, current_memory_tracker);
+        task = MPPTask::newTask(task_request.meta(), context, current_memory_tracker);
 
         auto retry_regions = task->prepare(task_request);
         for (auto region : retry_regions)

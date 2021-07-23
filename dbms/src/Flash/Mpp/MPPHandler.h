@@ -251,14 +251,13 @@ enum TaskStatus
 class MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
 public:
-    MPPTask(const mpp::TaskMeta & meta_, const Context & context_, MemoryTracker * memory_tracker_)
-        : context(context_),
-          memory_tracker(memory_tracker_),
-          meta(meta_),
-          log(&Logger::get("task " + std::to_string(meta_.task_id())))
+    using Ptr = std::shared_ptr<MPPTask>;
+
+    /// Ensure all MPPTasks are allocated as std::shared_ptr
+    template <typename ... Args>
+    static Ptr newTask(Args &&... args)
     {
-        id.start_ts = meta.start_ts();
-        id.task_id = meta.task_id();
+        return Ptr(new MPPTask(std::forward<Args>(args)...));
     }
 
     const MPPTaskId & getId() const { return id; }
@@ -291,6 +290,16 @@ public:
         LOG_DEBUG(log, "destruct MPPTask");
     }
 private:
+    MPPTask(const mpp::TaskMeta & meta_, const Context & context_, MemoryTracker * memory_tracker_)
+        : context(context_),
+          memory_tracker(memory_tracker_),
+          meta(meta_),
+          log(&Logger::get("task " + std::to_string(meta_.task_id())))
+    {
+        id.start_ts = meta.start_ts();
+        id.task_id = meta.task_id();
+    }
+
     void runImpl();
 
     void unregisterTask();
@@ -312,7 +321,7 @@ private:
         if (tunnel_map.find(id) != tunnel_map.end())
             throw Exception("the tunnel " + tunnel->id() + " has been registered");
 
-        tunnel_map[id] = tunnel;
+        tunnel_map[id] = std::move(tunnel);
     }
 
     Context context;
@@ -341,7 +350,7 @@ private:
     friend class MPPTaskManager;
 };
 
-using MPPTaskPtr = std::shared_ptr<MPPTask>;
+using MPPTaskPtr = MPPTask::Ptr;
 
 using MPPTaskMap = std::map<MPPTaskId, MPPTaskPtr>;
 
