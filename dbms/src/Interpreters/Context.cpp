@@ -62,7 +62,6 @@
 #include <Parsers/parseQuery.h>
 
 #include <Common/Config/ConfigProcessor.h>
-#include <Common/ZooKeeper/ZooKeeper.h>
 #include <common/logger_useful.h>
 
 
@@ -115,10 +114,6 @@ struct ContextShared
     mutable std::mutex embedded_dictionaries_mutex;
     mutable std::mutex external_dictionaries_mutex;
     mutable std::mutex external_models_mutex;
-    /// Separate mutex for re-initialization of zookeer session. This operation could take a long time and must not interfere with another operations.
-    mutable std::mutex zookeeper_mutex;
-
-    mutable zkutil::ZooKeeperPtr zookeeper;                 /// Client for ZooKeeper.
 
     String interserver_io_host;                             /// The host name by which this server is available for other servers.
     UInt16 interserver_io_port = 0;                         /// and port.
@@ -1568,25 +1563,6 @@ RateLimiterPtr Context::getWriteLimiter() const
 {
     return shared->io_rate_limiter.getWriteLimiter();
 }
-
-zkutil::ZooKeeperPtr Context::getZooKeeper() const
-{
-    std::lock_guard<std::mutex> lock(shared->zookeeper_mutex);
-
-    if (!shared->zookeeper)
-        shared->zookeeper = std::make_shared<zkutil::ZooKeeper>(getConfigRef(), "zookeeper");
-    else if (shared->zookeeper->expired())
-        shared->zookeeper = shared->zookeeper->startNewSession();
-
-    return shared->zookeeper;
-}
-
-bool Context::hasZooKeeper() const
-{
-    std::lock_guard<std::mutex> lock(shared->zookeeper_mutex);
-    return shared->zookeeper != nullptr;
-}
-
 
 void Context::setInterserverIOAddress(const String & host, UInt16 port)
 {
