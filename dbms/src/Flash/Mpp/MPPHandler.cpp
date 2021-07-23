@@ -30,50 +30,14 @@ extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char exception_during_mpp_close_tunnel[];
 } // namespace FailPoints
 
-bool MPPTaskProgress::isTaskHanging(const Context & context)
-{
-    bool ret = false;
-    auto current_progress_value = current_progress.load();
-    if (current_progress_value != progress_on_last_check)
-    {
-        /// make some progress
-        found_no_progress = false;
-    }
-    else
-    {
-        /// no progress
-        if (!found_no_progress)
-        {
-            /// first time on no progress
-            found_no_progress = true;
-            epoch_when_found_no_progress = std::chrono::duration_cast<std::chrono::seconds>(Clock::now().time_since_epoch()).count();
-        }
-        else
-        {
-            /// no progress for a while, check timeout
-            auto no_progress_duration
-                = std::chrono::duration_cast<std::chrono::seconds>(Clock::now().time_since_epoch()).count() - epoch_when_found_no_progress;
-            auto timeout_threshold = current_progress_value == 0 ? context.getSettingsRef().mpp_task_waiting_timeout
-                                                                 : context.getSettingsRef().mpp_task_running_timeout;
-            if (no_progress_duration > timeout_threshold)
-                ret = true;
-        }
-    }
-    progress_on_last_check = current_progress_value;
-    return ret;
-}
-
-namespace
-{
 mpp::MPPDataPacket getPacketWithError(String reason)
 {
     mpp::MPPDataPacket data;
-    auto err = new mpp::Error();
+    auto err = std::make_unique<mpp::Error>();
     err->set_msg(std::move(reason));
-    data.set_allocated_error(err);
+    data.set_allocated_error(err.release());
     return data;
 }
-} // namespace
 
 void MPPTunnel::close(const String & reason)
 {
@@ -86,7 +50,7 @@ void MPPTunnel::close(const String & reason)
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
 
-            if (!writer->Write(getPacketWith(reason)))
+            if (!writer->Write(getPacketWithError(reason)))
                 throw Exception("Failed to write err");
         }
         catch (...)
@@ -190,7 +154,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout);
-        LOG_DEBUG(log, "begin to register the tunnel " << tunnel->tunnel_id);
+        LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->tunnels.emplace_back(tunnel);
         if (!dag_context->isRootMPPTask())
@@ -201,7 +165,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
 
     // register task.
     auto task_manager = context.getTMTContext().getMPPTaskManager();
-    LOG_DEBUG(log, "begin to register the task " << id);
+    LOG_DEBUG(log, "begin to register the task " << id.toString());
 
     if (dag_context->isRootMPPTask())
     {
@@ -365,7 +329,7 @@ void MPPTask::writeErrToAllTunnel(const String & e)
         catch (...)
         {
             it.second->close("Failed to write error msg to tunnel");
-            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->tunnel_id);
+            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->id());
         }
     }
 }
@@ -384,11 +348,6 @@ void MPPTask::finishWrite()
     {
         it.second->finish();
     }
-}
-
-bool MPPTask::isTaskHanging()
-{
-    return status.load() == RUNNING && task_progress.isTaskHanging(context);
 }
 
 void MPPTask::cancel(const String & reason)
@@ -451,7 +410,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
     try
     {
         Stopwatch stopwatch;
-        task = std::make_shared<MPPTask>(task_request.meta(), context);
+        task = std::make_shared<MPPTask>(task_request.meta(), context, current_memory_tracker);
 
         auto retry_regions = task->prepare(task_request);
         for (auto region : retry_regions)
@@ -461,7 +420,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
             retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
             retry_region->mutable_region_epoch()->set_version(region.region_version);
         }
-        if (task->dag_context->isRootMPPTask())
+        if (task->isRootMPPTask())
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_root_task_run);
         }
@@ -469,7 +428,6 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
         }
-        task->memory_tracker = current_memory_tracker;
         task->run();
         LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
     }

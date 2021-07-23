@@ -24,35 +24,22 @@
 namespace DB
 {
 
+mpp::MPPDataPacket getPacketWithError(String reason);
+
 // Identify a mpp task.
 struct MPPTaskId
 {
-    uint64_t start_ts;
-    int64_t task_id;
+    uint64_t start_ts = 0;
+    int64_t task_id = -1;
+
     bool operator<(const MPPTaskId & rhs) const { return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id); }
     String toString() const { return "[" + std::to_string(start_ts) + "," + std::to_string(task_id) + "]"; }
 };
 
 
-struct MPPTunnel
+class MPPTunnel
 {
-    std::mutex mu;
-    std::condition_variable cv_for_connected;
-    std::condition_variable cv_for_finished;
-
-    bool connected; // if the exchange in has connected this tunnel.
-
-    bool finished; // if the tunnel has finished its connection.
-
-    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
-
-    std::chrono::seconds timeout;
-
-    // tunnel id is in the format like "tunnel[sender]+[receiver]"
-    String tunnel_id;
-
-    Logger * log;
-
+public:
     MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_, const std::chrono::seconds timeout_)
         : connected(false),
           finished(false),
@@ -74,6 +61,8 @@ struct MPPTunnel
         }
     }
 
+    const String & id() const { return tunnel_id; }
+
     // write a single packet to the tunnel, it will block if tunnel is not ready.
     // TODO: consider to hold a buffer
     void write(const mpp::MPPDataPacket & data, bool close_after_write = false)
@@ -82,7 +71,7 @@ struct MPPTunnel
         {
             std::unique_lock<std::mutex> lk(mu);
 
-            waitForConnectedWithLock();
+            waitForConnectedWithLock(lk);
 
             if (finished)
                 throw Exception("write to tunnel which is already closed.");
@@ -107,7 +96,7 @@ struct MPPTunnel
             std::unique_lock<std::mutex> lk(mu);
 
             /// make sure to finish the tunnel after it is connected
-            waitForConnectedWithLock();
+            waitForConnectedWithLock(lk);
 
             if (finished)
                 throw Exception("has finished");
@@ -145,7 +134,7 @@ struct MPPTunnel
     }
 private:
     // must under mu's protection
-    void waitForConnectedWithLock()
+    void waitForConnectedWithLock(std::unique_lock<std::mutex> & lk)
     {
         auto connected_func = [&]() { return connected; };
         if (timeout.count() > 0)
@@ -165,6 +154,24 @@ private:
         finished = true;
         cv_for_finished.notify_all();
     }
+
+    std::mutex mu;
+    std::condition_variable cv_for_connected;
+    std::condition_variable cv_for_finished;
+
+    bool connected; // if the exchange in has connected this tunnel.
+
+    bool finished; // if the tunnel has finished its connection.
+
+    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
+
+    std::chrono::seconds timeout;
+
+    // tunnel id is in the format like "tunnel[sender]+[receiver]"
+    String tunnel_id;
+
+    Logger * log;
+
 };
 
 using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;
@@ -233,15 +240,6 @@ using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 class MPPTaskManager;
 
-struct MPPTaskProgress
-{
-    std::atomic<UInt64> current_progress{0};
-    UInt64 progress_on_last_check = 0;
-    UInt64 epoch_when_found_no_progress = 0;
-    bool found_no_progress = false;
-    bool isTaskHanging(const Context & context);
-};
-
 enum TaskStatus
 {
     INITIALIZING,
@@ -250,8 +248,73 @@ enum TaskStatus
     CANCELLED,
 };
 
-struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
+class MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
+public:
+    MPPTask(const mpp::TaskMeta & meta_, const Context & context_, MemoryTracker * memory_tracker_)
+        : context(context_),
+          memory_tracker(memory_tracker_),
+          meta(meta_),
+          log(&Logger::get("task " + std::to_string(meta_.task_id())))
+    {
+        id.start_ts = meta.start_ts();
+        id.task_id = meta.task_id();
+    }
+
+    const MPPTaskId & getId() const { return id; }
+
+    bool isRootMPPTask() const { return dag_context->isRootMPPTask(); }
+
+    void cancel(const String & reason);
+
+    RegionInfoList prepare(const mpp::DispatchTaskRequest & task_request);
+
+    void run()
+    {
+        std::thread worker(&MPPTask::runImpl, this->shared_from_this());
+        worker.detach();
+    }
+
+    MPPTunnelPtr getTunnel(const mpp::TaskMeta & meta)
+    {
+        MPPTaskId id{meta.start_ts(), meta.task_id()};
+        auto it = tunnel_map.find(id);
+        return it != tunnel_map.end() ? it->second : nullptr;
+    }
+
+    ~MPPTask()
+    {
+        /// MPPTask maybe destructed by different thread, set the query memory_tracker
+        /// to current_memory_tracker in the destructor
+        current_memory_tracker = memory_tracker;
+        /// tunnels will close themselves in their dtor
+        LOG_DEBUG(log, "destruct MPPTask");
+    }
+private:
+    void runImpl();
+
+    void unregisterTask();
+
+    void writeErrToAllTunnel(const String & e);
+
+    /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
+    /// without waiting the tunnel to be connected
+    void closeAllTunnels(const String & reason);
+
+    void finishWrite();
+
+    bool switchStatus(TaskStatus from, TaskStatus to);
+
+    void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
+    {
+        if (status == CANCELLED)
+            throw Exception("the tunnel " + tunnel->id() + " can not been registered, because the task is cancelled");
+        if (tunnel_map.find(id) != tunnel_map.end())
+            throw Exception("the tunnel " + tunnel->id() + " has been registered");
+
+        tunnel_map[id] = tunnel;
+    }
+
     Context context;
 
     std::unique_ptr<tipb::DAGRequest> dag_req;
@@ -264,91 +327,18 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     MPPTaskId id;
 
-    MPPTaskProgress task_progress;
-    std::atomic<Int32> status{INITIALIZING};
-
     mpp::TaskMeta meta;
-
-    // which targeted task we should send data by which tunnel.
-    std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
 
     MPPTaskManager * manager = nullptr;
 
     Logger * log;
 
-    Exception err;
+    // which targeted task we should send data by which tunnel.
+    std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
 
-    std::condition_variable cv;
+    std::atomic<Int32> status{INITIALIZING};
 
-    MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
-        : context(context_), meta(meta_), log(&Logger::get("task " + std::to_string(meta_.task_id())))
-    {
-        id.start_ts = meta.start_ts();
-        id.task_id = meta.task_id();
-    }
-
-    void runImpl();
-
-    bool isTaskHanging();
-
-    void cancel(const String & reason);
-
-    std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
-
-    void updateProgress(const Progress &) { task_progress.current_progress++; }
-
-    void run()
-    {
-        std::thread worker(&MPPTask::runImpl, this->shared_from_this());
-        worker.detach();
-    }
-
-    std::mutex tunnel_mutex;
-
-    void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
-    {
-        if (status == CANCELLED)
-            throw Exception("the tunnel " + tunnel->tunnel_id + " can not been registered, because the task is cancelled");
-        std::unique_lock<std::mutex> lk(tunnel_mutex);
-        if (tunnel_map.find(id) != tunnel_map.end())
-        {
-            throw Exception("the tunnel " + tunnel->tunnel_id + " has been registered");
-        }
-        tunnel_map[id] = tunnel;
-        cv.notify_all();
-    }
-
-    MPPTunnelPtr getTunnelWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout)
-    {
-        MPPTaskId id{meta.start_ts(), meta.task_id()};
-        std::map<MPPTaskId, MPPTunnelPtr>::iterator it;
-        std::unique_lock<std::mutex> lk(tunnel_mutex);
-        auto ret = cv.wait_for(lk, timeout, [&] {
-            it = tunnel_map.find(id);
-            return it != tunnel_map.end();
-        });
-        return ret ? it->second : nullptr;
-    }
-    ~MPPTask()
-    {
-        /// MPPTask maybe destructed by different thread, set the query memory_tracker
-        /// to current_memory_tracker in the destructor
-        current_memory_tracker = memory_tracker;
-        /// tunnels will close themselves in their dtor
-        LOG_DEBUG(log, "destruct MPPTask");
-    }
-private:
-    void unregisterTask();
-
-    void writeErrToAllTunnel(const String & e);
-
-    /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
-    /// without waiting the tunnel to be connected
-    void closeAllTunnels(const String & reason);
-
-    void finishWrite();
-
-    bool switchStatus(TaskStatus from, TaskStatus to);
+    friend class MPPTaskManager;
 };
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;

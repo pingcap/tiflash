@@ -196,32 +196,24 @@ grpc::Status FlashService::Coprocessor(
         if (sender_task == nullptr)
         {
             LOG_ERROR(log, errMsg);
-            mpp::MPPDataPacket packet;
-            auto err = new mpp::Error();
-            err->set_msg(errMsg);
-            packet.set_allocated_error(err);
-            writer->Write(packet);
+            writer->Write(getPacketWithError(errMsg));
             return grpc::Status::OK;
         }
-        tunnel = sender_task->getTunnelWithTimeout(request->receiver_meta(), timeout);
+        tunnel = sender_task->getTunnel(request->receiver_meta());
     }
     if (tunnel == nullptr)
     {
         errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + " + toString(request->sender_meta().task_id())
             + " ) within " + toString(timeout.count()) + " s";
         LOG_ERROR(log, errMsg);
-        mpp::MPPDataPacket packet;
-        auto err = new mpp::Error();
-        err->set_msg(errMsg);
-        packet.set_allocated_error(err);
-        writer->Write(packet);
+        writer->Write(getPacketWithError(errMsg));
         return grpc::Status::OK;
     }
     Stopwatch stopwatch;
     tunnel->connect(writer);
     LOG_DEBUG(log, "connect tunnel successfully and begin to wait");
     tunnel->waitForFinish();
-    LOG_INFO(log, "connection for " << tunnel->tunnel_id << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
+    LOG_INFO(log, "connection for " << tunnel->id() << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     // TODO: Check if there are errors in task.
 
     return grpc::Status::OK;
@@ -247,11 +239,11 @@ grpc::Status FlashService::Coprocessor(
     });
 
     auto [context, status] = createDBContext(grpc_context);
-    auto err = new mpp::Error();
     if (!status.ok())
     {
+        auto err = std::make_unique<mpp::Error>();
         err->set_msg("error status");
-        response->set_allocated_error(err);
+        response->set_allocated_error(err.release());
         return status;
     }
     auto & tmt_context = context.getTMTContext();
