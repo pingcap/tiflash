@@ -1,6 +1,5 @@
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Config/TOMLConfiguration.h>
-#include <Common/Config/cpptoml.h>
 #include <Interpreters/Quota.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
