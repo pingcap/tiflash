@@ -56,7 +56,7 @@ struct StressOptions
 {
     size_t num_writers      = 1;
     size_t num_readers      = 4;
-    bool   clean_before_run = false;
+    bool   clean_before_run = true;
     size_t timeout_s        = 0;
     size_t read_delay_ms    = 0;
     size_t num_writer_slots = 1;
@@ -95,7 +95,7 @@ struct StressOptions
         desc.add_options()("help,h", "produce help message")                                          //
             ("write_concurrency,W", value<UInt32>()->default_value(4), "number of write threads")     //
             ("read_concurrency,R", value<UInt32>()->default_value(16), "number of read threads")      //
-            ("clean_before_run,C", value<bool>()->default_value(false), "drop data before running")   //
+            ("clean_before_run,C", value<bool>()->default_value(true), "drop data before running")    //
             ("timeout,T", value<UInt32>()->default_value(600), "maximum run time (seconds)")          //
             ("writer_slots", value<UInt32>()->default_value(4), "number of PageStorage writer slots") //
             ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay")      //
@@ -122,10 +122,24 @@ struct StressOptions
         opt.num_writer_slots = options["writer_slots"].as<UInt32>();
         opt.avg_page_size_mb = options["avg_page_size"].as<UInt32>();
         opt.rand_seed        = options["rand_seed"].as<UInt32>();
+
         if (options.count("paths"))
             opt.paths = options["paths"].as<std::vector<std::string>>();
         else
             opt.paths = {"./stress"};
+
+        if (!opt.clean_before_run)
+        {
+            for (const auto & path : opt.paths)
+            {
+                if (Poco::File file(path); !file.exists())
+                {
+                    std::cerr << "Can't find old page file in " << path << "\n" << desc << std::endl;
+                    exit(0);
+                }
+            }
+        }
+
         if (options.count("failpoints"))
             opt.failpoints = options["failpoints"].as<std::vector<std::string>>();
         return opt;
