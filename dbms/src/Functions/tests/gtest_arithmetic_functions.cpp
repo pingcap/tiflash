@@ -900,6 +900,34 @@ try
             DecimalField32(-700, 3), {}, {}, {}, {}
         }, 7, 3);
 
+    // decimal overflow test.
+
+    // for example, 999'999'999 % 1.0000'0000 can check whether Decimal32 is doing arithmetic on Int64.
+    // scaling 999'999'999 (Decimal(9, 0)) to Decimal(9, 8) needs to multiply it with 1'0000'0000.
+    // if it uses Int32, it will overflow and get wrong result (something like 0.69325056).
+
+#define MODULO_OVERFLOW_TESTCASE(Decimal, DecimalField, precision) \
+    { \
+        auto & builder = DecimalMaxValue::instance(); \
+        auto max_scale = std::min(decimal_max_scale, static_cast<ScaleType>(precision) - 1); \
+        auto exp10_x = static_cast<Decimal::NativeType>(builder.Get(max_scale)) + 1; /* exp10_x: 10^x */ \
+        auto decimal_max = exp10_x * 10 - 1; \
+        auto zero = static_cast<Decimal::NativeType>(0); /* for Int256 */ \
+        executeFunctionWithData<DecimalField, DecimalField, DecimalField>(__LINE__, func_name, \
+            makeDataType<Decimal>((precision), 0), makeDataType<Decimal>((precision), max_scale), \
+            {DecimalField(decimal_max, 0)}, {DecimalField(exp10_x, max_scale)}, {DecimalField(zero, max_scale)}, (precision), max_scale); \
+        executeFunctionWithData<DecimalField, DecimalField, DecimalField>(__LINE__, func_name, \
+            makeDataType<Decimal>((precision), max_scale), makeDataType<Decimal>((precision), 0), \
+            {DecimalField(exp10_x, max_scale)}, {DecimalField(decimal_max, 0)}, {DecimalField(exp10_x, max_scale)}, (precision), max_scale); \
+    }
+
+    MODULO_OVERFLOW_TESTCASE(Decimal32, DecimalField32, 9);
+    MODULO_OVERFLOW_TESTCASE(Decimal64, DecimalField64, 18);
+    MODULO_OVERFLOW_TESTCASE(Decimal128, DecimalField128, 38);
+    MODULO_OVERFLOW_TESTCASE(Decimal256, DecimalField256, 65);
+
+#undef MODULO_OVERFLOW_TESTCASE
+
     Int128 large_number_1 = static_cast<Int128>(std::numeric_limits<UInt64>::max()) * 100000;
     executeFunctionWithData<DecimalField128, DecimalField128, DecimalField128>(__LINE__, func_name,
         makeDataType<Decimal128>(38, 5), makeDataType<Decimal128>(38, 5),

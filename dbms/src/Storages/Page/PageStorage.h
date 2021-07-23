@@ -154,7 +154,7 @@ public:
     void reloadSettings(const Config & new_config) { config.reload(new_config); }
 
     // We may skip the GC to reduce useless reading by default.
-    bool gc(const Context& global_context, bool not_skip = false);
+    bool gc(bool not_skip = false, const RateLimiterPtr & rate_limiter = nullptr);
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
 
