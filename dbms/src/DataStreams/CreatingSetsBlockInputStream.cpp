@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -11,6 +12,10 @@
 namespace DB
 {
 
+namespace FailPoints
+{
+extern const char exception_in_creating_set_input_stream[];
+}
 namespace ErrorCodes
 {
 extern const int SET_SIZE_LIMIT_EXCEEDED;
@@ -97,9 +102,10 @@ void CreatingSetsBlockInputStream::createAll()
             {
                 if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
                 {
-                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
                     if (isCancelledOrThrowIfKilled())
                         return;
+                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
+                    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
         }
