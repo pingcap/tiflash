@@ -159,33 +159,7 @@ private:
 class DMStressProxy
 {
 public:
-    DMStressProxy(const StressOptions & opts_)
-        : name(opts_.table_name),
-          col_balance_define(2, "balance", std::make_shared<DataTypeUInt64>()),
-          col_random_define(3, "random_text", std::make_shared<DataTypeString>()),
-          log(&Poco::Logger::get("DMStressProxy")),
-          opts(opts_),
-          rnd(::time(nullptr)),
-          stop(false)
-    {
-        if (opts_.verify)
-        {
-            auto       dir_name = DB::tests::TiFlashTestEnv::getTemporaryPath() + "data/test/" + name;
-            Poco::File dir(dir_name);
-            LOG_INFO(log, "dir_name: " << dir_name);
-            if (dir.exists())
-            {
-                LOG_INFO(log, "remove dir_name: " << dir_name);
-                dir.remove(true);
-            }
-        }
-        context   = std::make_unique<Context>(DMTestEnv::getContext());
-        auto cols = DMTestEnv::getDefaultColumns();
-        cols->emplace_back(col_balance_define);
-        cols->emplace_back(col_random_define);
-        auto handle_col = (*cols)[0];
-        store = std::make_shared<DeltaMergeStore>(*context, true, "test", name, *cols, handle_col, false, 1, DeltaMergeStore::Settings());
-    }
+    DMStressProxy(const StressOptions & opts_);
 
     void run();
 

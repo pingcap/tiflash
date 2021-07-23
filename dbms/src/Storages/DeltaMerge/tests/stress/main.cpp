@@ -4,6 +4,10 @@
 
 #include <boost/program_options.hpp>
 
+#include <sys/wait.h>
+#include <unistd.h>
+#include <random>
+
 using StressOptions = DB::DM::tests::StressOptions;
 
 StressOptions parseStressOptions(int argc, char * argv[])
@@ -26,6 +30,8 @@ StressOptions parseStressOptions(int argc, char * argv[])
         ("verify", value<bool>()->default_value(true), "Verify")                                                  //
         ("verify_sleep_sec", value<UInt32>()->default_value(120), "Verify sleep seconds")                         //
         ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable")                             //
+        ("min_restart_sec", value<UInt32>()->default_value(600), "minimum interval to restart tiflash")           //
+        ("max_restart_sec", value<UInt32>()->default_value(3600), "maximum interval to restart tiflash")           //
         ;
 
     boost::program_options::variables_map options;
@@ -78,15 +84,8 @@ void init()
 #endif
 }
 
-int main(int argc, char * argv[])
+void runProxy(const StressOptions & opts, Poco::Logger * log)
 {
-    init();
-    auto opts = parseStressOptions(argc, argv);
-    for (const auto & fp : opts.failpoints)
-    {
-        DB::FailPointHelper::enableFailPoint(fp);
-    }
-    auto log = &Poco::Logger::get("DMStressProxy");
     try
     {
         UInt64 run_count = 0;
@@ -109,5 +108,47 @@ int main(int argc, char * argv[])
         LOG_INFO(log, "Unknow exception");
     }
     DB::tests::TiFlashTestEnv::shutdown();
+}
+
+int main(int argc, char * argv[])
+{
+    init();
+    auto opts = parseStressOptions(argc, argv);
+    for (const auto & fp : opts.failpoints)
+    {
+        DB::FailPointHelper::enableFailPoint(fp);
+    }
+    auto log  = &Poco::Logger::get("DMStressProxy");
+    UInt64 run_count = 0;
+    static std::uniform_int_distribution<unsigned> dist(1800, 3600);
+    std::default_random_engine generator;
+    generator.seed(::time(nullptr));
+    for (;;)
+    {
+        run_count++;
+        LOG_INFO(log, "main loop run count: " << run_count);
+        auto fpid = fork();
+        if (fpid < 0)
+        {
+            LOG_INFO(log, "fork error in run count " << run_count);
+        }
+        else if (fpid == 0)
+        {
+            runProxy(opts, log);
+            exit(0);
+        }
+        else
+        {
+            sleep(dist(generator));
+            // sleep(300);
+            kill(fpid, SIGKILL);
+            int status;
+            wait(&status);
+            if (WIFEXITED(status)) {
+                LOG_INFO(log, "child pid " << fpid << "exit normally");
+                break;
+            }
+        }
+    }
     return 0;
 }
