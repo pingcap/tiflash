@@ -10,6 +10,7 @@ namespace DM
 {
 
 void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define);
+void setColumnDefineDefaultValue(const TiDB::TableInfo & table_info, ColumnDefine & define);
 void applyAlter(ColumnDefines &               table_columns,
                 const AlterCommand &          command,
                 const OptionTableInfoConstRef table_info,

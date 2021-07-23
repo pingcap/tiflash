@@ -114,7 +114,9 @@ target_link_libraries (
     ${MALLOC_LIBRARIES}
     ${CMAKE_THREAD_LIBS_INIT}
     ${GLIBC_COMPATIBILITY_LIBRARIES}
-    ${MEMCPY_LIBRARIES})
+    ${MEMCPY_LIBRARIES}
+    fmt
+)
 
 if (RT_LIBRARY)
     target_link_libraries (common ${RT_LIBRARY})

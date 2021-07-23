@@ -7,14 +7,15 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
-#include <common/logger_useful.h>
+#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
 
 #include <atomic>
 #include <chrono>
@@ -22,8 +23,6 @@
 #include <memory>
 #include <random>
 
-#include "gtest/gtest.h"
-#include <Storages/Page/PageStorage.h>
 namespace DB
 {
 namespace tests
@@ -31,26 +30,17 @@ namespace tests
 
 using PSPtr = std::shared_ptr<DB::PageStorage>;
 
-class PageStorageMultiWriters_test : public ::testing::Test
+class PageStorageMultiWriters_test : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    PageStorageMultiWriters_test()
-        : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "page_storage_multi_writers_test"),
-          storage(),
-          file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
-    {
-    }
+    PageStorageMultiWriters_test() : storage(), file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()} {}
 
 protected:
     static void SetUpTestCase() {}
 
     void SetUp() override
     {
-        // drop dir if exists
-        if (Poco::File file(path); file.exists())
-        {
-            file.remove(true);
-        }
+        TiFlashStorageTestBasic::SetUp();
         // default test config
         config.file_roll_size    = 4 * MB;
         config.gc_max_valid_rate = 0.5;
@@ -61,7 +51,7 @@ protected:
 
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
-        auto spool     = TiFlashTestEnv::getContext().getPathPool().withTable("test", "t", false);
+        auto spool     = db_context->getPathPool().withTable("test", "t", false);
         auto delegator = spool.getPSDiskDelegatorSingle("log");
         auto storage   = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider);
         storage->restore();
@@ -69,7 +59,6 @@ protected:
     }
 
 protected:
-    String                       path;
     PageStorage::Config          config;
     std::shared_ptr<PageStorage> storage;
     const FileProviderPtr        file_provider;
@@ -255,7 +244,7 @@ public:
             return;
         try
         {
-            storage->gc(TiFlashTestEnv::getContext());
+            storage->gc();
         }
         catch (DB::Exception & e)
         {

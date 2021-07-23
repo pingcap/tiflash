@@ -826,7 +826,6 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         << " (" << src_rows / elapsed_seconds << " rows/sec., " << src_bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
 }
 
-
 template <typename Method, typename Table>
 void Aggregator::convertToBlockImpl(
     Method & method,
@@ -1792,6 +1791,8 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
 
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(params.keys_size, "");
+
+    typename Method::State state(key_columns, key_sizes, params.collators);
 
     typename Method::State state(key_columns, key_sizes, params.collators);
 

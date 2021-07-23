@@ -1,6 +1,6 @@
 #pragma once
 #include <Storages/Page/PageStorage.h>
-#include <Interpreters/Context.h>
+
 #include <boost/core/noncopyable.hpp>
 #include <map>
 #include <tuple>
@@ -27,7 +27,7 @@ public:
     };
 
 public:
-    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const Context& global_ctx);
+    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const RateLimiterPtr & rate_limiter_);
 
     /**
      * Take a snapshot from PageStorage and try to migrate data if some PageFiles used rate is low.
@@ -95,7 +95,7 @@ private:
     Poco::Logger * log;
     Poco::Logger * page_file_log;
 
-    const Context& global_context;
+    const RateLimiterPtr rate_limiter;
 };
 
 } // namespace DB

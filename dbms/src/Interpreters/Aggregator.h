@@ -629,7 +629,6 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(serialized_two_level)       \
         M(nullable_keys128_two_level) \
         M(nullable_keys256_two_level) 
-
 };
 
 using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;

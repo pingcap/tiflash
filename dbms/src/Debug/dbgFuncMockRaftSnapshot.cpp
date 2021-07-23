@@ -116,9 +116,9 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
             }
             else
                 key = RecordKVFormat::genKey(table_id, handle_id);
-            std::stringstream ss;
+            WriteBufferFromOwnString ss;
             RegionBench::encodeRow(table->table_info, fields, ss);
-            TiKVValue value(ss.str());
+            TiKVValue value(ss.releaseStr());
             UInt64 commit_ts = tso;
             UInt64 prewrite_ts = tso;
             TiKVValue commit_value = del ? RecordKVFormat::encodeWriteCfValue(Region::DelFlag, prewrite_ts)
@@ -358,9 +358,9 @@ void GenMockSSTData(const TiDB::TableInfo & table_info,
 
         {
             TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
-            std::stringstream ss;
+            WriteBufferFromOwnString ss;
             RegionBench::encodeRow(table_info, fields, ss);
-            TiKVValue prewrite_value(ss.str());
+            TiKVValue prewrite_value(ss.releaseStr());
             UInt64 commit_ts = handle_id;
             UInt64 prewrite_ts = commit_ts;
             TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);

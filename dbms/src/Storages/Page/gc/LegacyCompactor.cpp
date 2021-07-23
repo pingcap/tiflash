@@ -4,7 +4,7 @@
 
 namespace DB
 {
-LegacyCompactor::LegacyCompactor(const PageStorage & storage, const Context & global_ctx)
+LegacyCompactor::LegacyCompactor(const PageStorage & storage, const RateLimiterPtr & rate_limiter_)
     : storage_name(storage.storage_name),
       delegator(storage.delegator),
       file_provider(storage.getFileProvider()),
@@ -12,7 +12,7 @@ LegacyCompactor::LegacyCompactor(const PageStorage & storage, const Context & gl
       log(storage.log),
       page_file_log(storage.page_file_log),
       version_set(storage.storage_name + ".legacy_compactor", config.version_set_config, log),
-      global_context(global_ctx)
+      rate_limiter(rate_limiter_)
 {
 }
 
@@ -46,6 +46,8 @@ LegacyCompactor::tryCompact(                 //
     // Use the largest id-level in page_files_to_compact as Checkpoint's file
     const PageFileIdAndLevel checkpoint_id = page_files_to_compact.rbegin()->fileIdLevel();
 
+    // We only store the checkpoint file to `defaultPath` for convenience. If we store the checkpoint
+    // to multi disk one day, don't forget to check existence for multi disks deployment.
     const String storage_path = delegator->defaultPath();
     if (PageFile::isPageFileExist(checkpoint_id, storage_path, file_provider, PageFile::Type::Checkpoint, page_file_log))
     {
@@ -82,7 +84,7 @@ LegacyCompactor::tryCompact(                 //
     size_t bytes_written = 0;
     if (!info.empty())
     {
-        bytes_written = writeToCheckpoint(storage_path, checkpoint_id, std::move(wb), file_provider, page_file_log, global_context);
+        bytes_written = writeToCheckpoint(storage_path, checkpoint_id, std::move(wb), file_provider, page_file_log, rate_limiter);
         // Don't need to insert location since Checkpoint PageFile won't be read except using listAllPageFiles in `PageStorage::restore`
         delegator->addPageFileUsedSize(checkpoint_id, bytes_written, storage_path, /*need_insert_location=*/false);
     }
@@ -96,9 +98,12 @@ LegacyCompactor::tryCompact(                 //
         for (const auto & pf : page_files_to_compact)
             page_files_to_remove.emplace(pf);
 
-        removePageFilesIf(page_files, [&page_files_to_remove](const PageFile & pf) -> bool {
-            // Remove page files have been compacted
-            return page_files_to_remove.count(pf) > 0 //
+        removePageFilesIf(page_files, [&page_files_to_remove, &writing_file_ids](const PageFile & pf) -> bool {
+            return //
+                // Remove page files have been compacted
+                page_files_to_remove.count(pf) > 0
+                // Remove page files that maybe writing to
+                || (!writing_file_ids.empty() && pf.fileIdLevel() >= *writing_file_ids.begin())
                 // Remove legacy/checkpoint files since we don't do gc on them later
                 || pf.getType() == PageFile::Type::Legacy || pf.getType() == PageFile::Type::Checkpoint;
         });
@@ -239,9 +244,12 @@ WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::Snaps
     return wb;
 }
 
-size_t LegacyCompactor::writeToCheckpoint(
-    const String & storage_path, const PageFileIdAndLevel & file_id, WriteBatch && wb,
-    FileProviderPtr & file_provider, Poco::Logger * log, const Context& global_context)
+size_t LegacyCompactor::writeToCheckpoint(const String &             storage_path,
+                                          const PageFileIdAndLevel & file_id,
+                                          WriteBatch &&              wb,
+                                          FileProviderPtr &          file_provider,
+                                          Poco::Logger *             log,
+                                          const RateLimiterPtr &     rate_limiter)
 {
     size_t bytes_written   = 0;
     auto   checkpoint_file = PageFile::newPageFile(file_id.first, file_id.second, storage_path, file_provider, PageFile::Type::Temp, log);
@@ -249,7 +257,7 @@ size_t LegacyCompactor::writeToCheckpoint(
         auto checkpoint_writer = checkpoint_file.createWriter(false, true);
 
         PageEntriesEdit edit;
-        bytes_written += checkpoint_writer->write(wb, edit, global_context.getWriteLimiter());
+        bytes_written += checkpoint_writer->write(wb, edit, rate_limiter);
     }
     // drop "data" part for checkpoint file.
     bytes_written -= checkpoint_file.setCheckpoint();
