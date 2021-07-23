@@ -44,10 +44,9 @@ struct ClearableHashTableCell : public BaseCell
     /// Do I need to store the zero key separately (that is, can a zero key be inserted into the hash table).
     static constexpr bool need_zero_value_storage = false;
 
-    ClearableHashTableCell() {}
+    ClearableHashTableCell() {} //-V730
     ClearableHashTableCell(const Key & key_, const State & state) : BaseCell(key_, state), version(state.version) {}
 };
-
 
 template
 <
@@ -59,8 +58,8 @@ template
 class ClearableHashSet : public HashTable<Key, ClearableHashTableCell<Key, HashTableCell<Key, Hash, ClearableHashSetState>>, Hash, Grower, Allocator>
 {
 public:
-    using key_type = Key;
-    using value_type = typename ClearableHashSet::cell_type::value_type;
+    using Base = HashTable<Key, ClearableHashTableCell<Key, HashTableCell<Key, Hash, ClearableHashSetState>>, Hash, Grower, Allocator>;
+    using typename Base::LookupResult;
 
     void clear()
     {
@@ -79,9 +78,6 @@ template
 class ClearableHashSetWithSavedHash: public HashTable<Key, ClearableHashTableCell<Key, HashSetCellWithSavedHash<Key, Hash, ClearableHashSetState>>, Hash, Grower, Allocator>
 {
 public:
-    using key_type = Key;
-    using value_type = typename ClearableHashSetWithSavedHash::cell_type::value_type;
-
     void clear()
     {
         ++this->version;

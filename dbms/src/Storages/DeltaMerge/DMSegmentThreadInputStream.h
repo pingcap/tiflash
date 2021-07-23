@@ -103,7 +103,7 @@ protected:
             else
             {
                 after_segment_read(dm_context, cur_segment);
-                LOG_TRACE(log, "Finish reading segment [" + DB::toString(cur_segment->segmentId()) + "]");
+                LOG_TRACE(log, "Finish reading segment [" << cur_segment->segmentId() << "]");
                 cur_segment = {};
                 cur_stream  = {};
             }

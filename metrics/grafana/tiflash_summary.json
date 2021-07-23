@@ -2298,6 +2298,22 @@
               "intervalFactor": 1,
               "legendFormat": "write block",
               "refId": "B"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_DMWriteBlock{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance, type)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "write block-{{instance}}",
+              "refId": "C"
+            },
+            {
+              "expr": "sum(increase(tiflash_storage_command_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance, type)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "{{type}}-{{instance}}",
+              "refId": "D"
             }
           ],
           "thresholds": [],
@@ -3588,7 +3604,12 @@
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "/max_snapshot_lifetime/",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
@@ -3671,6 +3692,30 @@
               "intervalFactor": 1,
               "legendFormat": "place_index-{{instance}}",
               "refId": "H"
+            },
+            {
+              "expr": "tiflash_system_asynchronous_metric_MaxDTDeltaOldestSnapshotLifetime{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "max_snapshot_lifetime-{{instance}}",
+              "refId": "K"
+            },
+            {
+              "expr": "tiflash_system_asynchronous_metric_MaxDTStableOldestSnapshotLifetime{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "max_snapshot_lifetime_stable-{{instance}}",
+              "refId": "L"
+            },
+            {
+              "expr": "tiflash_system_asynchronous_metric_MaxDTMetaOldestSnapshotLifetime{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "max_snapshot_lifetime_meta-{{instance}}",
+              "refId": "M"
             }
           ],
           "thresholds": [],
@@ -3701,7 +3746,7 @@
               "show": true
             },
             {
-              "format": "short",
+              "format": "s",
               "label": null,
               "logBase": 1,
               "max": null,

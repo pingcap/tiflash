@@ -6,6 +6,7 @@
 #include <Storages/Transaction/Collator.h>
 
 #include <Common/Arena.h>
+#include <Common/ColumnsHashing.h>
 #include <Common/HashTable/HashSet.h>
 #include <Common/HashTable/ClearableHashSet.h>
 
@@ -18,7 +19,7 @@ namespace DB
 
 
 /// For the case where there is one numeric key.
-template <typename FieldType, typename TData>    /// UInt8/16/32/64 for any types with corresponding bit width.
+template <typename FieldType, typename TData, bool use_cache = true>    /// UInt8/16/32/64 for any types with corresponding bit width.
 struct SetMethodOneNumber
 {
     using Data = TData;
@@ -26,35 +27,8 @@ struct SetMethodOneNumber
 
     Data data;
 
-    /// To use one `Method` in different threads, use different `State`.
-    struct State
-    {
-        const FieldType * vec;
-
-        /** Called at the start of each block processing.
-          * Sets the variables required for the other methods called in inner loops.
-          */
-        void init(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & = TiDB::dummy_collators)
-        {
-            vec = &static_cast<const ColumnVector<FieldType> *>(key_columns[0])->getData()[0];
-        }
-
-        /// Get key from key columns for insertion into hash table.
-        Key getKey(
-            const ColumnRawPtrs & /*key_columns*/,
-            size_t /*keys_size*/,                 /// Number of key columns.
-            size_t i,                             /// From what row of the block I get the key.
-            const Sizes & /*key_sizes*/,          /// If keys of a fixed length - their lengths. Not used in methods for variable length keys.
-            std::vector<String> & /*sort_key_containers*/ = TiDB::dummy_sort_key_contaners) const    /// If key is string type with collation, should generate sort key instead of the origin key, sort_key_containers is used to generate sort_key
-        {
-            return unionCastToUInt64(vec[i]);
-        }
-
-    };
-
-    /** Place additional data, if necessary, in case a new key was inserted into the hash table.
-      */
-    static void onNewKey(typename Data::value_type & /*value*/, size_t /*keys_size*/, Arena & /*pool*/) {}
+    using State = ColumnsHashing::HashMethodOneNumber<typename Data::value_type,
+        void, FieldType, use_cache>;
 };
 
 namespace GeneralCI
@@ -71,45 +45,7 @@ struct SetMethodString
 
     Data data;
 
-    struct State
-    {
-        const ColumnString::Offsets * offsets;
-        const ColumnString::Chars_t * chars;
-        std::shared_ptr<TiDB::ITiDBCollator> collator;
-
-        void init(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators = TiDB::dummy_collators)
-        {
-            if (!collators.empty())
-                collator = collators[0];
-            const IColumn & column = *key_columns[0];
-            const ColumnString & column_string = static_cast<const ColumnString &>(column);
-            offsets = &column_string.getOffsets();
-            chars = &column_string.getChars();
-        }
-
-        Key getKey(
-            const ColumnRawPtrs &,
-            size_t,
-            size_t i,
-            const Sizes &,
-            std::vector<String> & sort_key_containers = TiDB::dummy_sort_key_contaners) const
-        {
-            Key key = StringRef(
-                    &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
-                    (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
-            if (collator != nullptr)
-            {
-                key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
-            }
-            return key;
-        }
-
-    };
-
-    static void onNewKey(typename Data::value_type & value, size_t, Arena & pool)
-    {
-        value.data = pool.insert(value.data, value.size);
-    }
+    using State = ColumnsHashing::HashMethodString<typename Data::value_type, void, true, false>;
 };
 
 /// For the case when there is one fixed-length string key.
@@ -121,43 +57,7 @@ struct SetMethodFixedString
 
     Data data;
 
-    struct State
-    {
-        size_t n;
-        const ColumnFixedString::Chars_t * chars;
-        std::shared_ptr<TiDB::ITiDBCollator> collator;
-
-        void init(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators = TiDB::dummy_collators)
-        {
-            if (!collators.empty())
-                collator = collators[0];
-            const IColumn & column = *key_columns[0];
-            const ColumnFixedString & column_string = static_cast<const ColumnFixedString &>(column);
-            n = column_string.getN();
-            chars = &column_string.getChars();
-        }
-
-        Key getKey(
-            const ColumnRawPtrs &,
-            size_t,
-            size_t i,
-            const Sizes &,
-            std::vector<String> & sort_key_containers = TiDB::dummy_sort_key_contaners) const
-        {
-            Key key = StringRef(&(*chars)[i * n], n);
-            if (collator != nullptr)
-            {
-                key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
-            }
-            return key;
-        }
-
-    };
-
-    static void onNewKey(typename Data::value_type & value, size_t, Arena & pool)
-    {
-        value.data = pool.insert(value.data, value.size);
-    }
+    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, void, true, false>;
 };
 
 namespace set_impl
@@ -267,36 +167,7 @@ struct SetMethodKeysFixed
 
     Data data;
 
-    class State : private set_impl::BaseStateKeysFixed<Key, has_nullable_keys>
-    {
-    public:
-        using Base = set_impl::BaseStateKeysFixed<Key, has_nullable_keys>;
-
-        void init(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & = TiDB::dummy_collators)
-        {
-            if (has_nullable_keys)
-                Base::init(key_columns);
-        }
-
-        Key getKey(
-            const ColumnRawPtrs & key_columns,
-            size_t keys_size,
-            size_t i,
-            const Sizes & key_sizes,
-            std::vector<String> & = TiDB::dummy_sort_key_contaners) const
-        {
-            if (has_nullable_keys)
-            {
-                auto bitmap = Base::createBitmap(i);
-                return packFixed<Key>(i, keys_size, Base::getActualColumns(), key_sizes, bitmap);
-            }
-            else
-                return packFixed<Key>(i, keys_size, key_columns, key_sizes);
-        }
-
-    };
-
-    static void onNewKey(typename Data::value_type &, size_t, Arena &) {}
+    using State = ColumnsHashing::HashMethodKeysFixed<typename Data::value_type, Key, void, has_nullable_keys, false>;
 };
 
 /// For other cases. 128 bit hash from the key.
@@ -308,27 +179,7 @@ struct SetMethodHashed
 
     Data data;
 
-    struct State
-    {
-        TiDB::TiDBCollators collators;
-        void init(const ColumnRawPtrs &, const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-        {
-            collators = collators_;
-        }
-
-        Key getKey(
-            const ColumnRawPtrs & key_columns,
-            size_t keys_size,
-            size_t i,
-            const Sizes &,
-            std::vector<String> & sort_key_containers = TiDB::dummy_sort_key_contaners) const
-        {
-            return hash128(i, keys_size, key_columns, collators, sort_key_containers);
-        }
-
-    };
-
-    static void onNewKey(typename Data::value_type &, size_t, Arena &) {}
+    using State = ColumnsHashing::HashMethodHashed<typename Data::value_type, void>;
 };
 
 

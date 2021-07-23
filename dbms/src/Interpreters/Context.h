@@ -31,12 +31,6 @@ class IPAddress;
 }
 } // namespace Poco
 
-namespace zkutil
-{
-class ZooKeeper;
-}
-
-
 namespace DB
 {
 
@@ -67,7 +61,6 @@ class PartLog;
 struct MergeTreeSettings;
 class IDatabase;
 class DDLGuard;
-class DDLWorker;
 class IStorage;
 class ITableFunction;
 using StoragePtr = std::shared_ptr<IStorage>;
@@ -358,11 +351,6 @@ public:
     MergeList & getMergeList();
     const MergeList & getMergeList() const;
 
-    /// If the current session is expired at the time of the call, synchronously creates and returns a new session with the startNewSession() call.
-    std::shared_ptr<zkutil::ZooKeeper> getZooKeeper() const;
-    /// Has ready or expired ZooKeeper
-    bool hasZooKeeper() const;
-
     /// Create a cache of uncompressed blocks of specified size. This can be done only once.
     void setUncompressedCache(size_t max_size_in_bytes);
     std::shared_ptr<UncompressedCache> getUncompressedCache() const;
@@ -403,9 +391,6 @@ public:
 
     BackgroundProcessingPool & getBackgroundPool();
     BackgroundProcessingPool & getBlockableBackgroundPool();
-
-    void setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker);
-    DDLWorker & getDDLWorker() const;
 
     void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
 

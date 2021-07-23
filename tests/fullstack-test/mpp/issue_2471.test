@@ -1,0 +1,43 @@
+# Preparation.
+=> DBGInvoke __init_fail_point()
+
+mysql> drop table if exists test.a
+mysql> create table test.a (pk int not null, id int, value varchar(64))
+mysql> insert into test.a values(0,1,'a'),(1,2,'b')
+
+mysql> alter table test.a set tiflash replica 1
+
+func> wait_table test a
+
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id = t2.id;
++----+------+-------+------+------+-------+
+| pk | id   | value | pk   | id   | value |
++----+------+-------+------+------+-------+
+|  0 |    1 | a     |    0 |    1 | a     |
+|  1 |    2 | b     |    1 |    2 | b     |
++----+------+-------+------+------+-------+
+
+=> DBGInvoke __enable_fail_point(exception_in_creating_set_input_stream)
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id = t2.id;
+ERROR 1105 (HY000) at line 1: other error for mpp stream: DB::Exception: Fail point FailPoints::exception_in_creating_set_input_stream is triggered.
+
+=> DBGInvoke __disable_fail_point(exception_in_creating_set_input_stream)
+
+mysql> use test; select sleep(5);
++----------+
+| sleep(5) |
++----------+
+|        0 |
++----------+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_opt_broadcast_cartesian_join=2; select * from a as t1 left join a as t2 on t1.id = t2.id;
++----+------+-------+------+------+-------+
+| pk | id   | value | pk   | id   | value |
++----+------+-------+------+------+-------+
+|  0 |    1 | a     |    0 |    1 | a     |
+|  1 |    2 | b     |    1 |    2 | b     |
++----+------+-------+------+------+-------+
+
+# Clean up.
+# mysql> drop table if exists test.a

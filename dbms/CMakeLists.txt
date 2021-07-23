@@ -112,7 +112,6 @@ if (ARCH_FREEBSD)
     target_compile_definitions (clickhouse_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
 endif ()
 
-add_subdirectory(src/Common/ZooKeeper)
 add_subdirectory(src/Common/Config)
 
 if (MAKE_STATIC_LIBRARIES)
@@ -256,6 +255,7 @@ if (ENABLE_TESTS)
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestBasic.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})

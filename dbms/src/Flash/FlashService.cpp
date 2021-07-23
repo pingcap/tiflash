@@ -156,7 +156,7 @@ grpc::Status FlashService::Coprocessor(
     }
 
     auto & tmt_context = context.getTMTContext();
-    response->set_available(tmt_context.getStoreStatus() == TMTContext::StoreStatus::Running);
+    response->set_available(tmt_context.checkRunning());
     return ::grpc::Status::OK;
 }
 

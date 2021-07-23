@@ -3,8 +3,6 @@
 #include <Storages/Page/PageFile.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include "gtest/gtest.h"
-
 namespace DB
 {
 namespace tests
