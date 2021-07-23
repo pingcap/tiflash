@@ -97,10 +97,9 @@ void CreatingSetsBlockInputStream::createAll()
             {
                 if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
                 {
+                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
                     if (isCancelledOrThrowIfKilled())
                         return;
-
-                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
                 }
             }
         }
@@ -122,7 +121,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTr
     {
 
         current_memory_tracker = memory_tracker;
-        LOG_TRACE(log,
+        LOG_DEBUG(log,
             (subquery.set ? "Creating set. " : "")
                 << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
                 << std::to_string(mpp_task_id));
