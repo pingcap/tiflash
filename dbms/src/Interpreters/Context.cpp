@@ -155,7 +155,6 @@ struct ContextShared
     mutable TMTContextPtr tmt_context;                      /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros;                            /// Substitutions extracted from config.
     std::unique_ptr<Compiler> compiler;                     /// Used for dynamic compilation of queries' parts if it necessary.
-    std::shared_ptr<DDLWorker> ddl_worker;                  /// Process ddl commands from zk.
     /// Rules for selecting the compression settings, depending on the size of the part.
     mutable std::unique_ptr<CompressionSettingsSelector> compression_settings_selector;
     std::unique_ptr<MergeTreeSettings> merge_tree_settings; /// Settings of MergeTree* engines.
@@ -1472,22 +1471,6 @@ BackgroundProcessingPool & Context::getBlockableBackgroundPool()
     if (!shared->blockable_background_pool)
         shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
     return *shared->blockable_background_pool;
-}
-
-void Context::setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker)
-{
-    auto lock = getLock();
-    if (shared->ddl_worker)
-        throw Exception("DDL background thread has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->ddl_worker = ddl_worker;
-}
-
-DDLWorker & Context::getDDLWorker() const
-{
-    auto lock = getLock();
-    if (!shared->ddl_worker)
-        throw Exception("DDL background thread is not initialized.", ErrorCodes::LOGICAL_ERROR);
-    return *shared->ddl_worker;
 }
 
 void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
