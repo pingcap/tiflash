@@ -8,7 +8,6 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
@@ -193,7 +192,7 @@ try
         }
     }
 
-    storage->gc(TiFlashTestEnv::getContext());
+    storage->gc();
 
     {
         Page page0 = storage->read(0);
@@ -239,7 +238,7 @@ try
     storage->registerExternalPagesCallbacks(scanner, remover);
     {
         SCOPED_TRACE("fist gc");
-        storage->gc(TiFlashTestEnv::getContext());
+        storage->gc();
         EXPECT_EQ(times_remover_called, 1UL);
     }
 
@@ -255,7 +254,7 @@ try
 
     {
         SCOPED_TRACE("gc with snapshot");
-        storage->gc(TiFlashTestEnv::getContext());
+        storage->gc();
         EXPECT_EQ(times_remover_called, 2UL);
     }
 
@@ -278,7 +277,7 @@ try
     storage->registerExternalPagesCallbacks(scanner, remover);
     {
         SCOPED_TRACE("gc with snapshot released");
-        storage->gc(TiFlashTestEnv::getContext());
+        storage->gc();
         EXPECT_EQ(times_remover_called, 3UL);
     }
 }
