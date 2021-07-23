@@ -29,7 +29,7 @@ DecodedRow * decodeRow(const TiKVValue::Base & raw_value, const TableInfo & tabl
 Field decodeUnknownColumnV2(const Field & unknown, const ColumnInfo & column_info);
 
 /// The following two encode functions are used for testing.
-void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, std::stringstream & ss);
-void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, std::stringstream & ss);
+void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
+void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 
 } // namespace DB

@@ -63,4 +63,12 @@ void writeException(const Exception & e, WriteBuffer & buf)
         writeException(Exception(*e.nested()), buf);
 }
 
+void writePointerHex(const void * ptr, WriteBuffer & buf)
+{
+    writeString("0x", buf);
+    char hex_str[2 * sizeof(ptr)];
+    writeHexUIntLowercase(reinterpret_cast<uintptr_t>(ptr), hex_str);
+    buf.write(hex_str, 2 * sizeof(ptr));
+}
+
 }

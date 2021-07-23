@@ -205,7 +205,7 @@ std::tuple<T, size_t> getValueLength(const T & v)
     using NearestType = typename NearestFieldType<T>::Type;
     auto [table_info, column_lut, fields] = getTableInfoLutFields(ColumnIDValue(1, v));
 
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     encodeRowV2(table_info, fields, ss);
     auto encoded = ss.str();
     auto * decoded = decodeRow(encoded, table_info, column_lut);
@@ -283,7 +283,7 @@ TEST(RowV2Suite, DecimalValueLength)
 #define ASSERT_ROW_VALUE(is_big, ...)                                               \
     {                                                                               \
         auto [table_info, column_lut, fields] = getTableInfoLutFields(__VA_ARGS__); \
-        std::stringstream ss;                                                       \
+        WriteBufferFromOwnString ss;                                                       \
         encodeRowV2(table_info, fields, ss);                                        \
         auto encoded = ss.str();                                                    \
         ASSERT_EQ(is_big, isBig(encoded));                                          \
