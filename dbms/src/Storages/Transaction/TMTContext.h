@@ -37,6 +37,7 @@ public:
         Idle = 0,
         Ready,
         Running,
+        Stopping,
         Terminated,
     };
 
@@ -80,9 +81,12 @@ public:
 
     bool isInitialized() const;
     StoreStatus getStoreStatus(std::memory_order = std::memory_order_seq_cst) const;
-    void setStoreStatusRunning();
-    bool getTerminated(std::memory_order = std::memory_order_seq_cst) const;
-    void setTerminated();
+    void setStatusRunning();
+    void setStatusStopping();
+    void setStatusTerminated();
+    bool checkShuttingDown(std::memory_order = std::memory_order_seq_cst) const;
+    bool checkTerminated(std::memory_order = std::memory_order_seq_cst) const;
+    bool checkRunning(std::memory_order = std::memory_order_seq_cst) const;
 
     const KVClusterPtr & getCluster() const { return cluster; }
 
