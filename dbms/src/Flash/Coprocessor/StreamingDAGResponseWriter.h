@@ -37,6 +37,7 @@ private:
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
     size_t rows_in_blocks;
+    size_t bytes_in_blocks;
     uint16_t partition_num;
     ThreadPool thread_pool;
 };

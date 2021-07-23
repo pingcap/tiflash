@@ -26,6 +26,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWr
       thread_pool(dag_context.final_concurrency)
 {
     rows_in_blocks = 0;
+    bytes_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
 }
 
@@ -232,17 +233,79 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
     };
 }
 
-
+uint64_t up_bound = 1 << 25;
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
     if (block.columns() != result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
     size_t rows = block.rows();
+    size_t bytes = block.bytes();
     rows_in_blocks += rows;
+    bytes_in_blocks += block.bytes();
     if (rows > 0)
     {
-        blocks.push_back(block);
+        if (bytes_in_blocks > up_bound) /// if the total blocks size is over up bound
+        {
+            if (!blocks.empty())
+            {
+                ScheduleEncodeTask<false>();
+            }
+            /// split the current block
+            if (bytes > up_bound)   /// if the block size is over up bound
+            {
+                size_t split_num = bytes / up_bound + 1;
+                split_num = std::min(split_num,rows);
+                if(split_num == 1)
+                {
+                    /// throw exceptions later
+                    blocks.push_back(block);
+                    ScheduleEncodeTask<false>();
+                }
+                else
+                {
+                    auto tmp_block = block;
+                    size_t step = rows / split_num;
+                    std::vector<Block> dest_blocks(split_num);
+                    for (size_t i = 0; i < tmp_block.columns(); ++i)
+                    {
+                        if (ColumnPtr converted = tmp_block.getByPosition(i).column->convertToFullColumnIfConst())
+                        {
+                            tmp_block.getByPosition(i).column = converted;
+                        }
+                    }
+
+                    for (size_t i = 0; i < split_num; ++i)
+                    {
+                        dest_blocks[i] = tmp_block.cloneEmpty();
+                    }
+                    /// cut blocks to split_num sub_blocks
+                    for (size_t col_id = 0; col_id < tmp_block.columns(); ++col_id)
+                    {
+                       for(size_t split_id = 0, start = 0; split_id < split_num; ++split_id, start += step)
+                       {
+                           /// the last step
+                           if(split_id + 1 == split_num)
+                           {
+                               step += rows - start;
+                           }
+                           auto cut_column =  tmp_block.safeGetByPosition(col_id).column->cut(start,step);
+                           dest_blocks[split_id].safeGetByPosition(col_id).column = std::move(cut_column);
+                       }
+                    }
+                    /// write each sub_blocks
+                    for (size_t split_id = 0; split_id < split_num; ++split_id)
+                    {
+                        blocks.push_back(dest_blocks[split_id]);
+                        ScheduleEncodeTask<false>();
+                    }
+                }
+            }
+            else
+                blocks.push_back(block);
+        }
+        else
+            blocks.push_back(block);
     }
     if ((Int64)rows_in_blocks > records_per_chunk)
     {
