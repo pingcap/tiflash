@@ -65,11 +65,13 @@ struct StressOptions
 
     std::vector<std::string> paths;
 
+    std::vector<std::string> failpoints;
+
     std::string toDebugString() const
     {
         return fmt::format("{{ num_writers: {}, num_readers: {}, clean_before_run: {}" //
                            ", timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
-                           ", avg_page_size_mb: {}, rand_seed: {:08x} paths: {} }}",
+                           ", avg_page_size_mb: {}, rand_seed: {:08x} paths: [{}] failpoints: [{}] }}",
                            num_writers,
                            num_readers,
                            clean_before_run,
@@ -78,7 +80,10 @@ struct StressOptions
                            num_writer_slots,
                            avg_page_size_mb,
                            rand_seed,
-                           fmt::format("[{}]", fmt::join(paths.begin(), paths.end(), ",")));
+                           fmt::join(paths.begin(), paths.end(), ","),
+                           fmt::join(failpoints.begin(), failpoints.end(), ",")
+                           //
+        );
     }
 
     // <prog> -W 4 -R 128 -T 10 -C 1 --paths ./stress1 --paths ./stress2
@@ -96,7 +101,8 @@ struct StressOptions
             ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay")      //
             ("avg_page_size", value<UInt32>()->default_value(1), "avg size for each page(MiB)")       //
             ("rand_seed", value<UInt32>()->default_value(0x123987), "random seed")                    //
-            ("paths", value<std::vector<std::string>>(), "store path")                                //
+            ("paths,P", value<std::vector<std::string>>(), "store path(s)")                           //
+            ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable")             //
             ;
         po::variables_map options;
         po::store(po::parse_command_line(argc, argv, desc), options);
@@ -117,13 +123,11 @@ struct StressOptions
         opt.avg_page_size_mb = options["avg_page_size"].as<UInt32>();
         opt.rand_seed        = options["rand_seed"].as<UInt32>();
         if (options.count("paths"))
-        {
             opt.paths = options["paths"].as<std::vector<std::string>>();
-        }
         else
-        {
             opt.paths = {"./stress"};
-        }
+        if (options.count("failpoints"))
+            opt.failpoints = options["failpoints"].as<std::vector<std::string>>();
         return opt;
     }
 };
@@ -334,6 +338,7 @@ public:
 };
 
 int main(int argc, char ** argv)
+try
 {
     Poco::AutoPtr<Poco::ConsoleChannel>    channel = new Poco::ConsoleChannel(std::cerr);
     Poco::AutoPtr<Poco::PatternFormatter>  formatter(new DB::UnifiedLogPatternFormatter);
@@ -346,11 +351,13 @@ int main(int argc, char ** argv)
     fiu_init(0);
 #endif
 
-    DB::FailPointHelper::enableFailPoint(DB::FailPoints::random_slow_page_storage_remove_expired_snapshots);
-    DB::FailPointHelper::enableFailPoint(DB::FailPoints::random_slow_page_storage_list_all_live_files);
-
     StressOptions options = StressOptions::parse(argc, argv);
     LOG_INFO(logger, fmt::format("Options: {}", options.toDebugString()));
+
+    for (const auto & fp : options.failpoints)
+    {
+        DB::FailPointHelper::enableFailPoint(fp);
+    }
 
     // set random seed
     srand(options.rand_seed);
@@ -381,6 +388,7 @@ int main(int argc, char ** argv)
     DB::KeyManagerPtr   key_manager   = std::make_shared<DB::MockKeyManager>(false);
     DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
 
+    // FIXME: running with `MockDiskDelegatorMulti` is not well-testing
     DB::PSDiskDelegatorPtr delegator;
     if (options.paths.empty())
         throw DB::Exception("Can not run without paths");
@@ -419,7 +427,8 @@ int main(int argc, char ** argv)
                          options.timeout_s));
     Poco::ThreadPool pool(/* minCapacity= */ 1 + options.num_writers + options.num_readers, 1 + options.num_writers + options.num_readers);
 
-    // start one writer thread
+    // start some writer thread
+    PSWriter::setApproxPageSize(options.avg_page_size_mb);
     std::vector<std::shared_ptr<PSWriter>> writers(options.num_writers);
     for (size_t i = 0; i < options.num_writers; ++i)
     {
@@ -496,4 +505,9 @@ int main(int argc, char ** argv)
         return 0;
     else
         return -1;
+}
+catch (...)
+{
+    DB::tryLogCurrentException("");
+    exit(-1);
 }
