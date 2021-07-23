@@ -67,7 +67,6 @@ class PartLog;
 struct MergeTreeSettings;
 class IDatabase;
 class DDLGuard;
-class DDLWorker;
 class IStorage;
 class ITableFunction;
 using StoragePtr = std::shared_ptr<IStorage>;
@@ -403,9 +402,6 @@ public:
 
     BackgroundProcessingPool & getBackgroundPool();
     BackgroundProcessingPool & getBlockableBackgroundPool();
-
-    void setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker);
-    DDLWorker & getDDLWorker() const;
 
     void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
 
