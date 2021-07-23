@@ -2,6 +2,7 @@
 
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/AggregateFunctionState.h>
 #include <AggregateFunctions/parseAggregateFunctionParameters.h>
 #include <Functions/FunctionFactory.h>
 #include <DataTypes/getLeastSupertype.h>
@@ -22,6 +23,7 @@
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/getMostSubtype.h>
 #include <Core/TypeListNumber.h>
+#include <ext/scope_guard.h>
 
 
 namespace DB
@@ -2403,10 +2405,6 @@ DataTypePtr FunctionArrayReduce::getReturnTypeImpl(const ColumnsWithTypeAndName 
 void FunctionArrayReduce::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
 {
     IAggregateFunction & agg_func = *aggregate_function.get();
-    std::unique_ptr<char[]> place_holder { new char[agg_func.sizeOfData()] };
-    AggregateDataPtr place = place_holder.get();
-
-    std::unique_ptr<Arena> arena = agg_func.allocatesMemoryInArena() ? std::make_unique<Arena>() : nullptr;
 
     size_t rows = block.rows();
 
@@ -2458,32 +2456,46 @@ void FunctionArrayReduce::executeImpl(Block & block, const ColumnNumbers & argum
         throw Exception("State function " + agg_func.getName() + " inserts results into non-state column "
                         + block.getByPosition(result).type->getName(), ErrorCodes::ILLEGAL_COLUMN);
 
-    ColumnArray::Offset current_offset = 0;
+    std::unique_ptr<Arena> arena = std::make_unique<Arena>();
+
+    PODArray<AggregateDataPtr> places(rows);
     for (size_t i = 0; i < rows; ++i)
     {
-        agg_func.create(place);
-        ColumnArray::Offset next_offset = (*offsets)[i];
-
+        places[i] = arena->alignedAlloc(agg_func.sizeOfData(), agg_func.alignOfData());
         try
         {
-            for (size_t j = current_offset; j < next_offset; ++j)
-                agg_func.add(place, aggregate_arguments, j, arena.get());
-
-            if (!res_col_aggregate_function)
-                agg_func.insertResultInto(place, res_col);
-            else
-                res_col_aggregate_function->insertFrom(place);
+            agg_func.create(places[i]);
         }
         catch (...)
         {
-            agg_func.destroy(place);
+            for (size_t j = 0; j < i; ++j)
+                agg_func.destroy(places[j]);
             throw;
         }
-
-        agg_func.destroy(place);
-        current_offset = next_offset;
     }
 
+    SCOPE_EXIT({
+        for (size_t i = 0; i < rows; ++i)
+            agg_func.destroy(places[i]);
+    });
+
+    {
+        auto * that = &agg_func;
+        /// Unnest consecutive trailing -State combinators
+        while (auto * func = typeid_cast<AggregateFunctionState *>(that))
+            that = func->getNestedFunction().get();
+
+        that->addBatchArray(rows, places.data(), 0, aggregate_arguments, offsets->data(), arena.get());
+    }
+
+    for (size_t i = 0; i < rows; ++i)
+    {
+        if (!res_col_aggregate_function)
+            agg_func.insertResultInto(places[i], res_col, arena.get());
+        else
+            res_col_aggregate_function->insertFrom(places[i]);
+    }
+    
     if (!is_const)
     {
         block.getByPosition(result).column = std::move(result_holder);
@@ -3287,15 +3299,15 @@ ColumnPtr FunctionArrayIntersect::execute(const UnpackedArrays & arrays, Mutable
 
         for (const auto & pair : map)
         {
-            if (pair.second == args)
+            if (pair.getMapped() == args)
             {
                 ++result_offset;
                 if constexpr (is_numeric_column)
-                    result_data.insert(pair.first);
+                    result_data.insert(pair.getKey());
                 else if constexpr (std::is_same<ColumnType, ColumnString>::value || std::is_same<ColumnType, ColumnFixedString>::value)
-                    result_data.insertData(pair.first.data, pair.first.size);
+                    result_data.insertData(pair.getKey().data, pair.getKey().size);
                 else
-                    result_data.deserializeAndInsertFromArena(pair.first.data);
+                    result_data.deserializeAndInsertFromArena(pair.getKey().data);
 
                 if (all_nullable)
                     null_map.push_back(0);

@@ -141,6 +141,25 @@ grpc::Status FlashService::Coprocessor(
     return mpp_handler.execute(context, response);
 }
 
+::grpc::Status FlashService::IsAlive(::grpc::ServerContext * grpc_context [[maybe_unused]],
+    const ::mpp::IsAliveRequest * request [[maybe_unused]], ::mpp::IsAliveResponse * response [[maybe_unused]])
+{
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+
+    auto & tmt_context = context.getTMTContext();
+    response->set_available(tmt_context.checkRunning());
+    return ::grpc::Status::OK;
+}
+
 ::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
     const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
 {
@@ -171,18 +190,21 @@ grpc::Status FlashService::Coprocessor(
     auto task_manager = tmt_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
     std::string errMsg;
-    MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, errMsg);
-    if (sender_task == nullptr)
+    MPPTunnelPtr tunnel;
     {
-        LOG_ERROR(log, errMsg);
-        mpp::MPPDataPacket packet;
-        auto err = new mpp::Error();
-        err->set_msg(errMsg);
-        packet.set_allocated_error(err);
-        writer->Write(packet);
-        return grpc::Status::OK;
+        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, errMsg);
+        if (sender_task == nullptr)
+        {
+            LOG_ERROR(log, errMsg);
+            mpp::MPPDataPacket packet;
+            auto err = new mpp::Error();
+            err->set_msg(errMsg);
+            packet.set_allocated_error(err);
+            writer->Write(packet);
+            return grpc::Status::OK;
+        }
+        tunnel = sender_task->getTunnelWithTimeout(request->receiver_meta(), timeout);
     }
-    MPPTunnelPtr tunnel = sender_task->getTunnelWithTimeout(request->receiver_meta(), timeout);
     if (tunnel == nullptr)
     {
         errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + " + toString(request->sender_meta().task_id())

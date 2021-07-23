@@ -125,10 +125,10 @@ public:
 
     void insertFrom(const IColumn & src, size_t n) override;
 
-    void insertFrom(ConstAggregateDataPtr place);
+    void insertFrom(ConstAggregateDataPtr __restrict place);
 
     /// Merge state at last row with specified state in another column.
-    void insertMergeFrom(ConstAggregateDataPtr place);
+    void insertMergeFrom(ConstAggregateDataPtr __restrict place);
 
     void insertMergeFrom(const IColumn & src, size_t n);
 

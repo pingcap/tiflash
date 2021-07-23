@@ -108,12 +108,12 @@ cmake "$SRCPATH" \
     -DUSE_CCACHE=${USE_CCACHE} \
     -DDEBUG_WITHOUT_DEBUG_INFO=ON
 
-make -j $NPROC tiflash
+make -j ${NPROC} tiflash
 
 # copy gtest binary under Debug mode
 if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST} -ne 0 ]]; then
-    #ctest -V -j $(nproc || grep -c ^processor /proc/cpuinfo)
-    make -j ${NPROC} gtests_dbms gtests_libcommon
+    make -j ${NPROC} page_ctl
+    make -j ${NPROC} gtests_dbms gtests_libcommon page_stress_testing
     cp -f "$build_dir/dbms/gtests_dbms" "${INSTALL_DIR}/"
     cp -f "$build_dir/libs/libcommon/src/tests/gtests_libcommon" "${INSTALL_DIR}/"
 fi

@@ -7,12 +7,13 @@
 #include <Poco/TemporaryFile.h>
 
 #include <common/logger_useful.h>
-
 #include <common/StringRef.h>
+#include <common/ThreadPool.h>
+
 #include <Common/Arena.h>
 #include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/TwoLevelHashMap.h>
-#include <common/ThreadPool.h>
+#include <Common/ColumnsHashing.h>
 
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
@@ -72,14 +73,12 @@ using AggregatedDataWithInt256Key = HashMap<Int256, AggregateDataPtr, HashCRC32<
 using AggregatedDataWithStringKey = HashMapWithSavedHash<StringRef, AggregateDataPtr>;
 using AggregatedDataWithKeys128 = HashMap<UInt128, AggregateDataPtr, HashCRC32<UInt128>>;
 using AggregatedDataWithKeys256 = HashMap<UInt256, AggregateDataPtr, HashCRC32<UInt256>>;
-using AggregatedDataHashed = HashMap<UInt128, std::pair<StringRef*, AggregateDataPtr>, TrivialHash>;
 
 using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
 using AggregatedDataWithInt256KeyTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
 using AggregatedDataWithStringKeyTwoLevel = TwoLevelHashMapWithSavedHash<StringRef, AggregateDataPtr>;
 using AggregatedDataWithKeys128TwoLevel = TwoLevelHashMap<UInt128, AggregateDataPtr, HashCRC32<UInt128>>;
 using AggregatedDataWithKeys256TwoLevel = TwoLevelHashMap<UInt256, AggregateDataPtr, HashCRC32<UInt256>>;
-using AggregatedDataHashedTwoLevel = TwoLevelHashMap<UInt128, std::pair<StringRef*, AggregateDataPtr>, TrivialHash>;
 
 /** Variants with better hash function, using more than 32 bits for hash.
   * Using for merging phase of external aggregation, where number of keys may be far greater than 4 billion,
@@ -95,77 +94,35 @@ using AggregatedDataWithKeys256Hash64 = HashMap<UInt256, AggregateDataPtr, Defau
 
 
 /// For the case where there is one numeric key.
-template <typename FieldType, typename TData>    /// UInt8/16/32/64 for any type with corresponding bit width.
+/// FieldType is UInt8/16/32/64 for any type with corresponding bit width.
+template <typename FieldType, typename TData,
+        bool consecutive_keys_optimization = true>
 struct AggregationMethodOneNumber
 {
     using Data = TData;
     using Key = typename Data::key_type;
     using Mapped = typename Data::mapped_type;
-    using iterator = typename Data::iterator;
-    using const_iterator = typename Data::const_iterator;
 
     Data data;
 
-    AggregationMethodOneNumber() {}
+    AggregationMethodOneNumber() = default;
 
     template <typename Other>
     AggregationMethodOneNumber(const Other & other) : data(other.data) {}
 
     /// To use one `Method` in different threads, use different `State`.
-    struct State
+    using State = ColumnsHashing::HashMethodOneNumber<typename Data::value_type,
+        Mapped, FieldType, consecutive_keys_optimization>;
+
+    /// Shuffle key columns before `insertKeyIntoColumns` call if needed.
+    std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
+
+    // Insert the key from the hash table into columns.
+    static void insertKeyIntoColumns(const Key & key, std::vector<IColumn *> & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators &)
     {
-        const FieldType * vec;
-
-        /** Called at the start of each block processing.
-          * Sets the variables needed for the other methods called in inner loops.
-          */
-        void init(ColumnRawPtrs & key_columns, const TiDB::TiDBCollators &)
-        {
-            vec = &static_cast<const ColumnVector<FieldType> *>(key_columns[0])->getData()[0];
-        }
-
-        /// Get the key from the key columns for insertion into the hash table.
-        Key getKey(
-            const ColumnRawPtrs & /*key_columns*/,
-            size_t /*keys_size*/,         /// Number of key columns.
-            size_t i,                     /// From which row of the block, get the key.
-            const Sizes & /*key_sizes*/,  /// If the keys of a fixed length - their lengths. It is not used in aggregation methods for variable length keys.
-            StringRefs & /*keys*/,        /// Here references to key data in columns can be written. They can be used in the future.
-            Arena & /*pool*/,
-            std::vector<String> & /*sort_key_containers*/) const /// If key is string type with collation, should generate sort key instead of the origin key, sort_key_containers is used to generate sort_key
-
-        {
-            if constexpr(std::is_same_v<FieldType, Int256>) {
-                return vec[i];
-            } else {
-                return unionCastToUInt64(vec[i]);
-            }
-        }
-    };
-
-    /// From the value in the hash table, get AggregateDataPtr.
-    static AggregateDataPtr & getAggregateData(Mapped & value)                { return value; }
-    static const AggregateDataPtr & getAggregateData(const Mapped & value)    { return value; }
-
-    /** Place additional data, if necessary, in case a new key was inserted into the hash table.
-      */
-    static void onNewKey(typename Data::value_type & /*value*/, size_t /*keys_size*/, StringRefs & /*keys*/, Arena & /*pool*/)
-    {
-    }
-
-    /** The action to be taken if the key is not new. For example, roll back the memory allocation in the pool.
-      */
-    static void onExistingKey(const Key & /*key*/, StringRefs & /*keys*/, Arena & /*pool*/) {}
-
-    /** Do not use optimization for consecutive keys.
-      */
-    static bool no_consecutive_keys_optimization(const TiDB::TiDBCollators &) { return false; };
-
-    /** Insert the key from the hash table into columns.
-      */
-    static void insertKeyIntoColumns(const typename Data::value_type & value, MutableColumns & key_columns, size_t /*keys_size*/, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & /*collators*/)
-    {
-        static_cast<ColumnVectorHelper *>(key_columns[0].get())->insertRawData<sizeof(FieldType)>(reinterpret_cast<const char *>(&value.first));
+        const auto * key_holder = reinterpret_cast<const char *>(&key);
+        auto * column = static_cast<ColumnVectorHelper *>(key_columns[0]);
+        column->insertRawData<sizeof(FieldType)>(key_holder);
     }
 };
 
@@ -176,81 +133,48 @@ struct AggregationMethodString
     using Data = TData;
     using Key = typename Data::key_type;
     using Mapped = typename Data::mapped_type;
-    using iterator = typename Data::iterator;
-    using const_iterator = typename Data::const_iterator;
 
     Data data;
 
-    AggregationMethodString() {}
+    AggregationMethodString() = default;
 
     template <typename Other>
     AggregationMethodString(const Other & other) : data(other.data) {}
 
-    struct State
+    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped>;
+
+    std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
+
+    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
     {
-        const ColumnString::Offsets * offsets;
-        const ColumnString::Chars_t * chars;
-        std::shared_ptr<TiDB::ITiDBCollator> collator;
-
-        void init(ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators)
-        {
-            const IColumn & column = *key_columns[0];
-            const ColumnString & column_string = static_cast<const ColumnString &>(column);
-            offsets = &column_string.getOffsets();
-            chars = &column_string.getChars();
-            if (!collators.empty())
-                collator = collators[0];
-        }
-
-        Key getKey(
-            const ColumnRawPtrs & /*key_columns*/,
-            size_t /*keys_size*/,
-            size_t i,
-            const Sizes & /*key_sizes*/,
-            StringRefs & /*keys*/,
-            Arena & /*pool*/,
-            std::vector<String> & sort_key_containers) const
-        {
-            if (collator == nullptr)
-            {
-                return StringRef(
-                        &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
-                        (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
-            }
-            else
-            {
-                Key key = StringRef(
-                        &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
-                        (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
-                return collator->sortKey(key.data, key.size, sort_key_containers[0]);
-            }
-        }
-    };
-
-    static AggregateDataPtr & getAggregateData(Mapped & value)                { return value; }
-    static const AggregateDataPtr & getAggregateData(const Mapped & value)    { return value; }
-
-    static void onNewKey(typename Data::value_type & value, size_t /*keys_size*/, StringRefs & /*keys*/, Arena & pool)
-    {
-        value.first.data = pool.insert(value.first.data, value.first.size);
-    }
-
-    static void onExistingKey(const Key & /*key*/, StringRefs & /*keys*/, Arena & /*pool*/) {}
-
-    /// if collator is not null, can not use the consecutive keys optimization because in this case the pre_key is destroyed once
-    /// current key is generated by `getKey`
-    static bool no_consecutive_keys_optimization(const TiDB::TiDBCollators & collators) { return !collators.empty() && collators[0] !=
-                                                                                                                              nullptr; };
-
-    static void insertKeyIntoColumns(const typename Data::value_type & value, MutableColumns & key_columns, size_t, const Sizes &, const TiDB::TiDBCollators &)
-    {
-        /// if collator is enabled, we can not reconstruct the original value from the key, so we add an extra agg
-        /// function first_row(group_by_column) during compile time, and will choose first_row(group_by_column) as
-        /// the result of group_by_column after agg, so do not need to handle collation here
-        key_columns[0]->insertData(value.first.data, value.first.size);
+        static_cast<ColumnString *>(key_columns[0])->insertData(key.data, key.size);
     }
 };
 
+/// Same as above but without cache
+template <typename TData>
+struct AggregationMethodStringNoCache
+{
+    using Data = TData;
+    using Key = typename Data::key_type;
+    using Mapped = typename Data::mapped_type;
+
+    Data data;
+
+    AggregationMethodStringNoCache() = default;
+
+    template <typename Other>
+    AggregationMethodStringNoCache(const Other & other) : data(other.data) {}
+
+    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, true, false>;
+
+    std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
+
+    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
+    {
+        static_cast<ColumnString *>(key_columns[0])->insertData(key.data, key.size);
+    }
+};
 
 /// For the case where there is one fixed-length string key.
 template <typename TData>
@@ -259,219 +183,82 @@ struct AggregationMethodFixedString
     using Data = TData;
     using Key = typename Data::key_type;
     using Mapped = typename Data::mapped_type;
-    using iterator = typename Data::iterator;
-    using const_iterator = typename Data::const_iterator;
 
     Data data;
 
-    AggregationMethodFixedString() {}
+    AggregationMethodFixedString() = default;
 
     template <typename Other>
     AggregationMethodFixedString(const Other & other) : data(other.data) {}
 
-    struct State
+    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped>;
+
+    std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
+
+    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
     {
-        size_t n;
-        const ColumnFixedString::Chars_t * chars;
-
-        void init(ColumnRawPtrs & key_columns, const TiDB::TiDBCollators &)
-        {
-            const IColumn & column = *key_columns[0];
-            const ColumnFixedString & column_string = static_cast<const ColumnFixedString &>(column);
-            n = column_string.getN();
-            chars = &column_string.getChars();
-        }
-
-        Key getKey(
-            const ColumnRawPtrs &,
-            size_t,
-            size_t i,
-            const Sizes &,
-            StringRefs &,
-            Arena &,
-            std::vector<String> &) const
-        {
-            return StringRef(&(*chars)[i * n], n);
-        }
-    };
-
-    static AggregateDataPtr & getAggregateData(Mapped & value)                { return value; }
-    static const AggregateDataPtr & getAggregateData(const Mapped & value)    { return value; }
-
-    static void onNewKey(typename Data::value_type & value, size_t, StringRefs &, Arena & pool)
-    {
-        value.first.data = pool.insert(value.first.data, value.first.size);
-    }
-
-    static void onExistingKey(const Key &, StringRefs &, Arena &) {}
-
-    static bool no_consecutive_keys_optimization(const TiDB::TiDBCollators &) { return false; };
-
-    static void insertKeyIntoColumns(const typename Data::value_type & value, MutableColumns & key_columns, size_t, const Sizes &, const TiDB::TiDBCollators &)
-    {
-        key_columns[0]->insertData(value.first.data, value.first.size);
+        static_cast<ColumnFixedString *>(key_columns[0])->insertData(key.data, key.size);
     }
 };
 
-namespace aggregator_impl
+/// Same as above but without cache
+template <typename TData>
+struct AggregationMethodFixedStringNoCache
 {
+    using Data = TData;
+    using Key = typename Data::key_type;
+    using Mapped = typename Data::mapped_type;
 
-/// This class is designed to provide the functionality that is required for
-/// supporting nullable keys in AggregationMethodKeysFixed. If there are
-/// no nullable keys, this class is merely implemented as an empty shell.
-template <typename Key, bool has_nullable_keys>
-class BaseStateKeysFixed;
+    Data data;
 
-/// Case where nullable keys are supported.
-template <typename Key>
-class BaseStateKeysFixed<Key, true>
-{
-protected:
-    void init(const ColumnRawPtrs & key_columns)
+    AggregationMethodFixedStringNoCache() = default;
+
+    template <typename Other>
+    AggregationMethodFixedStringNoCache(const Other & other) : data(other.data) {}
+
+    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false>;
+
+    std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
+
+    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
     {
-        null_maps.reserve(key_columns.size());
-        actual_columns.reserve(key_columns.size());
-
-        for (const auto & col : key_columns)
-        {
-            if (col->isColumnNullable())
-            {
-                const auto & nullable_col = static_cast<const ColumnNullable &>(*col);
-                actual_columns.push_back(&nullable_col.getNestedColumn());
-                null_maps.push_back(&nullable_col.getNullMapColumn());
-            }
-            else
-            {
-                actual_columns.push_back(col);
-                null_maps.push_back(nullptr);
-            }
-        }
-    }
-
-    /// Return the columns which actually contain the values of the keys.
-    /// For a given key column, if it is nullable, we return its nested
-    /// column. Otherwise we return the key column itself.
-    inline const ColumnRawPtrs & getActualColumns() const
-    {
-        return actual_columns;
-    }
-
-    /// Create a bitmap that indicates whether, for a particular row,
-    /// a key column bears a null value or not.
-    KeysNullMap<Key> createBitmap(size_t row) const
-    {
-        KeysNullMap<Key> bitmap{};
-
-        for (size_t k = 0; k < null_maps.size(); ++k)
-        {
-            if (null_maps[k] != nullptr)
-            {
-                const auto & null_map = static_cast<const ColumnUInt8 &>(*null_maps[k]).getData();
-                if (null_map[row] == 1)
-                {
-                    size_t bucket = k / 8;
-                    size_t offset = k % 8;
-                    bitmap[bucket] |= UInt8(1) << offset;
-                }
-            }
-        }
-
-        return bitmap;
-    }
-
-private:
-    ColumnRawPtrs actual_columns;
-    ColumnRawPtrs null_maps;
-};
-
-/// Case where nullable keys are not supported.
-template <typename Key>
-class BaseStateKeysFixed<Key, false>
-{
-protected:
-    void init(const ColumnRawPtrs &)
-    {
-        throw Exception{"Internal error: calling init() for non-nullable"
-            " keys is forbidden", ErrorCodes::LOGICAL_ERROR};
-    }
-
-    const ColumnRawPtrs & getActualColumns() const
-    {
-        throw Exception{"Internal error: calling getActualColumns() for non-nullable"
-            " keys is forbidden", ErrorCodes::LOGICAL_ERROR};
-    }
-
-    KeysNullMap<Key> createBitmap(size_t) const
-    {
-        throw Exception{"Internal error: calling createBitmap() for non-nullable keys"
-            " is forbidden", ErrorCodes::LOGICAL_ERROR};
+        static_cast<ColumnFixedString *>(key_columns[0])->insertData(key.data, key.size);
     }
 };
 
-}
 
 /// For the case where all keys are of fixed length, and they fit in N (for example, 128) bits.
-template <typename TData, bool has_nullable_keys_ = false>
+template <typename TData, bool has_nullable_keys_ = false, bool use_cache = true>
 struct AggregationMethodKeysFixed
 {
     using Data = TData;
     using Key = typename Data::key_type;
     using Mapped = typename Data::mapped_type;
-    using iterator = typename Data::iterator;
-    using const_iterator = typename Data::const_iterator;
     static constexpr bool has_nullable_keys = has_nullable_keys_;
 
     Data data;
 
-    AggregationMethodKeysFixed() {}
+    AggregationMethodKeysFixed() = default;
 
     template <typename Other>
     AggregationMethodKeysFixed(const Other & other) : data(other.data) {}
 
-    class State final : private aggregator_impl::BaseStateKeysFixed<Key, has_nullable_keys>
+    using State = ColumnsHashing::HashMethodKeysFixed<
+        typename Data::value_type,
+        Key,
+        Mapped,
+        has_nullable_keys,
+        use_cache>;
+
+    std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> & key_columns, const Sizes & key_sizes)
     {
-    public:
-        using Base = aggregator_impl::BaseStateKeysFixed<Key, has_nullable_keys>;
-
-        // todo support collation if there is fixed string column
-        void init(ColumnRawPtrs & key_columns, const TiDB::TiDBCollators &)
-        {
-            if (has_nullable_keys)
-                Base::init(key_columns);
-        }
-
-        Key getKey(
-            const ColumnRawPtrs & key_columns,
-            size_t keys_size,
-            size_t i,
-            const Sizes & key_sizes,
-            StringRefs &,
-            Arena &,
-            std::vector<String> &) const
-        {
-            if (has_nullable_keys)
-            {
-                auto bitmap = Base::createBitmap(i);
-                return packFixed<Key>(i, keys_size, Base::getActualColumns(), key_sizes, bitmap);
-            }
-            else
-                return packFixed<Key>(i, keys_size, key_columns, key_sizes);
-        }
-    };
-
-    static AggregateDataPtr & getAggregateData(Mapped & value)                { return value; }
-    static const AggregateDataPtr & getAggregateData(const Mapped & value)    { return value; }
-
-    static void onNewKey(typename Data::value_type &, size_t, StringRefs &, Arena &)
-    {
+        return State::shuffleKeyColumns(key_columns, key_sizes);
     }
 
-    static void onExistingKey(const Key &, StringRefs &, Arena &) {}
-
-    static bool no_consecutive_keys_optimization(const TiDB::TiDBCollators &) { return false; };
-
-    static void insertKeyIntoColumns(const typename Data::value_type & value, MutableColumns & key_columns, size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators &)
+    static void insertKeyIntoColumns(const Key & key, std::vector<IColumn *> & key_columns, const Sizes & key_sizes, const TiDB::TiDBCollators &)
     {
+        size_t keys_size = key_columns.size();
+
         static constexpr auto bitmap_size = has_nullable_keys ? std::tuple_size<KeysNullMap<Key>>::value : 0;
         /// In any hash key value, column values to be read start just after the bitmap, if it exists.
         size_t pos = bitmap_size;
@@ -481,39 +268,41 @@ struct AggregationMethodKeysFixed
             IColumn * observed_column;
             ColumnUInt8 * null_map;
 
+            bool column_nullable = false;
+            if constexpr (has_nullable_keys)
+                column_nullable = key_columns[i]->isColumnNullable();
+
             /// If we have a nullable column, get its nested column and its null map.
-            if (has_nullable_keys && key_columns[i]->isColumnNullable())
+            if (column_nullable)
             {
-                ColumnNullable & nullable_col = static_cast<ColumnNullable &>(*key_columns[i]);
+                ColumnNullable & nullable_col = assert_cast<ColumnNullable &>(*key_columns[i]);
                 observed_column = &nullable_col.getNestedColumn();
-                null_map = static_cast<ColumnUInt8 *>(&nullable_col.getNullMapColumn());
+                null_map = assert_cast<ColumnUInt8 *>(&nullable_col.getNullMapColumn());
             }
             else
             {
-                observed_column = key_columns[i].get();
+                observed_column = key_columns[i];
                 null_map = nullptr;
             }
 
-            bool is_null;
-            if (has_nullable_keys && key_columns[i]->isColumnNullable())
+            bool is_null = false;
+            if (column_nullable)
             {
                 /// The current column is nullable. Check if the value of the
                 /// corresponding key is nullable. Update the null map accordingly.
                 size_t bucket = i / 8;
                 size_t offset = i % 8;
-                UInt8 val = (reinterpret_cast<const UInt8 *>(&value.first)[bucket] >> offset) & 1;
+                UInt8 val = (reinterpret_cast<const UInt8 *>(&key)[bucket] >> offset) & 1;
                 null_map->insert(val);
                 is_null = val == 1;
             }
-            else
-                is_null = false;
 
             if (has_nullable_keys && is_null)
                 observed_column->insertDefault();
             else
             {
                 size_t size = key_sizes[i];
-                observed_column->insertData(reinterpret_cast<const char *>(&value.first) + pos, size);
+                observed_column->insertData(reinterpret_cast<const char *>(&key) + pos, size);
                 pos += size;
             }
         }
@@ -521,93 +310,7 @@ struct AggregationMethodKeysFixed
 };
 
 
-/// Aggregates by key concatenation. (In this case, strings containing zeros in the middle can stick together.)
-template <typename TData>
-struct AggregationMethodConcat
-{
-    using Data = TData;
-    using Key = typename Data::key_type;
-    using Mapped = typename Data::mapped_type;
-    using iterator = typename Data::iterator;
-    using const_iterator = typename Data::const_iterator;
-
-    Data data;
-
-    AggregationMethodConcat() {}
-
-    template <typename Other>
-    AggregationMethodConcat(const Other & other) : data(other.data) {}
-
-    struct State
-    {
-        TiDB::TiDBCollators collators;
-        void init(ColumnRawPtrs &, const TiDB::TiDBCollators & collators_)
-        {
-            collators = collators_;
-        }
-
-        Key getKey(
-            const ColumnRawPtrs & key_columns,
-            size_t keys_size,
-            size_t i,
-            const Sizes &,
-            StringRefs & keys,
-            Arena & pool,
-            std::vector<String> & sort_key_containers) const
-        {
-            return extractKeysAndPlaceInPoolContiguous(i, keys_size, key_columns, keys, collators, sort_key_containers, pool);
-        }
-    };
-
-    static AggregateDataPtr & getAggregateData(Mapped & value)                { return value; }
-    static const AggregateDataPtr & getAggregateData(const Mapped & value)    { return value; }
-
-    static void onNewKey(typename Data::value_type &, size_t, StringRefs &, Arena &)
-    {
-    }
-
-    static void onExistingKey(const Key & key, StringRefs & keys, Arena & pool)
-    {
-        pool.rollback(key.size + keys.size() * sizeof(keys[0]));
-    }
-
-    /// If the key already was, then it is removed from the pool (overwritten), and the next key can not be compared with it.
-    static bool no_consecutive_keys_optimization(const TiDB::TiDBCollators &) { return true; };
-
-    static void insertKeyIntoColumns(const typename Data::value_type & value, MutableColumns & key_columns, size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators &)
-    {
-        insertKeyIntoColumnsImpl(value, key_columns, keys_size, key_sizes);
-    }
-
-private:
-    /// Insert the values of the specified keys into the corresponding columns.
-    static void insertKeyIntoColumnsImpl(const typename Data::value_type & value, MutableColumns & key_columns, size_t keys_size, const Sizes &)
-    {
-        /// See function extractKeysAndPlaceInPoolContiguous.
-        const StringRef * key_refs = reinterpret_cast<const StringRef *>(value.first.data + value.first.size);
-
-        if (unlikely(0 == value.first.size))
-        {
-            /** Fix if all keys are empty arrays. For them, a zero-length StringRef is written to the hash table, but with a non-zero pointer.
-                * But when inserted into a hash table, this StringRef occurs equal to another key of zero length,
-                *  whose data pointer can be any garbage and can not be used.
-                */
-            for (size_t i = 0; i < keys_size; ++i)
-                key_columns[i]->insertDefault();
-        }
-        else
-        {
-            for (size_t i = 0; i < keys_size; ++i)
-                /// once fixed string with collation is supported, need to revisit this code because the size of key generated by
-                /// getKey for fixed string with collation is not the same as the origin key size
-                key_columns[i]->insertDataWithTerminatingZero(key_refs[i].data, key_refs[i].size);
-        }
-    }
-};
-
-
 /** Aggregates by concatenating serialized key values.
-  * Similar to AggregationMethodConcat, but it is suitable, for example, for arrays of strings or multiple arrays.
   * The serialized value differs in that it uniquely allows to deserialize it, having only the position with which it starts.
   * That is, for example, for strings, it contains first the serialized length of the string, and then the bytes.
   * Therefore, when aggregating by several strings, there is no ambiguity.
@@ -618,123 +321,23 @@ struct AggregationMethodSerialized
     using Data = TData;
     using Key = typename Data::key_type;
     using Mapped = typename Data::mapped_type;
-    using iterator = typename Data::iterator;
-    using const_iterator = typename Data::const_iterator;
 
     Data data;
 
-    AggregationMethodSerialized() {}
+    AggregationMethodSerialized() = default;
 
     template <typename Other>
     AggregationMethodSerialized(const Other & other) : data(other.data) {}
 
-    struct State
+    using State = ColumnsHashing::HashMethodSerialized<typename Data::value_type, Mapped>;
+
+    std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
+
+    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators & collators)
     {
-        TiDB::TiDBCollators collators;
-        void init(ColumnRawPtrs &, const TiDB::TiDBCollators & collators_)
-        {
-            collators = collators_;
-        }
-
-        Key getKey(
-            const ColumnRawPtrs & key_columns,
-            size_t keys_size,
-            size_t i,
-            const Sizes &,
-            StringRefs &,
-            Arena & pool,
-            std::vector<String> & sort_key_containers) const
-        {
-            return serializeKeysToPoolContiguous(i, keys_size, key_columns, collators, sort_key_containers, pool);
-        }
-    };
-
-    static AggregateDataPtr & getAggregateData(Mapped & value)                { return value; }
-    static const AggregateDataPtr & getAggregateData(const Mapped & value)    { return value; }
-
-    static void onNewKey(typename Data::value_type &, size_t, StringRefs &, Arena &)
-    {
-    }
-
-    static void onExistingKey(const Key & key, StringRefs &, Arena & pool)
-    {
-        pool.rollback(key.size);
-    }
-
-    /// If the key already was, it is removed from the pool (overwritten), and the next key can not be compared with it.
-    static bool no_consecutive_keys_optimization(const TiDB::TiDBCollators &) { return true; };
-
-    static void insertKeyIntoColumns(const typename Data::value_type & value, MutableColumns & key_columns, size_t keys_size, const Sizes &, const TiDB::TiDBCollators & collators)
-    {
-        auto pos = value.first.data;
-        for (size_t i = 0; i < keys_size; ++i)
+        const auto * pos = key.data;
+        for (size_t i = 0; i < key_columns.size(); ++i)
             pos = key_columns[i]->deserializeAndInsertFromArena(pos, collators.empty() ? nullptr : collators[i]);
-    }
-};
-
-
-/// For other cases. Aggregates by 128-bit hash from the key.
-template <typename TData>
-struct AggregationMethodHashed
-{
-    using Data = TData;
-    using Key = typename Data::key_type;
-    using Mapped = typename Data::mapped_type;
-    using iterator = typename Data::iterator;
-    using const_iterator = typename Data::const_iterator;
-
-    Data data;
-
-    AggregationMethodHashed() {}
-
-    template <typename Other>
-    AggregationMethodHashed(const Other & other) : data(other.data) {}
-
-    struct State
-    {
-        TiDB::TiDBCollators collators;
-        void init(ColumnRawPtrs &, const TiDB::TiDBCollators & collators_)
-        {
-            collators = collators_;
-        }
-
-        Key getKey(
-            const ColumnRawPtrs & key_columns,
-            size_t keys_size,
-            size_t i,
-            const Sizes &,
-            StringRefs & keys,
-            Arena &,
-            std::vector<String> & sort_key_containers) const
-        {
-            return hash128(i, keys_size, key_columns, keys, collators, sort_key_containers);
-        }
-    };
-
-    static AggregateDataPtr & getAggregateData(Mapped & value)                { return value.second; }
-    static const AggregateDataPtr & getAggregateData(const Mapped & value)    { return value.second; }
-
-    static void onNewKey(typename Data::value_type & value, size_t keys_size, StringRefs & keys, Arena & pool)
-    {
-        value.second.first = placeKeysInPool(keys_size, keys, pool);
-    }
-
-    static void onExistingKey(const Key &, StringRefs &, Arena &) {}
-
-    static bool no_consecutive_keys_optimization(const TiDB::TiDBCollators & collators)
-    {
-        for (auto & collator : collators)
-        {
-            if (collator != nullptr)
-                return true;
-        }
-        return false;
-    };
-
-    static void insertKeyIntoColumns(const typename Data::value_type & value, MutableColumns & key_columns, size_t keys_size, const Sizes &, const TiDB::TiDBCollators &)
-    {
-        for (size_t i = 0; i < keys_size; ++i)
-            key_columns[i]->insertDataWithTerminatingZero(value.second.first[i].data, value.second.first[i].size);
     }
 };
 
@@ -762,49 +365,44 @@ struct AggregatedDataVariants : private boost::noncopyable
       */
     Aggregator * aggregator = nullptr;
 
-    size_t keys_size;    /// Number of keys. NOTE do we need this field?
+    size_t keys_size{};  /// Number of keys. NOTE do we need this field?
     Sizes key_sizes;     /// Dimensions of keys, if keys of fixed length
     TiDB::TiDBCollators collators;
 
     /// Pools for states of aggregate functions. Ownership will be later transferred to ColumnAggregateFunction.
     Arenas aggregates_pools;
-    Arena * aggregates_pool;    /// The pool that is currently used for allocation.
+    Arena * aggregates_pool{};    /// The pool that is currently used for allocation.
 
     /** Specialization for the case when there are no keys, and for keys not fitted into max_rows_to_group_by.
       */
     AggregatedDataWithoutKey without_key = nullptr;
 
-    std::unique_ptr<AggregationMethodOneNumber<UInt8, AggregatedDataWithUInt8Key>>           key8;
-    std::unique_ptr<AggregationMethodOneNumber<UInt16, AggregatedDataWithUInt16Key>>         key16;
+    std::unique_ptr<AggregationMethodOneNumber<UInt8, AggregatedDataWithUInt8Key, false>>    key8;
+    std::unique_ptr<AggregationMethodOneNumber<UInt16, AggregatedDataWithUInt16Key, false>>  key16;
 
     std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64Key>>         key32;
     std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64Key>>         key64;
-    std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256Key>>      key_int256;
-    std::unique_ptr<AggregationMethodString<AggregatedDataWithStringKey>>                    key_string;
-    std::unique_ptr<AggregationMethodFixedString<AggregatedDataWithStringKey>>               key_fixed_string;
+    std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256Key>>         key_int256;
+    std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithStringKey>>             key_string;
+    std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithStringKey>>        key_fixed_string;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128>>                   keys128;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256>>                   keys256;
-    std::unique_ptr<AggregationMethodHashed<AggregatedDataHashed>>                           hashed;
-    std::unique_ptr<AggregationMethodConcat<AggregatedDataWithStringKey>>                    concat;
     std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKey>>                serialized;
 
-    std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel>> key32_two_level;
-    std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel>> key64_two_level;
-    std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel>> key_int256_two_level;
-    std::unique_ptr<AggregationMethodString<AggregatedDataWithStringKeyTwoLevel>>            key_string_two_level;
-    std::unique_ptr<AggregationMethodFixedString<AggregatedDataWithStringKeyTwoLevel>>       key_fixed_string_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel>>           keys128_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel>>           keys256_two_level;
-    std::unique_ptr<AggregationMethodHashed<AggregatedDataHashedTwoLevel>>                   hashed_two_level;
-    std::unique_ptr<AggregationMethodConcat<AggregatedDataWithStringKeyTwoLevel>>            concat_two_level;
-    std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevel>>        serialized_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel>>        key32_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel>>        key64_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel>>        key_int256_two_level;
+    std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithStringKeyTwoLevel>>            key_string_two_level;
+    std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithStringKeyTwoLevel>>       key_fixed_string_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel>>                  keys128_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel>>                  keys256_two_level;
+    std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevel>>               serialized_two_level;
 
     std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyHash64>>   key64_hash64;
-    std::unique_ptr<AggregationMethodString<AggregatedDataWithStringKeyHash64>>              key_string_hash64;
+    std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithStringKeyHash64>>       key_string_hash64;
     std::unique_ptr<AggregationMethodFixedString<AggregatedDataWithStringKeyHash64>>         key_fixed_string_hash64;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128Hash64>>             keys128_hash64;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256Hash64>>             keys256_hash64;
-    std::unique_ptr<AggregationMethodConcat<AggregatedDataWithStringKeyHash64>>              concat_hash64;
     std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKeyHash64>>          serialized_hash64;
 
     /// Support for nullable keys.
@@ -824,8 +422,6 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(keys128,                    false) \
         M(keys256,                    false) \
         M(key_int256,                    false) \
-        M(hashed,                     false) \
-        M(concat,                     false) \
         M(serialized,                 false) \
         M(key32_two_level,            true) \
         M(key64_two_level,            true) \
@@ -834,15 +430,12 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(key_fixed_string_two_level, true) \
         M(keys128_two_level,          true) \
         M(keys256_two_level,          true) \
-        M(hashed_two_level,           true) \
-        M(concat_two_level,           true) \
         M(serialized_two_level,       true) \
         M(key64_hash64,               false) \
         M(key_string_hash64,          false) \
         M(key_fixed_string_hash64,    false) \
         M(keys128_hash64,             false) \
         M(keys256_hash64,             false) \
-        M(concat_hash64,              false) \
         M(serialized_hash64,          false) \
         M(nullable_keys128,           false) \
         M(nullable_keys256,           false) \
@@ -963,8 +556,6 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(key_fixed_string) \
         M(keys128)          \
         M(keys256)          \
-        M(hashed)           \
-        M(concat)           \
         M(serialized)       \
         M(nullable_keys128) \
         M(nullable_keys256) \
@@ -977,7 +568,6 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(key_fixed_string_hash64) \
         M(keys128_hash64)   \
         M(keys256_hash64)   \
-        M(concat_hash64)    \
         M(serialized_hash64) \
 
     #define APPLY_FOR_VARIANTS_SINGLE_LEVEL(M) \
@@ -1009,11 +599,10 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(key_fixed_string_two_level) \
         M(keys128_two_level)          \
         M(keys256_two_level)          \
-        M(hashed_two_level)           \
-        M(concat_two_level)           \
         M(serialized_two_level)       \
         M(nullable_keys128_two_level) \
         M(nullable_keys256_two_level)
+
 };
 
 using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;
@@ -1055,10 +644,6 @@ public:
         const size_t max_rows_to_group_by;
         const OverflowMode group_by_overflow_mode;
 
-        /// For dynamic compilation.
-        Compiler * compiler;
-        const UInt32 min_count_to_compile;
-
         /// Two-level aggregation settings (used for a large number of keys).
         /** With how many keys or the size of the aggregation state in bytes,
           *  two-level aggregation begins to be used. Enough to reach of at least one of the thresholds.
@@ -1081,7 +666,6 @@ public:
             const Block & src_header_,
             const ColumnNumbers & keys_, const AggregateDescriptions & aggregates_,
             bool overflow_row_, size_t max_rows_to_group_by_, OverflowMode group_by_overflow_mode_,
-            Compiler * compiler_, UInt32 min_count_to_compile_,
             size_t group_by_two_level_threshold_, size_t group_by_two_level_threshold_bytes_,
             size_t max_bytes_before_external_group_by_,
             bool empty_result_for_aggregation_by_empty_set_,
@@ -1090,7 +674,6 @@ public:
             : src_header(src_header_),
             keys(keys_), aggregates(aggregates_), keys_size(keys.size()), aggregates_size(aggregates.size()),
             overflow_row(overflow_row_), max_rows_to_group_by(max_rows_to_group_by_), group_by_overflow_mode(group_by_overflow_mode_),
-            compiler(compiler_), min_count_to_compile(min_count_to_compile_),
             group_by_two_level_threshold(group_by_two_level_threshold_), group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_),
             max_bytes_before_external_group_by(max_bytes_before_external_group_by_),
             empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_),
@@ -1101,7 +684,7 @@ public:
         /// Only parameters that matter during merge.
         Params(const Block & intermediate_header_,
             const ColumnNumbers & keys_, const AggregateDescriptions & aggregates_, bool overflow_row_, const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, nullptr, 0, 0, 0, 0, false, "", collators_)
+            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, "", collators_)
         {
             intermediate_header = intermediate_header_;
         }
@@ -1111,7 +694,7 @@ public:
     };
 
 
-    Aggregator(const Params & params_);
+    explicit Aggregator(const Params & params_);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider);
@@ -1124,7 +707,6 @@ public:
     /// Process one block. Return false if the processing should be aborted (with group_by_overflow_mode = 'break').
     bool executeOnBlock(const Block & block, AggregatedDataVariants & result, const FileProviderPtr & file_provider,
         ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns,    /// Passed to not create them anew for each block
-        StringRefs & keys,                                        /// - pass the corresponding objects that are initially empty.
         bool & no_more_keys);
 
     /** Convert the aggregation data structure into a block.
@@ -1192,7 +774,7 @@ protected:
 
     Params params;
 
-    AggregatedDataVariants::Type method;
+    AggregatedDataVariants::Type method_chosen;
     Sizes key_sizes;
 
     AggregateFunctionsPlainPtrs aggregate_functions;
@@ -1232,26 +814,6 @@ protected:
 
     Logger * log = &Logger::get("Aggregator");
 
-    /** Dynamically compiled library for aggregation, if any.
-      * The meaning of dynamic compilation is to specialize code
-      *  for a specific list of aggregate functions.
-      * This allows you to expand the loop to create and update states of aggregate functions,
-      *  and also use inline-code instead of virtual calls.
-      */
-    struct CompiledData
-    {
-        SharedLibraryPtr compiled_aggregator;
-
-        /// Obtained with dlsym. It is still necessary to make reinterpret_cast to the function pointer.
-        void * compiled_method_ptr = nullptr;
-        void * compiled_two_level_method_ptr = nullptr;
-    };
-    /// shared_ptr - to pass into a callback, that can survive Aggregator.
-    std::shared_ptr<CompiledData> compiled_data { new CompiledData };
-
-    bool compiled_if_possible = false;
-    void compileIfPossible(AggregatedDataVariants::Type type);
-
     /// Returns true if you can abort the current task.
     CancellationHook isCancelled;
 
@@ -1280,8 +842,6 @@ protected:
         ColumnRawPtrs & key_columns,
         TiDB::TiDBCollators & collators,
         AggregateFunctionInstruction * aggregate_instructions,
-        const Sizes & key_sizes,
-        StringRefs & keys,
         bool no_more_keys,
         AggregateDataPtr overflow_row) const;
 
@@ -1292,10 +852,7 @@ protected:
         typename Method::State & state,
         Arena * aggregates_pool,
         size_t rows,
-        ColumnRawPtrs & key_columns,
         AggregateFunctionInstruction * aggregate_instructions,
-        const Sizes & key_sizes,
-        StringRefs & keys,
         AggregateDataPtr overflow_row) const;
 
     /// For case when there are no keys (all aggregate into one row).
@@ -1382,24 +939,21 @@ protected:
         MutableColumns & key_columns,
         AggregateColumnsData & aggregate_columns,
         MutableColumns & final_aggregate_columns,
-        const Sizes & key_sizes,
         bool final) const;
 
     template <typename Method, typename Table>
     void convertToBlockImplFinal(
         Method & method,
         Table & data,
-        MutableColumns & key_columns,
-        MutableColumns & final_aggregate_columns,
-        const Sizes & key_sizes) const;
+        std::vector<IColumn *>  key_columns,
+        MutableColumns & final_aggregate_columns) const;
 
     template <typename Method, typename Table>
     void convertToBlockImplNotFinal(
         Method & method,
         Table & data,
-        MutableColumns & key_columns,
-        AggregateColumnsData & aggregate_columns,
-        const Sizes & key_sizes) const;
+        std::vector<IColumn *>  key_columns,
+        AggregateColumnsData & aggregate_columns) const;
 
     template <typename Filler>
     Block prepareBlockAndFill(
@@ -1429,7 +983,6 @@ protected:
     template <bool no_more_keys, typename Method, typename Table>
     void mergeStreamsImplCase(
         Block & block,
-        const Sizes & key_sizes,
         Arena * aggregates_pool,
         Method & method,
         Table & data,
@@ -1438,7 +991,6 @@ protected:
     template <typename Method, typename Table>
     void mergeStreamsImpl(
         Block & block,
-        const Sizes & key_sizes,
         Arena * aggregates_pool,
         Method & method,
         Table & data,
@@ -1458,8 +1010,6 @@ protected:
         Method & method,
         Arena * pool,
         ColumnRawPtrs & key_columns,
-        const Sizes & key_sizes,
-        StringRefs & keys,
         const Block & source,
         std::vector<Block> & destinations) const;
 
@@ -1491,4 +1041,5 @@ APPLY_FOR_AGGREGATED_VARIANTS(M)
 #undef M
 
 
-}
+} // namespace DB
+

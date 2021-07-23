@@ -67,7 +67,7 @@ InterpreterCreateQuery::InterpreterCreateQuery(const ASTPtr & query_ptr_, Contex
 BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 {
     if (!create.cluster.empty())
-        throw Exception("Shoul not run into `executeDDLQueryOnCluster`");
+        throw Exception("Should not run into `executeDDLQueryOnCluster`");
 
     String database_name = create.database;
 
@@ -456,7 +456,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 {
     if (!create.cluster.empty())
     {
-        throw Exception("Shoul not run into `executeDDLQueryOnCluster`");
+        throw Exception("Should not run into `executeDDLQueryOnCluster`");
     }
 
     String path = context.getPath();

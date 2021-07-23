@@ -59,7 +59,7 @@ public:
         size_t gc_min_legacy_num = 3;
 
         size_t  gc_max_expect_legacy_files = 100;
-        Float64 gc_max_valid_rate_bound    = 0.95;
+        Float64 gc_max_valid_rate_bound    = 1.0;
 
         // Maximum write concurrency. Must not be changed once the PageStorage object is created.
         size_t num_write_slots = 1;
@@ -154,7 +154,7 @@ public:
     void reloadSettings(const Config & new_config) { config.reload(new_config); }
 
     // We may skip the GC to reduce useless reading by default.
-    bool gc(const Context& global_context, bool not_skip = false);
+    bool gc(bool not_skip = false, const RateLimiterPtr & rate_limiter = nullptr);
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
 

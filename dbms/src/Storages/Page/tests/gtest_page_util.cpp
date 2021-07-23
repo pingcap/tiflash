@@ -1,9 +1,7 @@
-#include "gtest/gtest.h"
-
 #include <Encryption/PosixWritableFile.h>
 #include <Poco/Logger.h>
-
 #include <Storages/Page/PageUtil.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
 {

@@ -109,7 +109,7 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
         &timezone_hour, &timezone_min, level_buff);
 
     {
-        std::tm time;
+        std::tm time {};
         time.tm_year = year - 1900;
         time.tm_mon = month - 1;
         time.tm_mday = day;

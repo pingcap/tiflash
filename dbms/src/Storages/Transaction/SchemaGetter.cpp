@@ -32,19 +32,19 @@ struct TxnStructure
 
     static String encodeStringDataKey(const String & key)
     {
-        std::stringstream stream;
+        WriteBufferFromOwnString stream;
 
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
         EncodeUInt<UInt64>(UInt64(StringData), stream);
 
-        return stream.str();
+        return stream.releaseStr();
     }
 
     static String encodeHashDataKey(const String & key, const String & field)
     {
-        std::stringstream stream;
+        WriteBufferFromOwnString stream;
 
         stream.write(metaPrefix, 1);
 
@@ -52,18 +52,18 @@ struct TxnStructure
         EncodeUInt<UInt64>(UInt64(HashData), stream);
         EncodeBytes(field, stream);
 
-        return stream.str();
+        return stream.releaseStr();
     }
 
     static String hashDataKeyPrefix(const String & key)
     {
-        std::stringstream stream;
+        WriteBufferFromOwnString stream;
 
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
         EncodeUInt<UInt64>(UInt64(HashData), stream);
-        return stream.str();
+        return stream.releaseStr();
     }
 
     static std::pair<String, String> decodeHashDataKey(const String & key)

@@ -267,7 +267,11 @@ public:
         std::mutex mutex;
 
     public:
-        size_t length() { return light_tasks.size() + heavy_tasks.size(); }
+        size_t length()
+        {
+            std::scoped_lock lock(mutex);
+            return light_tasks.size() + heavy_tasks.size();
+        }
 
         bool addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
 
@@ -398,7 +402,7 @@ public:
 private:
 #endif
 
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id="");
 
     bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 

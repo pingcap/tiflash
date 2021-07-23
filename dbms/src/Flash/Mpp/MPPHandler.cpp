@@ -26,6 +26,8 @@ extern const char exception_before_mpp_non_root_task_run[];
 extern const char exception_before_mpp_root_task_run[];
 extern const char exception_during_mpp_non_root_task_run[];
 extern const char exception_during_mpp_root_task_run[];
+extern const char exception_during_mpp_write_err_to_tunnel[];
+extern const char exception_during_mpp_close_tunnel[];
 } // namespace FailPoints
 
 bool MPPTaskProgress::isTaskHanging(const Context & context)
@@ -59,6 +61,32 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
     }
     progress_on_last_check = current_progress_value;
     return ret;
+}
+
+void MPPTunnel::close(const String & reason)
+{
+    std::unique_lock<std::mutex> lk(mu);
+    if (finished)
+        return;
+    if (connected && !reason.empty())
+    {
+        try
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
+            mpp::MPPDataPacket data;
+            auto err = new mpp::Error();
+            err->set_msg(reason);
+            data.set_allocated_error(err);
+            if (!writer->Write(data))
+                throw Exception("Failed to write err");
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
+        }
+    }
+    finished = true;
+    cv_for_finished.notify_all();
 }
 
 void MPPTask::unregisterTask()
@@ -95,14 +123,18 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
                 Errors::Coprocessor::BadRequest);
         }
     }
-    std::unordered_map<RegionVerID, RegionInfo> regions;
+    RegionInfoMap regions;
+    RegionInfoList retry_regions;
     for (auto & r : task_request.regions())
     {
-        RegionVerID region_ver_id(r.region_id(), r.region_epoch().conf_ver(), r.region_epoch().version());
-        auto res = regions.emplace(region_ver_id, RegionInfo(region_ver_id, CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+        auto res = regions.emplace(r.region_id(),
+            RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
+                CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
         if (!res.second)
-            throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + region_ver_id.toString(),
-                Errors::Coprocessor::BadRequest);
+        {
+            retry_regions.emplace_back(RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
+                CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+        }
     }
     // set schema ver and start ts.
     auto schema_ver = task_request.schema_ver();
@@ -149,7 +181,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
 
-    DAGQuerySource dag(context, regions, *dag_req, true);
+    DAGQuerySource dag(context, regions, retry_regions, *dag_req, true);
 
     if (dag_context->isRootMPPTask())
     {
@@ -220,16 +252,15 @@ String taskStatusToString(TaskStatus ts)
 }
 void MPPTask::runImpl()
 {
-    auto current_status = static_cast<TaskStatus>(status.load());
-    if (current_status != INITIALIZING)
+    auto old_status = static_cast<Int32>(INITIALIZING);
+    if (!status.compare_exchange_strong(old_status, static_cast<Int32>(RUNNING)))
     {
-        LOG_WARNING(log, "task in " + taskStatusToString(current_status) + " state, skip running");
+        LOG_WARNING(log, "task not in initializing state, skip running");
         return;
     }
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
     LOG_INFO(log, "task starts running");
-    status = RUNNING;
     auto from = io.in;
     auto to = io.out;
     try
@@ -296,6 +327,27 @@ void MPPTask::runImpl()
     GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_dispatch_mpp_task).Observe(peak_memory);
     unregisterTask();
     status = FINISHED;
+}
+
+void MPPTask::writeErrToAllTunnel(const String & e)
+{
+    for (auto & it : tunnel_map)
+    {
+        try
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_write_err_to_tunnel);
+            mpp::MPPDataPacket data;
+            auto err = new mpp::Error();
+            err->set_msg(e);
+            data.set_allocated_error(err);
+            it.second->write(data, true);
+        }
+        catch (...)
+        {
+            it.second->close("Failed to write error msg to tunnel");
+            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->tunnel_id);
+        }
+    }
 }
 
 bool MPPTask::isTaskHanging()
@@ -369,9 +421,9 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         for (auto region : retry_regions)
         {
             auto * retry_region = response->add_retry_regions();
-            retry_region->set_id(region.region_ver_id.id);
-            retry_region->mutable_region_epoch()->set_conf_ver(region.region_ver_id.conf_ver);
-            retry_region->mutable_region_epoch()->set_version(region.region_ver_id.ver);
+            retry_region->set_id(region.region_id);
+            retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
+            retry_region->mutable_region_epoch()->set_version(region.region_version);
         }
         if (task->dag_context->isRootMPPTask())
         {

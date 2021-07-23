@@ -38,6 +38,11 @@ struct Construct
     using Type = Error;
 };
 
+/**
+ * TODO:
+ * 1. support wide integers (Int128/Int256) needed by Decimal.
+ * 2. for floating point numbers Type should always be Float64.
+ */
 template <> struct Construct<false, false, 1> { using Type = UInt8; };
 template <> struct Construct<false, false, 2> { using Type = UInt16; };
 template <> struct Construct<false, false, 4> { using Type = UInt32; };
@@ -95,14 +100,37 @@ template <typename A, typename B> struct ResultOfIntegerDivision
         sizeof(A)>::Type;
 };
 
+template <size_t size>
+struct ConstructIntegerBySize
+{
+    using Type = Error;
+};
+
+template <> struct ConstructIntegerBySize<1> { using Type = Int8; };
+template <> struct ConstructIntegerBySize<2> { using Type = Int16; };
+template <> struct ConstructIntegerBySize<4> { using Type = Int32; };
+template <> struct ConstructIntegerBySize<8> { using Type = Int64; };
+template <> struct ConstructIntegerBySize<16> { using Type = Int128; };
+template <> struct ConstructIntegerBySize<32> { using Type = Int256; };
+template <> struct ConstructIntegerBySize<64> { using Type = Int512; };
+
 /** Division with remainder you get a number with the same number of bits as in divisor.
     */
 template <typename A, typename B> struct ResultOfModulo
 {
-    using Type = typename Construct<
-        std::is_signed_v<A> || std::is_signed_v<B>,
-        false,
-        sizeof(B)>::Type;
+    static constexpr auto result_size = std::max(actual_size_v<A>, actual_size_v<B>);
+
+    using IntegerType = typename ConstructIntegerBySize<result_size>::Type;
+
+    /**
+     * in MySQL:
+     * * if A or B is floating-point, A % B evalutes to Float64.
+     * * unsigned int % signed int evaluates to unsigned int, but signed int % unsigned int evaluates to signed int.
+     * * the precision of A % B is the maximum precision of A and B.
+     */
+    using Type = std::conditional_t<std::is_floating_point_v<A> || std::is_floating_point_v<B>,
+        Float64,
+        std::conditional_t<is_signed_v<A>, IntegerType, make_unsigned_t<IntegerType>>>;
 };
 
 template <typename A> struct ResultOfNegate
@@ -183,7 +211,7 @@ struct ResultOfIf
                 : max(sizeof(A), sizeof(B))>::Type;
 };
 
-/** Before applying operator `%` and bitwise operations, operands are casted to whole numbers. */
+/** Before applying bitwise operations, operands are casted to whole numbers. */
 template <typename A> struct ToInteger
 {
     using Type = typename Construct<

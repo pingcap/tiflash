@@ -4,6 +4,8 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ctime>
@@ -34,31 +36,18 @@ extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, /
 namespace tests
 {
 
-class Segment_test : public ::testing::Test
+class Segment_test : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    Segment_test() : name("tmp"), storage_pool() {}
-
-protected:
-    void dropDataOnDisk()
-    {
-        // drop former-gen table's data in disk
-        if (Poco::File file(DB::tests::TiFlashTestEnv::getTemporaryPath()); file.exists())
-            file.remove(true);
-    }
+    Segment_test() : storage_pool() {}
 
 public:
     static void SetUpTestCase() {}
 
-    virtual DB::Settings getSettings() { return DB::Settings(); }
-
     void SetUp() override
     {
-        db_context        = std::make_unique<Context>(DMTestEnv::getContext(getSettings()));
-        storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        storage_path_pool->drop(true);
+        TiFlashStorageTestBasic::SetUp();
         table_columns_ = std::make_shared<ColumnDefines>();
-        dropDataOnDisk();
 
         segment = reload();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -67,15 +56,14 @@ public:
 protected:
     SegmentPtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
-        *db_context       = DMTestEnv::getContext(db_settings);
+        TiFlashStorageTestBasic::reload(std::move(db_settings));
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_pool      = std::make_unique<StoragePool>("test.t1", *storage_path_pool, *db_context, db_context->getSettingsRef());
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
-        auto segment_id = storage_pool->newMetaPageId();
-        return Segment::newSegment(*dm_context_, table_columns_, RowKeyRange::newAll(false, 1), segment_id, 0);
+        return Segment::newSegment(*dm_context_, table_columns_, RowKeyRange::newAll(false, 1), storage_pool->newMetaPageId(), 0);
     }
 
     // setColumns should update dm_context at the same time
@@ -99,9 +87,6 @@ protected:
     DMContext & dmContext() { return *dm_context_; }
 
 protected:
-    std::unique_ptr<Context> db_context;
-    // the table name
-    String name;
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePathPool> storage_path_pool;
     std::unique_ptr<StoragePool>     storage_pool;
@@ -276,7 +261,7 @@ CATCH
 class SegmentDeletionRelevantPlace_test : public Segment_test, //
                                           public testing::WithParamInterface<bool>
 {
-    DB::Settings getSettings() override
+    DB::Settings getSettings()
     {
         DB::Settings settings;
         auto         enable_relevant_place = GetParam();

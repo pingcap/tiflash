@@ -56,7 +56,7 @@ BlockIO InterpreterRenameQuery::execute()
 
     if (!rename.cluster.empty())
     {
-        throw Exception("Shoul not run into `executeDDLQueryOnCluster`");
+        throw Exception("Should not run into `executeDDLQueryOnCluster`");
     }
 
     String current_database = context.getCurrentDatabase();

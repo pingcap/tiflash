@@ -70,7 +70,7 @@ public:
 
     friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2);
 
-    TerminateWaitIndex waitIndex(UInt64 index, const std::atomic_bool & terminated) const;
+    TerminateWaitIndex waitIndex(UInt64 index, std::function<bool(void)> &&) const;
     bool checkIndex(UInt64 index) const;
 
     RegionMetaSnapshot dumpRegionMetaSnapshot() const;
