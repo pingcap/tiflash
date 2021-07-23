@@ -31,12 +31,6 @@ class IPAddress;
 }
 } // namespace Poco
 
-namespace zkutil
-{
-class ZooKeeper;
-}
-
-
 namespace DB
 {
 
@@ -356,11 +350,6 @@ public:
 
     MergeList & getMergeList();
     const MergeList & getMergeList() const;
-
-    /// If the current session is expired at the time of the call, synchronously creates and returns a new session with the startNewSession() call.
-    std::shared_ptr<zkutil::ZooKeeper> getZooKeeper() const;
-    /// Has ready or expired ZooKeeper
-    bool hasZooKeeper() const;
 
     /// Create a cache of uncompressed blocks of specified size. This can be done only once.
     void setUncompressedCache(size_t max_size_in_bytes);
