@@ -248,7 +248,7 @@ enum TaskStatus
     CANCELLED,
 };
 
-class MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
+class MPPTask : public std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
 public:
     using Ptr = std::shared_ptr<MPPTask>;
