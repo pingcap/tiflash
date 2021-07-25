@@ -270,6 +270,7 @@ public:
 
     void run()
     {
+        memory_tracker = current_memory_tracker;
         std::thread worker(&MPPTask::runImpl, this->shared_from_this());
         worker.detach();
     }
@@ -290,9 +291,8 @@ public:
         LOG_DEBUG(log, "destruct MPPTask");
     }
 private:
-    MPPTask(const mpp::TaskMeta & meta_, const Context & context_, MemoryTracker * memory_tracker_)
+    MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
         : context(context_),
-          memory_tracker(memory_tracker_),
           meta(meta_),
           log(&Logger::get("task " + std::to_string(meta_.task_id())))
     {
@@ -332,6 +332,9 @@ private:
     /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
     /// BlockIO contains some information stored in Context and DAGContext, so need deconstruct it before Context and DAGContext
     BlockIO io;
+
+    /// memory_tracker is to carry current_memory_tracker to `runImpl` thread.
+    /// NOTE: only visit current_memory_tracker after `prepare` is finished.
     MemoryTracker * memory_tracker = nullptr;
 
     MPPTaskId id;
