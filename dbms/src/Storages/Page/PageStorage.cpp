@@ -942,7 +942,7 @@ WriteBatch::SequenceID PageStorage::WritingFilesSnapshot::minPersistedSequence()
     return seq;
 }
 
-bool PageStorage::gc(bool not_skip, const RateLimiterPtr & rate_limiter)
+bool PageStorage::gc(bool not_skip, const RateLimiterPtr & rate_limiter, const ReadLimiterPtr & read_limiter)
 {
     // If another thread is running gc, just return;
     bool v = false;
@@ -1124,7 +1124,7 @@ bool PageStorage::gc(bool not_skip, const RateLimiterPtr & rate_limiter)
     {
         // Try to compact consecutive Legacy PageFiles into a snapshot.
         // Legacy and checkpoint files will be removed from `page_files` after `tryCompact`.
-        LegacyCompactor compactor(*this, rate_limiter);
+        LegacyCompactor compactor(*this, rate_limiter, read_limiter);
         PageFileSet     page_files_to_archive;
         std::tie(page_files, page_files_to_archive, gc_context.num_bytes_written_in_compact_legacy)
             = compactor.tryCompact(std::move(page_files), writing_files_snapshot);
@@ -1139,8 +1139,8 @@ bool PageStorage::gc(bool not_skip, const RateLimiterPtr & rate_limiter)
         Stopwatch watch_migrate;
 
         // Calculate a config by the gc context, maybe do a more aggressive GC
-        DataCompactor<PageStorage::SnapshotPtr> compactor(*this, gc_context.calculateGcConfig(config), rate_limiter);
-        std::tie(gc_context.compact_result, gc_file_entries_edit) = compactor.tryMigrate(page_files, getSnapshot(), writing_files_snapshot);
+        DataCompactor<PageStorage::SnapshotPtr> compactor(*this, gc_context.calculateGcConfig(config), rate_limiter, read_limiter);
+        std::tie(gc_context.compact_result, gc_file_entries_edit) = compactor.tryMigrate(page_files, getSnapshot(), writing_file_id_levels);
 
         // We only care about those time cost in actually doing compaction on page data.
         if (gc_context.compact_result.do_compaction && metrics)

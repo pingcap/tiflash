@@ -4,7 +4,7 @@
 
 namespace DB
 {
-LegacyCompactor::LegacyCompactor(const PageStorage & storage, const RateLimiterPtr & rate_limiter_)
+LegacyCompactor::LegacyCompactor(const PageStorage & storage, const RateLimiterPtr & rate_limiter_, const ReadLimiterPtr & read_limiter_)
     : storage_name(storage.storage_name),
       delegator(storage.delegator),
       file_provider(storage.getFileProvider()),
@@ -12,7 +12,8 @@ LegacyCompactor::LegacyCompactor(const PageStorage & storage, const RateLimiterP
       log(storage.log),
       page_file_log(storage.page_file_log),
       version_set(storage.storage_name + ".legacy_compactor", config.version_set_config, log),
-      rate_limiter(rate_limiter_)
+      rate_limiter(rate_limiter_),
+      read_limiter(read_limiter_)
 {
 }
 
@@ -122,7 +123,6 @@ LegacyCompactor::tryCompact(                 //
 std::tuple<PageFileSet, PageFileSet, WriteBatch::SequenceID, std::optional<PageFile>>
 LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const WritingFilesSnapshot & writing_files)
 {
-    auto read_limiter = global_context.getReadLimiter();
     PageStorage::MetaMergingQueue merging_queue;
     for (auto & page_file : page_files)
     {

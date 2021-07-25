@@ -22,7 +22,7 @@ using WritingFilesSnapshot = PageStorage::WritingFilesSnapshot;
 class LegacyCompactor : private boost::noncopyable
 {
 public:
-    LegacyCompactor(const PageStorage & storage, const RateLimiterPtr & rate_limiter_);
+    LegacyCompactor(const PageStorage & storage, const RateLimiterPtr & rate_limiter_, const ReadLimiterPtr & read_limiter_);
 
     std::tuple<PageFileSet, PageFileSet, size_t> //
     tryCompact(PageFileSet && page_files, const WritingFilesSnapshot & writing_files);
@@ -60,6 +60,7 @@ private:
     PageStorage::StatisticsInfo       info;
 
     const RateLimiterPtr rate_limiter;
+    const ReadLimiterPtr read_limiter;
 };
 
 } // namespace DB
