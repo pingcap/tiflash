@@ -189,25 +189,27 @@ grpc::Status FlashService::Coprocessor(
     auto & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
-    std::string errMsg;
-    MPPTunnelPtr tunnel;
+    std::string err_msg;
+    MPPTunnelPtr tunnel = nullptr;
     {
-        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, errMsg);
-        if (sender_task == nullptr)
+        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
+        if (sender_task != nullptr)
         {
-            LOG_ERROR(log, errMsg);
-            writer->Write(getPacketWithError(errMsg));
-            return grpc::Status::OK;
+            tunnel = sender_task->getTunnel(request);
         }
-        tunnel = sender_task->getTunnel(request->receiver_meta());
-    }
-    if (tunnel == nullptr)
-    {
-        errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + " + toString(request->sender_meta().task_id())
-            + " ) within " + toString(timeout.count()) + " s";
-        LOG_ERROR(log, errMsg);
-        writer->Write(getPacketWithError(errMsg));
-        return grpc::Status::OK;
+        if (tunnel == nullptr)
+        {
+            LOG_ERROR(log, err_msg);
+            if (writer->Write(getPacketWithError(errMsg)))
+            {
+                return grpc::Status::OK;
+            }
+            else
+            {
+                LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Write error message failed for unknown reason.");
+                return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+            }
+        }
     }
     Stopwatch stopwatch;
     tunnel->connect(writer);

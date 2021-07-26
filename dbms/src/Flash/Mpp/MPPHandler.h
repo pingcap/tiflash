@@ -37,13 +37,16 @@ struct MPPTaskId
 };
 
 
+class MPPTask;
 class MPPTunnel
 {
 public:
-    MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_, const std::chrono::seconds timeout_)
+    MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_, const std::chrono::seconds timeout_,
+        std::shared_ptr<MPPTask> current_task_)
         : connected(false),
           finished(false),
           timeout(timeout_),
+          current_task(current_task_),
           tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id())),
           log(&Logger::get(tunnel_id))
     {}
@@ -62,6 +65,8 @@ public:
     }
 
     const String & id() const { return tunnel_id; }
+
+    bool isTaskCancelled();
 
     // write a single packet to the tunnel, it will block if tunnel is not ready.
     // TODO: consider to hold a buffer
@@ -134,19 +139,7 @@ public:
     }
 private:
     // must under mu's protection
-    void waitForConnectedWithLock(std::unique_lock<std::mutex> & lk)
-    {
-        auto connected_func = [&]() { return connected; };
-        if (timeout.count() > 0)
-        {
-            if (!cv_for_connected.wait_for(lk, timeout, connected_func))
-                throw Exception(tunnel_id + " is timeout");
-        }
-        else
-        {
-            cv_for_connected.wait(lk, connected_func);
-        }
-    }
+    void waitUntilConnect(std::unique_lock<std::mutex> & lk);
 
     // must under mu's protection
     void finishWithLock()
@@ -166,6 +159,8 @@ private:
     ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
 
     std::chrono::seconds timeout;
+  
+    std::weak_ptr<MPPTask> current_task;
 
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;

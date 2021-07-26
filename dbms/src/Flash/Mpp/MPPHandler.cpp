@@ -153,7 +153,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout);
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, this->shared_from_this());
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->tunnels.emplace_back(tunnel);
@@ -317,6 +317,30 @@ void MPPTask::runImpl()
     }
 }
 
+bool MPPTunnel::isTaskCancelled()
+{
+    auto sp = current_task.lock();
+    /// task can destruct before tunnel: MPPTask::runImpl finishes the write, destruct itself,
+    /// then EstablishMPPConnection wakes up from `tunnel->waitForFinish()` and destruct tunnel.
+    return sp != nullptr && sp->status == CANCELLED;
+}
+
+void MPPTunnel::waitUntilConnect(std::unique_lock<std::mutex> & lk)
+{
+    auto connected_or_cancelled = [&]() { return connected || isTaskCancelled(); };
+    if (timeout.count() > 0)
+    {
+        if (!cv_for_connected.wait_for(lk, timeout, connected_or_cancelled))
+            throw Exception(tunnel_id + " is timeout");
+    }
+    else
+    {
+        cv_for_connected.wait(lk, connected_or_cancelled);
+    }
+    if (!connected)
+        throw Exception("MPPTunnel can not be connected because MPPTask is cancelled");
+}
+
 void MPPTask::writeErrToAllTunnel(const String & e)
 {
     for (auto & it : tunnel_map)
@@ -352,41 +376,28 @@ void MPPTask::finishWrite()
 
 void MPPTask::cancel(const String & reason)
 {
+    LOG_WARNING(log, "Begin cancel task: " + id.toString());
     while (true)
     {
         auto previous_status = status.load();
         if (previous_status == FINISHED || previous_status == CANCELLED)
         {
-            return;
+            break;
         }
         else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, CANCELLED))
         {
             closeAllTunnels(reason);
             unregisterTask();
-            return;
+            break;
         }
         else if (previous_status == RUNNING && switchStatus(RUNNING, CANCELLED))
         {
-            LOG_WARNING(log, "Begin set cancel status on running task: " + id.toString());
-            auto process_list_element = context.getProcessListElement();
-            if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
-            {
-                BlockInputStreamPtr input_stream;
-                BlockOutputStreamPtr output_stream;
-                if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
-                {
-                    IProfilingBlockInputStream * input_stream_casted;
-                    if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
-                    {
-                        input_stream_casted->cancel(true);
-                    }
-                }
-            }
+            context.getProcessList().sendCancelToQuery(context.getCurrentQueryId(), context.getClientInfo().current_user, true);
             /// leave remaining work to runImpl
-            LOG_WARNING(log, "Finish set cancel status on running task: " + id.toString());
-            return;
+            break;
         }
     }
+    LOG_WARNING(log, "Finish cancel task: " + id.toString());
 }
 
 void MPPHandler::handleError(const MPPTaskPtr & task, const String & error)
