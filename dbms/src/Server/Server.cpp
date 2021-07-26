@@ -27,7 +27,6 @@
 #include <IO/ReadHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
-#include <Interpreters/DDLWorker.h>
 #include <Interpreters/IDAsPathUpgrader.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/loadMetadata.h>
@@ -1137,7 +1136,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// After attaching system databases we can initialize system log.
     global_context->initializeSystemLogs();
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
-    attachSystemTablesServer(*global_context->getDatabase("system"), false);
+    attachSystemTablesServer(*global_context->getDatabase("system"));
 
     {
         /// create TMTContext

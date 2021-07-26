@@ -7,7 +7,6 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
@@ -245,7 +244,7 @@ public:
             return;
         try
         {
-            storage->gc(TiFlashTestEnv::getContext());
+            storage->gc();
         }
         catch (DB::Exception & e)
         {
