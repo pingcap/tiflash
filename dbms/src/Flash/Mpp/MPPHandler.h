@@ -48,7 +48,7 @@ struct MPPTunnel
 
     std::chrono::seconds timeout;
 
-    MPPTask * current_task;
+    std::weak_ptr<MPPTask> current_task;
 
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
@@ -56,7 +56,7 @@ struct MPPTunnel
     Logger * log;
 
     MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_, const std::chrono::seconds timeout_,
-        MPPTask * current_task_)
+        std::shared_ptr<MPPTask> current_task_)
         : connected(false),
           finished(false),
           timeout(timeout_),
@@ -77,6 +77,8 @@ struct MPPTunnel
             tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
         }
     }
+
+    bool isTaskCancelled();
 
     void waitUntilConnect(std::unique_lock<std::mutex> & lk);
     // write a single packet to the tunnel, it will block if tunnel is not ready.

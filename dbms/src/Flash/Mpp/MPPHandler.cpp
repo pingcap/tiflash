@@ -200,7 +200,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, this);
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, this->shared_from_this());
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->tunnel_id);
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->tunnels.emplace_back(tunnel);
@@ -329,18 +329,24 @@ void MPPTask::runImpl()
     status = FINISHED;
 }
 
+bool MPPTunnel::isTaskCancelled()
+{
+    auto sp = current_task.lock();
+    return sp != nullptr && sp->status == CANCELLED;
+}
+
 void MPPTunnel::waitUntilConnect(std::unique_lock<std::mutex> & lk)
 {
     if (timeout.count() > 0)
     {
-        if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected || current_task->status == CANCELLED; }))
+        if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected || isTaskCancelled(); }))
         {
             throw Exception(tunnel_id + " is timeout");
         }
     }
     else
     {
-        cv_for_connected.wait(lk, [&]() { return connected || current_task->status == CANCELLED; });
+        cv_for_connected.wait(lk, [&]() { return connected || isTaskCancelled(); });
     }
     if (!connected)
         throw Exception("MPPTunnel can not be connected because MPPTask is cancelled");
