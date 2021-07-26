@@ -201,7 +201,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout);
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, this->shared_from_this());
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->tunnel_id);
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->tunnels.emplace_back(tunnel);
@@ -327,6 +327,29 @@ void MPPTask::runImpl()
     status = FINISHED;
 }
 
+bool MPPTunnel::isTaskCancelled()
+{
+    auto sp = current_task.lock();
+    return sp != nullptr && sp->status == CANCELLED;
+}
+
+void MPPTunnel::waitUntilConnect(std::unique_lock<std::mutex> & lk)
+{
+    if (timeout.count() > 0)
+    {
+        if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected || isTaskCancelled(); }))
+        {
+            throw Exception(tunnel_id + " is timeout");
+        }
+    }
+    else
+    {
+        cv_for_connected.wait(lk, [&]() { return connected || isTaskCancelled(); });
+    }
+    if (!connected)
+        throw Exception("MPPTunnel can not be connected because MPPTask is cancelled");
+}
+
 void MPPTask::writeErrToAllTunnel(const String & e)
 {
     for (auto & it : tunnel_map)
@@ -367,9 +390,7 @@ void MPPTask::cancel(const String & reason)
     LOG_WARNING(log, "Begin cancel task: " + id.toString());
     /// step 1. cancel query streams if it is running
     if (current_status == RUNNING)
-    {
         context.getProcessList().sendCancelToQuery(context.getCurrentQueryId(), context.getClientInfo().current_user, true);
-    }
     /// step 2. write Error msg and close the tunnel.
     /// Here we use `closeAllTunnel` because currently, `cancel` is a query level cancel, which
     /// means if this mpp task is cancelled, all the mpp tasks belonging to the same query are
