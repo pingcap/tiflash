@@ -1,7 +1,7 @@
 #include <future>
 #include <Common/setThreadName.h>
 #include <Common/CurrentMetrics.h>
-#include <Common/MemoryTracker.h>
+#include <Common/ThreadCreator.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 
 
@@ -175,11 +175,8 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
         {
             auto & child = children[i];
 
-            auto memory_tracker = current_memory_tracker;
-            reading_pool->schedule([&child, memory_tracker]
+            ThreadCreator(true, "MergeAggReadThr").scheduleJob(*reading_pool, [&child]
             {
-                current_memory_tracker = memory_tracker;
-                setThreadName("MergeAggReadThr");
                 CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
                 child->readPrefix();
             });
@@ -196,8 +193,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
           */
 
         for (size_t i = 0; i < merging_threads; ++i)
-            pool.schedule(std::bind(&MergingAggregatedMemoryEfficientBlockInputStream::mergeThread,
-                this, current_memory_tracker));
+            ThreadCreator(true, "MergeAggMergThr").scheduleJob(pool, [this] { mergeThread(); });
     }
 }
 
@@ -293,10 +289,8 @@ void MergingAggregatedMemoryEfficientBlockInputStream::finalize()
 }
 
 
-void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread(MemoryTracker * memory_tracker)
+void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
 {
-    setThreadName("MergeAggMergThr");
-    current_memory_tracker = memory_tracker;
     CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
 
     try
@@ -480,11 +474,8 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
         {
             if (need_that_input(input))
             {
-                auto memory_tracker = current_memory_tracker;
-                reading_pool->schedule([&input, &read_from_input, memory_tracker]
+                ThreadCreator(true, "MergeAggReadThr").scheduleJob(*reading_pool, [&input, &read_from_input]
                 {
-                    current_memory_tracker = memory_tracker;
-                    setThreadName("MergeAggReadThr");
                     CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
                     read_from_input(input);
                 });

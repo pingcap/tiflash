@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+#include <Common/ThreadCreator.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -104,7 +105,7 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
+                    workers.push_back(ThreadCreator().newThread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second)));
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
@@ -121,12 +122,10 @@ void CreatingSetsBlockInputStream::createAll()
     }
 }
 
-void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTracker * memory_tracker)
+void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
     try
     {
-
-        current_memory_tracker = memory_tracker;
         LOG_DEBUG(log,
             (subquery.set ? "Creating set. " : "")
                 << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
