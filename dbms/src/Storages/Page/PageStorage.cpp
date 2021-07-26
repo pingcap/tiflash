@@ -331,7 +331,7 @@ void PageStorage::restore()
         if (reader->hasNext())
         {
             // Continue to merge next WriteBatch.
-            reader->moveNext(nullptr);
+            reader->moveNext();
             merging_queue.push(std::move(reader));
         }
         else
