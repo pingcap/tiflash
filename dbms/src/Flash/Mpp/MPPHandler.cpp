@@ -322,10 +322,10 @@ bool MPPTunnel::isTaskCancelled()
     auto sp = current_task.lock();
     /// task can destruct before tunnel: MPPTask::runImpl finishes the write, destruct itself,
     /// then EstablishMPPConnection wakes up from `tunnel->waitForFinish()` and destruct tunnel.
-    return sp != nullptr && sp->status == CANCELLED;
+    return sp != nullptr && sp->getStatus() == CANCELLED;
 }
 
-void MPPTunnel::waitUntilConnect(std::unique_lock<std::mutex> & lk)
+void MPPTunnel::waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk)
 {
     auto connected_or_cancelled = [&]() { return connected || isTaskCancelled(); };
     if (timeout.count() > 0)

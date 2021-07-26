@@ -76,7 +76,7 @@ public:
         {
             std::unique_lock<std::mutex> lk(mu);
 
-            waitForConnectedWithLock(lk);
+            waitUntilConnectedOrCancelled(lk);
 
             if (finished)
                 throw Exception("write to tunnel which is already closed.");
@@ -101,7 +101,7 @@ public:
             std::unique_lock<std::mutex> lk(mu);
 
             /// make sure to finish the tunnel after it is connected
-            waitForConnectedWithLock(lk);
+            waitUntilConnectedOrCancelled(lk);
 
             if (finished)
                 throw Exception("has finished");
@@ -139,7 +139,7 @@ public:
     }
 private:
     // must under mu's protection
-    void waitUntilConnect(std::unique_lock<std::mutex> & lk);
+    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
 
     // must under mu's protection
     void finishWithLock()
@@ -258,6 +258,8 @@ public:
     const MPPTaskId & getId() const { return id; }
 
     bool isRootMPPTask() const { return dag_context->isRootMPPTask(); }
+
+    TaskStatus getStatus() const { return static_cast<TaskStatus>(status.load()); }
 
     void cancel(const String & reason);
 

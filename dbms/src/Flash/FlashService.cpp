@@ -195,12 +195,12 @@ grpc::Status FlashService::Coprocessor(
         MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
         if (sender_task != nullptr)
         {
-            tunnel = sender_task->getTunnel(request);
+            tunnel = sender_task->getTunnel(request->receiver_meta());
         }
         if (tunnel == nullptr)
         {
             LOG_ERROR(log, err_msg);
-            if (writer->Write(getPacketWithError(errMsg)))
+            if (writer->Write(getPacketWithError(err_msg)))
             {
                 return grpc::Status::OK;
             }
