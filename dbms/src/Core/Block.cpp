@@ -315,6 +315,42 @@ MutableColumns Block::cloneEmptyColumns() const
     return columns;
 }
 
+Block Block::cloneWithCutColumns(size_t start, size_t length) const
+{
+    Block copy = *this;
+
+    for (auto & column_to_cut : copy.data)
+        column_to_cut.column = column_to_cut.column->cut(start, length);
+
+    return copy;
+}
+
+std::unique_ptr<std::list<Block>> Block::splitLargeBlock(size_t limit) const
+{
+    auto bytes = this->bytes();
+    auto rows = this->rows();
+    auto sub_blocks = std::make_unique<std::list<Block>>();
+    if(bytes <= limit || rows == 1)
+    {
+        sub_blocks->emplace_back(*this);
+    }
+    else
+    {
+        size_t split_num = (this->bytes() + limit - 1) / limit;
+        split_num = std::min(split_num, rows);
+        size_t step = rows / split_num;
+        for(size_t start = 0; start < rows; start += step)
+        {
+            if(start + step > rows)
+            {
+                step = rows - start;
+            }
+            sub_blocks->emplace_back(cloneWithCutColumns(start, step));
+        }
+    }
+
+    return sub_blocks;
+}
 
 MutableColumns Block::mutateColumns() const
 {

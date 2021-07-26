@@ -111,6 +111,9 @@ public:
 
     /** Get empty columns with the same types as in block. */
     MutableColumns cloneEmptyColumns() const;
+    Block cloneWithCutColumns(size_t start, size_t length) const;
+
+    std::unique_ptr<std::list<Block>> splitLargeBlock(size_t limit) const;
 
     /** Get columns from block for mutation. Columns in block will be nullptr. */
     MutableColumns mutateColumns() const;

@@ -60,6 +60,8 @@ private:
 
     std::atomic<bool> executed {false};
 
+    std::unique_ptr<BlocksList> sub_blocks = nullptr;
+
     /// To read the data stored into the temporary data file.
     struct TemporaryFileStream
     {
