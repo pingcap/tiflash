@@ -1794,8 +1794,6 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
 
     typename Method::State state(key_columns, key_sizes, params.collators);
 
-    typename Method::State state(key_columns, key_sizes, params.collators);
-
     /// For all rows.
     size_t rows = block.rows();
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
