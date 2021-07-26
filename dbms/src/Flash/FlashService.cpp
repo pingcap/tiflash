@@ -204,8 +204,15 @@ grpc::Status FlashService::Coprocessor(
             auto err = new mpp::Error();
             err->set_msg(err_msg);
             packet.set_allocated_error(err);
-            writer->Write(packet);
-            return grpc::Status::OK;
+            if (writer->Write(packet))
+            {
+                return grpc::Status::OK;
+            }
+            else
+            {
+                LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Write error message failed for unknown reason.");
+                return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+            }
         }
     }
     Stopwatch stopwatch;

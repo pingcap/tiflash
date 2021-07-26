@@ -333,7 +333,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         });
         if (cancelled)
             err_msg = "can't find tunnel ( " + toString(request->sender_meta().task_id()) + " + "
-                + toString(request->receiver_meta().task_id()) + " because the  task is cancelled";
+                + toString(request->receiver_meta().task_id()) + " because the task is cancelled";
         if (!ret)
             err_msg = "can't find tunnel ( " + toString(request->sender_meta().task_id()) + " + "
                 + toString(request->receiver_meta().task_id()) + " ) within " + toString(timeout.count()) + " s";
