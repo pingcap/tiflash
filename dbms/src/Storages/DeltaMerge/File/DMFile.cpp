@@ -312,7 +312,7 @@ void DMFile::writeConfiguration(const FileProviderPtr & file_provider, const Wri
     String tmp_config_path = config_path + ".tmp";
     {
         WriteBufferFromFileProvider buf(
-            file_provider, tmp_config_path, encryptionPackPropertyPath(), false, write_limiter, DBMS_DEFAULT_BUFFER_SIZE);
+            file_provider, tmp_config_path, encryptionConfigurationPath(), false, write_limiter, DBMS_DEFAULT_BUFFER_SIZE);
         {
             auto stream = OutputStreamWrapper{buf};
             stream << *configuration;
