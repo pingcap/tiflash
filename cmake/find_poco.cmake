@@ -77,20 +77,3 @@ elseif (NOT MISSING_INTERNAL_POCO_LIBRARY)
 endif ()
 
 message(STATUS "Using Poco: ${Poco_INCLUDE_DIRS} : ${Poco_Foundation_LIBRARY},${Poco_Util_LIBRARY},${Poco_Net_LIBRARY},${Poco_NetSSL_LIBRARY},${Poco_XML_LIBRARY},${Poco_Data_LIBRARY},${Poco_DataODBC_LIBRARY},${Poco_MongoDB_LIBRARY}; MongoDB=${Poco_MongoDB_FOUND}, DataODBC=${Poco_DataODBC_FOUND}, NetSSL=${Poco_NetSSL_FOUND}")
-
-# How to make sutable poco:
-# use branch:
-#  develop  OR  poco-1.7.9-release + 6a49c94d18c654d7a20b8c8ea47071b1fdd4813b
-# and merge:
-# ClickHouse-Extras/tiflash_unbundled
-# ClickHouse-Extras/tiflash_unbundled_zlib
-# ClickHouse-Extras/tiflash_task
-# ClickHouse-Extras/tiflash_misc
-# ClickHouse-Extras/tiflash_anl
-# ClickHouse-Extras/tiflash_http_header https://github.com/pocoproject/poco/pull/1574
-# ClickHouse-Extras/tiflash_socket
-# ClickHouse-Extras/tiflash_warning
-# ClickHouse-Extras/tiflash-purge-logs-on-no-space
-# ClickHouse-Extras/tiflash_freebsd
-# ClickHouse-Extras/clikhouse_no_zlib
-# ClickHouse-Extras/tiflash-fix-atomic
