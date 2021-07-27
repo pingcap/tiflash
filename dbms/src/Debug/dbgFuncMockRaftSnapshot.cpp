@@ -31,6 +31,7 @@ namespace FailPoints
 {
 extern const char force_set_sst_to_dtfile_block_size[];
 extern const char force_set_sst_decode_rand[];
+extern const char force_set_safepoint_when_decode_block[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -356,19 +357,23 @@ void GenMockSSTData(const TiDB::TableInfo & table_info,
             fields.emplace_back(handle_id / 2);
         }
 
+        // Check the MVCC (key-format and transaction model) for details
+        // https://en.pingcap.com/blog/2016-11-17-mvcc-in-tikv#mvcc
         {
             TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
             WriteBufferFromOwnString ss;
             RegionBench::encodeRow(table_info, fields, ss);
             TiKVValue prewrite_value(ss.releaseStr());
-            UInt64 commit_ts = handle_id;
-            UInt64 prewrite_ts = commit_ts;
-            TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
-            TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
-            TiKVKey prewrite_key = RecordKVFormat::appendTs(key, prewrite_ts);
 
-            write_kv_list.emplace_back(std::make_pair(std::move(commit_key), std::move(commit_value)));
+            UInt64 prewrite_ts = handle_id;
+            UInt64 commit_ts = prewrite_ts + 100; // Assume that commit_ts is larger that prewrite_ts
+
+            TiKVKey prewrite_key = RecordKVFormat::appendTs(key, prewrite_ts);
             default_kv_list.emplace_back(std::make_pair(std::move(prewrite_key), std::move(prewrite_value)));
+
+            TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
+            TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
+            write_kv_list.emplace_back(std::make_pair(std::move(commit_key), std::move(commit_value)));
         }
     }
 
@@ -613,11 +618,13 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
 
     // set block size so that we can test for schema-sync while decoding dt files
     FailPointHelper::enableFailPoint(FailPoints::force_set_sst_to_dtfile_block_size);
+    FailPointHelper::enableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
 
     auto ingest_ids = kvstore->preHandleSnapshotToFiles(
         new_region, SSTViewVec{sst_views.data(), sst_views.size()}, index, MockTiKV::instance().getRaftTerm(region_id), tmt);
     GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
 
+    FailPointHelper::disableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
     {
         std::stringstream ss;
         ss << "Generate " << ingest_ids.size() << " files for [region_id=" << region_id << "]";
