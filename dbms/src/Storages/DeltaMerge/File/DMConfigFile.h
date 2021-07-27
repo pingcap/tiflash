@@ -1,9 +1,6 @@
 #pragma once
 #include <Common/TiFlashException.h>
 #include <Common/config_version.h>
-#include <Poco/DynamicStruct.h>
-#include <Poco/JSON/JSON.h>
-#include <Poco/JSON/Parser.h>
 #include <Storages/DeltaMerge/File/Checksum/Checksum.h>
 #include <Storages/DeltaMerge/File/Checksum/ChecksumBuffer.h>
 

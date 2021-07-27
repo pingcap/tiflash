@@ -16,14 +16,6 @@
 
 #include "Checksum.h"
 
-namespace DB::ErrorCodes
-{
-extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
-extern const int CANNOT_FSYNC;
-extern const int CANNOT_SEEK_THROUGH_FILE;
-extern const int CANNOT_TRUNCATE_FILE;
-extern const int ARGUMENT_OUT_OF_BOUND;
-} // namespace DB::ErrorCodes
 namespace DB::DM::Checksum
 {
 
