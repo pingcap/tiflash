@@ -209,12 +209,13 @@ void RateLimiter::refillAndAlloc()
 }
 
 ReadLimiter::ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_,
-    UInt64 refill_period_ms_)
+    Int64 get_io_stat_period_us, UInt64 refill_period_ms_)
     : RateLimiter(metrics_, rate_limit_per_sec_, type_, refill_period_ms_),
       getIOStatistic(std::move(getIOStatistic_)),
       last_stat_bytes(getIOStatistic()),
       last_stat_time(now()),
-      log(&Poco::Logger::get("ReadLimiter"))
+      log(&Poco::Logger::get("ReadLimiter")),
+      get_io_statistic_period_us(get_io_stat_period_us)
 {}
 
 Int64 ReadLimiter::getAvailableBalance()
@@ -223,7 +224,7 @@ Int64 ReadLimiter::getAvailableBalance()
     // Not call getIOStatisctics() every time for performance.
     // If the clock back, elapsed_us could be negative.
     Int64 elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(us - last_stat_time).count();
-    if (elapsed_us < get_io_statistic_period_us)
+    if (get_io_statistic_period_us != 0 && elapsed_us < get_io_statistic_period_us)
     {
         return available_balance;
     }

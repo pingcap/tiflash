@@ -100,7 +100,7 @@ using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 class ReadLimiter final : public RateLimiter
 {
 public:
-    ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_ = 100);
+    ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_, Int64 get_io_stat_period_us = 2000, UInt64 refill_period_ms_ = 100);
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
@@ -127,7 +127,7 @@ private:
     TimePoint last_stat_time;
     Poco::Logger* log;
 
-    static constexpr Int64 get_io_statistic_period_us = 2000;
+    Int64 get_io_statistic_period_us;
 };
 
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;

@@ -53,7 +53,7 @@ TEST(RateLimiter_test, Rate)
     }
 }
 
-TEST(ReadLimiter_test, Read)
+TEST(ReadLimiter_test, GetIOStatPeroid_2000us)
 {
     Int64 consumed = 0;
     auto getStat = [&consumed]()
@@ -65,16 +65,17 @@ TEST(ReadLimiter_test, Read)
         limiter.request(bytes);
         consumed += bytes;
     };
-    auto waitRefresh = []()
+    Int64 get_io_stat_period_us = 2000;
+    auto waitRefresh = [&]()
     {
-        std::chrono::microseconds sleep_time(ReadLimiter::get_io_statistic_period_us + 1);
+        std::chrono::microseconds sleep_time(get_io_stat_period_us + 1);
         std::this_thread::sleep_for(sleep_time);
     };
 
     using TimePointMS = std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds>;
     Int64 bytes_per_sec = 1000;
     UInt64 refill_period_ms = 20;
-    ReadLimiter limiter(getStat, nullptr, bytes_per_sec, LimiterType::UNKNOW, refill_period_ms);
+    ReadLimiter limiter(getStat, nullptr, bytes_per_sec, LimiterType::UNKNOW, get_io_stat_period_us, refill_period_ms);
 
     TimePointMS t0 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     // Refill 20 every 20ms.
