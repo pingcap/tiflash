@@ -8,25 +8,25 @@
 namespace DB
 {
 
-/// ThreadCreator helps to set attributes on new threads or threadpool's jobs.
+/// ThreadFactory helps to set attributes on new threads or threadpool's jobs.
 /// Current supported attributes:
 /// 1. MemoryTracker
 /// 2. ThreadName
 ///
-/// ThreadCreator should only be constructed on stack.
-class ThreadCreator
+/// ThreadFactory should only be constructed on stack.
+class ThreadFactory
 {
 public:
     /// force_overwrite_thread_attribute is only used for ThreadPool's jobs.
     /// For new threads it is treated as always true.
-    explicit ThreadCreator(bool force_overwrite_thread_attribute = false, std::string thread_name_ = "")
+    explicit ThreadFactory(bool force_overwrite_thread_attribute = false, std::string thread_name_ = "")
         : force_overwrite(force_overwrite_thread_attribute), thread_name(thread_name_) {}
 
-    ThreadCreator(const ThreadCreator &) = delete;
-    ThreadCreator & operator=(const ThreadCreator &) = delete;
+    ThreadFactory(const ThreadFactory &) = delete;
+    ThreadFactory & operator=(const ThreadFactory &) = delete;
 
-    ThreadCreator(ThreadCreator &&) = default;
-    ThreadCreator & operator=(ThreadCreator &&) = default;
+    ThreadFactory(ThreadFactory &&) = default;
+    ThreadFactory & operator=(ThreadFactory &&) = default;
 
     template <typename F, typename ... Args>
     std::thread newThread(F && f, Args &&... args)
@@ -49,13 +49,8 @@ public:
         return [force_overwrite = force_overwrite, memory_tracker, thread_name = thread_name, f = std::move(f), args = std::make_tuple(std::move(args)...)]
         {
             setAttributes(memory_tracker, thread_name, force_overwrite);
-            std::apply(f, std::move(args));
+            return std::apply(f, std::move(args));
         };
-    }
-
-    void scheduleJob(ThreadPool & pool, ThreadPool::Job job)
-    {
-        pool.schedule(newJob(job));
     }
 private:
     static void setAttributes(MemoryTracker * memory_tracker, const std::string & thread_name, bool force_overwrite)

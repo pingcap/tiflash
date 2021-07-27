@@ -1,7 +1,7 @@
 #include <future>
 #include <Common/setThreadName.h>
 #include <Common/CurrentMetrics.h>
-#include <Common/ThreadCreator.h>
+#include <Common/ThreadFactory.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 
 
@@ -175,11 +175,12 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
         {
             auto & child = children[i];
 
-            ThreadCreator(true, "MergeAggReadThr").scheduleJob(*reading_pool, [&child]
-            {
-                CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
-                child->readPrefix();
-            });
+            reading_pool->schedule(
+                ThreadFactory(true, "MergeAggReadThr").newJob([&child]
+                {
+                    CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
+                    child->readPrefix();
+                }));
         }
 
         reading_pool->wait();
@@ -193,7 +194,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
           */
 
         for (size_t i = 0; i < merging_threads; ++i)
-            ThreadCreator(true, "MergeAggMergThr").scheduleJob(pool, [this] { mergeThread(); });
+            pool.schedule(ThreadFactory(true, "MergeAggMergThr").newJob([this] { mergeThread(); }));
     }
 }
 
@@ -474,11 +475,11 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
         {
             if (need_that_input(input))
             {
-                ThreadCreator(true, "MergeAggReadThr").scheduleJob(*reading_pool, [&input, &read_from_input]
+                reading_pool->schedule(ThreadFactory(true, "MergeAggReadThr").newJob([&input, &read_from_input]
                 {
                     CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
                     read_from_input(input);
-                });
+                }));
             }
         }
 

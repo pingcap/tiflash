@@ -22,7 +22,7 @@
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/MemoryTracker.h>
-#include <Common/ThreadCreator.h>
+#include <Common/ThreadFactory.h>
 #include <Common/escapeForFileName.h>
 #include <common/logger_useful.h>
 #include <ext/range.h>
@@ -191,7 +191,7 @@ void DistributedBlockOutputStream::waitForJobs()
 
 ThreadPool::Job DistributedBlockOutputStream::runWritingJob(DistributedBlockOutputStream::JobReplica & job, const Block & current_block)
 {
-    return ThreadCreator(false, "DistrOutStrProc").newJob([this, &job, &current_block]
+    return ThreadFactory(false, "DistrOutStrProc").newJob([this, &job, &current_block]
     {
         ++job.blocks_started;
 

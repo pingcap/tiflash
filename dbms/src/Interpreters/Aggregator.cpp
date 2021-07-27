@@ -23,7 +23,7 @@
 #include <Interpreters/Aggregator.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/MemoryTracker.h>
-#include <Common/ThreadCreator.h>
+#include <Common/ThreadFactory.h>
 #include <Common/typeid_cast.h>
 #include <common/demangle.h>
 
@@ -1029,7 +1029,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
             tasks[bucket] = std::packaged_task<Block()>(std::bind(converter, bucket));
 
             if (thread_pool)
-                ThreadCreator().scheduleJob(*thread_pool, [bucket, &tasks] { tasks[bucket](); });
+                thread_pool->schedule(ThreadFactory().newJob([bucket, &tasks] { tasks[bucket](); }));
             else
                 tasks[bucket]();
         }
@@ -1439,7 +1439,8 @@ private:
         if (max_scheduled_bucket_num >= NUM_BUCKETS)
             return;
 
-        ThreadCreator(true, "MergingAggregtd").scheduleJob(parallel_merge_data->pool, [this]{ thread(max_scheduled_bucket_num); });
+        parallel_merge_data->pool.schedule(
+            ThreadFactory(true, "MergingAggregtd").newJob([this]{ thread(max_scheduled_bucket_num); }));
     }
 
     void thread(Int32 bucket_num)
@@ -1769,7 +1770,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
             auto task = std::bind(merge_bucket, bucket, aggregates_pool);
 
             if (thread_pool)
-                ThreadCreator().scheduleJob(*thread_pool, task);
+                thread_pool->schedule(ThreadFactory().newJob(task));
             else
                 task();
         }

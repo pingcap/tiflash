@@ -5,7 +5,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Common/setThreadName.h>
 #include <Common/CurrentMetrics.h>
-#include <Common/ThreadCreator.h>
+#include <Common/ThreadFactory.h>
 #include <common/ThreadPool.h>
 #include <Common/MemoryTracker.h>
 
@@ -122,7 +122,7 @@ protected:
     void next()
     {
         ready.reset();
-        ThreadCreator(false, "AsyncBlockInput").scheduleJob(pool, [this] { calculate(); });
+        pool.schedule(ThreadFactory(false, "AsyncBlockInput").newJob([this] { calculate(); }));
     }
 
 

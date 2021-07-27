@@ -2,7 +2,7 @@
 
 #include <Common/setThreadName.h>
 #include <Common/CurrentMetrics.h>
-#include <Common/ThreadCreator.h>
+#include <Common/ThreadFactory.h>
 
 // #define DEDUP_TRACER
 #ifndef DEDUP_TRACER
@@ -37,7 +37,7 @@ DedupSortedBlockInputStream::DedupSortedBlockInputStream(BlockInputStreams & inp
         readers.schedule(std::bind(&DedupSortedBlockInputStream::asynFetch, this, i));
 
     LOG_DEBUG(log, "Start deduping in single thread, using priority-queue");
-    dedup_thread = std::make_unique<std::thread>(ThreadCreator().newThread([this] { asyncDedupByQueue(); }));
+    dedup_thread = std::make_unique<std::thread>(ThreadFactory().newThread([this] { asyncDedupByQueue(); }));
 }
 
 
