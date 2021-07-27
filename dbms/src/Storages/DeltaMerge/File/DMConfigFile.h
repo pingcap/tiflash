@@ -27,7 +27,7 @@ public:
         dtpb::Configuration configuration;
         if (unlikely(!configuration.ParseFromIstream(&input)))
         {
-            throw TiFlashException("failed to parse configuration proto from input stream", Errors::Checksum::LowLevelFailure);
+            throw TiFlashException("failed to parse configuration proto from input stream", Errors::Checksum::IOFailure);
         }
 
         auto                 unchecked_algorithm = configuration.checksum_algorithm();
@@ -186,7 +186,7 @@ inline std::ostream & operator<<(std::ostream & output, const DMConfiguration & 
 
     if (!configuration.SerializeToOstream(&output))
     {
-        throw TiFlashException("failed to output configuration proto to stream", Errors::Checksum::LowLevelFailure);
+        throw TiFlashException("failed to output configuration proto to stream", Errors::Checksum::IOFailure);
     };
 
     return output;

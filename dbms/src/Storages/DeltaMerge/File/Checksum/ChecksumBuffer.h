@@ -86,7 +86,7 @@ private:
                 else
                 {
                     throw TiFlashException(fmt::format("cannot flush checksum framed data to {} (errno = {})", out->getFileName(), errno),
-                                           Errors::Checksum::LowLevelFailure);
+                                           Errors::Checksum::IOFailure);
                 }
             }
             iter += count;
@@ -177,7 +177,7 @@ private:
                 else
                 {
                     throw TiFlashException(fmt::format("cannot load checksum framed data from {} (errno = {})", in->getFileName(), errno),
-                                           Errors::Checksum::LowLevelFailure);
+                                           Errors::Checksum::IOFailure);
                 }
             }
             expected -= count;
@@ -256,7 +256,7 @@ private:
             auto result        = in->seek(static_cast<off_t>(header_offset), SEEK_SET);
             if (result == -1)
             {
-                throw TiFlashException("checksum framed file " + in->getFileName() + " is not seekable", Errors::Checksum::LowLevelFailure);
+                throw TiFlashException("checksum framed file " + in->getFileName() + " is not seekable", Errors::Checksum::IOFailure);
             }
             auto length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>) + frame_size);
             if (length == 0 && target_offset == 0)

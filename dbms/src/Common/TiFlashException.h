@@ -124,9 +124,9 @@ namespace DB
             "This usually indicates a disk failure happened at a TiFlash node, \n"                                                   \
             "you may need to examine the health of your servers.",                                                                   \
             "");                                                                                                                     \
-        E(LowLevelFailure, "There are failed IO operations during checksum loading or writing.",                                     \
+        E(IOFailure, "There are failed IO operations during checksum loading or writing.",                                           \
             "Please check the permission of your data directories, \n"                                                               \
-            "if the problem persists, please contact the developer.",                                                                 \
+            "if the problem persists, please contact the developer.",                                                                \
             "");                                                                                                                     \
         E(Internal, "Checksum internal error.",                                                                                      \
             "Please contact with developer, \n"                                                                                      \
