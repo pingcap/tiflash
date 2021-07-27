@@ -71,7 +71,7 @@ public:
     };
 
 private:
-    void loadKeysFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_need_include);
+    void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_need_include);
 
     Block readCommitedBlock();
 

@@ -100,10 +100,13 @@ Block SSTFilesToBlockInputStream::read()
 {
     while (write_cf_reader && write_cf_reader->remained())
     {
-        // Read a key-value from write CF and continue to read key-value until
-        // the key that we read from write CF.
-        // All SST files store key-value in a sorted way so that we are able to
-        // scan committed rows in `region`.
+        // To decode committed rows from key-value pairs into block, we need to load
+        // all need key-value pairs from default and lock column families.
+        // Check the MVCC (key-format and transaction model) for details
+        // https://en.pingcap.com/blog/2016-11-17-mvcc-in-tikv#mvcc
+        // To ensure correctness, when loading key-values pairs from the default and
+        // the lock column family, we will load all key-values which rowkeys are equal
+        // or less that the last rowkey from the write column family.
         auto key   = write_cf_reader->key();
         auto value = write_cf_reader->value();
         region->insert(ColumnFamilyType::Write, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
@@ -114,8 +117,8 @@ Block SSTFilesToBlockInputStream::read()
         {
             const DecodedTiKVKey rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(key.data, key.len));
             // Batch the loading from other CFs until we need to decode data
-            loadKeysFromSST(ColumnFamilyType::Default, &rowkey);
-            loadKeysFromSST(ColumnFamilyType::Lock, &rowkey);
+            loadCFDataFromSST(ColumnFamilyType::Default, &rowkey);
+            loadCFDataFromSST(ColumnFamilyType::Lock, &rowkey);
 
             auto block = readCommitedBlock();
             if (block.rows() != 0)
@@ -124,14 +127,14 @@ Block SSTFilesToBlockInputStream::read()
         }
     }
     // Load all key-value pairs from other CFs
-    loadKeysFromSST(ColumnFamilyType::Default, nullptr);
-    loadKeysFromSST(ColumnFamilyType::Lock, nullptr);
+    loadCFDataFromSST(ColumnFamilyType::Default, nullptr);
+    loadCFDataFromSST(ColumnFamilyType::Lock, nullptr);
 
     // All uncommitted data are saved in `region`, decode the last committed rows.
     return readCommitedBlock();
 }
 
-void SSTFilesToBlockInputStream::loadKeysFromSST(ColumnFamilyType cf, const DecodedTiKVKey * const rowkey_to_be_included)
+void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * const rowkey_to_be_included)
 {
     SSTReader *      reader;
     size_t *         p_process_keys     = &process_keys.default_cf;
