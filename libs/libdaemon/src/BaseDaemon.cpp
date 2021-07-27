@@ -947,14 +947,16 @@ void BaseDaemon::initialize(Application & self)
     /// Write core dump on crash.
     {
         struct rlimit rlim;
-        if (getrlimit(RLIMIT_CORE, &rlim))
-            throw Poco::Exception("Cannot getrlimit");
+        if (int code = getrlimit(RLIMIT_CORE, &rlim); code) {
+            throw Poco::Exception("Cannot getrlimit, error code = " + std::to_string(code) + ", error message = " + std::string(strerror(errno)));
+        }
         /// 1 GiB by default. If more - it writes to disk too long.
         rlim.rlim_cur = config().getUInt64("core_dump.size_limit", 1024 * 1024 * 1024);
 
-        if (setrlimit(RLIMIT_CORE, &rlim))
+        if (int code = setrlimit(RLIMIT_CORE, &rlim); code)
         {
-            std::string message = "Cannot set max size of core file to " + std::to_string(rlim.rlim_cur);
+            std::string message = "Cannot set max size of core file to " + std::to_string(rlim.rlim_cur) + ", rlim_max = " + std::to_string(rlim.rlim_max) +
+                                  ", error code = " + std::to_string(code) + ", error message = " + std::string(strerror(errno));
         #if !defined(ADDRESS_SANITIZER) && !defined(THREAD_SANITIZER) && !defined(MEMORY_SANITIZER) && !defined(SANITIZER)
             throw Poco::Exception(message);
         #else
