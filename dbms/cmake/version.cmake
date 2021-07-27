@@ -29,7 +29,7 @@ else ()
     set (VERSION_SO "${VERSION_STRING}")
 endif ()
 
-set (TIFLASH_NAME "TIFLASH")
+set (TIFLASH_NAME "TiFlash")
 
 # Semantic version.
 set (TIFLASH_VERSION_MAJOR 4)
