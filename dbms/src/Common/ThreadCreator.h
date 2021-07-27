@@ -35,7 +35,7 @@ public:
         auto wrapped_func = [memory_tracker, thread_name = thread_name, f = std::move(f)](Args &&... args)
         {
             setAttributes(memory_tracker, thread_name, true);
-            f(std::forward<Args>(args)...);
+            return std::invoke(f, std::forward<Args>(args)...);
         };
         return std::thread(wrapped_func, std::forward<Args>(args)...);
     }
