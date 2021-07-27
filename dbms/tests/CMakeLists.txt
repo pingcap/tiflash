@@ -4,21 +4,21 @@ enable_testing()
 if (TARGET check)
     message (STATUS "Target check already exists")
 else ()
-    include (${ClickHouse_SOURCE_DIR}/cmake/add_check.cmake)
+    include (${TiFlash_SOURCE_DIR}/cmake/add_check.cmake)
 endif ()
 
-install (PROGRAMS clickhouse-test clickhouse-test-server DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+install (PROGRAMS tiflash-test tiflash-test-server DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT tiflash)
 install (
     DIRECTORY queries performance external_dictionaries
-    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/clickhouse-test
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/tiflash-test
     USE_SOURCE_PERMISSIONS
-    COMPONENT clickhouse
+    COMPONENT tiflash
     PATTERN "CMakeLists.txt" EXCLUDE
     PATTERN ".gitignore" EXCLUDE
 )
 
-install (FILES server-test.xml DESTINATION  ${CLICKHOUSE_ETC_DIR}/clickhouse-server COMPONENT clickhouse)
-install (FILES client-test.xml DESTINATION  ${CLICKHOUSE_ETC_DIR}/clickhouse-client COMPONENT clickhouse)
+install (FILES server-test.xml DESTINATION  ${TIFLASH_ETC_DIR}/tiflash-server COMPONENT tiflash)
+install (FILES client-test.xml DESTINATION  ${TIFLASH_ETC_DIR}/tiflash-client COMPONENT tiflash)
 
 add_subdirectory (external_dictionaries)
 
@@ -26,5 +26,5 @@ if (ENABLE_TESTS)
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR})
 
     # maybe add --no-long ?
-    add_test(NAME with_server COMMAND bash -c "env BUILD_DIR=${ClickHouse_BINARY_DIR} TEST_OPT0='--skip compile' ${CMAKE_CURRENT_SOURCE_DIR}/clickhouse-test-server")
+    add_test(NAME with_server COMMAND bash -c "env BUILD_DIR=${TiFlash_BINARY_DIR} TEST_OPT0='--skip compile' ${CMAKE_CURRENT_SOURCE_DIR}/tiflash-test-server")
 endif ()

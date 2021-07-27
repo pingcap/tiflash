@@ -1,7 +1,7 @@
-project (ClickHouse)
+project (TiFlash)
 cmake_minimum_required (VERSION 2.8)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ClickHouse_SOURCE_DIR}/cmake/Modules/")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -70,7 +70,7 @@ option (USE_STATIC_LIBRARIES "Set to FALSE to use shared libraries" ON)
 option (MAKE_STATIC_LIBRARIES "Set to FALSE to make shared libraries" ${USE_STATIC_LIBRARIES})
 if (NOT MAKE_STATIC_LIBRARIES)
     option (SPLIT_SHARED_LIBRARIES "DEV ONLY. Keep all internal libs as separate .so for faster linking" OFF)
-    option (CLICKHOUSE_SPLIT_BINARY "Make several binaries instead one bundled (clickhouse-server, clickhouse-client, ... )" OFF)
+    option (TIFLASH_SPLIT_BINARY "Make several binaries instead one bundled (tiflash-server, tiflash-client, ... )" OFF)
 endif ()
 
 if (SPLIT_SHARED_LIBRARIES)
@@ -225,9 +225,9 @@ endif ()
 
 # when installing to /usr - place configs to /etc but for /usr/local place to /usr/local/etc
 if (CMAKE_INSTALL_PREFIX STREQUAL "/usr")
-    set (CLICKHOUSE_ETC_DIR "/etc")
+    set (TIFLASH_ETC_DIR "/etc")
 else ()
-    set (CLICKHOUSE_ETC_DIR "${CMAKE_INSTALL_PREFIX}/etc")
+    set (TIFLASH_ETC_DIR "${CMAKE_INSTALL_PREFIX}/etc")
 endif ()
 
 option (UNBUNDLED "Try find all libraries in system (if fail - use bundled from contrib/)" OFF)
@@ -304,9 +304,9 @@ include (libs/libdaemon/cmake/find_unwind.cmake)
 include (cmake/print_flags.cmake)
 
 # Directory for Yandex specific files
-set (CLICKHOUSE_PRIVATE_DIR ${ClickHouse_SOURCE_DIR}/private/)
-if (EXISTS ${CLICKHOUSE_PRIVATE_DIR})
-    add_subdirectory (${CLICKHOUSE_PRIVATE_DIR})
+set (TIFLASH_PRIVATE_DIR ${TiFlash_SOURCE_DIR}/private/)
+if (EXISTS ${TIFLASH_PRIVATE_DIR})
+    add_subdirectory (${TIFLASH_PRIVATE_DIR})
 endif ()
 
 add_subdirectory (contrib)

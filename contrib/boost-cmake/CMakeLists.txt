@@ -10,7 +10,7 @@
 # Important boost patch: 094c18b
 #
 
-set (LIBRARY_DIR ${ClickHouse_SOURCE_DIR}/contrib/boost)
+set (LIBRARY_DIR ${TiFlash_SOURCE_DIR}/contrib/boost)
 
 if (NOT MSVC)
     add_definitions(-Wno-unused-variable -Wno-deprecated-declarations)

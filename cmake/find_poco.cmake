@@ -1,6 +1,6 @@
 option (USE_INTERNAL_POCO_LIBRARY "Set to FALSE to use system poco library instead of bundled" ${NOT_UNBUNDLED})
 
-if (NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/poco/CMakeLists.txt")
+if (NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/poco/CMakeLists.txt")
    if (USE_INTERNAL_POCO_LIBRARY)
       message (WARNING "submodule contrib/poco is missing. to fix try run: \n git submodule update --init --recursive")
    endif ()
@@ -42,18 +42,18 @@ elseif (NOT MISSING_INTERNAL_POCO_LIBRARY)
 
     # used in internal compiler
     list (APPEND Poco_INCLUDE_DIRS
-        "${ClickHouse_SOURCE_DIR}/contrib/poco/Foundation/include/"
-        "${ClickHouse_SOURCE_DIR}/contrib/poco/Util/include/"
+        "${TiFlash_SOURCE_DIR}/contrib/poco/Foundation/include/"
+        "${TiFlash_SOURCE_DIR}/contrib/poco/Util/include/"
     )
 
     if (NOT DEFINED POCO_ENABLE_MONGODB OR POCO_ENABLE_MONGODB)
         set (Poco_MongoDB_FOUND 1)
         set (Poco_MongoDB_LIBRARY PocoMongoDB)
-        set (Poco_MongoDB_INCLUDE_DIRS "${ClickHouse_SOURCE_DIR}/contrib/poco/MongoDB/include/")
+        set (Poco_MongoDB_INCLUDE_DIRS "${TiFlash_SOURCE_DIR}/contrib/poco/MongoDB/include/")
     endif ()
 
     set (Poco_Data_FOUND 1)
-    set (Poco_Data_INCLUDE_DIRS "${ClickHouse_SOURCE_DIR}/contrib/poco/Data/include")
+    set (Poco_Data_INCLUDE_DIRS "${TiFlash_SOURCE_DIR}/contrib/poco/Data/include")
     set (Poco_Data_LIBRARY PocoData)
 
     # TODO! fix internal ssl
@@ -65,7 +65,7 @@ elseif (NOT MISSING_INTERNAL_POCO_LIBRARY)
 
     if (USE_STATIC_LIBRARIES AND USE_INTERNAL_ZLIB_LIBRARY)
         list (APPEND Poco_INCLUDE_DIRS
-            "${ClickHouse_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}/"
+            "${TiFlash_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}/"
             "${ClickHouse_BINARY_DIR}/contrib/${INTERNAL_ZLIB_NAME}/"
         )
     endif ()
@@ -82,15 +82,15 @@ message(STATUS "Using Poco: ${Poco_INCLUDE_DIRS} : ${Poco_Foundation_LIBRARY},${
 # use branch:
 #  develop  OR  poco-1.7.9-release + 6a49c94d18c654d7a20b8c8ea47071b1fdd4813b
 # and merge:
-# ClickHouse-Extras/clickhouse_unbundled
-# ClickHouse-Extras/clickhouse_unbundled_zlib
-# ClickHouse-Extras/clickhouse_task
-# ClickHouse-Extras/clickhouse_misc
-# ClickHouse-Extras/clickhouse_anl
-# ClickHouse-Extras/clickhouse_http_header https://github.com/pocoproject/poco/pull/1574
-# ClickHouse-Extras/clickhouse_socket
-# ClickHouse-Extras/clickhouse_warning
-# ClickHouse-Extras/clickhouse-purge-logs-on-no-space
-# ClickHouse-Extras/clickhouse_freebsd
+# ClickHouse-Extras/tiflash_unbundled
+# ClickHouse-Extras/tiflash_unbundled_zlib
+# ClickHouse-Extras/tiflash_task
+# ClickHouse-Extras/tiflash_misc
+# ClickHouse-Extras/tiflash_anl
+# ClickHouse-Extras/tiflash_http_header https://github.com/pocoproject/poco/pull/1574
+# ClickHouse-Extras/tiflash_socket
+# ClickHouse-Extras/tiflash_warning
+# ClickHouse-Extras/tiflash-purge-logs-on-no-space
+# ClickHouse-Extras/tiflash_freebsd
 # ClickHouse-Extras/clikhouse_no_zlib
-# ClickHouse-Extras/clickhouse-fix-atomic
+# ClickHouse-Extras/tiflash-fix-atomic

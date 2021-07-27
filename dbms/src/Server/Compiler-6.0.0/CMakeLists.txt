@@ -1,12 +1,12 @@
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error")
 
-add_library(clickhouse-compiler-lib
+add_library(tiflash-compiler-lib
     driver.cpp
     cc1_main.cpp
     cc1as_main.cpp
     lld.cpp)
 
-target_compile_options(clickhouse-compiler-lib PRIVATE -fno-rtti -fno-exceptions -g0)
+target_compile_options(tiflash-compiler-lib PRIVATE -fno-rtti -fno-exceptions -g0)
 
 llvm_map_components_to_libraries(REQUIRED_LLVM_LIBRARIES all)
 
@@ -17,11 +17,11 @@ list(REMOVE_ITEM REQUIRED_LLVM_LIBRARIES "-l/usr/lib/libexecinfo.so")
 
 message(STATUS "Using LLVM ${LLVM_VERSION}: ${LLVM_INCLUDE_DIRS} : ${REQUIRED_LLVM_LIBRARIES}")
 
-target_include_directories(clickhouse-compiler-lib PRIVATE ${LLVM_INCLUDE_DIRS})
+target_include_directories(tiflash-compiler-lib PRIVATE ${LLVM_INCLUDE_DIRS})
 
 # This is extracted almost directly from CMakeFiles/.../link.txt in LLVM build directory.
 
-target_link_libraries(clickhouse-compiler-lib PRIVATE
+target_link_libraries(tiflash-compiler-lib PRIVATE
 
 clangBasic clangCodeGen clangDriver
 clangFrontend 

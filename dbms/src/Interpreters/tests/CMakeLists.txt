@@ -5,7 +5,7 @@ add_executable (create_query create_query.cpp)
 target_link_libraries (create_query dbms)
 
 add_executable (select_query select_query.cpp)
-target_link_libraries (select_query clickhouse_storages_system dbms)
+target_link_libraries (select_query tiflash_storages_system dbms)
 
 add_executable (aggregate aggregate.cpp)
 target_link_libraries (aggregate dbms)
@@ -26,8 +26,8 @@ target_link_libraries (hash_map_string_2 dbms)
 
 add_executable (hash_map_string_3 hash_map_string_3.cpp)
 target_link_libraries (hash_map_string_3 dbms ${FARMHASH_LIBRARIES} ${METROHASH_LIBRARIES})
-target_include_directories (hash_map_string_3 BEFORE PRIVATE ${ClickHouse_SOURCE_DIR}/contrib/libfarmhash)
-target_include_directories (hash_map_string_3 BEFORE PRIVATE ${ClickHouse_SOURCE_DIR}/contrib/libmetrohash/src)
+target_include_directories (hash_map_string_3 BEFORE PRIVATE ${TiFlash_SOURCE_DIR}/contrib/libfarmhash)
+target_include_directories (hash_map_string_3 BEFORE PRIVATE ${TiFlash_SOURCE_DIR}/contrib/libmetrohash/src)
 
 add_executable (hash_map_string_small hash_map_string_small.cpp)
 target_include_directories (hash_map_string_small BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})

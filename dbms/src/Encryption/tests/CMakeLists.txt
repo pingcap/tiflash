@@ -1,5 +1,5 @@
 add_executable(encryption_test EXCLUDE_FROM_ALL gtest_encryption_test.cpp)
-target_link_libraries(encryption_test dbms gtest_main clickhouse_functions)
+target_link_libraries(encryption_test dbms gtest_main tiflash_functions)
 
 add_executable(rate_limiter_test EXCLUDE_FROM_ALL rate_limiter_test.cpp)
-target_link_libraries(rate_limiter_test dbms gtest_main clickhouse_functions)
+target_link_libraries(rate_limiter_test dbms gtest_main tiflash_functions)

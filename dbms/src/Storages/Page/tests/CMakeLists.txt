@@ -6,10 +6,10 @@ macro(grep_gtest_sources BASE_DIR DST_VAR)
 endmacro()
 
 # attach all dm gtest sources
-grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/tests ps_gtest_sources)
+grep_gtest_sources(${TiFlash_SOURCE_DIR}/dbms/src/Storages/Page/tests ps_gtest_sources)
 
 # FIXME: This target is broken now, we need to remove some dependency for libpage_storage first
-add_executable(gtests_page_storage ${ps_gtest_sources} ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/gtests_dbms_main.cpp)
+add_executable(gtests_page_storage ${ps_gtest_sources} ${TiFlash_SOURCE_DIR}/dbms/src/TestUtils/gtests_dbms_main.cpp)
 target_link_libraries(gtests_page_storage gtest_main page_storage)
 target_compile_options(gtests_page_storage PRIVATE -Wno-unknown-pragmas)
 target_compile_definitions(gtests_page_storage PRIVATE DBMS_PUBLIC_GTEST)

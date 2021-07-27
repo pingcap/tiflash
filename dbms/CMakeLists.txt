@@ -13,8 +13,8 @@ message (STATUS "Will build ${VERSION_FULL} (TiFlash ${TIFLASH_RELEASE_VERSION})
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config.h.in ${CONFIG_COMMON})
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config_version.h.in ${CONFIG_VERSION})
 
-get_property (BUILD_COMPILE_DEFINITIONS DIRECTORY ${ClickHouse_SOURCE_DIR} PROPERTY COMPILE_DEFINITIONS)
-get_property (BUILD_INCLUDE_DIRECTORIES DIRECTORY ${ClickHouse_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
+get_property (BUILD_COMPILE_DEFINITIONS DIRECTORY ${TiFlash_SOURCE_DIR} PROPERTY COMPILE_DEFINITIONS)
+get_property (BUILD_INCLUDE_DIRECTORIES DIRECTORY ${TiFlash_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
 string (TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config_build.cpp.in ${CONFIG_BUILD})
 
@@ -39,11 +39,11 @@ add_subdirectory (src)
 set(dbms_headers)
 set(dbms_sources)
 
-include(${ClickHouse_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
+include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 
-add_headers_and_sources(clickhouse_common_io src/Common)
-add_headers_and_sources(clickhouse_common_io src/Common/HashTable)
-add_headers_and_sources(clickhouse_common_io src/IO)
+add_headers_and_sources(tiflash_common_io src/Common)
+add_headers_and_sources(tiflash_common_io src/Common/HashTable)
+add_headers_and_sources(tiflash_common_io src/IO)
 
 add_headers_and_sources(dbms src/Analyzers)
 add_headers_and_sources(dbms src/Core)
@@ -80,9 +80,9 @@ add_headers_and_sources(dbms src/Client)
 add_headers_only(dbms src/Flash/Coprocessor)
 add_headers_only(dbms src/Server)
 
-list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
-list (APPEND clickhouse_common_io_headers ${CONFIG_VERSION} ${CONFIG_COMMON})
-list (APPEND clickhouse_common_io_headers ${fiu_include_dirs})
+list (APPEND tiflash_common_io_sources ${CONFIG_BUILD})
+list (APPEND tiflash_common_io_headers ${CONFIG_VERSION} ${CONFIG_COMMON})
+list (APPEND tiflash_common_io_headers ${fiu_include_dirs})
 
 list (APPEND dbms_sources src/Functions/IFunction.cpp src/Functions/FunctionFactory.cpp src/Functions/FunctionHelpers.cpp)
 list (APPEND dbms_headers src/Functions/IFunction.h src/Functions/FunctionFactory.h src/Functions/FunctionHelpers.h)
@@ -106,10 +106,10 @@ list (APPEND dbms_headers
 list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctions/TableFunctionFactory.cpp)
 list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
 
-add_library(clickhouse_common_io ${SPLIT_SHARED} ${clickhouse_common_io_headers} ${clickhouse_common_io_sources})
+add_library(tiflash_common_io ${SPLIT_SHARED} ${tiflash_common_io_headers} ${tiflash_common_io_sources})
 
 if (ARCH_FREEBSD)
-    target_compile_definitions (clickhouse_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
+    target_compile_definitions (tiflash_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
 endif ()
 
 add_subdirectory(src/Common/Config)
@@ -118,8 +118,8 @@ if (MAKE_STATIC_LIBRARIES)
     add_library(dbms ${dbms_headers} ${dbms_sources})
 else ()
     add_library(dbms SHARED ${dbms_headers} ${dbms_sources})
-    set_target_properties (dbms PROPERTIES SOVERSION ${VERSION_MAJOR} VERSION ${VERSION_SO} OUTPUT_NAME clickhouse)
-    install (TARGETS dbms LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT clickhouse)
+    set_target_properties (dbms PROPERTIES SOVERSION ${VERSION_MAJOR} VERSION ${VERSION_SO} OUTPUT_NAME tiflash)
+    install (TARGETS dbms LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT tiflash)
 endif ()
 
 target_include_directories(dbms PUBLIC "${TIFLASH_PROXY_FFI_SRC}")
@@ -148,7 +148,7 @@ if (NOT ARCH_ARM)
     set (LINK_LIBRARIES_ONLY_ON_X86_64 cpuid)
 endif()
 
-target_link_libraries (clickhouse_common_io
+target_link_libraries (tiflash_common_io
     common
     string_utils
     ${LINK_LIBRARIES_ONLY_ON_X86_64}
@@ -166,12 +166,12 @@ target_link_libraries (clickhouse_common_io
     prometheus-cpp::push
     prometheus-cpp::pull
 )
-target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
+target_include_directories (tiflash_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 
 target_link_libraries (dbms
-    clickhouse_parsers
-    clickhouse_common_config
-    clickhouse_common_io
+    tiflash_parsers
+    tiflash_common_config
+    tiflash_common_io
     flash_service
     kvproto
     kv_client
@@ -190,15 +190,15 @@ if (NOT USE_INTERNAL_RE2_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${RE2_INCLUDE_DIR})
 endif ()
 
-target_include_directories (clickhouse_common_io BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
+target_include_directories (tiflash_common_io BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
 if (Poco_Data_FOUND AND NOT USE_INTERNAL_POCO_LIBRARY)
-    target_include_directories (clickhouse_common_io PRIVATE ${Poco_Data_INCLUDE_DIRS})
+    target_include_directories (tiflash_common_io PRIVATE ${Poco_Data_INCLUDE_DIRS})
     target_include_directories (dbms PRIVATE ${Poco_Data_INCLUDE_DIRS})
 endif()
 
 if (Poco_NetSSL_FOUND)
-    target_link_libraries (clickhouse_common_io ${Poco_NetSSL_LIBRARY})
+    target_link_libraries (tiflash_common_io ${Poco_NetSSL_LIBRARY})
 endif()
 
 target_link_libraries (dbms ${Poco_Foundation_LIBRARY})
@@ -223,24 +223,24 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
 endif ()
 
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
-target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
-target_include_directories (clickhouse_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})
-target_include_directories (clickhouse_common_io BEFORE PUBLIC ${DOUBLE_CONVERSION_INCLUDE_DIR})
+target_include_directories (tiflash_common_io PUBLIC ${DBMS_INCLUDE_DIR})
+target_include_directories (tiflash_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})
+target_include_directories (tiflash_common_io BEFORE PUBLIC ${DOUBLE_CONVERSION_INCLUDE_DIR})
 
 # also for copy_headers.sh:
-target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
+target_include_directories (tiflash_common_io BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
 
 add_subdirectory (tests)
 
 if (ENABLE_TESTS)
-    include (${ClickHouse_SOURCE_DIR}/cmake/find_gtest.cmake)
+    include (${TiFlash_SOURCE_DIR}/cmake/find_gtest.cmake)
 
     if (USE_INTERNAL_GTEST_LIBRARY)
         # Google Test from sources
-        add_subdirectory(${ClickHouse_SOURCE_DIR}/contrib/googletest/googletest ${CMAKE_CURRENT_BINARY_DIR}/googletest)
+        add_subdirectory(${TiFlash_SOURCE_DIR}/contrib/googletest/googletest ${CMAKE_CURRENT_BINARY_DIR}/googletest)
         # avoid problems with <regexp.h>
         target_compile_definitions (gtest INTERFACE GTEST_HAS_POSIX_RE=0)
-        target_include_directories (gtest INTERFACE ${ClickHouse_SOURCE_DIR}/contrib/googletest/include)
+        target_include_directories (gtest INTERFACE ${TiFlash_SOURCE_DIR}/contrib/googletest/include)
     endif ()
 
     macro(grep_gtest_sources BASE_DIR DST_VAR)
@@ -249,18 +249,18 @@ if (ENABLE_TESTS)
     endmacro()
 
     # attach all dbms gtest sources
-    grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms dbms_gtest_sources)
+    grep_gtest_sources(${TiFlash_SOURCE_DIR}/dbms dbms_gtest_sources)
     add_executable(gtests_dbms EXCLUDE_FROM_ALL
         ${dbms_gtest_sources}
-        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestBasic.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestBasic.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
-    target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions)
+    target_link_libraries(gtests_dbms gtest_main dbms tiflash_functions)
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
 endif ()
