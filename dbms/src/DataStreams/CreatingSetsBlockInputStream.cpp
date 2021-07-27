@@ -105,7 +105,7 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-                    workers.push_back(ThreadCreator().newThread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second)));
+                    workers.emplace_back(ThreadCreator().newThread([this, &subquery = elem.second]{ createOne(subquery); }));
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }

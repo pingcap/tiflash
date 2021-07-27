@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/MemoryTracker.h>
+#include <Common/setThreadName.h>
 #include <common/ThreadPool.h>
 #include <thread>
 
@@ -28,10 +29,10 @@ public:
     ThreadCreator & operator=(ThreadCreator &&) = default;
 
     template <typename F, typename ... Args>
-    std::thread createThread(F && f, Args &&... args)
+    std::thread newThread(F && f, Args &&... args)
     {
         auto memory_tracker = current_memory_tracker;
-        auto wrapped_func = [memory_tracker, thread_name, f = std::move(f)](Args &&... args)
+        auto wrapped_func = [memory_tracker, thread_name = thread_name, f = std::move(f)](Args &&... args)
         {
             setAttributes(memory_tracker, thread_name, true);
             f(std::forward<Args>(args)...);
@@ -40,12 +41,12 @@ public:
     }
 
     template <typename F, typename ... Args>
-    ThreadPool::Job createJob(F && f, Args &&... args)
+    ThreadPool::Job newJob(F && f, Args &&... args)
     {
         auto memory_tracker = current_memory_tracker;
         /// Use std::tuple to workaround the limit on the lambda's init-capture of C++17.
         /// See https://stackoverflow.com/questions/47496358/c-lambdas-how-to-capture-variadic-parameter-pack-from-the-upper-scope
-        return [force_overwrite, memory_tracker, thread_name, f = std::move(f), args = std::make_tuple(std::move(args)...)]
+        return [force_overwrite = force_overwrite, memory_tracker, thread_name = thread_name, f = std::move(f), args = std::make_tuple(std::move(args)...)]
         {
             setAttributes(memory_tracker, thread_name, force_overwrite);
             std::apply(f, std::move(args));
@@ -54,7 +55,7 @@ public:
 
     void scheduleJob(ThreadPool & pool, ThreadPool::Job job)
     {
-        pool.schedule(createJob(job));
+        pool.schedule(newJob(job));
     }
 private:
     static void setAttributes(MemoryTracker * memory_tracker, const std::string & thread_name, bool force_overwrite)
