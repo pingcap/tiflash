@@ -148,12 +148,13 @@ DMFileReader::Stream::Stream(DMFileReader &                   reader,
     }
     else
     {
-        buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(reader.file_provider,
-                                                                            reader.dmfile->colDataPath(file_name_base),
-                                                                            reader.dmfile->encryptionDataPath(file_name_base),
-                                                                            estimated_size,
-                                                                            read_limiter,
-                                                                            *reader.dmfile->configuration);
+        buf = std::make_unique<CompressedReadBufferFromFileProvider<false>>(
+            reader.file_provider,
+            reader.dmfile->colDataPath(file_name_base),
+            reader.dmfile->encryptionDataPath(file_name_base),
+            reader.dmfile->configuration->getChecksumFrameLength(), // here the estimated size is not good
+            read_limiter,
+            *reader.dmfile->configuration);
     }
 }
 
