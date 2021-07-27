@@ -4,7 +4,7 @@ enable_testing()
 if (TARGET check)
     message (STATUS "Target check already exists")
 else ()
-    include (${TiFlash_SOURCE_DIR}/cmake/add_check.cmake)
+    include (${TIFLASH_SOURCE_DIR}/cmake/add_check.cmake)
 endif ()
 
 install (PROGRAMS tiflash-test tiflash-test-server DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT tiflash)
@@ -26,5 +26,5 @@ if (ENABLE_TESTS)
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR})
 
     # maybe add --no-long ?
-    add_test(NAME with_server COMMAND bash -c "env BUILD_DIR=${TiFlash_BINARY_DIR} TEST_OPT0='--skip compile' ${CMAKE_CURRENT_SOURCE_DIR}/tiflash-test-server")
+    add_test(NAME with_server COMMAND bash -c "env BUILD_DIR=${TIFLASH_BINARY_DIR} TEST_OPT0='--skip compile' ${CMAKE_CURRENT_SOURCE_DIR}/tiflash-test-server")
 endif ()

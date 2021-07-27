@@ -7,7 +7,7 @@ endif ()
 if (SPARCEHASH_INCLUDE_DIR)
 else ()
     set (USE_INTERNAL_SPARCEHASH_LIBRARY 1)
-    set (SPARCEHASH_INCLUDE_DIR "${TiFlash_SOURCE_DIR}/contrib/libsparsehash")
+    set (SPARCEHASH_INCLUDE_DIR "${TIFLASH_SOURCE_DIR}/contrib/libsparsehash")
 endif ()
 
 message (STATUS "Using sparsehash: ${SPARCEHASH_INCLUDE_DIR}")

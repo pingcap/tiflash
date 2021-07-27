@@ -6,7 +6,7 @@ macro(grep_gtest_sources BASE_DIR DST_VAR)
     file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
 endmacro()
 # attach all dm gtest sources
-grep_gtest_sources(${TiFlash_SOURCE_DIR}/dbms/src/Storages/DeltaMerge/tests dm_gtest_sources)
+grep_gtest_sources(${TIFLASH_SOURCE_DIR}/dbms/src/Storages/DeltaMerge/tests dm_gtest_sources)
 add_executable(gtests_dm EXCLUDE_FROM_ALL ${dm_gtest_sources} dm_basic_include.h)
 target_link_libraries(gtests_dm gtest_main dbms tiflash_functions)
 add_check(gtests_dm)

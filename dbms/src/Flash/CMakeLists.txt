@@ -1,4 +1,4 @@
-include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
+include(${TIFLASH_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 
 add_headers_and_sources(flash_service .)
 add_headers_and_sources(flash_service ./Coprocessor)

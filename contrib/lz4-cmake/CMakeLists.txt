@@ -1,4 +1,4 @@
-SET(LIBRARY_DIR ${TiFlash_SOURCE_DIR}/contrib/lz4/lib)
+SET(LIBRARY_DIR ${TIFLASH_SOURCE_DIR}/contrib/lz4/lib)
 
 add_library (lz4
     ${LIBRARY_DIR}/lz4.c

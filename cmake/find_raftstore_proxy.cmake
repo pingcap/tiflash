@@ -1,5 +1,5 @@
-set (TIFLASH_PROXY_LIB_PATH "${TiFlash_SOURCE_DIR}/libs/libtiflash-proxy")
-set (TIFLASH_PROXY_MODULE_PATH "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy")
+set (TIFLASH_PROXY_LIB_PATH "${TIFLASH_SOURCE_DIR}/libs/libtiflash-proxy")
+set (TIFLASH_PROXY_MODULE_PATH "${TIFLASH_SOURCE_DIR}/contrib/tiflash-proxy")
 set (TIFLASH_PROXY_FFI_SRC "${TIFLASH_PROXY_MODULE_PATH}/raftstore-proxy/ffi/src")
 
 set (TIFLASH_PROXY_LIBRARY "TIFLASH_PROXY_LIBRARY-NOTFOUND")

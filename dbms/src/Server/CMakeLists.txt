@@ -32,7 +32,7 @@ add_library (tiflash-server-lib
 target_link_libraries(tiflash-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
 
 target_link_libraries (tiflash-server-lib tiflash_common_io daemon tiflash_storages_system tiflash_functions tiflash_aggregate_functions tiflash_table_functions)
-target_include_directories (tiflash-server-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
+target_include_directories (tiflash-server-lib PUBLIC ${TIFLASH_SOURCE_DIR}/libs/libdaemon/include)
 
 add_library (tiflash-local-lib LocalServer.cpp)
 target_link_libraries (tiflash-local-lib tiflash-server-lib tiflash_functions tiflash_aggregate_functions tiflash_table_functions)

@@ -1,5 +1,5 @@
-include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
-include(${TiFlash_SOURCE_DIR}/cmake/dbms_generate_function.cmake)
+include(${TIFLASH_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
+include(${TIFLASH_SOURCE_DIR}/cmake/dbms_generate_function.cmake)
 
 generate_function_register(Arithmetic
   FunctionPlus
@@ -73,7 +73,7 @@ generate_function_register(Array
 add_headers_and_sources(tiflash_functions .)
 add_headers_and_sources(tiflash_functions ./GatherUtils)
 add_headers_and_sources(tiflash_functions ./Conditional)
-add_headers_and_sources(tiflash_functions ${TiFlash_BINARY_DIR}/dbms/src/Functions)
+add_headers_and_sources(tiflash_functions ${TIFLASH_BINARY_DIR}/dbms/src/Functions)
 
 list(REMOVE_ITEM tiflash_functions_sources IFunction.cpp FunctionFactory.cpp FunctionHelpers.cpp)
 list(REMOVE_ITEM tiflash_functions_headers IFunction.h FunctionFactory.h FunctionHelpers.h)
@@ -82,8 +82,8 @@ add_library(tiflash_functions ${tiflash_functions_sources})
 
 target_link_libraries(tiflash_functions PUBLIC dbms PRIVATE libconsistent-hashing ${FARMHASH_LIBRARIES} ${METROHASH_LIBRARIES})
 
-target_include_directories (tiflash_functions BEFORE PUBLIC ${TiFlash_SOURCE_DIR}/contrib/libfarmhash)
-target_include_directories (tiflash_functions BEFORE PUBLIC ${TiFlash_SOURCE_DIR}/contrib/libmetrohash/src)
+target_include_directories (tiflash_functions BEFORE PUBLIC ${TIFLASH_SOURCE_DIR}/contrib/libfarmhash)
+target_include_directories (tiflash_functions BEFORE PUBLIC ${TIFLASH_SOURCE_DIR}/contrib/libmetrohash/src)
 target_include_directories (tiflash_functions BEFORE PUBLIC ${DIVIDE_INCLUDE_DIR})
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO" OR CMAKE_BUILD_TYPE_UC STREQUAL "MINSIZEREL")

@@ -26,8 +26,8 @@ target_link_libraries (hash_map_string_2 dbms)
 
 add_executable (hash_map_string_3 hash_map_string_3.cpp)
 target_link_libraries (hash_map_string_3 dbms ${FARMHASH_LIBRARIES} ${METROHASH_LIBRARIES})
-target_include_directories (hash_map_string_3 BEFORE PRIVATE ${TiFlash_SOURCE_DIR}/contrib/libfarmhash)
-target_include_directories (hash_map_string_3 BEFORE PRIVATE ${TiFlash_SOURCE_DIR}/contrib/libmetrohash/src)
+target_include_directories (hash_map_string_3 BEFORE PRIVATE ${TIFLASH_SOURCE_DIR}/contrib/libfarmhash)
+target_include_directories (hash_map_string_3 BEFORE PRIVATE ${TIFLASH_SOURCE_DIR}/contrib/libmetrohash/src)
 
 add_executable (hash_map_string_small hash_map_string_small.cpp)
 target_include_directories (hash_map_string_small BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})

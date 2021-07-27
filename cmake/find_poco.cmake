@@ -1,6 +1,6 @@
 option (USE_INTERNAL_POCO_LIBRARY "Set to FALSE to use system poco library instead of bundled" ${NOT_UNBUNDLED})
 
-if (NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/poco/CMakeLists.txt")
+if (NOT EXISTS "${TIFLASH_SOURCE_DIR}/contrib/poco/CMakeLists.txt")
    if (USE_INTERNAL_POCO_LIBRARY)
       message (WARNING "submodule contrib/poco is missing. to fix try run: \n git submodule update --init --recursive")
    endif ()
@@ -42,18 +42,18 @@ elseif (NOT MISSING_INTERNAL_POCO_LIBRARY)
 
     # used in internal compiler
     list (APPEND Poco_INCLUDE_DIRS
-        "${TiFlash_SOURCE_DIR}/contrib/poco/Foundation/include/"
-        "${TiFlash_SOURCE_DIR}/contrib/poco/Util/include/"
+        "${TIFLASH_SOURCE_DIR}/contrib/poco/Foundation/include/"
+        "${TIFLASH_SOURCE_DIR}/contrib/poco/Util/include/"
     )
 
     if (NOT DEFINED POCO_ENABLE_MONGODB OR POCO_ENABLE_MONGODB)
         set (Poco_MongoDB_FOUND 1)
         set (Poco_MongoDB_LIBRARY PocoMongoDB)
-        set (Poco_MongoDB_INCLUDE_DIRS "${TiFlash_SOURCE_DIR}/contrib/poco/MongoDB/include/")
+        set (Poco_MongoDB_INCLUDE_DIRS "${TIFLASH_SOURCE_DIR}/contrib/poco/MongoDB/include/")
     endif ()
 
     set (Poco_Data_FOUND 1)
-    set (Poco_Data_INCLUDE_DIRS "${TiFlash_SOURCE_DIR}/contrib/poco/Data/include")
+    set (Poco_Data_INCLUDE_DIRS "${TIFLASH_SOURCE_DIR}/contrib/poco/Data/include")
     set (Poco_Data_LIBRARY PocoData)
 
     # TODO! fix internal ssl
@@ -65,8 +65,8 @@ elseif (NOT MISSING_INTERNAL_POCO_LIBRARY)
 
     if (USE_STATIC_LIBRARIES AND USE_INTERNAL_ZLIB_LIBRARY)
         list (APPEND Poco_INCLUDE_DIRS
-            "${TiFlash_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}/"
-            "${TiFlash_BINARY_DIR}/contrib/${INTERNAL_ZLIB_NAME}/"
+            "${TIFLASH_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}/"
+            "${TIFLASH_BINARY_DIR}/contrib/${INTERNAL_ZLIB_NAME}/"
         )
     endif ()
 
