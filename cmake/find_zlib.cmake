@@ -24,7 +24,7 @@ if (NOT ZLIB_FOUND)
         set(WITH_NEON 1 CACHE INTERNAL "")
         set(WITH_ACLE 1 CACHE INTERNAL "")
     endif ()
-    set (ZLIB_INCLUDE_DIR "${TiFlash_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}" "${ClickHouse_BINARY_DIR}/contrib/${INTERNAL_ZLIB_NAME}") # generated zconf.h
+    set (ZLIB_INCLUDE_DIR "${TiFlash_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}" "${TiFlash_BINARY_DIR}/contrib/${INTERNAL_ZLIB_NAME}") # generated zconf.h
     set (ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIR}) # for poco
     set (ZLIB_FOUND 1) # for poco
     if (USE_STATIC_LIBRARIES)
