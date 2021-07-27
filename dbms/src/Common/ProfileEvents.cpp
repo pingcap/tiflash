@@ -2,18 +2,18 @@
 
 
 /// Available events. Add something here as you wish.
-#define APPLY_FOR_EVENTS(M) \
-    M(Query) \
-    M(SelectQuery) \
-    M(InsertQuery) \
-    M(DeleteQuery) \
-    M(FileOpen) \
-    M(FileOpenFailed) \
-    M(Seek) \
-    M(ReadBufferFromFileDescriptorRead) \
-    M(ReadBufferFromFileDescriptorReadFailed) \
-    M(ReadBufferFromFileDescriptorReadBytes) \
-    M(WriteBufferFromFileDescriptorWrite) \
+#define APPLY_FOR_EVENTS(M)                     \
+    M(Query)                                    \
+    M(SelectQuery)                              \
+    M(InsertQuery)                              \
+    M(DeleteQuery)                              \
+    M(FileOpen)                                 \
+    M(FileOpenFailed)                           \
+    M(Seek)                                     \
+    M(ReadBufferFromFileDescriptorRead)         \
+    M(ReadBufferFromFileDescriptorReadFailed)   \
+    M(ReadBufferFromFileDescriptorReadBytes)    \
+    M(WriteBufferFromFileDescriptorWrite)       \
     M(WriteBufferFromFileDescriptorWriteFailed) \
     M(WriteBufferFromFileDescriptorWriteBytes) \
     M(ReadBufferAIORead) \
@@ -189,31 +189,37 @@
     \
     M(DMFileFilterNoFilter) \
     M(DMFileFilterAftPKAndPackSet) \
-    M(DMFileFilterAftRoughSet)
+    M(DMFileFilterAftRoughSet) \
+    \
+    M(ChecksumBufferRead) \
+    M(ChecksumBufferWrite) \
+    M(ChecksumBufferReadBytes) \
+    M(ChecksumBufferWriteBytes) \
+    M(ChecksumDigestBytes) \
+    M(ChecksumBufferSeek)
 
 
 namespace ProfileEvents
 {
-    #define M(NAME) extern const Event NAME = __COUNTER__;
+#define M(NAME) extern const Event NAME = __COUNTER__;
+APPLY_FOR_EVENTS(M)
+#undef M
+constexpr Event END = __COUNTER__;
+
+std::atomic<Count> counters[END]{}; /// Global variable, initialized by zeros.
+
+const char * getDescription(Event event)
+{
+    static const char * descriptions[] = {
+#define M(NAME) #NAME,
         APPLY_FOR_EVENTS(M)
-    #undef M
-    constexpr Event END = __COUNTER__;
+#undef M
+    };
 
-    std::atomic<Count> counters[END] {};    /// Global variable, initialized by zeros.
-
-    const char * getDescription(Event event)
-    {
-        static const char * descriptions[] =
-        {
-        #define M(NAME) #NAME,
-            APPLY_FOR_EVENTS(M)
-        #undef M
-        };
-
-        return descriptions[event];
-    }
-
-    Event end() { return END; }
+    return descriptions[event];
 }
+
+Event end() { return END; }
+} // namespace ProfileEvents
 
 #undef APPLY_FOR_EVENTS

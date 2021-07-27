@@ -9,12 +9,29 @@
 #define TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE DBMS_DEFAULT_BUFFER_SIZE
 #endif // TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE
 
+#include <Common/CurrentMetrics.h>
 #include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <fmt/format.h>
 
 #include "Checksum.h"
+
+namespace CurrentMetrics
+{
+extern const Metric Write;
+extern const Metric Read;
+} // namespace CurrentMetrics
+
+namespace ProfileEvents
+{
+extern const Event ChecksumBufferRead;
+extern const Event ChecksumBufferWrite;
+extern const Event ChecksumBufferReadBytes;
+extern const Event ChecksumBufferWriteBytes;
+extern const Event ChecksumBufferSeek;
+extern const Event Seek;
+} // namespace ProfileEvents
 
 namespace DB::DM::Checksum
 {
@@ -70,7 +87,13 @@ private:
 
         while (expected != 0)
         {
-            auto count = out->write(iter, expected);
+            ProfileEvents::increment(ProfileEvents::ChecksumBufferWrite);
+
+            ssize_t count;
+            {
+                CurrentMetrics::Increment increment{CurrentMetrics::Write};
+                count = out->write(iter, expected);
+            }
             if (unlikely(count == -1))
             {
                 if (errno == EINTR)
@@ -84,6 +107,8 @@ private:
             iter += count;
             expected -= count;
         }
+
+        ProfileEvents::increment(ProfileEvents::ChecksumBufferWriteBytes, len + sizeof(ChecksumFrame<Backend>));
 
         current_frame++;
     }
@@ -157,7 +182,12 @@ private:
         size_t expected = size;
         while (expected != 0)
         {
-            auto count = in->read(pos, expected);
+            ProfileEvents::increment(ProfileEvents::ChecksumBufferRead);
+            ssize_t count;
+            {
+                CurrentMetrics::Increment increment{CurrentMetrics::Read};
+                count = in->read(pos, expected);
+            }
             if (count == 0)
             {
                 break;
@@ -175,6 +205,7 @@ private:
             expected -= count;
             pos += count;
         }
+        ProfileEvents::increment(ProfileEvents::ChecksumBufferReadBytes, size - expected);
         return size - expected;
     }
 
@@ -222,6 +253,9 @@ private:
 
     off_t doSeek(off_t offset, int whence) override
     {
+        ProfileEvents::increment(ProfileEvents::Seek);
+        ProfileEvents::increment(ProfileEvents::ChecksumBufferSeek);
+
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
 
