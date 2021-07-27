@@ -41,6 +41,38 @@
 └───────┴─────────────┘
 
 #####
+## Mock to test some boundary of handling snapshot with same rowkey with different versions
+=> DBGInvoke __region_snapshot_pre_handle_file_pks(default, test, 4, 'col_1 Int64', '', 3,4,5, 5,5,5, 5,6,7, 8,9)
+=> DBGInvoke __region_snapshot_apply_file(4)
+# In DeltaTree, we store data by rowkey asc, tso asc
+=> selraw *, _INTERNAL_VERSION from default.test
+┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┐
+│    -3 │           3 │            100111 │
+│    -4 │           4 │            100110 │
+│    -5 │           5 │            100105 │
+│    -5 │           5 │            100106 │
+│    -5 │           5 │            100107 │
+│    -5 │           5 │            100108 │
+│    -5 │           5 │            100109 │
+│    -6 │           6 │            100104 │
+│    -7 │           7 │            100103 │
+│    -8 │           8 │            100102 │
+│    -9 │           9 │            100101 │
+└───────┴─────────────┴───────────────────┘
+# Filtered by MVCC
+=> select *, _INTERNAL_VERSION from default.test
+┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┐
+│    -3 │           3 │            100111 │
+│    -4 │           4 │            100110 │
+│    -5 │           5 │            100109 │
+│    -6 │           6 │            100104 │
+│    -7 │           7 │            100103 │
+│    -8 │           8 │            100102 │
+│    -9 │           9 │            100101 │
+└───────┴─────────────┴───────────────────┘
+
+
+#####
 ### Mock to test apply snapshot with multiple schema
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_2 String')
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_3 UInt64')
