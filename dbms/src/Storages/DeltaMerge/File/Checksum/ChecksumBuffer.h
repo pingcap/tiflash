@@ -240,7 +240,12 @@ private:
             return false; // EOF
         if (unlikely(length != sizeof(ChecksumFrame<Backend>) + frame.bytes))
         {
-            throw TiFlashException("frame length mismatch for " + in->getFileName(), Errors::Checksum::DataCorruption);
+            throw TiFlashException(fmt::format("frame length (header = {}, body = {}, read = {}) mismatch for {}",
+                                               sizeof(ChecksumFrame<Backend>),
+                                               frame.bytes,
+                                               length,
+                                               in->getFileName()),
+                                   Errors::Checksum::DataCorruption);
         }
 
         // body checksum examination
@@ -285,7 +290,7 @@ private:
                 throw TiFlashException("checksum framed file " + in->getFileName() + " is not seekable", Errors::Checksum::IOFailure);
             }
             auto length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>) + frame_size);
-            if (length == 0 && target_offset == 0)
+            if (length == 0)
             {
                 current_frame = target_frame;
                 pos           = working_buffer.begin();
@@ -294,7 +299,12 @@ private:
             }
             if (unlikely(length != sizeof(ChecksumFrame<Backend>) + frame.bytes))
             {
-                throw TiFlashException("frame length mismatch for " + in->getFileName(), Errors::Checksum::DataCorruption);
+                throw TiFlashException(fmt::format("frame length (header = {}, body = {}, read = {}) mismatch for {}",
+                                                   sizeof(ChecksumFrame<Backend>),
+                                                   frame.bytes,
+                                                   length,
+                                                   in->getFileName()),
+                                       Errors::Checksum::DataCorruption);
             }
 
             // body checksum examination
