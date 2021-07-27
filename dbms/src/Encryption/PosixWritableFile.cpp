@@ -117,4 +117,32 @@ int PosixWritableFile::fsync()
     return ::fsync(fd);
 }
 
+void PosixWritableFile::hardLink(const char * link_file)
+{
+    int rc;
+
+    if (link_file == nullptr || strlen(link_file) == 0)
+    {
+        throwFromErrno("Link file is not exist.", ErrorCodes::FILE_DOESNT_EXIST);
+    }
+
+    if (getFileName().empty())
+    {
+        throwFromErrno("File is not exist.", ErrorCodes::FILE_DOESNT_EXIST);
+    }
+
+    close();
+    rc = ::remove(getFileName().c_str());
+    if (rc != 0)
+    {
+        throwFromErrno("Can't remove file : " + getFileName());
+    }
+
+    rc = ::link(link_file, getFileName().c_str());
+    if (rc != 0)
+    {
+        throwFromErrno("Can't link file : " + getFileName() + " to file : " + link_file);
+    }
+}
+
 } // namespace DB

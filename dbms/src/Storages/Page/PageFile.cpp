@@ -438,6 +438,193 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
 }
 
 // =========================================================
+// PageFile::MetaLinkingReader
+// =========================================================
+
+PageFile::MetaLinkingReader::MetaLinkingReader(PageFile & page_file_) : page_file(page_file_) {}
+
+PageFile::MetaLinkingReader::~MetaLinkingReader()
+{
+    page_file.free(meta_buffer, meta_size);
+}
+
+bool PageFile::MetaLinkingReader::initialize()
+{
+    const auto path = page_file.metaPath();
+
+    Poco::File file(path);
+    if (unlikely(!file.exists()))
+        throw Exception("Try to read meta of " + page_file.toString() + ", but not exists. Path: " + path, ErrorCodes::LOGICAL_ERROR);
+
+    meta_size = file.getSize();
+
+    if (meta_size == 0) // Empty file
+    {
+        return false;
+    }
+
+    auto underlying_file = page_file.file_provider->newRandomAccessFile(path, page_file.metaEncryptionPath());
+    // File not exists.
+    if (unlikely(underlying_file->getFd() == -1))
+        throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
+
+    SCOPE_EXIT({ underlying_file->close(); });
+
+    meta_buffer = (char *)page_file.alloc(meta_size);
+    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size);
+
+    return true;
+}
+
+PageFile::MetaLinkingReaderPtr PageFile::MetaLinkingReader::createFrom(PageFile & page_file)
+{
+    auto reader = std::make_shared<PageFile::MetaLinkingReader>(page_file);
+    if (!reader->initialize())
+    {
+        return nullptr;
+    }
+    return reader;
+}
+
+bool PageFile::MetaLinkingReader::hasNext() const
+{
+    return meta_file_offset < meta_size;
+}
+
+void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID sid)
+{
+    if (meta_file_offset != 0)
+    {
+        throw Exception("PageFile should open a new reader for link.", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    char * meta_data_end = meta_buffer + meta_size;
+    char * pos           = meta_buffer + meta_file_offset;
+    if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
+    {
+        LOG_WARNING(page_file.log,
+                    "[batch_start_pos=" << meta_file_offset << "] [meta_size=" << meta_size << "] [file=" << page_file.metaPath()
+                                        << "] ignored.");
+        return;
+    }
+
+    const char * wb_start_pos = pos;
+    const auto   wb_bytes     = PageUtil::get<PageMetaFormat::WBSize>(pos);
+    if (wb_start_pos + wb_bytes > meta_data_end)
+    {
+        LOG_WARNING(page_file.log,
+                    "[expect_batch_bytes=" << wb_bytes << "] [meta_size=" << meta_size << "] [file=" << page_file.metaPath()
+                                           << "] ignored.");
+        return;
+    }
+
+    WriteBatch::SequenceID wb_sequence    = 0;
+    const auto             binary_version = PageUtil::get<PageFormat::Version>(pos);
+    char *                 sequence_pos   = pos;
+    switch (binary_version)
+    {
+    case PageFormat::V1:
+        wb_sequence = 0;
+        break;
+    case PageFormat::V2:
+        wb_sequence = PageUtil::get<WriteBatch::SequenceID>(pos);
+        break;
+    default:
+        throw Exception("[unknown_version=" + DB::toString(binary_version) + "] [file=" + page_file.metaPath() + "]",
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+
+    if (wb_sequence > sid)
+    {
+        throw Exception("Current sequence is invaild", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    // check the checksum of WriteBatch
+    const auto wb_bytes_without_checksum = wb_bytes - sizeof(PageMetaFormat::Checksum);
+    const auto wb_checksum               = PageUtil::get<PageMetaFormat::Checksum, false>(wb_start_pos + wb_bytes_without_checksum);
+    const auto checksum_calc             = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
+    if (wb_checksum != checksum_calc)
+    {
+        std::stringstream ss;
+        ss << "[expecte_checksum=" << std::hex << wb_checksum << "] [actual_checksum" << checksum_calc << "]";
+        throw Exception("[path=" + page_file.folderPath() + "] [batch_bytes=" + DB::toString(wb_bytes) + "] " + ss.str(),
+                        ErrorCodes::CHECKSUM_DOESNT_MATCH);
+    }
+
+    // change the wb checksum
+    PageUtil::put<WriteBatch::SequenceID>(sequence_pos, sid);
+    char * checksum_pos = meta_buffer + meta_file_offset;
+    checksum_pos += wb_bytes_without_checksum;
+    const auto new_checksum = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
+    PageUtil::put<PageMetaFormat::Checksum>(checksum_pos, new_checksum);
+
+    // recover WriteBatch
+    while (pos < wb_start_pos + wb_bytes_without_checksum)
+    {
+        const auto write_type = static_cast<WriteBatch::WriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
+        switch (write_type)
+        {
+        case WriteBatch::WriteType::PUT:
+        case WriteBatch::WriteType::UPSERT: {
+            pos += sizeof(PageId);
+            switch (binary_version)
+            {
+            case PageFormat::V1: {
+                break;
+            }
+            case PageFormat::V2: {
+                pos += sizeof(PageFileId);
+                pos += sizeof(PageFileLevel);
+                pos += sizeof(PageMetaFormat::PageFlags);
+                break;
+            }
+            default:
+                throw Exception("[unknown_version=" + DB::toString(binary_version) + "] [file=" + page_file.metaPath() + "]",
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+            pos += sizeof(PageMetaFormat::PageTag);
+            pos += sizeof(PageMetaFormat::PageOffset);
+            pos += sizeof(PageSize);
+            pos += sizeof(PageMetaFormat::Checksum);
+
+            if (binary_version == PageFormat::V2)
+            {
+                const UInt64 num_fields = PageUtil::get<UInt64>(pos);
+                for (size_t i = 0; i < num_fields; ++i)
+                {
+                    // field_offset
+                    pos += sizeof(UInt64);
+                    // field_checksum
+                    pos += sizeof(UInt64);
+                }
+            }
+            break;
+        }
+        case WriteBatch::WriteType::DEL: {
+            pos += sizeof(PageId);
+            break;
+        }
+        case WriteBatch::WriteType::REF: {
+            // ref_id
+            pos += sizeof(PageId);
+            // page_id
+            pos += sizeof(PageId);
+            break;
+        }
+        }
+    }
+    // move `pos` over the checksum of WriteBatch
+    pos += sizeof(PageMetaFormat::Checksum);
+
+    if (unlikely(pos != wb_start_pos + wb_bytes))
+        throw Exception("[batch_bytes=" + DB::toString(wb_bytes) + "] [actual_bytes=" + DB::toString(pos - wb_start_pos)
+                            + "] [file=" + page_file.metaPath() + "]",
+                        ErrorCodes::LOGICAL_ERROR);
+
+    meta_file_offset = pos - meta_buffer;
+}
+
+// =========================================================
 // PageFile::Writer
 // =========================================================
 
@@ -459,6 +646,34 @@ PageFile::Writer::~Writer()
         return;
 
     closeFd();
+}
+
+void PageFile::Writer::pageFileLink(PageFile & linked_file, WriteBatch::SequenceID sid)
+{
+    char * linked_meta_data;
+    size_t linked_meta_size;
+    auto   reader = PageFile::MetaLinkingReader::createFrom(linked_file);
+
+    if (!reader)
+    {
+        throw Exception("Can not open linked page file reader.", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    if (meta_file->isClosed())
+    {
+        meta_file->open();
+    }
+
+    // Move to the SequenceID item
+    while (reader->hasNext())
+    {
+        reader->linkToNewSequenceNext(sid);
+    }
+
+    std::tie(linked_meta_data, linked_meta_size) = reader->getMetaInfo();
+
+    PageUtil::writeFile(meta_file, 0, linked_meta_data, linked_meta_size, nullptr, false);
+    data_file->hardLink(linked_file.dataPath().c_str());
 }
 
 const String & PageFile::Writer::parentPath() const
@@ -1008,6 +1223,21 @@ size_t PageFile::setCheckpoint()
     file_provider->deleteEncryptionInfo(old_meta_encryption_path);
     // Remove the data part, should be an emtpy file.
     return removeDataIfExists();
+}
+
+bool PageFile::linkPage(PageFile & page_file, WriteBatch::SequenceID sid)
+{
+    auto writer = this->createWriter(false, false);
+    try
+    {
+        writer->pageFileLink(page_file, sid);
+        return true;
+    }
+    catch (DB::Exception & e)
+    {
+        LOG_WARNING(page_file.log, "failed to link page file. error meesgae : " + e.message());
+    }
+    return false;
 }
 
 size_t PageFile::removeDataIfExists() const

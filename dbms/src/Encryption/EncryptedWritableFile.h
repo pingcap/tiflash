@@ -2,6 +2,7 @@
 
 #include <Encryption/AESCTRCipherStream.h>
 #include <Encryption/WritableFile.h>
+
 #include <string>
 
 namespace DB
@@ -30,6 +31,8 @@ public:
     bool isClosed() override { return file->isClosed(); }
 
     int fsync() override { return file->fsync(); }
+
+    void hardLink(const char * link_file) override { file->hardLink(link_file); };
 
 private:
     WritableFilePtr file;

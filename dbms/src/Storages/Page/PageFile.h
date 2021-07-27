@@ -30,10 +30,16 @@ public:
         friend class PageFile;
 
     public:
-        Writer(PageFile &, bool sync_on_write, bool create_new_file = true);
+        Writer(PageFile &, bool sync_on_write, bool truncate_if_exists = true);
         ~Writer();
 
+<<<<<<< HEAD
         [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
+=======
+        void pageFileLink(PageFile & link_file, WriteBatch::SequenceID sid);
+
+        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const RateLimiterPtr & rate_limiter = nullptr);
+>>>>>>> ed640f672 (add link page interface)
         void                 tryCloseIdleFd(const Seconds & max_idle_time);
 
         const String &     parentPath() const;
@@ -163,8 +169,12 @@ public:
         }
 
     private:
+<<<<<<< HEAD
 
         void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter);
+=======
+        void initialize(std::optional<size_t> max_meta_offset);
+>>>>>>> ed640f672 (add link page interface)
 
     private:
         PageFile & page_file;
@@ -181,6 +191,34 @@ public:
         // Current parsed offsets.
         size_t meta_file_offset = 0;
         size_t data_file_offset = 0;
+    };
+
+    class MetaLinkingReader;
+    using MetaLinkingReaderPtr = std::shared_ptr<MetaLinkingReader>;
+
+    class MetaLinkingReader : private boost::noncopyable
+    {
+    public:
+        static MetaLinkingReaderPtr createFrom(PageFile & page_file);
+
+        MetaLinkingReader(PageFile & page_file_); // should only called by `createFrom`
+
+        ~MetaLinkingReader();
+
+        bool hasNext() const;
+
+        void linkToNewSequenceNext(WriteBatch::SequenceID sid);
+
+        std::pair<char *, size_t> getMetaInfo() { return {meta_buffer, meta_size}; };
+
+    private:
+        bool initialize();
+
+    private:
+        PageFile & page_file;
+        char *     meta_buffer      = nullptr;
+        size_t     meta_size        = 0;
+        size_t     meta_file_offset = 0;
     };
 
     struct MergingPtrComparator
@@ -291,6 +329,9 @@ public:
 
     String parentPath() const { return parent_path; }
     String folderPath() const;
+
+
+    bool linkPage(PageFile & page_file, WriteBatch::SequenceID sid);
 
     void createEncryptionInfo() const
     {
