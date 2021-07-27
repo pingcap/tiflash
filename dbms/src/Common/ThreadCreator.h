@@ -18,7 +18,7 @@ class ThreadCreator
 public:
     /// force_overwrite_thread_attribute is only used for ThreadPool's jobs.
     /// For new threads it is treated as always true.
-    explicit ThreadCreator(bool force_overwrite_thread_attribute = false, std::thread thread_name_ = "")
+    explicit ThreadCreator(bool force_overwrite_thread_attribute = false, std::string thread_name_ = "")
         : force_overwrite(force_overwrite_thread_attribute), thread_name(thread_name_) {}
 
     ThreadCreator(const ThreadCreator &) = delete;
@@ -48,7 +48,7 @@ public:
         return [force_overwrite, memory_tracker, thread_name, f = std::move(f), args = std::make_tuple(std::move(args)...)]
         {
             setAttributes(memory_tracker, thread_name, force_overwrite);
-            std::apply([](F && f, Args &&... args) { f(args); }, std::move(f), std::move(args));
+            std::apply(f, std::move(args));
         };
     }
 
