@@ -120,7 +120,7 @@ public:
     [[nodiscard]] std::map<std::string, std::string> &       getEmbeddedChecksum() { return embedded_checksum; }
     [[nodiscard]] const std::map<std::string, std::string> & getDebugInfo() const { return debug_info; }
 
-    void addChecksum(std::string name, std::string value) { embedded_checksum.template emplace(std::move(name), std::move(value)); }
+    void addChecksum(std::string name, std::string value) { embedded_checksum[std::move(name)] = std::move(value); }
 
     [[nodiscard]] UnifiedDigestBaseBox createUnifiedDigest() const
     {
