@@ -1,4 +1,4 @@
-project (TiFlash)
+project (TIFLASH)
 cmake_minimum_required (VERSION 2.8)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TIFLASH_SOURCE_DIR}/cmake/Modules/")
@@ -302,12 +302,6 @@ endif()
 include (libs/libdaemon/cmake/find_unwind.cmake)
 
 include (cmake/print_flags.cmake)
-
-# Directory for Yandex specific files
-set (TIFLASH_PRIVATE_DIR ${TIFLASH_SOURCE_DIR}/private/)
-if (EXISTS ${TIFLASH_PRIVATE_DIR})
-    add_subdirectory (${TIFLASH_PRIVATE_DIR})
-endif ()
 
 add_subdirectory (contrib)
 
