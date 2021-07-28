@@ -587,7 +587,7 @@ using DedupCursors = std::vector<DedupCursorPtr>;
 class StreamMasks
 {
 public:
-    using Data = std::vector<bool>;
+    using Data = BoolVec;
 
     StreamMasks(size_t size = 0) : data(size, 0), sum(0) {}
 

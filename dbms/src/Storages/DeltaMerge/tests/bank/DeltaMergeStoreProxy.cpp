@@ -98,7 +98,7 @@ UInt64 DeltaMergeStoreProxy::sumBalance(UInt64 begin, UInt64 end, UInt64 tso)
                                          EMPTY_FILTER,
                                          /* expected_block_size= */ 1024)[0];
 
-    std::vector<bool>   found_status;
+    BoolVec found_status;
     std::vector<UInt64> result;
     found_status.resize(end - begin, false);
     result.resize(end - begin, 0);
