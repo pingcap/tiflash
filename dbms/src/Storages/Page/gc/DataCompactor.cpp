@@ -335,10 +335,9 @@ DataCompactor<SnapshotPtr>::migratePages( //
             biggest_file.linkPage(biggest_page_file, compact_seq);
             migrate_file_id = {largest_file_id, level + 2};
             data_readers.erase(biggest_file.fileIdLevel());
-            LOG_INFO(log, "---------------------------------------------------------------------------");
-            LOG_INFO(log, storage_name <<  "GC devide to link PageFile_" << biggest_file.getFileId() << "_" << biggest_file.getLevel()
-                << " to PageFile_"  << biggest_page_file.getFileId()<< "_" << biggest_page_file.getLevel());
-            LOG_INFO(log, "---------------------------------------------------------------------------");
+            LOG_INFO(log,
+                     storage_name << "GC devide to link PageFile_" << biggest_file.getFileId() << "_" << biggest_file.getLevel()
+                                  << " to PageFile_" << biggest_page_file.getFileId() << "_" << biggest_page_file.getLevel());
         }
 
         gc_file = PageFile::newPageFile(
