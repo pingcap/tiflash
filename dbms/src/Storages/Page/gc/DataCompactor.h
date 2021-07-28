@@ -7,6 +7,7 @@
 
 namespace DB
 {
+using WritingFilesSnapshot = PageStorage::WritingFilesSnapshot;
 
 template <typename SnapshotPtr>
 class DataCompactor : private boost::noncopyable
@@ -38,12 +39,12 @@ public:
      * WriteBatches. No matter we merge valid page(s) from that WriteBatch or not.
      * 
      * Note that all types of PageFile in `page_files` should be `Formal`.
-     * Those PageFile whose id in `writing_file_ids`, theirs data will not be migrate.
+     * Those PageFile whose id in `writing_files`, theirs data will not be migrate.
      * 
      * Return DataCompactor::Result and entries edit should be applied to PageStorage's entries.
      */
     std::tuple<Result, PageEntriesEdit>
-    tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapshot, const std::set<PageFileIdAndLevel> & writing_file_ids);
+    tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapshot, const WritingFilesSnapshot & writing_files);
 
 
 private:
@@ -56,10 +57,10 @@ private:
      */
     static ValidPages collectValidPagesInPageFile(const SnapshotPtr & snapshot);
 
-    std::tuple<PageFileSet, size_t, size_t> selectCandidateFiles( // keep readable indent
-        const PageFileSet &                  page_files,
-        const ValidPages &                   files_valid_pages,
-        const std::set<PageFileIdAndLevel> & writing_file_ids) const;
+    std::tuple<PageFileSet, size_t, size_t> //
+    selectCandidateFiles(const PageFileSet &          page_files,
+                         const ValidPages &           files_valid_pages,
+                         const WritingFilesSnapshot & writing_files) const;
 
     std::tuple<PageEntriesEdit, size_t> //
     migratePages(const SnapshotPtr & snapshot,
