@@ -454,7 +454,7 @@ public:
         if (server.security_config.has_tls_config)
         {
             grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
-            auto options = server.security_config.ReadAndCacheSecurityInfo();
+            auto options = server.security_config.readAndCacheSecurityInfo();
             server_cred.pem_root_certs = options.pem_root_certs;
             server_cred.pem_key_cert_pairs.push_back(
                 grpc::SslServerCredentialsOptions::PemKeyCertPair{options.pem_private_key, options.pem_cert_chain});
