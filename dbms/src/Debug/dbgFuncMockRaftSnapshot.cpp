@@ -424,9 +424,9 @@ void GenMockSSTDataByHandles(const TiDB::TableInfo & table_info,
         // https://github.com/pingcap/tics/issues/1864
         {
             TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
-            WriteBufferFromOwnString ss;
+            std::stringstream ss;
             RegionBench::encodeRow(table_info, fields, ss);
-            TiKVValue prewrite_value(ss.releaseStr());
+            TiKVValue prewrite_value(ss.str());
 
             UInt64 prewrite_ts = 100000 + num_rows - index; // make it to be timestamp desc in SSTFiles
             UInt64 commit_ts = prewrite_ts + 100;           // Assume that commit_ts is larger that prewrite_ts
