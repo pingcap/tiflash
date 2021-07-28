@@ -765,7 +765,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, ExpressionActionsChain & chain)
+bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(const BoolVec & is_ts_column, ExpressionActionsChain & chain)
 {
     bool hasTSColumn = false;
     for (auto b : is_ts_column)
@@ -1216,7 +1216,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, encode_type, rqst);
     DAGSchema schema;
     ColumnsWithTypeAndName columns;
-    std::vector<bool> is_ts_column;
+    BoolVec is_ts_column;
     std::vector<NameAndTypePair> source_columns;
     for (int i = 0; i < (int)query_block.output_field_types.size(); i++)
     {
