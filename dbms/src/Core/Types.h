@@ -95,4 +95,6 @@ template <> struct TypeId<Int256>   { static constexpr const TypeIndex value = T
 template <> struct TypeId<Float32>  { static constexpr const TypeIndex value = TypeIndex::Float32; };
 template <> struct TypeId<Float64>  { static constexpr const TypeIndex value = TypeIndex::Float64; };
 
+using BoolVec = std::vector<UInt8>;
+
 }

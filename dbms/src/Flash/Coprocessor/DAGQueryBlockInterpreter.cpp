@@ -29,6 +29,7 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/makeDummyQuery.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageMergeTree.h>
@@ -69,7 +70,7 @@ extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
-    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_, ASTPtr dummy_query_,
+    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_,
     const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map_)
     : context(context_),
@@ -77,7 +78,6 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
       query_block(query_block_),
       keep_session_timezone_info(keep_session_timezone_info_),
       rqst(rqst_),
-      dummy_query(std::move(dummy_query_)),
       dag(dag_),
       subqueriesForSets(subqueriesForSets_),
       exchange_receiver_map(exchange_receiver_map_),
@@ -171,25 +171,178 @@ BlockInputStreamPtr combinedNonJoinedDataStream(DAGPipeline & pipeline, size_t m
 
 namespace
 {
-struct RegionReadHolder
+struct AnalysisResult
 {
+    bool need_timezone_cast_after_tablescan = false;
+    bool has_where = false;
+    bool need_aggregate = false;
+    bool has_having = false;
+    bool has_order_by = false;
+
+    ExpressionActionsPtr timezone_cast;
+    ExpressionActionsPtr before_where;
+    ExpressionActionsPtr before_aggregation;
+    ExpressionActionsPtr before_having;
+    ExpressionActionsPtr before_order_and_select;
+    ExpressionActionsPtr final_projection;
+
+    String filter_column_name;
+    String having_column_name;
+    std::vector<NameAndTypePair> order_columns;
+    /// Columns from the SELECT list, before renaming them to aliases.
+    Names selected_columns;
+
+    Names aggregation_keys;
+    TiDB::TiDBCollators aggregation_collators;
+    AggregateDescriptions aggregate_descriptions;
+};
+
+// add timezone cast for timestamp type, this is used to support session level timezone
+bool addTimeZoneCastAfterTS(
+    DAGExpressionAnalyzer & analyzer,
+    const BoolVec & is_ts_column,
+    ExpressionActionsChain & chain)
+{
+    bool hasTSColumn = false;
+    for (auto b : is_ts_column)
+        hasTSColumn |= b;
+    if (!hasTSColumn)
+        return false;
+
+    return analyzer.appendTimeZoneCastsAfterTS(chain, is_ts_column);
+}
+
+AnalysisResult analyzeExpressions(
+    Context & context,
+    DAGExpressionAnalyzer & analyzer,
+    const DAGQueryBlock & query_block,
+    const std::vector<const tipb::Expr *> & conditions,
+    const BoolVec & is_ts_column,
+    bool keep_session_timezone_info,
+    const NamesWithAliases & final_project)
+{
+    AnalysisResult res;
+    ExpressionActionsChain chain;
+    if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
+    {
+        if (addTimeZoneCastAfterTS(analyzer, is_ts_column, chain))
+        {
+            res.need_timezone_cast_after_tablescan = true;
+            res.timezone_cast = chain.getLastActions();
+            chain.addStep();
+        }
+    }
+    if (!conditions.empty())
+    {
+        analyzer.appendWhere(chain, conditions, res.filter_column_name);
+        res.has_where = true;
+        res.before_where = chain.getLastActions();
+        chain.addStep();
+    }
+    // There will be either Agg...
+    if (query_block.aggregation)
+    {
+        /// collation sensitive group by is slower then normal group by, use normal group by by default
+        // todo better to let TiDB decide whether group by is collation sensitive or not
+        analyzer.appendAggregation(
+            chain,
+            query_block.aggregation->aggregation(),
+            res.aggregation_keys,
+            res.aggregation_collators,
+            res.aggregate_descriptions,
+            context.getSettingsRef().group_by_collation_sensitive);
+        res.need_aggregate = true;
+        res.before_aggregation = chain.getLastActions();
+
+        chain.finalize();
+        chain.clear();
+
+        // add cast if type is not match
+        analyzer.appendAggSelect(chain, query_block.aggregation->aggregation());
+        if (query_block.having != nullptr)
+        {
+            std::vector<const tipb::Expr *> having_conditions;
+            for (auto & c : query_block.having->selection().conditions())
+                having_conditions.push_back(&c);
+            analyzer.appendWhere(chain, having_conditions, res.having_column_name);
+            res.has_having = true;
+            res.before_having = chain.getLastActions();
+            chain.addStep();
+        }
+    }
+    // Or TopN, not both.
+    if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
+    {
+        res.has_order_by = true;
+        analyzer.appendOrderBy(chain, query_block.limitOrTopN->topn(), res.order_columns);
+    }
+
+    analyzer.generateFinalProject(
+        chain,
+        query_block.output_field_types,
+        query_block.output_offsets,
+        query_block.qb_column_prefix,
+        keep_session_timezone_info || !query_block.isRootQueryBlock(),
+        final_project);
+
+    // Append final project results if needed.
+    analyzer.appendFinalProject(chain, final_project);
+
+    res.before_order_and_select = chain.getLastActions();
+    chain.finalize();
+    chain.clear();
+    //todo need call prependProjectInput??
+    return res;
+}
+
+struct RegionReader
+{
+    TableID table_id;
+    size_t max_block_size;
+    size_t max_streams;
     std::unique_ptr<MvccQueryInfo> mvcc_query_info;
     // We need to validate regions snapshot after getting streams from storage.
     LearnerReadSnapshot learner_read_snapshot;
     // it should be hash map because duplicated region id may occur if merge regions to retry of dag.
     RegionRetryList region_retry;
+    /// Hold read lock on both `alter_lock` and `drop_lock` until the local input streams are created.
+    /// We need an immuntable structure to build the TableScan operator and create snapshot input streams
+    /// of storage. After the input streams created, the `alter_lock` can be released so that reading
+    /// won't block DDL operations.
+    TableStructureLockHolder table_structure_lock;
+    /// Table from where to read data, if not subquery.
+    ManageableStoragePtr storage;
+    const RegionInfoMap & dag_region_infos;
 
-    explicit RegionReadHolder(const Settings & settings)
-        : mvcc_query_info(new MvccQueryInfo(true, settings.read_tso)) {}
+    Names required_columns;
+    NameAndTypes source_columns;
+    BoolVec is_timestmap_column;
+
+    explicit RegionReader(
+        TableID table_id_,
+        size_t max_streams_,
+        const Settings & settings,
+        const DAGQuerySource & dag)
+        : table_id(table_id_),
+          max_block_size(settings.max_block_size),
+          max_streams(max_streams_),
+          mvcc_query_info(new MvccQueryInfo(true, settings.read_tso)),
+          dag_region_infos(dag.getRegions())
+    {
+    }
 
     void doCopLearnerRead(
-        TableID table_id,
-        const RegionInfoMap & dag_region_infos,
-        TMTContext & tmt,
-        size_t max_streams,
+        Context & context,
         Logger * log)
     {
-        auto [info_retry, status] = MakeRegionQueryInfos(dag_region_infos, {}, tmt, *mvcc_query_info, table_id);
+        auto & tmt = context.getTMTContext();
+        auto [info_retry, status] = MakeRegionQueryInfos(
+            dag_region_infos,
+            {},
+            tmt,
+            *mvcc_query_info,
+            table_id);
+
         if (info_retry)
             throw RegionException({info_retry->begin()->get().region_id}, status);
 
@@ -197,20 +350,24 @@ struct RegionReadHolder
     }
 
     void doBatchCopLearnerRead(
-        TableID table_id,
-        const RegionInfoMap & dag_region_infos,
-        TMTContext & tmt,
-        size_t max_streams,
+        Context & context,
         Logger * log)
     {
+        auto & tmt = context.getTMTContext();
         std::unordered_set<RegionID> force_retry;
         for (;;)
         {
             try
             {
                 region_retry.clear();
-                auto [retry, status] = MakeRegionQueryInfos(dag_region_infos, force_retry, tmt, *mvcc_query_info, table_id);
+                auto [retry, status] = MakeRegionQueryInfos(
+                    dag_region_infos,
+                    force_retry,
+                    tmt,
+                    *mvcc_query_info,
+                    table_id);
                 UNUSED(status);
+
                 if (retry)
                 {
                     region_retry = std::move(*retry);
@@ -243,7 +400,232 @@ struct RegionReadHolder
             }
         }
     }
+
+    void doLocalReadIfNeeded(
+        Context & context,
+        DAGExpressionAnalyzer & analyzer,
+        DAGPipeline & pipeline,
+        const Names & required_columns,
+        size_t max_block_size)
+    {
+        SelectQueryInfo query_info;
+        /// to avoid null point exception
+        query_info.query = makeDummyQuery();
+        query_info.dag_query = std::make_unique<DAGQueryInfo>(
+            conditions,
+            analyzer.getPreparedSets(),
+            analyzer.getCurrentInputColumns(),
+            context.getTimezoneInfo());
+        query_info.mvcc_query_info = std::move(mvcc_query_info);
+
+        FAIL_POINT_PAUSE(FailPoints::pause_after_learner_read);
+        bool need_local_read = !query_info.mvcc_query_info->regions_query_info.empty();
+        if (need_local_read)
+        {
+            doLocalRead(
+                context,
+                table_id,
+                required_columns,
+                query_info,
+                max_block_size,
+                learner_read_snapshot,
+                pipeline,
+                region_retry);
+        }
+
+        for (const auto & region_info : dag_region_infos)
+        {
+            region_retry.emplace_back(region_info);
+        }
+    }
+
+    void doLocalRead(
+        Context & context,
+        TableID table_id,
+        const Names & required_columns,
+        SelectQueryInfo & query_info,
+        size_t max_block_size,
+        DAGPipeline & pipeline)
+    {
+        QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
+        auto & tmt = context.getTMTContext();
+        // TODO: Note that if storage is (Txn)MergeTree, and any region exception thrown, we won't do retry here.
+        // Now we only support DeltaTree in production environment and don't do any extra check for storage type here.
+
+        int num_allow_retry = 1;
+        while (true)
+        {
+            try
+            {
+                pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+
+                // After getting streams from storage, we need to validate whether regions have changed or not after learner read.
+                // In case the versions of regions have changed, those `streams` may contain different data other than expected.
+                // Like after region merge/split.
+
+                // Inject failpoint to throw RegionException
+                fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
+                    const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
+                    RegionException::UnavailableRegions region_ids;
+                    for (const auto & info : regions_info)
+                    {
+                        if (rand() % 100 > 50)
+                            region_ids.insert(info.region_id);
+                    }
+                    throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+                });
+                fiu_do_on(FailPoints::region_exception_after_read_from_storage_all_error, {
+                    const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
+                    RegionException::UnavailableRegions region_ids;
+                    for (const auto & info : regions_info)
+                        region_ids.insert(info.region_id);
+                    throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+                });
+                validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
+                break;
+            }
+            catch (RegionException & e)
+            {
+                /// Recover from region exception when super batch is enable
+                if (dag.isBatchCop())
+                {
+                    // clean all streams from local because we are not sure the correctness of those streams
+                    pipeline.streams.clear();
+                    const auto & dag_regions = dag.getRegions();
+                    std::stringstream ss;
+                    // Normally there is only few regions need to retry when super batch is enabled. Retry to read
+                    // from local first. However, too many retry in different places may make the whole process
+                    // time out of control. We limit the number of retries to 1 now.
+                    if (likely(num_allow_retry > 0))
+                    {
+                        --num_allow_retry;
+                        auto & regions_query_info = query_info.mvcc_query_info->regions_query_info;
+                        for (auto iter = regions_query_info.begin(); iter != regions_query_info.end(); /**/)
+                        {
+                            if (e.unavailable_region.find(iter->region_id) != e.unavailable_region.end())
+                            {
+                                // move the error regions info from `query_info.mvcc_query_info->regions_query_info` to `region_retry`
+                                if (auto region_iter = dag_regions.find(iter->region_id); likely(region_iter != dag_regions.end()))
+                                {
+                                    region_retry.emplace_back(region_iter->second);
+                                    ss << region_iter->first << ",";
+                                }
+                                iter = regions_query_info.erase(iter);
+                            }
+                            else
+                            {
+                                ++iter;
+                            }
+                        }
+                        LOG_WARNING(log,
+                            "RegionException after read from storage, regions ["
+                                << ss.str() << "], message: " << e.message()
+                                << (regions_query_info.empty() ? "" : ", retry to read from local"));
+                        if (unlikely(regions_query_info.empty()))
+                            break; // no available region in local, break retry loop
+                        continue;  // continue to retry read from local storage
+                    }
+                    else
+                    {
+                        // push all regions to `region_retry` to retry from other tiflash nodes
+                        for (const auto & region : query_info.mvcc_query_info->regions_query_info)
+                        {
+                            auto iter = dag_regions.find(region.region_id);
+                            if (likely(iter != dag_regions.end()))
+                            {
+                                region_retry.emplace_back(iter->second);
+                                ss << iter->first << ",";
+                            }
+                        }
+                        LOG_WARNING(log, "RegionException after read from storage, regions [" << ss.str() << "], message: " << e.message());
+                        break; // break retry loop
+                    }
+                }
+                else
+                {
+                    // Throw an exception for TiDB / TiSpark to retry
+                    e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
+                        + "`, table_id: " + DB::toString(table_id) + ")");
+                    throw;
+                }
+            }
+            catch (DB::Exception & e)
+            {
+                /// Other unknown exceptions
+                e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
+                    + "`, table_id: " + DB::toString(table_id) + ")");
+                throw;
+            }
+        }
+    }
+
+    void getColumnsForTableScan(
+        const tipb::TableScan & ts,
+        UInt64 max_columns_to_read)
+    {
+        // todo handle alias column
+        if (max_columns_to_read && ts.columns.size() > max_columns_to_read)
+        {
+            throw TiFlashException("Limit for number of columns to read exceeded. "
+                                   "Requested: "
+                    + toString(ts.columns.size()) + ", maximum: " + toString(max_columns_to_read),
+                Errors::BroadcastJoin::TooManyColumns);
+        }
+
+        String handle_column_name = MutableSupport::tidb_pk_column_name;
+        if (auto pk_handle_col = storage.getTableInfo().getPKHandleColumn())
+            handle_column_name = pk_handle_col->get().name;
+
+        Names required_columns;
+        NameAndTypes source_columns;
+        BoolVec timestamp_column_flag;
+        for (Int32 i = 0; i < ts.columns().size(); i++)
+        {
+            auto const & ci = ts.columns(i);
+            ColumnID cid = ci.column_id();
+
+            // Column ID -1 return the handle column
+            String name = cid == -1 ? handle_column_name : storage.getTableInfo().getColumnName(cid);
+            auto pair = storage.getColumns().getPhysical(name);
+            required_columns.emplace_back(std::move(name));
+            source_columns.emplace_back(std::move(pair));
+            timestamp_column_flag.push_back(cid != -1 && ci.tp() == TiDB::TypeTimestamp);
+        }
+
+        return {required_columns, source_columns, timestamp_column_flag};
+    }
 };
+
+void setQuotaAndLimitsOnTableScan(DAGPipeline & pipeline, const Context & context)
+{
+    const Settings & settings = context.getSettingsRef();
+
+    IProfilingBlockInputStream::LocalLimits limits;
+    limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
+    limits.size_limits = SizeLimits(settings.max_rows_to_read, settings.max_bytes_to_read, settings.read_overflow_mode);
+    limits.max_execution_time = settings.max_execution_time;
+    limits.timeout_overflow_mode = settings.timeout_overflow_mode;
+
+    /** Quota and minimal speed restrictions are checked on the initiating server of the request, and not on remote servers,
+          *  because the initiating server has a summary of the execution of the request on all servers.
+          *
+          * But limits on data size to read and maximum execution time are reasonable to check both on initiator and
+          *  additionally on each remote server, because these limits are checked per block of data processed,
+          *  and remote servers may process way more blocks of data than are received by initiator.
+          */
+    limits.min_execution_speed = settings.min_execution_speed;
+    limits.timeout_before_checking_execution_speed = settings.timeout_before_checking_execution_speed;
+
+    QuotaForIntervals & quota = context.getQuota();
+
+    pipeline.transform([&](auto & stream) {
+        if (IProfilingBlockInputStream * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
+        {
+            p_stream->setLimits(limits);
+            p_stream->setQuota(quota);
+        }
+    });
+}
 
 } // namespace
 
@@ -266,75 +648,33 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     const Settings & settings = context.getSettingsRef();
     auto & tmt = context.getTMTContext();
 
-    RegionReadHolder holder(settings);
+    RegionReader reader(settings);
 
     if (!dag.isBatchCop())
-        holder.doCopLearnerRead(table_id, dag.getRegions(), tmt, max_streams, log);
+        reader.doCopLearnerRead(table_id, dag.getRegions(), tmt, max_streams, log);
     else
-        holder.doBatchCopLearnerRead(table_id, dag.getRegions(), tmt, max_streams, log);
+        reader.doBatchCopLearnerRead(table_id, dag.getRegions(), tmt, max_streams, log);
 
-    // Hold read lock on both `alter_lock` and `drop_lock` until the local input streams are created.
-    // We need an immuntable structure to build the TableScan operator and create snapshot input streams
-    // of storage. After the input streams created, the `alter_lock` can be released so that reading
-    // won't block DDL operations.
-    TableStructureLockHolder table_structure_lock;
-    if (unlikely(settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION))
-    {
-        if (storage = tmt.getStorages().get(table_id); storage == nullptr)
-        {
-            throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
-        }
-        table_structure_lock = storage->lockStructureForShare(context.getCurrentQueryId());
-    }
-    else
-    {
-        std::tie(this->storage, table_structure_lock) = getAndLockStorageWithSchemaVersion(table_id, settings.schema_version);
-    }
+    /// storage:
+    /// Table from where to read data, if not subquery.
+    ///
+    /// table_structure_lock:
+    /// Hold read lock on both `alter_lock` and `drop_lock` until the local input streams are created.
+    /// We need an immuntable structure to build the TableScan operator and create snapshot input streams
+    /// of storage. After the input streams created, the `alter_lock` can be released so that reading
+    /// won't block DDL operations.
+    auto [storage, table_structre_lock] = getAndLockStorage(table_id, settings.schema_version);
 
-    Names required_columns;
-    std::vector<NameAndTypePair> source_columns;
-    String handle_column_name = MutableSupport::tidb_pk_column_name;
-    if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
-        handle_column_name = pk_handle_col->get().name;
-
-    for (Int32 i = 0; i < ts.columns().size(); i++)
-    {
-        auto const & ci = ts.columns(i);
-        ColumnID cid = ci.column_id();
-
-        if (cid == -1)
-        {
-            // Column ID -1 return the handle column
-            required_columns.push_back(handle_column_name);
-            auto pair = storage->getColumns().getPhysical(handle_column_name);
-            source_columns.push_back(pair);
-            timestamp_column_flag_for_tablescan.push_back(false);
-            continue;
-        }
-
-        String name = storage->getTableInfo().getColumnName(cid);
-        required_columns.push_back(name);
-        auto pair = storage->getColumns().getPhysical(name);
-        source_columns.emplace_back(std::move(pair));
-        timestamp_column_flag_for_tablescan.push_back(ci.tp() == TiDB::TypeTimestamp);
-    }
+    auto [required_column, source_columns, timestamp_column_flag] = getColumnsForTableScan(ts, *storage, settings.max_columns_to_read);
+    timestamp_column_flag_for_tablescan = std::move(timestamp_column_flag);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-
-    // todo handle alias column
-    if (settings.max_columns_to_read && required_columns.size() > settings.max_columns_to_read)
-    {
-        throw TiFlashException("Limit for number of columns to read exceeded. "
-                               "Requested: "
-                + toString(required_columns.size()) + ", maximum: " + settings.max_columns_to_read.toString(),
-            Errors::BroadcastJoin::TooManyColumns);
-    }
 
     size_t max_block_size = settings.max_block_size;
 
     SelectQueryInfo query_info;
     /// to avoid null point exception
-    query_info.query = dummy_query;
+    query_info.query = makeDummyQuery();
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns(), context.getTimezoneInfo());
     query_info.mvcc_query_info = std::move(mvcc_query_info);
@@ -386,33 +726,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     pipeline.transform([&](auto & stream) { stream->addTableLock(table_drop_lock); });
 
     /// Set the limits and quota for reading data, the speed and time of the query.
-    {
-        IProfilingBlockInputStream::LocalLimits limits;
-        limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
-        limits.size_limits = SizeLimits(settings.max_rows_to_read, settings.max_bytes_to_read, settings.read_overflow_mode);
-        limits.max_execution_time = settings.max_execution_time;
-        limits.timeout_overflow_mode = settings.timeout_overflow_mode;
-
-        /** Quota and minimal speed restrictions are checked on the initiating server of the request, and not on remote servers,
-              *  because the initiating server has a summary of the execution of the request on all servers.
-              *
-              * But limits on data size to read and maximum execution time are reasonable to check both on initiator and
-              *  additionally on each remote server, because these limits are checked per block of data processed,
-              *  and remote servers may process way more blocks of data than are received by initiator.
-              */
-        limits.min_execution_speed = settings.min_execution_speed;
-        limits.timeout_before_checking_execution_speed = settings.timeout_before_checking_execution_speed;
-
-        QuotaForIntervals & quota = context.getQuota();
-
-        pipeline.transform([&](auto & stream) {
-            if (IProfilingBlockInputStream * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
-            {
-                p_stream->setLimits(limits);
-                p_stream->setQuota(quota);
-            }
-        });
-    }
+    setQuotaAndLimitsOnTableScan(pipeline, context);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
 }
 
@@ -793,84 +1107,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(join_output_columns), context);
 }
 
-// add timezone cast for timestamp type, this is used to support session level timezone
-bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, ExpressionActionsChain & chain)
-{
-    bool hasTSColumn = false;
-    for (auto b : is_ts_column)
-        hasTSColumn |= b;
-    if (!hasTSColumn)
-        return false;
-
-    return analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column);
-}
-
-AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
-{
-    AnalysisResult res;
-    ExpressionActionsChain chain;
-    if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
-    {
-        if (addTimeZoneCastAfterTS(timestamp_column_flag_for_tablescan, chain))
-        {
-            res.need_timezone_cast_after_tablescan = true;
-            res.timezone_cast = chain.getLastActions();
-            chain.addStep();
-        }
-    }
-    if (!conditions.empty())
-    {
-        analyzer->appendWhere(chain, conditions, res.filter_column_name);
-        res.has_where = true;
-        res.before_where = chain.getLastActions();
-        chain.addStep();
-    }
-    // There will be either Agg...
-    if (query_block.aggregation)
-    {
-        /// collation sensitive group by is slower then normal group by, use normal group by by default
-        // todo better to let TiDB decide whether group by is collation sensitive or not
-        analyzer->appendAggregation(chain, query_block.aggregation->aggregation(), res.aggregation_keys, res.aggregation_collators,
-            res.aggregate_descriptions, context.getSettingsRef().group_by_collation_sensitive);
-        res.need_aggregate = true;
-        res.before_aggregation = chain.getLastActions();
-
-        chain.finalize();
-        chain.clear();
-
-        // add cast if type is not match
-        analyzer->appendAggSelect(chain, query_block.aggregation->aggregation());
-        if (query_block.having != nullptr)
-        {
-            std::vector<const tipb::Expr *> having_conditions;
-            for (auto & c : query_block.having->selection().conditions())
-                having_conditions.push_back(&c);
-            analyzer->appendWhere(chain, having_conditions, res.having_column_name);
-            res.has_having = true;
-            res.before_having = chain.getLastActions();
-            chain.addStep();
-        }
-    }
-    // Or TopN, not both.
-    if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
-    {
-        res.has_order_by = true;
-        analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn(), res.order_columns);
-    }
-
-    analyzer->generateFinalProject(chain, query_block.output_field_types, query_block.output_offsets, query_block.qb_column_prefix,
-        keep_session_timezone_info || !query_block.isRootQueryBlock(), final_project);
-
-    // Append final project results if needed.
-    analyzer->appendFinalProject(chain, final_project);
-
-    res.before_order_and_select = chain.getLastActions();
-    chain.finalize();
-    chain.clear();
-    //todo need call prependProjectInput??
-    return res;
-}
-
 void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column); });
@@ -956,35 +1192,45 @@ void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const E
     }
 }
 
-std::tuple<ManageableStoragePtr, TableStructureLockHolder> //
-DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 query_schema_version)
+std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGQueryBlockInterpreter::getAndLockStorage(TableID table_id, Int64 query_schema_version)
 {
     /// Get current schema version in schema syncer for a chance to shortcut.
     auto & tmt = context.getTMTContext();
+
+    if (unlikely(query_schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION))
+    {
+        auto storage = tmt.getStorages().get(table_id);
+        if (!storage)
+        {
+            throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
+        }
+        return {storage, storage->lockStructureForShare(context.getCurrentQueryId())};
+    }
+
     auto global_schema_version = tmt.getSchemaSyncer()->getCurrentVersion();
 
-    /// Lambda for get storage, then align schema version under the read lock.
+    /// Align schema version under the read lock.
+    /// Return: [storage, table_structure_lock, storage_schema_version, ok]
     auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<ManageableStoragePtr, TableStructureLockHolder, Int64, bool> {
         /// Get storage in case it's dropped then re-created.
         // If schema synced, call getTable without try, leading to exception on table not existing.
-        auto storage_ = tmt.getStorages().get(table_id);
-        if (!storage_)
+        auto storage = tmt.getStorages().get(table_id);
+        if (!storage)
         {
             if (schema_synced)
                 throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
             else
-                return std::make_tuple(nullptr, TableStructureLockHolder{}, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
+                return {nullptr, TableStructureLockHolder{}, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false};
         }
 
-        if (storage_->engineType() != ::TiDB::StorageEngine::TMT && storage_->engineType() != ::TiDB::StorageEngine::DT)
+        if (storage->engineType() != ::TiDB::StorageEngine::TMT && storage->engineType() != ::TiDB::StorageEngine::DT)
         {
-            throw TiFlashException("Specifying schema_version for non-managed storage: " + storage_->getName()
-                    + ", table: " + storage_->getTableName() + ", id: " + DB::toString(table_id) + " is not allowed",
+            throw TiFlashException("Specifying schema_version for non-managed storage: " + storage->getName()
+                    + ", table: " + storage->getTableName() + ", id: " + DB::toString(table_id) + " is not allowed",
                 Errors::Coprocessor::Internal);
         }
 
-        /// Lock storage
-        auto lock = storage_->lockStructureForShare(context.getCurrentQueryId());
+        auto lock = storage->lockStructureForShare(context.getCurrentQueryId());
 
         /// Check schema version, requiring TiDB/TiSpark and TiFlash both use exactly the same schema.
         // We have three schema versions, two in TiFlash:
@@ -992,7 +1238,7 @@ DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_id, I
         // 2. Global: the version that TiFlash global schema is at.
         // And one from TiDB/TiSpark:
         // 3. Query: the version that TiDB/TiSpark used for this query.
-        auto storage_schema_version = storage_->getTableInfo().schema_version;
+        auto storage_schema_version = storage->getTableInfo().schema_version;
         // Not allow storage > query in any case, one example is time travel queries.
         if (storage_schema_version > query_schema_version)
             throw TiFlashException("Table " + std::to_string(table_id) + " schema version " + std::to_string(storage_schema_version)
@@ -1001,51 +1247,52 @@ DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_id, I
         // From now on we have storage <= query.
         // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
         if (schema_synced)
-            return std::make_tuple(storage_, lock, storage_schema_version, true);
+            return {storage, lock, storage_schema_version, true};
         // From now on the schema was not synced.
         // 1. storage == query, TiDB/TiSpark is using exactly the same schema that altered this table, we are just OK to serve.
         // 2. global >= query, TiDB/TiSpark is using a schema older than TiFlash global, but as mentioned above we have storage <= query,
         // meaning that the query schema is still newer than the time when this table was last altered, so we still OK to serve.
         if (storage_schema_version == query_schema_version || global_schema_version >= query_schema_version)
-            return std::make_tuple(storage_, lock, storage_schema_version, true);
+            return {storage, lock, storage_schema_version, true};
         // From now on we have global < query.
         // Return false for outer to sync and retry.
-        return std::make_tuple(nullptr, TableStructureLockHolder{}, storage_schema_version, false);
+        return {nullptr, TableStructureLockHolder{}, storage_schema_version, false};
     };
 
-    /// Try get storage and lock once.
-    ManageableStoragePtr storage_;
-    TableStructureLockHolder lock;
-    Int64 storage_schema_version;
-    auto log_schema_version = [&](const String & result) {
+    auto log_schema_version = [&](const String & result, Int64 storage_schema_version) {
         LOG_DEBUG(log,
             __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
                                 << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
     };
-    bool ok;
-    {
-        std::tie(storage_, lock, storage_schema_version, ok) = get_and_lock_storage(false);
-        if (ok)
-        {
-            log_schema_version("OK, no syncing required.");
-            return std::make_tuple(storage_, lock);
-        }
-    }
 
-    /// If first try failed, sync schema and try again.
-    {
-        log_schema_version("not OK, syncing schemas.");
+    auto sync_schema = [&] {
         auto start_time = Clock::now();
         GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_trigger_count, type_cop_read).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
 
-        std::tie(storage_, lock, storage_schema_version, ok) = get_and_lock_storage(true);
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
+    };
+
+    /// Try get storage and lock once.
+    auto [storage, lock, storage_schema_version, ok] = get_and_lock_storage(false);
+    if (ok)
+    {
+        log_schema_version("OK, no syncing required.", storage_schema_version);
+        return {storage, lock};
+    }
+
+    /// If first try failed, sync schema and try again.
+    {
+        log_schema_version("not OK, syncing schemas.", storage_schema_version);
+
+        sync_schema();
+
+        std::tie(storage, lock, storage_schema_version, ok) = get_and_lock_storage(true);
         if (ok)
         {
-            log_schema_version("OK after syncing.");
-            return std::make_tuple(storage_, lock);
+            log_schema_version("OK after syncing.", storage_schema_version);
+            return {storage, lock};
         }
 
         throw TiFlashException("Shouldn't reach here", Errors::Coprocessor::Internal);
@@ -1245,7 +1492,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, encode_type, rqst);
     DAGSchema schema;
     ColumnsWithTypeAndName columns;
-    std::vector<bool> is_ts_column;
+    BoolVec is_ts_column;
     std::vector<NameAndTypePair> source_columns;
     for (int i = 0; i < (int)query_block.output_field_types.size(); i++)
     {
@@ -1268,7 +1515,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
         /// if the encode type is default, the timestamp column in dag response is UTC based
         /// so need to cast the timezone
         ExpressionActionsChain chain;
-        if (addTimeZoneCastAfterTS(is_ts_column, chain))
+        if (addTimeZoneCastAfterTS(*analyzer, is_ts_column, chain))
         {
             for (size_t i = 0; i < final_project.size(); i++)
             {
@@ -1396,7 +1643,15 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         dag.getDAGContext().table_scan_executor_id = query_block.source_name;
     }
 
-    auto res = analyzeExpressions();
+    auto res = analyzeExpressions(
+        context,
+        *analyzer,
+        query_block,
+        conditions,
+        timestamp_column_flag_for_tablescan,
+        keep_session_timezone_info,
+        final_project);
+
     if (res.need_timezone_cast_after_tablescan)
     {
         /// execute timezone cast
