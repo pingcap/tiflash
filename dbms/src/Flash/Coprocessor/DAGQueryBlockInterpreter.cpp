@@ -169,39 +169,39 @@ BlockInputStreamPtr combinedNonJoinedDataStream(DAGPipeline & pipeline, size_t m
     return ret;
 }
 
-// the flow is the same as executeFetchcolumns
-void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline)
+namespace
 {
-    if (!ts.has_table_id())
-    {
-        // do not have table id
-        throw TiFlashException("Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
-    }
-    if (dag.getRegions().empty())
-    {
-        throw TiFlashException("Dag Request does not have region to read. ", Errors::Coprocessor::BadRequest);
-    }
-
-    TableID table_id = ts.table_id();
-
-    const Settings & settings = context.getSettingsRef();
-    auto & tmt = context.getTMTContext();
-
-    auto mvcc_query_info = std::make_unique<MvccQueryInfo>(true, settings.read_tso);
+struct RegionReadHolder
+{
+    std::unique_ptr<MvccQueryInfo> mvcc_query_info;
     // We need to validate regions snapshot after getting streams from storage.
     LearnerReadSnapshot learner_read_snapshot;
-
     // it should be hash map because duplicated region id may occur if merge regions to retry of dag.
     RegionRetryList region_retry;
 
-    if (!dag.isBatchCop())
+    explicit RegionReadHolder(const Settings & settings)
+        : mvcc_query_info(new MvccQueryInfo(true, settings.read_tso)) {}
+
+    void doCopLearnerRead(
+        TableID table_id,
+        const RegionInfoMap & dag_region_infos,
+        TMTContext & tmt,
+        size_t max_streams,
+        Logger * log)
     {
-        if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *mvcc_query_info, table_id); info_retry)
-            throw RegionException({(*info_retry).begin()->get().region_id}, status);
+        auto [info_retry, status] = MakeRegionQueryInfos(dag_region_infos, {}, tmt, *mvcc_query_info, table_id);
+        if (info_retry)
+            throw RegionException({info_retry->begin()->get().region_id}, status);
 
         learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
     }
-    else
+
+    void doBatchCopLearnerRead(
+        TableID table_id,
+        const RegionInfoMap & dag_region_infos,
+        TMTContext & tmt,
+        size_t max_streams,
+        Logger * log)
     {
         std::unordered_set<RegionID> force_retry;
         for (;;)
@@ -209,8 +209,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             try
             {
                 region_retry.clear();
-                auto [retry, status] = MakeRegionQueryInfos(dag.getRegions(), force_retry, tmt, *mvcc_query_info, table_id);
-                std::ignore = status;
+                auto [retry, status] = MakeRegionQueryInfos(dag_region_infos, force_retry, tmt, *mvcc_query_info, table_id);
+                UNUSED(status);
                 if (retry)
                 {
                     region_retry = std::move(*retry);
@@ -243,6 +243,35 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             }
         }
     }
+};
+
+} // namespace
+
+
+// the flow is the same as executeFetchcolumns
+void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline)
+{
+    if (!ts.has_table_id())
+    {
+        // do not have table id
+        throw TiFlashException("Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
+    }
+    if (dag.getRegions().empty())
+    {
+        throw TiFlashException("Dag Request does not have region to read. ", Errors::Coprocessor::BadRequest);
+    }
+
+    TableID table_id = ts.table_id();
+
+    const Settings & settings = context.getSettingsRef();
+    auto & tmt = context.getTMTContext();
+
+    RegionReadHolder holder(settings);
+
+    if (!dag.isBatchCop())
+        holder.doCopLearnerRead(table_id, dag.getRegions(), tmt, max_streams, log);
+    else
+        holder.doBatchCopLearnerRead(table_id, dag.getRegions(), tmt, max_streams, log);
 
     // Hold read lock on both `alter_lock` and `drop_lock` until the local input streams are created.
     // We need an immuntable structure to build the TableScan operator and create snapshot input streams
