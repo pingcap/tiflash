@@ -221,7 +221,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
 
     // merge `candidates` to PageFile which PageId = max of all `candidates` and level = level + 1
     auto [largest_file_id, level] = candidates.rbegin()->fileIdLevel();
-    const PageFileIdAndLevel migrate_file_id{largest_file_id, level + 1};
+    PageFileIdAndLevel migrate_file_id{largest_file_id, level + 1};
 
     // In case that those files are hold by snapshot and do migratePages to same `migrate_file_id` again, we need to check
     // whether gc_file (and its legacy file) is already exist.
@@ -260,14 +260,6 @@ DataCompactor<SnapshotPtr>::migratePages( //
         // else the PageFile is not exists in all paths, continue migration.
     }
 
-    // Choose one path for creating a tmp PageFile for migration
-    const String pf_parent_path = delegator->choosePath(migrate_file_id);
-    PageFile     gc_file        = PageFile::newPageFile(
-        migrate_file_id.first, migrate_file_id.second, pf_parent_path, file_provider, PageFile::Type::Temp, page_file_log);
-    LOG_INFO(log,
-             storage_name << " GC decide to migrate " << candidates.size() << " files, containing " << migrate_page_count
-                          << " pages to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel() << ", path " << pf_parent_path);
-
     PageEntriesEdit gc_file_edit;
     size_t          bytes_written = 0;
     MigrateInfos    migrate_infos;
@@ -286,12 +278,24 @@ DataCompactor<SnapshotPtr>::migratePages( //
             }
         }
     }
+
     WriteBatch::SequenceID compact_seq = 0;
+    PageFile               biggest_file;
+    PageFile               gc_file;
     {
         PageStorage::OpenReadFiles data_readers;
+
+        PageFile & biggest_page_file    = const_cast<PageFile &>(*candidates.rbegin());
+        auto       biggest_page_file_id = biggest_page_file.getFileId();
+
         // To keep the order of all PageFiles' meta, `compact_seq` should be maximum of all candidates.
         for (auto & page_file : candidates)
         {
+            if (page_file.getDataFileSize() > biggest_page_file.getDataFileSize())
+            {
+                biggest_page_file = page_file;
+            }
+
             if (page_file.getType() != PageFile::Type::Formal)
             {
                 throw Exception("Try to migrate pages from invalid type PageFile: " + page_file.toString()
@@ -319,6 +323,31 @@ DataCompactor<SnapshotPtr>::migratePages( //
             data_readers.emplace(page_file.fileIdLevel(), std::move(data_reader));
         }
 
+        // Choose one path for creating a tmp PageFile for migration
+        const String pf_parent_path = delegator->choosePath(migrate_file_id);
+
+        // Need used the biggest to replace largest
+        // It will make data merge faster
+        if (biggest_page_file_id != biggest_page_file.getFileId())
+        {
+            biggest_file = PageFile::newPageFile(
+                migrate_file_id.first, migrate_file_id.second, pf_parent_path, file_provider, PageFile::Type::Temp, page_file_log);
+            biggest_file.linkPage(biggest_page_file, compact_seq);
+            migrate_file_id = {largest_file_id, level + 2};
+            data_readers.erase(biggest_file.fileIdLevel());
+            LOG_INFO(log, "---------------------------------------------------------------------------");
+            LOG_INFO(log, storage_name <<  "GC devide to link PageFile_" << biggest_file.getFileId() << "_" << biggest_file.getLevel()
+                << " to PageFile_"  << biggest_page_file.getFileId()<< "_" << biggest_page_file.getLevel());
+            LOG_INFO(log, "---------------------------------------------------------------------------");
+        }
+
+        gc_file = PageFile::newPageFile(
+            migrate_file_id.first, migrate_file_id.second, pf_parent_path, file_provider, PageFile::Type::Temp, page_file_log);
+
+        LOG_INFO(log,
+                 storage_name << " GC decide to migrate " << candidates.size() << " files, containing " << migrate_page_count
+                              << " pages to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel() << ", path " << pf_parent_path);
+
         // Merge all WriteBatch with valid pages, sorted by WriteBatch::sequence
         std::tie(gc_file_edit, bytes_written)
             = mergeValidPages(std::move(data_readers), files_valid_pages, snapshot, compact_seq, gc_file, migrate_infos);
@@ -329,10 +358,12 @@ DataCompactor<SnapshotPtr>::migratePages( //
     if (gc_file_edit.empty())
     {
         LOG_INFO(log, storage_name << " No valid pages, deleting PageFile_" << migrate_file_id.first << "_" << migrate_file_id.second);
+        biggest_file.destroy();
         gc_file.destroy();
     }
     else
     {
+        biggest_file.setFormal();
         gc_file.setFormal();
         size_t num_migrate_pages = 0;
         for (const auto & [file_id, num_pages] : migrate_infos)

@@ -493,11 +493,6 @@ bool PageFile::MetaLinkingReader::hasNext() const
 
 void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID sid)
 {
-    if (meta_file_offset != 0)
-    {
-        throw Exception("PageFile should open a new reader for link.", ErrorCodes::LOGICAL_ERROR);
-    }
-
     char * meta_data_end = meta_buffer + meta_size;
     char * pos           = meta_buffer + meta_file_offset;
     if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
