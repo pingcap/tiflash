@@ -7,7 +7,6 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -20,36 +19,24 @@ extern const int BAD_ARGUMENTS;
 extern const int UNKNOWN_TABLE;
 } // namespace ErrorCodes
 
-static const std::string TABLE_SYNC_STATUS_PREFIX = "/tiflash/sync-status/";
 
-uint8_t CheckHttpUriAvailable(BaseBuffView path_)
-{
-    std::string_view path(path_.data, path_.len);
-    return path.size() > TABLE_SYNC_STATUS_PREFIX.size() && path.substr(0, TABLE_SYNC_STATUS_PREFIX.size()) == TABLE_SYNC_STATUS_PREFIX;
-}
-
-HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView path_)
+HttpRequestRes HandleHttpRequestSyncStatus(EngineStoreServerWrap * server, BaseBuffView path_, const std::string & method_name)
 {
     HttpRequestStatus status = HttpRequestStatus::Ok;
     TableID table_id = 0;
     {
         std::string_view path(path_.data, path_.len);
-        if (CheckHttpUriAvailable(path_))
+
+        std::string table_id_str(path.substr(method_name.size()));
+        try
         {
-            std::string table_id_str(path.substr(TABLE_SYNC_STATUS_PREFIX.size()));
-            try
-            {
-                table_id = std::stoll(table_id_str);
-            }
-            catch (...)
-            {
-                status = HttpRequestStatus::ErrorParam;
-            }
+            table_id = std::stoll(table_id_str);
         }
-        else
+        catch (...)
         {
             status = HttpRequestStatus::ErrorParam;
         }
+
         if (status != HttpRequestStatus::Ok)
             return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
     }
@@ -78,6 +65,42 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
     auto s = RawCppString::New(ss.str());
     return HttpRequestRes{.status = status,
         .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}}};
+}
+
+HttpRequestRes HandleHttpRequestStoreStatus(EngineStoreServerWrap * server, BaseBuffView, const std::string &)
+{
+    auto name = RawCppString::New(IntoStoreStatusName(server->tmt->getStoreStatus(std::memory_order_relaxed)));
+    return HttpRequestRes{.status = HttpRequestStatus::Ok,
+        .res = CppStrWithView{.inner = GenRawCppPtr(name, RawCppPtrTypeImpl::String), .view = BaseBuffView{name->data(), name->size()}}};
+}
+
+typedef HttpRequestRes (*HANDLE_HTTP_URI_METHOD)(EngineStoreServerWrap *, BaseBuffView, const std::string &);
+static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI
+    = {{"/tiflash/sync-status/", HandleHttpRequestSyncStatus}, {"/tiflash/store-status", HandleHttpRequestStoreStatus}};
+
+uint8_t CheckHttpUriAvailable(BaseBuffView path_)
+{
+    std::string_view path(path_.data, path_.len);
+    for (auto & [str, method] : AVAILABLE_HTTP_URI)
+    {
+        std::ignore = method;
+        if (path.size() >= str.size() && path.substr(0, str.size()) == str)
+            return true;
+    }
+    return false;
+}
+
+HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView path_)
+{
+    std::string_view path(path_.data, path_.len);
+    for (auto & [str, method] : AVAILABLE_HTTP_URI)
+    {
+        if (path.size() >= str.size() && path.substr(0, str.size()) == str)
+        {
+            return method(server, path_, str);
+        }
+    }
+    return HttpRequestRes{.status = HttpRequestStatus::ErrorParam, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
 }
 
 inline std::string ToPdKey(const char * key, const size_t len)
