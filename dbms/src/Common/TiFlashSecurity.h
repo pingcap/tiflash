@@ -113,21 +113,16 @@ public:
             return true;
         }
         auto auth_context = grpc_context->auth_context();
-        for (auto it = auth_context->begin(); it != auth_context->end(); it++)
+        for (const auto & [property_name, common_name] : *auth_context)
         {
-            if ((*it).first.compare(GRPC_X509_CN_PROPERTY_NAME) == 0)
-            {
-                auto common_name = (*it).second;
-                if (allowed_common_names.count(String(common_name.data())))
-                {
-                    return true;
-                }
-            }
+            if (property_name == GRPC_X509_CN_PROPERTY_NAME &&
+                    allowed_common_names.count(String(common_name.data(), common_name.size())))
+                return true;
         }
         return false;
     }
 
-    grpc::SslCredentialsOptions ReadAndCacheSecurityInfo()
+    grpc::SslCredentialsOptions readAndCacheSecurityInfo()
     {
         if (inited)
         {
@@ -141,7 +136,7 @@ public:
     }
 
 private:
-    String readFile(const String & filename)
+    static String readFile(const String & filename)
     {
         if (filename.empty())
         {

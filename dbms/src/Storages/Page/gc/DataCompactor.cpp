@@ -38,9 +38,13 @@ DataCompactor<SnapshotPtr>::tryMigrate(                                  //
     // Select gc candidate files
     Result      result;
     PageFileSet candidates;
+<<<<<<< HEAD
     PageFileSet files_without_valid_pages;
     std::tie(candidates, files_without_valid_pages, result.bytes_migrate, result.num_migrate_pages)
         = selectCandidateFiles(page_files, valid_pages, writing_files);
+=======
+    std::tie(candidates, result.bytes_migrate, result.num_migrate_pages) = selectCandidateFiles(page_files, valid_pages, writing_files);
+>>>>>>> upstream/master
 
     result.candidate_size = candidates.size();
     result.do_compaction  = result.candidate_size >= config.gc_min_files
