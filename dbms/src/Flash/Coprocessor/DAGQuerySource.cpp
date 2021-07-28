@@ -4,6 +4,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserQuery.h>
+#include <Parsers/makeDummyQuery.h>
 #include <Parsers/parseQuery.h>
 
 namespace DB
@@ -62,12 +63,7 @@ std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t max_query_size)
     // this is a WAR to avoid NPE when the MergeTreeDataSelectExecutor trying
     // to extract key range of the query.
     // todo find a way to enable key range extraction for dag query
-    String tmp = "select 1";
-    ParserQuery parser(tmp.data() + tmp.size());
-    ASTPtr parent = parseQuery(parser, tmp.data(), tmp.data() + tmp.size(), "", max_query_size);
-    auto query = dag_request.DebugString();
-    ast = ((ASTSelectWithUnionQuery *)parent.get())->list_of_selects->children.at(0);
-    return std::make_tuple(query, ast);
+    return {dag_request.DebugString(), makeDummyQuery()};
 }
 
 String DAGQuerySource::str(size_t) { return dag_request.DebugString(); }

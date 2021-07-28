@@ -141,7 +141,6 @@ private:
     const DAGQueryBlock & query_block;
     const bool keep_session_timezone_info;
     const tipb::DAGRequest & rqst;
-    ASTPtr dummy_query;
 
     NamesWithAliases final_project;
 
