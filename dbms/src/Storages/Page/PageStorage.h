@@ -172,6 +172,28 @@ public:
 
     static PageFormat::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
 
+    struct PersistState
+    {
+        // use to protect reading WriteBatches from writable PageFile's meta in GC
+        size_t meta_offset = 0;
+        // use to protect that legacy compactor won't exceed the sequence of minimum persisted
+        WriteBatch::SequenceID sequence = 0;
+    };
+
+    struct WritingFilesSnapshot
+    {
+        using const_iterator = std::map<PageFileIdAndLevel, PersistState>::const_iterator;
+
+        PageFileIdAndLevel     minFileIDLevel() const;
+        WriteBatch::SequenceID minPersistedSequence() const;
+
+        const_iterator find(const PageFileIdAndLevel & id) const { return states.find(id); }
+        const_iterator end() const { return states.end(); }
+        bool           contains(const PageFileIdAndLevel & id) const { return states.count(id) > 0; }
+
+        std::map<PageFileIdAndLevel, PersistState> states;
+    };
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -191,6 +213,8 @@ private:
                          const PageFileIdAndLevel &           writing_file_id_level,
                          const std::set<PageFileIdAndLevel> & live_files);
 
+    void getWritingSnapshot(std::lock_guard<std::mutex> &, WritingFilesSnapshot & writing_snapshot) const;
+
     friend class LegacyCompactor;
 
     template <typename SnapshotPtr>
@@ -206,12 +230,18 @@ private:
 
     FileProviderPtr file_provider;
 
+    struct WritingPageFile
+    {
+        PageFile     file;
+        PersistState persisted{};
+    };
     std::mutex write_mutex; // A mutex protect `idle_writers`,`write_files` and `statistics`.
 
-    std::condition_variable write_mutex_cv;
-    std::vector<PageFile>   write_files;
-    std::deque<WriterPtr>   idle_writers;
-    StatisticsInfo          statistics;
+    // TODO: Wrap `write_mutex_cv`, `write_files`, `idle_writers` to be a standalone class
+    std::condition_variable      write_mutex_cv;
+    std::vector<WritingPageFile> write_files;
+    std::deque<WriterPtr>        idle_writers;
+    StatisticsInfo               statistics;
 
     // A sequence number to keep ordering between multi-writers.
     std::atomic<WriteBatch::SequenceID> write_batch_seq = 0;
@@ -233,6 +263,12 @@ private:
 
     // For reporting metrics to prometheus
     TiFlashMetricsPtr metrics;
+
+private:
+    WriterPtr checkAndRenewWriter(WritingPageFile & page_file,
+                                  const String &    parent_path_hint,
+                                  WriterPtr &&      old_writer  = nullptr,
+                                  const String &    logging_msg = "");
 };
 
 class PageReader : private boost::noncopyable
