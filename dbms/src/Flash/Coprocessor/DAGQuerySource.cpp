@@ -58,7 +58,7 @@ void DAGQuerySource::analyzeDAGEncodeType()
         encode_type = tipb::EncodeType::TypeDefault;
 }
 
-std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t max_query_size)
+std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t)
 {
     // this is a WAR to avoid NPE when the MergeTreeDataSelectExecutor trying
     // to extract key range of the query.
