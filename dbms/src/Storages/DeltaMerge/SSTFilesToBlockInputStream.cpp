@@ -118,7 +118,7 @@ Block SSTFilesToBlockInputStream::read()
                 loaded_writer_key.clear();
                 loaded_writer_key.assign(key.data, key.len);
             }
-        } // Notice: `key`, `value` are string-view-like object, should never after `next` called
+        } // Notice: `key`, `value` are string-view-like object, should never use after `next` called
         write_cf_reader->next();
 
         if (process_keys.write_cf % expected_size == 0)
@@ -217,7 +217,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
                 {
                     *last_loaded_rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(key.data, key.len));
                 }
-            } // Notice: `key`, `value` are string-view-like object, should never after `next` called
+            } // Notice: `key`, `value` are string-view-like object, should never use after `next` called
             reader->next();
         }
 
