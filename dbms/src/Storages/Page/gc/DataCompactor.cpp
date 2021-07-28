@@ -23,16 +23,16 @@ DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStora
 template <typename SnapshotPtr>
 std::tuple<typename DataCompactor<SnapshotPtr>::Result, PageEntriesEdit> //
 DataCompactor<SnapshotPtr>::tryMigrate(                                  //
-    const PageFileSet &                  page_files,
-    SnapshotPtr &&                       snapshot,
-    const std::set<PageFileIdAndLevel> & writing_file_ids)
+    const PageFileSet &          page_files,
+    SnapshotPtr &&               snapshot,
+    const WritingFilesSnapshot & writing_files)
 {
     ValidPages valid_pages = collectValidPagesInPageFile(snapshot);
 
     // Select gc candidate files
     Result      result;
     PageFileSet candidates;
-    std::tie(candidates, result.bytes_migrate, result.num_migrate_pages) = selectCandidateFiles(page_files, valid_pages, writing_file_ids);
+    std::tie(candidates, result.bytes_migrate, result.num_migrate_pages) = selectCandidateFiles(page_files, valid_pages, writing_files);
 
     result.candidate_size = candidates.size();
     result.do_compaction
@@ -79,10 +79,14 @@ DataCompactor<SnapshotPtr>::collectValidPagesInPageFile(const SnapshotPtr & snap
 template <typename SnapshotPtr>
 std::tuple<PageFileSet, size_t, size_t>           //
 DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
-    const PageFileSet &                  page_files,
-    const ValidPages &                   files_valid_pages,
-    const std::set<PageFileIdAndLevel> & writing_file_ids) const
+    const PageFileSet &          page_files,
+    const ValidPages &           files_valid_pages,
+    const WritingFilesSnapshot & writing_files) const
 {
+#ifdef PAGE_STORAGE_UTIL_DEBUGGGING
+    LOG_TRACE(log, storage_name << " input size of candidates: " << page_files.size());
+#endif
+
     PageFileSet candidates;
     size_t      candidate_total_size = 0;
     size_t      num_migrate_pages    = 0;
@@ -107,7 +111,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
         }
 
         // Don't gc writing page file.
-        bool is_candidate = (writing_file_ids.count(page_file.fileIdLevel()) == 0)
+        bool is_candidate = !writing_files.contains(page_file.fileIdLevel())
             && (valid_rate < config.gc_max_valid_rate //
                 || file_size < config.file_small_size //
                 || config.gc_max_valid_rate >= 1.0    // all page file will be picked
@@ -218,7 +222,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
             }
 
             // Create meta reader and update `compact_seq`
-            auto meta_reader = const_cast<PageFile &>(page_file).createMetaMergingReader();
+            auto meta_reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file));
             while (meta_reader->hasNext())
             {
                 meta_reader->moveNext();

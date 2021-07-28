@@ -75,6 +75,7 @@ extern const char force_triggle_background_merge_delta[];
 extern const char force_triggle_foreground_flush[];
 extern const char force_set_segment_ingest_packs_fail[];
 extern const char segment_merge_after_ingest_packs[];
+extern const char random_exception_after_dt_write_done[];
 } // namespace FailPoints
 
 namespace DM
@@ -550,6 +551,12 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             merge_range = merge_range.merge(segment->getRowKeyRange());
         flushCache(dm_context, merge_range);
     }
+
+    fiu_do_on(FailPoints::random_exception_after_dt_write_done, {
+        static int num_call = 0;
+        if (num_call++ % 10 == 7)
+            throw Exception("Fail point random_exception_after_dt_write_done is triggered.", ErrorCodes::FAIL_POINT_ERROR);
+    });
 
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
