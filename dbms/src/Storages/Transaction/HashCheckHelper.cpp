@@ -41,7 +41,7 @@ void readFileFully(const std::string & path, int fd, off_t file_offset, size_t r
     }
 }
 
-void checkObjectHashInFile(const std::string & path, const std::vector<size_t> & object_bytes, const std::vector<bool> & use,
+void checkObjectHashInFile(const std::string & path, const std::vector<size_t> & object_bytes, const BoolVec & use,
     const std::vector<uint128> & expected_hash_codes, size_t block_size)
 {
     Poco::File file(path);
