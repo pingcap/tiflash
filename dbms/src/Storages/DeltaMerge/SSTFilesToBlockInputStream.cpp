@@ -98,6 +98,7 @@ void SSTFilesToBlockInputStream::readSuffix()
 
 Block SSTFilesToBlockInputStream::read()
 {
+    std::string loaded_writer_key;
     while (write_cf_reader && write_cf_reader->remained())
     {
         // To decode committed rows from key-value pairs into block, we need to load
@@ -107,15 +108,22 @@ Block SSTFilesToBlockInputStream::read()
         // To ensure correctness, when loading key-values pairs from the default and
         // the lock column family, we will load all key-values which rowkeys are equal
         // or less that the last rowkey from the write column family.
-        auto key   = write_cf_reader->key();
-        auto value = write_cf_reader->value();
-        region->insert(ColumnFamilyType::Write, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
-        ++process_keys.write_cf;
+        {
+            BaseBuffView key   = write_cf_reader->key();
+            BaseBuffView value = write_cf_reader->value();
+            region->insert(ColumnFamilyType::Write, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
+            ++process_keys.write_cf;
+            if (process_keys.write_cf % expected_size == 0)
+            {
+                loaded_writer_key.clear();
+                loaded_writer_key.assign(key.data, key.len);
+            }
+        } // Notice: `key`, `value` are string-view-like object, should never after `next` called
         write_cf_reader->next();
 
         if (process_keys.write_cf % expected_size == 0)
         {
-            const DecodedTiKVKey rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(key.data, key.len));
+            const DecodedTiKVKey rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(std::move(loaded_writer_key)));
             // Batch the loading from other CFs until we need to decode data
             loadCFDataFromSST(ColumnFamilyType::Default, &rowkey);
             loadCFDataFromSST(ColumnFamilyType::Lock, &rowkey);
@@ -159,8 +167,8 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
     {
         while (reader && reader->remained())
         {
-            auto key   = reader->key();
-            auto value = reader->value();
+            BaseBuffView key   = reader->key();
+            BaseBuffView value = reader->value();
             // TODO: use doInsert to avoid locking
             region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
             reader->next();
@@ -199,16 +207,18 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
         // Let's try to load keys until process_keys_offset_end
         while (reader && reader->remained() && *p_process_keys < process_keys_offset_end)
         {
-            auto key   = reader->key();
-            auto value = reader->value();
-            // TODO: use doInsert to avoid locking
-            region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
-            reader->next();
-            (*p_process_keys) += 1;
-            if (*p_process_keys == process_keys_offset_end)
             {
-                *last_loaded_rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(key.data, key.len));
-            }
+                BaseBuffView key   = reader->key();
+                BaseBuffView value = reader->value();
+                // TODO: use doInsert to avoid locking
+                region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
+                (*p_process_keys) += 1;
+                if (*p_process_keys == process_keys_offset_end)
+                {
+                    *last_loaded_rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(key.data, key.len));
+                }
+            } // Notice: `key`, `value` are string-view-like object, should never after `next` called
+            reader->next();
         }
 
         // Update the end offset.
