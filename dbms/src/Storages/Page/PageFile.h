@@ -33,13 +33,7 @@ public:
         Writer(PageFile &, bool sync_on_write, bool truncate_if_exists = true);
         ~Writer();
 
-<<<<<<< HEAD
         [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
-=======
-        void pageFileLink(PageFile & link_file, WriteBatch::SequenceID sid);
-
-        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const RateLimiterPtr & rate_limiter = nullptr);
->>>>>>> ed640f672 (add link page interface)
         void                 tryCloseIdleFd(const Seconds & max_idle_time);
 
         const String &     parentPath() const;
@@ -169,12 +163,8 @@ public:
         }
 
     private:
-<<<<<<< HEAD
 
         void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter);
-=======
-        void initialize(std::optional<size_t> max_meta_offset);
->>>>>>> ed640f672 (add link page interface)
 
     private:
         PageFile & page_file;

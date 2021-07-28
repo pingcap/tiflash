@@ -230,7 +230,7 @@ TEST(PageFile_test, PageFileLink)
         edit.put(page_id, p3entry);
     }
 
-    writer->write(batch, edit);
+    ASSERT_GT(writer->write(batch, edit), 0);
     PageFile               pf1 = PageFile::newPageFile(page_id, 1, path, file_provider, PageFile::Type::Formal, log);
     WriteBatch::SequenceID sid = 100;
     ASSERT_TRUE(pf1.linkPage(pf0, sid));
