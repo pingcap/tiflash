@@ -22,17 +22,13 @@ struct ColumnStat
 
 using ColumnStats = std::unordered_map<ColId, ColumnStat>;
 
-inline void readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadBuffer & buf, UnifiedDigestBase * digest = nullptr)
+inline void readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadBuffer & buf)
 {
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
 
     size_t count;
     DB::assertString("Columns: ", buf);
     DB::readText(count, buf);
-    if (digest)
-    {
-        digest->update(count);
-    }
     DB::assertString("\n\n", buf);
 
     ColId  id = 0;
@@ -55,27 +51,14 @@ inline void readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadB
 
         auto type = data_type_factory.get(type_name);
         column_sats.emplace(id, ColumnStat{id, type, avg_size, serialized_bytes});
-        if (digest)
-        {
-            digest->update(avg_size);
-            if (ver >= DMFileFormat::V1)
-            {
-                digest->update(serialized_bytes);
-            }
-            digest->update(type_name.data(), type_name.length());
-        }
     }
 }
 
-inline void writeText(const ColumnStats & column_sats, DMFileFormat::Version ver, WriteBuffer & buf, UnifiedDigestBase * digest = nullptr)
+inline void writeText(const ColumnStats & column_sats, DMFileFormat::Version ver, WriteBuffer & buf)
 {
     auto size = column_sats.size();
     DB::writeString("Columns: ", buf);
     DB::writeText(size, buf);
-    if (digest)
-    {
-        digest->update(size);
-    }
     DB::writeString("\n\n", buf);
 
     for (auto & [id, stat] : column_sats)
@@ -93,15 +76,6 @@ inline void writeText(const ColumnStats & column_sats, DMFileFormat::Version ver
         auto name = stat.type->getName();
         DB::writeString(name, buf);
         DB::writeChar('\n', buf);
-        if (digest)
-        {
-            digest->update(stat.avg_size);
-            if (ver >= DMFileFormat::V1)
-            {
-                digest->update(stat.serialized_bytes);
-            }
-            digest->update(name.data(), name.length());
-        }
     }
 }
 

@@ -214,31 +214,23 @@ const EncryptionPath DMFile::encryptionConfigurationPath() const
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : configurationFileName());
 }
 
-DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest)
+DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer)
 {
     size_t meta_offset = buffer.count();
     writeString("DTFile format: ", buffer);
     writeIntText(configuration ? STORAGE_FORMAT_CURRENT.dm_file : DMFileFormat::V1, buffer);
-    if (digest)
-    {
-        digest->update(STORAGE_FORMAT_CURRENT.dm_file);
-    }
     writeString("\n", buffer);
-    writeText(column_stats, STORAGE_FORMAT_CURRENT.dm_file, buffer, digest);
+    writeText(column_stats, STORAGE_FORMAT_CURRENT.dm_file, buffer);
     size_t meta_size = buffer.count() - meta_offset;
     return std::make_tuple(meta_offset, meta_size);
 }
 
-DMFile::OffsetAndSize DMFile::writePackStatToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest)
+DMFile::OffsetAndSize DMFile::writePackStatToBuffer(WriteBuffer & buffer)
 {
     size_t pack_offset = buffer.count();
     for (auto & stat : pack_stats)
     {
         writePODBinary(stat, buffer);
-        if (digest)
-        {
-            digest->update(stat);
-        }
     }
     size_t pack_size = buffer.count() - pack_offset;
     return std::make_tuple(pack_offset, pack_size);
@@ -248,15 +240,11 @@ DMFile::OffsetAndSize DMFile::writePackPropertyToBuffer(WriteBuffer & buffer, Un
 {
     size_t offset = buffer.count();
     auto   data   = pack_properties.SerializeAsString();
-    writeStringBinary(data, buffer);
     if (digest)
     {
-        for (const auto & i : pack_properties.property())
-        {
-            digest->update(i.gc_hint_version());
-            digest->update(i.num_rows());
-        }
+        digest->update(data.data(), data.size());
     }
+    writeStringBinary(data, buffer);
     size_t size = buffer.count() - offset;
     return std::make_tuple(offset, size);
 }
@@ -270,9 +258,13 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const WriteLimiter
         WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, write_limiter, 4096);
         if (configuration)
         {
-            auto digest = configuration->createUnifiedDigest();
-            writeMetaToBuffer(buf, digest.get());
+            auto digest     = configuration->createUnifiedDigest();
+            auto tmp_buffer = WriteBufferFromOwnString{};
+            writeMetaToBuffer(tmp_buffer);
+            auto serialized = tmp_buffer.releaseStr();
+            digest->update(serialized.data(), serialized.length());
             configuration->addChecksum(metaFileName(), digest->raw());
+            buf.write(serialized.data(), serialized.size());
         }
         else
         {
@@ -367,14 +359,12 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileForm
 
 void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
-    const auto name = metaFileName();
-    auto       buf  = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.meta_size);
-    buf.seek(meta_pack_info.meta_offset);
-
-    DMFileFormat::Version ver; // Binary version
-    assertString("DTFile format: ", buf);
-    DB::readText(ver, buf);
-    assertString("\n", buf);
+    const auto   name        = metaFileName();
+    auto         file_buf    = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.meta_size);
+    auto         meta_buf    = std::vector<char>(meta_pack_info.meta_size);
+    auto         meta_reader = ReadBufferFromMemory{meta_buf.data(), meta_buf.size()};
+    ReadBuffer * buf         = &meta_reader;
+    file_buf.seek(meta_pack_info.meta_offset);
 
     // checksum examination
     if (configuration)
@@ -383,23 +373,25 @@ void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo 
         if (location != configuration->getEmbeddedChecksum().end())
         {
             auto digest = configuration->createUnifiedDigest();
-            digest->update(ver);
-            readText(column_stats, ver, buf, digest.get());
+            file_buf.readBig(meta_buf.data(), meta_buf.size());
+            digest->update(meta_buf.data(), meta_buf.size());
             if (unlikely(!digest->compareRaw(location->second)))
             {
-                throw TiFlashException(fmt::format("checksum mismatch for {}", name), Errors::Checksum::DataCorruption);
+                throw TiFlashException(fmt::format("checksum mismatch for {}", metaPath()), Errors::Checksum::DataCorruption);
             }
+            buf = &meta_reader;
         }
         else
         {
             log->warning(fmt::format("checksum for {} not found", name));
-            readText(column_stats, ver, buf);
         }
     }
-    else
-    {
-        readText(column_stats, ver, buf);
-    }
+
+    DMFileFormat::Version ver; // Binary version
+    assertString("DTFile format: ", *buf);
+    DB::readText(ver, *buf);
+    assertString("\n", *buf);
+    readText(column_stats, ver, *buf);
 
     // No need to upgrade meta when mode is Mode::SINGLE_FILE
     if (mode == Mode::FOLDER)
@@ -471,14 +463,10 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
         {
             auto         digest = configuration->createUnifiedDigest();
             const auto & target = location->second;
-            for (const auto & i : pack_properties.property())
-            {
-                digest->update(i.gc_hint_version());
-                digest->update(i.num_rows());
-            }
+            digest->update(tmp_buf.data(), tmp_buf.size());
             if (unlikely(!digest->compareRaw(target)))
             {
-                throw TiFlashException(fmt::format("checksum mismatch for {}", name), Errors::Checksum::DataCorruption);
+                throw TiFlashException(fmt::format("checksum mismatch for {}", packPropertyPath()), Errors::Checksum::DataCorruption);
             }
         }
         else
