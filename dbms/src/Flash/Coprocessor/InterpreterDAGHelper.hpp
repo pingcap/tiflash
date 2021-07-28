@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/TiFlashException.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RegionException.h>
 
 namespace DB
