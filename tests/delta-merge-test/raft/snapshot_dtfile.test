@@ -7,8 +7,8 @@
 #####
 ## Pre-handle region to dt files then apply
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
-=> DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 => DBGInvoke __refresh_schemas()
+=> DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 => DBGInvoke region_snapshot_pre_handle_file(default, test, 4, 3, 6, 'col_1 Int64', '')
 ┌─region_snapshot_pre_handle_file(default, test, 4, 3, 6)────────┐
 │ Generate 1 files for [region_id=4]                             │
@@ -39,37 +39,6 @@
 │    -4 │           4 │
 │    -5 │           5 │
 └───────┴─────────────┘
-
-#####
-## Mock to test some boundary of handling snapshot with same rowkey with different versions
-=> DBGInvoke __region_snapshot_pre_handle_file_pks(default, test, 4, 'col_1 Int64', '', 3,4,5, 5,5,5, 5,6,7, 8,9)
-=> DBGInvoke __region_snapshot_apply_file(4)
-# In DeltaTree, we store data by rowkey asc, tso asc
-=> selraw *, _INTERNAL_VERSION from default.test
-┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┐
-│    -3 │           3 │            100111 │
-│    -4 │           4 │            100110 │
-│    -5 │           5 │            100105 │
-│    -5 │           5 │            100106 │
-│    -5 │           5 │            100107 │
-│    -5 │           5 │            100108 │
-│    -5 │           5 │            100109 │
-│    -6 │           6 │            100104 │
-│    -7 │           7 │            100103 │
-│    -8 │           8 │            100102 │
-│    -9 │           9 │            100101 │
-└───────┴─────────────┴───────────────────┘
-# Filtered by MVCC
-=> select *, _INTERNAL_VERSION from default.test
-┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┐
-│    -3 │           3 │            100111 │
-│    -4 │           4 │            100110 │
-│    -5 │           5 │            100109 │
-│    -6 │           6 │            100104 │
-│    -7 │           7 │            100103 │
-│    -8 │           8 │            100102 │
-│    -9 │           9 │            100101 │
-└───────┴─────────────┴───────────────────┘
 
 
 #####
@@ -102,8 +71,8 @@
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
-=> DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 => DBGInvoke __refresh_schemas()
+=> DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 ## Mock to test apply snapshot with an older schema (case 1 - add column)
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_2 String')
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_3 UInt64')
@@ -137,8 +106,8 @@
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
-=> DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 => DBGInvoke __refresh_schemas()
+=> DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 ## Mock to test apply snapshot with an older schema (case 2 - drop column)
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_2 String')
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_3 UInt64')
@@ -171,8 +140,8 @@
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
-=> DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 => DBGInvoke __refresh_schemas()
+=> DBGInvoke __region_snapshot(4, 0, 10000, default, test)
 # Only the sst files of write cf ingested and send to TiFlash as a snapshot, no panic, and those uncommitted data remain in memory
 => DBGInvoke __region_snapshot_pre_handle_file(default, test, 4, 3, 12, 'col_1 Int64', '', 1, 'write')
 => DBGInvoke __region_snapshot_apply_file(4)
@@ -194,6 +163,43 @@
 │   -10 │          10 │
 │   -11 │          11 │
 └───────┴─────────────┘
+
+#####
+## Mock to test some boundary of handling snapshot with same rowkey with different versions
+## selraw will ignore 'delete_range', so rebuild the table first
+=> DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __region_snapshot(4, 0, 10000, default, test)
+=> DBGInvoke __region_snapshot_pre_handle_file_pks(default, test, 4, 'col_1 Int64', '', 3,4,5, 5,5,5, 5,6,7, 8,9)
+=> DBGInvoke __region_snapshot_apply_file(4)
+# In DeltaTree, we store data by rowkey asc, tso asc
+=> selraw *, _INTERNAL_VERSION from default.test
+┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┐
+│    -3 │           3 │            100111 │
+│    -4 │           4 │            100110 │
+│    -5 │           5 │            100105 │
+│    -5 │           5 │            100106 │
+│    -5 │           5 │            100107 │
+│    -5 │           5 │            100108 │
+│    -5 │           5 │            100109 │
+│    -6 │           6 │            100104 │
+│    -7 │           7 │            100103 │
+│    -8 │           8 │            100102 │
+│    -9 │           9 │            100101 │
+└───────┴─────────────┴───────────────────┘
+# Filtered by MVCC
+=> select *, _INTERNAL_VERSION from default.test
+┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┐
+│    -3 │           3 │            100111 │
+│    -4 │           4 │            100110 │
+│    -5 │           5 │            100109 │
+│    -6 │           6 │            100104 │
+│    -7 │           7 │            100103 │
+│    -8 │           8 │            100102 │
+│    -9 │           9 │            100101 │
+└───────┴─────────────┴───────────────────┘
 
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
