@@ -211,7 +211,7 @@ private:
 
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
-    mutable std::atomic<Timepoint> last_compact_log_time = Timepoint::min();
+    mutable std::atomic<Timepoint> last_compact_log_time{Timepoint::min()};
     mutable std::atomic<size_t> approx_mem_cache_rows{0};
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
 };
