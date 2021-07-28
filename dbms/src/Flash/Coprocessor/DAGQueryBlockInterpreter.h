@@ -96,12 +96,6 @@ private:
         TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
 
-    void readFromLocalStorage(            //
-        const TableStructureLockHolder &, //
-        const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
-        const LearnerReadSnapshot & learner_read_snapshot, //
-        DAGPipeline & pipeline, RegionRetryList & region_retry);
-    std::tuple<ManageableStoragePtr, TableStructureLockHolder> getAndLockStorage(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
