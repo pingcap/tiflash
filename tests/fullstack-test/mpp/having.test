@@ -1,0 +1,27 @@
+# Preparation.
+mysql> drop table if exists test.t1
+mysql> create table test.t1 (id int, value varchar(64))
+mysql> insert into test.t1 values(0,'aaa'),(1,'bbb'),(2,'ccc')
+mysql> drop table if exists test.t2
+mysql> create table test.t2 (id int, value varchar(64))
+mysql> insert into test.t2 values(0,'ddd'),(1,'eee'),(2,'ccc')
+
+mysql> alter table test.t1 set tiflash replica 1
+mysql> alter table test.t2 set tiflash replica 1
+
+func> wait_table test t1
+func> wait_table test t2
+
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select * from t1 where value <> any( select value from t2);
++------+-------+
+| id   | value |
++------+-------+
+|    0 | aaa   |
+|    1 | bbb   |
+|    2 | ccc   |
++------+-------+
+
+# Clean up.
+# mysql> drop table if exists test.t1
+# mysql> drop table if exists test.t2
