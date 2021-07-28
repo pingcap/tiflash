@@ -549,7 +549,7 @@ void Region::tryCompactionFilter(const Timestamp safe_point)
     // No need to check default cf. Because tikv will gc default cf before write cf.
     if (del_write)
     {
-        LOG_INFO(log, __FUNCTION__ << ": delete " << del_write << " in write cf");
+        LOG_INFO(log, __FUNCTION__ << ": delete " << del_write << " in write cf for region " << meta.regionId());
     }
 }
 
