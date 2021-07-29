@@ -69,8 +69,27 @@ Block AggregatingBlockInputStream::readImpl()
 
     if (isCancelledOrThrowIfKilled() || !impl)
         return {};
+    Block res;
+    if (nullptr == sub_blocks || sub_blocks->empty())
+    {
+        res = impl->read();
 
-    return impl->read();
+        if (res.bytes() > AGG_BLOCK_SIZE_LIMIT)
+        {
+            sub_blocks = res.splitLargeBlock(AGG_BLOCK_SIZE_LIMIT);
+            LOG_TRACE(log,
+                      impl->getName() + " read a large block, size = " + std::to_string(res.bytes())
+                          + " , and rows = " + std::to_string(res.rows()) + " , split into " + std::to_string(sub_blocks->size())
+                          + " sub blocks by " + std::to_string(AGG_BLOCK_SIZE_LIMIT));
+        }
+        else
+        {
+            return res;
+        }
+    }
+    res = sub_blocks->front();
+    sub_blocks->pop_front();
+    return res;
 }
 
 

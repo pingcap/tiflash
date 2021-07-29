@@ -59,6 +59,8 @@ protected:
      /** From here we will get the completed blocks after the aggregation. */
     std::unique_ptr<IBlockInputStream> impl;
 
+    std::unique_ptr<BlocksList> sub_blocks = nullptr;
+
     Logger * log = &Logger::get("AggregatingBlockInputStream");
 };
 
