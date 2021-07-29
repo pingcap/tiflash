@@ -781,12 +781,8 @@ protected:
 
     /** This array serves two purposes.
       *
-      * 1. Function arguments are collected side by side, and they do not need to be collected from different places. Also the array is made zero-terminated.
+      * Function arguments are collected side by side, and they do not need to be collected from different places. Also the array is made zero-terminated.
       * The inner loop (for the case without_key) is almost twice as compact; performance gain of about 30%.
-      *
-      * 2. Calling a function by pointer is better than a virtual call, because in the case of a virtual call,
-      *  GCC 5.1.2 generates code that, at each iteration of the loop, reloads the function address from memory into the register
-      *  (the offset value in the virtual function table).
       */
     struct AggregateFunctionInstruction
     {
@@ -794,6 +790,9 @@ protected:
         IAggregateFunction::AddFunc func;
         size_t state_offset;
         const IColumn ** arguments;
+        const IAggregateFunction * batch_that;
+        const IColumn ** batch_arguments;
+        const UInt64 * offsets = nullptr;
     };
 
     using AggregateFunctionInstructions = std::vector<AggregateFunctionInstruction>;
@@ -847,7 +846,7 @@ protected:
 
     /// Specialization for a particular value no_more_keys.
     template <bool no_more_keys, typename Method>
-    void executeImplCase(
+    void executeImplBatch(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
@@ -968,6 +967,12 @@ protected:
         Method & method,
         bool final,
         size_t bucket) const;
+
+    void prepareAggregateInstructions(
+        Columns columns,
+        AggregateColumns & aggregate_columns,
+        Columns & materialized_columns,
+        AggregateFunctionInstructions & instructions);
 
     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
     Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
