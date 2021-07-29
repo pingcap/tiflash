@@ -1,8 +1,18 @@
-#include "TOMLConfiguration.h"
+/// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
+#if !__clang__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
+#include <Common/Config/cpptoml.h>
+#if !__clang__
+#pragma GCC diagnostic pop
+#endif
+
+
+#include <Common/Config/TOMLConfiguration.h>
+#include <Poco/Exception.h>
 
 #include <sstream>
-
-#include "Poco/Exception.h"
 
 namespace DB
 {

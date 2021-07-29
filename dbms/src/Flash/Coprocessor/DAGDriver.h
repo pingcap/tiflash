@@ -12,6 +12,8 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
+#include <vector>
+
 namespace DB
 {
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/Block.h>
 #include <Core/Names.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataRead.h>
