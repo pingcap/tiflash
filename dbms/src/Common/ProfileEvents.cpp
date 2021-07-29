@@ -65,23 +65,6 @@
     M(DelayedInsertsMilliseconds) \
     M(DuplicatedInsertedBlocks) \
     \
-    M(ZooKeeperInit) \
-    M(ZooKeeperTransactions) \
-    M(ZooKeeperList) \
-    M(ZooKeeperCreate) \
-    M(ZooKeeperRemove) \
-    M(ZooKeeperExists) \
-    M(ZooKeeperGet) \
-    M(ZooKeeperSet) \
-    M(ZooKeeperMulti) \
-    M(ZooKeeperCheck) \
-    M(ZooKeeperClose) \
-    M(ZooKeeperWatchResponse) \
-    M(ZooKeeperExceptions) \
-    M(ZooKeeperWaitMicroseconds) \
-    M(ZooKeeperBytesSent) \
-    M(ZooKeeperBytesReceived) \
-    \
     M(DistributedConnectionFailTry) \
     M(DistributedConnectionMissingTable) \
     M(DistributedConnectionStaleReplica) \
