@@ -18,3 +18,12 @@ target_link_libraries (arithmetic_functions dbms gtest_main clickhouse_functions
 
 add_executable (strings_replace gtest_strings_replace.cpp)
 target_link_libraries (strings_replace dbms gtest_main clickhouse_functions)
+
+add_executable (strings_ascii gtest_strings_ascii.cpp)
+target_link_libraries (strings_ascii dbms gtest_main clickhouse_functions)
+
+add_executable (strings_length gtest_strings_length.cpp)
+target_link_libraries (strings_length dbms gtest_main clickhouse_functions)
+
+add_executable (strings_position gtest_strings_position.cpp)
+target_link_libraries (strings_position dbms gtest_main clickhouse_functions)

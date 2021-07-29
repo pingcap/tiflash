@@ -1,0 +1,44 @@
+mysql> drop table if exists test.test_tb
+mysql> create table if not exists test.test_tb(id int NOT NULL AUTO_INCREMENT,char_ CHAR(4) NULL,enum_ ENUM('enum1', 'enum2', 'enum3') NULL,longtext_ LONGTEXT NULL,mediumtext_ MEDIUMTEXT NULL,set_ SET('set1', 'set2', 'set3') NULL,text_ TEXT NULL,tinytext_ TINYTEXT NULL,varchar_ VARCHAR(30) NULL,bit_ BIT NULL,bigint_ BIGINT NULL,boolean_ BOOLEAN NULL,decimal_ DECIMAL NULL,double_ DOUBLE NULL,float_ FLOAT NULL,int_ INT NULL,mediumint_ MEDIUMINT NULL,real_ REAL NULL,smallint_ SMALLINT NULL,tinyint_ TINYINT NULL,date_ DATE NULL,datetime_ DATETIME NULL,timestamp_ TIMESTAMP NULL,time_ TIME NULL,year_ YEAR NULL,blob_ BLOB NULL,mediumblob_ MEDIUMBLOB NULL,longblob_ LONGBLOB NULL,tinyblob_ TINYBLOB NULL,json_ JSON NULL,PRIMARY KEY(id))
+
+mysql> INSERT INTO test.test_tb(id, varchar_) VALUES (1, 'hello world');
+mysql> INSERT INTO test.test_tb(id, varchar_) VALUES (2, '  aaa');
+mysql> INSERT INTO test.test_tb(id, varchar_) VALUES (3, 'aaa   ');
+mysql> INSERT INTO test.test_tb(id, varchar_) VALUES (4, ' aaa aaa ');
+mysql> INSERT INTO test.test_tb(id, varchar_) VALUES (5, ' 平凯 星辰 ');
+
+mysql> analyze table test.test_tb
+mysql> alter table test.test_tb set tiflash replica 1
+func> wait_table test test_tb
+
+
+mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where trim(varchar_) = 'hello world';
++----+
+| id |
++----+
+|  1 |
++----+
+
+
+mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where trim(varchar_) = 'aaa';
++----+
+| id |
++----+
+|  2 |
+|  3 |
++----+
+
+
+mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where trim(varchar_) = 'aaa aaa';
++----+
+| id |
++----+
+|  4 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where trim(varchar_) = '平凯 星辰';
++----+
+| id |
++----+
+|  5 |
++----+

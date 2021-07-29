@@ -943,7 +943,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     //{tipb::ScalarFuncSig::BitLength, "cast"},
     //{tipb::ScalarFuncSig::Bin, "cast"},
-    //{tipb::ScalarFuncSig::ASCII, "cast"},
+    {tipb::ScalarFuncSig::ASCII, "ascii"},
     //{tipb::ScalarFuncSig::Char, "cast"},
     {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"}, {tipb::ScalarFuncSig::Concat, "tidbConcat"},
     {tipb::ScalarFuncSig::ConcatWS, "tidbConcatWS"},
@@ -970,9 +970,9 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::LTrim, "ltrim"}, {tipb::ScalarFuncSig::LeftUTF8, "leftUTF8"},
     //{tipb::ScalarFuncSig::Left, "cast"},
     {tipb::ScalarFuncSig::Length, "length"},
-    //{tipb::ScalarFuncSig::Locate2ArgsUTF8, "cast"},
+    {tipb::ScalarFuncSig::Locate2ArgsUTF8, "position"},
     //{tipb::ScalarFuncSig::Locate3ArgsUTF8, "cast"},
-    //{tipb::ScalarFuncSig::Locate2Args, "cast"},
+    {tipb::ScalarFuncSig::Locate2Args, "position"},
     //{tipb::ScalarFuncSig::Locate3Args, "cast"},
 
     {tipb::ScalarFuncSig::Lower, "lower"},
@@ -1000,7 +1000,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SubstringIndex, "cast"},
 
     //{tipb::ScalarFuncSig::ToBase64, "cast"},
-    //{tipb::ScalarFuncSig::Trim1Arg, "cast"},
+    {tipb::ScalarFuncSig::Trim1Arg, "trim"},
     //{tipb::ScalarFuncSig::Trim2Args, "cast"},
     //{tipb::ScalarFuncSig::Trim3Args, "cast"},
     //{tipb::ScalarFuncSig::UnHex, "cast"},
