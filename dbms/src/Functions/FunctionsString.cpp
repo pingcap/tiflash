@@ -2806,7 +2806,7 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    DataTypePtr getReturnTypeImpl([[maybe_unused]] const DataTypes & arguments) const override
     {
         return std::make_shared<DataTypeInt64>();
     }
@@ -2852,7 +2852,7 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    DataTypePtr getReturnTypeImpl([[maybe_unused]] const DataTypes & arguments) const override
     {
         return std::make_shared<DataTypeInt64>();
     }
@@ -2898,7 +2898,7 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    DataTypePtr getReturnTypeImpl([[maybe_unused]] const DataTypes & arguments) const override
     {
         return std::make_shared<DataTypeInt64>();
     }
