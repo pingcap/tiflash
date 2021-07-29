@@ -56,6 +56,7 @@ struct StressOptions
 {
     size_t num_writers      = 1;
     size_t num_readers      = 4;
+    bool   init_pages       = false;
     bool   clean_before_run = false;
     size_t timeout_s        = 0;
     size_t read_delay_ms    = 0;
@@ -92,17 +93,18 @@ struct StressOptions
         namespace po = boost::program_options;
         using po::value;
         po::options_description desc("Allowed options");
-        desc.add_options()("help,h", "produce help message")                                          //
-            ("write_concurrency,W", value<UInt32>()->default_value(4), "number of write threads")     //
-            ("read_concurrency,R", value<UInt32>()->default_value(16), "number of read threads")      //
-            ("clean_before_run,C", value<bool>()->default_value(false), "drop data before running")   //
-            ("timeout,T", value<UInt32>()->default_value(600), "maximum run time (seconds)")          //
-            ("writer_slots", value<UInt32>()->default_value(4), "number of PageStorage writer slots") //
-            ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay")      //
-            ("avg_page_size", value<UInt32>()->default_value(1), "avg size for each page(MiB)")       //
-            ("rand_seed", value<UInt32>()->default_value(0x123987), "random seed")                    //
-            ("paths,P", value<std::vector<std::string>>(), "store path(s)")                           //
-            ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable")             //
+        desc.add_options()("help,h", "produce help message")                                                //
+            ("write_concurrency,W", value<UInt32>()->default_value(4), "number of write threads")           //
+            ("read_concurrency,R", value<UInt32>()->default_value(16), "number of read threads")            //
+            ("init_pages,I", value<bool>()->default_value(false), "init pages if not exist before running") //
+            ("clean_before_run,C", value<bool>()->default_value(false), "drop data before running")         //
+            ("timeout,T", value<UInt32>()->default_value(600), "maximum run time (seconds)")                //
+            ("writer_slots", value<UInt32>()->default_value(4), "number of PageStorage writer slots")       //
+            ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay")            //
+            ("avg_page_size", value<UInt32>()->default_value(1), "avg size for each page(MiB)")             //
+            ("rand_seed", value<UInt32>()->default_value(0x123987), "random seed")                          //
+            ("paths,P", value<std::vector<std::string>>(), "store path(s)")                                 //
+            ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable")                   //
             ;
         po::variables_map options;
         po::store(po::parse_command_line(argc, argv, desc), options);
@@ -116,16 +118,19 @@ struct StressOptions
         StressOptions opt;
         opt.num_writers      = options["write_concurrency"].as<UInt32>();
         opt.num_readers      = options["read_concurrency"].as<UInt32>();
+        opt.init_pages       = options["init_pages"].as<bool>();
         opt.clean_before_run = options["clean_before_run"].as<bool>();
         opt.timeout_s        = options["timeout"].as<UInt32>();
         opt.read_delay_ms    = options["read_delay_ms"].as<UInt32>();
         opt.num_writer_slots = options["writer_slots"].as<UInt32>();
         opt.avg_page_size_mb = options["avg_page_size"].as<UInt32>();
         opt.rand_seed        = options["rand_seed"].as<UInt32>();
+
         if (options.count("paths"))
             opt.paths = options["paths"].as<std::vector<std::string>>();
         else
             opt.paths = {"./stress"};
+
         if (options.count("failpoints"))
             opt.failpoints = options["failpoints"].as<std::vector<std::string>>();
         return opt;
@@ -362,7 +367,6 @@ try
     // set random seed
     srand(options.rand_seed);
 
-    bool need_fill_init_pages = false;
     // drop dir if exists
     bool all_directories_not_exist = true;
     for (const auto & path : options.paths)
@@ -376,11 +380,12 @@ try
             }
         }
     }
+
+    if (options.clean_before_run || all_directories_not_exist)
+        options.init_pages = true;
+
     if (options.clean_before_run)
-        need_fill_init_pages = true;
-    else
-        need_fill_init_pages = !all_directories_not_exist;
-    LOG_INFO(logger, "All pages have been drop.");
+        LOG_INFO(logger, "All pages have been drop.");
 
     // create PageStorage
     DB::PageStorage::Config config;
@@ -409,7 +414,7 @@ try
     }
 
     // init all pages in PageStorage
-    if (need_fill_init_pages)
+    if (options.init_pages)
     {
         PSWriter::fillAllPages(ps);
         LOG_INFO(logger, "All pages have been init.");
