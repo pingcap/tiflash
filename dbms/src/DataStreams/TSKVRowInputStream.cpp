@@ -128,7 +128,7 @@ bool TSKVRowInputStream::read(MutableColumns & columns)
                 }
                 else
                 {
-                    index = it->second;
+                    index = it->getMapped();
 
                     if (read_columns[index])
                         throw Exception("Duplicate field found while parsing TSKV format: " + name_ref.toString(), ErrorCodes::INCORRECT_DATA);
