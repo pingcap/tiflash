@@ -212,6 +212,7 @@ target_link_libraries (dbms
     Threads::Threads
 )
 
+set_source_files_properties(src/DataTypes/DataTypeStringAVX2.cpp APPEND COMPILE_FLAGS "${DATATYPE_ORIGINAL_FLAGS} -mavx -mavx2")
 target_include_directories (dbms BEFORE PRIVATE ${DIVIDE_INCLUDE_DIR})
 target_include_directories (dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
 

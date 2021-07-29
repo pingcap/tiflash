@@ -1,21 +1,12 @@
-#include <Core/Defines.h>
-
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnConst.h>
-
+#include <Columns/ColumnString.h>
 #include <Common/typeid_cast.h>
-
-#include <DataTypes/DataTypeString.h>
+#include <Core/Defines.h>
 #include <DataTypes/DataTypeFactory.h>
-
+#include <DataTypes/DataTypeString.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
 #include <IO/VarInt.h>
-
-#if __SSE2__
-    #include <emmintrin.h>
-#endif
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
@@ -65,7 +56,7 @@ void DataTypeString::deserializeBinary(IColumn & column, ReadBuffer & istr) cons
     try
     {
         data.resize(offset);
-        istr.readStrict(reinterpret_cast<char*>(&data[offset - size - 1]), size);
+        istr.readStrict(reinterpret_cast<char *>(&data[offset - size - 1]), size);
         data.back() = 0;
     }
     catch (...)
@@ -87,9 +78,7 @@ void DataTypeString::serializeBinaryBulk(const IColumn & column, WriteBuffer & o
     if (!size)
         return;
 
-    size_t end = limit && offset + limit < size
-        ? offset + limit
-        : size;
+    size_t end = limit && offset + limit < size ? offset + limit : size;
 
     if (offset == 0)
     {
@@ -161,7 +150,7 @@ static NO_INLINE void deserializeBinarySSE2(ColumnString::Chars_t & data, Column
             else
 #endif
             {
-                istr.readStrict(reinterpret_cast<char*>(&data[offset - size - 1]), size);
+                istr.readStrict(reinterpret_cast<char *>(&data[offset - size - 1]), size);
             }
         }
 
@@ -195,14 +184,29 @@ void DataTypeString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, 
 
     offsets.reserve(offsets.size() + limit);
 
+#ifdef __x86_64__
+    if (__builtin_cpu_supports("avx2"))
+    {
+        if (avg_chars_size >= 128)
+            return deserializeBinaryAVX2By4(data, offsets, istr, limit);
+        if (avg_chars_size >= 96)
+            return deserializeBinaryAVX2By3(data, offsets, istr, limit);
+        if (avg_chars_size >= 64)
+            return deserializeBinaryAVX2By2(data, offsets, istr, limit);
+        if (avg_chars_size >= 32)
+            return deserializeBinaryAVX2By1(data, offsets, istr, limit);
+        goto SSE2_TAIL;
+    }
+#endif
+
     if (avg_chars_size >= 64)
-        deserializeBinarySSE2<4>(data, offsets, istr, limit);
-    else if (avg_chars_size >= 48)
-        deserializeBinarySSE2<3>(data, offsets, istr, limit);
-    else if (avg_chars_size >= 32)
-        deserializeBinarySSE2<2>(data, offsets, istr, limit);
-    else
-        deserializeBinarySSE2<1>(data, offsets, istr, limit);
+        return deserializeBinarySSE2<4>(data, offsets, istr, limit);
+    if (avg_chars_size >= 48)
+        return deserializeBinarySSE2<3>(data, offsets, istr, limit);
+    if (avg_chars_size >= 32)
+        return deserializeBinarySSE2<2>(data, offsets, istr, limit);
+SSE2_TAIL:
+    return deserializeBinarySSE2<1>(data, offsets, istr, limit);
 }
 
 
@@ -291,21 +295,15 @@ void DataTypeString::deserializeTextCSV(IColumn & column, ReadBuffer & istr, con
 }
 
 
-MutableColumnPtr DataTypeString::createColumn() const
-{
-    return ColumnString::create();
-}
+MutableColumnPtr DataTypeString::createColumn() const { return ColumnString::create(); }
 
 
-bool DataTypeString::equals(const IDataType & rhs) const
-{
-    return typeid(rhs) == typeid(*this);
-}
+bool DataTypeString::equals(const IDataType & rhs) const { return typeid(rhs) == typeid(*this); }
 
 
 void registerDataTypeString(DataTypeFactory & factory)
 {
-    auto creator = static_cast<DataTypePtr(*)()>([] { return DataTypePtr(std::make_shared<DataTypeString>()); });
+    auto creator = static_cast<DataTypePtr (*)()>([] { return DataTypePtr(std::make_shared<DataTypeString>()); });
 
     factory.registerSimpleDataType("String", creator);
 
@@ -323,4 +321,4 @@ void registerDataTypeString(DataTypeFactory & factory)
     factory.registerSimpleDataType("LONGBLOB", creator, DataTypeFactory::CaseInsensitive);
 }
 
-}
+} // namespace DB

@@ -1,8 +1,14 @@
 #pragma once
 
+#include <Columns/ColumnString.h>
+#include <DataTypes/IDataType.h>
+#include <IO/ReadHelpers.h>
+
 #include <ostream>
 
-#include <DataTypes/IDataType.h>
+#ifdef __x86_64__
+#include <immintrin.h>
+#endif
 
 
 namespace DB
@@ -14,10 +20,7 @@ public:
     using FieldType = String;
     static constexpr bool is_parametric = false;
 
-    const char * getFamilyName() const override
-    {
-        return "String";
-    }
+    const char * getFamilyName() const override { return "String"; }
 
     TypeIndex getTypeId() const override { return TypeIndex::String; }
 
@@ -47,10 +50,7 @@ public:
 
     MutableColumnPtr createColumn() const override;
 
-    Field getDefault() const override
-    {
-        return String();
-    }
+    Field getDefault() const override { return String(); }
 
     bool equals(const IDataType & rhs) const override;
 
@@ -64,4 +64,14 @@ public:
     bool canBeInsideNullable() const override { return true; }
 };
 
-}
+#ifdef __x86_64__
+#define DECLARE_DESERIALIZE_BIN_AVX2(UNROLL)       \
+    extern void deserializeBinaryAVX2##By##UNROLL( \
+        ColumnString::Chars_t & data, ColumnString::Offsets & offsets, ReadBuffer & istr, size_t limit);
+DECLARE_DESERIALIZE_BIN_AVX2(4)
+DECLARE_DESERIALIZE_BIN_AVX2(3)
+DECLARE_DESERIALIZE_BIN_AVX2(2)
+DECLARE_DESERIALIZE_BIN_AVX2(1)
+#undef DECLARE_DESERIALIZE_BIN_AVX2
+#endif
+} // namespace DB
