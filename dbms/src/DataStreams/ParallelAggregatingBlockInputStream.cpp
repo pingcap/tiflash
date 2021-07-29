@@ -96,16 +96,17 @@ Block ParallelAggregatingBlockInputStream::readImpl()
     Block res;
     if (isCancelledOrThrowIfKilled() || !impl)
         return res;
-    if (nullptr == sub_blocks || (sub_blocks != nullptr && sub_blocks->empty()))
+    if (nullptr == sub_blocks || sub_blocks->empty())
     {
         res = impl->read();
 
-        if (res.bytes() > (1UL << 28))
+        if (res.bytes() > AGG_BLOCK_SIZE_LIMIT)
         {
+            sub_blocks = res.splitLargeBlock(AGG_BLOCK_SIZE_LIMIT);
             LOG_TRACE(log,
                 impl->getName() + " read a large block, size = " + std::to_string(res.bytes())
-                    + " , and rows = " + std::to_string(res.rows()));
-            sub_blocks = res.splitLargeBlock(1UL << 28);
+                    + " , and rows = " + std::to_string(res.rows()) + " , split into " + std::to_string(sub_blocks->size())
+                    + " sub blocks by " + std::to_string(AGG_BLOCK_SIZE_LIMIT));
         }
         else
         {

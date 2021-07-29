@@ -42,6 +42,7 @@ namespace ErrorCodes
 
 class IBlockOutputStream;
 
+#define AGG_BLOCK_SIZE_LIMIT (1UL << 28)
 
 /** Different data structures that can be used for aggregation
   * For efficiency, the aggregation data itself is put into the pool.
