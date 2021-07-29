@@ -29,7 +29,7 @@ void DeltaMergeStoreProxy::upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
     insertColumn<UInt64>(block, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID, 0);
     insertColumn<UInt64>(block, col_balance_define.type, col_balance_define.name, col_balance_define.id, balance);
 
-    store->write(*context, context->getSettingsRef(), block);
+    store->write(*context, context->getSettingsRef(), std::move(block));
 }
 
 UInt64 DeltaMergeStoreProxy::selectBalance(UInt64 id, UInt64 tso)
@@ -98,7 +98,7 @@ UInt64 DeltaMergeStoreProxy::sumBalance(UInt64 begin, UInt64 end, UInt64 tso)
                                          EMPTY_FILTER,
                                          /* expected_block_size= */ 1024)[0];
 
-    std::vector<bool>   found_status;
+    BoolVec found_status;
     std::vector<UInt64> result;
     found_status.resize(end - begin, false);
     result.resize(end - begin, 0);

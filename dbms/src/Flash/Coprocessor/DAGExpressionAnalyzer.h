@@ -77,7 +77,7 @@ public:
     String applyFunction(
         const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, std::shared_ptr<TiDB::ITiDBCollator> collator);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
-    bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column);
+    bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, const BoolVec & is_ts_column);
     bool appendJoinKeyAndJoinFilters(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const DataTypes & key_types, Names & key_names, bool left, bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, String & filter_column_name);

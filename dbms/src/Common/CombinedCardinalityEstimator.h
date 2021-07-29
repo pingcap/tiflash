@@ -135,12 +135,12 @@ public:
         if (rhs.getContainerType() == details::ContainerType::SMALL)
         {
             for (const auto & x : rhs.small)
-                insert(x);
+                insert(x.getKey());
         }
         else if (rhs.getContainerType() == details::ContainerType::MEDIUM)
         {
             for (const auto & x : rhs.getContainer<Medium>())
-                insert(x);
+                insert(x.getKey());
         }
         else if (rhs.getContainerType() == details::ContainerType::LARGE)
             getContainer<Large>().merge(rhs.getContainer<Large>());
@@ -232,7 +232,7 @@ private:
         auto tmp_medium = std::make_unique<Medium>();
 
         for (const auto & x : small)
-            tmp_medium->insert(x);
+            tmp_medium->insert(x.getKey());
 
         medium = tmp_medium.release();
         setContainerType(details::ContainerType::MEDIUM);
@@ -251,12 +251,12 @@ private:
         if (container_type == details::ContainerType::SMALL)
         {
             for (const auto & x : small)
-                tmp_large->insert(x);
+                tmp_large->insert(x.getKey());
         }
         else if (container_type == details::ContainerType::MEDIUM)
         {
             for (const auto & x : getContainer<Medium>())
-                tmp_large->insert(x);
+                tmp_large->insert(x.getKey());
 
             destroy();
         }

@@ -40,7 +40,7 @@ TEST(TestConcurrentHashMap, ConcurrentInsert)
                     typename ConcurrentMap::SegmentType::IteratorWithLock it;
                     bool inserted;
                     map.emplace(insert_value, it, inserted);
-                    it.first->second.value++;
+                    it.first->getMapped().value++;
                 }
             });
         }
@@ -49,7 +49,7 @@ TEST(TestConcurrentHashMap, ConcurrentInsert)
         {
             ASSERT_EQ(map.has(insert_value), true);
             typename ConcurrentMap::SegmentType::IteratorWithLock it = map.find(insert_value);
-            ASSERT_EQ(it.first->second.value.load(), (int)test_concurrency);
+            ASSERT_EQ(it.first->getMapped().value.load(), (int)test_concurrency);
         }
     }
 }
@@ -75,9 +75,9 @@ TEST(TestConcurrentHashMap, ConcurrentInsertWithExplicitLock)
                     }
                     bool inserted;
                     std::lock_guard<std::mutex> lk(map.getSegmentMutex(segment_index));
-                    typename ConcurrentMap::SegmentType::HashTable::iterator it;
+                    typename ConcurrentMap::SegmentType::HashTable::LookupResult it;
                     map.getSegmentTable(segment_index).emplace(insert_value, it, inserted);
-                    it->second.value++;
+                    it->getMapped().value++;
                 }
             });
         }
@@ -92,8 +92,8 @@ TEST(TestConcurrentHashMap, ConcurrentInsertWithExplicitLock)
             }
             auto & sub_map = map.getSegmentTable(segment_index);
             ASSERT_EQ(sub_map.has(insert_value), true);
-            typename ConcurrentMap::SegmentType::HashTable::iterator it = sub_map.find(insert_value);
-            ASSERT_EQ(it->second.value.load(), (int)test_concurrency);
+            typename ConcurrentMap::SegmentType::HashTable::LookupResult it = sub_map.find(insert_value);
+            ASSERT_EQ(it->getMapped().value.load(), (int)test_concurrency);
         }
     }
 }
@@ -121,7 +121,7 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsert)
                     bool inserted;
                     UInt64 insert_value = u(e);
                     concurrent_map.emplace(insert_value, it, inserted);
-                    it.first->second.value++;
+                    it.first->getMapped().value++;
                     if (maps[i].count(insert_value) > 0)
                     {
                         maps[i][insert_value] = maps[i][insert_value] + 1;
@@ -156,7 +156,7 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsert)
         {
             ASSERT_EQ(concurrent_map.has(it->first), true);
             typename ConcurrentMap::SegmentType::IteratorWithLock concurrent_it = concurrent_map.find(it->first);
-            ASSERT_EQ(concurrent_it.first->second.value.load(), it->second);
+            ASSERT_EQ(concurrent_it.first->getMapped().value.load(), it->second);
         }
     }
 }
@@ -190,9 +190,9 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsertWithExplicitLock)
                     bool inserted;
                     {
                         std::lock_guard<std::mutex> lk(concurrent_map.getSegmentMutex(segment_index));
-                        typename ConcurrentMap::SegmentType::HashTable::iterator it;
+                        typename ConcurrentMap::SegmentType::HashTable::LookupResult it;
                         concurrent_map.getSegmentTable(segment_index).emplace(insert_value, it, inserted);
-                        it->second.value++;
+                        it->getMapped().value++;
                     }
                     if (maps[i].count(insert_value) > 0)
                     {
@@ -215,7 +215,7 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsertWithExplicitLock)
             {
                 if (final_map.count(it->first))
                 {
-                    final_map[it->first] = final_map[it->first] + it->second;
+                    final_map[it->first] += it->second;
                 }
                 else
                 {
@@ -235,8 +235,8 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsertWithExplicitLock)
             }
             auto & sub_map = concurrent_map.getSegmentTable(segment_index);
             ASSERT_EQ(sub_map.has(insert_value), true);
-            typename ConcurrentMap::SegmentType::HashTable::iterator concurrent_it = sub_map.find(insert_value);
-            ASSERT_EQ(concurrent_it->second.value.load(), it->second);
+            typename ConcurrentMap::SegmentType::HashTable::LookupResult concurrent_it = sub_map.find(insert_value);
+            ASSERT_EQ(concurrent_it->getMapped().value.load(), it->second);
         }
     }
 }
