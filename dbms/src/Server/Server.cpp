@@ -419,7 +419,7 @@ private:
 };
 
 // We only need this task run once.
-void backgroundInitStores(Context & global_context, Logger * log)
+void backgroundInitStores(Context & global_context, Logger * log, bool lazily_init_store)
 {
     auto initStores = [&global_context, log]() {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
@@ -442,7 +442,16 @@ void backgroundInitStores(Context & global_context, Logger * log)
             "Storage inited finish. [total_count=" << storages.size() << "] [init_count=" << init_cnt << "] [error_count=" << err_cnt
                                                    << "]");
     };
-    std::thread(initStores).detach();
+    if (lazily_init_store)
+    {
+        LOG_INFO(log, "Lazily init store.");
+        std::thread(initStores).detach();
+    }
+    else
+    {
+        LOG_INFO(log, "Not lazily init store.");
+        initStores();
+    }
 }
 
 class Server::FlashGrpcServerHolder
@@ -1185,7 +1194,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Sync schemas done.");
 
-    backgroundInitStores(*global_context, log);
+    backgroundInitStores(*global_context, log, storage_config.lazily_init_store);
 
     // After schema synced, set current database.
     global_context->setCurrentDatabase(default_database);

@@ -136,6 +136,9 @@ void TiFlashStorageConfig::parse(const String & storage, Poco::Logger * log)
 
     if (auto version = table->get_qualified_as<UInt64>("format_version"); version)
         format_version = *version;
+
+    if (auto lazily_init = table->get_qualified_as<Int32>("lazily_init_store"); lazily_init)
+        lazily_init_store = (*lazily_init == 1);
 }
 
 Strings TiFlashStorageConfig::getAllNormalPaths() const

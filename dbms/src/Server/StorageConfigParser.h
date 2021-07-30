@@ -53,7 +53,7 @@ public:
 
     UInt64 bg_task_io_rate_limit = 0;
     UInt64 format_version = 0;
-
+    bool lazily_init_store = false;
 public:
     TiFlashStorageConfig() {}
 
