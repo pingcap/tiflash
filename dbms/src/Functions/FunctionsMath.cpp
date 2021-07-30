@@ -12,8 +12,12 @@ void registerFunctionsMath(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionE>();
     factory.registerFunction<FunctionPi>();
+    factory.registerFunction<FunctionSign>();
+    factory.registerFunction<FunctionRadians>();
+    factory.registerFunction<FunctionDegrees>();
     factory.registerFunction<FunctionExp>();
     factory.registerFunction<FunctionLog>();
+    factory.registerFunction<FunctionLog2Args>();
     factory.registerFunction<FunctionExp2>();
     factory.registerFunction<FunctionLog2>();
     factory.registerFunction<FunctionExp10>();

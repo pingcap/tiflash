@@ -510,7 +510,6 @@ void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns 
     }
 }
 
-
 bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & result, const FileProviderPtr & file_provider,
     ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, bool & no_more_keys)
 {
@@ -1838,6 +1837,7 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
             aggregate_columns[j]->data(),
             aggregates_pool);
     }
+
 
     /// Early release memory.
     block.clear();

@@ -509,4 +509,123 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
         return EngineStoreApplyRes::Persist;
     }
 }
+
+void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & terminate_signals_counter)
+{
+    constexpr double BATCH_READ_INDEX_TIME_RATE = 0.2; // part of time for waiting shall be assigned to batch-read-index
+    constexpr double MAX_SLEEP_TIME = 20;
+
+    Logger * log = &Logger::get(__FUNCTION__);
+
+    LOG_INFO(log, "start to check regions ready");
+
+    std::unordered_set<RegionID> remain_regions;
+    std::unordered_map<RegionID, uint64_t> regions_to_check;
+    Stopwatch region_check_watch;
+    size_t total_regions_cnt = 0;
+    double sleep_time = 2.5; // default tick in TiKV is about 2s (without hibernate-region)
+    {
+        tmt.getKVStore()->traverseRegions([&remain_regions](RegionID region_id, const RegionPtr &) { remain_regions.emplace(region_id); });
+        total_regions_cnt = remain_regions.size();
+    }
+    while (region_check_watch.elapsedSeconds() < tmt.waitRegionReadyTimeout() * BATCH_READ_INDEX_TIME_RATE
+        && terminate_signals_counter.load(std::memory_order_relaxed) == 0)
+    {
+        std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
+        for (auto it = remain_regions.begin(); it != remain_regions.end();)
+        {
+            auto region_id = *it;
+            if (auto region = tmt.getKVStore()->getRegion(region_id); region)
+            {
+                batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region));
+                it++;
+            }
+            else
+            {
+                it = remain_regions.erase(it);
+            }
+        }
+        auto read_index_res = tmt.getKVStore()->getProxyHelper()->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
+        for (auto && [resp, region_id] : *read_index_res)
+        {
+            bool need_retry = resp.read_index() == 0;
+            if (resp.has_region_error())
+            {
+                auto & region_error = resp.region_error();
+                if (region_error.has_region_not_found() || region_error.has_epoch_not_match())
+                    need_retry = false;
+            }
+            if (!need_retry)
+            {
+                // if region is able to get latest commit-index from TiKV, we should make it available only after it has caught up.
+                regions_to_check.emplace(region_id, resp.read_index());
+                remain_regions.erase(region_id);
+            }
+            else
+            {
+                // retry in next round
+            }
+        }
+        if (remain_regions.empty())
+            break;
+
+        LOG_INFO(log, remain_regions.size() << " regions need to fetch latest commit-index in next round, sleep for " << sleep_time << "s");
+        std::this_thread::sleep_for(std::chrono::milliseconds(int64_t(sleep_time * 1000)));
+        sleep_time = std::min(MAX_SLEEP_TIME, sleep_time * 2);
+    }
+
+    if (!remain_regions.empty())
+    {
+        LOG_WARNING(
+            log, remain_regions.size() << " regions CANNOT fetch latest commit-index from TiKV, (region-id): "; do {
+                for (auto && r : remain_regions)
+                {
+                    oss_internal_rare << "(" << r << ") ";
+                }
+            } while (0));
+    }
+    while (region_check_watch.elapsedSeconds() < (double)tmt.waitRegionReadyTimeout()
+        && terminate_signals_counter.load(std::memory_order_relaxed) == 0)
+    {
+        for (auto it = regions_to_check.begin(); it != regions_to_check.end();)
+        {
+            auto [region_id, latest_index] = *it;
+            if (auto region = tmt.getKVStore()->getRegion(region_id); region)
+            {
+                if (region->appliedIndex() >= latest_index)
+                {
+                    it = regions_to_check.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+            else
+            {
+                it = regions_to_check.erase(it);
+            }
+        }
+
+        if (regions_to_check.empty())
+            break;
+
+        LOG_INFO(log, regions_to_check.size() << " regions need to apply to latest index, sleep for " << sleep_time << "s");
+        std::this_thread::sleep_for(std::chrono::milliseconds(int64_t(sleep_time * 1000)));
+        sleep_time = std::min(MAX_SLEEP_TIME, sleep_time * 2);
+    }
+    if (!regions_to_check.empty())
+    {
+        LOG_WARNING(
+            log, regions_to_check.size() << " regions CANNOT catch up with latest index, (region-id,latest-index): "; do {
+                for (auto && [region_id, latest_index] : regions_to_check)
+                {
+                    oss_internal_rare << "(" << region_id << "," << latest_index << ") ";
+                }
+            } while (0));
+    }
+
+    LOG_INFO(log, "finish to check " << total_regions_cnt << " regions, time cost " << region_check_watch.elapsedSeconds() << "s");
+}
+
 } // namespace DB

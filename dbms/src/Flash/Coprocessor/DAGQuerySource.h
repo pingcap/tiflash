@@ -53,7 +53,7 @@ public:
     DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_,
         const tipb::DAGRequest & dag_request_, const bool is_batch_cop_ = false);
 
-    std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
+    std::tuple<std::string, ASTPtr> parse(size_t) override;
     String str(size_t max_query_size) override;
     std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
 
