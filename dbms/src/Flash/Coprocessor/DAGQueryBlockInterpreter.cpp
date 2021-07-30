@@ -160,7 +160,7 @@ AnalysisResult analyzeExpressions(
     const std::vector<const tipb::Expr *> & conditions,
     const BoolVec & is_ts_column,
     bool keep_session_timezone_info,
-    const NamesWithAliases & final_project)
+    NamesWithAliases & final_project)
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
@@ -244,14 +244,14 @@ struct RegionReader
     const DAGQuerySource & dag;
     const DAGQueryBlock & query_block;
     const tipb::TableScan & table_scan;
-    const std::vector<const tipb::Expr *> conditions;
+    const std::vector<const tipb::Expr *> & conditions;
     size_t max_streams;
     Poco::Logger * log;
 
     /// derived from other members, doesn't change during RegionReader's lifetime
 
     TableID table_id;
-    const Setting & settings;
+    const Settings & settings;
     TMTContext & tmt;
 
     /// initialized by RegionReader, will transfer to caller after RegionReader finished.
@@ -271,8 +271,8 @@ struct RegionReader
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
     BlockInputStreamPtr null_stream_if_empty;
     Names required_columns;
-    NameAndTypes source_columns;
-    BoolVec is_timestmap_column;
+    NamesAndTypes source_columns;
+    BoolVec is_timestamp_column;
     String handle_column_name;
     std::optional<tipb::DAGRequest> dag_request;
     std::optional<DAGSchema> dag_schema;
@@ -280,20 +280,21 @@ struct RegionReader
     RegionReader(
         Context & context_,
         const DAGQuerySource & dag_,
-        const DAGQueryBlock & query_block;
+        const DAGQueryBlock & query_block_,
         const tipb::TableScan & ts,
-        const std::vector<const tipb::Expr *> conditions_,
+        const std::vector<const tipb::Expr *> & conditions_,
         size_t max_streams_,
         Poco::Logger * log_)
         : context(context_),
           dag(dag_),
+          query_block(query_block_),
           table_scan(ts),
           conditions(conditions_),
           max_streams(max_streams_),
           log(log_),
           table_id(ts.table_id()),
           settings(context.getSettingsRef()),
-          tmt(context.getTMTContext),
+          tmt(context.getTMTContext()),
           mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
     {
     }
@@ -305,9 +306,9 @@ struct RegionReader
         else
             learner_read_snapshot = doCopLearnerRead();
 
-        std::tie(storage, table_structre_lock) = getAndLockStorage(settings.schema_version);
+        std::tie(storage, table_structure_lock) = getAndLockStorage(settings.schema_version);
 
-        std::tie(required_column, source_columns, is_timestamp_column, handle_column_name) = getColumnsForTableScan(settings.max_columns_to_read);
+        std::tie(required_columns, source_columns, is_timestamp_column, handle_column_name) = getColumnsForTableScan(settings.max_columns_to_read);
 
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
@@ -357,11 +358,11 @@ struct RegionReader
 
                 if (retry)
                 {
-                    for (const auto & r : retry)
+                    for (const auto & r : *retry)
                         force_retry.emplace(r.get().region_id);
                 }
                 if (mvcc_query_info->regions_query_info.empty())
-                    return {{}, *retry};
+                    return std::make_tuple(LearnerReadSnapshot{}, *retry);
                 return {doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log), *retry};
             }
             catch (const LockException & e)
@@ -614,22 +615,22 @@ struct RegionReader
         }
     }
 
-    std::tuple<Names, NameAndTypes, BoolVec, String> getColumnsForTableScan(UInt64 max_columns_to_read)
+    std::tuple<Names, NamesAndTypes, BoolVec, String> getColumnsForTableScan(Int64 max_columns_to_read)
     {
         // todo handle alias column
-        if (max_columns_to_read && table_scan.columns.size() > max_columns_to_read)
+        if (max_columns_to_read && table_scan.columns().size() > max_columns_to_read)
         {
             throw TiFlashException("Limit for number of columns to read exceeded. "
                                    "Requested: "
-                    + toString(table_scan.columns.size()) + ", maximum: " + toString(max_columns_to_read),
+                    + toString(table_scan.columns().size()) + ", maximum: " + toString(max_columns_to_read),
                 Errors::BroadcastJoin::TooManyColumns);
         }
 
         Names required_columns_;
-        NameAndTypes source_columns_;
+        NamesAndTypes source_columns_;
         BoolVec timestamp_column_flag;
         String handle_column_name_ = MutableSupport::tidb_pk_column_name;
-        if (auto pk_handle_col = storage.getTableInfo().getPKHandleColumn())
+        if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
             handle_column_name_ = pk_handle_col->get().name;
 
         for (Int32 i = 0; i < table_scan.columns().size(); i++)
@@ -638,8 +639,8 @@ struct RegionReader
             ColumnID cid = ci.column_id();
 
             // Column ID -1 return the handle column
-            String name = cid == -1 ? handle_column_name_ : storage.getTableInfo().getColumnName(cid);
-            auto pair = storage.getColumns().getPhysical(name);
+            String name = cid == -1 ? handle_column_name_ : storage->getTableInfo().getColumnName(cid);
+            auto pair = storage->getColumns().getPhysical(name);
             required_columns_.emplace_back(std::move(name));
             source_columns_.emplace_back(std::move(pair));
             timestamp_column_flag.push_back(cid != -1 && ci.tp() == TiDB::TypeTimestamp);
@@ -674,11 +675,11 @@ struct RegionReader
             tipb::Executor * ts_exec = dag_req.add_executors();
             ts_exec->set_tp(tipb::ExecType::TypeTableScan);
             ts_exec->set_executor_id(query_block.source->executor_id());
-            *(ts_exec->mutable_tbl_scan()) = ts;
+            *(ts_exec->mutable_tbl_scan()) = table_scan;
 
-            for (int i = 0; i < ts.columns().size(); ++i)
+            for (int i = 0; i < table_scan.columns().size(); ++i)
             {
-                const auto & col = ts.columns(i);
+                const auto & col = table_scan.columns(i);
                 auto col_id = col.column_id();
 
                 if (col_id == DB::TiDBPkColumnID)
@@ -706,7 +707,7 @@ struct RegionReader
 
 };
 
-void setQuotaAndLimitsOnTableScan(DAGPipeline & pipeline, const Context & context)
+void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
 {
     const Settings & settings = context.getSettingsRef();
 
@@ -753,11 +754,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
         throw TiFlashException("Dag Request does not have region to read. ", Errors::Coprocessor::BadRequest);
     }
 
-    TableID table_id = ts.table_id();
-
-    const Settings & settings = context.getSettingsRef();
-    auto & tmt = context.getTMTContext();
-
     RegionReader reader(context, dag, query_block, ts, conditions, max_streams, log);
     reader.execute(pipeline);
 
@@ -799,7 +795,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     pipeline.transform([&](auto & stream) { stream->addTableLock(table_drop_lock); });
 
     /// Set the limits and quota for reading data, the speed and time of the query.
-    setQuotaAndLimitsOnTableScan(pipeline, context);
+    setQuotaAndLimitsOnTableScan(context, pipeline);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
 }
 
