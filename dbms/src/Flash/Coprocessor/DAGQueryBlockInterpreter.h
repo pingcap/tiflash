@@ -98,10 +98,6 @@ private:
 
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
-<<<<<<< HEAD
-=======
-    bool addTimeZoneCastAfterTS(const BoolVec & is_ts_column, ExpressionActionsChain & chain);
->>>>>>> master
 
     void executeRemoteQueryImpl(DAGPipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
         ::tipb::DAGRequest & dag_req, const DAGSchema & schema);
