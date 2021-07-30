@@ -169,31 +169,9 @@ static NO_INLINE void deserializeBinarySSE2(ColumnString::Chars_t & data, Column
     }
 }
 
-
-void DataTypeString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const
+void deserializeBinaryBulkDispatch(
+    double avg_chars_size, ColumnString::Chars_t & data, ColumnString::Offsets & offsets, ReadBuffer & istr, size_t limit)
 {
-    ColumnString & column_string = typeid_cast<ColumnString &>(column);
-    ColumnString::Chars_t & data = column_string.getChars();
-    ColumnString::Offsets & offsets = column_string.getOffsets();
-
-    double avg_chars_size;
-
-    if (avg_value_size_hint && avg_value_size_hint > sizeof(offsets[0]))
-    {
-        /// Randomly selected.
-        constexpr auto avg_value_size_hint_reserve_multiplier = 1.2;
-
-        avg_chars_size = (avg_value_size_hint - sizeof(offsets[0])) * avg_value_size_hint_reserve_multiplier;
-    }
-    else
-    {
-        /// By default reserve only for empty strings.
-        avg_chars_size = 1;
-    }
-
-    data.reserve(data.size() + std::ceil(limit * avg_chars_size));
-
-    offsets.reserve(offsets.size() + limit);
     do
     {
 #ifdef DBMS_ENABLE_AVX_SUPPORT
@@ -219,6 +197,34 @@ void DataTypeString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, 
             return deserializeBinarySSE2<2>(data, offsets, istr, limit);
     } while (false);
     return deserializeBinarySSE2<1>(data, offsets, istr, limit);
+}
+
+void DataTypeString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const
+{
+    ColumnString & column_string = typeid_cast<ColumnString &>(column);
+    ColumnString::Chars_t & data = column_string.getChars();
+    ColumnString::Offsets & offsets = column_string.getOffsets();
+
+    double avg_chars_size;
+
+    if (avg_value_size_hint && avg_value_size_hint > sizeof(offsets[0]))
+    {
+        /// Randomly selected.
+        constexpr auto avg_value_size_hint_reserve_multiplier = 1.2;
+
+        avg_chars_size = (avg_value_size_hint - sizeof(offsets[0])) * avg_value_size_hint_reserve_multiplier;
+    }
+    else
+    {
+        /// By default reserve only for empty strings.
+        avg_chars_size = 1;
+    }
+
+    data.reserve(data.size() + std::ceil(limit * avg_chars_size));
+
+    offsets.reserve(offsets.size() + limit);
+
+    deserializeBinaryBulkDispatch(avg_chars_size, data, offsets, istr, limit);
 }
 
 
