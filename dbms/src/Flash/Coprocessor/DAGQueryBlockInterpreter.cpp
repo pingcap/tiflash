@@ -34,7 +34,6 @@
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
-#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/Region.h>
