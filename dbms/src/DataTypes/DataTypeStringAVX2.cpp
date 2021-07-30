@@ -33,13 +33,16 @@ void deserializeBinaryAVX2(ColumnString::Chars_t & data, ColumnString::Offsets &
 
         data.resize(offset);
 
+        constexpr auto vector_length = sizeof(__m256i);
+
         if (size)
         {
             /// An optimistic branch in which more efficient copying is possible.
-            if (offset + 32 * UNROLL_TIMES <= data.capacity() && istr.position() + size + 32 * UNROLL_TIMES <= istr.buffer().end())
+            if (offset + vector_length * UNROLL_TIMES <= data.capacity()
+                && istr.position() + size + vector_length * UNROLL_TIMES <= istr.buffer().end())
             {
                 const auto * avx2_src_pos = reinterpret_cast<const __m256i *>(istr.position());
-                const auto shift_limit = (size + (32 * UNROLL_TIMES - 1)) / 32 / UNROLL_TIMES * UNROLL_TIMES;
+                const auto shift_limit = (size + (vector_length * UNROLL_TIMES - 1)) / vector_length / UNROLL_TIMES * UNROLL_TIMES;
                 const __m256i * avx2_src_end = avx2_src_pos + shift_limit;
                 auto * avx2_dst_pos = reinterpret_cast<__m256i *>(&data[offset - size - 1]);
 
