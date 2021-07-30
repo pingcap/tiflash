@@ -184,4 +184,6 @@ class KVStoreTaskLock : private boost::noncopyable
     std::lock_guard<std::mutex> lock;
 };
 
+void WaitCheckRegionReady(const TMTContext &, const std::atomic_size_t & terminate_signals_counter);
+
 } // namespace DB

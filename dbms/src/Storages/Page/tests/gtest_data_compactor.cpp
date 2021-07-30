@@ -101,7 +101,7 @@ try
     });
 
     // valid_pages
-    DataCompactor<MockSnapshotPtr> compactor(storage, config, ctx);
+    DataCompactor<MockSnapshotPtr> compactor(storage, config, nullptr);
     auto                           valid_pages = DataCompactor<MockSnapshotPtr>::collectValidPagesInPageFile(snapshot);
     ASSERT_EQ(valid_pages.size(), 2); // 3 valid pages in 2 PageFiles
 
