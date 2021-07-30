@@ -7,7 +7,10 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/Coprocessor/DAGPipeline.h>
 #include <Interpreters/AggregateDescription.h>
+#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/TiDB.h>
@@ -17,50 +20,12 @@ namespace DB
 {
 
 class Context;
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
-struct RegionLearnerReadSnapshot;
-using LearnerReadSnapshot = std::unordered_map<RegionID, RegionLearnerReadSnapshot>;
-struct SelectQueryInfo;
 
-using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
-using DAGSchema = std::vector<DAGColumnInfo>;
 class DAGQuerySource;
 class DAGQueryBlock;
 struct RegionInfo;
 class ExchangeReceiver;
 class DAGExpressionAnalyzer;
-class ExpressionActions;
-using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
-struct ExpressionActionsChain;
-class IManageableStorage;
-using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
-using NameWithAlias = std::pair<std::string, std::string>;
-using NamesWithAliases = std::vector<NameWithAlias>;
-using RegionRetryList = std::list<std::reference_wrapper<const RegionInfo>>;
-
-struct DAGPipeline
-{
-    BlockInputStreams streams;
-    /** When executing FULL or RIGHT JOIN, there will be a data stream from which you can read "not joined" rows.
-      * It has a special meaning, since reading from it should be done after reading from the main streams.
-      * It is appended to the main streams in UnionBlockInputStream or ParallelAggregatingBlockInputStream.
-      */
-    BlockInputStreams streams_with_non_joined_data;
-
-    BlockInputStreamPtr & firstStream() { return streams.at(0); }
-
-    template <typename Transform>
-    void transform(Transform && transform)
-    {
-        for (auto & stream : streams)
-            transform(stream);
-        for (auto & stream : streams_with_non_joined_data)
-            transform(stream);
-    }
-
-    bool hasMoreThanOneStream() const { return streams.size() + streams_with_non_joined_data.size() > 1; }
-};
 
 /** build ch plan from dag request: dag executors -> ch plan
   */
