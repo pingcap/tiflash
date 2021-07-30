@@ -93,7 +93,7 @@ class DAGQueryBlockInterpreter
 {
 public:
     DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
-        const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst, ASTPtr dummp_query,
+        const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst,
         const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
         const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map);
 
@@ -130,7 +130,7 @@ private:
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
     AnalysisResult analyzeExpressions();
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
-    bool addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, ExpressionActionsChain & chain);
+    bool addTimeZoneCastAfterTS(const BoolVec & is_ts_column, ExpressionActionsChain & chain);
 
 private:
     void executeRemoteQueryImpl(DAGPipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
@@ -141,7 +141,6 @@ private:
     const DAGQueryBlock & query_block;
     const bool keep_session_timezone_info;
     const tipb::DAGRequest & rqst;
-    ASTPtr dummy_query;
 
     NamesWithAliases final_project;
 
@@ -162,7 +161,7 @@ private:
     const DAGQuerySource & dag;
     std::vector<SubqueriesForSets> & subqueriesForSets;
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
-    std::vector<bool> timestamp_column_flag_for_tablescan;
+    BoolVec timestamp_column_flag_for_tablescan;
 
     Poco::Logger * log;
 };

@@ -210,7 +210,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             }
         };
         [&]() {
-            if (!tmt.checkRunning())
+            if (!tmt.checkRunning(std::memory_order_relaxed))
             {
                 make_default_batch_read_index_result();
                 return;

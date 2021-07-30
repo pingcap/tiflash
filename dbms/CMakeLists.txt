@@ -112,7 +112,6 @@ if (ARCH_FREEBSD)
     target_compile_definitions (clickhouse_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
 endif ()
 
-add_subdirectory(src/Common/ZooKeeper)
 add_subdirectory(src/Common/Config)
 
 if (MAKE_STATIC_LIBRARIES)

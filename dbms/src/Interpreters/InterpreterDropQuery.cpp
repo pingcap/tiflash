@@ -4,7 +4,6 @@
 #include <Databases/IDatabase.h>
 #include <Encryption/FileProvider.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/DDLWorker.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Poco/File.h>
@@ -41,7 +40,7 @@ BlockIO InterpreterDropQuery::execute()
     checkAccess(drop);
 
     if (!drop.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, context, {drop.database});
+        throw Exception("Should not run into `executeDDLQueryOnCluster`");
 
     String path = context.getPath();
     String current_database = context.getCurrentDatabase();

@@ -1,5 +1,6 @@
 #include "ConfigReloader.h"
 
+#include <Common/Exception.h>
 #include <Common/setThreadName.h>
 #include <Poco/File.h>
 #include <Poco/Util/Application.h>

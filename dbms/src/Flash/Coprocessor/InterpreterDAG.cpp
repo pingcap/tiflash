@@ -49,7 +49,7 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
         input_streams_vec.push_back(child_streams);
     }
     DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, keep_session_timezone_info,
-        dag.getDAGRequest(), dag.getAST(), dag, subqueriesForSets, mpp_exchange_receiver_maps);
+        dag.getDAGRequest(), dag, subqueriesForSets, mpp_exchange_receiver_maps);
     return query_block_interpreter.execute();
 }
 
