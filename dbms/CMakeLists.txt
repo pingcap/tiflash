@@ -8,6 +8,10 @@ set (CONFIG_VERSION ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config_version.h)
 set (CONFIG_COMMON ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config.h)
 set (CONFIG_BUILD ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config_build.cpp)
 
+if (ARCH_AMD64)
+    option(DBMS_ENABLE_AVX_SUPPORT "enable AVX and AVX2 support" ON)
+endif()
+
 include (cmake/version.cmake)
 message (STATUS "Will build ${VERSION_FULL} (TiFlash ${TIFLASH_RELEASE_VERSION})")
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config.h.in ${CONFIG_COMMON})
@@ -212,9 +216,10 @@ target_link_libraries (dbms
     Threads::Threads
 )
 
-if(ARCH_AMD64)
+if(DBMS_ENABLE_AVX_SUPPORT)
 set_source_files_properties(src/DataTypes/DataTypeStringAVX2.cpp
         APPEND COMPILE_FLAGS "-mavx -mavx2")
+target_compile_definitions(dbms PRIVATE DBMS_ENABLE_AVX_SUPPORT=1)
 endif()
 target_include_directories (dbms BEFORE PRIVATE ${DIVIDE_INCLUDE_DIR})
 target_include_directories (dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})

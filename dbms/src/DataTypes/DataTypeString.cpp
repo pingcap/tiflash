@@ -8,6 +8,9 @@
 #include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
 
+#ifdef __x86_64__
+#include <immintrin.h>
+#endif
 
 namespace DB
 {
@@ -193,17 +196,17 @@ void DataTypeString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, 
     offsets.reserve(offsets.size() + limit);
     do
     {
-#ifdef __x86_64__
+#ifdef DBMS_ENABLE_AVX_SUPPORT
         if (__builtin_cpu_supports("avx2"))
         {
             if (avg_chars_size >= 128)
-                return deserializeBinaryAVX2By4(data, offsets, istr, limit);
+                return deserializeBinaryAVX2ByUnRoll4(data, offsets, istr, limit);
             if (avg_chars_size >= 96)
-                return deserializeBinaryAVX2By3(data, offsets, istr, limit);
+                return deserializeBinaryAVX2ByUnRoll3(data, offsets, istr, limit);
             if (avg_chars_size >= 64)
-                return deserializeBinaryAVX2By2(data, offsets, istr, limit);
+                return deserializeBinaryAVX2ByUnRoll2(data, offsets, istr, limit);
             if (avg_chars_size >= 32)
-                return deserializeBinaryAVX2By1(data, offsets, istr, limit);
+                return deserializeBinaryAVX2ByUnRoll1(data, offsets, istr, limit);
             break;
         }
 #endif
