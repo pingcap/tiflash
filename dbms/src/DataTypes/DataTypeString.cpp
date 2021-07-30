@@ -134,15 +134,23 @@ static NO_INLINE void deserializeBinarySSE2(ColumnString::Chars_t & data, Column
                     sse_src_pos += UNROLL_TIMES;
                     sse_dst_pos += UNROLL_TIMES;
 
-                    if (UNROLL_TIMES >= 4) __asm__("movdqu %0, %%xmm0" :: "m"(sse_src_pos[-4]));
-                    if (UNROLL_TIMES >= 3) __asm__("movdqu %0, %%xmm1" :: "m"(sse_src_pos[-3]));
-                    if (UNROLL_TIMES >= 2) __asm__("movdqu %0, %%xmm2" :: "m"(sse_src_pos[-2]));
-                    if (UNROLL_TIMES >= 1) __asm__("movdqu %0, %%xmm3" :: "m"(sse_src_pos[-1]));
+                    if (UNROLL_TIMES >= 4)
+                        __asm__("movdqu %0, %%xmm0" ::"m"(sse_src_pos[-4]));
+                    if (UNROLL_TIMES >= 3)
+                        __asm__("movdqu %0, %%xmm1" ::"m"(sse_src_pos[-3]));
+                    if (UNROLL_TIMES >= 2)
+                        __asm__("movdqu %0, %%xmm2" ::"m"(sse_src_pos[-2]));
+                    if (UNROLL_TIMES >= 1)
+                        __asm__("movdqu %0, %%xmm3" ::"m"(sse_src_pos[-1]));
 
-                    if (UNROLL_TIMES >= 4) __asm__("movdqu %%xmm0, %0" : "=m"(sse_dst_pos[-4]));
-                    if (UNROLL_TIMES >= 3) __asm__("movdqu %%xmm1, %0" : "=m"(sse_dst_pos[-3]));
-                    if (UNROLL_TIMES >= 2) __asm__("movdqu %%xmm2, %0" : "=m"(sse_dst_pos[-2]));
-                    if (UNROLL_TIMES >= 1) __asm__("movdqu %%xmm3, %0" : "=m"(sse_dst_pos[-1]));
+                    if (UNROLL_TIMES >= 4)
+                        __asm__("movdqu %%xmm0, %0" : "=m"(sse_dst_pos[-4]));
+                    if (UNROLL_TIMES >= 3)
+                        __asm__("movdqu %%xmm1, %0" : "=m"(sse_dst_pos[-3]));
+                    if (UNROLL_TIMES >= 2)
+                        __asm__("movdqu %%xmm2, %0" : "=m"(sse_dst_pos[-2]));
+                    if (UNROLL_TIMES >= 1)
+                        __asm__("movdqu %%xmm3, %0" : "=m"(sse_dst_pos[-1]));
                 }
 
                 istr.position() += size;
@@ -183,29 +191,30 @@ void DataTypeString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, 
     data.reserve(data.size() + std::ceil(limit * avg_chars_size));
 
     offsets.reserve(offsets.size() + limit);
-
-#ifdef __x86_64__
-    if (__builtin_cpu_supports("avx2"))
+    do
     {
-        if (avg_chars_size >= 128)
-            return deserializeBinaryAVX2By4(data, offsets, istr, limit);
-        if (avg_chars_size >= 96)
-            return deserializeBinaryAVX2By3(data, offsets, istr, limit);
-        if (avg_chars_size >= 64)
-            return deserializeBinaryAVX2By2(data, offsets, istr, limit);
-        if (avg_chars_size >= 32)
-            return deserializeBinaryAVX2By1(data, offsets, istr, limit);
-        goto SSE2_TAIL;
-    }
+#ifdef __x86_64__
+        if (__builtin_cpu_supports("avx2"))
+        {
+            if (avg_chars_size >= 128)
+                return deserializeBinaryAVX2By4(data, offsets, istr, limit);
+            if (avg_chars_size >= 96)
+                return deserializeBinaryAVX2By3(data, offsets, istr, limit);
+            if (avg_chars_size >= 64)
+                return deserializeBinaryAVX2By2(data, offsets, istr, limit);
+            if (avg_chars_size >= 32)
+                return deserializeBinaryAVX2By1(data, offsets, istr, limit);
+            break;
+        }
 #endif
 
-    if (avg_chars_size >= 64)
-        return deserializeBinarySSE2<4>(data, offsets, istr, limit);
-    if (avg_chars_size >= 48)
-        return deserializeBinarySSE2<3>(data, offsets, istr, limit);
-    if (avg_chars_size >= 32)
-        return deserializeBinarySSE2<2>(data, offsets, istr, limit);
-SSE2_TAIL:
+        if (avg_chars_size >= 64)
+            return deserializeBinarySSE2<4>(data, offsets, istr, limit);
+        if (avg_chars_size >= 48)
+            return deserializeBinarySSE2<3>(data, offsets, istr, limit);
+        if (avg_chars_size >= 32)
+            return deserializeBinarySSE2<2>(data, offsets, istr, limit);
+    } while (false);
     return deserializeBinarySSE2<1>(data, offsets, istr, limit);
 }
 
