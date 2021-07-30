@@ -52,25 +52,28 @@ void deserializeBinaryAVX2(ColumnString::Chars_t & data, ColumnString::Offsets &
                     avx2_src_pos += UNROLL_TIMES;
                     avx2_dst_pos += UNROLL_TIMES;
 
-                    __m256i vector[UNROLL_TIMES];
+                    // GCC 7 does not seem to have a good support for AVX2 codegen here,
+                    // we still need to use ASM.
+                    // GCC 7 does not generate code with `vmovdqu` with `ymm` registers,
+                    // but instead rely on `xmm` registers.
 
                     if constexpr (UNROLL_TIMES >= 4)
-                        vector[3] = _mm256_loadu_si256(avx2_src_pos - 4);
+                        __asm__("vmovdqu %0, %%ymm0" ::"m"(avx2_src_pos[-4]));
                     if constexpr (UNROLL_TIMES >= 3)
-                        vector[2] = _mm256_loadu_si256(avx2_src_pos - 3);
+                        __asm__("vmovdqu %0, %%ymm1" ::"m"(avx2_src_pos[-3]));
                     if constexpr (UNROLL_TIMES >= 2)
-                        vector[1] = _mm256_loadu_si256(avx2_src_pos - 2);
+                        __asm__("vmovdqu %0, %%ymm2" ::"m"(avx2_src_pos[-2]));
                     if constexpr (UNROLL_TIMES >= 1)
-                        vector[0] = _mm256_loadu_si256(avx2_src_pos - 1);
+                        __asm__("vmovdqu %0, %%ymm3" ::"m"(avx2_src_pos[-1]));
 
                     if constexpr (UNROLL_TIMES >= 4)
-                        _mm256_storeu_si256(avx2_dst_pos - 4, vector[3]);
+                        __asm__("vmovdqu %%ymm0, %0" : "=m"(avx2_dst_pos[-4]));
                     if constexpr (UNROLL_TIMES >= 3)
-                        _mm256_storeu_si256(avx2_dst_pos - 3, vector[2]);
+                        __asm__("vmovdqu %%ymm1, %0" : "=m"(avx2_dst_pos[-3]));
                     if constexpr (UNROLL_TIMES >= 2)
-                        _mm256_storeu_si256(avx2_dst_pos - 2, vector[1]);
+                        __asm__("vmovdqu %%ymm2, %0" : "=m"(avx2_dst_pos[-2]));
                     if constexpr (UNROLL_TIMES >= 1)
-                        _mm256_storeu_si256(avx2_dst_pos - 1, vector[0]);
+                        __asm__("vmovdqu %%ymm3, %0" : "=m"(avx2_dst_pos[-1]));
 
                     __builtin_prefetch(avx2_src_pos);
                 }
