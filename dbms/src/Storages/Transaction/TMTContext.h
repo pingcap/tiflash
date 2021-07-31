@@ -34,11 +34,13 @@ class TMTContext : private boost::noncopyable
 public:
     enum class StoreStatus : uint8_t
     {
-        Idle = 0,
+        _MIN = 0,
+        Idle,
         Ready,
         Running,
         Stopping,
         Terminated,
+        _MAX,
     };
 
 public:
@@ -92,6 +94,7 @@ public:
 
     UInt64 replicaReadMaxThread() const;
     UInt64 batchReadIndexTimeout() const;
+    Int64 waitRegionReadyTimeout() const;
 
 private:
     Context & context;
@@ -117,6 +120,9 @@ private:
 
     std::atomic_uint64_t replica_read_max_thread;
     std::atomic_uint64_t batch_read_index_timeout_ms;
+    std::atomic_int64_t wait_region_ready_timeout_sec;
 };
+
+const std::string & IntoStoreStatusName(TMTContext::StoreStatus status);
 
 } // namespace DB
