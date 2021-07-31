@@ -11,6 +11,8 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 
@@ -29,6 +31,15 @@ extern const char exception_during_mpp_root_task_run[];
 extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char exception_during_mpp_close_tunnel[];
 } // namespace FailPoints
+
+mpp::MPPDataPacket getPacketWithError(String reason)
+{
+    mpp::MPPDataPacket data;
+    auto err = std::make_unique<mpp::Error>();
+    err->set_msg(std::move(reason));
+    data.set_allocated_error(err.release());
+    return data;
+}
 
 bool MPPTaskProgress::isTaskHanging(const Context & context)
 {
@@ -73,11 +84,7 @@ void MPPTunnel::close(const String & reason)
         try
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(reason);
-            data.set_allocated_error(err);
-            if (!writer->Write(data))
+            if (!writer->Write(getPacketWithError(reason)))
                 throw Exception("Failed to write err");
         }
         catch (...)
@@ -260,6 +267,10 @@ void MPPTask::runImpl()
     }
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
+    SCOPE_EXIT({
+        GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_duration_seconds, type_run_mpp_task)
+            .Observe(stopwatch.elapsedSeconds());
+    });
     LOG_INFO(log, "task starts running");
     auto from = io.in;
     auto to = io.out;
@@ -324,7 +335,7 @@ void MPPTask::runImpl()
     LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     auto process_info = context.getProcessListElement()->getInfo();
     auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
-    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_dispatch_mpp_task).Observe(peak_memory);
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
     unregisterTask();
     status = FINISHED;
 }
@@ -359,11 +370,7 @@ void MPPTask::writeErrToAllTunnel(const String & e)
         try
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_write_err_to_tunnel);
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(e);
-            data.set_allocated_error(err);
-            it.second->write(data, true);
+            it.second->write(getPacketWithError(e), true);
         }
         catch (...)
         {

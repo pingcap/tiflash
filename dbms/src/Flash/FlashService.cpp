@@ -200,11 +200,7 @@ grpc::Status FlashService::Coprocessor(
         if (tunnel == nullptr)
         {
             LOG_ERROR(log, err_msg);
-            mpp::MPPDataPacket packet;
-            auto err = new mpp::Error();
-            err->set_msg(err_msg);
-            packet.set_allocated_error(err);
-            if (writer->Write(packet))
+            if (writer->Write(getPacketWithError(err_msg)))
             {
                 return grpc::Status::OK;
             }
@@ -245,11 +241,11 @@ grpc::Status FlashService::Coprocessor(
     });
 
     auto [context, status] = createDBContext(grpc_context);
-    auto err = new mpp::Error();
     if (!status.ok())
     {
+        auto err = std::make_unique<mpp::Error>();
         err->set_msg("error status");
-        response->set_allocated_error(err);
+        response->set_allocated_error(err.release());
         return status;
     }
     auto & tmt_context = context.getTMTContext();

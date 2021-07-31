@@ -43,6 +43,7 @@ void registerFunctionsGeo(FunctionFactory &);
 void registerFunctionsCharset(FunctionFactory &);
 void registerFunctionsNull(FunctionFactory &);
 void registerFunctionsFindCluster(FunctionFactory &);
+void registerFunctionsStringMath(FunctionFactory &);
 
 
 void registerFunctions()
@@ -81,6 +82,7 @@ void registerFunctions()
     registerFunctionsCharset(factory);
     registerFunctionsNull(factory);
     registerFunctionsFindCluster(factory);
+    registerFunctionsStringMath(factory);
 }
 
 }
