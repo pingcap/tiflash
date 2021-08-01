@@ -169,6 +169,26 @@ TEST_F(TestDispatchHelper, OneLine)
     ASSERT_EQ(result, 3 * (sizeof(char) + sizeof(double)));
 }
 
+TEST_F(TestDispatchHelper, GetTypeVector)
+{
+    auto table = helper::newBuilder()
+                      .append<char, short>()
+                      .append<int, double, long double>()
+                      .setSignature<size_t(size_t)>()
+                      .buildFor<SumOfSize>();
+
+    auto index = table.createTypeVector();
+    index[0] = helper::getTypeVar<short>();
+    index[1] = helper::getTypeVar<int>();
+
+    auto fn = table.lookup(index);
+    ASSERT_NE(fn, nullptr);
+
+    auto result = fn(5);
+    ASSERT_TRUE((std::is_same_v<decltype(result), size_t>));
+    ASSERT_EQ(result, 5 * (sizeof(short) + sizeof(int)));
+}
+
 } // namespace tests
 
 } // namespace DB
