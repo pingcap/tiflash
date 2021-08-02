@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Storages/Page/gc/DataCompactor.h>
 #include <Storages/PathPool.h>
@@ -8,6 +9,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_set_page_data_compact_batch[];
+} // namespace FailPoints
 
 template <typename SnapshotPtr>
 DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const RateLimiterPtr & rate_limiter_)
@@ -399,7 +404,12 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
                 return gc_file_writer->write(wb, gc_file_edit, rate_limiter);
             };
 
+#ifndef NDEBUG
+            size_t MAX_BATCH_PER_MOVEMENT = 1000;
+            fiu_do_on(FailPoints::force_set_page_data_compact_batch, { MAX_BATCH_PER_MOVEMENT = 3; });
+#else
             constexpr size_t MAX_BATCH_PER_MOVEMENT = 1000;
+#endif
             if (page_id_and_entries.size() <= MAX_BATCH_PER_MOVEMENT)
             {
                 bytes_written += migrate_entries(page_id_and_entries);
@@ -417,14 +427,14 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
                 {
                     size_t end_idx = std::min(start_idx + MAX_BATCH_PER_MOVEMENT, page_id_and_entries.size());
                     entries_batch.clear();
-                    std::copy(page_id_and_entries.begin() + start_idx, page_id_and_entries.begin() + end_idx, entries_batch.begin());
+                    entries_batch.assign(page_id_and_entries.begin() + start_idx, page_id_and_entries.begin() + end_idx);
 #ifndef NDEBUG
                     entries_migrated += entries_batch.size();
 #endif
                     const auto curr_bytes_written = migrate_entries(entries_batch);
                     LOG_DEBUG(log,
                               storage_name << " DataCompactor::mergeValidPages run with a samller batch [start_idx=" << start_idx
-                                           << "] [end_idx=" << end_idx << "], [curr_bytes_written=" << curr_bytes_written << "]");
+                                           << "] [end_idx=" << end_idx << "] [curr_bytes_written=" << curr_bytes_written << "]");
                     bytes_written += curr_bytes_written;
 
                     start_idx = end_idx;
