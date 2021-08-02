@@ -3,8 +3,6 @@
 #include <Columns/ColumnString.h>
 #include <DataTypes/IDataType.h>
 #include <IO/ReadHelpers.h>
-
-#include <ostream>
 namespace DB
 {
 
