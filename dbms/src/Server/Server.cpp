@@ -144,7 +144,7 @@ void detectSIMDGlobalConfig(Logger * log)
         {
             auto level = std::stoul(config);
             // casting out-of-range integer to enum is UB.
-            if (level >= static_cast<size_t>(DB::X86SIMDLevel::Disable) && level <= static_cast<size_t>(DB::X86SIMDLevel::AVX512))
+            if (level <= static_cast<size_t>(DB::X86SIMDLevel::AVX512))
             {
                 DB::TIFLASH_SIMD_LEVEL = static_cast<DB::X86SIMDLevel>(level);
             }
