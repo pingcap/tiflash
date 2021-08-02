@@ -40,7 +40,7 @@
 	url = git@github.com:tikv/client-c.git
 [submodule "contrib/tiflash-proxy"]
 	path = contrib/tiflash-proxy
-	url = git@github.com:pingcap/tidb-engine-ext.git
+	url = git@github.com:solotzg/tidb-engine-ext.git
 [submodule "contrib/prometheus-cpp"]
 	path = contrib/prometheus-cpp
 	url = git@github.com:jupp0r/prometheus-cpp.git
