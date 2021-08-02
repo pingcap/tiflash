@@ -309,17 +309,17 @@ void StorageIORateLimitConfig::parse(const String& storage_io_rate_limit, Poco::
         }
     };
 
-    readConfig("max-bytes-per-sec", max_bytes_per_sec);
-    readConfig("max-read-bytes-per-sec", max_read_bytes_per_sec);
-    readConfig("max-write-bytes-per-sec", max_write_bytes_per_sec);
-    readConfig("foreground-write-weight", fg_write_weight);
-    readConfig("background-write-weight", bg_write_weight);
-    readConfig("foreground-read-weight", fg_read_weight);
-    readConfig("background-read-weight", bg_read_weight);
+    readConfig("max_bytes_per_sec", max_bytes_per_sec);
+    readConfig("max_read_bytes_per_sec", max_read_bytes_per_sec);
+    readConfig("max_write_bytes_per_sec", max_write_bytes_per_sec);
+    readConfig("foreground_write_weight", fg_write_weight);
+    readConfig("background_write_weight", bg_write_weight);
+    readConfig("foreground_read_weight", fg_read_weight);
+    readConfig("background_read_weight", bg_read_weight);
     
     use_max_bytes_per_sec = (max_read_bytes_per_sec == 0 && max_write_bytes_per_sec == 0);
 
-    LOG_INFO(log, "storage.io-rate-limit " << toString());
+    LOG_INFO(log, "storage.io_rate_limit " << toString());
 }
 
 std::string StorageIORateLimitConfig::toString() const

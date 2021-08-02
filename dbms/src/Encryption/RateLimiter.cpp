@@ -315,23 +315,23 @@ ReadLimiterPtr IORateLimiter::getReadLimiter()
 void IORateLimiter::updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_)
 {
     StorageIORateLimitConfig new_io_config;
-    if (config_.has("storage.io-rate-limit"))
+    if (config_.has("storage.io_rate_limit"))
     {
-        new_io_config.parse(config_.getString("storage.io-rate-limit"), log);
+        new_io_config.parse(config_.getString("storage.io_rate_limit"), log);
     }
     else
     {
-        LOG_INFO(log, "storage.io-rate-limit is not found in config, use default config.");
+        LOG_INFO(log, "storage.io_rate_limit is not found in config, use default config.");
     }
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (io_config == new_io_config)
     {
-        LOG_INFO(log, "storage.io-rate-limit is not changed");
+        LOG_INFO(log, "storage.io_rate_limit is not changed");
         return;
     }
 
-    LOG_INFO(log, "storage.io-rate-limit is changed, update limiter.");
+    LOG_INFO(log, "storage.io_rate_limit is changed, update limiter.");
     io_config = new_io_config;
 
     auto GenRateLimiter = [&](UInt64 bytes_per_sec, LimiterType type) {

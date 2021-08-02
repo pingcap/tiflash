@@ -398,47 +398,47 @@ try
     Strings tests = {
         R"(
 [storage]
-[storage.io-rate-limit]
-max-bytes-per-sec=0
-max-read-bytes-per-sec=0
-max-write-bytes-per-sec=0
-foreground-write-weight=1
-background-write-weight=2
-foreground-read-weight=5
-background-read-weight=2
+[storage.io_rate_limit]
+max_bytes_per_sec=0
+max_read_bytes_per_sec=0
+max_write_bytes_per_sec=0
+foreground_write_weight=1
+background_write_weight=2
+foreground_read_weight=5
+background_read_weight=2
 )",
         R"(
 [storage]
-[storage.io-rate-limit]
-max-bytes-per-sec=1024000
-max-read-bytes-per-sec=0
-max-write-bytes-per-sec=0
-foreground-write-weight=1
-background-write-weight=2
-foreground-read-weight=5
-background-read-weight=2
+[storage.io_rate_limit]
+max_bytes_per_sec=1024000
+max_read_bytes_per_sec=0
+max_write_bytes_per_sec=0
+foreground_write_weight=1
+background_write_weight=2
+foreground_read_weight=5
+background_read_weight=2
 )",
         R"(
 [storage]
-[storage.io-rate-limit]
-max-bytes-per-sec=0
-max-read-bytes-per-sec=1024000
-max-write-bytes-per-sec=1024000
-foreground-write-weight=1
-background-write-weight=2
-foreground-read-weight=5
-background-read-weight=2
+[storage.io_rate_limit]
+max_bytes_per_sec=0
+max_read_bytes_per_sec=1024000
+max_write_bytes_per_sec=1024000
+foreground_write_weight=1
+background_write_weight=2
+foreground_read_weight=5
+background_read_weight=2
 )",
         R"(
 [storage]
-[storage.io-rate-limit]
-max-bytes-per-sec=1024000
-max-read-bytes-per-sec=1024000
-max-write-bytes-per-sec=1024000
-foreground-write-weight=1
-background-write-weight=2
-foreground-read-weight=5
-background-read-weight=2
+[storage.io_rate_limit]
+max_bytes_per_sec=1024000
+max_read_bytes_per_sec=1024000
+max_write_bytes_per_sec=1024000
+foreground_write_weight=1
+background_write_weight=2
+foreground_read_weight=5
+background_read_weight=2
 )",
     };
 
@@ -551,11 +551,11 @@ background-read-weight=2
         auto config = loadConfigFromString(test_case);
 
         LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
-        ASSERT_TRUE(config->has("storage.io-rate-limit"));
+        ASSERT_TRUE(config->has("storage.io_rate_limit"));
     
         StorageIORateLimitConfig io_config;
         verifyDefault(io_config);
-        io_config.parse(config->getString("storage.io-rate-limit"), log);
+        io_config.parse(config->getString("storage.io_rate_limit"), log);
         case_verifiers[i](io_config);
     }
 }
