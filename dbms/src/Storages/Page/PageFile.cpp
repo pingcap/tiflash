@@ -4,6 +4,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/Page/PageFileSpec.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -44,14 +45,11 @@ static constexpr bool PAGE_CHECKSUM_ON_READ = true;
 #define O_DIRECT 00040000
 #endif
 
+/**
+ * FIXME: need remove
+ */
 namespace PageMetaFormat
 {
-using WBSize = UInt32;
-// TODO we should align these alias with type in PageCache
-using PageTag    = UInt64;
-using IsPut      = std::underlying_type<WriteBatch::WriteType>::type;
-using PageOffset = UInt64;
-using Checksum   = UInt64;
 
 struct PageFlags
 {
@@ -64,155 +62,15 @@ struct PageFlags
 static_assert(std::is_trivially_copyable_v<PageFlags>);
 static_assert(sizeof(PageFlags) == sizeof(UInt32));
 
+using WBSize = UInt32;
+// TODO we should align these alias with type in PageCache
+using PageTag    = UInt64;
+using IsPut      = std::underlying_type<WriteBatch::WriteType>::type;
+using PageOffset = UInt64;
+using Checksum   = UInt64;
+
 static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageFileId) + sizeof(PageFileLevel) + sizeof(PageFlags) + sizeof(PageTag)
     + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
-
-/// Return <data to write into meta file, data to write into data file>.
-std::pair<ByteBuffer, ByteBuffer> genWriteData( //
-    WriteBatch &      wb,
-    PageFile &        page_file,
-    PageEntriesEdit & edit)
-{
-    WBSize meta_write_bytes = 0;
-    size_t data_write_bytes = 0;
-
-    meta_write_bytes += sizeof(WBSize) + sizeof(PageFormat::Version) + sizeof(WriteBatch::SequenceID);
-
-    for (const auto & write : wb.getWrites())
-    {
-        meta_write_bytes += sizeof(IsPut);
-        switch (write.type)
-        {
-        case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
-            if (write.read_buffer)
-                data_write_bytes += write.size;
-            meta_write_bytes += PAGE_META_SIZE;
-            meta_write_bytes += sizeof(UInt64); // size of field_offsets + checksum
-            meta_write_bytes += ((sizeof(UInt64) + sizeof(UInt64)) * write.offsets.size());
-            break;
-        case WriteBatch::WriteType::DEL:
-            // For delete page, store page id only. And don't need to write data file.
-            meta_write_bytes += sizeof(PageId);
-            break;
-        case WriteBatch::WriteType::REF:
-            // For ref page, store RefPageId -> PageId. And don't need to write data file.
-            meta_write_bytes += (sizeof(PageId) + sizeof(PageId));
-            break;
-        }
-    }
-
-    meta_write_bytes += sizeof(Checksum);
-
-    char * meta_buffer = (char *)page_file.alloc(meta_write_bytes);
-    char * data_buffer = (char *)page_file.alloc(data_write_bytes);
-
-    char * meta_pos = meta_buffer;
-    char * data_pos = data_buffer;
-
-    PageUtil::put(meta_pos, meta_write_bytes);
-    PageUtil::put(meta_pos, STORAGE_FORMAT_CURRENT.page);
-    PageUtil::put(meta_pos, wb.getSequence());
-
-    PageOffset page_data_file_off = page_file.getDataFileAppendPos();
-    for (auto & write : wb.getWrites())
-    {
-        PageUtil::put(meta_pos, static_cast<IsPut>(write.type));
-        switch (write.type)
-        {
-        case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT: {
-            PageFlags  flags;
-            Checksum   page_checksum = 0;
-            PageOffset page_offset   = 0;
-            if (write.read_buffer)
-            {
-                write.read_buffer->readStrict(data_pos, write.size);
-                page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
-                page_offset   = page_data_file_off;
-                // In this case, checksum of each fields (inside `write.offsets[i].second`)
-                // is simply 0, we need to calulate the checksums of each fields
-                for (size_t i = 0; i < write.offsets.size(); ++i)
-                {
-                    const auto field_beg    = write.offsets[i].first;
-                    const auto field_end    = (i == write.offsets.size() - 1) ? write.size : write.offsets[i + 1].first;
-                    write.offsets[i].second = CityHash_v1_0_2::CityHash64(data_pos + field_beg, field_end - field_beg);
-                }
-
-                data_pos += write.size;
-                page_data_file_off += write.size;
-            }
-            else
-            {
-                // Notice: in this case, we need to copy checksum instead of calculate from buffer(which is null)
-                // Do NOT use `data_pos` outside this if-else branch
-
-                // get page_checksum from write when read_buffer is nullptr
-                flags.setIsDetachPage();
-                page_checksum = write.page_checksum;
-                page_offset   = write.page_offset;
-                // `entry.field_offsets`(and checksum) just simply copy `write.offsets`
-                // page_data_file_off += 0;
-            }
-
-            // UPSERT may point to another PageFile
-            PageEntry entry;
-            entry.file_id  = (write.type == WriteBatch::WriteType::PUT ? page_file.getFileId() : write.target_file_id.first);
-            entry.level    = (write.type == WriteBatch::WriteType::PUT ? page_file.getLevel() : write.target_file_id.second);
-            entry.tag      = write.tag;
-            entry.size     = write.size;
-            entry.offset   = page_offset;
-            entry.checksum = page_checksum;
-
-            // entry.field_offsets = write.offsets;
-            // we can swap from WriteBatch instead of copying
-            entry.field_offsets.swap(write.offsets);
-
-            PageUtil::put(meta_pos, (PageId)write.page_id);
-            PageUtil::put(meta_pos, (PageFileId)entry.file_id);
-            PageUtil::put(meta_pos, (PageFileLevel)entry.level);
-            PageUtil::put(meta_pos, (PageFlags)flags);
-            PageUtil::put(meta_pos, (PageTag)write.tag);
-            PageUtil::put(meta_pos, (PageOffset)entry.offset);
-            PageUtil::put(meta_pos, (PageSize)write.size);
-            PageUtil::put(meta_pos, (Checksum)page_checksum);
-
-            PageUtil::put(meta_pos, (UInt64)entry.field_offsets.size());
-            for (size_t i = 0; i < entry.field_offsets.size(); ++i)
-            {
-                PageUtil::put(meta_pos, (UInt64)entry.field_offsets[i].first);
-                PageUtil::put(meta_pos, (UInt64)entry.field_offsets[i].second);
-            }
-
-            if (write.type == WriteBatch::WriteType::PUT)
-                edit.put(write.page_id, entry);
-            else if (write.type == WriteBatch::WriteType::UPSERT)
-                edit.upsertPage(write.page_id, entry);
-
-            break;
-        }
-        case WriteBatch::WriteType::DEL:
-            PageUtil::put(meta_pos, (PageId)write.page_id);
-
-            edit.del(write.page_id);
-            break;
-        case WriteBatch::WriteType::REF:
-            PageUtil::put(meta_pos, static_cast<PageId>(write.page_id));
-            PageUtil::put(meta_pos, static_cast<PageId>(write.ori_page_id));
-
-            edit.ref(write.page_id, write.ori_page_id);
-            break;
-        }
-    }
-
-    const Checksum wb_checksum = CityHash_v1_0_2::CityHash64(meta_buffer, meta_write_bytes - sizeof(Checksum));
-    PageUtil::put(meta_pos, wb_checksum);
-
-    if (unlikely(meta_pos != meta_buffer + meta_write_bytes || data_pos != data_buffer + data_write_bytes))
-        throw Exception("pos not match", ErrorCodes::LOGICAL_ERROR);
-
-    return {{meta_buffer, meta_pos}, {data_buffer, data_pos}};
-}
 } // namespace PageMetaFormat
 
 // =========================================================
@@ -466,22 +324,204 @@ const String & PageFile::Writer::parentPath() const
     return page_file.parent_path;
 }
 
-size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const RateLimiterPtr & rate_limiter)
+void PageFile::FiledOffsetWriter::serialize(struct WriteContext & ctx, PageEntry & entry)
 {
-    ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
-
-    if (data_file->isClosed())
+    for (size_t i = 0; i < entry.field_offsets.size(); ++i)
     {
-        data_file->open();
-        meta_file->open();
+        PFWriteBatchFieldOffset * field_offset = PageUtil::cast<PFWriteBatchFieldOffset>(ctx.meta_pos);
+        field_offset->bits.field_offset        = entry.field_offsets[i].first;
+        field_offset->bits.field_checksum      = entry.field_offsets[i].second;
+    }
+}
+
+void PageFile::WriteBatchWriter::applyPUEdit(struct WriteContext & ctx,
+                                             WriteBatch::Write &   writer,
+                                             UInt64 &              page_data_file_off,
+                                             PageEntry &           entry)
+{
+    WriteBatchChecksum   page_checksum = 0;
+    WriteBatchPageOffset page_offset   = 0;
+    if (writer.read_buffer)
+    {
+        writer.read_buffer->readStrict(ctx.data_pos, writer.size);
+        page_checksum = CityHash_v1_0_2::CityHash64(ctx.data_pos, writer.size);
+        page_offset   = page_data_file_off;
+        // In this case, checksum of each fields (inside `write.offsets[i].second`)
+        // is simply 0, we need to calulate the checksums of each fields
+        for (size_t i = 0; i < writer.offsets.size(); ++i)
+        {
+            const auto field_beg     = writer.offsets[i].first;
+            const auto field_end     = (i == writer.offsets.size() - 1) ? writer.size : writer.offsets[i + 1].first;
+            writer.offsets[i].second = CityHash_v1_0_2::CityHash64(ctx.data_pos + field_beg, field_end - field_beg);
+        }
+
+        ctx.data_pos += writer.size;
+        page_data_file_off += writer.size;
+    }
+    else
+    {
+        // Notice: in this case, we need to copy checksum instead of calculate from buffer(which is null)
+        // Do NOT use `data_pos` outside this if-else branch
+
+        // get page_checksum from write when read_buffer is nullptr
+        page_checksum = writer.page_checksum;
+        page_offset   = writer.page_offset;
+        // `entry.field_offsets`(and checksum) just simply copy `write.offsets`
+        // page_data_file_off += 0;
     }
 
-    // TODO: investigate if not copy data into heap, write big pages can be faster?
-    ByteBuffer meta_buf, data_buf;
-    std::tie(meta_buf, data_buf) = PageMetaFormat::genWriteData(wb, page_file, edit);
+    entry.file_id  = (writer.type == WriteBatch::WriteType::PUT ? ctx.page_file->getFileId() : writer.target_file_id.first);
+    entry.level    = (writer.type == WriteBatch::WriteType::PUT ? ctx.page_file->getLevel() : writer.target_file_id.second);
+    entry.tag      = writer.tag;
+    entry.size     = writer.size;
+    entry.offset   = page_offset;
+    entry.checksum = page_checksum;
 
-    SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
-    SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
+    // entry.field_offsets = write.offsets;
+    // we can swap from WriteBatch instead of copying
+    entry.field_offsets.swap(writer.offsets);
+
+    if (writer.type == WriteBatch::WriteType::PUT)
+        ctx.edit->put(writer.page_id, entry);
+    else if (writer.type == WriteBatch::WriteType::UPSERT)
+        ctx.edit->upsertPage(writer.page_id, entry);
+}
+
+void PageFile::WriteBatchWriter::applyDelEdit(struct WriteContext & ctx, WriteBatch::Write & writer)
+{
+    ctx.edit->del(writer.page_id);
+}
+
+void PageFile::WriteBatchWriter::applyRefEdit(struct WriteContext & ctx, WriteBatch::Write & writer)
+{
+    ctx.edit->ref(writer.page_id, writer.ori_page_id);
+}
+
+
+void PageFile::WriteBatchWriter::serialize(struct WriteContext & ctx, WriteBatch::Write & writer, UInt64 & page_data_file_off)
+{
+    switch (writer.type)
+    {
+    case WriteBatch::WriteType::PUT:
+    case WriteBatch::WriteType::UPSERT: {
+        PageEntry entry = {};
+        PageFlags flags;
+
+        if (!writer.read_buffer)
+        {
+            flags.setIsDetachPage();
+        }
+
+        applyPUEdit(ctx, writer, page_data_file_off, entry);
+        PFWriteBatchTypePU * wb_pu   = PageUtil::cast<PFWriteBatchTypePU>(ctx.meta_pos);
+        wb_pu->bits.type             = (UInt8)writer.type;
+        wb_pu->bits.page_id          = writer.page_id;
+        wb_pu->bits.file_id          = entry.file_id;
+        wb_pu->bits.level            = entry.level;
+        wb_pu->bits.flag             = flags.flags;
+        wb_pu->bits.tag              = writer.tag;
+        wb_pu->bits.page_offset      = entry.offset;
+        wb_pu->bits.page_size        = writer.size;
+        wb_pu->bits.page_checksum    = entry.checksum;
+        wb_pu->bits.field_offset_len = (UInt64)entry.field_offsets.size();
+        fo_writer.serialize(ctx, entry);
+        break;
+    }
+
+    case WriteBatch::WriteType::DEL: {
+        PFWriteBatchTypeDel * wb_del = PageUtil::cast<PFWriteBatchTypeDel>(ctx.meta_pos);
+        wb_del->bits.type            = (UInt8)writer.type;
+        wb_del->bits.page_id         = writer.page_id;
+        applyDelEdit(ctx, writer);
+        break;
+    }
+
+    case WriteBatch::WriteType::REF: {
+        PFWriteBatchTypeRef * wb_ref = PageUtil::cast<PFWriteBatchTypeRef>(ctx.meta_pos);
+        wb_ref->bits.page_id         = writer.page_id;
+        wb_ref->bits.og_page_id      = writer.ori_page_id;
+        applyRefEdit(ctx, writer);
+        break;
+    }
+    }
+}
+
+std::pair<size_t, size_t> PageFile::WriteBatchWriter::measureWriteBatchsSize(WriteBatch & wb)
+{
+    size_t meta_bytes = 0;
+    size_t data_bytes = 0;
+
+    for (const auto & write : wb.getWrites())
+    {
+        switch (write.type)
+        {
+        case WriteBatch::WriteType::PUT:
+        case WriteBatch::WriteType::UPSERT: {
+            if (write.read_buffer)
+                data_bytes += write.size;
+            meta_bytes += sizeof(PFWriteBatchTypePU);
+            meta_bytes += (sizeof(PFWriteBatchFieldOffset) * write.offsets.size());
+            break;
+        }
+        case WriteBatch::WriteType::DEL: {
+            // For delete page, store page id only. And don't need to write data file.
+            meta_bytes += sizeof(PFWriteBatchTypeDel);
+            break;
+        }
+        case WriteBatch::WriteType::REF: {
+            // For ref page, store RefPageId -> PageId. And don't need to write data file.
+            meta_bytes += sizeof(PFWriteBatchTypeRef);
+            break;
+        }
+        }
+    }
+
+    return {meta_bytes, data_bytes};
+}
+
+std::pair<ByteBuffer, ByteBuffer> PageFile::Writer::genWriteData(WriteBatch & wb, PageEntriesEdit & edit)
+{
+    UInt32 meta_write_bytes = 0;
+    size_t data_write_bytes = 0;
+
+    // Get write batchs size
+    std::tie(meta_write_bytes, data_write_bytes) = wb_writer.measureWriteBatchsSize(wb);
+
+    // Checksum At the bottom of the meta.
+    meta_write_bytes += sizeof(PFMetaInfo) + sizeof(PFMetaInfoChecksum);
+
+    char * meta_buffer = (char *)page_file.alloc(meta_write_bytes);
+    char * data_buffer = (char *)page_file.alloc(data_write_bytes);
+
+    WriteContext write_ctx = {&wb, &page_file, &edit, data_buffer, meta_buffer};
+
+    PFMetaInfo * meta_info            = PageUtil::cast<PFMetaInfo>(write_ctx.meta_pos);
+    meta_info->bits.meta_byte_size    = meta_write_bytes;
+    meta_info->bits.meta_info_version = STORAGE_FORMAT_CURRENT.page;
+    meta_info->bits.meta_seq_id       = wb.getSequence();
+
+    // Serialize the write batchs
+    {
+        UInt64 page_data_file_off = write_ctx.page_file->getDataFileAppendPos();
+        for (auto & writer : write_ctx.wb->getWrites())
+        {
+            wb_writer.serialize(write_ctx, writer, page_data_file_off);
+        }
+    }
+
+    // At last add Checksum.
+    const PFMetaInfoChecksum wb_checksum = CityHash_v1_0_2::CityHash64(meta_buffer, meta_write_bytes - sizeof(PFMetaInfoChecksum));
+    PageUtil::put(write_ctx.meta_pos, wb_checksum);
+
+    // Check and throw
+    if (unlikely(write_ctx.meta_pos != meta_buffer + meta_write_bytes || write_ctx.data_pos != data_buffer + data_write_bytes))
+        throw Exception("pos not match", ErrorCodes::LOGICAL_ERROR);
+
+    return {{meta_buffer, write_ctx.meta_pos}, {data_buffer, write_ctx.data_pos}};
+}
+
+void PageFile::Writer::serialize(ByteBuffer & meta_buf, ByteBuffer & data_buf, const RateLimiterPtr & rate_limiter)
+{
 
 #ifndef NDEBUG
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf, bool enable_failpoint) {
@@ -500,6 +540,26 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Ra
     write_buf(data_file, page_file.data_file_pos, data_buf);
     write_buf(meta_file, page_file.meta_file_pos, meta_buf);
 #endif
+}
+
+size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const RateLimiterPtr & rate_limiter)
+{
+    ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
+
+    if (data_file->isClosed())
+    {
+        data_file->open();
+        meta_file->open();
+    }
+
+    // TODO: investigate if not copy data into heap, write big pages can be faster?
+    ByteBuffer meta_buf, data_buf;
+    std::tie(meta_buf, data_buf) = genWriteData(wb, edit);
+
+    SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
+    SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
+
+    serialize(meta_buf, data_buf, rate_limiter);
 
     fiu_do_on(FailPoints::exception_before_page_file_write_sync,
               { // Mock that writing page file meta is not completed

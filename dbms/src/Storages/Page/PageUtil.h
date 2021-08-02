@@ -134,6 +134,16 @@ inline T get(std::conditional_t<advance, char *&, const char *> pos)
         pos += sizeof(T);
     return v;
 }
+
+template <typename T, bool advance = true>
+T * cast(std::conditional_t<advance, char *&, const char *> pos)
+{
+    T * t = reinterpret_cast<T *>(pos);
+    if constexpr (advance)
+        pos += sizeof(T);
+    return t;
+}
+
 } // namespace PageUtil
 
 } // namespace DB

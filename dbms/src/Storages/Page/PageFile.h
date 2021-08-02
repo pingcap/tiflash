@@ -24,6 +24,49 @@ namespace DB
 class PageFile : public Allocator<false>
 {
 public:
+    struct WriteContext
+    {
+        WriteBatch *      wb;
+        PageFile *        page_file;
+        PageEntriesEdit * edit;
+
+        char * data_pos;
+        char * meta_pos;
+    };
+
+    class FiledOffsetWriter : private boost::noncopyable
+    {
+    public:
+        void serialize(struct WriteContext & ctx, PageEntry & entry);
+    };
+
+    class WriteBatchWriter : private boost::noncopyable
+    {
+    public:
+        struct PageFlags
+        {
+            UInt32 flags = 0;
+            // Detach page means the meta and data not in the same PageFile
+            void setIsDetachPage() { flags |= 0x1; }
+            bool isDetachPage() const { return flags & 0x1; }
+        };
+        static_assert(std::is_trivially_copyable_v<PageFlags>);
+        static_assert(sizeof(PageFlags) == sizeof(UInt32), "Invalid size of PageFlags.");
+
+        void                      serialize(struct WriteContext & ctx, WriteBatch::Write & writer, UInt64 & page_data_file_off);
+        std::pair<size_t, size_t> measureWriteBatchsSize(WriteBatch & wb);
+
+    protected:
+        void applyPUEdit(struct WriteContext & ctx, WriteBatch::Write & writer, UInt64 & page_data_file_off, PageEntry & entry);
+        void applyDelEdit(struct WriteContext & ctx, WriteBatch::Write & writer);
+        void applyRefEdit(struct WriteContext & ctx, WriteBatch::Write & writer);
+
+    protected:
+        using WriteBatchPageOffset = UInt64;
+        using WriteBatchChecksum   = UInt64;
+        FiledOffsetWriter fo_writer;
+    };
+
     /// Writer can NOT be used by multi threads.
     class Writer : private boost::noncopyable
     {
@@ -39,8 +82,15 @@ public:
         const String &     parentPath() const;
         PageFileIdAndLevel fileIdLevel() const;
 
+    protected:
+        std::pair<ByteBuffer, ByteBuffer> genWriteData(WriteBatch & wb, PageEntriesEdit & edit);
+        void serialize(ByteBuffer & meta_buffer, ByteBuffer & data_buffer, const RateLimiterPtr & rate_limiter);
+
     private:
         void closeFd();
+
+    protected:
+        WriteBatchWriter wb_writer;
 
     private:
         PageFile & page_file;
@@ -51,6 +101,7 @@ public:
 
         Clock::time_point last_write_time; // use to free idle writers
     };
+
 
     /// Reader is safe to used by multi threads.
     class Reader : private boost::noncopyable, private Allocator<false>
@@ -163,7 +214,6 @@ public:
         }
 
     private:
-
         void initialize(std::optional<size_t> max_meta_offset);
 
     private:
