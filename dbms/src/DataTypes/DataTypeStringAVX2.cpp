@@ -37,6 +37,7 @@ void deserializeBinaryAVX2(ColumnString::Chars_t & data, ColumnString::Offsets &
                 && istr.position() + size + vector_length * UNROLL_TIMES <= istr.buffer().end())
             {
                 const auto * avx2_src_pos = reinterpret_cast<const __m256i *>(istr.position());
+                // truncate to the multiple of (UNROLL_TIMES * vector length)
                 const auto shift_limit = (size + (vector_length * UNROLL_TIMES - 1)) / vector_length / UNROLL_TIMES * UNROLL_TIMES;
                 const __m256i * avx2_src_end = avx2_src_pos + shift_limit;
                 auto * avx2_dst_pos = reinterpret_cast<__m256i *>(&data[offset - size - 1]);
@@ -50,8 +51,7 @@ void deserializeBinaryAVX2(ColumnString::Chars_t & data, ColumnString::Offsets &
                     // GCC 7 does not seem to have a good support for AVX2 codegen here,
                     // we still need to use ASM.
                     // GCC 7 does not generate code with `vmovdqu` with `ymm` registers,
-                    // but instead rely on `xmm` registers.
-
+                    // but instead rely on `xmm` registers (`vmovdqu` xmm and `inserti` it to ymm).
                     if constexpr (UNROLL_TIMES >= 4)
                         __asm__("vmovdqu %0, %%ymm0" ::"m"(avx2_src_pos[-4]));
                     if constexpr (UNROLL_TIMES >= 3)
