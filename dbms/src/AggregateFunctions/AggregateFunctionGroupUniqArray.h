@@ -91,7 +91,7 @@ public:
 
         size_t i = 0;
         for (auto it = set.begin(); it != set.end(); ++it, ++i)
-            data_to[old_size + i] = *it;
+            data_to[old_size + i] = it->getKey();
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
@@ -146,7 +146,7 @@ public:
 
         for (const auto & elem : set)
         {
-            writeStringBinary(elem, buf);
+            writeStringBinary(elem.key, buf);
         }
     }
 
@@ -168,7 +168,7 @@ public:
         auto & set = this->data(place).value;
 
         bool inserted;
-        State::Set::iterator it;
+        State::Set::LookupResult it;
 
         StringRef str_serialized = getSerialization(*columns[0], row_num, *arena);
         set.emplace(str_serialized, it, inserted);
@@ -181,7 +181,7 @@ public:
         else
         {
             if (inserted)
-                it->data = arena->insert(str_serialized.data, str_serialized.size);
+                it->key = arena->insert(str_serialized.data, str_serialized.size);
         }
     }
 
@@ -191,12 +191,12 @@ public:
         auto & rhs_set = this->data(rhs).value;
 
         bool inserted;
-        State::Set::iterator it;
+        State::Set::LookupResult it;
         for (auto & rhs_elem : rhs_set)
         {
-            cur_set.emplace(rhs_elem, it, inserted);
-            if (inserted)
-                it->data = arena->insert(it->data, it->size);
+            // We have to copy the keys to our arena.
+            assert(arena != nullptr);
+            cur_set.emplace(ArenaKeyHolder{rhs_elem.getValue(), *arena}, it, inserted);
         }
     }
 
@@ -211,7 +211,7 @@ public:
 
         for (auto & elem : set)
         {
-            deserializeAndInsert(elem, data_to);
+            deserializeAndInsert(elem.key, data_to);
         }
     }
 

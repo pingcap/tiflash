@@ -31,6 +31,7 @@ namespace FailPoints
 {
 extern const char force_set_sst_to_dtfile_block_size[];
 extern const char force_set_sst_decode_rand[];
+extern const char force_set_safepoint_when_decode_block[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -356,19 +357,86 @@ void GenMockSSTData(const TiDB::TableInfo & table_info,
             fields.emplace_back(handle_id / 2);
         }
 
+        // Check the MVCC (key-format and transaction model) for details
+        // https://en.pingcap.com/blog/2016-11-17-mvcc-in-tikv#mvcc
         {
             TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
             WriteBufferFromOwnString ss;
             RegionBench::encodeRow(table_info, fields, ss);
             TiKVValue prewrite_value(ss.releaseStr());
-            UInt64 commit_ts = handle_id;
-            UInt64 prewrite_ts = commit_ts;
-            TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
-            TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
-            TiKVKey prewrite_key = RecordKVFormat::appendTs(key, prewrite_ts);
 
-            write_kv_list.emplace_back(std::make_pair(std::move(commit_key), std::move(commit_value)));
+            UInt64 prewrite_ts = handle_id;
+            UInt64 commit_ts = prewrite_ts + 100; // Assume that commit_ts is larger that prewrite_ts
+
+            TiKVKey prewrite_key = RecordKVFormat::appendTs(key, prewrite_ts);
             default_kv_list.emplace_back(std::make_pair(std::move(prewrite_key), std::move(prewrite_value)));
+
+            TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
+            TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
+            write_kv_list.emplace_back(std::make_pair(std::move(commit_key), std::move(commit_value)));
+        }
+    }
+
+    MockSSTReader::getMockSSTData().clear();
+
+    if (cfs.count(ColumnFamilyType::Write) > 0)
+        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Write}] = std::move(write_kv_list);
+    if (cfs.count(ColumnFamilyType::Default) > 0)
+        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Default}] = std::move(default_kv_list);
+}
+
+// TODO: make it a more generic testing function
+void GenMockSSTDataByHandles(const TiDB::TableInfo & table_info,
+    TableID table_id,
+    const String & store_key,
+    const std::vector<UInt64> & handles,
+    UInt64 num_fields = 1,
+    const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
+{
+    MockSSTReader::Data write_kv_list, default_kv_list;
+    size_t num_rows = handles.size();
+
+    for (size_t index = 0; index < handles.size(); ++index)
+    {
+        const auto handle_id = handles[index];
+        std::vector<Field> fields;
+        if (num_fields > 0)
+        {
+            // make it have one column Int64 just for test
+            fields.emplace_back(-handle_id);
+        }
+        if (num_fields > 1 && index >= num_rows / 3)
+        {
+            // column String for test
+            std::string s = "_" + DB::toString(handle_id);
+            Field f(s.data(), s.size());
+            fields.emplace_back(std::move(f));
+        }
+        if (num_fields > 2 && index >= 2 * num_rows / 3)
+        {
+            // column UInt64 for test
+            fields.emplace_back(handle_id / 2);
+        }
+
+        // Check the MVCC (key-format and transaction model) for details
+        // https://en.pingcap.com/blog/2016-11-17-mvcc-in-tikv#mvcc
+        // The rows (primary key, timestamp) are sorted by primary key asc, timestamp desc in SSTFiles
+        // https://github.com/pingcap/tics/issues/1864
+        {
+            TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
+            WriteBufferFromOwnString ss;
+            RegionBench::encodeRow(table_info, fields, ss);
+            TiKVValue prewrite_value(ss.releaseStr());
+
+            UInt64 prewrite_ts = 100000 + num_rows - index; // make it to be timestamp desc in SSTFiles
+            UInt64 commit_ts = prewrite_ts + 100;           // Assume that commit_ts is larger that prewrite_ts
+
+            TiKVKey prewrite_key = RecordKVFormat::appendTs(key, prewrite_ts);
+            default_kv_list.emplace_back(std::make_pair(std::move(prewrite_key), std::move(prewrite_value)));
+
+            TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
+            TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
+            write_kv_list.emplace_back(std::make_pair(std::move(commit_key), std::move(commit_value)));
         }
     }
 
@@ -592,7 +660,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
     // We may call this function mutiple time to mock some situation, try to reuse the region in `GLOBAL_REGION_MAP`
     // so that we can collect uncommitted data.
     UInt64 index = MockTiKV::instance().getRaftIndex(region_id) + 1;
-    RegionPtr new_region = RegionBench::createRegion(table->id(), region_id, start_handle, end_handle, index);
+    RegionPtr new_region = RegionBench::createRegion(table->id(), region_id, start_handle, end_handle + 10000, index);
 
     // Register some mock SST reading methods so that we can decode data in `MockSSTReader::MockSSTData`
     RegionMockTest mock_test(kvstore, new_region);
@@ -613,11 +681,108 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
 
     // set block size so that we can test for schema-sync while decoding dt files
     FailPointHelper::enableFailPoint(FailPoints::force_set_sst_to_dtfile_block_size);
+    FailPointHelper::enableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
 
     auto ingest_ids = kvstore->preHandleSnapshotToFiles(
         new_region, SSTViewVec{sst_views.data(), sst_views.size()}, index, MockTiKV::instance().getRaftTerm(region_id), tmt);
     GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
 
+    FailPointHelper::disableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
+    {
+        std::stringstream ss;
+        ss << "Generate " << ingest_ids.size() << " files for [region_id=" << region_id << "]";
+        output(ss.str());
+    }
+}
+
+// Simulate a region pre-handle snapshot data to DTFiles
+//    ./storage-client.sh "DBGInvoke region_snapshot_pre_handle_file_with_handles(database_name, table_name, region_id, schema_string, pk_name, handle0, handle1, ..., handlek)"
+void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() < 6)
+        throw Exception(
+            "Args not matched, should be: database_name, table_name, region_id, schema_string, pk_name, handle0, handle1, ..., handlek",
+            ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+
+    const String schema_str = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    String handle_pk_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[4]).value);
+
+    std::vector<UInt64> handles;
+    for (size_t i = 5; i < args.size(); ++i)
+    {
+        handles.push_back(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[i]).value));
+    }
+
+    UInt64 test_fields = 1;
+    std::unordered_set<ColumnFamilyType> cfs;
+    cfs.insert(ColumnFamilyType::Write);
+    cfs.insert(ColumnFamilyType::Default);
+
+    // Parse a TableInfo from `schema_str` to generate data with this schema
+    TiDB::TableInfoPtr mocked_table_info;
+    {
+        ASTPtr columns_ast;
+        ParserColumnDeclarationList schema_parser;
+        Tokens tokens(schema_str.data(), schema_str.data() + schema_str.length());
+        TokenIterator pos(tokens);
+        Expected expected;
+        if (!schema_parser.parse(pos, columns_ast, expected))
+            throw Exception("Invalid TiDB table schema", ErrorCodes::LOGICAL_ERROR);
+        ColumnsDescription columns
+            = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
+        mocked_table_info = MockTiDB::parseColumns(table_name, columns, handle_pk_name, "dt");
+    }
+
+    MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+    const auto & table_info = RegionBench::getTableInfo(context, database_name, table_name);
+    if (table_info.is_common_handle)
+        throw Exception("Mocking pre handle SST files to DTFiles to a common handle table is not supported", ErrorCodes::LOGICAL_ERROR);
+
+    // Mock SST data for handle [start, end)
+    const auto region_name = "__snap_snap_" + std::to_string(region_id);
+    GenMockSSTDataByHandles(*mocked_table_info, table->id(), region_name, handles, test_fields, cfs);
+
+    auto & tmt = context.getTMTContext();
+    auto & kvstore = tmt.getKVStore();
+    auto old_region = kvstore->getRegion(region_id);
+
+    // We may call this function mutiple time to mock some situation, try to reuse the region in `GLOBAL_REGION_MAP`
+    // so that we can collect uncommitted data.
+    UInt64 index = MockTiKV::instance().getRaftIndex(region_id) + 1;
+    UInt64 region_start_handle = handles[0];
+    UInt64 region_end_handle = handles.back() + 10000;
+    RegionPtr new_region = RegionBench::createRegion(table->id(), region_id, region_start_handle, region_end_handle, index);
+
+    // Register some mock SST reading methods so that we can decode data in `MockSSTReader::MockSSTData`
+    RegionMockTest mock_test(kvstore, new_region);
+
+    std::vector<SSTView> sst_views;
+    {
+        if (cfs.count(ColumnFamilyType::Write) > 0)
+            sst_views.push_back(SSTView{
+                ColumnFamilyType::Write,
+                BaseBuffView{region_name.data(), region_name.length()},
+            });
+        if (cfs.count(ColumnFamilyType::Default) > 0)
+            sst_views.push_back(SSTView{
+                ColumnFamilyType::Default,
+                BaseBuffView{region_name.data(), region_name.length()},
+            });
+    }
+
+    // set block size so that we can test for schema-sync while decoding dt files
+    FailPointHelper::enableFailPoint(FailPoints::force_set_sst_to_dtfile_block_size);
+    FailPointHelper::enableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
+
+    auto ingest_ids = kvstore->preHandleSnapshotToFiles(
+        new_region, SSTViewVec{sst_views.data(), sst_views.size()}, index, MockTiKV::instance().getRaftTerm(region_id), tmt);
+    GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
+
+    FailPointHelper::disableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
     {
         std::stringstream ss;
         ss << "Generate " << ingest_ids.size() << " files for [region_id=" << region_id << "]";

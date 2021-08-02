@@ -1,3 +1,5 @@
+#include <Common/FailPoint.h>
+#include <Common/ThreadFactory.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -11,6 +13,10 @@
 namespace DB
 {
 
+namespace FailPoints
+{
+extern const char exception_in_creating_set_input_stream[];
+}
 namespace ErrorCodes
 {
 extern const int SET_SIZE_LIMIT_EXCEEDED;
@@ -99,8 +105,8 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-
-                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
+                    workers.emplace_back(ThreadFactory().newThread([this, &subquery = elem.second]{ createOne(subquery); }));
+                    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
         }
@@ -116,13 +122,11 @@ void CreatingSetsBlockInputStream::createAll()
     }
 }
 
-void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTracker * memory_tracker)
+void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
     try
     {
-
-        current_memory_tracker = memory_tracker;
-        LOG_TRACE(log,
+        LOG_DEBUG(log,
             (subquery.set ? "Creating set. " : "")
                 << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
                 << std::to_string(mpp_task_id));

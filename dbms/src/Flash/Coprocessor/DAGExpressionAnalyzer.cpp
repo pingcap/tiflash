@@ -661,7 +661,7 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 // Note in the worst case(e.g select ts_col from table with Default encode), this will introduce two
 // useless casts to all the timestamp columns, however, since TiDB now use chunk encode as the default
 // encoding scheme, the worst case should happen rarely
-bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column)
+bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, const BoolVec & is_ts_column)
 {
     if (context.getTimezoneInfo().is_utc_timezone)
         return false;
@@ -862,7 +862,7 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
     /// TiDB can not guarantee that the field type in DAG request is accurate, so in order to make things work,
     /// TiFlash will append extra type cast if needed.
     bool need_append_type_cast = false;
-    std::vector<bool> need_append_type_cast_vec;
+    BoolVec need_append_type_cast_vec;
     if (!output_offsets.empty())
     {
         /// !output_offsets.empty() means root block, we need to append type cast for root block if necessary
