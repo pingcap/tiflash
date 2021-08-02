@@ -2819,8 +2819,9 @@ public:
         const ColumnFixedString * c0_fixed_string = checkAndGetColumn<ColumnFixedString>(c0_col);
 
         Field res_field;
-        auto col_res = ColumnInt64::create();
         int val_num = c0_col->size();
+        auto col_res = ColumnInt64::create();
+        col_res->reserve(val_num);
         if (c0_const == nullptr && c0_string == nullptr && c0_fixed_string == nullptr)
             throw Exception("Illegal argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -2865,8 +2866,9 @@ public:
         const ColumnFixedString * c0_fixed_string = checkAndGetColumn<ColumnFixedString>(c0_col);
 
         Field res_field;
-        auto col_res = ColumnInt64::create();
         int val_num = c0_col->size();
+        auto col_res = ColumnInt64::create();
+        col_res->reserve(val_num);
         if (c0_const == nullptr && c0_string == nullptr && c0_fixed_string == nullptr)
             throw Exception("Illegal argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -2924,8 +2926,9 @@ public:
         if (c0_col->size() != c1_col->size())
             throw Exception("Function " + getName() + " column number is inconformity", ErrorCodes::LOGICAL_ERROR);
 
-        int val_num = c0_col->size();
         auto col_res = ColumnInt64::create();
+        int val_num = c0_col->size();
+        col_res->reserve(val_num);
 
         for (int i = 0; i < val_num; i++)
         {
