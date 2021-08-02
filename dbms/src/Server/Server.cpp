@@ -17,6 +17,7 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/setThreadName.h>
+#include <Core/SIMD.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
@@ -131,6 +132,34 @@ void loadMiConfig(Logger * log)
 }
 #undef TRY_LOAD_CONF
 #endif
+
+#ifdef __x86_64__
+void detectSIMDGlobalConfig(Logger * log)
+{
+    auto config = getenv("TIFLASH_SIMD_LEVEL");
+    if (config)
+    {
+        LOG_INFO(log, "Got environment variable TIFLASH_SIMD_LEVEL: " << config);
+        try
+        {
+            auto level = std::stoul(config);
+            // casting out-of-range integer to enum is UB.
+            if (level >= static_cast<size_t>(DB::X86SIMDLevel::Disable) && level <= static_cast<size_t>(DB::X86SIMDLevel::AVX512))
+            {
+                DB::TIFLASH_SIMD_LEVEL = static_cast<DB::X86SIMDLevel>(level);
+            }
+            else
+            {
+                LOG_ERROR(log, "TIFLASH_SIMD_LEVEL = " << level << " is not valid, using default level instead");
+            }
+        }
+        catch (...)
+        {
+        }
+    }
+}
+#endif
+
 namespace CurrentMetrics
 {
 extern const Metric Revision;
@@ -790,6 +819,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #endif
 
     UpdateMallocConfig(log);
+    detectSIMDGlobalConfig(log);
 
     registerFunctions();
     registerAggregateFunctions();

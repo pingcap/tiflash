@@ -2,6 +2,7 @@
 #include <Columns/ColumnString.h>
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
+#include <Core/SIMD.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeString.h>
 #include <IO/ReadHelpers.h>
@@ -175,7 +176,7 @@ void deserializeBinaryBulkDispatch(
     do
     {
 #ifdef DBMS_ENABLE_AVX_SUPPORT
-        if (__builtin_cpu_supports("avx2"))
+        if (__builtin_cpu_supports("avx2") && TIFLASH_SIMD_LEVEL >= X86SIMDLevel::AVX)
         {
             if (avg_chars_size >= 128)
                 return deserializeBinaryAVX2<4>(data, offsets, istr, limit);
