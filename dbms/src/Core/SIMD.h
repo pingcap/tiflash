@@ -27,8 +27,7 @@ enum class SIMDFeature
     avx512dq,
     avx512cd,
     avx512bw,
-    avx512vl,
-    avx512vnni
+    avx512vl
 };
 
 static inline bool SIMDRuntimeSupport(SIMDFeature feature)
@@ -47,7 +46,6 @@ static inline bool SIMDRuntimeSupport(SIMDFeature feature)
         CHECK_RETURN(avx512cd)
         CHECK_RETURN(avx512bw)
         CHECK_RETURN(avx512vl)
-        CHECK_RETURN(avx512vnni)
     }
 #undef CHECK_RETURN
     return false;
