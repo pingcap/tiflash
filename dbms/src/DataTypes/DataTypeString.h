@@ -58,9 +58,13 @@ public:
     bool canBeInsideNullable() const override { return true; }
 };
 
-#ifdef __x86_64__
-#define DECLARE_DESERIALIZE_BIN_AVX2(UNROLL)      \
-    void deserializeBinaryAVX2##ByUnRoll##UNROLL( \
+
+#ifdef DBMS_ENABLE_AVX_SUPPORT
+template <int>
+void deserializeBinaryAVX2(ColumnString::Chars_t & data, ColumnString::Offsets & offsets, ReadBuffer & istr, size_t limit);
+
+#define DECLARE_DESERIALIZE_BIN_AVX2(UNROLL)            \
+    extern template void deserializeBinaryAVX2<UNROLL>( \
         ColumnString::Chars_t & data, ColumnString::Offsets & offsets, ReadBuffer & istr, size_t limit);
 DECLARE_DESERIALIZE_BIN_AVX2(4)
 DECLARE_DESERIALIZE_BIN_AVX2(3)

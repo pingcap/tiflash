@@ -6,15 +6,10 @@
 namespace DB
 {
 
-namespace
-{
 
-#define IMPLEMENT_DESERIALIZE_BIN_AVX2(UNROLL)                                                          \
-    void NO_INLINE deserializeBinaryAVX2##ByUnRoll##UNROLL(                                             \
-        ColumnString::Chars_t & data, ColumnString::Offsets & offsets, ReadBuffer & istr, size_t limit) \
-    {                                                                                                   \
-        deserializeBinaryAVX2<UNROLL>(data, offsets, istr, limit);                                      \
-    }
+#define IMPLEMENT_DESERIALIZE_BIN_AVX2(UNROLL)             \
+    template void NO_INLINE deserializeBinaryAVX2<UNROLL>( \
+        ColumnString::Chars_t & data, ColumnString::Offsets & offsets, ReadBuffer & istr, size_t limit);
 
 template <int UNROLL_TIMES>
 void deserializeBinaryAVX2(ColumnString::Chars_t & data, ColumnString::Offsets & offsets, ReadBuffer & istr, size_t limit)
@@ -91,8 +86,6 @@ void deserializeBinaryAVX2(ColumnString::Chars_t & data, ColumnString::Offsets &
         data[offset - 1] = 0;
     }
 }
-
-} // namespace
 
 IMPLEMENT_DESERIALIZE_BIN_AVX2(1)
 IMPLEMENT_DESERIALIZE_BIN_AVX2(2)

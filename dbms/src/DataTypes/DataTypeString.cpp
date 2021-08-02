@@ -178,13 +178,13 @@ void deserializeBinaryBulkDispatch(
         if (__builtin_cpu_supports("avx2"))
         {
             if (avg_chars_size >= 128)
-                return deserializeBinaryAVX2ByUnRoll4(data, offsets, istr, limit);
+                return deserializeBinaryAVX2<4>(data, offsets, istr, limit);
             if (avg_chars_size >= 96)
-                return deserializeBinaryAVX2ByUnRoll3(data, offsets, istr, limit);
+                return deserializeBinaryAVX2<3>(data, offsets, istr, limit);
             if (avg_chars_size >= 64)
-                return deserializeBinaryAVX2ByUnRoll2(data, offsets, istr, limit);
+                return deserializeBinaryAVX2<2>(data, offsets, istr, limit);
             if (avg_chars_size >= 32)
-                return deserializeBinaryAVX2ByUnRoll1(data, offsets, istr, limit);
+                return deserializeBinaryAVX2<1>(data, offsets, istr, limit);
             break;
         }
 #endif
