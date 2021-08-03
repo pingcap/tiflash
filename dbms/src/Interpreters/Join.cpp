@@ -160,7 +160,7 @@ Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_siz
     if (keys_size == 1 && typeid_cast<const ColumnFixedString *>(key_columns[0]))
         return Type::key_fixed_string;
 
-    /// Otherwise, will use set of cryptographic hashes of unambiguously serialized values.
+    /// Otherwise, use serialized values as the key.
     return Type::serialized;
 }
 
