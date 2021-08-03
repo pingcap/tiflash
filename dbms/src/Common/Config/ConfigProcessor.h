@@ -1,21 +1,24 @@
 #pragma once
 
+#include <Poco/AutoPtr.h>
+#include <Poco/ConsoleChannel.h>
+#include <Poco/DirectoryIterator.h>
+#include <Poco/File.h>
+#include <Poco/Path.h>
+#include <Poco/Util/AbstractConfiguration.h>
+#include <common/logger_useful.h>
+
 #include <string>
 #include <unordered_set>
 #include <vector>
 
-#include <Poco/AutoPtr.h>
-#include <Poco/File.h>
-#include <Poco/Path.h>
-#include <Poco/DirectoryIterator.h>
-#include <Poco/ConsoleChannel.h>
-#include <Poco/Util/AbstractConfiguration.h>
-#include <Common/Config/cpptoml.h>
-
-#include <common/logger_useful.h>
-
 
 using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
+namespace cpptoml
+{
+class table;
+}
+
 using TOMLTablePtr = std::shared_ptr<cpptoml::table>;
 
 class ConfigProcessor
@@ -24,10 +27,7 @@ public:
     using Substitutions = std::vector<std::pair<std::string, std::string>>;
 
     /// Set log_to_console to true if the logging subsystem is not initialized yet.
-    explicit ConfigProcessor(
-        const std::string & path,
-        bool log_to_console = false,
-        const Substitutions & substitutions = Substitutions());
+    explicit ConfigProcessor(const std::string & path, bool log_to_console = false, const Substitutions & substitutions = Substitutions());
 
     ~ConfigProcessor();
 
@@ -51,7 +51,6 @@ public:
     void savePreprocessedConfig(const LoadedConfig & loaded_config);
 
 public:
-
     /// Is the file named as result of config preprocessing, not as original files.
     static bool isPreprocessedFile(const std::string & config_path);
 

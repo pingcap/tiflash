@@ -6,6 +6,10 @@
 #include <Storages/Transaction/RegionsRangeIndex.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
+namespace TiDB
+{
+struct TableInfo;
+}
 namespace DB
 {
 namespace RegionBench
