@@ -340,7 +340,7 @@ void IORateLimiter::updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::Abstrac
 
     bg_write_limiter = GenRateLimiter(io_config.getBgWriteMaxBytesPerSec(), LimiterType::BG_WRITE);
     fg_write_limiter = GenRateLimiter(io_config.getFgWriteMaxBytesPerSec(), LimiterType::FG_WRITE);
-
+#ifdef __linux__
     {
         auto bytes = io_config.getBgReadMaxBytesPerSec();
         auto getBgReadIOStatistic = [&]() { return getCurrentIOInfo().bg_read_bytes; };
@@ -355,6 +355,7 @@ void IORateLimiter::updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::Abstrac
         };
         fg_read_limiter = bytes == 0 ? nullptr : std::make_shared<ReadLimiter>(getFgReadIOStatistic, metrics_, bytes, LimiterType::FG_READ);
     }
+#endif
 }
 
 void IORateLimiter::setBackgroundThreadIds(std::vector<pid_t> thread_ids)
@@ -365,6 +366,7 @@ void IORateLimiter::setBackgroundThreadIds(std::vector<pid_t> thread_ids)
 
 std::pair<Int64, Int64> IORateLimiter::getReadWriteBytes(const std::string & fname)
 {
+#if __linux__
     std::ifstream ifs(fname);
     if (ifs.fail())
     {
@@ -406,6 +408,9 @@ std::pair<Int64, Int64> IORateLimiter::getReadWriteBytes(const std::string & fna
         throw Exception(msg, ErrorCodes::UNKNOWN_EXCEPTION);
     }
     return {read_bytes, write_bytes};
+#else
+    return {0, 0};
+#endif
 }
 
 IORateLimiter::IOInfo IORateLimiter::getCurrentIOInfo()
