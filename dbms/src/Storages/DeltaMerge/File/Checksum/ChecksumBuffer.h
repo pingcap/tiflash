@@ -256,6 +256,82 @@ private:
         return true;
     }
 
+    size_t readBig(char * buffer, size_t size) override
+    {
+        const auto expected = size;
+        auto &     frame    = reinterpret_cast<ChecksumFrame<Backend> &>(
+            *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
+
+        auto readHeader = [&]() -> bool {
+            auto header_length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>));
+            if (header_length == 0)
+                return false;
+            if (unlikely(header_length != sizeof(ChecksumFrame<Backend>)))
+            {
+                throw TiFlashException(fmt::format("readBig expects to read a new header, but only {}/{} bytes returned",
+                                                   header_length,
+                                                   sizeof(ChecksumFrame<Backend>)),
+                                       Errors::Checksum::IOFailure);
+            }
+            return true;
+        };
+
+        auto readBody = [&]() {
+            auto body_length = expectRead(buffer, frame.bytes);
+            if (unlikely(body_length != sizeof(ChecksumFrame<Backend>)))
+            {
+                throw TiFlashException(
+                    fmt::format("readBig expects to read the body, but only {}/{} bytes returned", body_length, frame.bytes),
+                    Errors::Checksum::IOFailure);
+            }
+        };
+
+        // firstly, if we have read some bytes
+        // we need to flush them to the destination
+        if (working_buffer.end() - position() != 0)
+        {
+            auto amount = std::min(size, working_buffer.end() - position());
+            std::memcpy(buffer, position(), amount);
+            size -= amount;
+            position() += amount;
+            buffer += amount;
+        }
+
+        // now, we are at the beginning of the next frame
+        while (size >= frame_size)
+        {
+            // read the header to our own memory area
+            // if readHeader returns false, then we are at the end of file
+            if (!readHeader())
+            {
+                return expected - size;
+            }
+
+            // read the body
+            readBody();
+
+            // check body
+            if (!skip_checksum)
+            {
+                auto digest = Backend{};
+                digest.update(buffer, frame.bytes);
+                if (unlikely(frame.checksum != digest.checksum()))
+                {
+                    throw TiFlashException("checksum mismatch for " + in->getFileName(), Errors::Checksum::DataCorruption);
+                }
+            }
+
+            // update statistics
+            current_frame++;
+            size -= frame.bytes;
+            buffer += frame.bytes;
+        }
+
+        // Finally, there may be still some bytes left.
+        assert(position() == working_buffer.end());
+        return (expected - size) + (size ? read(buffer, size) : 0);
+    }
+
     off_t doSeek(off_t offset, int whence) override
     {
         ProfileEvents::increment(ProfileEvents::Seek);
