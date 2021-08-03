@@ -82,7 +82,7 @@ static inline bool SIMDRuntimeSupport(SIMDFeature feature)
         // https://github.com/torvalds/linux/blob/master/arch/arm64/include/uapi/asm/hwcap.h
         // AARCH64 targets does not has similar builtins for runtime checking; however, it has
         // a full series of HWCAP flags to achieve the similar capability.
-        // CentOS 7 default kernel does not SVE2, so we just ignore SVE2 in that case.
+        // CentOS 7 default kernel does not support SVE2, so we just ignore SVE2 in that case.
         // (Maybe one can consider it after ARMv9 becomes more prevalent.)
         case SIMDFeature::sve:
         case SIMDFeature::asimd:
