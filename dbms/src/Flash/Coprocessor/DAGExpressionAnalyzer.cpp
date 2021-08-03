@@ -204,6 +204,19 @@ static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
+static String buildTupleFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, const int tuple_size, ExpressionActionsPtr & actions)
+{
+    const String & func_name = "tuple";
+    Names argument_names;
+    for (auto i=0 ; i< tuple_size; ++i)
+    {
+        auto & child = expr.children(i);
+        String name = analyzer->getActions(child, actions, false);
+        argument_names.push_back(name);
+    }
+    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+}
+
 static const String tidb_cast_name = "tidb_cast";
 
 static String buildCastFunctionInternal(DAGExpressionAnalyzer * analyzer, const Names & argument_names, bool in_union,
@@ -421,33 +434,61 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         }
 
         AggregateDescription aggregate;
-        auto arg_size = expr.children_size();
-        if (expr.tp() == tipb::ExprType::GroupConcat) {
-            // the last parametric is the separator
-            --arg_size;
-        }
-        DataTypes types(arg_size);
-        aggregate.argument_names.resize(arg_size);
-        TiDB::TiDBCollators arg_collators;
-        for (Int32 i = 0; i < arg_size; i++)
+        auto child_size = expr.children_size();
+        DataTypes types(child_size);
+        if (expr.tp() == tipb::ExprType::GroupConcat)
         {
-
-            String arg_name = getActions(expr.children(i), step.actions);
-            types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
-            if (removeNullable(types[i])->isString())
-                arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
+            /// the last parametric is the separator
+            auto arg_size = 1;
+            --child_size;
+            types.resize(arg_size);
+            aggregate.argument_names.resize(arg_size);
+            String arg_name;
+            if (child_size == 1)
+            {
+                arg_name = getActions(expr.children(0), step.actions);
+            }
+            else if(child_size > 1)
+            {
+                /// or args... -> tuple(args...)
+                arg_name = buildTupleFunction(this, expr, child_size,step.actions);
+            }
             else
-                arg_collators.push_back(nullptr);
-            aggregate.argument_names[i] = arg_name;
+            {
+                throw Exception("invalid parameter size for group concat aggregation!");
+            }
+
+            types[0] = step.actions->getSampleBlock().getByName(arg_name).type;
+            aggregate.argument_names[0] = arg_name;
             step.required_output.push_back(arg_name);
+/*
+            /// the separator
+            arg_name = getActions(expr.children(child_size), step.actions);
+            types[1] = step.actions->getSampleBlock().getByName(arg_name).type;
+            aggregate.argument_names[1] = arg_name;
+            step.required_output.push_back(arg_name);
+
+            for (auto i=0; i< expr.order_by_size(); ++i)
+            {
+                String arg_name = getActions(expr.order_by(i).expr(), step.actions);
+                types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+                aggregate.argument_names[i] = arg_name;
+                step.required_output.push_back(arg_name);
+            }
+*/
         }
-//        for (auto i=0; i< expr.order_by_size(); ++i)
-//        {
-//            String arg_name = getActions(expr.order_by(i).expr(), step.actions);
-//            types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
-//            aggregate.argument_names[i] = arg_name;
-//            step.required_output.push_back(arg_name);
-//        }
+        else
+        {
+            aggregate.argument_names.resize(child_size);
+            for (Int32 i = 0; i < child_size; i++)
+            {
+                String arg_name = getActions(expr.children(i), step.actions);
+                types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+                aggregate.argument_names[i] = arg_name;
+                step.required_output.push_back(arg_name);
+            }
+        }
+
         String func_string = genFuncString(agg_func_name, aggregate.argument_names);
         bool duplicate = false;
         for (const auto & pre_agg : aggregate_descriptions)
@@ -465,7 +506,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         aggregate.parameters = Array();
         /// if there is group by clause, there is no need to consider the empty input case
         aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, agg.group_by_size() == 0);
-        aggregate.function->setCollators(arg_collators);
+        aggregate.function->setCollator(getCollatorFromExpr(expr));
         aggregate_descriptions.push_back(aggregate);
         DataTypePtr result_type = aggregate.function->getReturnType();
         // this is a temp result since implicit cast maybe added on these aggregated_columns
@@ -504,8 +545,6 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
                 /// extra aggregation function any(group_by_column) here as the output of the group by column
                 const String & agg_func_name = "any";
                 AggregateDescription aggregate;
-                TiDB::TiDBCollators arg_collators;
-                arg_collators.push_back(collator);
 
                 DataTypes types(1);
                 aggregate.argument_names.resize(1);
@@ -528,7 +567,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
                 aggregate.column_name = func_string;
                 aggregate.parameters = Array();
                 aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, false);
-                aggregate.function->setCollators(arg_collators);
+                aggregate.function->setCollator(getCollatorFromExpr(expr));
                 aggregate_descriptions.push_back(aggregate);
                 DataTypePtr result_type = aggregate.function->getReturnType();
                 // this is a temp result since implicit cast maybe added on these aggregated_columns
