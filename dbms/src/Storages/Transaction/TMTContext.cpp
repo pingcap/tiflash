@@ -64,7 +64,7 @@ Context & TMTContext::getContext() { return context; }
 
 bool TMTContext::isInitialized() const { return getStoreStatus() != StoreStatus::Idle; }
 
-void TMTContext::setStoreStatusRunning() { store_status = StoreStatus::Running; }
+void TMTContext::setStatusRunning() { store_status = StoreStatus::Running; }
 
 TMTContext::StoreStatus TMTContext::getStoreStatus(std::memory_order memory_order) const { return store_status.load(memory_order); }
 
@@ -94,7 +94,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     static constexpr const char * COMPACT_LOG_MIN_BYTES = "flash.compact_log_min_bytes";
     static constexpr const char * REPLICA_READ_MAX_THREAD = "flash.replica_read_max_thread";
     static constexpr const char * BATCH_READ_INDEX_TIMEOUT_MS = "flash.batch_read_index_timeout_ms";
-
+    static constexpr const char * WAIT_REGION_READY_TIMEOUT_SEC = "flash.wait_region_ready_timeout_sec";
 
     getRegionTable().setTableCheckerThreshold(config.getDouble(TABLE_OVERLAP_THRESHOLD, 0.6));
     // default config about compact-log: period 120s, rows 40k, bytes 32MB.
@@ -104,21 +104,50 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     {
         replica_read_max_thread = std::max(config.getUInt64(REPLICA_READ_MAX_THREAD, 1), 1);
         batch_read_index_timeout_ms = config.getUInt64(BATCH_READ_INDEX_TIMEOUT_MS, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
+        wait_region_ready_timeout_sec = ({
+            int64_t t = config.getInt64(WAIT_REGION_READY_TIMEOUT_SEC, /*20min*/ 20 * 60);
+            t = t >= 0 ? t : std::numeric_limits<int64_t>::max(); // set -1 to wait infinitely
+            t;
+        });
+    }
+    {
         LOG_INFO(&Logger::get(__FUNCTION__),
-            "read-index max thread num: " << replicaReadMaxThread() << ", timeout: " << batchReadIndexTimeout() << "ms");
+            "read-index max thread num: " << replicaReadMaxThread() << ", timeout: " << batchReadIndexTimeout() << "ms;"
+                                          << " wait-region-ready timeout: " << waitRegionReadyTimeout() << "s");
     }
 }
 
-bool TMTContext::getTerminated(std::memory_order memory_order) const { return getStoreStatus(memory_order) == StoreStatus::Terminated; }
+bool TMTContext::checkShuttingDown(std::memory_order memory_order) const { return getStoreStatus(memory_order) >= StoreStatus::Stopping; }
+bool TMTContext::checkTerminated(std::memory_order memory_order) const { return getStoreStatus(memory_order) == StoreStatus::Terminated; }
+bool TMTContext::checkRunning(std::memory_order memory_order) const { return getStoreStatus(memory_order) == StoreStatus::Running; }
 
-void TMTContext::setTerminated()
+void TMTContext::setStatusStopping()
 {
-    store_status = StoreStatus::Terminated;
+    store_status = StoreStatus::Stopping;
     // notify all region to stop learner read.
     kvstore->traverseRegions([](const RegionID, const RegionPtr & region) { region->notifyApplied(); });
 }
 
-UInt64 TMTContext::replicaReadMaxThread() const { return replica_read_max_thread.load(std::memory_order::memory_order_relaxed); }
-UInt64 TMTContext::batchReadIndexTimeout() const { return batch_read_index_timeout_ms.load(std::memory_order::memory_order_relaxed); }
+void TMTContext::setStatusTerminated() { store_status = StoreStatus::Terminated; }
+
+UInt64 TMTContext::replicaReadMaxThread() const { return replica_read_max_thread.load(std::memory_order_relaxed); }
+UInt64 TMTContext::batchReadIndexTimeout() const { return batch_read_index_timeout_ms.load(std::memory_order_relaxed); }
+Int64 TMTContext::waitRegionReadyTimeout() const { return wait_region_ready_timeout_sec.load(std::memory_order_relaxed); }
+
+const std::string & IntoStoreStatusName(TMTContext::StoreStatus status)
+{
+    static const std::string StoreStatusName[] = {
+        "Idle",
+        "Ready",
+        "Running",
+        "Stopping",
+        "Terminated",
+    };
+    static const std::string Unknown = "Unknown";
+    auto idx = static_cast<uint8_t>(status);
+    return idx > static_cast<uint8_t>(TMTContext::StoreStatus::_MIN) && idx < static_cast<uint8_t>(TMTContext::StoreStatus::_MAX)
+        ? StoreStatusName[idx - 1]
+        : Unknown;
+}
 
 } // namespace DB

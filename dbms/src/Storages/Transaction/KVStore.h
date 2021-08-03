@@ -87,6 +87,9 @@ public:
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
 
+    void addReadIndexEvent(Int64 f) { read_index_event_flag += f; }
+    Int64 getReadIndexEvent() const { return read_index_event_flag; }
+
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
@@ -147,6 +150,7 @@ private:
     std::list<RegionDataReadInfoList> bg_gc_region_data;
 
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
+    std::atomic_int64_t read_index_event_flag{0};
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore
@@ -156,5 +160,7 @@ class KVStoreTaskLock : private boost::noncopyable
     KVStoreTaskLock(std::mutex & mutex_) : lock(mutex_) {}
     std::lock_guard<std::mutex> lock;
 };
+
+void WaitCheckRegionReady(const TMTContext &, const std::atomic_size_t & terminate_signals_counter);
 
 } // namespace DB
