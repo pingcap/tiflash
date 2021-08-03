@@ -63,15 +63,15 @@ public:
 public:
     struct ProcessKeys
     {
-        size_t default_cf;
-        size_t write_cf;
-        size_t lock_cf;
+        size_t default_cf = 0;
+        size_t write_cf   = 0;
+        size_t lock_cf    = 0;
 
         inline size_t total() const { return default_cf + write_cf + lock_cf; }
     };
 
 private:
-    void scanCF(ColumnFamilyType cf, const std::string_view until = std::string_view{});
+    void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_need_include);
 
     Block readCommitedBlock();
 
@@ -90,6 +90,9 @@ private:
     SSTReaderPtr write_cf_reader;
     SSTReaderPtr default_cf_reader;
     SSTReaderPtr lock_cf_reader;
+
+    DecodedTiKVKey default_last_loaded_rowkey;
+    DecodedTiKVKey lock_last_loaded_rowkey;
 
     friend class BoundedSSTFilesToBlockInputStream;
 
