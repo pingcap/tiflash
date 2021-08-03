@@ -305,6 +305,7 @@ endif()
 if (DBMS_ENABLE_AVX_SUPPORT)
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS "-mavx -mavx2")
+    set_source_files_properties(src/Functions/FunctionsArithmeticAVX2.cpp APPEND COMPILE_FLAGS "-mavx -mavx2")
     target_compile_definitions(dbms INTERFACE DBMS_ENABLE_AVX_SUPPORT=1)
 endif ()
 
@@ -312,6 +313,8 @@ if (DBMS_ENABLE_AVX512_SUPPORT)
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS
     #                             "-mavx512bw -mavx512lv -mavx512f -mavx512dq -mavx512_vnni -mavx512cd")
+    set_source_files_properties(src/Functions/FunctionsArithmeticAVX512.cpp APPEND COMPILE_FLAGS
+                                "-mavx512bw -mavx512lv -mavx512f -mavx512dq -mavx512_vnni -mavx512cd")
     target_compile_definitions(dbms INTERFACE DBMS_ENABLE_AVX512_SUPPORT=1)
 endif ()
 
