@@ -420,9 +420,9 @@ private:
 };
 
 // We only need this task run once.
-void backgroundInitStores(Context & global_context, Logger * log)
+void initStores(Context & global_context, Logger * log, bool lazily_init_store)
 {
-    auto initStores = [&global_context, log]() {
+    auto do_init_stores = [&global_context, log]() {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
         int init_cnt = 0;
         int err_cnt = 0;
@@ -443,7 +443,16 @@ void backgroundInitStores(Context & global_context, Logger * log)
             "Storage inited finish. [total_count=" << storages.size() << "] [init_count=" << init_cnt << "] [error_count=" << err_cnt
                                                    << "]");
     };
-    std::thread(initStores).detach();
+    if (lazily_init_store)
+    {
+        LOG_INFO(log, "Lazily init store.");
+        std::thread(do_init_stores).detach();
+    }
+    else
+    {
+        LOG_INFO(log, "Not lazily init store.");
+        do_init_stores();
+    }
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
@@ -1071,12 +1080,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     socket.setSendTimeout(settings.send_timeout);
                     servers.emplace_back(new TCPServer(new TCPHandlerFactory(*this), server_pool, socket, new Poco::Net::TCPServerParams));
 
+<<<<<<< HEAD
                     LOG_INFO(log, "Listening tcp: " + address.toString());
                 }
                 else if (security_config.has_tls_config)
                 {
                     LOG_INFO(log, "tcp_port is closed because tls config is set");
                 }
+=======
+    initStores(*global_context, log, storage_config.lazily_init_store);
+>>>>>>> 9fc8ef3e9... Add switch for lazily init store and enable it by default. (#2531)
 
                 /// TCP with SSL
                 if (config().has("tcp_port_secure") && !security_config.has_tls_config)
