@@ -1234,23 +1234,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
         SessionCleaner session_cleaner(*global_context);
         ClusterManagerService cluster_manager_service(*global_context, config_path);
 
+        auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
         {
-            tiflash_instance_wrap.tmt = &global_context->getTMTContext();
+            tiflash_instance_wrap.tmt = &tmt_context;
             LOG_INFO(log, "let tiflash proxy start all services");
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            LOG_INFO(log, "proxy is ready to serve, try to wake up all region leader by sending read index request");
-            {
-                std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
-                tiflash_instance_wrap.tmt->getKVStore()->traverseRegions([&batch_read_index_req](RegionID, const RegionPtr & region) {
-                    batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region));
-                });
-                tiflash_instance_wrap.proxy_helper->batchReadIndex(
-                    batch_read_index_req, tiflash_instance_wrap.tmt->batchReadIndexTimeout());
-            }
-            LOG_INFO(log, "start to wait for terminal signal");
+            LOG_INFO(log, "tiflash proxy is ready to serve, try to wake up all regions' leader");
+            WaitCheckRegionReady(tmt_context, terminate_signals_counter);
         }
 
         {
@@ -1260,12 +1253,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
             GET_METRIC(metrics, tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
-        global_context->getTMTContext().setStoreStatusRunning();
+        tmt_context.setStatusRunning();
+        LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
 
         {
-            global_context->getTMTContext().setTerminated();
-            LOG_INFO(log, "Set tmt context terminated");
+            LOG_INFO(log, "Set store status Stopping");
+            tmt_context.setStatusStopping();
+            {
+                // Wait until there is no read-index task.
+                while (tmt_context.getKVStore()->getReadIndexEvent())
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            }
+            tmt_context.setStatusTerminated();
+            LOG_INFO(log, "Set store status Terminated");
             // wait proxy to stop services
             if (proxy_conf.is_proxy_runnable)
             {
