@@ -67,7 +67,7 @@ private:
     Logger * log = &Logger::get("CreatingSetsBlockInputStream");
 
     void createAll();
-    void createOne(SubqueryForSet & subquery, MemoryTracker * memory_tracker);
+    void createOne(SubqueryForSet & subquery);
 };
 
 } // namespace DB

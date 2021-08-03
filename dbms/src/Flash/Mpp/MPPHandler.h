@@ -23,6 +23,8 @@
 namespace DB
 {
 
+mpp::MPPDataPacket getPacketWithError(String reason);
+
 // Identify a mpp task.
 struct MPPTaskId
 {
