@@ -19,6 +19,7 @@ class DataTypeNumber final : public DataTypeNumberBase<T>
     bool canBeUsedInBooleanContext() const override { return true; }
     bool isNumber() const override { return true; }
     bool isInteger() const override { return std::is_integral_v<T>; }
+    bool isFloatingPoint() const override { return std::is_floating_point_v<T>; }
     bool canBeInsideNullable() const override { return true; }
 
 public:
