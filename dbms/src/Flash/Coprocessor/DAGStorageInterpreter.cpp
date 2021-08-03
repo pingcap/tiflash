@@ -125,7 +125,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 {
     if (dag.isBatchCop())
-        std::tie(learner_read_snapshot, region_retry) = doBatchCopLearnerRead();
+        learner_read_snapshot = doBatchCopLearnerRead();
     else
         learner_read_snapshot = doCopLearnerRead();
 
@@ -164,13 +164,15 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
     return doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
 }
 
-std::tuple<LearnerReadSnapshot, RegionRetryList> DAGStorageInterpreter::doBatchCopLearnerRead()
+/// Will assign region_retry
+LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
 {
     std::unordered_set<RegionID> force_retry;
     for (;;)
     {
         try
         {
+            region_retry.clear();
             auto [retry, status] = MakeRegionQueryInfos(
                 dag.getRegions(),
                 force_retry,
@@ -181,12 +183,13 @@ std::tuple<LearnerReadSnapshot, RegionRetryList> DAGStorageInterpreter::doBatchC
 
             if (retry)
             {
-                for (const auto & r : *retry)
+                region_retry = std::move(*retry);
+                for (const auto & r : region_retry)
                     force_retry.emplace(r.get().region_id);
             }
             if (mvcc_query_info->regions_query_info.empty())
-                return std::make_tuple(LearnerReadSnapshot{}, *retry);
-            return {doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log), *retry};
+                return {};
+            return doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
         }
         catch (const LockException & e)
         {

@@ -61,7 +61,7 @@ public:
 private:
     LearnerReadSnapshot doCopLearnerRead();
 
-    std::tuple<LearnerReadSnapshot, RegionRetryList> doBatchCopLearnerRead();
+    LearnerReadSnapshot doBatchCopLearnerRead();
 
     void doLocalRead(DAGPipeline & pipeline, size_t max_block_size);
 
