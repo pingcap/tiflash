@@ -36,7 +36,7 @@ using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
  *
  * This class is multi-threads safe. Support single thread write, and multi threads read.
  */
-class PageStorage : private boost::noncopyable
+class PageStorage
 {
 public:
     struct Config
@@ -57,6 +57,8 @@ public:
         // Minimum number of legacy files to be selected for compaction
         size_t gc_min_legacy_num = 3;
 
+        size_t  gc_max_expect_legacy_files = 100;
+        Float64 gc_max_valid_rate_bound    = 1.0;
 
         // Maximum write concurrency. Must not be changed once the PageStorage object is created.
         size_t num_write_slots = 1;
@@ -128,7 +130,11 @@ public:
     void write(WriteBatch && write_batch, const RateLimiterPtr & rate_limiter = nullptr);
 
     SnapshotPtr getSnapshot();
-    size_t      getNumSnapshots() const;
+    // Get some statistics of all living snapshots and the oldest living snapshot.
+    // Return < num of snapshots,
+    //          living time(seconds) of the oldest snapshot,
+    //          created thread id of the oldest snapshot      >
+    std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
 
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {});
     Page      read(PageId page_id, SnapshotPtr snapshot = {});
@@ -222,13 +228,14 @@ private:
     TiFlashMetricsPtr metrics;
 };
 
-class PageReader : private boost::noncopyable
+class PageReader
 {
 public:
     /// Not snapshot read.
     explicit PageReader(PageStorage & storage_) : storage(storage_), snap() {}
     /// Snapshot read.
     PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_) : storage(storage_), snap(snap_) {}
+    PageReader(PageStorage & storage_, PageStorage::SnapshotPtr && snap_) : storage(storage_), snap(std::move(snap_)) {}
 
     Page    read(PageId page_id) const { return storage.read(page_id, snap); }
     PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, snap); }

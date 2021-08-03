@@ -1,7 +1,7 @@
+#include <Common/CurrentMetrics.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <gtest/gtest.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -11,16 +11,20 @@
 
 #include "dm_basic_include.h"
 
+namespace CurrentMetrics
+{
+extern const Metric DT_SnapshotOfRead;
+extern const Metric DT_SnapshotOfReadRaw;
+extern const Metric DT_SnapshotOfSegmentSplit;
+extern const Metric DT_SnapshotOfSegmentMerge;
+extern const Metric DT_SnapshotOfDeltaMerge;
+extern const Metric DT_SnapshotOfPlaceIndex;
+} // namespace CurrentMetrics
+
 namespace DB
 {
 namespace DM
 {
-extern DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
-                                    const ColumnDefinesPtr &       schema_snap,
-                                    const BlockInputStreamPtr &    input_stream,
-                                    UInt64                         file_id,
-                                    const String &                 parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
 namespace tests
 {
 
@@ -184,6 +188,7 @@ try
         {
             // flush segment
             segment = segment->mergeDelta(dmContext(), tableColumns());
+            ;
         }
 
         {
@@ -240,7 +245,7 @@ try
     // Thread A
     write_rows(100);
     check_rows(100);
-    auto snap = segment->createSnapshot(dmContext());
+    auto snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
 
     // Thread B
     write_rows(100);
@@ -1041,12 +1046,8 @@ public:
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto delegate     = context.path_pool.getStableDiskDelegator();
         auto store_path   = delegate.choosePath();
-
-        DMFileBlockOutputStream::Flags flags;
-        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
-
         auto dmfile
-            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, flags);
+            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, false);
 
         delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
@@ -1076,7 +1077,8 @@ try
             case Segment_test_Mode::V2_BlockOnly:
                 segment->write(dmContext(), std::move(block));
                 break;
-            case Segment_test_Mode::V2_FileOnly: {
+            case Segment_test_Mode::V2_FileOnly:
+            {
                 auto delegate          = dmContext().path_pool.getStableDiskDelegator();
                 auto file_provider     = dmContext().db_context.getFileProvider();
                 auto [range, file_ids] = genDMFile(dmContext(), block);
@@ -1089,7 +1091,7 @@ try
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
 
-                segment->ingestPacks(dmContext(), range, {pack}, false);
+                segment->writeRegionSnapshot(dmContext(), range, {pack}, false);
                 break;
             }
             default:
@@ -1118,7 +1120,7 @@ try
     SegmentPtr other_segment;
     {
         WriteBatches wbs(dmContext().storage_pool);
-        auto         segment_snap = segment->createSnapshot(dmContext(), true);
+        auto         segment_snap = segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
         ASSERT_FALSE(!segment_snap);
 
         write_100_rows(segment);
@@ -1147,8 +1149,8 @@ try
     {
         WriteBatches wbs(dmContext().storage_pool);
 
-        auto left_snap  = segment->createSnapshot(dmContext(), true);
-        auto right_snap = other_segment->createSnapshot(dmContext(), true);
+        auto left_snap  = segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+        auto right_snap = other_segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
         ASSERT_FALSE(!left_snap || !right_snap);
 
         write_100_rows(other_segment);
@@ -1352,6 +1354,7 @@ try
     {
         segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
+        ;
     }
 
     {
@@ -1529,6 +1532,7 @@ try
     {
         segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
+        ;
     }
 
     {
@@ -1563,97 +1567,6 @@ try
         }
         in->readSuffix();
         ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
-    }
-}
-CATCH
-
-TEST_F(Segment_test, CalculateDTFileProperty)
-try
-{
-    Settings settings                    = dmContext().db_context.getSettings();
-    settings.dt_segment_stable_pack_rows = 10;
-
-    segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
-
-    const size_t num_rows_write_every_round = 100;
-    const size_t write_round                = 3;
-    const size_t tso                        = 10000;
-    for (size_t i = 0; i < write_round; i++)
-    {
-        size_t start = num_rows_write_every_round * i;
-        Block  block = DMTestEnv::prepareSimpleWriteBlock(start, start + num_rows_write_every_round, false, tso);
-        // write to segment
-        segment->write(dmContext(), block);
-        segment = segment->mergeDelta(dmContext(), tableColumns());
-    }
-
-    {
-        auto & stable = segment->getStable();
-        ASSERT_GT(stable->getDMFiles()[0]->getPacks(), (size_t)1);
-        ASSERT_EQ(stable->getRows(), num_rows_write_every_round * write_round);
-        // caculate StableProperty
-        ASSERT_EQ(stable->isStablePropertyCached(), false);
-        auto        start = RowKeyValue::fromHandle(0);
-        auto        end   = RowKeyValue::fromHandle(num_rows_write_every_round);
-        RowKeyRange range(start, end, false, 1);
-        // calculate the StableProperty for packs in the key range [0, num_rows_write_every_round)
-        stable->calculateStableProperty(dmContext(), range, false);
-        ASSERT_EQ(stable->isStablePropertyCached(), true);
-        auto & property = stable->getStableProperty();
-        ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
-        ASSERT_EQ(property.num_versions, num_rows_write_every_round);
-        ASSERT_EQ(property.num_puts, num_rows_write_every_round);
-        ASSERT_EQ(property.num_rows, num_rows_write_every_round);
-    }
-}
-CATCH
-
-TEST_F(Segment_test, CalculateDTFilePropertyWithPropertyFileDeleted)
-try
-{
-    Settings settings                    = dmContext().db_context.getSettings();
-    settings.dt_segment_stable_pack_rows = 10;
-
-    segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
-
-    const size_t num_rows_write_every_round = 100;
-    const size_t write_round                = 3;
-    const size_t tso                        = 10000;
-    for (size_t i = 0; i < write_round; i++)
-    {
-        size_t start = num_rows_write_every_round * i;
-        Block  block = DMTestEnv::prepareSimpleWriteBlock(start, start + num_rows_write_every_round, false, tso);
-        // write to segment
-        segment->write(dmContext(), block);
-        segment = segment->mergeDelta(dmContext(), tableColumns());
-    }
-
-    {
-        auto & stable  = segment->getStable();
-        auto & dmfiles = stable->getDMFiles();
-        ASSERT_GT(dmfiles[0]->getPacks(), (size_t)1);
-        auto & dmfile    = dmfiles[0];
-        auto   file_path = dmfile->path();
-        // check property file exists and then delete it
-        ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
-        Poco::File(file_path + "/property").remove();
-        ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
-        // clear PackProperties to force it to calculate from scratch
-        dmfile->getPackProperties().clear_property();
-        ASSERT_EQ(dmfile->getPackProperties().property_size(), 0);
-        // caculate StableProperty
-        ASSERT_EQ(stable->isStablePropertyCached(), false);
-        auto        start = RowKeyValue::fromHandle(0);
-        auto        end   = RowKeyValue::fromHandle(num_rows_write_every_round);
-        RowKeyRange range(start, end, false, 1);
-        // calculate the StableProperty for packs in the key range [0, num_rows_write_every_round)
-        stable->calculateStableProperty(dmContext(), range, false);
-        ASSERT_EQ(stable->isStablePropertyCached(), true);
-        auto & property = stable->getStableProperty();
-        ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
-        ASSERT_EQ(property.num_versions, num_rows_write_every_round);
-        ASSERT_EQ(property.num_puts, num_rows_write_every_round);
-        ASSERT_EQ(property.num_rows, num_rows_write_every_round);
     }
 }
 CATCH

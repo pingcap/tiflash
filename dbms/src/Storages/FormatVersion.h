@@ -77,7 +77,7 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V2 = StorageFormatVersio
     .page = PageFormat::V2,
 };
 
-inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V2;
+inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V1;
 
 inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
 {

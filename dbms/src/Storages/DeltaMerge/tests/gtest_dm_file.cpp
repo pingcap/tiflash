@@ -22,25 +22,6 @@ namespace DM
 namespace tests
 {
 
-TEST(DMFileWriterFlags_test, SetClearFlags)
-{
-    using Flags = DMFileWriter::Flags;
-
-    Flags flags;
-
-    bool f = false;
-    flags.setRateLimit(f);
-    EXPECT_FALSE(flags.needRateLimit());
-    flags.setSingleFile(f);
-    EXPECT_FALSE(flags.isSingleFile());
-
-    f = true;
-    flags.setRateLimit(f);
-    EXPECT_TRUE(flags.needRateLimit());
-    flags.setSingleFile(f);
-    EXPECT_TRUE(flags.isSingleFile());
-}
-
 String paramToString(const ::testing::TestParamInfo<DMFile::Mode> & info)
 {
     const auto mode = info.param;
@@ -152,15 +133,6 @@ try
 
     const size_t num_rows_write = 128;
 
-    DMFileBlockOutputStream::BlockProperty block_property1;
-    block_property1.effective_num_rows = 1;
-    block_property1.gc_hint_version    = 1;
-    DMFileBlockOutputStream::BlockProperty block_property2;
-    block_property2.effective_num_rows = 2;
-    block_property2.gc_hint_version    = 2;
-    std::vector<DMFileBlockOutputStream::BlockProperty> block_propertys;
-    block_propertys.push_back(block_property1);
-    block_propertys.push_back(block_property2);
     {
         // Prepare for write
         // Block 1: [0, 64)
@@ -169,11 +141,9 @@ try
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
         auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
         stream->writePrefix();
-        stream->write(block1, block_property1);
-        stream->write(block2, block_property2);
+        stream->write(block1, 0);
+        stream->write(block2, 0);
         stream->writeSuffix();
-
-        ASSERT_EQ(dm_file->getPackProperties().property_size(), 2);
     }
 
 
@@ -210,17 +180,10 @@ try
 
     /// Test restore the file from disk and read
     {
-        dm_file = restoreDMFile();
-
-        // Test dt property read success
-        auto propertys = dm_file->getPackProperties();
-        ASSERT_EQ(propertys.property_size(), 2);
-        for (int i = 0; i < propertys.property_size(); i++)
-        {
-            auto & property = propertys.property(i);
-            ASSERT_EQ((size_t)property.num_rows(), (size_t)block_propertys[i].effective_num_rows);
-            ASSERT_EQ((size_t)property.gc_hint_version(), (size_t)block_propertys[i].effective_num_rows);
-        }
+        auto id = dm_file->fileId();
+        dm_file.reset();
+        auto file_provider = dbContext().getFileProvider();
+        dm_file            = DMFile::restore(file_provider, id, 0, parent_path, /*read_meta=*/true);
     }
     {
         // Test read after restore
@@ -280,11 +243,9 @@ try
         Block block1         = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
         Block block2         = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
         auto  stream         = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
-
-        DMFileBlockOutputStream::BlockProperty block_property;
         stream->writePrefix();
-        stream->write(block1, block_property);
-        stream->write(block2, block_property);
+        stream->write(block1, 0);
+        stream->write(block2, 0);
         stream->writeSuffix();
     }
 
@@ -324,11 +285,9 @@ try
         Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
         auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
-
-        DMFileBlockOutputStream::BlockProperty block_property;
         stream->writePrefix();
-        stream->write(block1, block_property);
-        stream->write(block2, block_property);
+        stream->write(block1, 0);
+        stream->write(block2, 0);
         stream->writeSuffix();
     }
 
@@ -394,11 +353,9 @@ try
         Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
         auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
-
-        DMFileBlockOutputStream::BlockProperty block_property;
         stream->writePrefix();
-        stream->write(block1, block_property);
-        stream->write(block2, block_property);
+        stream->write(block1, 0);
+        stream->write(block2, 0);
         stream->writeSuffix();
     }
 
@@ -468,13 +425,11 @@ try
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
         stream->writePrefix();
         size_t pk_beg = 0;
-
-        DMFileBlockOutputStream::BlockProperty block_property;
         for (size_t i = 0; i < nparts; ++i)
         {
             auto  pk_end = (i == nparts - 1) ? num_rows_write : (pk_beg + num_rows_write / nparts);
             Block block  = DMTestEnv::prepareSimpleWriteBlock(pk_beg, pk_end, false);
-            stream->write(block, block_property);
+            stream->write(block, 0);
             pk_beg += num_rows_write / nparts;
         }
         stream->writeSuffix();
@@ -569,8 +524,6 @@ try
     {
         // Prepare some packs in DMFile
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
-
-        DMFileBlockOutputStream::BlockProperty block_property;
         stream->writePrefix();
         size_t pk_beg = 0;
         for (size_t i = 0; i < nparts; ++i)
@@ -586,7 +539,7 @@ try
             ColumnWithTypeAndName i64(std::move(col), i64_cd.type, i64_cd.name, i64_cd.id);
             block.insert(i64);
 
-            stream->write(block, block_property);
+            stream->write(block, 0);
             pk_beg += num_rows_write / nparts;
         }
         stream->writeSuffix();
@@ -673,8 +626,6 @@ try
     {
         // Prepare some packs in DMFile
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
-
-        DMFileBlockOutputStream::BlockProperty block_property;
         stream->writePrefix();
         size_t pk_beg = 0;
         for (size_t i = 0; i < nparts; ++i)
@@ -690,7 +641,7 @@ try
             ColumnWithTypeAndName i64(std::move(col), i64_cd.type, i64_cd.name, i64_cd.id);
             block.insert(i64);
 
-            stream->write(block, block_property);
+            stream->write(block, 0);
             pk_beg += num_rows_write / nparts;
         }
         stream->writeSuffix();
@@ -772,15 +723,13 @@ try
     {
         // Prepare some packs in DMFile
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
-
-        DMFileBlockOutputStream::BlockProperty block_property;
         stream->writePrefix();
         size_t pk_beg = 0;
         for (size_t i = 0; i < nparts; ++i)
         {
             auto  pk_end = (i == nparts - 1) ? num_rows_write : (pk_beg + num_rows_write / nparts);
             Block block  = DMTestEnv::prepareSimpleWriteBlock(pk_beg, pk_end, false);
-            stream->write(block, block_property);
+            stream->write(block, 0);
             pk_beg += num_rows_write / nparts;
         }
         stream->writeSuffix();
@@ -895,10 +844,8 @@ try
         block.insert(f64);
 
         auto stream = std::make_unique<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
-
-        DMFileBlockOutputStream::BlockProperty block_property;
         stream->writePrefix();
-        stream->write(block, block_property);
+        stream->write(block, 0);
         stream->writeSuffix();
     }
 
@@ -964,10 +911,8 @@ try
         block.insert(str);
 
         auto stream = std::make_unique<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
-
-        DMFileBlockOutputStream::BlockProperty block_property;
         stream->writePrefix();
-        stream->write(block, block_property);
+        stream->write(block, 0);
         stream->writeSuffix();
     }
 
@@ -1033,10 +978,8 @@ try
 
         block.insert(nullable_col);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
-
-        DMFileBlockOutputStream::BlockProperty block_property;
         stream->writePrefix();
-        stream->write(block, block_property);
+        stream->write(block, 0);
         stream->writeSuffix();
     }
 
@@ -1136,8 +1079,11 @@ public:
     }
 
     // Update dm_context.
-    void reload(const ColumnDefinesPtr & cols = DMTestEnv::getDefaultColumns(true))
+    void reload(ColumnDefinesPtr cols = {})
     {
+        if (!cols)
+            cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
+
         *table_columns_ = *cols;
 
         dm_context = std::make_unique<DMContext>( //
@@ -1177,7 +1123,7 @@ protected:
 TEST_P(DMFile_Clustered_Index_Test, WriteRead)
 try
 {
-    auto cols = DMTestEnv::getDefaultColumns(is_common_handle);
+    auto cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
 
     const size_t num_rows_write = 128;
 
@@ -1202,11 +1148,9 @@ try
                                                           is_common_handle,
                                                           rowkey_column_size);
         auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
-
-        DMFileBlockOutputStream::BlockProperty block_property;
         stream->writePrefix();
-        stream->write(block1, block_property);
-        stream->write(block2, block_property);
+        stream->write(block1, 0);
+        stream->write(block2, 0);
         stream->writeSuffix();
     }
 
@@ -1247,7 +1191,7 @@ CATCH
 TEST_P(DMFile_Clustered_Index_Test, ReadFilteredByHandle)
 try
 {
-    auto cols = DMTestEnv::getDefaultColumns(is_common_handle);
+    auto cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
 
     const Int64 num_rows_write = 1024;
     const Int64 nparts         = 5;
@@ -1256,8 +1200,6 @@ try
     {
         // Prepare some packs in DMFile
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
-
-        DMFileBlockOutputStream::BlockProperty block_property;
         stream->writePrefix();
         size_t pk_beg = 0;
         for (size_t i = 0; i < nparts; ++i)
@@ -1272,7 +1214,7 @@ try
                                                              EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                              is_common_handle,
                                                              rowkey_column_size);
-            stream->write(block, block_property);
+            stream->write(block, 0);
             pk_beg += num_rows_write / nparts;
         }
         stream->writeSuffix();
@@ -1384,9 +1326,8 @@ public:
             block.insert(f64);
 
             auto stream = std::make_unique<DMFileBlockOutputStream>(dbContext(), dm_file, *cols_before_ddl);
-            DMFileBlockOutputStream::BlockProperty block_property;
             stream->writePrefix();
-            stream->write(block, block_property);
+            stream->write(block, 0);
             stream->writeSuffix();
 
             return {num_rows_write, *cols_before_ddl};

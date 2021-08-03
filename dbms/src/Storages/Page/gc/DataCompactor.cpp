@@ -110,7 +110,8 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
         bool is_candidate = (writing_file_ids.count(page_file.fileIdLevel()) == 0)
             && (valid_rate < config.gc_max_valid_rate //
                 || file_size < config.file_small_size //
-                || (std::fabs(config.gc_max_valid_rate - 1.0) < std::numeric_limits<double>::epsilon()));
+                || config.gc_max_valid_rate >= 1.0    // all page file will be picked
+            );
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
         LOG_TRACE(log,
                   storage_name << " " << page_file.toString() << " [valid rate=" << DB::toString(valid_rate, 2)
@@ -147,18 +148,46 @@ DataCompactor<SnapshotPtr>::migratePages( //
     auto [largest_file_id, level] = candidates.rbegin()->fileIdLevel();
     const PageFileIdAndLevel migrate_file_id{largest_file_id, level + 1};
 
-    // In case that those files are hold by snapshot and do migratePages to same PageFile again, we need to check if gc_file is already exist.
-    const String pf_parent_path = delegator->choosePath(migrate_file_id);
-    if (PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log))
+    // In case that those files are hold by snapshot and do migratePages to same `migrate_file_id` again, we need to check
+    // whether gc_file (and its legacy file) is already exist.
+    //
+    // For example:
+    //   First round:
+    //     PageFile_998_0, PageFile_999_0, PageFile_1000_0
+    //        ^                                ^
+    //        └────────────────────────────────┘
+    //   Only PageFile_998_0 and PageFile_1000_0 are picked as candidates, it will generate PageFile_1000_1 for storing
+    //   GC data in this round.
+    //
+    //   Second round:
+    //     PageFile_998_0, PageFile_999_0, PageFile_1000_0
+    //        ^                ^               ^
+    //        └────────────────┵───────────────┘
+    //   Some how PageFile_1000_0 don't get deleted (maybe there is a snapshot that need to read Pages inside it) and
+    //   we start a new round of GC. PageFile_998_0(again), PageFile_999_0(new), PageFile_1000_0(again) are picked into
+    //   candidates and 1000_0 is the largest file_id.
     {
-        LOG_INFO(log,
-                 storage_name << " GC migration to PageFile_" //
-                              << migrate_file_id.first << "_" << migrate_file_id.second << " is done before.");
-        return {PageEntriesEdit{}, 0};
+        // We need to check existence for multi disks deployment, or we may generate the same file id
+        // among different disks, some of them will be ignored by the PageFileSet because of duplicated
+        // file id while restoring from disk
+        const auto paths = delegator->listPaths();
+        for (const auto & pf_parent_path : paths)
+        {
+            if (PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log)
+                || PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Legacy, page_file_log))
+            {
+                LOG_INFO(log,
+                         storage_name << " GC migration to PageFile_" //
+                                      << migrate_file_id.first << "_" << migrate_file_id.second << " is done before.");
+                return {PageEntriesEdit{}, 0};
+            }
+        }
+        // else the PageFile is not exists in all paths, continue migration.
     }
 
-    // Create a tmp PageFile for migration
-    PageFile gc_file = PageFile::newPageFile(
+    // Choose one path for creating a tmp PageFile for migration
+    const String pf_parent_path = delegator->choosePath(migrate_file_id);
+    PageFile     gc_file        = PageFile::newPageFile(
         migrate_file_id.first, migrate_file_id.second, pf_parent_path, file_provider, PageFile::Type::Temp, page_file_log);
     LOG_INFO(log,
              storage_name << " GC decide to migrate " << candidates.size() << " files, containing " << migrate_page_count
@@ -259,14 +288,15 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
         const auto & [_valid_bytes, valid_page_ids_in_file] = iter->second;
         (void)_valid_bytes;
 
-        if (auto reader_iter = data_readers.find(file_id_level); reader_iter == data_readers.end())
+        auto reader_iter = data_readers.find(file_id_level);
+        if (reader_iter == data_readers.end())
             continue;
 
         // One WriteBatch for one candidate.
         auto page_id_and_entries = collectValidEntries(valid_page_ids_in_file, snapshot);
         if (!page_id_and_entries.empty())
         {
-            auto          data_reader = data_readers.at(file_id_level);
+            auto &        data_reader = reader_iter->second;
             const PageMap pages       = data_reader->read(page_id_and_entries);
             WriteBatch    wb;
             wb.setSequence(compact_sequence);

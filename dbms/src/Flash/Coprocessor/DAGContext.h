@@ -8,6 +8,7 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Flash/Coprocessor/DAGDriver.h>
 
 namespace DB
 {
@@ -59,6 +60,8 @@ public:
     void handleOverflowError(const String & msg);
     void handleDivisionByZero(const String & msg);
     void handleInvalidTime(const String & msg);
+    bool allowZeroInDate() const;
+    bool allowInvalidDate() const;
     bool shouldClipToZero();
     const std::vector<std::pair<Int32, String>> & getWarnings() const { return warnings; }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
@@ -82,6 +85,8 @@ public:
     bool return_executor_id;
     bool is_mpp_task;
     bool is_root_mpp_task;
+
+    RegionInfoList retry_regions;
 
 private:
     /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo

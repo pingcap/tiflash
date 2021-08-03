@@ -1,6 +1,5 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
-#include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
@@ -80,7 +79,7 @@ BlockIO InterpreterDAG::execute()
     std::vector<SubqueriesForSets> subqueriesForSets;
     BlockInputStreams streams = executeQueryBlock(*dag.getQueryBlock(), subqueriesForSets);
 
-    Pipeline pipeline;
+    DAGPipeline pipeline;
     pipeline.streams = streams;
 
     DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams);

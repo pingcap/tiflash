@@ -17,10 +17,17 @@
 #include <DataStreams/GraphiteRollupSortedBlockInputStream.h>
 #include <Storages/MergeTree/MergeTreeDataPart.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#if defined(__clang__)
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#endif
 #include <boost/multi_index_container.hpp>
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/global_fun.hpp>
 #include <boost/range/iterator_range_core.hpp>
+#pragma GCC diagnostic pop
 
 namespace TiDB
 {

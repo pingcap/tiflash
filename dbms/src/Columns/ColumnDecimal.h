@@ -28,6 +28,11 @@ public:
         scale(scale_)
     {}
 
+    DecimalPaddedPODArray(size_t size, const T & x, UInt32 scale_)
+        :   Base(size, x),
+            scale(scale_)
+    {}
+
     DecimalPaddedPODArray(const DecimalPaddedPODArray & other)
     :   Base(other.begin(), other.end()),
         scale(other.scale)
@@ -73,6 +78,10 @@ private:
     :   data(n, scale_),
         scale(scale_)
     {}
+    ColumnDecimal(const size_t n, const T & x, UInt32 scale_)
+        :   data(n, x, scale_),
+            scale(scale_)
+    {}
 
     ColumnDecimal(const ColumnDecimal & src)
     :   data(src.data),
@@ -105,6 +114,7 @@ public:
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
     void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
+    void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int nan_direction_hint) const override;
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res) const override;
 

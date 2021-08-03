@@ -52,6 +52,15 @@ void ColumnVector<T>::updateHashWithValue(size_t n, SipHash & hash, std::shared_
 }
 
 template <typename T>
+void ColumnVector<T>::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+{
+    for (size_t i = 0, sz = size(); i < sz; ++i)
+    {
+        hash_values[i].update(data[i]);
+    }
+}
+
+template <typename T>
 struct ColumnVector<T>::less
 {
     const Self & parent;

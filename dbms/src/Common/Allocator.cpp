@@ -42,7 +42,7 @@ namespace ErrorCodes
   *
   * PS. This is also required, because tcmalloc can not allocate a chunk of memory greater than 16 GB.
   */
-static constexpr size_t MMAP_THRESHOLD = 64 * (1ULL << 20);
+static constexpr size_t MMAP_THRESHOLD = 64 * (1ULL << 30);
 static constexpr size_t MMAP_MIN_ALIGNMENT = 4096;
 static constexpr size_t MALLOC_MIN_ALIGNMENT = 8;
 

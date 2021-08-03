@@ -118,9 +118,9 @@ public:
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
     bool write(DMContext & dm_context, const Block & block); // For test only
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
-    bool ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
+    bool writeRegionSnapshot(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
 
-    SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update = false) const;
+    SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
 
     BlockInputStreamPtr getInputStream(const DMContext &          dm_context,
                                        const ColumnDefines &      columns_to_read,
@@ -238,14 +238,13 @@ public:
     }
     bool hasAbandoned() { return delta->hasAbandoned(); }
 
+    bool isSplitForbidden() { return split_forbidden; }
+    void forbidSplit() { split_forbidden = true; }
+
     void drop(const FileProviderPtr & file_provider) { stable->drop(file_provider); }
 
     RowsAndBytes
     getRowsAndBytesInRange(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, const RowKeyRange & check_range, bool is_exact);
-
-    DB::Timestamp getLastCheckGCSafePoint() { return last_check_gc_safe_point.load(std::memory_order_relaxed); }
-
-    void setLastCheckGCSafePoint(DB::Timestamp gc_safe_point) { last_check_gc_safe_point.store(gc_safe_point, std::memory_order_relaxed); }
 
 private:
     ReadInfo getReadInfo(const DMContext &          dm_context,
@@ -324,13 +323,20 @@ private:
     const PageId segment_id;
     const PageId next_segment_id;
 
-    std::atomic<DB::Timestamp> last_check_gc_safe_point = 0;
-
     const DeltaValueSpacePtr  delta;
     const StableValueSpacePtr stable;
 
+    bool split_forbidden = false;
+
     Logger * log;
 };
+
+DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
+                             const ColumnDefinesPtr &    schema_snap,
+                             const BlockInputStreamPtr & input_stream,
+                             UInt64                      file_id,
+                             const String &              parent_path,
+                             bool                        need_rate_limit);
 
 } // namespace DM
 } // namespace DB

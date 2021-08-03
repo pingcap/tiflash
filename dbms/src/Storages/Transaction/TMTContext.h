@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Poco/Util/AbstractConfiguration.h>
-#include <Storages/GCManager.h>
 #include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/StorageEngineType.h>
@@ -24,13 +23,19 @@ using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
 class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 
-class GCManager;
-using GCManagerPtr = std::shared_ptr<GCManager>;
-
 struct TiFlashRaftConfig;
 
 class TMTContext : private boost::noncopyable
 {
+public:
+    enum class StoreStatus : uint8_t
+    {
+        Idle = 0,
+        Ready,
+        Running,
+        Terminated,
+    };
+
 public:
     const KVStorePtr & getKVStore() const;
     KVStorePtr & getKVStore();
@@ -44,10 +49,7 @@ public:
     const BackgroundService & getBackgroundService() const;
     BackgroundService & getBackgroundService();
 
-    GCManager & getGCManager();
-
     Context & getContext();
-    bool isInitialized() const;
 
     bool isBgFlushDisabled() const { return disable_bg_flush; }
 
@@ -70,12 +72,16 @@ public:
 
     void reloadConfig(const Poco::Util::AbstractConfiguration & config);
 
-    const std::atomic_bool & getTerminated() const;
+    bool isInitialized() const;
+    StoreStatus getStoreStatus(std::memory_order = std::memory_order_seq_cst) const;
+    void setStoreStatusRunning();
+    bool getTerminated(std::memory_order = std::memory_order_seq_cst) const;
     void setTerminated();
 
     const KVClusterPtr & getCluster() const { return cluster; }
 
-    UInt64 replicaReadMaxThread() const { return replica_read_max_thread.load(std::memory_order::memory_order_relaxed); }
+    UInt64 replicaReadMaxThread() const;
+    UInt64 batchReadIndexTimeout() const;
 
 private:
     Context & context;
@@ -83,13 +89,12 @@ private:
     ManagedStorages storages;
     RegionTable region_table;
     BackGroundServicePtr background_service;
-    GCManager gc_manager;
 
-private:
     KVClusterPtr cluster;
 
     mutable std::mutex mutex;
-    std::atomic_bool initialized = false;
+
+    std::atomic<StoreStatus> store_status{StoreStatus::Idle};
 
     const std::unordered_set<std::string> ignore_databases;
     SchemaSyncerPtr schema_syncer;
@@ -99,8 +104,8 @@ private:
 
     bool disable_bg_flush;
 
-    std::atomic_bool terminated{false};
-    std::atomic_uint64_t replica_read_max_thread{1};
+    std::atomic_uint64_t replica_read_max_thread;
+    std::atomic_uint64_t batch_read_index_timeout_ms;
 };
 
 } // namespace DB

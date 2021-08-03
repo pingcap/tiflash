@@ -1,3 +1,6 @@
+#TODO: mpp hang detect is disabled, so this test should not be used
+#RETURN
+
 # Preparation.
 => DBGInvoke __init_fail_point()
 => DBGInvoke __disable_fail_point(hang_in_execution)

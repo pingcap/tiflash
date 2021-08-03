@@ -65,7 +65,8 @@ public:
 
     static DeltaPackPtr deserializeMetadata(DMContext &         context, //
                                             const RowKeyRange & segment_range,
-                                            ReadBuffer &        buf);
+                                            ReadBuffer &        buf,
+                                            const BlockPtr &    last_schema);
 
     String toString() const override
     {

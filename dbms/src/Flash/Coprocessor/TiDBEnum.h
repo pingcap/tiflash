@@ -5,7 +5,6 @@
 #include <tipb/expression.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Common/MyTime.h>
 #include <Core/Types.h>
 #include <common/StringRef.h>
 

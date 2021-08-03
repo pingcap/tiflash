@@ -47,6 +47,39 @@ void ColumnNullable::updateHashWithValue(
     }
 }
 
+void ColumnNullable::updateHashWithValues(
+    IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+{
+    const auto & arr = getNullMapData();
+    size_t null_count = 0;
+
+    /// TODO: use an more efficient way to calc the sum.
+    for (size_t i = 0, n = arr.size(); i < n; ++i)
+    {
+        null_count += arr[i];
+    }
+
+    if (null_count == 0)
+    {
+        getNestedColumn().updateHashWithValues(hash_values, collator, sort_key_container);
+    }
+    else
+    {
+        IColumn::HashValues original_values;
+        original_values.reserve(null_count);
+        for (size_t i = 0, n = arr.size(); i < n; ++i)
+        {
+            if (arr[i])
+                original_values.push_back(hash_values[i]);
+        }
+        getNestedColumn().updateHashWithValues(hash_values, collator, sort_key_container);
+        for (size_t i = 0, j = 0, n = arr.size(); i < n; ++i)
+        {
+            if (arr[i])
+                hash_values[i] = original_values[j++];
+        }
+    }
+}
 
 MutableColumnPtr ColumnNullable::cloneResized(size_t new_size) const
 {

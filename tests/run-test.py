@@ -200,17 +200,17 @@ def matched(outputs, matches, fuzz):
 
 
 class Matcher:
-    def __init__(self, executor, executor_tidb, executor_func, executor_curl_tidb, fuzz):
+    def __init__(self, executor, executor_tidb, executor_func, curl_tidb_executor, fuzz):
         self.executor = executor
         self.executor_tidb = executor_tidb
         self.executor_func = executor_func
-        self.executor_curl_tidb = executor_curl_tidb
         self.query_line_number = 0
         self.fuzz = fuzz
         self.query = None
         self.outputs = None
         self.matches = []
         self.is_mysql = False
+        self.curl_tidb_executor = curl_tidb_executor
 
     def on_line(self, line, line_number):
         if line.startswith(SLEEP_PREFIX):
@@ -236,7 +236,7 @@ class Matcher:
             self.query_line_number = line_number
             self.is_mysql = True
             self.query = line[len(CURL_TIDB_STATUS_PREFIX):]
-            self.outputs = self.executor_curl_tidb.exe(self.query)
+            self.outputs = self.curl_tidb_executor.exe(self.query)
             self.matches = []
         elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
             if verbose: print 'running', line
@@ -272,12 +272,12 @@ class Matcher:
         return True
 
 
-def parse_exe_match(path, executor, executor_tidb, executor_func, executor_curl_tidb, fuzz):
+def parse_exe_match(path, executor, executor_tidb, executor_func, curl_tidb_executor, fuzz):
     todos = []
     line_number = 0
     line_number_cached = 0
     with open(path) as file:
-        matcher = Matcher(executor, executor_tidb, executor_func, executor_curl_tidb, fuzz)
+        matcher = Matcher(executor, executor_tidb, executor_func, curl_tidb_executor, fuzz)
         cached = None
         for origin in file:
             line_number += 1

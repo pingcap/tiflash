@@ -45,31 +45,6 @@ public:
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
 
-    bool isStablePropertyCached() const { return is_property_cached.load(std::memory_order_acquire); }
-
-    struct StableProperty
-    {
-        // when gc_safe_point exceed this version, there must be some data obsolete
-        UInt64 gc_hint_version;
-        // number of rows including all puts and deletes
-        UInt64 num_versions;
-        // number of visible rows using the latest timestamp
-        UInt64 num_puts;
-        // number of rows having at least one version(include delete)
-        UInt64 num_rows;
-
-        const String toDebugString() const
-        {
-            return "StableProperty: gc_hint_version [" + std::to_string(this->gc_hint_version) + "] num_versions ["
-                + std::to_string(this->num_versions) + "] num_puts[" + std::to_string(this->num_puts) + "] num_rows["
-                + std::to_string(this->num_rows) + "]";
-        }
-    };
-
-    const StableProperty & getStableProperty() const { return property; }
-
-    void calculateStableProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle);
-
     struct Snapshot;
     using SnapshotPtr = std::shared_ptr<Snapshot>;
 
@@ -149,9 +124,6 @@ private:
     UInt64  valid_rows;
     UInt64  valid_bytes;
     DMFiles files;
-
-    StableProperty    property;
-    std::atomic<bool> is_property_cached = false;
 
     Logger * log;
 };

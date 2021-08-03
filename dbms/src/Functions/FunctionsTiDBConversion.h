@@ -8,6 +8,7 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/FieldVisitors.h>
+#include <Common/MyTime.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -47,7 +48,7 @@
 namespace DB
 {
 
-StringRef trim(const StringRef & value);
+String trim(const StringRef & value);
 
 enum CastError
 {
@@ -91,8 +92,10 @@ struct TiDBConvertToString
             col_null_map_to = ColumnUInt8::create(size, 0);
             vec_null_map_to = &col_null_map_to->getData();
         }
+        bool need_padding = tp.tp() == TiDB::TypeString && tp.flen() > 0 && tp.collate() == TiDB::ITiDBCollator::BINARY;
+
         String padding_string;
-        if (tp.tp() == TiDB::TypeString && tp.flen() > 0)
+        if (need_padding)
             padding_string.resize(tp.flen(), 0);
 
         const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
@@ -131,12 +134,14 @@ struct TiDBConvertToString
                 if (byte_length < org_length)
                     context.getDAGContext()->handleTruncateError("Data Too Long");
                 write_buffer.write(reinterpret_cast<const char *>(&(*data_from)[current_offset]), byte_length);
-                if (tp.tp() == TiDB::TypeString && tp.flen() > 0 && byte_length < static_cast<size_t>(tp.flen()))
+                if (need_padding && byte_length < static_cast<size_t>(tp.flen()))
                     write_buffer.write(padding_string.data(), tp.flen() - byte_length);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
                 current_offset = next_offset;
             }
+
+            data_to.resize(write_buffer.count());
         }
         else if constexpr (IsDecimal<FromFieldType>)
         {
@@ -161,11 +166,13 @@ struct TiDBConvertToString
                 if (byte_length < element_write_buffer.count())
                     context.getDAGContext()->handleTruncateError("Data Too Long");
                 write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), byte_length);
-                if (tp.tp() == TiDB::TypeString && tp.flen() > 0 && byte_length < static_cast<size_t>(tp.flen()))
+                if (need_padding && byte_length < static_cast<size_t>(tp.flen()))
                     write_buffer.write(padding_string.data(), tp.flen() - byte_length);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
             }
+
+            data_to.resize(write_buffer.count());
         }
         else if (const auto col_from = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get()))
         {
@@ -204,11 +211,13 @@ struct TiDBConvertToString
                 if (byte_length < element_write_buffer.count())
                     context.getDAGContext()->handleTruncateError("Data Too Long");
                 write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), byte_length);
-                if (tp.tp() == TiDB::TypeString && tp.flen() > 0 && byte_length < static_cast<size_t>(tp.flen()))
+                if (need_padding && byte_length < static_cast<size_t>(tp.flen()))
                     write_buffer.write(padding_string.data(), tp.flen() - byte_length);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
             }
+
+            data_to.resize(write_buffer.count());
         }
         else
             throw Exception(
@@ -391,14 +400,14 @@ struct TiDBConvertToInteger
     static T strToInt(const StringRef & value, const Context & context)
     {
         // trim space
-        StringRef trim_string = trim(value);
-        if (trim_string.size == 0)
+        String trim_string = trim(value);
+        if (trim_string.size() == 0)
         {
             if (value.size != 0)
                 context.getDAGContext()->handleTruncateError("cast str as int");
             return static_cast<T>(0);
         }
-        StringRef int_string = getValidIntPrefix(trim_string);
+        StringRef int_string = getValidIntPrefix(StringRef(trim_string));
         if (int_string.size == 0)
         {
             if (value.size != 0)
@@ -432,9 +441,8 @@ struct TiDBConvertToInteger
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
 
-        auto col_to = ColumnVector<ToFieldType>::create();
+        auto col_to = ColumnVector<ToFieldType>::create(size, 0);
         typename ColumnVector<ToFieldType>::Container & vec_to = col_to->getData();
-        vec_to.resize(size);
 
         ColumnUInt8::MutablePtr col_null_map_to;
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
@@ -587,8 +595,7 @@ struct TiDBConvertToFloat
     }
 
     template <typename T>
-    static std::enable_if_t<std::is_floating_point_v<T> || std::is_integral_v<T>, Float64> toFloat(
-        const T & value)
+    static std::enable_if_t<std::is_floating_point_v<T> || std::is_integral_v<T>, Float64> toFloat(const T & value)
     {
         return static_cast<Float64>(value);
     }
@@ -649,14 +656,24 @@ struct TiDBConvertToFloat
 
     static Float64 strToFloat(const StringRef & value, bool need_truncate, Float64 shift, Float64 max_f, const Context & context)
     {
-        StringRef trim_string = trim(value);
-        StringRef float_string = getValidFloatPrefix(trim_string);
-        if (trim_string.size == 0 && value.size != 0)
+        String trim_string = trim(value);
+        StringRef float_string = getValidFloatPrefix(StringRef(trim_string));
+        if (trim_string.size() == 0 && value.size != 0)
         {
-            context.getDAGContext()->handleTruncateError("cast str as real");
+            context.getDAGContext()->handleTruncateError("Truncated incorrect DOUBLE value");
             return 0.0;
         }
         Float64 f = strtod(float_string.data, nullptr);
+        if (f == std::numeric_limits<Float64>::infinity())
+        {
+            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value");
+            return std::numeric_limits<Float64>::max();
+        }
+        if (f == -std::numeric_limits<double>::infinity())
+        {
+            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value");
+            return -std::numeric_limits<Float64>::max();
+        }
         return produceTargetFloat64(f, need_truncate, shift, max_f, context);
     }
 
@@ -666,9 +683,8 @@ struct TiDBConvertToFloat
         size_t size = block.getByPosition(arguments[0]).column->size();
 
         /// NOTICE: Since ToFieldType only can be Float32 or Float64, convert from_value to Float64 and then implicitly cast to ToFieldType is fine.
-        auto col_to = ColumnVector<ToFieldType>::create();
+        auto col_to = ColumnVector<ToFieldType>::create(size, 0);
         typename ColumnVector<ToFieldType>::Container & vec_to = col_to->getData();
-        vec_to.resize(size);
 
         ColumnUInt8::MutablePtr col_null_map_to;
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
@@ -710,17 +726,16 @@ struct TiDBConvertToFloat
                     MyDateTime date_time(vec_from[i]);
                     if (type.getFraction() > 0)
                         vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
+                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
                     else
                         vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                + date_time.hour * 1000 + date_time.minute * 100 + date_time.second);
+                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second);
                 }
             }
         }
         else if constexpr (std::is_same_v<FromDataType, DataTypeString>)
         {
             /// cast string as real
-            /// the implementation is quite different from TiDB/TiKV, so cast string as float will not be pushed to TiFlash
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
             const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
             const ColumnString::Chars_t * chars = &col_from_string->getChars();
@@ -1079,9 +1094,8 @@ struct TiDBConvertToDecimal
         bool, const tipb::FieldType &, const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
-        auto col_to = ColumnDecimal<ToFieldType>::create(0, scale);
+        auto col_to = ColumnDecimal<ToFieldType>::create(size, static_cast<ToFieldType>(0), scale);
         typename ColumnDecimal<ToFieldType>::Container & vec_to = col_to->getData();
-        vec_to.resize(size);
 
         ColumnUInt8::MutablePtr col_null_map_to;
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
@@ -1176,9 +1190,8 @@ struct TiDBConvertToTime
         Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType &, const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
-        auto col_to = ColumnUInt64::create();
+        auto col_to = ColumnUInt64::create(size, 0);
         ColumnUInt64::Container & vec_to = col_to->getData();
-        vec_to.resize(size);
 
         ColumnUInt8::MutablePtr col_null_map_to;
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
@@ -1297,7 +1310,8 @@ struct TiDBConvertToTime
             {
                 try
                 {
-                    MyDateTime datetime = numberToDateTime(vec_from[i]);
+                    MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
+                    bool is_null = numberToDateTime(vec_from[i], datetime, context.getDAGContext());
                     if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                     {
                         MyDate date(datetime.year, datetime.month, datetime.day);
@@ -1307,8 +1321,9 @@ struct TiDBConvertToTime
                     {
                         vec_to[i] = datetime.toPackedUInt();
                     }
+                    (*vec_null_map_to)[i] = is_null;
                 }
-                catch (const Exception &)
+                catch (const TiFlashException & e)
                 {
                     // Cannot cast, fill with NULL
                     (*vec_null_map_to)[i] = 1;
@@ -1405,6 +1420,115 @@ struct TiDBConvertToTime
             block.getByPosition(result).column = std::move(col_to);
     }
 };
+
+inline bool getDatetime(const Int64 & num, MyDateTime & result, DAGContext * ctx)
+{
+    UInt64 ymd = num / 1000000;
+    UInt64 hms = num - ymd * 1000000;
+
+    UInt64 year = ymd / 10000;
+    ymd %= 10000;
+    UInt64 month = ymd / 100;
+    UInt64 day = ymd % 100;
+
+    UInt64 hour = hms / 10000;
+    hms %= 10000;
+    UInt64 minute = hms / 100;
+    UInt64 second = hms % 100;
+
+    if (toCoreTimeChecked(year, month, day, hour, minute, second, 0, result))
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+    if (ctx)
+    {
+        result.check(ctx->allowZeroInDate(), ctx->allowInvalidDate());
+    }
+    else
+    {
+        result.check(false, false);
+    }
+    return false;
+}
+
+// Convert a integer number to DateTime and return true if the result is NULL.
+// If number is invalid(according to SQL_MODE), return NULL and handle the error with DAGContext.
+// This function may throw exception.
+inline bool numberToDateTime(Int64 number, MyDateTime & result, DAGContext * ctx)
+{
+    MyDateTime datetime(0);
+    if (number == 0)
+    {
+        result = datetime;
+        return false;
+    }
+
+    // datetime type
+    if (number >= 10000101000000)
+    {
+        return getDatetime(number, result, ctx);
+    }
+
+    // check MMDD
+    if (number < 101)
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDD: 2000-2069
+    if (number <= 69 * 10000 + 1231)
+    {
+        number = (number + 20000000) * 1000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    if (number < 70 * 10000 + 101)
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDD
+    if (number <= 991231)
+    {
+        number = (number + 19000000) * 1000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    // check hour/min/second
+    if (number <= 99991231)
+    {
+        number *= 1000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    // check MMDDHHMMSS
+    if (number < 101000000)
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDDhhmmss: 2000-2069
+    if (number <= 69 * 10000000000 + 1231235959)
+    {
+        number += 20000000000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    // check YYYYMMDDhhmmss
+    if (number < 70 * 10000000000 + 101000000)
+    {
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+    }
+
+    // check YYMMDDHHMMSS
+    if (number <= 991231235959)
+    {
+        number += 19000000000000;
+        return getDatetime(number, result, ctx);
+    }
+
+    return getDatetime(number, result, ctx);
+}
 
 class PreparedFunctionTiDBCast : public PreparedFunctionImpl
 {
@@ -1577,7 +1701,7 @@ private:
     template <bool return_nullable>
     WrapperType createWrapper(const DataTypePtr & from_type, const DataTypePtr & to_type) const
     {
-        if (from_type->equals(*to_type) && !from_type->isParametric() && !from_type->isString() && !return_nullable)
+        if (isIdentityCast(from_type, to_type))
             return createIdentityWrapper(from_type);
         if (const auto from_actual_type = checkAndGetDataType<DataTypeUInt8>(from_type.get()))
             return createWrapper<DataTypeUInt8, return_nullable>(to_type);
@@ -1619,6 +1743,15 @@ private:
             "tidb_cast from " + from_type->getName() + " to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
     }
 
+    bool isIdentityCast(const DataTypePtr & from_type, const DataTypePtr & to_type) const
+    {
+        // todo should remove !from_type->isParametric(), because when a type equals to
+        //  other type, its parameter should be the same
+        DataTypePtr from_inner_type = removeNullable(from_type);
+        DataTypePtr to_inner_type = removeNullable(to_type);
+        return from_type->isNullable() == to_type->isNullable() && from_inner_type->equals(*to_inner_type) && !from_inner_type->isParametric() && !from_inner_type->isString();
+    }
+
     WrapperType prepare(const DataTypePtr & from_type, const DataTypePtr & to_type) const
     {
         if (from_type->onlyNull())
@@ -1629,10 +1762,10 @@ private:
             };
         }
 
+        if (isIdentityCast(from_type, to_type))
+            return createIdentityWrapper(from_type);
         DataTypePtr from_inner_type = removeNullable(from_type);
         DataTypePtr to_inner_type = removeNullable(to_type);
-        if (from_type->equals(*to_type) && !from_inner_type->isParametric() && !from_inner_type->isString())
-            return createIdentityWrapper(from_type);
 
         auto wrapper = prepareImpl(from_inner_type, to_inner_type, to_type->isNullable());
         if (from_type->isNullable())
@@ -1684,7 +1817,33 @@ private:
         }
         else
         {
-            return wrapper;
+            if (isIdentityCast(from_inner_type, to_inner_type) && to_type->isNullable())
+            {
+                /// convert not_null type to nullable type
+                return [wrapper, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_,
+                           const tipb::FieldType & tidb_tp_, const Context & context_) {
+                    auto & res = block.getByPosition(result);
+                    const auto & ret_type = res.type;
+                    const auto & nullable_type = static_cast<const DataTypeNullable &>(*ret_type);
+                    const auto & nested_type = nullable_type.getNestedType();
+
+                    Block tmp_block = block;
+                    size_t tmp_res_index = tmp_block.columns();
+                    tmp_block.insert({nullptr, nested_type, ""});
+
+                    wrapper(tmp_block, arguments, tmp_res_index, in_union_, tidb_tp_, context_);
+                    /// This is a conversion from an ordinary type to a nullable type.
+                    /// So we create a trivial null map.
+                    ColumnPtr null_map = ColumnUInt8::create(block.rows(), 0);
+
+                    const auto & tmp_res = tmp_block.getByPosition(tmp_res_index);
+                    res.column = ColumnNullable::create(tmp_res.column, null_map);
+                };
+            }
+            else
+            {
+                return wrapper;
+            }
         }
     }
 

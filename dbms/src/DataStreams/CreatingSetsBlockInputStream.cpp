@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -11,6 +12,10 @@
 namespace DB
 {
 
+namespace FailPoints
+{
+extern const char exception_in_creating_set_input_stream[];
+}
 namespace ErrorCodes
 {
 extern const int SET_SIZE_LIMIT_EXCEEDED;
@@ -99,8 +104,8 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-
                     workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
+                    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
         }
@@ -122,7 +127,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTr
     {
 
         current_memory_tracker = memory_tracker;
-        LOG_TRACE(log,
+        LOG_DEBUG(log,
             (subquery.set ? "Creating set. " : "")
                 << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
                 << std::to_string(mpp_task_id));
@@ -142,9 +147,6 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTr
 
         if (table_out)
             table_out->writePrefix();
-        std::unique_ptr<ThreadPool> join_build_thread_pool = nullptr;
-        if (subquery.join != nullptr && subquery.join->getBuildConcurrency() > 1)
-            join_build_thread_pool = std::make_unique<ThreadPool>(subquery.join->getBuildConcurrency());
 
         while (Block block = subquery.source->read())
         {
@@ -162,17 +164,10 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTr
 
             if (!done_with_join)
             {
-                if (join_build_thread_pool == nullptr)
-                {
-                    if (!subquery.join->insertFromBlock(block))
-                        done_with_join = true;
-                }
-                else
-                {
-                    subquery.join->insertFromBlockASync(block, *join_build_thread_pool);
-                    if (subquery.join->isBuildSetExceeded())
-                        done_with_join = true;
-                }
+                // move building hash tables into `HashJoinBuildBlockInputStream`, so that fetch block and insert block into a hash table are
+                // running into a thread, avoiding generating more threads.
+                if (subquery.join->isBuildSetExceeded())
+                    done_with_join = true;
             }
 
             if (!done_with_table)
@@ -197,8 +192,6 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTr
             }
         }
 
-        if (join_build_thread_pool != nullptr)
-            join_build_thread_pool->wait();
 
         if (subquery.join)
             subquery.join->setFinishBuildTable(true);

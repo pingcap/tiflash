@@ -496,7 +496,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                 const ASTTableJoin & join = static_cast<const ASTTableJoin &>(*query.join()->table_join);
                 if (join.kind == ASTTableJoin::Kind::Full || join.kind == ASTTableJoin::Kind::Right)
                     pipeline.stream_with_non_joined_data = expressions.before_join->createStreamWithNonJoinedDataIfFullOrRightJoin(
-                        pipeline.firstStream()->getHeader(), settings.max_block_size);
+                        pipeline.firstStream()->getHeader(), 0, 1, settings.max_block_size);
 
                 for (auto & stream : pipeline.streams)   /// Applies to all sources except stream_with_non_joined_data.
                     stream = std::make_shared<ExpressionBlockInputStream>(stream, expressions.before_join);
@@ -782,9 +782,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         SelectQueryInfo query_info;
         query_info.query = query_ptr;
         query_info.sets = query_analyzer->getPreparedSets();
-        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
-        query_info.mvcc_query_info->resolve_locks = settings.resolve_locks;
-        query_info.mvcc_query_info->read_tso = settings.read_tso;
+        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(settings.resolve_locks, settings.read_tso);
 
         const String & request_str = settings.regions;
 

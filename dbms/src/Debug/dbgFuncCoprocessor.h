@@ -20,9 +20,4 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args);
 //   ./storages-client.sh "DBGInvoke mock_dag(query, region_id[, start_ts])"
 BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args);
 
-namespace Debug
-{
-void setServiceAddr(const std::string & addr);
-}
-
 } // namespace DB

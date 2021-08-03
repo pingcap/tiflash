@@ -796,7 +796,7 @@ DatabasePtr detachThenAttach(Context & ctx, const String & db_name, DatabasePtr 
     }
 
     db = ctx.getDatabase(db_name);
-    return db;
+    return std::move(db);
 }
 
 TEST_F(DatabaseTiFlash_test, Tombstone)

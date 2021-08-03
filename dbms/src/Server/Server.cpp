@@ -100,10 +100,6 @@ extern const int ARGUMENT_OUT_OF_BOUND;
 extern const int INVALID_CONFIG_PARAMETER;
 } // namespace ErrorCodes
 
-namespace Debug
-{
-extern void setServiceAddr(const std::string & addr);
-}
 
 static std::string getCanonicalPath(std::string path)
 {
@@ -346,33 +342,6 @@ private:
     pthread_t thread;
     Logger * log;
 };
-
-// We only need this task run once.
-void backgroundInitStores(Context & global_context, Logger * log)
-{
-    auto initStores = [&global_context, log]() {
-        auto storages = global_context.getTMTContext().getStorages().getAllStorage();
-        int init_cnt = 0;
-        int err_cnt = 0;
-        for (auto & [table_id, storage] : storages)
-        {
-            try
-            {
-                init_cnt += storage->initStoreIfDataDirExist() ? 1 : 0;
-                LOG_INFO(log, "Storage inited done [table_id=" << table_id << "]");
-            }
-            catch (...)
-            {
-                err_cnt++;
-                tryLogCurrentException(log, "Storage inited fail, [table_id=" + DB::toString(table_id) + "]");
-            }
-        }
-        LOG_INFO(log,
-            "Storage inited finish. [total_count=" << storages.size() << "] [init_count=" << init_cnt << "] [error_count=" << err_cnt
-                                                   << "]");
-    };
-    std::thread(initStores).detach();
-}
 
 int Server::main(const std::vector<std::string> & /*args*/)
 {
@@ -780,8 +749,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Sync schemas done.");
 
-    backgroundInitStores(*global_context, log);
-
     // After schema synced, set current database.
     global_context->setCurrentDatabase(default_database);
 
@@ -841,7 +808,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         builder.SetMaxSendMessageSize(-1);
         flash_grpc_server = builder.BuildAndStart();
         LOG_INFO(log, "Flash grpc server listening on [" << raft_config.flash_server_addr << "]");
-        Debug::setServiceAddr(raft_config.flash_server_addr);
     }
 
     SCOPE_EXIT({
@@ -1177,7 +1143,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 tiflash_instance_wrap.tmt->getKVStore()->traverseRegions([&batch_read_index_req](RegionID, const RegionPtr & region) {
                     batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region));
                 });
-                tiflash_instance_wrap.proxy_helper->batchReadIndex(batch_read_index_req);
+                tiflash_instance_wrap.proxy_helper->batchReadIndex(
+                    batch_read_index_req, tiflash_instance_wrap.tmt->batchReadIndexTimeout());
             }
             LOG_INFO(log, "start to wait for terminal signal");
         }
@@ -1189,6 +1156,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             GET_METRIC(metrics, tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
+        global_context->getTMTContext().setStoreStatusRunning();
         waitForTerminationRequest();
 
         {

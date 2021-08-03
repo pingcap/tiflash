@@ -3,6 +3,7 @@
 #include <Core/Field.h>
 #include <common/DateLUTImpl.h>
 
+struct StringRef;
 namespace DB
 {
 
@@ -89,6 +90,10 @@ struct MyTimeBase
     int week(UInt32 mode) const;
 
     std::tuple<int, int> calcWeek(UInt32 mode) const;
+
+    // Check validity of time under specified SQL_MODE.
+    // May throw exception.
+    void check(bool allow_zero_in_date, bool allow_invalid_date) const;
 };
 
 struct MyDateTime : public MyTimeBase
@@ -129,6 +134,24 @@ struct MyDateTimeFormatter
     }
 };
 
+struct MyDateTimeParser
+{
+    explicit MyDateTimeParser(String format_);
+
+    std::optional<UInt64> parseAsPackedUInt(const StringRef & str_view) const;
+
+    struct Context;
+
+private:
+    const String format;
+
+    // Parsing method. Parse from ctx.view[ctx.pos].
+    // If success, update `datetime`, `ctx` and return true.
+    // If fail, return false.
+    using ParserCallback = std::function<bool(MyDateTimeParser::Context & ctx, MyTimeBase & datetime)>;
+    std::vector<ParserCallback> parsers;
+};
+
 Field parseMyDateTime(const String & str, int8_t fsp = 6);
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to);
@@ -139,11 +162,34 @@ int calcDayNum(int year, int month, int day);
 
 size_t maxFormattedDateTimeStringLength(const String & format);
 
-MyDateTime numberToDateTime(Int64 number);
+
+inline bool supportedByDateLUT(const MyDateTime & my_time) { return my_time.year >= 1970; }
+
+/// DateLUT only support time from year 1970, in some corner cases, the input date may be
+/// 1969-12-31, need extra logical to handle it
+inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone)
+{
+    if likely (supportedByDateLUT(my_time))
+        return time_zone.makeDateTime(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
+    if likely (my_time.year == 1969 && my_time.month == 12 && my_time.day == 31)
+    {
+        /// - 3600 * 24 + my_time.hour * 3600 + my_time.minute * 60 + my_time.second is UTC based, need to adjust
+        /// the epoch according to the input time_zone
+        return -3600 * 24 + my_time.hour * 3600 + my_time.minute * 60 + my_time.second - time_zone.getOffsetAtStartEpoch();
+    }
+    else
+    {
+        throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
+    }
+}
 
 bool isPunctuation(char c);
 
 bool isValidSeperator(char c, int previous_parts);
 
+// Build CoreTime value with checking overflow of internal bit fields, return true if input is invalid.
+// Note that this function will not check if the input is logically a valid datetime value.
+bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
+                     const UInt64 & second, const UInt64 & microsecond, MyDateTime & result);
 
 } // namespace DB

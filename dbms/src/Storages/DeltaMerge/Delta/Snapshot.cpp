@@ -25,7 +25,10 @@ std::pair<size_t, size_t> findPack(const DeltaPacks & packs, size_t rows_offset,
             if (deletes_count == deletes_offset)
             {
                 if (unlikely(rows_count != rows_offset))
-                    throw Exception("deletes_offset and rows_offset are not matched");
+                    throw Exception("rows_count and rows_offset are expected to be equal. pack_index: " + DB::toString(pack_index)
+                                    + ", pack_size: " + DB::toString(packs.size()) + ", rows_count: " + DB::toString(rows_count)
+                                    + ", rows_offset: " + DB::toString(rows_offset) + ", deletes_count: " + DB::toString(deletes_count)
+                                    + ", deletes_offset: " + DB::toString(deletes_offset));
                 return {pack_index, 0};
             }
             ++deletes_count;
@@ -36,14 +39,19 @@ std::pair<size_t, size_t> findPack(const DeltaPacks & packs, size_t rows_offset,
             if (rows_count > rows_offset)
             {
                 if (unlikely(deletes_count != deletes_offset))
-                    throw Exception("deletes_offset and rows_offset are not matched");
+                    throw Exception("deletes_count and deletes_offset are expected to be equal. pack_index: " + DB::toString(pack_index)
+                                    + ", pack_size: " + DB::toString(packs.size()) + ", rows_count: " + DB::toString(rows_count)
+                                    + ", rows_offset: " + DB::toString(rows_offset) + ", deletes_count: " + DB::toString(deletes_count)
+                                    + ", deletes_offset: " + DB::toString(deletes_offset));
 
                 return {pack_index, pack->getRows() - (rows_count - rows_offset)};
             }
         }
     }
     if (rows_count != rows_offset || deletes_count != deletes_offset)
-        throw Exception("illegal rows_offset(" + DB::toString(rows_offset) + "), deletes_count(" + DB::toString(deletes_count) + ")");
+        throw Exception("illegal rows_offset and deletes_offset. pack_size: " + DB::toString(packs.size())
+                        + ", rows_count: " + DB::toString(rows_count) + ", rows_offset: " + DB::toString(rows_offset)
+                        + ", deletes_count: " + DB::toString(deletes_count) + ", deletes_offset: " + DB::toString(deletes_offset));
 
     return {pack_index, 0};
 }
@@ -52,7 +60,7 @@ std::pair<size_t, size_t> findPack(const DeltaPacks & packs, size_t rows_offset,
 // DeltaValueSpace
 // ================================================
 
-DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update)
+DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type)
 {
     if (for_update && !tryLockUpdating())
         return {};
@@ -61,7 +69,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     if (abandoned.load(std::memory_order_relaxed))
         return {};
 
-    auto snap          = std::make_shared<DeltaValueSnapshot>();
+    auto snap          = std::make_shared<DeltaValueSnapshot>(type);
     snap->is_update    = for_update;
     snap->_delta       = this->shared_from_this();
     snap->storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, true);
@@ -200,7 +208,7 @@ Block DeltaValueReader::readPKVersion(size_t offset, size_t limit)
     Block block;
     for (size_t i = 0; i < 2; ++i)
     {
-        const auto & cd = (*col_defs)[i];
+        auto cd = (*col_defs)[i];
         block.insert(ColumnWithTypeAndName(std::move(cols[i]), cd.type, cd.name, cd.id));
     }
     return block;

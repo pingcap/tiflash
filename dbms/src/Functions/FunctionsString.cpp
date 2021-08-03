@@ -454,19 +454,18 @@ void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyr
         toCase(src, src_end, dst);
 }
 
-
 /** If the string is encoded in UTF-8, then it selects a substring of code points in it.
   * Otherwise, the behavior is undefined.
   */
 struct SubstringUTF8Impl
 {
     static void vector(const ColumnString::Chars_t & data,
-        const ColumnString::Offsets & offsets,
-        Int64 original_start,
-        size_t length,
-        bool implicit_length,
-        ColumnString::Chars_t & res_data,
-        ColumnString::Offsets & res_offsets)
+                       const ColumnString::Offsets & offsets,
+                       Int64 original_start,
+                       size_t length,
+                       bool implicit_length,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size());
         size_t size = offsets.size();
@@ -481,14 +480,14 @@ struct SubstringUTF8Impl
             ColumnString::Offset bytes_start = 0;
             ColumnString::Offset bytes_length = 0;
             size_t start = 0;
-            if(original_start >= 0)
+            if (original_start >= 0)
                 start = original_start;
             else
             {
                 // set the start as string_length - abs(original_start) + 1
                 std::vector<ColumnString::Offset> start_offsets;
                 ColumnString::Offset current = prev_offset;
-                while (current < offsets[i] -1)
+                while (current < offsets[i] - 1)
                 {
                     start_offsets.push_back(current);
                     if (data[current] < 0xBF)
@@ -500,9 +499,18 @@ struct SubstringUTF8Impl
                     else
                         current += 1;
                 }
+                if (static_cast<size_t>(-original_start) > start_offsets.size())
+                {
+                    // return empty string
+                    res_data.resize(res_data.size() + 1);
+                    res_data[res_offset] = 0;
+                    res_offset++;
+                    res_offsets[i] = res_offset;
+                    continue;
+                }
                 start = start_offsets.size() + original_start + 1;
                 pos = start;
-                j = start_offsets[start-1];
+                j = start_offsets[start - 1];
             }
             while (j < offsets[i] - 1)
             {
@@ -547,6 +555,66 @@ struct SubstringUTF8Impl
                 memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], &data[prev_offset + bytes_start - 1], bytes_to_copy);
                 res_offset += bytes_to_copy + 1;
                 res_data[res_offset - 1] = 0;
+            }
+            res_offsets[i] = res_offset;
+            prev_offset = offsets[i];
+        }
+    }
+};
+
+
+/** If the string is encoded in UTF-8, then it selects a right of code points in it.
+  * Otherwise, the behavior is undefined.
+  */
+struct RightUTF8Impl
+{
+    static void vector(const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        size_t length,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            std::vector<ColumnString::Offset> start_offsets;
+            ColumnString::Offset current = prev_offset;
+            // TODO: break this loop in advance
+            // NOTE: data[offsets[i] -1] = 0, so ignore it
+            while (current < offsets[i] -1)
+            {
+                start_offsets.push_back(current);
+                if (data[current] < 0xBF)
+                    current += 1;
+                else if (data[current] < 0xE0)
+                    current += 2;
+                else if (data[current] < 0xF0)
+                    current += 3;
+                else
+                    current += 1;
+            }
+            if (start_offsets.size() == 0 )
+            {
+                // null
+                res_data.resize(res_data.size() + 1);
+                res_data[res_offset] = 0;
+                ++res_offset;
+            }
+            else
+            {
+                // not null
+                // if(string_length > length, string_length - length, 0)
+                auto start_index = start_offsets.size() > length ? start_offsets.size() - length: 0;
+                // copy data from start to end of this string
+                size_t bytes_to_copy = offsets[i] - start_offsets[start_index];
+                res_data.resize(res_data.size() + bytes_to_copy );
+                memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], &data[start_offsets[start_index]], bytes_to_copy);
+                res_offset += bytes_to_copy;
             }
             res_offsets[i] = res_offset;
             prev_offset = offsets[i];
@@ -863,6 +931,158 @@ private:
     }
 };
 
+/** TiDB Function CONCAT(str1,str2,...)
+  * Returns the string that results from concatenating the arguments. May have one or more arguments.
+  * CONCAT() returns NULL if any argument is NULL.
+*/
+class FunctionTiDBConcat : public IFunction
+{
+private:
+    const Context & context;
+
+    struct NameTiDBConcat
+    {
+        static constexpr auto name = "tidbConcat";
+    };
+
+public:
+    static constexpr auto name = NameTiDBConcat::name;
+    FunctionTiDBConcat(const Context & context) : context(context) {}
+    static FunctionPtr create(const Context & context)
+    {
+        return std::make_shared<FunctionTiDBConcat>(context);
+    }
+
+    String getName() const override{ return name; }
+
+    bool isVariadic() const override{ return true; }
+    size_t getNumberOfArguments() const override{ return 0; }
+
+    bool useDefaultImplementationForNulls() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() < 1)
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                            + ", should be at least 1.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        for (const auto arg_idx : ext::range(0, arguments.size()))
+        {
+            const auto & arg = arguments[arg_idx].get();
+            if (!arg->isStringOrFixedString())
+                throw Exception{
+                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+        }
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    {
+        if (arguments.size() == 1)
+        {
+            const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
+            block.getByPosition(result).column = c0->cloneResized(c0->size());
+        }
+        else
+            return ConcatImpl<NameTiDBConcat, false>(context).executeImpl(block, arguments, result);
+    }
+};
+
+/** TiDB Function CONCAT_WS(separator,str1,str2,...)
+  * CONCAT_WS() stands for Concatenate With Separator and is a special form of CONCAT().
+  * The first argument is the separator for the rest of the arguments.
+  * If the separator is NULL, the result is NULL.
+  * CONCAT_WS() does not skip empty strings. However, it does skip any NULL values after the separator argument.
+*/
+class FunctionTiDBConcatWithSeparator : public IFunction
+{
+public:
+    static constexpr auto name = "tidbConcatWS";
+    static FunctionPtr create(const Context &){ return std::make_shared<FunctionTiDBConcatWithSeparator>(); }
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    bool isVariadic() const override
+    {
+        return true;
+    }
+
+    size_t getNumberOfArguments() const override
+    {
+        return 0;
+    }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() < 2)
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                            + ", should be at least 2.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        for (const auto arg_idx : ext::range(0, arguments.size()))
+        {
+            const auto arg = removeNullable(arguments[arg_idx]).get();
+            if (!arg->isStringOrFixedString())
+                throw Exception{
+                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+        }
+
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    {
+        Block nested_block = createBlockWithNestedColumns(block, arguments, result);
+        StringSources sources(arguments.size());
+        for (size_t i = 0; i < arguments.size(); ++i)
+            sources[i] = createDynamicStringSource(*nested_block.getByPosition(arguments[i]).column);
+
+        size_t rows = block.rows();
+        auto result_null_map = ColumnUInt8::create(rows);
+        auto res = ColumnString::create();
+        StringSink sink(*res, rows);
+
+        for (size_t row = 0; row < rows; row++)
+        {
+            if (block.getByPosition(arguments[0]).column->isNullAt(row))
+            {
+                result_null_map->getData()[row] = true;
+            }
+            else
+            {
+                result_null_map->getData()[row] = false;
+
+                bool has_not_null = false;
+                for (size_t col = 1; col < arguments.size(); ++col)
+                {
+                    if (!block.getByPosition(arguments[col]).column->isNullAt(row))
+                    {
+                        if (has_not_null)
+                            writeSlice(sources[0]->getWhole(), sink);
+                        else
+                            has_not_null = true;
+                        writeSlice(sources[col]->getWhole(), sink);
+                    }
+                }
+            }
+            for (size_t col = 0; col < arguments.size(); ++col)
+                sources[col]->next();
+            sink.next();
+        }
+
+        block.getByPosition(result).column = ColumnNullable::create(std::move(res), std::move(result_null_map));
+    }
+};
 
 class FunctionSubstring : public IFunction
 {
@@ -1117,6 +1337,89 @@ public:
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };
+
+
+class FunctionRightUTF8 : public IFunction
+{
+public:
+    static constexpr auto name = "rightUTF8";
+    static FunctionPtr create(const Context &)
+    {
+        return std::make_shared<FunctionRightUTF8>();
+    }
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    size_t getNumberOfArguments() const override
+    {
+        return 2;
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        size_t arguments_size = arguments.size();
+        if(arguments_size != 2 )
+            throw Exception("Function " + getName()
+                            + " requires from 2 parameters: string, length. Passed "
+                            + toString(arguments.size()) + ".",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        if (!arguments[0]->isString())
+            throw Exception(
+                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if (!arguments[1]->isNumber())
+            throw Exception("Illegal type " + arguments[1]->getName()
+                            + " of argument of function "
+                            + getName(),
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    {
+        const ColumnPtr column_string = block.getByPosition(arguments[0]).column;
+
+        const ColumnPtr column_length = block.getByPosition(arguments[1]).column;
+        if (!column_length->isColumnConst())
+            throw Exception("2nd arguments of function " + getName() + " must be constants.");
+        Field length_field = (*block.getByPosition(arguments[1]).column)[0];
+        if (length_field.getType() != Field::Types::UInt64 && length_field.getType() != Field::Types::Int64)
+            throw Exception("2nd argument of function " + getName() + " must have UInt/Int type.");
+        Int64 length;
+        if(length_field.getType() == Field::Types::Int64) {
+            length = length_field.get<Int64>();
+        } else {
+            UInt64 u_start = length_field.get<UInt64>();
+            if (u_start >= 0x8000000000000000ULL)
+                throw Exception("Too large values of 2nd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            length = (Int64)u_start;
+        }
+
+        if (length <= 0 ) {
+            block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
+            return;
+        }
+
+        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
+        {
+            auto col_res = ColumnString::create();
+            RightUTF8Impl::vector(col->getChars(), col->getOffsets(), length,col_res->getChars(), col_res->getOffsets());
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
+
 
 
 class FunctionAppendTrailingCharIfAbsent : public IFunction
@@ -2602,9 +2905,12 @@ void registerFunctionsString(FunctionFactory & factory)
 	factory.registerFunction<FunctionRPadUTF8>();
     factory.registerFunction<FunctionConcat>();
     factory.registerFunction<FunctionConcatAssumeInjective>();
+    factory.registerFunction<FunctionTiDBConcat>();
+    factory.registerFunction<FunctionTiDBConcatWithSeparator>();
     factory.registerFunction<FunctionSubstring>();
     factory.registerFunction<FunctionSubstringUTF8>();
     factory.registerFunction<FunctionAppendTrailingCharIfAbsent>();
     factory.registerFunction<FunctionJsonLength>();
+    factory.registerFunction<FunctionRightUTF8>();
 }
 }

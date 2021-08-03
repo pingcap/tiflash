@@ -28,13 +28,11 @@ struct TiFlashRaftConfig
     static constexpr TiDB::StorageEngine DEFAULT_ENGINE = TiDB::StorageEngine::DT;
     bool disable_bg_flush = false;
     TiDB::StorageEngine engine = DEFAULT_ENGINE;
-    TiDB::SnapshotApplyMethod snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Directory;
 
 public:
     TiFlashRaftConfig() = default;
 
     static TiFlashRaftConfig parseSettings(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
-
 };
 
 } // namespace DB
