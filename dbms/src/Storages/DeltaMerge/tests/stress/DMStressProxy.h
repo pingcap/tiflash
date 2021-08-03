@@ -31,6 +31,8 @@ struct StressOptions
     String table_name;
     bool   verify;
     UInt32 verify_sleep_sec;
+
+    std::vector<std::string> failpoints;
 };
 
 template <typename T>
