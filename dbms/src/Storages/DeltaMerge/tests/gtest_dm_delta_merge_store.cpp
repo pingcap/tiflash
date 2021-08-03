@@ -280,7 +280,8 @@ try
         store     = reload(cols, (pk_type == DMTestEnv::PkType::CommonHandle), 1);
 
         ASSERT_EQ(store->isCommonHandle(), pk_type == DMTestEnv::PkType::CommonHandle) << DMTestEnv::PkTypeToString(pk_type);
-        ASSERT_EQ(store->pkIsHandle(), (pk_type == DMTestEnv::PkType::PkIsHandleInt64 || pk_type == DMTestEnv::PkType::PkIsHandleInt32))
+        ASSERT_EQ(store->pkIsHandle(store->original_table_handle_define),
+                  (pk_type == DMTestEnv::PkType::PkIsHandleInt64 || pk_type == DMTestEnv::PkType::PkIsHandleInt32))
             << DMTestEnv::PkTypeToString(pk_type);
 
         const size_t nrows  = 20;
@@ -294,7 +295,7 @@ try
                                                          handle.type,
                                                          store->isCommonHandle(),
                                                          store->getRowKeyColumnSize());
-        block1              = store->addExtraColumnIfNeed(*context, std::move(block1));
+        block1              = DeltaMergeStore::addExtraColumnIfNeed(*context, store->getHandle(), std::move(block1));
         ASSERT_EQ(block1.rows(), nrows);
         ASSERT_TRUE(block1.has(EXTRA_HANDLE_COLUMN_NAME));
         for (const auto & c : block1)
@@ -311,7 +312,11 @@ try
                                                          handle.type,
                                                          store->isCommonHandle(),
                                                          store->getRowKeyColumnSize());
+<<<<<<< HEAD
         block2         = store->addExtraColumnIfNeed(*context, std::move(block2));
+=======
+        block2         = DeltaMergeStore::addExtraColumnIfNeed(*db_context, store->getHandle(), std::move(block2));
+>>>>>>> d20b39537 (Save storage schema snapshot for decoding Region snapshot)
         ASSERT_EQ(block2.rows(), nrows_2);
         ASSERT_TRUE(block2.has(EXTRA_HANDLE_COLUMN_NAME));
         for (const auto & c : block2)

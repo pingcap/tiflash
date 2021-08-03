@@ -1,0 +1,46 @@
+#pragma once
+
+#include <Storages/ColumnsDescription.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/Transaction/TiDB.h>
+
+namespace DB
+{
+
+class Region;
+using RegionPtr = std::shared_ptr<Region>;
+class StorageDeltaMerge;
+
+// TODO: consider refactoring the table structure related classes
+// Now there are some classes in IStorage/IManageableStorage/DeltaMergeStore level are both
+// related to the table structure. It make applying DDL operations and decoding Raft data
+// more complicated.
+struct DecodingStorageSchemaSnapshot
+{
+    bool is_common_handle = false;
+    TiDB::TableInfo table_info;
+    ColumnsDescription columns;
+    std::shared_ptr<StorageDeltaMerge> storage = nullptr;
+    DM::ColumnDefinesPtr column_defines;
+    DM::ColumnDefine original_table_handle_define;
+
+
+    DecodingStorageSchemaSnapshot() = default;
+
+    DecodingStorageSchemaSnapshot(const DecodingStorageSchemaSnapshot &) = delete;
+    DecodingStorageSchemaSnapshot & operator=(const DecodingStorageSchemaSnapshot &) = delete;
+
+    DecodingStorageSchemaSnapshot(DecodingStorageSchemaSnapshot &&) = default;
+    DecodingStorageSchemaSnapshot & operator=(DecodingStorageSchemaSnapshot &&) = default;
+};
+
+std::tuple<TableLockHolder, DecodingStorageSchemaSnapshot> //
+AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt);
+
+Block GenRegionBlockDatawithSchema(const RegionPtr & region, //
+    const DecodingStorageSchemaSnapshot & schema_snap,
+    Timestamp gc_safepoint,
+    bool force_decode,
+    TMTContext & tmt);
+
+} // namespace DB

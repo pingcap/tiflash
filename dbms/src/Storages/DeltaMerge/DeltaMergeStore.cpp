@@ -403,14 +403,14 @@ inline Block getSubBlock(const Block & block, size_t offset, size_t limit)
     }
 }
 
-// Add an extra handle column if handle reused the original column data.
-Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, Block && block) const
+// Add an extra handle column if pkIsHandle
+Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const ColumnDefine & handle_define, Block && block)
 {
-    if (pkIsHandle())
+    if (pkIsHandle(handle_define))
     {
-        if (!EXTRA_HANDLE_COLUMN_INT_TYPE->equals(*original_table_handle_define.type))
+        if (!EXTRA_HANDLE_COLUMN_INT_TYPE->equals(*handle_define.type))
         {
-            auto handle_pos = getPosByColumnId(block, original_table_handle_define.id);
+            auto handle_pos = getPosByColumnId(block, handle_define.id);
             addColumnToBlock(block, //
                              EXTRA_HANDLE_COLUMN_ID,
                              EXTRA_HANDLE_COLUMN_NAME,
@@ -423,7 +423,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, Block &&
         {
             // If types are identical, `FunctionToInt64` just take reference to the original column.
             // We need a deep copy for the pk column or it will make trobule for later processing.
-            auto      pk_col_with_name = getByColumnId(block, original_table_handle_define.id);
+            auto      pk_col_with_name = getByColumnId(block, handle_define.id);
             auto      pk_column        = pk_col_with_name.column;
             ColumnPtr handle_column    = pk_column->cloneResized(pk_column->size());
             addColumnToBlock(block, //
@@ -447,7 +447,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         return;
 
     auto  dm_context = newDMContext(db_context, db_settings);
-    Block block      = addExtraColumnIfNeed(db_context, std::move(to_write));
+    Block block      = addExtraColumnIfNeed(db_context, original_table_handle_define, std::move(to_write));
 
     const auto bytes = block.bytes();
 
