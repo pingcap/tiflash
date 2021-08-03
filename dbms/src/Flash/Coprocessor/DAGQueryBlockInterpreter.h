@@ -78,10 +78,12 @@ private:
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;
 
+    /// How many streams before aggregation
+    size_t before_agg_streams = 1;
+
     TableLockHolder table_drop_lock;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
-
 
     std::vector<const tipb::Expr *> conditions;
     const DAGQuerySource & dag;
