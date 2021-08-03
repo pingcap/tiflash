@@ -57,7 +57,7 @@ private:
      */
     static ValidPages collectValidPagesInPageFile(const SnapshotPtr & snapshot);
 
-    std::tuple<PageFileSet, size_t, size_t> //
+    std::tuple<PageFileSet, PageFileSet, size_t, size_t> //
     selectCandidateFiles(const PageFileSet &          page_files,
                          const ValidPages &           files_valid_pages,
                          const WritingFilesSnapshot & writing_files) const;
@@ -66,6 +66,7 @@ private:
     migratePages(const SnapshotPtr & snapshot,
                  const ValidPages &  files_valid_pages,
                  const PageFileSet & candidates,
+                 const PageFileSet & files_without_valid_pages,
                  const size_t        migrate_page_count) const;
 
     std::tuple<PageEntriesEdit, size_t> //
