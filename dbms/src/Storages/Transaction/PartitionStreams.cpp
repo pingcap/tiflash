@@ -24,6 +24,7 @@ namespace FailPoints
 {
 extern const char pause_before_apply_raft_cmd[];
 extern const char pause_before_apply_raft_snapshot[];
+extern const char force_set_safepoint_when_decode_block[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -592,6 +593,8 @@ Block GenRegionBlockDatawithSchema(const RegionPtr & region,
 {
     // In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
     // If some rows were updated and add tiflash replica, tiflash store may receive region snapshot with unmatched data in write & default cf sst files.
+    fiu_do_on(FailPoints::force_set_safepoint_when_decode_block,
+        { gc_safepoint = 10000000; }); // Mock a GC safepoint for testing compaction filter
     region->tryCompactionFilter(gc_safepoint);
 
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
