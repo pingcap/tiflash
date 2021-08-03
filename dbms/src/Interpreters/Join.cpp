@@ -161,7 +161,7 @@ Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_siz
         return Type::key_fixed_string;
 
     /// Otherwise, will use set of cryptographic hashes of unambiguously serialized values.
-    return Type::hashed;
+    return Type::serialized;
 }
 
 
@@ -255,9 +255,9 @@ template <typename Value, typename Mapped> struct KeyGetterForTypeImpl<Join::Typ
 {
     using Type = ColumnsHashing::HashMethodKeysFixed<Value, UInt256, Mapped, false, false>;
 };
-template <typename Value, typename Mapped> struct KeyGetterForTypeImpl<Join::Type::hashed, Value, Mapped>
+template <typename Value, typename Mapped> struct KeyGetterForTypeImpl<Join::Type::serialized, Value, Mapped>
 {
-    using Type = ColumnsHashing::HashMethodHashed<Value, Mapped, false>;
+    using Type = ColumnsHashing::HashMethodSerialized<Value, Mapped>;
 };
 
 
@@ -518,7 +518,8 @@ namespace
                     segment_index_info[segment_index_info.size() - 1].push_back(i);
                 continue;
             }
-            auto key = keyHolderGetKey(key_getter.getKeyHolder(i, nullptr, sort_key_containers));
+            auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
+            auto key = keyHolderGetKey(key_holder);
             size_t segment_index = 0;
             size_t hash_value = 0;
             if (!ZeroTraits::check(key))
@@ -527,6 +528,7 @@ namespace
                 segment_index = hash_value % segment_size;
             }
             segment_index_info[segment_index].push_back(i);
+            keyHolderDiscardKey(key_holder);
         }
         for (size_t insert_index = 0; insert_index < segment_index_info.size(); insert_index++)
         {
@@ -919,6 +921,7 @@ namespace
         KeyGetter key_getter(key_columns, key_sizes, collators);
         std::vector<std::string> sort_key_containers;
         sort_key_containers.resize(key_columns.size());
+        Arena pool;
 
         for (size_t i = 0; i < rows; ++i)
         {
@@ -929,7 +932,8 @@ namespace
             }
             else
             {
-                auto key = keyHolderGetKey(key_getter.getKeyHolder(i, nullptr, sort_key_containers));
+                auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
+                auto key = keyHolderGetKey(key_holder);
                 size_t segment_index = 0;
                 size_t hash_value = 0;
                 if (map.getSegmentSize() > 0 && !ZeroTraits::check(key))
@@ -950,6 +954,7 @@ namespace
                 else
                     Adder<KIND, STRICTNESS, Map>::addNotFound(
                         num_columns_to_add, added_columns, i, filter.get(), current_offset, offsets_to_replicate.get());
+                keyHolderDiscardKey(key_holder);
             }
         }
     }

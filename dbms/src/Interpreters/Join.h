@@ -197,7 +197,7 @@ public:
         M(key_fixed_string)            \
         M(keys128)                     \
         M(keys256)                     \
-        M(hashed)
+        M(serialized)
 
     enum class Type
     {
@@ -220,9 +220,9 @@ public:
         std::unique_ptr<ConcurrentHashMap<UInt64, Mapped, HashCRC32<UInt64>>>                     key64;
         std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>>                        key_string;
         std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>>                        key_fixed_string;
-        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>>                     keys128;
-        std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>>                     keys256;
-        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, TrivialHash>>                   hashed;
+        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>>                   keys128;
+        std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>>                   keys256;
+        std::unique_ptr<ConcurrentHashMap<StringRef, Mapped>>                                     serialized;
     };
 
     using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;
