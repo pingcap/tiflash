@@ -34,10 +34,13 @@ class TMTContext : private boost::noncopyable
 public:
     enum class StoreStatus : uint8_t
     {
-        Idle = 0,
+        _MIN = 0,
+        Idle,
         Ready,
         Running,
+        Stopping,
         Terminated,
+        _MAX,
     };
 
 public:
@@ -80,14 +83,18 @@ public:
 
     bool isInitialized() const;
     StoreStatus getStoreStatus(std::memory_order = std::memory_order_seq_cst) const;
-    void setStoreStatusRunning();
-    bool getTerminated(std::memory_order = std::memory_order_seq_cst) const;
-    void setTerminated();
+    void setStatusRunning();
+    void setStatusStopping();
+    void setStatusTerminated();
+    bool checkShuttingDown(std::memory_order = std::memory_order_seq_cst) const;
+    bool checkTerminated(std::memory_order = std::memory_order_seq_cst) const;
+    bool checkRunning(std::memory_order = std::memory_order_seq_cst) const;
 
     const KVClusterPtr & getCluster() const { return cluster; }
 
     UInt64 replicaReadMaxThread() const;
     UInt64 batchReadIndexTimeout() const;
+    Int64 waitRegionReadyTimeout() const;
 
 private:
     Context & context;
@@ -113,6 +120,9 @@ private:
 
     std::atomic_uint64_t replica_read_max_thread;
     std::atomic_uint64_t batch_read_index_timeout_ms;
+    std::atomic_int64_t wait_region_ready_timeout_sec;
 };
+
+const std::string & IntoStoreStatusName(TMTContext::StoreStatus status);
 
 } // namespace DB
