@@ -255,6 +255,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     DAGStorageInterpreter storage_interpreter(context, dag, query_block, ts, conditions, max_streams, log);
     storage_interpreter.execute(pipeline);
 
+    analyzer = std::move(storage_interpreter.analyzer);
     timestamp_column_flag_for_tablescan = std::move(storage_interpreter.is_timestamp_column);
 
     // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result

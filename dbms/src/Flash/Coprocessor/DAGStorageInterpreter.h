@@ -47,6 +47,7 @@ public:
 
     /// Members will be transfered to DAGQueryBlockInterpreter after execute
 
+    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
     BoolVec is_timestamp_column;
     /// it should be hash map because duplicated region id may occur if merge regions to retry of dag.
     RegionRetryList region_retry;
@@ -94,7 +95,6 @@ private:
     LearnerReadSnapshot learner_read_snapshot;
     /// Table from where to read data, if not subquery.
     ManageableStoragePtr storage;
-    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
     Names required_columns;
     NamesAndTypes source_columns;
     String handle_column_name;
