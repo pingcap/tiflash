@@ -7,7 +7,7 @@
 namespace DB
 {
 template <typename A, typename B>
-void vectorizedDivisionLoopAVX2(typename DivideIntegralImpl<A, B>::ResultType *& c_pos, A *& a_pos, B b, size_t size)
+void vectorizedDivisionLoopAVX2(typename DivideIntegralImpl<A, B>::ResultType *& c_pos, A const *& a_pos, B b, size_t size)
 {
     using VectorType = __m256i;
     libdivide::divider<A> divider(b);
@@ -27,7 +27,8 @@ void vectorizedDivisionLoopAVX2(typename DivideIntegralImpl<A, B>::ResultType *&
 }
 
 #define VECTORIZED_DIV_LOOP_AVX2_INSTANTIATION(A, B) \
-    template void vectorizedDivisionLoopAVX2<A, B>(typename DivideIntegralImpl<A, B>::ResultType * &c_pos, A * &a_pos, B b, size_t size);
+    template void vectorizedDivisionLoopAVX2<A, B>(  \
+        typename DivideIntegralImpl<A, B>::ResultType * &c_pos, A const *& a_pos, B b, size_t size);
 
 VECTORIZED_DIV_LOOP_AVX2_INSTANTIATION(UInt64, UInt64)
 VECTORIZED_DIV_LOOP_AVX2_INSTANTIATION(UInt64, UInt32)

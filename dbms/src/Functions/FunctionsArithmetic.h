@@ -2724,10 +2724,10 @@ namespace DB
 
 #ifdef DBMS_ENABLE_AVX512_SUPPORT
 template <typename A, typename B>
-void vectorizedDivisionLoopAVX512(typename DivideIntegralImpl<A, B>::ResultType *& c_pos, A *& a_pos, B b, size_t size);
+void vectorizedDivisionLoopAVX512(typename DivideIntegralImpl<A, B>::ResultType *& c_pos, A const *& a_pos, B b, size_t size);
 #define VECTORIZED_DIV_LOOP_AVX512_EXTERN(A, B)              \
     extern template void vectorizedDivisionLoopAVX512<A, B>( \
-        typename DivideIntegralImpl<A, B>::ResultType * &c_pos, A * &a_pos, B b, size_t size);
+        typename DivideIntegralImpl<A, B>::ResultType * &c_pos, A const *& a_pos, B b, size_t size);
 
 VECTORIZED_DIV_LOOP_AVX512_EXTERN(UInt64, UInt64)
 VECTORIZED_DIV_LOOP_AVX512_EXTERN(UInt64, UInt32)
@@ -2753,10 +2753,10 @@ VECTORIZED_DIV_LOOP_AVX512_EXTERN(Int32, Int8)
 
 #ifdef DBMS_ENABLE_AVX_SUPPORT
 template <typename A, typename B>
-void vectorizedDivisionLoopAVX2(typename DivideIntegralImpl<A, B>::ResultType *& c_pos, A *& a_pos, B b, size_t size);
+void vectorizedDivisionLoopAVX2(typename DivideIntegralImpl<A, B>::ResultType *& c_pos, A const *& a_pos, B b, size_t size);
 #define VECTORIZED_DIV_LOOP_AVX2_EXTERN(A, B)              \
     extern template void vectorizedDivisionLoopAVX2<A, B>( \
-        typename DivideIntegralImpl<A, B>::ResultType * &c_pos, A * &a_pos, B b, size_t size);
+        typename DivideIntegralImpl<A, B>::ResultType * &c_pos, A const *& a_pos, B b, size_t size);
 VECTORIZED_DIV_LOOP_AVX2_EXTERN(UInt64, UInt64)
 VECTORIZED_DIV_LOOP_AVX2_EXTERN(UInt64, UInt32)
 VECTORIZED_DIV_LOOP_AVX2_EXTERN(UInt64, UInt16)
@@ -2817,13 +2817,13 @@ struct DivideIntegralByConstantImpl
             using namespace SIMDOption;
 #ifdef DBMS_ENABLE_AVX512_SUPPORT
             if (ENABLE_AVX512 && SIMDRuntimeSupport(SIMDFeature::avx512f)) {
-                vectorizedDivisionLoopAVX512(c_pos, a_pos, b, size);
+                vectorizedDivisionLoopAVX512<A, B>(c_pos, a_pos, b, size);
             }
 #endif
             break;
 #ifdef DBMS_ENABLE_AVX_SUPPORT
             if (ENABLE_AVX && SIMDRuntimeSupport(SIMDFeature::avx2)) {
-                vectorizedDivisionLoopAVX2(c_pos, a_pos, b, size);
+                vectorizedDivisionLoopAVX2<A, B>(c_pos, a_pos, b, size);
             }
 #endif
         } while (false);
