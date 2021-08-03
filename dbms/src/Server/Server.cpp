@@ -421,7 +421,7 @@ private:
 // We only need this task run once.
 void initStores(Context & global_context, Logger * log, bool lazily_init_store)
 {
-    auto initStores = [&global_context, log]() {
+    auto do_init_stores = [&global_context, log]() {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
         int init_cnt = 0;
         int err_cnt = 0;
@@ -445,12 +445,12 @@ void initStores(Context & global_context, Logger * log, bool lazily_init_store)
     if (lazily_init_store)
     {
         LOG_INFO(log, "Lazily init store.");
-        std::thread(initStores).detach();
+        std::thread(do_init_stores).detach();
     }
     else
     {
         LOG_INFO(log, "Not lazily init store.");
-        initStores();
+        do_init_stores();
     }
 }
 
