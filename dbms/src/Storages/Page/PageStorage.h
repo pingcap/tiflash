@@ -128,7 +128,7 @@ public:
 
     PageId getMaxId();
 
-    void write(WriteBatch && write_batch, const RateLimiterPtr & rate_limiter = nullptr);
+    void write(WriteBatch && write_batch, const WriteLimiterPtr & rate_limiter = nullptr);
 
     SnapshotPtr getSnapshot();
     // Get some statistics of all living snapshots and the oldest living snapshot.
@@ -154,7 +154,7 @@ public:
     void reloadSettings(const Config & new_config) { config.reload(new_config); }
 
     // We may skip the GC to reduce useless reading by default.
-    bool gc(bool not_skip = false, const RateLimiterPtr & rate_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
+    bool gc(bool not_skip = false, const WriteLimiterPtr & rate_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
 

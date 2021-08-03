@@ -32,7 +32,7 @@ WriteBufferFromFileProvider::WriteBufferFromFileProvider(const FileProviderPtr &
     const std::string & file_name_,
     const EncryptionPath & encryption_path_,
     bool create_new_encryption_info_,
-    const RateLimiterPtr & rate_limiter_,
+    const WriteLimiterPtr & rate_limiter_,
     size_t buf_size,
     int flags,
     mode_t mode,

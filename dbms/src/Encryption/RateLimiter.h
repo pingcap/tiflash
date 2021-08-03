@@ -30,9 +30,9 @@ enum class LimiterType
     BG_READ = 4,
 };
 
-// RateLimiter is to control write rate (bytes per second).
+// WriteLimiter is to control write rate (bytes per second).
 // Because of the storage engine is append-only, the amount of data written by the storage engine
-// is equal to the amount of data written to the disk by the operating system. So, RateLimiter
+// is equal to the amount of data written to the disk by the operating system. So, WriteLimiter
 // can limit the write request without any external dependencies.
 //
 // Constructor parameters:
@@ -47,12 +47,12 @@ enum class LimiterType
 // is set to 10MB/s and refill_period_us is set to 100ms, then 1MB is refilled every 100ms internally.
 // Larger value can lead to burstier writes while smaller value introduces more CPU overhead. The default
 // should work for most cases.
-class RateLimiter
+class WriteLimiter
 {
 public:
-    RateLimiter(TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_ = 100);
+    WriteLimiter(TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_ = 100);
 
-    virtual ~RateLimiter();
+    virtual ~WriteLimiter();
 
     // `request()` is the main interface used by clients.
     // It receives the requested balance as the parameter,
@@ -104,7 +104,7 @@ protected:
     LimiterType type;
 };
 
-using RateLimiterPtr = std::shared_ptr<RateLimiter>;
+using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 
 // ReadLimiter is to control read rate (bytes per second).
 // Because of the page cache, the amount of data read by the storage engine
@@ -119,8 +119,8 @@ using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 //
 // `get_io_stat_period_us` is the interval between calling getIOStatistic_.
 //
-// Other parameters are the same as RateLimiter.
-class ReadLimiter final : public RateLimiter
+// Other parameters are the same as WriteLimiter.
+class ReadLimiter final : public WriteLimiter
 {
 public:
     ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_,
@@ -160,7 +160,7 @@ class IORateLimiter
 public:
     IORateLimiter();
 
-    RateLimiterPtr getWriteLimiter();
+    WriteLimiterPtr getWriteLimiter();
     ReadLimiterPtr getReadLimiter();
 
     void updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_);
@@ -192,8 +192,8 @@ private:
     IOInfo getCurrentIOInfo();
 
     StorageIORateLimitConfig io_config;
-    RateLimiterPtr bg_write_limiter;
-    RateLimiterPtr fg_write_limiter;
+    WriteLimiterPtr bg_write_limiter;
+    WriteLimiterPtr fg_write_limiter;
     ReadLimiterPtr bg_read_limiter;
     ReadLimiterPtr fg_read_limiter;
     std::mutex mtx_;

@@ -523,7 +523,7 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
     return pages_reader;
 }
 
-void PageStorage::write(WriteBatch && wb, const RateLimiterPtr & rate_limiter)
+void PageStorage::write(WriteBatch && wb, const WriteLimiterPtr & rate_limiter)
 {
     if (unlikely(wb.empty()))
         return;
@@ -942,7 +942,7 @@ WriteBatch::SequenceID PageStorage::WritingFilesSnapshot::minPersistedSequence()
     return seq;
 }
 
-bool PageStorage::gc(bool not_skip, const RateLimiterPtr & rate_limiter, const ReadLimiterPtr & read_limiter)
+bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & rate_limiter, const ReadLimiterPtr & read_limiter)
 {
     // If another thread is running gc, just return;
     bool v = false;

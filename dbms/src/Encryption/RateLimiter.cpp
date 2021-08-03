@@ -72,7 +72,7 @@ inline void metricAllocBytes(TiFlashMetricsPtr & metrics, LimiterType type, Int6
     }
 }
 
-RateLimiter::RateLimiter(TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_)
+WriteLimiter::WriteLimiter(TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_)
     : refill_period_ms{refill_period_ms_},
       refill_balance_per_period{calculateRefillBalancePerPeriod(rate_limit_per_sec_)},
       available_balance{refill_balance_per_period},
@@ -82,7 +82,7 @@ RateLimiter::RateLimiter(TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, 
       type(type_)
 {}
 
-RateLimiter::~RateLimiter()
+WriteLimiter::~WriteLimiter()
 {
     std::unique_lock<std::mutex> lock(request_mutex);
     stop = true;
@@ -93,7 +93,7 @@ RateLimiter::~RateLimiter()
         exit_cv.wait(lock);
 }
 
-void RateLimiter::request(Int64 bytes)
+void WriteLimiter::request(Int64 bytes)
 {
     std::unique_lock<std::mutex> lock(request_mutex);
 
@@ -170,16 +170,16 @@ void RateLimiter::request(Int64 bytes)
     }
 }
 
-bool RateLimiter::canGrant(Int64 bytes) { return available_balance >= bytes; }
+bool WriteLimiter::canGrant(Int64 bytes) { return available_balance >= bytes; }
 
-void RateLimiter::consumeBytes(Int64 bytes)
+void WriteLimiter::consumeBytes(Int64 bytes)
 {
     metricAllocBytes(metrics, type, bytes);
     total_bytes_through += bytes;
     available_balance -= bytes;
 }
 
-void RateLimiter::refillAndAlloc()
+void WriteLimiter::refillAndAlloc()
 {
     if (available_balance < refill_balance_per_period)
         available_balance += refill_balance_per_period;
@@ -210,7 +210,7 @@ void RateLimiter::refillAndAlloc()
 
 ReadLimiter::ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_,
     Int64 get_io_stat_period_us, UInt64 refill_period_ms_)
-    : RateLimiter(metrics_, rate_limit_per_sec_, type_, refill_period_ms_),
+    : WriteLimiter(metrics_, rate_limit_per_sec_, type_, refill_period_ms_),
       getIOStatistic(std::move(getIOStatistic_)),
       last_stat_bytes(getIOStatistic()),
       last_stat_time(now()),
@@ -300,7 +300,7 @@ extern __thread bool is_background_thread;
 extern thread_local bool is_background_thread;
 #endif
 
-RateLimiterPtr IORateLimiter::getWriteLimiter()
+WriteLimiterPtr IORateLimiter::getWriteLimiter()
 {
     std::lock_guard<std::mutex> lock(mtx_);
     return is_background_thread ? bg_write_limiter : fg_write_limiter;
@@ -335,7 +335,7 @@ void IORateLimiter::updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::Abstrac
     io_config = new_io_config;
 
     auto GenRateLimiter = [&](UInt64 bytes_per_sec, LimiterType type) {
-        return bytes_per_sec == 0 ? nullptr : std::make_shared<RateLimiter>(metrics_, bytes_per_sec, type);
+        return bytes_per_sec == 0 ? nullptr : std::make_shared<WriteLimiter>(metrics_, bytes_per_sec, type);
     };
 
     bg_write_limiter = GenRateLimiter(io_config.getBgWriteMaxBytesPerSec(), LimiterType::BG_WRITE);

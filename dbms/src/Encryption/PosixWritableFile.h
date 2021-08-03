@@ -25,7 +25,7 @@ protected:
 
 public:
     PosixWritableFile(
-        const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode, const RateLimiterPtr & rate_limiter_ = nullptr);
+        const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode, const WriteLimiterPtr & rate_limiter_ = nullptr);
 
     ~PosixWritableFile() override;
 
@@ -51,7 +51,7 @@ private:
 private:
     std::string file_name;
     int fd;
-    RateLimiterPtr rate_limiter;
+    WriteLimiterPtr rate_limiter;
 };
 
 } // namespace DB

@@ -4,7 +4,7 @@
 
 namespace DB
 {
-LegacyCompactor::LegacyCompactor(const PageStorage & storage, const RateLimiterPtr & rate_limiter_, const ReadLimiterPtr & read_limiter_)
+LegacyCompactor::LegacyCompactor(const PageStorage & storage, const WriteLimiterPtr & rate_limiter_, const ReadLimiterPtr & read_limiter_)
     : storage_name(storage.storage_name),
       delegator(storage.delegator),
       file_provider(storage.getFileProvider()),
@@ -276,7 +276,7 @@ size_t LegacyCompactor::writeToCheckpoint(const String &             storage_pat
                                           WriteBatch &&              wb,
                                           FileProviderPtr &          file_provider,
                                           Poco::Logger *             log,
-                                          const RateLimiterPtr &     rate_limiter)
+                                          const WriteLimiterPtr &     rate_limiter)
 {
     size_t bytes_written   = 0;
     auto   checkpoint_file = PageFile::newPageFile(file_id.first, file_id.second, storage_path, file_provider, PageFile::Type::Temp, log);

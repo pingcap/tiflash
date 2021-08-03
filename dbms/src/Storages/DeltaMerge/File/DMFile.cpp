@@ -228,7 +228,7 @@ DMFile::OffsetAndSize DMFile::writePackPropertyToBuffer(WriteBuffer & buffer)
     return std::make_tuple(offset, size);
 }
 
-void DMFile::writeMeta(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
+void DMFile::writeMeta(const FileProviderPtr & file_provider, const WriteLimiterPtr & rate_limiter)
 {
     String meta_path     = metaPath();
     String tmp_meta_path = meta_path + ".tmp";
@@ -241,7 +241,7 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const RateLimiterP
     Poco::File(tmp_meta_path).renameTo(meta_path);
 }
 
-void DMFile::writePackProperty(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
+void DMFile::writePackProperty(const FileProviderPtr & file_provider, const WriteLimiterPtr & rate_limiter)
 {
     String property_path     = packPropertyPath();
     String tmp_property_path = property_path + ".tmp";
@@ -253,7 +253,7 @@ void DMFile::writePackProperty(const FileProviderPtr & file_provider, const Rate
     Poco::File(tmp_property_path).renameTo(property_path);
 }
 
-void DMFile::writeMetadata(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
+void DMFile::writeMetadata(const FileProviderPtr & file_provider, const WriteLimiterPtr & rate_limiter)
 {
     writePackProperty(file_provider, rate_limiter);
     writeMeta(file_provider, rate_limiter);
@@ -374,7 +374,7 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
     readPackStat(file_provider, footer.meta_pack_info);
 }
 
-void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
+void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & rate_limiter)
 {
     writeMetadata(file_provider, rate_limiter);
     if (unlikely(status != Status::WRITING))

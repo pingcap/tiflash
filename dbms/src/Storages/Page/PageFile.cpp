@@ -466,7 +466,7 @@ const String & PageFile::Writer::parentPath() const
     return page_file.parent_path;
 }
 
-size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const RateLimiterPtr & rate_limiter)
+size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & rate_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 

@@ -24,9 +24,9 @@ struct WriteBatches : private boost::noncopyable
     StoragePool & storage_pool;
     bool          should_roll_back = false;
 
-    RateLimiterPtr rate_limiter;
+    WriteLimiterPtr rate_limiter;
 
-    WriteBatches(StoragePool & storage_pool_, const RateLimiterPtr & rate_limiter_ = nullptr)
+    WriteBatches(StoragePool & storage_pool_, const WriteLimiterPtr & rate_limiter_ = nullptr)
         : storage_pool(storage_pool_), rate_limiter(rate_limiter_)
     {
     }

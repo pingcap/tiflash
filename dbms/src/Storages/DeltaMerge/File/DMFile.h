@@ -247,13 +247,13 @@ private:
     OffsetAndSize writePackStatToBuffer(WriteBuffer & buffer);
     OffsetAndSize writePackPropertyToBuffer(WriteBuffer & buffer);
 
-    void writeMeta(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
-    void writePackProperty(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
+    void writeMeta(const FileProviderPtr & file_provider, const WriteLimiterPtr & rate_limiter);
+    void writePackProperty(const FileProviderPtr & file_provider, const WriteLimiterPtr & rate_limiter);
     void readMeta(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
     void readPackStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
     void readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
 
-    void writeMetadata(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
+    void writeMetadata(const FileProviderPtr & file_provider, const WriteLimiterPtr & rate_limiter);
     void readMetadata(const FileProviderPtr & file_provider);
 
     void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver);
@@ -263,7 +263,7 @@ private:
     Status getStatus() const { return status; }
     void   setStatus(Status status_) { status = status_; }
 
-    void finalizeForFolderMode(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
+    void finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & rate_limiter);
     void finalizeForSingleFileMode(WriteBuffer & buffer);
 
     void addSubFileStat(const String & name, UInt64 offset, UInt64 size) { sub_file_stats.emplace(name, SubFileStat{offset, size}); }

@@ -16,10 +16,10 @@ namespace DB
 {
 namespace tests
 {
-TEST(RateLimiter_test, Rate)
+TEST(WriteLimiter_test, Rate)
 {
     srand((unsigned)time(NULL));
-    auto write = [](const RateLimiterPtr & rate_limiter, UInt64 max_request_size) {
+    auto write = [](const WriteLimiterPtr & rate_limiter, UInt64 max_request_size) {
         AtomicStopwatch watch;
         while (watch.elapsedSeconds() < 4)
         {
@@ -32,7 +32,7 @@ TEST(RateLimiter_test, Rate)
     {
         UInt64 target = i * 1024 * 10;
         // refill ten times every second
-        auto rate_limiter = std::make_shared<RateLimiter>(nullptr, target, LimiterType::UNKNOW, 100);
+        auto rate_limiter = std::make_shared<WriteLimiter>(nullptr, target, LimiterType::UNKNOW, 100);
         AtomicStopwatch watch;
         std::vector<std::thread> threads;
         // create multiple threads to perform request command

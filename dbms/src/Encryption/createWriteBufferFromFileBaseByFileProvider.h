@@ -19,7 +19,7 @@ WriteBufferFromFileBase * createWriteBufferFromFileBaseByFileProvider(const File
     const std::string & filename_,
     const EncryptionPath & encryption_path_,
     bool create_new_encryption_info_,
-    const RateLimiterPtr & rate_limiter_,
+    const WriteLimiterPtr & rate_limiter_,
     size_t estimated_size,
     size_t aio_threshold,
     size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE,

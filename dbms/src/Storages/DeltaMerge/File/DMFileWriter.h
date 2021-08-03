@@ -29,7 +29,7 @@ public:
                CompressionSettings    compression_settings,
                size_t                 max_compress_block_size,
                FileProviderPtr &      file_provider,
-               const RateLimiterPtr & rate_limiter_,
+               const WriteLimiterPtr & rate_limiter_,
                bool                   do_index)
             : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
                                                                      dmfile->colDataPath(file_base_name),
@@ -83,7 +83,7 @@ public:
                          CompressionSettings     compression_settings,
                          size_t                  max_compress_block_size,
                          const FileProviderPtr & file_provider,
-                         const RateLimiterPtr &  rate_limiter_)
+                         const WriteLimiterPtr &  rate_limiter_)
             : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
                                                                      dmfile->path(),
                                                                      EncryptionPath(dmfile->encryptionBasePath(), ""),
@@ -183,7 +183,7 @@ public:
     DMFileWriter(const DMFilePtr &       dmfile_,
                  const ColumnDefines &   write_columns_,
                  const FileProviderPtr & file_provider_,
-                 const RateLimiterPtr &  rate_limiter_,
+                 const WriteLimiterPtr &  rate_limiter_,
                  const Options &         options_);
 
     void write(const Block & block, const BlockProperty & block_property);
@@ -212,7 +212,7 @@ private:
     SingleFileStreamPtr single_file_stream;
 
     FileProviderPtr file_provider;
-    RateLimiterPtr  rate_limiter;
+    WriteLimiterPtr  rate_limiter;
 };
 
 } // namespace DM

@@ -11,7 +11,7 @@ namespace DM
 DMFileWriter::DMFileWriter(const DMFilePtr &             dmfile_,
                            const ColumnDefines &         write_columns_,
                            const FileProviderPtr &       file_provider_,
-                           const RateLimiterPtr &        rate_limiter_,
+                           const WriteLimiterPtr &        rate_limiter_,
                            const DMFileWriter::Options & options_)
     : dmfile(dmfile_),
       write_columns(write_columns_),

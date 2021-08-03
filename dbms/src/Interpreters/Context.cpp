@@ -1563,7 +1563,7 @@ void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::Abstr
     getIORateLimiter().setBackgroundThreadIds(tids);
 }
 
-RateLimiterPtr Context::getWriteLimiter() const
+WriteLimiterPtr Context::getWriteLimiter() const
 {
     return getIORateLimiter().getWriteLimiter();
 }

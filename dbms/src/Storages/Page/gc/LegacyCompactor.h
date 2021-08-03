@@ -22,7 +22,7 @@ using WritingFilesSnapshot = PageStorage::WritingFilesSnapshot;
 class LegacyCompactor : private boost::noncopyable
 {
 public:
-    LegacyCompactor(const PageStorage & storage, const RateLimiterPtr & rate_limiter_, const ReadLimiterPtr & read_limiter_);
+    LegacyCompactor(const PageStorage & storage, const WriteLimiterPtr & rate_limiter_, const ReadLimiterPtr & read_limiter_);
 
     std::tuple<PageFileSet, PageFileSet, size_t> //
     tryCompact(PageFileSet && page_files, const WritingFilesSnapshot & writing_files);
@@ -41,7 +41,7 @@ private:
                                                   WriteBatch &&              wb,
                                                   FileProviderPtr &          file_provider,
                                                   Poco::Logger *             log,
-                                                  const RateLimiterPtr &     rate_limiter);
+                                                  const WriteLimiterPtr &     rate_limiter);
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -59,7 +59,7 @@ private:
     PageStorage::VersionedPageEntries version_set;
     PageStorage::StatisticsInfo       info;
 
-    const RateLimiterPtr rate_limiter;
+    const WriteLimiterPtr rate_limiter;
     const ReadLimiterPtr read_limiter;
 };
 

@@ -87,11 +87,11 @@ class KeyManager;
 using KeyManagerPtr = std::shared_ptr<KeyManager>;
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
-class RateLimiter;
-using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 struct TiFlashRaftConfig;
 class DAGContext;
 class IORateLimiter;
+class WriteLimiter;
+using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 
@@ -416,7 +416,7 @@ public:
     FileProviderPtr getFileProvider() const;
 
     void initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config);
-    RateLimiterPtr getWriteLimiter() const;
+    WriteLimiterPtr getWriteLimiter() const;
     ReadLimiterPtr getReadLimiter() const;
     IORateLimiter& getIORateLimiter() const;
 

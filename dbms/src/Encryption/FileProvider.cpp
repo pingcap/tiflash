@@ -23,7 +23,7 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_,
 }
 
 WritableFilePtr FileProvider::newWritableFile(const String & file_path_, const EncryptionPath & encryption_path_, bool truncate_if_exists_,
-    bool create_new_encryption_info_, const RateLimiterPtr & rate_limiter_, int flags, mode_t mode) const
+    bool create_new_encryption_info_, const WriteLimiterPtr & rate_limiter_, int flags, mode_t mode) const
 {
     WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, rate_limiter_);
     if (encryption_enabled && create_new_encryption_info_)
