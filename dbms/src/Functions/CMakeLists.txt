@@ -80,6 +80,32 @@ list(REMOVE_ITEM clickhouse_functions_headers IFunction.h FunctionFactory.h Func
 
 add_library(clickhouse_functions ${clickhouse_functions_sources})
 
+# Region for specialized CPU flags tuning
+if (DBMS_ENABLE_AVX_SUPPORT)
+    # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
+    set_source_files_properties(FunctionsArithmeticAVX2.cpp APPEND COMPILE_FLAGS "-mavx -mavx2")
+    target_compile_definitions(clickhouse_functions INTERFACE DBMS_ENABLE_AVX_SUPPORT=1)
+endif ()
+
+if (DBMS_ENABLE_AVX512_SUPPORT)
+    # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
+    set_source_files_properties(FunctionsArithmeticAVX512.cpp APPEND COMPILE_FLAGS
+                                 "-mavx512bw -mavx512vl -mavx512f -mavx512dq -mavx512cd")
+    target_compile_definitions(clickhouse_functions INTERFACE DBMS_ENABLE_AVX512_SUPPORT=1)
+endif ()
+
+if (DBMS_ENABLE_ASIMD_SUPPORT)
+    # https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
+    # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS "-march=armv8.6-a+simd")
+    target_compile_definitions(clickhouse_functions INTERFACE DBMS_ENABLE_ASIMD_SUPPORT=1)
+endif ()
+
+if (DBMS_ENABLE_SVE_SUPPORT)
+    # https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
+    # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS "-march=armv8.6-a+sve")
+    target_compile_definitions(clickhouse_functions INTERFACE DBMS_ENABLE_SVE_SUPPORT=1)
+endif ()
+
 target_link_libraries(clickhouse_functions PUBLIC dbms PRIVATE libconsistent-hashing ${FARMHASH_LIBRARIES} ${METROHASH_LIBRARIES})
 
 target_include_directories (clickhouse_functions BEFORE PUBLIC ${ClickHouse_SOURCE_DIR}/contrib/libfarmhash)
