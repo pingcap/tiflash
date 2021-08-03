@@ -234,7 +234,8 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
 
-target_include_directories(dbms BEFORE PRIVATE ${CRC64_INCLUDE_DIRS})
+target_include_directories(dbms BEFORE PRIVATE
+        ${CRC64_INCLUDE_DIRS} ${XXHASH_INCLUDE_DIR})
 
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
@@ -274,7 +275,8 @@ if (ENABLE_TESTS)
         ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestBasic.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
-    target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR} ${CRC64_INCLUDE_DIRS})
+    target_include_directories(gtests_dbms BEFORE PRIVATE
+            ${SPARCEHASH_INCLUDE_DIR} ${CRC64_INCLUDE_DIRS} ${XXHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
     target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions)
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
