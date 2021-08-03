@@ -982,8 +982,13 @@ struct TiDBRoundPrecisionInferer
         EXPECT(frac == 0);
 
         assert(prec >= scale);
+        PrecType new_prec = prec - scale;
+
         // +1 for possible overflow, e.g. round(99999) => 100000
-        return std::make_tuple(prec - scale + 1, 0);
+        if (scale > 0)
+            new_prec += 1;
+
+        return std::make_tuple(new_prec, 0);
     }
 };
 
