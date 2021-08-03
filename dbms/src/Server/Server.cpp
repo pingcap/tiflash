@@ -17,6 +17,7 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/setThreadName.h>
+#include <Core/SIMD.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
@@ -131,6 +132,32 @@ void loadMiConfig(Logger * log)
 }
 #undef TRY_LOAD_CONF
 #endif
+
+namespace
+{
+void loadBooleanConfig(Logger * log, bool & target, const char * name)
+{
+    auto config = getenv(name);
+    if (config)
+    {
+        LOG_INFO(log, "Got environment variable " << name << " = " << config);
+        try
+        {
+            auto result = std::stoul(config);
+            if (result != 0 && result != 1)
+            {
+                LOG_ERROR(log, "Environment variable" << name << " = " << result << " is not valid");
+                return;
+            }
+            target = result;
+        }
+        catch (...)
+        {
+        }
+    }
+}
+} // namespace
+
 namespace CurrentMetrics
 {
 extern const Metric Revision;
@@ -799,6 +826,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #endif
 
     UpdateMallocConfig(log);
+
+#ifdef DBMS_ENABLE_AVX_SUPPORT
+    loadBooleanConfig(log, DB::SIMDOption::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
+#endif
+
+#ifdef DBMS_ENABLE_AVX512_SUPPORT
+    loadBooleanConfig(log, DB::SIMDOption::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
+#endif
+
+#ifdef DBMS_ENABLE_ASIMD_SUPPORT
+    loadBooleanConfig(log, DB::SIMDOption::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
+#endif
+
+#ifdef DBMS_ENABLE_SVE_SUPPORT
+    loadBooleanConfig(log, DB::SIMDOption::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
+#endif
 
     registerFunctions();
     registerAggregateFunctions();

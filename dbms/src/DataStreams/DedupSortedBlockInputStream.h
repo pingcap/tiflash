@@ -49,7 +49,7 @@ public:
     }
 
 private:
-    void asynDedupByQueue();
+    void asyncDedupByQueue();
     void asynFetch(size_t pisition);
 
     void fetchBlock(size_t pisition);
