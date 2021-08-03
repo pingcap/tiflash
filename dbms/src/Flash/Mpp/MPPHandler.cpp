@@ -32,6 +32,15 @@ extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char exception_during_mpp_close_tunnel[];
 } // namespace FailPoints
 
+mpp::MPPDataPacket getPacketWithError(String reason)
+{
+    mpp::MPPDataPacket data;
+    auto err = std::make_unique<mpp::Error>();
+    err->set_msg(std::move(reason));
+    data.set_allocated_error(err.release());
+    return data;
+}
+
 bool MPPTaskProgress::isTaskHanging(const Context & context)
 {
     bool ret = false;
@@ -75,11 +84,7 @@ void MPPTunnel::close(const String & reason)
         try
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(reason);
-            data.set_allocated_error(err);
-            if (!writer->Write(data))
+            if (!writer->Write(getPacketWithError(reason)))
                 throw Exception("Failed to write err");
         }
         catch (...)
@@ -365,11 +370,7 @@ void MPPTask::writeErrToAllTunnel(const String & e)
         try
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_write_err_to_tunnel);
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(e);
-            data.set_allocated_error(err);
-            it.second->write(data, true);
+            it.second->write(getPacketWithError(e), true);
         }
         catch (...)
         {
