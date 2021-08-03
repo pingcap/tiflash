@@ -38,6 +38,12 @@ if (ARCH_AMD64)
     option(DBMS_ENABLE_AVX512_SUPPORT "enable AVX512 support" ON)
 endif ()
 
+if (ARCH_AARCH64)
+    ## TODO: The following options are reserved for AARCH64, but they are not considered in the code yet.
+    option(DBMS_ENABLE_ASIMD_SUPPORT "enable Advanced SIMD support" OFF)
+    option(DBMS_ENABLE_SVE_SUPPORT "enable Scalable Vector Extension support" OFF)
+endif ()
+
 include_directories (src)
 add_subdirectory (src)
 
@@ -294,12 +300,6 @@ if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
             EXECUTABLE gtests_dbms
     )
 endif()
-
-if (ARCH_AARCH64)
-    ## TODO: The following options are reserved for AARCH64, but they are not considered in the code yet.
-    option(DBMS_ENABLE_ASIMD_SUPPORT "enable Advanced SIMD support" OFF)
-    option(DBMS_ENABLE_SVE_SUPPORT "enable Scalable Vector Extension support" OFF)
-endif ()
 
 # Region for specialized CPU flags tuning
 if (DBMS_ENABLE_AVX_SUPPORT)
