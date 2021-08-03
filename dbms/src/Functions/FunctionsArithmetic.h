@@ -7,6 +7,7 @@
 #include <Common/FieldVisitors.h>
 #include <Common/typeid_cast.h>
 #include <Core/AccurateComparison.h>
+#include <Core/SIMD.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDecimal.h>
@@ -2721,6 +2722,43 @@ template <> struct FunctionUnaryArithmeticMonotonicity<NameIntExp10>
 namespace DB
 {
 
+#ifdef DBMS_ENABLE_AVX512_SUPPORT
+template <typename A, typename B>
+void vectorizedDivisionLoopAVX512(typename DivideIntegralImpl<A, B>::ResultType *& c_pos, A *& a_pos, B b, size_t size);
+#define VECTORIZED_DIV_LOOP_AVX512_EXTERN(A, B)              \
+    extern template void vectorizedDivisionLoopAVX512<A, B>( \
+        typename DivideIntegralImpl<A, B>::ResultType * &c_pos, A * &a_pos, B b, size_t size);
+
+VECTORIZED_DIV_LOOP_AVX512_EXTERN(UInt64, UInt64)
+VECTORIZED_DIV_LOOP_AVX512_EXTERN(UInt64, UInt32)
+VECTORIZED_DIV_LOOP_AVX512_EXTERN(UInt64, UInt16)
+VECTORIZED_DIV_LOOP_AVX512_EXTERN(UInt64, UInt8)
+
+VECTORIZED_DIV_LOOP_AVX512_EXTERN(UInt32, UInt64)
+VECTORIZED_DIV_LOOP_AVX512_EXTERN(UInt32, UInt32)
+VECTORIZED_DIV_LOOP_AVX512_EXTERN(UInt32, UInt16)
+VECTORIZED_DIV_LOOP_AVX512_EXTERN(UInt32, UInt8)
+#undef VECTORIZED_DIV_LOOP_AVX512_EXTERN
+#endif
+
+#ifdef DBMS_ENABLE_AVX_SUPPORT
+template <typename A, typename B>
+void vectorizedDivisionLoopAVX2(typename DivideIntegralImpl<A, B>::ResultType *& c_pos, A *& a_pos, B b, size_t size);
+#define VECTORIZED_DIV_LOOP_AVX2_EXTERN(A, B)              \
+    extern template void vectorizedDivisionLoopAVX2<A, B>( \
+        typename DivideIntegralImpl<A, B>::ResultType * &c_pos, A * &a_pos, B b, size_t size);
+VECTORIZED_DIV_LOOP_AVX2_EXTERN(UInt64, UInt64)
+VECTORIZED_DIV_LOOP_AVX2_EXTERN(UInt64, UInt32)
+VECTORIZED_DIV_LOOP_AVX2_EXTERN(UInt64, UInt16)
+VECTORIZED_DIV_LOOP_AVX2_EXTERN(UInt64, UInt8)
+
+VECTORIZED_DIV_LOOP_AVX2_EXTERN(UInt32, UInt64)
+VECTORIZED_DIV_LOOP_AVX2_EXTERN(UInt32, UInt32)
+VECTORIZED_DIV_LOOP_AVX2_EXTERN(UInt32, UInt16)
+VECTORIZED_DIV_LOOP_AVX2_EXTERN(UInt32, UInt8)
+#undef VECTORIZED_DIV_LOOP_AVX2_EXTERN
+#endif
+
 template <typename A, typename B>
 struct DivideIntegralByConstantImpl
     : BinaryOperationImplBase<A, B, DivideIntegralImpl<A, B>>
@@ -2751,6 +2789,24 @@ struct DivideIntegralByConstantImpl
         const A * a_pos = &a[0];
         const A * a_end = a_pos + size;
         ResultType * c_pos = &c[0];
+
+
+        //before SSE, we only select between AVX2 and AVX512
+
+        do {
+            using namespace SIMDOption;
+#ifdef DBMS_ENABLE_AVX512_SUPPORT
+            if (ENABLE_AVX512 && SIMDRuntimeSupport(SIMDFeature::avx512f)) {
+                vectorizedDivisionLoopAVX512(c_pos, a_pos, b, size);
+            }
+#endif
+            break;
+#ifdef DBMS_ENABLE_AVX_SUPPORT
+            if (ENABLE_AVX && SIMDRuntimeSupport(SIMDFeature::avx2)) {
+                vectorizedDivisionLoopAVX2(c_pos, a_pos, b, size);
+            }
+#endif
+        } while (false);
 
 #if __SSE2__
         static constexpr size_t values_per_sse_register = 16 / sizeof(A);
@@ -2812,7 +2868,7 @@ struct ModuloByConstantImpl
 /** Specializations are specified for dividing numbers of the type UInt64 and UInt32 by the numbers of the same sign.
   * Can be expanded to all possible combinations, but more code is needed.
   */
-
+// clang-format off
 template <> struct BinaryOperationImpl<UInt64, UInt8, DivideIntegralImpl<UInt64, UInt8>> : DivideIntegralByConstantImpl<UInt64, UInt8> {};
 template <> struct BinaryOperationImpl<UInt64, UInt16, DivideIntegralImpl<UInt64, UInt16>> : DivideIntegralByConstantImpl<UInt64, UInt16> {};
 template <> struct BinaryOperationImpl<UInt64, UInt32, DivideIntegralImpl<UInt64, UInt32>> : DivideIntegralByConstantImpl<UInt64, UInt32> {};
@@ -2853,7 +2909,7 @@ template <> struct BinaryOperationImpl<Int32, Int8, ModuloImpl<Int32, Int8>> : M
 template <> struct BinaryOperationImpl<Int32, Int16, ModuloImpl<Int32, Int16>> : ModuloByConstantImpl<Int32, Int16> {};
 template <> struct BinaryOperationImpl<Int32, Int32, ModuloImpl<Int32, Int32>> : ModuloByConstantImpl<Int32, Int32> {};
 template <> struct BinaryOperationImpl<Int32, Int64, ModuloImpl<Int32, Int64>> : ModuloByConstantImpl<Int32, Int64> {};
-
+// clang-format on
 
 template <typename Impl, typename Name>
 struct FunctionBitTestMany : public IFunction
