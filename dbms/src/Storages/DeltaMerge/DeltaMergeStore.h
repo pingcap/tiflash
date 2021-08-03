@@ -301,7 +301,7 @@ public:
     // Stop all background tasks.
     void shutdown();
 
-    Block addExtraColumnIfNeed(const Context & db_context, Block && block) const;
+    static Block addExtraColumnIfNeed(const Context & db_context, const ColumnDefine & handle_define, Block && block);
 
     void write(const Context & db_context, const DB::Settings & db_settings, Block && block);
 
@@ -404,7 +404,7 @@ private:
 
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id="");
 
-    bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
+    static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
