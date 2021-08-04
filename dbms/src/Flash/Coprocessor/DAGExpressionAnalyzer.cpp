@@ -336,14 +336,15 @@ static String buildRoundFunction(DAGExpressionAnalyzer * analyzer, const tipb::E
     if (expr.children_size() != 1)
         throw TiFlashException("Invalid arguments of ROUND function", Errors::Coprocessor::BadRequest);
 
-    Names argument_names;
 
     auto input_arg_name = analyzer->getActions(expr.children(0), actions);
-    argument_names.push_back(std::move(input_arg_name));
 
     auto const_zero = tipb::Expr();
     constructInt64LiteralTiExpr(const_zero, 0);
     auto const_zero_arg_name = analyzer->getActions(const_zero, actions);
+
+    Names argument_names;
+    argument_names.push_back(std::move(input_arg_name));
     argument_names.push_back(std::move(const_zero_arg_name));
 
     return analyzer->applyFunction("tidbRoundWithFrac", argument_names, actions, getCollatorFromExpr(expr));

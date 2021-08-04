@@ -5,10 +5,17 @@
 namespace DB
 {
 
+// safeUnsignedAbs evaluates absolute value of argument `value` and cast it to unsigned type of `To`.
+// it guarantees that no undefined behavior will occur and exact result can be represented by unsigned `To`.
 template <typename To, typename From>
-static constexpr make_unsigned_t<To> toUnsigned(const From & value)
+constexpr make_unsigned_t<To> safeUnsignedAbs(const From & value)
 {
+    static_assert(is_integer_v<From>, "type From must be integral");
+    static_assert(is_integer_v<To>, "type To must be integral");
+
     using ReturnType = make_unsigned_t<To>;
+
+    static_assert(actual_size_v<ReturnType> >= actual_size_v<From>, "type unsigned To can't hold all values of type From");
 
     if constexpr (is_signed_v<From>)
     {

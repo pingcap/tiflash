@@ -1,17 +1,17 @@
 #pragma once
 
-#include <Functions/FunctionsArithmetic.h>
-#include <Functions/FunctionHelpers.h>
-#include <Functions/toUnsigned.h>
-#include <IO/WriteHelpers.h>
 #include <Common/Decimal.h>
 #include <Common/TiFlashException.h>
+#include <Common/safeUnsignedAbs.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsArithmetic.h>
+#include <IO/WriteHelpers.h>
 
-#include <cmath>
-#include <cfenv>
-#include <type_traits>
 #include <array>
+#include <cfenv>
+#include <cmath>
 #include <ext/bit_cast.h>
+#include <type_traits>
 
 #if __SSE4_1__
     #include <smmintrin.h>
@@ -863,8 +863,8 @@ using FracType = Int64;
 
 // for DEBUG only, will be removed after RoundWithFrac is implemented.
 #define EXPECT(expr) \
-    if (!(expr)) \
-        throw TiFlashException(fmt::format("\"{}\" failed", #expr), Errors::Coprocessor::Internal); \
+    if (!(expr))     \
+        throw TiFlashException(fmt::format("\"{}\" failed", #expr), Errors::Coprocessor::Internal);
 
 template <typename InputType>
 struct TiDBIntegerRound
@@ -906,7 +906,8 @@ struct ConstPowOf10
 {
     using ArrayType = std::array<T, N + 1>;
 
-    static constexpr ArrayType build() {
+    static constexpr ArrayType build()
+    {
         ArrayType result = {1};
         for (size_t i = 1; i <= N; ++i)
             result[i] = result[i - 1] * static_cast<T>(10);
@@ -930,7 +931,7 @@ struct TiDBDecimalRound
         EXPECT(frac == 0);
 
         auto divider = Pow::result[input_scale];
-        auto absolute_value = toUnsigned<UnsignedNativeType>(input.value);
+        auto absolute_value = safeUnsignedAbs<UnsignedNativeType>(input.value);
 
         // "round half away from zero"
         // examples:
@@ -984,7 +985,7 @@ struct TiDBRoundPrecisionInferer
         assert(prec >= scale);
         PrecType new_prec = prec - scale;
 
-        // +1 for possible overflow, e.g. round(99999) => 100000
+        // +1 for possible overflow, e.g. round(99999.9) => 100000
         if (scale > 0)
             new_prec += 1;
 
@@ -1055,7 +1056,7 @@ public:
 
     Monotonicity getMonotonicityForRange(const IDataType &, const Field &, const Field &) const override { return {true, true, true}; }
 
-protected:
+private:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         checkArguments(arguments);
@@ -1071,7 +1072,7 @@ protected:
         }
         else
         {
-            assert((input_type->isDecimal()));
+            assert(input_type->isDecimal());
 
             auto prec = getDecimalPrecision(*input_type, std::numeric_limits<PrecType>::max());
             auto scale = getDecimalScale(*input_type, std::numeric_limits<ScaleType>::max());
@@ -1116,58 +1117,77 @@ protected:
         auto input_scale = getDecimalScale(*input_type, 0);
         auto result_scale = getDecimalScale(*return_type, 0);
 
-        if (!checkInputType(input_type, return_type, frac_type, input_column, frac_column, result_column, input_scale, result_scale))
-            throw TiFlashException("Dispatch fails", Errors::Coprocessor::Internal);
+        checkInputTypeAndApply(input_type, return_type, frac_type, input_column, frac_column, result_column, input_scale, result_scale);
 
         block.getByPosition(result).column = std::move(result_column);
     }
 
-    bool checkInputType(const DataTypePtr & input_type, const DataTypePtr & return_type, const DataTypePtr & frac_type,
+    void checkInputTypeAndApply(const DataTypePtr & input_type, const DataTypePtr & return_type, const DataTypePtr & frac_type,
         const ColumnPtr & input_column, const ColumnPtr & frac_column, MutableColumnPtr & result_column, ScaleType input_scale,
         ScaleType result_scale)
     {
-        return castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128,
-            DataTypeDecimal256, DataTypeInt8, DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64,
-            DataTypeUInt64>(input_type.get(), [&](const auto & input_type, bool) {
-            using InputDataType = std::decay_t<decltype(input_type)>;
+        if (castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256,
+                DataTypeInt8, DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64, DataTypeUInt64>(
+                input_type.get(), [&](const auto & input_type, bool) {
+                    using InputDataType = std::decay_t<decltype(input_type)>;
 
-            return checkReturnType<typename InputDataType::FieldType>(
-                return_type, frac_type, input_column, frac_column, result_column, input_scale, result_scale);
-        });
+                    checkReturnTypeAndApply<typename InputDataType::FieldType>(
+                        return_type, frac_type, input_column, frac_column, result_column, input_scale, result_scale);
+
+                    return true;
+                }))
+        {
+            throw Exception(fmt::format("Illegal column type {} for the first argument of function {}", input_type->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
     }
 
     template <typename InputType>
-    bool checkReturnType(const DataTypePtr & return_type, const DataTypePtr & frac_type, const ColumnPtr & input_column,
+    void checkReturnTypeAndApply(const DataTypePtr & return_type, const DataTypePtr & frac_type, const ColumnPtr & input_column,
         const ColumnPtr & frac_column, MutableColumnPtr & result_column, ScaleType input_scale, ScaleType result_scale)
     {
-        return castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128,
-            DataTypeDecimal256, DataTypeInt8, DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64,
-            DataTypeUInt64>(return_type.get(), [&](const auto & return_type, bool) {
-            using ReturnDataType = std::decay_t<decltype(return_type)>;
+        if (castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256,
+                DataTypeInt8, DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64, DataTypeUInt64>(
+                return_type.get(), [&](const auto & return_type, bool) {
+                    using ReturnDataType = std::decay_t<decltype(return_type)>;
 
-            return checkFracType<InputType, typename ReturnDataType::FieldType>(
-                frac_type, input_column, frac_column, result_column, input_scale, result_scale);
-        });
+                    return checkFracTypeAndApply<InputType, typename ReturnDataType::FieldType>(
+                        frac_type, input_column, frac_column, result_column, input_scale, result_scale);
+                }))
+        {
+            throw TiFlashException(fmt::format("Unexpected return type for function {}", getName()), Errors::Coprocessor::Internal);
+        }
     }
 
     template <typename InputType, typename ReturnType>
-    bool checkFracType(const DataTypePtr & frac_type, const ColumnPtr & input_column, const ColumnPtr & frac_column,
+    bool checkFracTypeAndApply(const DataTypePtr & frac_type, const ColumnPtr & input_column, const ColumnPtr & frac_column,
         MutableColumnPtr & result_column, ScaleType input_scale [[maybe_unused]], ScaleType result_scale [[maybe_unused]])
     {
         if constexpr ((std::is_floating_point_v<InputType> && !std::is_same_v<ReturnType, Float64>)
             || (IsDecimal<InputType> && !IsDecimal<ReturnType>) || (is_integer_v<InputType> && !std::is_same_v<InputType, ReturnType>))
             return false;
         else
-            return castTypeToEither<DataTypeInt64, DataTypeUInt64>(frac_type.get(), [&](const auto & frac_type, bool) {
-                using FracDataType = std::decay_t<decltype(frac_type)>;
+        {
+            if (castTypeToEither<DataTypeInt64, DataTypeUInt64>(frac_type.get(), [&](const auto & frac_type, bool) {
+                    using FracDataType = std::decay_t<decltype(frac_type)>;
 
-                return checkColumns<InputType, ReturnType, typename FracDataType::FieldType>(
-                    input_column, frac_column, result_column, input_scale, result_scale);
-            });
+                    checkColumnsAndApply<InputType, ReturnType, typename FracDataType::FieldType>(
+                        input_column, frac_column, result_column, input_scale, result_scale);
+
+                    return true;
+                }))
+            {
+                throw Exception(
+                    fmt::format("Illegal column type {} for the second argument of function {}", frac_type->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
+            }
+
+            return true;
+        }
     }
 
     template <typename InputType, typename ReturnType, typename FracType>
-    bool checkColumns(const ColumnPtr & input_column, const ColumnPtr & frac_column, MutableColumnPtr & result_column,
+    void checkColumnsAndApply(const ColumnPtr & input_column, const ColumnPtr & frac_column, MutableColumnPtr & result_column,
         ScaleType input_scale, ScaleType result_scale)
     {
         using InputColumn = std::conditional_t<IsDecimal<InputType>, ColumnDecimal<InputType>, ColumnVector<InputType>>;
@@ -1179,10 +1199,8 @@ protected:
 
         TiDBRound<InputType, ReturnType, FracType, InputColumn, ResultColumn, ColumnConst>::apply(
             input_column, frac_column, result_column, input_scale, result_scale);
-        return true;
     }
 
-private:
     void checkArguments(const ColumnsWithTypeAndName & arguments) const
     {
         if (arguments.size() != getNumberOfArguments())
