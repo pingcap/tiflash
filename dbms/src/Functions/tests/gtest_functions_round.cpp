@@ -125,7 +125,6 @@ using TestCases = ::testing::Types<TestCase<Int64, Int64>, TestCase<UInt64, UInt
     TestCase<DecimalField256, DecimalField256>, TestCase<DecimalField128, DecimalField128>, TestCase<DecimalField64, DecimalField32>,
     TestCase<DecimalField128, DecimalField64>, TestCase<DecimalField256, DecimalField64>>;
 
-
 template <typename InputType, typename OutputType, size_t id = 0>
 auto getTestData();
 
