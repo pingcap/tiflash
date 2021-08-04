@@ -208,10 +208,10 @@ void BackgroundProcessingPool::threadFunction()
                 {
                     next_sleep_time_span = 0;
                 }
-                else if (task->interval_millisecond != 0)
+                else if (task->interval_milliseconds != 0)
                 {
                     // Update `next_sleep_time_span` by user-defined interval if the later one is non-zero
-                    next_sleep_time_span = Poco::Timespan(0, /*microseconds=*/task->interval_millisecond * 1000);
+                    next_sleep_time_span = Poco::Timespan(0, /*microseconds=*/task->interval_milliseconds * 1000);
                 }
                 // else `sleep_seconds` by default
             }

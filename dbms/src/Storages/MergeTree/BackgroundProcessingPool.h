@@ -36,7 +36,7 @@ public:
         void wake();
 
         TaskInfo(BackgroundProcessingPool & pool_, const Task & function_, const bool multi_, const uint64_t interval_ms_)
-            : pool(pool_), function(function_), multi(multi_), interval_millisecond(interval_ms_)
+            : pool(pool_), function(function_), multi(multi_), interval_milliseconds(interval_ms_)
         {}
 
     private:
@@ -53,7 +53,7 @@ public:
         const bool multi;
         std::atomic_bool occupied {false};
 
-        const uint64_t interval_millisecond;
+        const uint64_t interval_milliseconds;
 
         std::multimap<Poco::Timestamp, std::shared_ptr<TaskInfo>>::iterator iterator;
     };
