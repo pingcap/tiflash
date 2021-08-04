@@ -57,7 +57,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(random_exception_after_page_storage_sequence_acquired) \
     M(random_slow_page_storage_remove_expired_snapshots)     \
     M(random_slow_page_storage_list_all_live_files)          \
-    M(force_set_safepoint_when_decode_block)
+    M(force_set_safepoint_when_decode_block)                 \
+    M(force_set_page_data_compact_batch)
 
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_after_learner_read)                   \

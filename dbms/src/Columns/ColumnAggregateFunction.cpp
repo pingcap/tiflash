@@ -180,7 +180,7 @@ void ColumnAggregateFunction::updateHashWithValues(IColumn::HashValues & hash_va
     }
 }
 
-void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash) const
+void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
 {
     auto s = data.size();
     if (hash.getData().size() != data.size())

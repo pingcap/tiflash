@@ -68,7 +68,7 @@ public:
     {
     }
 
-    void updateWeakHash32(WeakHash32 &) const override
+    void updateWeakHash32(WeakHash32 &, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override
     {
     }
 

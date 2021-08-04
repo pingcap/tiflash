@@ -222,15 +222,25 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     // get partition column ids
     auto part_keys = exchangeSender.partition_keys();
     std::vector<Int64> partition_col_id;
-    for (const auto & expr : part_keys)
+    TiDB::TiDBCollators collators;
+    for (int i = 0; i < part_keys.size(); i++)
     {
+        const auto & expr = part_keys[i];
         assert(isColumnExpr(expr));
         auto column_index = decodeDAGInt64(expr.val());
         partition_col_id.emplace_back(column_index);
+        if (getDataTypeByFieldType(expr.field_type())->isString())
+        {
+            collators.emplace_back(getCollatorFromFieldType(exchangeSender.types(i)));
+        }
+        else
+        {
+            collators.emplace_back(nullptr);
+        }
     }
     // construct writer
     std::unique_ptr<DAGResponseWriter> response_writer
-        = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, exchangeSender.tp(),
+        = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, collators, exchangeSender.tp(),
             context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), *dag_context);
     BlockOutputStreamPtr squash_stream = std::make_shared<DAGBlockOutputStream>(io.in->getHeader(), std::move(response_writer));
     io.out = std::make_shared<SquashingBlockOutputStream>(squash_stream, 20000, 0);
