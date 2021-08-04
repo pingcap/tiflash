@@ -125,13 +125,15 @@ void WriteLimiter::request(Int64 bytes)
         // then it is responsible to trigger the refill process.
         if (req_queue.front() == &r)
         {
-            if (refill_stop_watch.elapsedMilliseconds() >= refill_period_ms)
+            UInt64 elapsed_ms = refill_stop_watch.elapsedMilliseconds();
+            if (elapsed_ms >= refill_period_ms)
             {
                 timed_out = true;
             }
             else
             {
-                auto status = r.cv.wait_for(lock, std::chrono::milliseconds(refill_period_ms));
+                // Wait for next refill period.
+                auto status = r.cv.wait_for(lock, std::chrono::milliseconds(refill_period_ms - elapsed_ms));
                 timed_out = (status == std::cv_status::timeout);
             }
             if (timed_out)
