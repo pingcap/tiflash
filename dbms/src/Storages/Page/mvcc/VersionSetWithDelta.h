@@ -4,11 +4,13 @@
 #include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/mvcc/VersionSet.h>
 #include <stdint.h>
 
 #include <boost/core/noncopyable.hpp>
 #include <cassert>
+#include <chrono>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -36,6 +38,7 @@ extern const Event PSMVCCApplyOnNewDelta;
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCNumSnapshots;
+extern const Metric PSMVCCSnapshotsList;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -139,8 +142,15 @@ public:
         VersionSetWithDelta * vset;
         TVersionView          view;
 
+        using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
+        const unsigned t_id;
+
+    private:
+        const TimePoint create_time;
+
     public:
-        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_) : vset(vset_), view(std::move(tail_))
+        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_)
+            : vset(vset_), view(std::move(tail_)), t_id(Poco::ThreadNumber::get()), create_time(std::chrono::steady_clock::now())
         {
             CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
         }
@@ -157,6 +167,14 @@ public:
         }
 
         const TVersionView * version() const { return &view; }
+
+        // The time this snapshot living for
+        double elapsedSeconds() const
+        {
+            auto                          end  = std::chrono::steady_clock::now();
+            std::chrono::duration<double> diff = end - create_time;
+            return diff.count();
+        }
 
         template <typename V, typename VV, typename VE, typename B>
         friend class VersionSetWithDelta;
@@ -178,6 +196,7 @@ public:
         // Do not call `vset->removeExpiredSnapshots` inside `~Snapshot`, or it may cause incursive deadlock
         // on `vset->read_write_mutex`.
         snapshots.emplace_back(SnapshotWeakPtr(s));
+        CurrentMetrics::add(CurrentMetrics::PSMVCCSnapshotsList);
         return s;
     }
 
@@ -304,22 +323,6 @@ protected:
     }
 
 private:
-<<<<<<< HEAD
-    void removeExpiredSnapshots(const std::unique_lock<std::shared_mutex> &) const
-    {
-        for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
-        {
-            if (iter->expired())
-            {
-                // Clear free snapshots
-                iter = snapshots.erase(iter);
-            }
-            else
-            {
-                iter++;
-            }
-        }
-=======
     // Scan over all `snapshots`, remove the invalid snapshots and get some statistics
     // of all living snapshots and the oldest living snapshot.
     // Return < num of snapshots,
@@ -369,7 +372,6 @@ private:
         CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_snapshots_removed);
         // Return some statistics of the oldest living snapshot.
         return {num_valid_snapshots, longest_living_seconds, longest_living_from_thread_id};
->>>>>>> 548b3a150... Fix deadlock on `removeExpiredSnapshots` (#2461)
     }
 
 public:
@@ -393,15 +395,11 @@ public:
 
     size_t numSnapshots() const
     {
-<<<<<<< HEAD
-        // Note: this will scan and remove expired weak_ptr to snapshot
-        std::unique_lock lock(read_write_mutex);
-        removeExpiredSnapshots(lock);
-        return snapshots.size();
-=======
         // Note: this will scan and remove expired weak_ptrs from `snapshots`
-        return removeExpiredSnapshots();
->>>>>>> 548b3a150... Fix deadlock on `removeExpiredSnapshots` (#2461)
+        size_t num_snapshots = 0;
+
+        std::tie(num_snapshots, std::ignore, std::ignore) = removeExpiredSnapshots();
+        return num_snapshots;
     }
 
     std::string toDebugString() const

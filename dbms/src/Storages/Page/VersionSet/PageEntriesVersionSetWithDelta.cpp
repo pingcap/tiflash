@@ -1,15 +1,10 @@
-<<<<<<< HEAD
-=======
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
->>>>>>> 548b3a150... Fix deadlock on `removeExpiredSnapshots` (#2461)
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 
 #include <stack>
 
-<<<<<<< HEAD
-=======
 #ifdef FIU_ENABLE
 #include <Common/randomSeed.h>
 
@@ -23,7 +18,6 @@ namespace CurrentMetrics
 extern const Metric PSMVCCSnapshotsList;
 } // namespace CurrentMetrics
 
->>>>>>> 548b3a150... Fix deadlock on `removeExpiredSnapshots` (#2461)
 namespace DB
 {
 namespace FailPoints
@@ -69,7 +63,9 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
     /// Collect live files is costly, we save SnapshotPtrs and scan them without lock.
     // Note read_write_mutex must be hold.
     std::vector<SnapshotPtr> valid_snapshots;
-    const size_t             snapshots_size_before_clean = snapshots.size();
+    const size_t             snapshots_size_before_clean   = snapshots.size();
+    double                   longest_living_seconds        = 0.0;
+    unsigned                 longest_living_from_thread_id = 0;
     for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
     {
         auto snapshot_or_invalid = iter->lock();
@@ -80,10 +76,6 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
         }
         else
         {
-<<<<<<< HEAD
-            // Save valid snapshot.
-            valid_snapshots.emplace_back(snapshot_or_invalid);
-=======
             fiu_do_on(FailPoints::random_slow_page_storage_list_all_live_files, {
                 pcg64                     rng(randomSeed());
                 std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
@@ -96,7 +88,6 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
                 longest_living_from_thread_id = snapshot_or_invalid->t_id;
             }
             valid_snapshots.emplace_back(snapshot_or_invalid); // Save valid snapshot and release them without lock later
->>>>>>> 548b3a150... Fix deadlock on `removeExpiredSnapshots` (#2461)
             iter++;
         }
     }
@@ -109,9 +100,16 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
     const size_t num_invalid_snapshot_to_clean = snapshots_size_before_clean + 1 - valid_snapshots.size();
     if (num_invalid_snapshot_to_clean > 0)
     {
-        LOG_DEBUG(log,
-                  name << " gcApply remove " + DB::toString(snapshots_size_before_clean + 1 - valid_snapshots.size())
-                          + " invalid snapshots.");
+        CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_invalid_snapshot_to_clean);
+        std::stringstream ss;
+        ss << name << " gcApply remove " << num_invalid_snapshot_to_clean << " invalid snapshots, " << valid_snapshots.size()
+           << " snapshots left, longest lifetime " << DB::toString(longest_living_seconds, 3) << " seconds, created from thread_id "
+           << longest_living_from_thread_id;
+        constexpr double EXIST_STALE_SNAPSHOT = 60.0;
+        if (longest_living_seconds > EXIST_STALE_SNAPSHOT)
+            LOG_WARNING(log, ss.str());
+        else
+            LOG_DEBUG(log, ss.str());
     }
     // Iterate all snapshots to collect all PageFile in used.
     std::set<PageFileIdAndLevel> live_files;

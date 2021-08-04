@@ -38,6 +38,7 @@
     M(DictCacheRequests) \
     M(Revision) \
     M(PSMVCCNumSnapshots) \
+    M(PSMVCCSnapshotsList) \
     M(RWLockWaitingReaders) \
     M(RWLockWaitingWriters) \
     M(RWLockActiveReaders) \
