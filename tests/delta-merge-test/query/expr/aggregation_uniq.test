@@ -33,7 +33,7 @@
 => DBGInvoke __raft_insert_row(default, test, 4, 52, 'test3', 777, '222')
 => DBGInvoke __raft_insert_row(default, test, 4, 53, 'test3', 777, '111')
 
-=> DBGInvoke dag('select uniqRawRes(col_1, col_2) from default.test group by col_2')
+=> DBGInvoke dag('select uniqRawRes(col_1, col_2), col_2 from default.test group by col_2')
 ┌─count(col_1)─┬─col_2─┐
 │            2 │   666 │
 │            1 │   777 │
@@ -44,7 +44,7 @@
 │ 3                        │
 └──────────────────────────┘
 
-=> DBGInvoke dag('select uniqRawRes(col_2) from default.test group by col_1')
+=> DBGInvoke dag('select uniqRawRes(col_2), col_1 from default.test group by col_1')
 ┌─uniqRawRes(col_2)─┬─col_1─┐
 │ 1                 │ test3 │
 │ 1                 │ test1 │
@@ -52,7 +52,7 @@
 └───────────────────┴───────┘
 
 => DBGInvoke __raft_insert_row(default, test, 4, 54, 'test3', 777, NULL)
-=> DBGInvoke dag('select uniqRawRes(col_3) from default.test group by col_1')
+=> DBGInvoke dag('select uniqRawRes(col_3), col_1 from default.test group by col_1')
 ┌─uniqRawRes(col_3)─┬─col_1─┐
 │ 2                 │ test3 │
 │ 1                 │ test1 │
@@ -61,7 +61,7 @@
 
 => DBGInvoke __raft_insert_row(default, test, 4, 55, 'test3', 999, NULL)
 
-=> DBGInvoke dag('select uniqRawRes(col_2) from default.test group by col_3')
+=> DBGInvoke dag('select uniqRawRes(col_2), col_3 from default.test group by col_3')
 ┌─uniqRawRes(col_2)─┬─col_3─┐
 │ 2                 │ 222   │
 │ 2                 │ \N    │
@@ -71,7 +71,7 @@
 => DBGInvoke __raft_insert_row(default, test, 4, 56, 'test5', 999, NULL)
 => DBGInvoke __raft_insert_row(default, test, 4, 57, 'test5', 999, NULL)
 
-=> DBGInvoke dag('select uniqRawRes(col_1, col_2) from default.test group by col_3')
+=> DBGInvoke dag('select uniqRawRes(col_1, col_2), col_3 from default.test group by col_3')
 ┌─uniqRawRes(col_1, col_2)─┬─col_3─┐
 │ 2                        │ 222   │
 │ 3                        │ \N    │

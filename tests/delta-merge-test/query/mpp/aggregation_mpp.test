@@ -30,7 +30,7 @@
 => DBGInvoke __raft_insert_row(default, test, 6, 253, 'test4', 888)
 
 # shuffle agg
-=> DBGInvoke tidb_query('select count(col_1) from default.test group by col_2', 4,'mpp_query:true,mpp_partition_num:3')
+=> DBGInvoke tidb_query('select count(col_1), col_2 from default.test group by col_2', 4,'mpp_query:true,mpp_partition_num:3')
 ┌─exchange_receiver_0─┬─exchange_receiver_1─┐
 │                   6 │                 666 │
 │                   3 │                 777 │
