@@ -342,15 +342,15 @@ struct HashMethodSerialized
     HashMethodSerialized(const ColumnRawPtrs & key_columns_, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators_)
         : key_columns(key_columns_), keys_size(key_columns_.size()), collators(collators_) {}
 
-protected:
-    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
-
     ALWAYS_INLINE SerializedKeyHolder getKeyHolder(size_t row, Arena * pool, std::vector<String> & sort_key_containers) const
     {
         return SerializedKeyHolder{
             serializeKeysToPoolContiguous(row, keys_size, key_columns, collators, sort_key_containers, *pool),
             *pool};
     }
+
+protected:
+    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
 };
 
 /// For the case when there is one string key.
