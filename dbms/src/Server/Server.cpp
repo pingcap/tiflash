@@ -17,7 +17,7 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/setThreadName.h>
-#include <Core/SIMD.h>
+#include <common/SIMD.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
@@ -829,11 +829,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     UpdateMallocConfig(log);
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    loadBooleanConfig(log, DB::SIMDOption::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
+    loadBooleanConfig(log, SIMDOption::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
 #endif
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-    loadBooleanConfig(log, DB::SIMDOption::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
+    loadBooleanConfig(log, SIMDOption::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
 #endif
 
 #ifdef TIFLASH_ENABLE_ASIMD_SUPPORT

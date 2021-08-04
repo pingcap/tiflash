@@ -5,8 +5,6 @@
 #include <sys/auxv.h>
 #endif
 #endif
-namespace DB
-{
 namespace SIMDOption
 {
 #if defined(__x86_64__)
@@ -59,11 +57,11 @@ static inline bool SIMDRuntimeSupport(SIMDFeature feature)
 
 #elif defined(__aarch64__)
 
-#ifdef DBMS_ENABLE_ASIMD_SUPPORT
+#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
 extern bool ENABLE_ASIMD;
 #endif
 
-#ifdef DBMS_ENABLE_SVE_SUPPORT
+#ifdef TIFLASH_ENABLE_SVE_SUPPORT
 extern bool ENABLE_SVE;
 #endif
 
@@ -109,4 +107,3 @@ static inline bool SIMDRuntimeSupport(SIMDFeature feature)
 #endif
 
 }; // namespace SIMDOption
-} // namespace DB

@@ -1,6 +1,5 @@
-#include "SIMD.h"
-namespace DB
-{
+#include <common/SIMD.h>
+
 namespace SIMDOption
 {
 #ifdef __x86_64__
@@ -15,15 +14,14 @@ bool ENABLE_AVX512 = true;
 
 #elif defined(__aarch64__)
 
-#ifdef DBMS_ENABLE_ASIMD_SUPPORT
+#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
 bool ENABLE_ASIMD = false;
 #endif
 
-#ifdef DBMS_ENABLE_SVE_SUPPORT
+#ifdef TIFLASH_ENABLE_SVE_SUPPORT
 bool ENABLE_SVE = false;
 #endif
 
 
 #endif
 }; // namespace SIMDOption
-} // namespace DB

@@ -289,25 +289,3 @@ if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
             EXECUTABLE gtests_dbms
     )
 endif()
-
-# Region for specialized CPU flags tuning
-if (TIFLASH_ENABLE_AVX_SUPPORT)
-    # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
-    # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS "-mavx -mavx2")
-endif ()
-
-if (TIFLASH_ENABLE_AVX512_SUPPORT)
-    # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
-    # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS
-    #                             "-mavx512bw -mavx512lv -mavx512f -mavx512dq -mavx512_vnni -mavx512cd")
-endif ()
-
-if (TIFLASH_ENABLE_ASIMD_SUPPORT)
-    # https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
-    # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS "-march=armv8.6-a+simd")
-endif ()
-
-if (TIFLASH_ENABLE_SVE_SUPPORT)
-    # https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
-    # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS "-march=armv8.6-a+sve")
-endif ()
