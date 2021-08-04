@@ -17,6 +17,7 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/setThreadName.h>
+#include <Core/SIMD.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
@@ -131,6 +132,32 @@ void loadMiConfig(Logger * log)
 }
 #undef TRY_LOAD_CONF
 #endif
+
+namespace
+{
+void loadBooleanConfig(Logger * log, bool & target, const char * name)
+{
+    auto config = getenv(name);
+    if (config)
+    {
+        LOG_INFO(log, "Got environment variable " << name << " = " << config);
+        try
+        {
+            auto result = std::stoul(config);
+            if (result != 0 && result != 1)
+            {
+                LOG_ERROR(log, "Environment variable" << name << " = " << result << " is not valid");
+                return;
+            }
+            target = result;
+        }
+        catch (...)
+        {
+        }
+    }
+}
+} // namespace
+
 namespace CurrentMetrics
 {
 extern const Metric Revision;
@@ -419,9 +446,9 @@ private:
 };
 
 // We only need this task run once.
-void backgroundInitStores(Context & global_context, Logger * log)
+void initStores(Context & global_context, Logger * log, bool lazily_init_store)
 {
-    auto initStores = [&global_context, log]() {
+    auto do_init_stores = [&global_context, log]() {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
         int init_cnt = 0;
         int err_cnt = 0;
@@ -442,7 +469,16 @@ void backgroundInitStores(Context & global_context, Logger * log)
             "Storage inited finish. [total_count=" << storages.size() << "] [init_count=" << init_cnt << "] [error_count=" << err_cnt
                                                    << "]");
     };
-    std::thread(initStores).detach();
+    if (lazily_init_store)
+    {
+        LOG_INFO(log, "Lazily init store.");
+        std::thread(do_init_stores).detach();
+    }
+    else
+    {
+        LOG_INFO(log, "Not lazily init store.");
+        do_init_stores();
+    }
 }
 
 class Server::FlashGrpcServerHolder
@@ -790,6 +826,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #endif
 
     UpdateMallocConfig(log);
+
+#ifdef DBMS_ENABLE_AVX_SUPPORT
+    loadBooleanConfig(log, DB::SIMDOption::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
+#endif
+
+#ifdef DBMS_ENABLE_AVX512_SUPPORT
+    loadBooleanConfig(log, DB::SIMDOption::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
+#endif
+
+#ifdef DBMS_ENABLE_ASIMD_SUPPORT
+    loadBooleanConfig(log, DB::SIMDOption::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
+#endif
+
+#ifdef DBMS_ENABLE_SVE_SUPPORT
+    loadBooleanConfig(log, DB::SIMDOption::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
+#endif
 
     registerFunctions();
     registerAggregateFunctions();
@@ -1185,7 +1237,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Sync schemas done.");
 
-    backgroundInitStores(*global_context, log);
+    initStores(*global_context, log, storage_config.lazily_init_store);
 
     // After schema synced, set current database.
     global_context->setCurrentDatabase(default_database);

@@ -28,9 +28,10 @@ public:
     void finishWrite() override;
 
 private:
-    template <bool collect_execution_info>
+    template <bool for_last_response>
     void ScheduleEncodeTask();
     ThreadPool::Job getEncodeTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    template <bool for_last_response>
     ThreadPool::Job getEncodePartitionTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
     tipb::ExchangeType exchange_type;

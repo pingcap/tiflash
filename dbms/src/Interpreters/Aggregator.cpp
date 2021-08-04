@@ -23,6 +23,7 @@
 #include <Interpreters/Aggregator.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/MemoryTracker.h>
+#include <Common/ThreadFactory.h>
 #include <Common/typeid_cast.h>
 #include <common/demangle.h>
 
@@ -1175,7 +1176,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
                 [thread_id, &converter] { return converter(thread_id); });
 
             if (thread_pool)
-                thread_pool->schedule([thread_id, &tasks] { tasks[thread_id](); });
+                thread_pool->schedule(ThreadFactory().newJob([thread_id, &tasks] { tasks[thread_id](); }));
             else
                 tasks[thread_id]();
         }
@@ -1594,14 +1595,12 @@ private:
         if (max_scheduled_bucket_num >= NUM_BUCKETS)
             return;
 
-        parallel_merge_data->pool.schedule(std::bind(&MergingAndConvertingBlockInputStream::thread, this,
-            max_scheduled_bucket_num, current_memory_tracker));
+        parallel_merge_data->pool.schedule(
+            ThreadFactory(true, "MergingAggregtd").newJob([this]{ thread(max_scheduled_bucket_num); }));
     }
 
-    void thread(Int32 bucket_num, MemoryTracker * memory_tracker)
+    void thread(Int32 bucket_num)
     {
-        current_memory_tracker = memory_tracker;
-        setThreadName("MergingAggregtd");
         CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
 
         try
@@ -1964,10 +1963,8 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
 
         LOG_TRACE(log, "Merging partially aggregated two-level data.");
 
-        auto merge_bucket = [&bucket_to_blocks, &result, this](Int32 bucket, Arena * aggregates_pool, MemoryTracker * memory_tracker)
+        auto merge_bucket = [&bucket_to_blocks, &result, this](Int32 bucket, Arena * aggregates_pool)
         {
-            current_memory_tracker = memory_tracker;
-
             for (Block & block : bucket_to_blocks[bucket])
             {
                 if (isCancelled())
@@ -2000,10 +1997,10 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
             result.aggregates_pools.push_back(std::make_shared<Arena>());
             Arena * aggregates_pool = result.aggregates_pools.back().get();
 
-            auto task = std::bind(merge_bucket, bucket, aggregates_pool, current_memory_tracker);
+            auto task = std::bind(merge_bucket, bucket, aggregates_pool);
 
             if (thread_pool)
-                thread_pool->schedule(task);
+                thread_pool->schedule(ThreadFactory().newJob(task));
             else
                 task();
         }
