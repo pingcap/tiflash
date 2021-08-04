@@ -1126,7 +1126,7 @@ private:
         const ColumnPtr & input_column, const ColumnPtr & frac_column, MutableColumnPtr & result_column, ScaleType input_scale,
         ScaleType result_scale)
     {
-        if (castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256,
+        if (!castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256,
                 DataTypeInt8, DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64, DataTypeUInt64>(
                 input_type.get(), [&](const auto & input_type, bool) {
                     using InputDataType = std::decay_t<decltype(input_type)>;
@@ -1146,7 +1146,7 @@ private:
     void checkReturnTypeAndApply(const DataTypePtr & return_type, const DataTypePtr & frac_type, const ColumnPtr & input_column,
         const ColumnPtr & frac_column, MutableColumnPtr & result_column, ScaleType input_scale, ScaleType result_scale)
     {
-        if (castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256,
+        if (!castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256,
                 DataTypeInt8, DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64, DataTypeUInt64>(
                 return_type.get(), [&](const auto & return_type, bool) {
                     using ReturnDataType = std::decay_t<decltype(return_type)>;
@@ -1168,7 +1168,7 @@ private:
             return false;
         else
         {
-            if (castTypeToEither<DataTypeInt64, DataTypeUInt64>(frac_type.get(), [&](const auto & frac_type, bool) {
+            if (!castTypeToEither<DataTypeInt64, DataTypeUInt64>(frac_type.get(), [&](const auto & frac_type, bool) {
                     using FracDataType = std::decay_t<decltype(frac_type)>;
 
                     checkColumnsAndApply<InputType, ReturnType, typename FracDataType::FieldType>(
