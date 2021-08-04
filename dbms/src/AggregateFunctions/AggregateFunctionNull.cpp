@@ -3,6 +3,7 @@
 #include <AggregateFunctions/AggregateFunctionNothing.h>
 #include <AggregateFunctions/AggregateFunctionNull.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeTuple.h>
 
 #include <unordered_set>
 
@@ -92,6 +93,11 @@ public:
                 else
                     return std::make_shared<AggregateFunctionFirstRowNull<false, false>>(nested_function);
             }
+        }
+        if (nested_function && (nested_function->getName() == "groupArray" || nested_function->getName() == "groupUniqArray")&& String(arguments[0]->getFamilyName()) == "Tuple")
+        {
+            /// checkDataTypeTuple
+            return std::make_shared<AggregateFunctionNullVariadic<false>>(nested_function, typeid_cast<const DataTypeTuple *>(arguments[0].get())->getElements());
         }
 
         if (arguments.size() == 1)
