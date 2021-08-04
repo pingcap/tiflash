@@ -17,7 +17,7 @@ public:
         const std::string & file_name_,
         const EncryptionPath & encryption_path,
         bool create_new_encryption_info_ = true,
-        const WriteLimiterPtr & rate_limiter_ = nullptr,
+        const WriteLimiterPtr & write_limiter_ = nullptr,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         int flags = -1,
         mode_t mode = 0666,

@@ -19,12 +19,12 @@ namespace tests
 TEST(WriteLimiter_test, Rate)
 {
     srand((unsigned)time(NULL));
-    auto write = [](const WriteLimiterPtr & rate_limiter, UInt64 max_request_size) {
+    auto write = [](const WriteLimiterPtr & write_limiter, UInt64 max_request_size) {
         AtomicStopwatch watch;
         while (watch.elapsedSeconds() < 4)
         {
             auto size = rand() % max_request_size + 1;
-            rate_limiter->request(size);
+            write_limiter->request(size);
         }
     };
 
@@ -32,19 +32,19 @@ TEST(WriteLimiter_test, Rate)
     {
         UInt64 target = i * 1024 * 10;
         // refill ten times every second
-        auto rate_limiter = std::make_shared<WriteLimiter>(nullptr, target, LimiterType::UNKNOW, 100);
+        auto write_limiter = std::make_shared<WriteLimiter>(nullptr, target, LimiterType::UNKNOW, 100);
         AtomicStopwatch watch;
         std::vector<std::thread> threads;
         // create multiple threads to perform request command
         for (size_t num = 0; num < 10; num++)
         {
-            std::thread thread(write, std::ref(rate_limiter), target / 10);
+            std::thread thread(write, std::ref(write_limiter), target / 10);
             threads.push_back(std::move(thread));
         }
         for (auto & thread : threads)
             thread.join();
         auto elapsed = watch.elapsedSeconds();
-        auto actual_rate = rate_limiter->getTotalBytesThrough() / elapsed;
+        auto actual_rate = write_limiter->getTotalBytesThrough() / elapsed;
         // make sure that 0.8 * target <= actual_rate <= 1.25 * target
         // hint: the range [0.8, 1.25] is copied from rocksdb,
         // if tests fail, try to enlarge this range.

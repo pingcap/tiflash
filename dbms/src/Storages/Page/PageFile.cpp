@@ -466,7 +466,7 @@ const String & PageFile::Writer::parentPath() const
     return page_file.parent_path;
 }
 
-size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & rate_limiter)
+size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -485,7 +485,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Wr
 
 #ifndef NDEBUG
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf, bool enable_failpoint) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), rate_limiter, enable_failpoint);
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), write_limiter, enable_failpoint);
         if (sync_on_write)
             PageUtil::syncFile(file);
     };
@@ -493,7 +493,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Wr
     write_buf(meta_file, page_file.meta_file_pos, meta_buf, true);
 #else
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), rate_limiter);
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), write_limiter);
         if (sync_on_write)
             PageUtil::syncFile(file);
     };

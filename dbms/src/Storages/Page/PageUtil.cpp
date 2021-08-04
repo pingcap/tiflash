@@ -55,16 +55,16 @@ void syncFile(WritableFilePtr & file)
 
 #ifndef NDEBUG
 void writeFile(
-    WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & rate_limiter, bool enable_failpoint)
+    WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter, bool enable_failpoint)
 #else
-void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & rate_limiter)
+void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter)
 #endif
 {
     ProfileEvents::increment(ProfileEvents::PSMWriteCalls);
     ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
 
-    if (rate_limiter)
-        rate_limiter->request(to_write);
+    if (write_limiter)
+        write_limiter->request(to_write);
     size_t bytes_written = 0;
     while (bytes_written != to_write)
     {

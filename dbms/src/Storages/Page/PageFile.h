@@ -33,7 +33,7 @@ public:
         Writer(PageFile &, bool sync_on_write, bool create_new_file = true);
         ~Writer();
 
-        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & rate_limiter = nullptr);
+        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
         void                 tryCloseIdleFd(const Seconds & max_idle_time);
 
         const String &     parentPath() const;

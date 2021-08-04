@@ -102,20 +102,20 @@ bool StoragePool::gc(const Settings & /*settings*/, const Seconds & try_gc_perio
     }
 
     bool done_anything = false;
-    auto rate_limiter  = global_context.getWriteLimiter();
+    auto write_limiter  = global_context.getWriteLimiter();
     auto read_limiter  = global_context.getReadLimiter();
     // FIXME: The global_context.settings is mutable, we need a way to reload thses settings.
     // auto config = extractConfig(settings, StorageType::Meta);
     // meta_storage.reloadSettings(config);
-    done_anything |= meta_storage.gc(/*not_skip*/ false, rate_limiter, read_limiter);
+    done_anything |= meta_storage.gc(/*not_skip*/ false, write_limiter, read_limiter);
 
     // config = extractConfig(settings, StorageType::Data);
     // data_storage.reloadSettings(config);
-    done_anything |= data_storage.gc(/*not_skip*/ false, rate_limiter, read_limiter);
+    done_anything |= data_storage.gc(/*not_skip*/ false, write_limiter, read_limiter);
 
     // config = extractConfig(settings, StorageType::Log);
     // log_storage.reloadSettings(config);
-    done_anything |= log_storage.gc(/*not_skip*/ false, rate_limiter, read_limiter);
+    done_anything |= log_storage.gc(/*not_skip*/ false, write_limiter, read_limiter);
 
     return done_anything;
 }

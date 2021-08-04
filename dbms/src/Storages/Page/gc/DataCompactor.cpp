@@ -15,7 +15,7 @@ extern const char force_set_page_data_compact_batch[];
 } // namespace FailPoints
 
 template <typename SnapshotPtr>
-DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const WriteLimiterPtr & rate_limiter_,
+DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const WriteLimiterPtr & write_limiter_,
                                           const ReadLimiterPtr & read_limiter_)
     : storage_name(storage.storage_name),
       delegator(storage.delegator),
@@ -23,7 +23,7 @@ DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStora
       config(std::move(gc_config)),
       log(storage.log),
       page_file_log(storage.page_file_log),
-      rate_limiter(rate_limiter_),
+      write_limiter(write_limiter_),
       read_limiter(read_limiter_)
 {
 }
@@ -404,7 +404,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
                                   page.data.size(),
                                   entry.field_offsets);
                 }
-                return gc_file_writer->write(wb, gc_file_edit, rate_limiter);
+                return gc_file_writer->write(wb, gc_file_edit, write_limiter);
             };
 
 #ifndef NDEBUG
