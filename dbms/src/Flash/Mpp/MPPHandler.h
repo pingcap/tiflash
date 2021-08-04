@@ -5,6 +5,8 @@
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Mpp/MPPTunnel.h>
+#include <Flash/Mpp/TaskStatus.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
@@ -23,8 +25,6 @@
 namespace DB
 {
 
-mpp::MPPDataPacket getPacketWithError(String reason);
-
 // Identify a mpp task.
 struct MPPTaskId
 {
@@ -34,65 +34,6 @@ struct MPPTaskId
     String toString() const { return "[" + std::to_string(start_ts) + "," + std::to_string(task_id) + "]"; }
 };
 
-
-class MPPTask;
-class MPPTunnel : private boost::noncopyable
-{
-public:
-    MPPTunnel(
-        const mpp::TaskMeta & receiver_meta_,
-        const mpp::TaskMeta & sender_meta_,
-        const std::chrono::seconds timeout_,
-        const std::shared_ptr<MPPTask> & current_task_);
-
-    ~MPPTunnel();
-
-    const String & id() const { return tunnel_id; }
-
-    bool isTaskCancelled();
-
-    // write a single packet to the tunnel, it will block if tunnel is not ready.
-    void write(const mpp::MPPDataPacket & data, bool close_after_write = false);
-
-    // finish the writing.
-    void writeDone();
-
-    /// close() finishes the tunnel, if the tunnel is connected already, it will
-    /// write the error message to the tunnel, otherwise it just close the tunnel
-    void close(const String & reason);
-
-    // a MPPConn request has arrived. it will build connection by this tunnel;
-    void connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_);
-
-    // wait until all the data has been transferred.
-    void waitForFinish();
-private:
-    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
-
-    // must under mu's protection
-    void finishWithLock();
-
-    std::mutex mu;
-    std::condition_variable cv_for_connected;
-    std::condition_variable cv_for_finished;
-
-    bool connected; // if the exchange in has connected this tunnel.
-
-    bool finished; // if the tunnel has finished its connection.
-
-    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
-
-    std::chrono::seconds timeout;
-
-    std::weak_ptr<MPPTask> current_task;
-
-    // tunnel id is in the format like "tunnel[sender]+[receiver]"
-    String tunnel_id;
-
-    Logger * log;
-};
-
-using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;
 
 struct MPPTunnelSet
 {
@@ -165,14 +106,6 @@ struct MPPTaskProgress
     UInt64 epoch_when_found_no_progress = 0;
     bool found_no_progress = false;
     bool isTaskHanging(const Context & context);
-};
-
-enum TaskStatus
-{
-    INITIALIZING,
-    RUNNING,
-    FINISHED,
-    CANCELLED,
 };
 
 struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
