@@ -126,11 +126,11 @@ struct MPPTunnel
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
     {
+        std::lock_guard<std::mutex> lk(mu);
         if (connected)
         {
             throw Exception("has connected");
         }
-        std::lock_guard<std::mutex> lk(mu);
         LOG_DEBUG(log, "ready to connect");
         connected = true;
         writer = writer_;
