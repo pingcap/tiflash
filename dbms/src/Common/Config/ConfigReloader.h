@@ -1,10 +1,9 @@
 #pragma once
 
-#include <Common/ZooKeeper/Common.h>
-#include <Common/ZooKeeper/ZooKeeperNodeCache.h>
 #include <time.h>
 
 #include <condition_variable>
+#include <functional>
 #include <list>
 #include <mutex>
 #include <set>

@@ -48,7 +48,7 @@ struct QuantileExactWeighted
     void merge(const QuantileExactWeighted & rhs)
     {
         for (const auto & pair : rhs.map)
-            map[pair.first] += pair.second;
+            map[pair.getKey()] += pair.getMapped();
     }
 
     void serialize(WriteBuffer & buf) const
@@ -83,8 +83,8 @@ struct QuantileExactWeighted
         UInt64 sum_weight = 0;
         for (const auto & pair : map)
         {
-            sum_weight += pair.second;
-            array[i] = pair;
+            sum_weight += pair.getMapped();
+            array[i] = pair.getValue();
             ++i;
         }
 
@@ -133,8 +133,8 @@ struct QuantileExactWeighted
         UInt64 sum_weight = 0;
         for (const auto & pair : map)
         {
-            sum_weight += pair.second;
-            array[i] = pair;
+            sum_weight += pair.getMapped();
+            array[i] = pair.getValue();
             ++i;
         }
 

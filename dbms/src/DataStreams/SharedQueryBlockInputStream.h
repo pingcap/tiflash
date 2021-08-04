@@ -3,6 +3,7 @@
 #include <thread>
 
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/ThreadFactory.h>
 #include <common/logger_useful.h>
 #include <Common/typeid_cast.h>
 
@@ -56,7 +57,7 @@ public:
         read_prefixed = true;
 
         /// Start reading thread.
-        thread = std::thread(&SharedQueryBlockInputStream::fetchBlocks, this);
+        thread = ThreadFactory().newThread([this] { fetchBlocks(); });
     }
 
     void readSuffix() override

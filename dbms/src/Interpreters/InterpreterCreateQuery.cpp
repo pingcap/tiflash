@@ -24,7 +24,6 @@
 #include <Storages/StorageLog.h>
 
 #include <Interpreters/Context.h>
-#include <Interpreters/DDLWorker.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -39,7 +38,6 @@
 #include <Databases/IDatabase.h>
 
 #include <Common/FailPoint.h>
-#include <Common/ZooKeeper/ZooKeeper.h>
 
 
 namespace DB
@@ -69,7 +67,7 @@ InterpreterCreateQuery::InterpreterCreateQuery(const ASTPtr & query_ptr_, Contex
 BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 {
     if (!create.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, context, {create.database});
+        throw Exception("Should not run into `executeDDLQueryOnCluster`");
 
     String database_name = create.database;
 
@@ -458,11 +456,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 {
     if (!create.cluster.empty())
     {
-        NameSet databases{create.database};
-        if (!create.to_table.empty())
-            databases.emplace(create.to_database);
-
-        return executeDDLQueryOnCluster(query_ptr, context, databases);
+        throw Exception("Should not run into `executeDDLQueryOnCluster`");
     }
 
     String path = context.getPath();

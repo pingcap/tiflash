@@ -1,12 +1,13 @@
 #pragma once
 #include <Storages/Page/PageStorage.h>
-#include <Interpreters/Context.h>
+
 #include <boost/core/noncopyable.hpp>
 #include <map>
 #include <tuple>
 
 namespace DB
 {
+using WritingFilesSnapshot = PageStorage::WritingFilesSnapshot;
 
 template <typename SnapshotPtr>
 class DataCompactor : private boost::noncopyable
@@ -27,7 +28,7 @@ public:
     };
 
 public:
-    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const Context& global_ctx);
+    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const RateLimiterPtr & rate_limiter_);
 
     /**
      * Take a snapshot from PageStorage and try to migrate data if some PageFiles used rate is low.
@@ -38,12 +39,12 @@ public:
      * WriteBatches. No matter we merge valid page(s) from that WriteBatch or not.
      *
      * Note that all types of PageFile in `page_files` should be `Formal`.
-     * Those PageFile whose id in `writing_file_ids`, theirs data will not be migrate.
-     *
+     * Those PageFile whose id in `writing_files`, theirs data will not be migrate.
+     * 
      * Return DataCompactor::Result and entries edit should be applied to PageStorage's entries.
      */
     std::tuple<Result, PageEntriesEdit>
-    tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapshot, const std::set<PageFileIdAndLevel> & writing_file_ids);
+    tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapshot, const WritingFilesSnapshot & writing_files);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -58,15 +59,16 @@ private:
      */
     static ValidPages collectValidPagesInPageFile(const SnapshotPtr & snapshot);
 
-    std::tuple<PageFileSet, size_t, size_t> selectCandidateFiles( // keep readable indent
-        const PageFileSet &                  page_files,
-        const ValidPages &                   files_valid_pages,
-        const std::set<PageFileIdAndLevel> & writing_file_ids) const;
+    std::tuple<PageFileSet, PageFileSet, size_t, size_t> //
+    selectCandidateFiles(const PageFileSet &          page_files,
+                         const ValidPages &           files_valid_pages,
+                         const WritingFilesSnapshot & writing_files) const;
 
     std::tuple<PageEntriesEdit, size_t> //
     migratePages(const SnapshotPtr & snapshot,
                  const ValidPages &  files_valid_pages,
                  const PageFileSet & candidates,
+                 const PageFileSet & files_without_valid_pages,
                  const size_t        migrate_page_count) const;
 
     std::tuple<PageEntriesEdit, size_t> //
@@ -95,7 +97,7 @@ private:
     Poco::Logger * log;
     Poco::Logger * page_file_log;
 
-    const Context& global_context;
+    const RateLimiterPtr rate_limiter;
 };
 
 } // namespace DB
