@@ -115,7 +115,6 @@ public:
 
     std::string getDebugString(std::stringstream & ss) const;
     RegionID id() const;
-    pingcap::kv::RegionVerID verID() const;
     ImutRegionRangePtr getRange() const;
 
     std::string toString(bool dump_status = true) const;
@@ -144,8 +143,8 @@ public:
 
     ReadIndexResult learnerRead(UInt64 start_ts);
 
-    /// If server is terminating, return true (read logic should throw NOT_FOUND exception and let upper layer retry other store).
-    TerminateWaitIndex waitIndex(UInt64 index, const std::atomic_bool & terminated);
+    // Return time cost(seconds) about wait-index. If peer-state is NOT Normal or store-status is Terminated, wait-index process will be stopped as well.
+    double waitIndex(UInt64 index, const TMTContext & tmt);
 
     UInt64 appliedIndex() const;
 
@@ -212,7 +211,7 @@ private:
 
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
-    mutable std::atomic<Timepoint> last_compact_log_time = Timepoint::min();
+    mutable std::atomic<Timepoint> last_compact_log_time{Timepoint::min()};
     mutable std::atomic<size_t> approx_mem_cache_rows{0};
     mutable std::atomic<size_t> approx_mem_cache_bytes{0};
 };

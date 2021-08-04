@@ -458,7 +458,7 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
 
 void literalToPB(tipb::Expr * expr, const Field & value, uint32_t collator_id)
 {
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     switch (value.getType())
     {
         case Field::Types::Which::Null:
@@ -527,7 +527,7 @@ void literalToPB(tipb::Expr * expr, const Field & value, uint32_t collator_id)
         default:
             throw Exception(String("Unsupported literal type: ") + value.getTypeName(), ErrorCodes::LOGICAL_ERROR);
     }
-    expr->set_val(ss.str());
+    expr->set_val(ss.releaseStr());
 }
 
 String getFunctionNameForConstantFolding(tipb::Expr * expr)
@@ -616,33 +616,34 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
             throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
         expr->set_tp(tipb::ColumnRef);
         *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
-        std::stringstream ss;
+        expr->mutable_field_type()->set_collate(collator_id);
+        WriteBufferFromOwnString ss;
         encodeDAGInt64(ft - input.begin(), ss);
-        auto s_val = ss.str();
-        expr->set_val(s_val);
+        expr->set_val(ss.releaseStr());
     }
     else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
     {
-        if (AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
+        /// aggregation function is handled in Aggregation, so just treated as a column
+        auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
+            auto column_name = splitQualifiedName(func->getColumnName());
+            auto field_name = splitQualifiedName(field.first);
+            if (column_name.first.empty())
+                return field_name.second == column_name.second;
+            else
+                return field_name.first == column_name.first && field_name.second == column_name.second;
+        });
+        if (ft != input.end())
         {
-            /// aggregation function is handled in Aggregation, so just treated as a column
-            auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
-                auto column_name = splitQualifiedName(func->getColumnName());
-                auto field_name = splitQualifiedName(field.first);
-                if (column_name.first.empty())
-                    return field_name.second == column_name.second;
-                else
-                    return field_name.first == column_name.first && field_name.second == column_name.second;
-            });
-            if (ft == input.end())
-                throw Exception("No such column " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
             expr->set_tp(tipb::ColumnRef);
             *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
-            std::stringstream ss;
+            WriteBufferFromOwnString ss;
             encodeDAGInt64(ft - input.begin(), ss);
-            auto s_val = ss.str();
-            expr->set_val(s_val);
+            expr->set_val(ss.releaseStr());
             return;
+        }
+        if (AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
+        {
+            throw Exception("No such column " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
         }
         String func_name_lowercase = Poco::toLower(func->name);
         // TODO: Support more functions.
@@ -836,6 +837,19 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
         else
         {
             /// check function
+            auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
+                auto column_name = splitQualifiedName(func->getColumnName());
+                auto field_name = splitQualifiedName(field.first);
+                if (column_name.first.empty())
+                    return field_name.second == column_name.second;
+                else
+                    return field_name.first == column_name.first && field_name.second == column_name.second;
+            });
+            if (ft != input.end())
+            {
+                used_columns.emplace(func->getColumnName());
+                return;
+            }
             for (const auto & child_ast : func->arguments->children)
             {
                 collectUsedColumnsFromExpr(input, child_ast, used_columns);
@@ -928,9 +942,13 @@ struct ExchangeSender : Executor
         {
             auto * expr = exchange_sender->add_partition_keys();
             expr->set_tp(tipb::ColumnRef);
-            std::stringstream ss;
+            WriteBufferFromOwnString ss;
             encodeDAGInt64(i, ss);
-            expr->set_val(ss.str());
+            expr->set_val(ss.releaseStr());
+            auto tipb_type = TiDB::columnInfoToFieldType(output_schema[i].second);
+            *expr->mutable_field_type() = tipb_type;
+            tipb_type.set_collate(collator_id);
+            *exchange_sender->add_types() = tipb_type;
         }
         for (auto task_id : mpp_info.sender_target_task_ids)
         {
@@ -1123,6 +1141,7 @@ struct Aggregation : public Executor
     std::vector<ASTPtr> agg_exprs;
     std::vector<ASTPtr> gby_exprs;
     bool is_final_mode;
+    DAGSchema output_schema_for_partial_agg;
     Aggregation(size_t & index_, const DAGSchema & output_schema_, bool has_uniq_raw_res_, bool need_append_project_,
         std::vector<ASTPtr> && agg_exprs_, std::vector<ASTPtr> && gby_exprs_, bool is_final_mode_)
         : Executor(index_, "aggregation_" + std::to_string(index_), output_schema_),
@@ -1209,6 +1228,8 @@ struct Aggregation : public Executor
     }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
+        /// output schema for partial agg is the original agg's output schema
+        output_schema_for_partial_agg = output_schema;
         output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(),
                                 [&](const auto & field) { return used_columns.count(field.first) == 0; }),
             output_schema.end());
@@ -1247,7 +1268,7 @@ struct Aggregation : public Executor
         if (gby_exprs.size() == 0)
             throw Exception("agg without group by columns not supported in mpp query");
         std::shared_ptr<Aggregation> partial_agg = std::make_shared<Aggregation>(
-            executor_index, output_schema, has_uniq_raw_res, false, std::move(agg_exprs), std::move(gby_exprs), false);
+            executor_index, output_schema_for_partial_agg, has_uniq_raw_res, false, std::move(agg_exprs), std::move(gby_exprs), false);
         partial_agg->children.push_back(children[0]);
         std::vector<size_t> partition_keys;
         size_t agg_func_num = partial_agg->agg_exprs.size();
@@ -1256,10 +1277,11 @@ struct Aggregation : public Executor
             partition_keys.push_back(i + agg_func_num);
         }
         std::shared_ptr<ExchangeSender> exchange_sender
-            = std::make_shared<ExchangeSender>(executor_index, output_schema, tipb::Hash, partition_keys);
+            = std::make_shared<ExchangeSender>(executor_index, output_schema_for_partial_agg, tipb::Hash, partition_keys);
         exchange_sender->children.push_back(partial_agg);
 
-        std::shared_ptr<ExchangeReceiver> exchange_receiver = std::make_shared<ExchangeReceiver>(executor_index, output_schema);
+        std::shared_ptr<ExchangeReceiver> exchange_receiver
+            = std::make_shared<ExchangeReceiver>(executor_index, output_schema_for_partial_agg);
         exchange_map[exchange_receiver->name] = std::make_pair(exchange_receiver, exchange_sender);
         /// re-construct agg_exprs and gby_exprs in final_agg
         for (size_t i = 0; i < partial_agg->agg_exprs.size(); i++)
@@ -1270,12 +1292,12 @@ struct Aggregation : public Executor
             if (agg_func->name == "count")
                 update_agg_func->name = "sum";
             update_agg_func->arguments->children.clear();
-            update_agg_func->arguments->children.push_back(std::make_shared<ASTIdentifier>(output_schema[i].first));
+            update_agg_func->arguments->children.push_back(std::make_shared<ASTIdentifier>(output_schema_for_partial_agg[i].first));
             agg_exprs.push_back(update_agg_expr);
         }
         for (size_t i = 0; i < partial_agg->gby_exprs.size(); i++)
         {
-            gby_exprs.push_back(std::make_shared<ASTIdentifier>(output_schema[agg_func_num + i].first));
+            gby_exprs.push_back(std::make_shared<ASTIdentifier>(output_schema_for_partial_agg[agg_func_num + i].first));
         }
         children[0] = exchange_receiver;
     }
@@ -1303,10 +1325,9 @@ struct Project : public Executor
                     tipb::Expr * expr = proj->add_exprs();
                     expr->set_tp(tipb::ColumnRef);
                     *(expr->mutable_field_type()) = columnInfoToFieldType(input_schema[i].second);
-                    std::stringstream ss;
+                    WriteBufferFromOwnString ss;
                     encodeDAGInt64(i, ss);
-                    auto s_val = ss.str();
-                    expr->set_val(s_val);
+                    expr->set_val(ss.releaseStr());
                 }
                 continue;
             }
@@ -1437,9 +1458,9 @@ struct Join : Executor
                 tipb_type.set_collate(collator_id);
 
                 tipb_key->set_tp(tipb::ColumnRef);
-                std::stringstream ss;
+                WriteBufferFromOwnString ss;
                 encodeDAGInt64(index, ss);
-                tipb_key->set_val(ss.str());
+                tipb_key->set_val(ss.releaseStr());
                 *tipb_key->mutable_field_type() = tipb_type;
 
                 *tipb_field_type = tipb_type;
@@ -1862,16 +1883,17 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
         else
         {
             exprs.push_back(expr);
+            auto ft = std::find_if(input->output_schema.begin(), input->output_schema.end(),
+                [&](const auto & field) { return field.first == expr->getColumnName(); });
+            if (ft != input->output_schema.end())
+            {
+                output_schema.emplace_back(ft->first, ft->second);
+                continue;
+            }
             const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
             if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
             {
-                auto ft = std::find_if(input->output_schema.begin(), input->output_schema.end(),
-                    [&](const auto & field) { return field.first == func->getColumnName(); });
-                if (ft == input->output_schema.end())
-                    throw Exception("No such agg " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
-                // todo need to use the subquery alias to reconstruct the field
-                //  name if subquery is supported
-                output_schema.emplace_back(ft->first, ft->second);
+                throw Exception("No such agg " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
             }
             else
             {
@@ -2265,7 +2287,8 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
                 has_uniq_raw_res = true;
         }
 
-        if (dynamic_cast<mock::Aggregation *>(root_executor.get())->need_append_project)
+        auto * agg = dynamic_cast<mock::Aggregation *>(root_executor.get());
+        if (agg->need_append_project || ast_query.select_expression_list->children.size() != agg->agg_exprs.size() + agg->gby_exprs.size())
         {
             /// Project if needed
             root_executor = compileProject(root_executor, executor_index, ast_query.select_expression_list);
@@ -2308,10 +2331,11 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
     static Logger * log = &Logger::get("MockDAG");
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     tipb::SelectResponse dag_response;
-    std::unordered_map<RegionVerID, RegionInfo> regions;
-    RegionVerID region_ver_id(region_id, region_conf_version, region_version);
-    regions.emplace(region_ver_id, RegionInfo(region_ver_id, std::move(key_ranges), nullptr));
-    DAGDriver driver(context, dag_request, regions, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
+    RegionInfoMap regions;
+    RegionInfoList retry_regions;
+
+    regions.emplace(region_id, RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
+    DAGDriver driver(context, dag_request, regions, retry_regions, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
     driver.execute();
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
     return dag_response;

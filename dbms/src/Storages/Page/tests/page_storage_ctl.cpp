@@ -9,9 +9,20 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/gc/DataCompactor.h>
 #include <Storages/PathPool.h>
+#include <TestUtils/MockDiskDelegator.h>
 
 
+/* some exported global vars */
 DB::WriteBatch::SequenceID debugging_recover_stop_sequence = 0;
+namespace DB
+{
+#if __APPLE__ && __clang__
+__thread bool is_background_thread = false;
+#else
+thread_local bool is_background_thread = false;
+#endif
+} // namespace DB
+/* some exported global vars */
 
 void Usage(const char * prog)
 {
@@ -31,35 +42,6 @@ Usage: %s <path> <mode>
             prog,
             prog);
 }
-
-// TODO: support multi-disk
-class MockDiskDelegator : public DB::PSDiskDelegator
-{
-public:
-    MockDiskDelegator(DB::String path_) : path(std::move(path_)) {}
-
-    size_t      numPaths() const { return 1; }
-    DB::String  defaultPath() const { return path; }
-    DB::String  getPageFilePath(const DB::PageFileIdAndLevel & /*id_lvl*/) const { return path; }
-    void        removePageFile(const DB::PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/) {}
-    DB::Strings listPaths() const
-    {
-        DB::Strings paths;
-        paths.emplace_back(path);
-        return paths;
-    }
-    DB::String choosePath(const DB::PageFileIdAndLevel & /*id_lvl*/) { return path; }
-    size_t     addPageFileUsedSize(const DB::PageFileIdAndLevel & /*id_lvl*/,
-                                   size_t /*size_to_add*/,
-                                   const DB::String & /*pf_parent_path*/,
-                                   bool /*need_insert_location*/)
-    {
-        return 0;
-    }
-
-private:
-    std::string path;
-};
 
 void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
 {
@@ -165,7 +147,7 @@ try
     }
     DB::KeyManagerPtr      key_manager   = std::make_shared<DB::MockKeyManager>(false);
     DB::FileProviderPtr    file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
-    DB::PSDiskDelegatorPtr delegator     = std::make_shared<MockDiskDelegator>(path);
+    DB::PSDiskDelegatorPtr delegator     = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
 
     // Do not remove any files.
     DB::PageStorage::ListPageFilesOption options;
@@ -244,7 +226,7 @@ void dump_all_entries(DB::PageFileSet & page_files, int32_t mode)
         DB::PageEntriesEdit  edit;
         DB::PageIdAndEntries id_and_caches;
 
-        auto reader = const_cast<DB::PageFile &>(page_file).createMetaMergingReader(/*meta_file_buffer_size=*/DBMS_DEFAULT_META_READER_BUFFER_SIZE);
+        auto reader = DB::PageFile::MetaMergingReader::createFrom(const_cast<DB::PageFile &>(page_file), /*meta_file_buffer_size=*/DBMS_DEFAULT_META_READER_BUFFER_SIZE);
 
         while (reader->hasNext())
         {
@@ -309,7 +291,7 @@ void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & sto
 
     DB::DataCompactor<DB::PageStorage::SnapshotPtr>::ValidPages file_valid_pages;
     {
-        DB::DataCompactor<DB::PageStorage::SnapshotPtr> compactor(storage, config);
+        DB::DataCompactor<DB::PageStorage::SnapshotPtr> compactor(storage, config, nullptr);
         file_valid_pages = compactor.collectValidPagesInPageFile(snapshot);
     }
 

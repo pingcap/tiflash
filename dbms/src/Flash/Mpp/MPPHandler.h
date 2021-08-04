@@ -23,6 +23,8 @@
 namespace DB
 {
 
+mpp::MPPDataPacket getPacketWithError(String reason);
+
 // Identify a mpp task.
 struct MPPTaskId
 {
@@ -33,6 +35,7 @@ struct MPPTaskId
 };
 
 
+struct MPPTask;
 struct MPPTunnel
 {
     std::mutex mu;
@@ -47,15 +50,19 @@ struct MPPTunnel
 
     std::chrono::seconds timeout;
 
+    std::weak_ptr<MPPTask> current_task;
+
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
     Logger * log;
 
-    MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_, const std::chrono::seconds timeout_)
+    MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_, const std::chrono::seconds timeout_,
+        std::shared_ptr<MPPTask> current_task_)
         : connected(false),
           finished(false),
           timeout(timeout_),
+          current_task(current_task_),
           tunnel_id("tunnel" + std::to_string(sender_meta_.task_id()) + "+" + std::to_string(receiver_meta_.task_id())),
           log(&Logger::get(tunnel_id))
     {}
@@ -73,6 +80,9 @@ struct MPPTunnel
         }
     }
 
+    bool isTaskCancelled();
+
+    void waitUntilConnect(std::unique_lock<std::mutex> & lk);
     // write a single packet to the tunnel, it will block if tunnel is not ready.
     // TODO: consider to hold a buffer
     void write(const mpp::MPPDataPacket & data, bool close_after_write = false)
@@ -81,20 +91,11 @@ struct MPPTunnel
         LOG_TRACE(log, "ready to write");
         std::unique_lock<std::mutex> lk(mu);
 
-        if (timeout.count() > 0)
-        {
-            if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
-            {
-                throw Exception(tunnel_id + " is timeout");
-            }
-        }
-        else
-        {
-            cv_for_connected.wait(lk, [&]() { return connected; });
-        }
+        waitUntilConnect(lk);
         if (finished)
             throw Exception("write to tunnel which is already closed.");
-        writer->Write(data);
+        if (!writer->Write(data))
+            throw Exception("Failed to write data");
         if (close_after_write)
         {
             finished = true;
@@ -113,17 +114,7 @@ struct MPPTunnel
         if (finished)
             throw Exception("has finished");
         /// make sure to finish the tunnel after it is connected
-        if (timeout.count() > 0)
-        {
-            if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
-            {
-                throw Exception(tunnel_id + " is timeout");
-            }
-        }
-        else
-        {
-            cv_for_connected.wait(lk, [&]() { return connected; });
-        }
+        waitUntilConnect(lk);
         finished = true;
         cv_for_finished.notify_all();
     }
@@ -186,13 +177,15 @@ struct MPPTunnelSet
     void write(tipb::SelectResponse & response)
     {
         mpp::MPPDataPacket packet;
-        response.SerializeToString(packet.mutable_data());
+        if (!response.SerializeToString(packet.mutable_data()))
+            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
         tunnels[0]->write(packet);
 
         if (tunnels.size() > 1)
         {
             clearExecutionSummaries(response);
-            response.SerializeToString(packet.mutable_data());
+            if (!response.SerializeToString(packet.mutable_data()))
+                throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
             for (size_t i = 1; i < tunnels.size(); i++)
             {
                 tunnels[i]->write(packet);
@@ -208,7 +201,8 @@ struct MPPTunnelSet
             clearExecutionSummaries(response);
         }
         mpp::MPPDataPacket packet;
-        response.SerializeToString(packet.mutable_data());
+        if (!response.SerializeToString(packet.mutable_data()))
+            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
         tunnels[partition_id]->write(packet);
     }
 
@@ -238,12 +232,14 @@ enum TaskStatus
 
 struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
-    /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
-    BlockIO io;
     Context context;
 
     std::unique_ptr<tipb::DAGRequest> dag_req;
     std::unique_ptr<DAGContext> dag_context;
+
+    /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
+    /// BlockIO contains some information stored in Context and DAGContext, so need deconstruct it before Context and DAGContext
+    BlockIO io;
     MemoryTracker * memory_tracker = nullptr;
 
     MPPTaskId id;
@@ -313,6 +309,8 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
     {
+        if (status == CANCELLED)
+            throw Exception("the tunnel " + tunnel->tunnel_id + " can not been registered, because the task is cancelled");
         std::unique_lock<std::mutex> lk(tunnel_mutex);
         if (tunnel_map.find(id) != tunnel_map.end())
         {
@@ -322,16 +320,28 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         cv.notify_all();
     }
 
-    MPPTunnelPtr getTunnelWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout)
+    MPPTunnelPtr getTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout, String & err_msg)
     {
-        MPPTaskId id{meta.start_ts(), meta.task_id()};
+        MPPTaskId id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
         std::map<MPPTaskId, MPPTunnelPtr>::iterator it;
+        bool cancelled = false;
         std::unique_lock<std::mutex> lk(tunnel_mutex);
         auto ret = cv.wait_for(lk, timeout, [&] {
             it = tunnel_map.find(id);
+            if (status == CANCELLED)
+            {
+                cancelled = true;
+                return true;
+            }
             return it != tunnel_map.end();
         });
-        return ret ? it->second : nullptr;
+        if (cancelled)
+            err_msg = "can't find tunnel ( " + toString(request->sender_meta().task_id()) + " + "
+                + toString(request->receiver_meta().task_id()) + " because the task is cancelled";
+        if (!ret)
+            err_msg = "can't find tunnel ( " + toString(request->sender_meta().task_id()) + " + "
+                + toString(request->receiver_meta().task_id()) + " ) within " + toString(timeout.count()) + " s";
+        return (ret && !cancelled) ? it->second : nullptr;
     }
     ~MPPTask()
     {

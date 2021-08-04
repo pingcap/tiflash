@@ -24,6 +24,7 @@ namespace FailPoints
 {
 extern const char pause_before_apply_raft_cmd[];
 extern const char pause_before_apply_raft_snapshot[];
+extern const char force_set_safepoint_when_decode_block[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -173,7 +174,6 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     const std::unordered_set<UInt64> * bypass_lock_ts,
     RegionVersion region_version,
     RegionVersion conf_version,
-    std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range,
     bool resolve_locks,
     bool need_data_value)
 {
@@ -204,8 +204,6 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
                 throw Exception("Should not happen, region not belong to table: table id in region is " + std::to_string(mapped_table_id)
                         + ", expected table id is " + std::to_string(table_id),
                     ErrorCodes::LOGICAL_ERROR);
-
-            range = meta_snap.range->rawKeys();
         }
 
         /// Deal with locks.
@@ -313,7 +311,6 @@ RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::Tab
     bool resolve_locks,
     Timestamp start_ts,
     const std::unordered_set<UInt64> * bypass_lock_ts,
-    std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range,
     RegionScanFilterPtr scan_filter)
 {
     if (!region)
@@ -322,7 +319,7 @@ RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::Tab
     // Tiny optimization for queries that need only handle, tso, delmark.
     bool need_value = column_names_to_read.size() != 3;
     auto region_data_lock = resolveLocksAndReadRegionData(
-        table_info.id, region, start_ts, bypass_lock_ts, region_version, conf_version, range, resolve_locks, need_value);
+        table_info.id, region, start_ts, bypass_lock_ts, region_version, conf_version, resolve_locks, need_value);
 
     return std::visit(variant_op::overloaded{
                           [&](RegionDataReadInfoList & data_list_read) -> ReadBlockByRegionRes {
@@ -344,7 +341,7 @@ RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::Tab
                           },
                           [&](LockInfoPtr & lock_value) -> ReadBlockByRegionRes {
                               assert(lock_value);
-                              throw LockException(region->verID(), std::move(lock_value));
+                              throw LockException(region->id(), std::move(lock_value));
                           },
                           [](RegionException::RegionReadStatus & s) -> ReadBlockByRegionRes { return s; },
                       },
@@ -358,7 +355,6 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
     const std::unordered_set<UInt64> * bypass_lock_ts,
     RegionVersion region_version,
     RegionVersion conf_version,
-    std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range,
     Logger * log)
 {
     auto region_data_lock = resolveLocksAndReadRegionData(table_id,
@@ -367,7 +363,6 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
         bypass_lock_ts,
         region_version,
         conf_version,
-        range,
         /* resolve_locks */ true,
         /* need_data_value */ true);
 
@@ -598,6 +593,8 @@ Block GenRegionBlockDatawithSchema(const RegionPtr & region,
 {
     // In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
     // If some rows were updated and add tiflash replica, tiflash store may receive region snapshot with unmatched data in write & default cf sst files.
+    fiu_do_on(FailPoints::force_set_safepoint_when_decode_block,
+        { gc_safepoint = 10000000; }); // Mock a GC safepoint for testing compaction filter
     region->tryCompactionFilter(gc_safepoint);
 
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;

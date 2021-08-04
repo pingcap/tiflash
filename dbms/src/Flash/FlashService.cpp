@@ -141,7 +141,8 @@ grpc::Status FlashService::Coprocessor(
     return mpp_handler.execute(context, response);
 }
 
-::grpc::Status FlashService::IsAlive(::grpc::ServerContext * grpc_context [[maybe_unused]], const ::mpp::IsAliveRequest * request [[maybe_unused]], ::mpp::IsAliveResponse * response [[maybe_unused]])
+::grpc::Status FlashService::IsAlive(::grpc::ServerContext * grpc_context [[maybe_unused]],
+    const ::mpp::IsAliveRequest * request [[maybe_unused]], ::mpp::IsAliveResponse * response [[maybe_unused]])
 {
     if (!security_config.checkGrpcContext(grpc_context))
     {
@@ -155,7 +156,7 @@ grpc::Status FlashService::Coprocessor(
     }
 
     auto & tmt_context = context.getTMTContext();
-    response->set_available(!tmt_context.getTerminated());
+    response->set_available(tmt_context.checkRunning());
     return ::grpc::Status::OK;
 }
 
@@ -188,33 +189,27 @@ grpc::Status FlashService::Coprocessor(
     auto & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
-    std::string errMsg;
-    MPPTunnelPtr tunnel;
+    std::string err_msg;
+    MPPTunnelPtr tunnel = nullptr;
     {
-        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, errMsg);
-        if (sender_task == nullptr)
+        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
+        if (sender_task != nullptr)
         {
-            LOG_ERROR(log, errMsg);
-            mpp::MPPDataPacket packet;
-            auto err = new mpp::Error();
-            err->set_msg(errMsg);
-            packet.set_allocated_error(err);
-            writer->Write(packet);
-            return grpc::Status::OK;
+            tunnel = sender_task->getTunnelWithTimeout(request, timeout, err_msg);
         }
-        tunnel = sender_task->getTunnelWithTimeout(request->receiver_meta(), timeout);
-    }
-    if (tunnel == nullptr)
-    {
-        errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + " + toString(request->sender_meta().task_id())
-            + " ) within " + toString(timeout.count()) + " s";
-        LOG_ERROR(log, errMsg);
-        mpp::MPPDataPacket packet;
-        auto err = new mpp::Error();
-        err->set_msg(errMsg);
-        packet.set_allocated_error(err);
-        writer->Write(packet);
-        return grpc::Status::OK;
+        if (tunnel == nullptr)
+        {
+            LOG_ERROR(log, err_msg);
+            if (writer->Write(getPacketWithError(err_msg)))
+            {
+                return grpc::Status::OK;
+            }
+            else
+            {
+                LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Write error message failed for unknown reason.");
+                return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+            }
+        }
     }
     Stopwatch stopwatch;
     tunnel->connect(writer);
@@ -246,11 +241,11 @@ grpc::Status FlashService::Coprocessor(
     });
 
     auto [context, status] = createDBContext(grpc_context);
-    auto err = new mpp::Error();
     if (!status.ok())
     {
+        auto err = std::make_unique<mpp::Error>();
         err->set_msg("error status");
-        response->set_allocated_error(err);
+        response->set_allocated_error(err.release());
         return status;
     }
     auto & tmt_context = context.getTMTContext();

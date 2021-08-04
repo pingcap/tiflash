@@ -95,7 +95,7 @@ public:
         throw Exception("updateHashWithValues is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void updateWeakHash32(WeakHash32 &) const override
+    void updateWeakHash32(WeakHash32 &, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override
     {
         throw Exception("updateWeakHash32 is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }

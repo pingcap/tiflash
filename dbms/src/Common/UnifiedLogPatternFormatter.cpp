@@ -3,6 +3,7 @@
 #include <IO/WriteHelpers.h>
 #include <Poco/Channel.h>
 #include <Poco/Ext/ThreadNumber.h>
+#include <fmt/core.h>
 #include <sys/time.h>
 
 #include <boost/algorithm/string.hpp>
@@ -101,9 +102,8 @@ std::string UnifiedLogPatternFormatter::getTimestamp() const
 
     int zone_offset = local_tm->tm_gmtoff;
 
-    char buffer[100] = "yyyy/MM/dd HH:mm:ss.SSS";
-
-    std::sprintf(buffer, "%04d/%02d/%02d %02d:%02d:%02d.%03d", year, month, day, hour, minute, second, milliseconds);
+    std::string buffer
+        = fmt::format("{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:03d}", year, month, day, hour, minute, second, milliseconds);
 
     std::stringstream ss;
     ss << buffer << " ";
@@ -118,10 +118,9 @@ std::string UnifiedLogPatternFormatter::getTimestamp() const
         ss << "-";
     else
         ss << "+";
-    char buff[] = "hh:mm";
-    std::sprintf(buff, "%02d:%02d", offset_tm->tm_hour, offset_tm->tm_min);
+    buffer = fmt::format("{0:02d}:{1:02d}", offset_tm->tm_hour, offset_tm->tm_min);
 
-    ss << buff;
+    ss << buffer;
 
     std::string result = ss.str();
     return result;

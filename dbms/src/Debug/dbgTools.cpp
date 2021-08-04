@@ -251,7 +251,7 @@ Field convertField(const ColumnInfo & column_info, const Field & field)
     }
 }
 
-void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, std::stringstream & ss)
+void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss)
 {
     if (table_info.columns.size() < fields.size() + table_info.pk_is_handle)
         throw Exception("Encoding row has less columns than encode values [num_columns=" + DB::toString(table_info.columns.size())
@@ -324,9 +324,9 @@ void insert(                                                                    
     }
     else
         key = RecordKVFormat::genKey(table_id, handle_id);
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     encodeRow(table_info, fields, ss);
-    TiKVValue value(ss.str());
+    TiKVValue value(ss.releaseStr());
 
     UInt64 prewrite_ts = pd_client->getTS();
     UInt64 commit_ts = pd_client->getTS();
@@ -396,10 +396,10 @@ struct BatchCtrl
         default_str = String(str_len, '_');
     }
 
-    void EncodeDatum(std::stringstream & ss, TiDB::CodecFlag flag, Int64 magic_num)
+    void EncodeDatum(WriteBuffer & ss, TiDB::CodecFlag flag, Int64 magic_num)
     {
         Int8 target = (magic_num % 70) + '0';
-        ss << UInt8(flag);
+        EncodeUInt(UInt8(flag), ss);
         switch (flag)
         {
             case TiDB::CodecFlagJson:
@@ -435,7 +435,7 @@ struct BatchCtrl
 
     TiKVValue EncodeRow(const TiDB::TableInfo & table_info, Int64 magic_num)
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         for (size_t i = 0; i < table_info.columns.size(); i++)
         {
             const TiDB::ColumnInfo & column = table_info.columns[i];
@@ -443,7 +443,7 @@ struct BatchCtrl
             // TODO: May need to use BumpyDatum to flatten before encoding.
             EncodeDatum(ss, column.getCodecFlag(), magic_num);
         }
-        return TiKVValue(ss.str());
+        return TiKVValue(ss.releaseStr());
     }
 };
 

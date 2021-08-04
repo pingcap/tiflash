@@ -124,7 +124,7 @@ void ColumnDecimal<T>::updateHashWithValues(IColumn::HashValues & hash_values, c
 }
 
 template <typename T>
-void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash) const
+void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
 {
     auto s = data.size();
 

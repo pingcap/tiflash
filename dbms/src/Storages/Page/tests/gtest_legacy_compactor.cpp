@@ -6,7 +6,6 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
@@ -171,7 +170,7 @@ try
     opt.remove_tmp_files  = false;
     auto page_files       = PageStorage::listAllPageFiles(file_provider, delegator, storage.page_file_log, opt);
 
-    LegacyCompactor compactor(storage, ctx);
+    LegacyCompactor compactor(storage, nullptr);
     auto && [page_files_left, page_files_compacted, bytes_written] = compactor.tryCompact(std::move(page_files), {});
     (void)page_files_left;
     (void)bytes_written;
@@ -184,9 +183,12 @@ try
 
     PageStorage::MetaMergingQueue mergine_queue;
     {
-        auto reader = page_file.createMetaMergingReader(/*meta_file_buffer_size=*/DBMS_DEFAULT_META_READER_BUFFER_SIZE);
-        reader->moveNext();
-        mergine_queue.push(std::move(reader));
+        if (auto reader = PageFile::MetaMergingReader::createFrom(page_file, /*meta_file_buffer_size=*/DBMS_DEFAULT_META_READER_BUFFER_SIZE); //
+            reader->hasNext())
+        {
+            reader->moveNext();
+            mergine_queue.push(std::move(reader));
+        }
     }
 
     DB::PageStorage::StatisticsInfo   debug_info;

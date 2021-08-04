@@ -29,11 +29,11 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/makeDummyQuery.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
-#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/Region.h>
@@ -64,11 +64,12 @@ namespace FailPoints
 extern const char region_exception_after_read_from_storage_some_error[];
 extern const char region_exception_after_read_from_storage_all_error[];
 extern const char pause_after_learner_read[];
+extern const char pause_after_copr_streams_acquired[];
 extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
-    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_, ASTPtr dummy_query_,
+    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_,
     const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map_)
     : context(context_),
@@ -76,7 +77,6 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
       query_block(query_block_),
       keep_session_timezone_info(keep_session_timezone_info_),
       rqst(rqst_),
-      dummy_query(std::move(dummy_query_)),
       dag(dag_),
       subqueriesForSets(subqueriesForSets_),
       exchange_receiver_map(exchange_receiver_map_),
@@ -99,22 +99,22 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
 }
 
 static std::tuple<std::optional<::tipb::DAGRequest>, std::optional<DAGSchema>> //
-buildRemoteTS(const std::unordered_map<RegionVerID, const RegionInfo &> & region_retry, const DAGQueryBlock & query_block,
-    const tipb::TableScan & ts, const String & handle_column_name, const TableStructureLockHolder &, const ManageableStoragePtr & storage,
-    Context & context, Poco::Logger * log)
+buildRemoteTS(const RegionRetryList & region_retry, const DAGQueryBlock & query_block, const tipb::TableScan & ts,
+    const String & handle_column_name, const TableStructureLockHolder &, const ManageableStoragePtr & storage, Context & context,
+    Poco::Logger * log)
 {
     if (region_retry.empty())
         return std::make_tuple(std::nullopt, std::nullopt);
 
-    for (auto it : region_retry)
+    for (auto & r : region_retry)
     {
-        context.getQueryContext().getDAGContext()->retry_regions.push_back(it.second);
+        context.getQueryContext().getDAGContext()->retry_regions.push_back(r.get());
     }
     LOG_DEBUG(log, ({
         std::stringstream ss;
         ss << "Start to retry " << region_retry.size() << " regions (";
         for (auto & r : region_retry)
-            ss << r.first.toString() << ",";
+            ss << r.get().region_id << ",";
         ss << ")";
         ss.str();
     }));
@@ -186,34 +186,35 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     const Settings & settings = context.getSettingsRef();
     auto & tmt = context.getTMTContext();
 
-    auto mvcc_query_info = std::make_unique<MvccQueryInfo>();
-    mvcc_query_info->resolve_locks = true;
-    mvcc_query_info->read_tso = settings.read_tso;
+    auto mvcc_query_info = std::make_unique<MvccQueryInfo>(true, settings.read_tso);
     // We need to validate regions snapshot after getting streams from storage.
     LearnerReadSnapshot learner_read_snapshot;
-    std::unordered_map<RegionVerID, const RegionInfo &> region_retry;
+
+    // it should be hash map because duplicated region id may occur if merge regions to retry of dag.
+    RegionRetryList region_retry;
+
     if (!dag.isBatchCop())
     {
-        if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *mvcc_query_info, table_id, log); info_retry)
-            throw RegionException({(*info_retry).begin()->first}, status);
+        if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *mvcc_query_info, table_id); info_retry)
+            throw RegionException({(*info_retry).begin()->get().region_id}, status);
 
         learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
     }
     else
     {
-        std::unordered_set<RegionVerID> force_retry;
+        std::unordered_set<RegionID> force_retry;
         for (;;)
         {
             try
             {
                 region_retry.clear();
-                auto [retry, status] = MakeRegionQueryInfos(dag.getRegions(), force_retry, tmt, *mvcc_query_info, table_id, log);
+                auto [retry, status] = MakeRegionQueryInfos(dag.getRegions(), force_retry, tmt, *mvcc_query_info, table_id);
                 std::ignore = status;
                 if (retry)
                 {
                     region_retry = std::move(*retry);
                     for (auto & r : region_retry)
-                        force_retry.emplace(r.first);
+                        force_retry.emplace(r.get().region_id);
                 }
                 if (mvcc_query_info->regions_query_info.empty())
                     break;
@@ -224,11 +225,11 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             {
                 // We can also use current thread to resolve lock, but it will block next process.
                 // So, force this region retry in another thread in CoprocessorBlockInputStream.
-                force_retry.emplace(e.region_ver_id);
+                force_retry.emplace(e.region_id);
             }
             catch (const RegionException & e)
             {
-                if (tmt.getTerminated())
+                if (tmt.checkShuttingDown())
                     throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
                 // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
                 // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
@@ -303,7 +304,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
 
     SelectQueryInfo query_info;
     /// to avoid null point exception
-    query_info.query = dummy_query;
+    query_info.query = makeDummyQuery();
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns(), context.getTimezoneInfo());
     query_info.mvcc_query_info = std::move(mvcc_query_info);
@@ -314,6 +315,11 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     {
         readFromLocalStorage(
             table_structure_lock, table_id, required_columns, query_info, max_block_size, learner_read_snapshot, pipeline, region_retry);
+    }
+
+    for (auto & region_info : dag.getRetryRegions())
+    {
+        region_retry.emplace_back(region_info);
     }
 
     // Should build these vars under protect of `table_structure_lock`.
@@ -335,7 +341,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
         std::vector<pingcap::coprocessor::KeyRange> ranges;
         for (auto & info : region_retry)
         {
-            for (auto & range : info.second.key_ranges)
+            for (auto & range : info.get().key_ranges)
                 ranges.emplace_back(*range.first, *range.second);
         }
         sort(ranges.begin(), ranges.end());
@@ -377,13 +383,14 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             }
         });
     }
+    FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
 }
 
 void DAGQueryBlockInterpreter::readFromLocalStorage( //
     const TableStructureLockHolder &,                //
     const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
     const LearnerReadSnapshot & learner_read_snapshot, //
-    DAGPipeline & pipeline, std::unordered_map<RegionVerID, const RegionInfo &> & region_retry)
+    DAGPipeline & pipeline, RegionRetryList & region_retry)
 {
     QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
     auto & tmt = context.getTMTContext();
@@ -404,20 +411,20 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
             // Inject failpoint to throw RegionException
             fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
                 const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
-                RegionException::UnavailableRegions region_ver_ids;
+                RegionException::UnavailableRegions region_ids;
                 for (const auto & info : regions_info)
                 {
                     if (rand() % 100 > 50)
-                        region_ver_ids.insert(info.region_ver_id);
+                        region_ids.insert(info.region_id);
                 }
-                throw RegionException(std::move(region_ver_ids), RegionException::RegionReadStatus::NOT_FOUND);
+                throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
             });
             fiu_do_on(FailPoints::region_exception_after_read_from_storage_all_error, {
                 const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
-                RegionException::UnavailableRegions region_ver_ids;
+                RegionException::UnavailableRegions region_ids;
                 for (const auto & info : regions_info)
-                    region_ver_ids.insert(info.region_ver_id);
-                throw RegionException(std::move(region_ver_ids), RegionException::RegionReadStatus::NOT_FOUND);
+                    region_ids.insert(info.region_id);
+                throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
             });
             validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
             break;
@@ -440,13 +447,13 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
                     auto & regions_query_info = query_info.mvcc_query_info->regions_query_info;
                     for (auto iter = regions_query_info.begin(); iter != regions_query_info.end(); /**/)
                     {
-                        if (e.unavailable_region.find(iter->region_ver_id) != e.unavailable_region.end())
+                        if (e.unavailable_region.find(iter->region_id) != e.unavailable_region.end())
                         {
                             // move the error regions info from `query_info.mvcc_query_info->regions_query_info` to `region_retry`
-                            if (auto region_iter = dag_regions.find(iter->region_ver_id); likely(region_iter != dag_regions.end()))
+                            if (auto region_iter = dag_regions.find(iter->region_id); likely(region_iter != dag_regions.end()))
                             {
-                                region_retry.emplace(region_iter->first, region_iter->second);
-                                ss << region_iter->first.toString() << ",";
+                                region_retry.emplace_back(region_iter->second);
+                                ss << region_iter->first << ",";
                             }
                             iter = regions_query_info.erase(iter);
                         }
@@ -468,11 +475,11 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
                     // push all regions to `region_retry` to retry from other tiflash nodes
                     for (const auto & region : query_info.mvcc_query_info->regions_query_info)
                     {
-                        auto iter = dag_regions.find(region.region_ver_id);
+                        auto iter = dag_regions.find(region.region_id);
                         if (likely(iter != dag_regions.end()))
                         {
-                            region_retry.emplace(iter->first, iter->second);
-                            ss << iter->first.toString() << ",";
+                            region_retry.emplace_back(iter->second);
+                            ss << iter->first << ",";
                         }
                     }
                     LOG_WARNING(log, "RegionException after read from storage, regions [" << ss.str() << "], message: " << e.message());
@@ -757,7 +764,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, ExpressionActionsChain & chain)
+bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(const BoolVec & is_ts_column, ExpressionActionsChain & chain)
 {
     bool hasTSColumn = false;
     for (auto b : is_ts_column)
@@ -792,9 +799,13 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
     if (query_block.aggregation)
     {
         /// collation sensitive group by is slower then normal group by, use normal group by by default
-        // todo better to let TiDB decide whether group by is collation sensitive or not
+        bool group_by_collation_sensitive = context.getSettingsRef().group_by_collation_sensitive;
+        if (context.getDAGContext()->isMPPTask())
+            /// in mpp task, here is no way to tell whether this aggregation is first stage aggregation or
+            /// final stage aggregation, to make sure the result is right, always do collation sensitive aggregation
+            group_by_collation_sensitive = true;
         analyzer->appendAggregation(chain, query_block.aggregation->aggregation(), res.aggregation_keys, res.aggregation_collators,
-            res.aggregate_descriptions, context.getSettingsRef().group_by_collation_sensitive);
+            res.aggregate_descriptions, group_by_collation_sensitive);
         res.need_aggregate = true;
         res.before_aggregation = chain.getLastActions();
 
@@ -887,12 +898,12 @@ void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
+        before_agg_streams = pipeline.streams.size();
         BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams);
         pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams, stream_with_non_joined_data,
             params, context.getFileProvider(), true, max_streams,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                                                                 : static_cast<size_t>(settings.max_threads));
-
         pipeline.streams.resize(1);
     }
     else
@@ -1208,7 +1219,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, encode_type, rqst);
     DAGSchema schema;
     ColumnsWithTypeAndName columns;
-    std::vector<bool> is_ts_column;
+    BoolVec is_ts_column;
     std::vector<NameAndTypePair> source_columns;
     for (int i = 0; i < (int)query_block.output_field_types.size(); i++)
     {
@@ -1462,6 +1473,17 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
             for (size_t i = 0; i < concurrency; i++)
                 pipeline.streams.push_back(std::make_shared<SimpleBlockInputStream>(shared_query_block_input_stream));
         }
+    }
+
+    /// expand concurrency after agg
+    if(!query_block.isRootQueryBlock() && before_agg_streams > 1 && pipeline.streams.size()==1)
+    {
+        size_t concurrency = before_agg_streams;
+        BlockInputStreamPtr shared_query_block_input_stream
+            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream());
+        pipeline.streams.clear();
+        for (size_t i = 0; i < concurrency; i++)
+            pipeline.streams.push_back(std::make_shared<SimpleBlockInputStream>(shared_query_block_input_stream));
     }
 
     return pipeline.streams;

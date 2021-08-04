@@ -15,7 +15,7 @@ public:
 
     void put(PageId page_id, const PageEntry & entry)
     {
-        EditRecord record;
+        EditRecord record {};
         record.type    = WriteBatch::WriteType::PUT;
         record.page_id = page_id;
         record.entry   = entry;
@@ -24,7 +24,7 @@ public:
 
     void upsertPage(PageId page_id, const PageEntry & entry)
     {
-        EditRecord record;
+        EditRecord record {};
         record.type    = WriteBatch::WriteType::UPSERT;
         record.page_id = page_id;
         record.entry   = entry;
@@ -33,7 +33,7 @@ public:
 
     void del(PageId page_id)
     {
-        EditRecord record;
+        EditRecord record {};
         record.type    = WriteBatch::WriteType::DEL;
         record.page_id = page_id;
         records.emplace_back(record);
@@ -41,7 +41,7 @@ public:
 
     void ref(PageId ref_id, PageId page_id)
     {
-        EditRecord record;
+        EditRecord record {};
         record.type        = WriteBatch::WriteType::REF;
         record.page_id     = ref_id;
         record.ori_page_id = page_id;

@@ -4,6 +4,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserQuery.h>
+#include <Parsers/makeDummyQuery.h>
 #include <Parsers/parseQuery.h>
 
 namespace DB
@@ -14,9 +15,9 @@ namespace ErrorCodes
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-DAGQuerySource::DAGQuerySource(Context & context_, const std::unordered_map<RegionVerID, RegionInfo> & regions_,
+DAGQuerySource::DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_,
     const tipb::DAGRequest & dag_request_, const bool is_batch_cop_)
-    : context(context_), regions(regions_), dag_request(dag_request_), is_batch_cop(is_batch_cop_)
+    : context(context_), regions(regions_), retry_regions(retry_regions_), dag_request(dag_request_), is_batch_cop(is_batch_cop_)
 {
     if (dag_request.has_root_executor())
     {
@@ -57,17 +58,12 @@ void DAGQuerySource::analyzeDAGEncodeType()
         encode_type = tipb::EncodeType::TypeDefault;
 }
 
-std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t max_query_size)
+std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t)
 {
     // this is a WAR to avoid NPE when the MergeTreeDataSelectExecutor trying
     // to extract key range of the query.
     // todo find a way to enable key range extraction for dag query
-    String tmp = "select 1";
-    ParserQuery parser(tmp.data() + tmp.size());
-    ASTPtr parent = parseQuery(parser, tmp.data(), tmp.data() + tmp.size(), "", max_query_size);
-    auto query = dag_request.DebugString();
-    ast = ((ASTSelectWithUnionQuery *)parent.get())->list_of_selects->children.at(0);
-    return std::make_tuple(query, ast);
+    return {dag_request.DebugString(), makeDummyQuery()};
 }
 
 String DAGQuerySource::str(size_t) { return dag_request.DebugString(); }

@@ -2,6 +2,7 @@
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageUtil.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include "gtest/gtest.h"
 
