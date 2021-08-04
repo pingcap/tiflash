@@ -183,10 +183,10 @@ try
 
     PageStorage::MetaMergingQueue mergine_queue;
     {
-        if (auto reader = PageFile::MetaMergingReader::createFrom(page_file); //
+        if (auto reader = PageFile::MetaMergingReader::createFrom(page_file, ctx.getReadLimiter());
             reader->hasNext())
         {
-            reader->moveNext(ctx.getReadLimiter());
+            reader->moveNext();
             mergine_queue.push(std::move(reader));
         }
     }

@@ -113,8 +113,8 @@ public:
     class MetaMergingReader : private boost::noncopyable
     {
     public:
-        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset);
-        static MetaMergingReaderPtr createFrom(PageFile & page_file);
+        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter = nullptr);
+        static MetaMergingReaderPtr createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter = nullptr);
 
         MetaMergingReader(PageFile & page_file_); // should only called by `createFrom`
 
@@ -130,7 +130,7 @@ public:
     public:
         bool hasNext() const;
 
-        void moveNext(const ReadLimiterPtr & read_limiter = nullptr, PageFormat::Version * v = nullptr);
+        void moveNext(PageFormat::Version * v = nullptr);
 
         PageEntriesEdit getEdits() { return std::move(curr_edit); }
 

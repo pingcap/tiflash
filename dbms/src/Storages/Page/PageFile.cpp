@@ -226,17 +226,17 @@ PageFile::MetaMergingReader::~MetaMergingReader()
     page_file.free(meta_buffer, meta_size);
 }
 
-PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t max_meta_offset)
+PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter)
 {
     auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
-    reader->initialize(max_meta_offset);
+    reader->initialize(max_meta_offset, read_limiter);
     return reader;
 }
 
-PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file)
+PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter)
 {
     auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
-    reader->initialize(std::nullopt);
+    reader->initialize(std::nullopt, read_limiter);
     return reader;
 }
 
@@ -287,7 +287,7 @@ bool PageFile::MetaMergingReader::hasNext() const
     return status == Status::Opened && meta_file_offset < meta_size;
 }
 
-void PageFile::MetaMergingReader::moveNext(const ReadLimiterPtr & read_limiter, PageFormat::Version * v)
+void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
 {
     curr_edit.clear();
     curr_write_batch_sequence = 0;

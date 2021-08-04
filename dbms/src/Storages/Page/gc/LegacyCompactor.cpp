@@ -130,13 +130,13 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         if (auto iter = writing_files.find(page_file.fileIdLevel()); iter != writing_files.end())
         {
             // create reader with max meta reading offset
-            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), iter->second.meta_offset);
+            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), iter->second.meta_offset, read_limiter);
         }
         else
         {
-            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file));
+            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), read_limiter);
         }
-        if (reader->hasNext(read_limiter))
+        if (reader->hasNext())
         {
             // Read one valid WriteBatch
             reader->moveNext();
@@ -224,7 +224,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         }
         if (reader->hasNext())
         {
-            reader->moveNext(read_limiter);
+            reader->moveNext();
             merging_queue.push(std::move(reader));
         }
         else

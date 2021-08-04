@@ -124,7 +124,7 @@ PageFormat::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_
         while (reader->hasNext())
         {
             // Continue to read the binary version of next WriteBatch.
-            reader->moveNext(nullptr, &temp_version);
+            reader->moveNext(&temp_version);
             max_binary_version = std::max(max_binary_version, temp_version);
         }
         LOG_DEBUG(log, "getMaxDataVersion done from " + reader->toString() << " [max version=" << max_binary_version << "]");
@@ -263,11 +263,11 @@ void PageStorage::restore()
               || page_file.getType() == PageFile::Type::Checkpoint))
             throw Exception("Try to recover from " + page_file.toString() + ", illegal type.", ErrorCodes::LOGICAL_ERROR);
 
-        if (auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file)); //
+        if (auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file));
             reader->hasNext())
         {
             // Read one WriteBatch
-            reader->moveNext(nullptr);
+            reader->moveNext();
             merging_queue.push(std::move(reader));
         }
         // else the file doesn't contain any valid meta, just skip it.
@@ -1140,7 +1140,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
 
         // Calculate a config by the gc context, maybe do a more aggressive GC
         DataCompactor<PageStorage::SnapshotPtr> compactor(*this, gc_context.calculateGcConfig(config), write_limiter, read_limiter);
-        std::tie(gc_context.compact_result, gc_file_entries_edit) = compactor.tryMigrate(page_files, getSnapshot(), writing_file_id_levels);
+        std::tie(gc_context.compact_result, gc_file_entries_edit) = compactor.tryMigrate(page_files, getSnapshot(), writing_files_snapshot);
 
         // We only care about those time cost in actually doing compaction on page data.
         if (gc_context.compact_result.do_compaction && metrics)
