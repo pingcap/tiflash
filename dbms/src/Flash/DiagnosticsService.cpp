@@ -351,7 +351,6 @@ static void getCacheSize(const uint & level [[maybe_unused]], size_t & size, siz
 #ifdef __linux__
     getCacheSizeLinux(level, size, line_size);
 #else
-    std::ignore = level;
     size = 0;
     line_size = 0;
 #endif

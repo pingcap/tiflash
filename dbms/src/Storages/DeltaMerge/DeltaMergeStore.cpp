@@ -171,7 +171,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       original_table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
       blockable_background_pool(db_context.getBlockableBackgroundPool()),
-      next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MAX_KEY : RowKeyValue::INT_HANDLE_MAX_KEY),
+      next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY),
       hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
@@ -1142,28 +1142,17 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     auto try_add_background_task = [&](const BackgroundTask & task) {
         // Prevent too many tasks.
-//        if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3))
-//        {
-//            if (shutdown_called.load(std::memory_order_relaxed))
-//                return;
-//
-//            auto heavy = background_tasks.addTask(task, thread_type, log);
-//            if (heavy)
-//                blockable_background_pool_handle->wake();
-//            else
-//                background_task_handle->wake();
-//        }
+        if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3))
+        {
+            if (shutdown_called.load(std::memory_order_relaxed))
+                return;
 
-        if (shutdown_called.load(std::memory_order_relaxed))
-            return;
-
-        // TODO: remove this log
-        LOG_DEBUG(log, "add background task " << toString(task.type) << " by thread " << toString(thread_type));
-        auto heavy = background_tasks.addTask(task, thread_type, log);
-        if (heavy)
-            blockable_background_pool_handle->wake();
-        else
-            background_task_handle->wake();
+            auto heavy = background_tasks.addTask(task, thread_type, log);
+            if (heavy)
+                blockable_background_pool_handle->wake();
+            else
+                background_task_handle->wake();
+        }
     };
 
     /// Flush is always try first.
@@ -1189,10 +1178,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     if (segment->getDelta()->isUpdating())
         return;
 
-    // TODO: remove this log
-    if (thread_type == ThreadType::BG_GC)
-        LOG_DEBUG(log, "bg gc check segment");
-
     /// Now start trying structure update.
 
     auto getMergeSibling = [&]() -> SegmentPtr {
@@ -1201,7 +1186,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         // The last segment cannot be merged.
         if (segment->getRowKeyRange().isEndInfinite())
             return {};
-        LOG_DEBUG(log, "getMergeSibling 1");
         SegmentPtr next_segment;
         {
             std::shared_lock read_write_lock(read_write_mutex);
@@ -1210,18 +1194,14 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             // check legality
             if (it == segments.end())
                 return {};
-            LOG_DEBUG(log, "getMergeSibling it legal");
             auto & cur_segment = it->second;
             if (cur_segment.get() != segment.get())
                 return {};
-            LOG_DEBUG(log, "getMergeSibling find current segment");
             ++it;
             if (it == segments.end())
                 return {};
             next_segment = it->second;
-            LOG_DEBUG(log, "getMergeSibling find next segment");
             auto limit = dm_context->segment_limit_rows / 5;
-            LOG_DEBUG(log, "limit " << limit << " next segment estimated rows " << next_segment->getEstimatedRows());
             if (next_segment->getEstimatedRows() >= limit)
                 return {};
         }
@@ -1282,7 +1262,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     };
     auto try_bg_merge = [&]() {
         SegmentPtr merge_sibling;
-        LOG_DEBUG(log, "try bg merge " << should_merge << " segment_rows " << segment_rows << " segment_limit_rows " << segment_limit_rows << " segment_bytes " << segment_bytes << " segment_limit_bytes " << segment_limit_bytes);
         if (should_merge && (merge_sibling = getMergeSibling()))
         {
             try_add_background_task(BackgroundTask{TaskType::Merge, dm_context, segment, merge_sibling});
@@ -1439,14 +1418,14 @@ namespace GC
 {
 // Returns true if it needs gc.
 // This is for optimization purpose, does not mean to be accurate.
-bool shouldCompact(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ratio_threshold, Logger * log)
+bool shouldCompactStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ratio_threshold, Logger * log)
 {
     // Always GC.
     if (ratio_threshold < 1.0)
         return true;
 
     auto & property = seg->getStable()->getStableProperty();
-    LOG_TRACE(log, property.toDebugString());
+    LOG_TRACE(log, __PRETTY_FUNCTION__ << property.toDebugString());
     // No data older than safe_point to GC.
     if (property.gc_hint_version > gc_safepoint)
         return false;
@@ -1459,7 +1438,7 @@ bool shouldCompact(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ra
     return false;
 }
 
-bool shouldCompactWithStable(const DMContext & context, const SegmentSnapshotPtr & snap, Logger * log)
+bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapshotPtr & snap, double ratio_threshold, Logger * log)
 {
     auto delete_range                = snap->delta->getSquashDeleteRange();
     auto [delete_rows, delete_bytes] = snap->stable->getApproxRowsAndBytes(context, delete_range);
@@ -1467,12 +1446,9 @@ bool shouldCompactWithStable(const DMContext & context, const SegmentSnapshotPtr
     auto stable_rows = snap->stable->getRows();
     auto stable_bytes = snap->stable->getBytes();
 
-    // TODO: change to trace level
-    // TODO: remove delete_range.toString()
-    LOG_DEBUG(log, "delete range " << delete_range.toString() << " delete range rows " << delete_rows << ", delete_bytes " << delete_bytes << " stable_rows " << stable_rows << " stable_bytes " << stable_bytes);
+    LOG_TRACE(log, __PRETTY_FUNCTION__ << " delete range rows [" << delete_rows << "], delete_bytes [" << delete_bytes << "] stable_rows [" << stable_rows << "] stable_bytes [" << stable_bytes << "]");
 
-    // TODO: magic number of 0.8
-    bool should_compact = (delete_rows > stable_rows * 0.8) || (delete_bytes > stable_bytes * 0.8);
+    bool should_compact = (delete_rows > stable_rows * ratio_threshold) || (delete_bytes > stable_bytes * ratio_threshold);
     return should_compact;
 }
 } // namespace GC
@@ -1564,8 +1540,8 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         {
             // Check whether we should apply gc on this segment
             const bool should_compact
-                = GC::shouldCompact(segment, gc_safe_point, global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc, log)
-                || GC::shouldCompactWithStable(*dm_context, segment_snap, log);
+                = GC::shouldCompactStable(segment, gc_safe_point, global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc, log)
+                || GC::shouldCompactDeltaWithStable(*dm_context, segment_snap, global_context.getSettingsRef().dt_bg_gc_delta_delete_ratio_to_trigger_gc, log);
             bool finish_gc_on_segment = false;
             if (should_compact)
             {
