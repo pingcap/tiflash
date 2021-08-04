@@ -5,11 +5,11 @@ namespace SIMDOption
 {
 #ifdef __x86_64__
 
-#ifdef DBMS_ENABLE_AVX_SUPPORT
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
 bool ENABLE_AVX = true;
 #endif
 
-#ifdef DBMS_ENABLE_AVX512_SUPPORT
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
 bool ENABLE_AVX512 = true;
 #endif
 
