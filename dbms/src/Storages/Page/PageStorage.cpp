@@ -109,9 +109,9 @@ PageFile::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_pr
     if (page_files.empty())
         return PageFile::CURRENT_VERSION;
 
-    bool                all_empty          = true;
-    PageFormat::Version max_binary_version = PageFile::VERSION_BASE;
-    PageFormat::Version temp_version       = PageFile::CURRENT_VERSION;
+    bool              all_empty          = true;
+    PageFile::Version max_binary_version = PageFile::VERSION_BASE;
+    PageFile::Version temp_version       = PageFile::CURRENT_VERSION;
     for (auto iter = page_files.rbegin(); iter != page_files.rend(); ++iter)
     {
         // Skip those files without valid meta
@@ -130,7 +130,7 @@ PageFile::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_pr
         LOG_DEBUG(log, "getMaxDataVersion done from " + reader->toString() << " [max version=" << max_binary_version << "]");
         break;
     }
-    max_binary_version = (all_empty ? STORAGE_FORMAT_CURRENT.page : max_binary_version);
+    max_binary_version = (all_empty ? PageFile::CURRENT_VERSION : max_binary_version);
     return max_binary_version;
 }
 
