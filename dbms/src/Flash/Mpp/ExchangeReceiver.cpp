@@ -51,7 +51,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
         req->set_allocated_sender_meta(sender_task);
         LOG_DEBUG(log, "begin start and read : " << req->DebugString());
-        ::grpc::Status status;
+        ::grpc::Status status = ::grpc::Status::OK;
         for (int i = 0; i < 10; i++)
         {
             pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
@@ -78,6 +78,11 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                     break;
                 }
             }
+	    // if meet error, such as decode packect fails, it will not retry.
+            if (meet_error)
+            {
+                break;
+            }
             status = reader->Finish();
             if (status.ok())
             {
@@ -86,7 +91,8 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             }
             else
             {
-                LOG_WARNING(log, "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info "<< req_info);
+                LOG_WARNING(log,
+                    "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
 
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1s);
