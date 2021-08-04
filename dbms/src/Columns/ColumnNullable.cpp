@@ -81,7 +81,7 @@ void ColumnNullable::updateHashWithValues(
     }
 }
 
-void ColumnNullable::updateWeakHash32(WeakHash32 & hash) const
+void ColumnNullable::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
 {
     auto s = size();
 
@@ -90,7 +90,7 @@ void ColumnNullable::updateWeakHash32(WeakHash32 & hash) const
                         ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     WeakHash32 old_hash = hash;
-    nested_column->updateWeakHash32(hash);
+    nested_column->updateWeakHash32(hash, collator, sort_key_container);
 
     const auto & null_map_data = getNullMapData();
     auto & hash_data = hash.getData();
