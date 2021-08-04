@@ -58,7 +58,6 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             grpc::ClientContext client_context;
             auto reader = cluster->rpc_client->sendStreamRequest(req->sender_meta().address(), &client_context, call);
             reader->WaitForInitialMetadata();
-            // Block until the next result is available in the completion queue "cq".
             mpp::MPPDataPacket packet;
             String req_info = "tunnel" + std::to_string(sender_task->task_id()) + "+" + std::to_string(task_meta.task_id());
             for (;;)
