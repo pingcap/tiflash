@@ -1491,7 +1491,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         {
             std::shared_lock lock(read_write_mutex);
 
-            auto segment_it = segments.lower_bound(next_gc_check_key.toRowKeyValueRef());
+            auto segment_it = segments.upper_bound(next_gc_check_key.toRowKeyValueRef());
             if (segment_it == segments.end())
                 segment_it = segments.begin();
 
@@ -1501,13 +1501,8 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             check_segments_num++;
 
             segment           = segment_it->second;
+            next_gc_check_key = segment_it->first.toRowKeyValue();
             segment_snap      = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
-            // update next gc key, gc from end to begin
-            // TODO: add more comment
-            SegmentSortedMap::reverse_iterator segment_rit{segment_it};
-            if (segment_rit == segments.rend())
-                segment_rit = segments.rbegin();
-            next_gc_check_key = segment_rit->first.toRowKeyValue();
         }
 
         assert(segment != nullptr);
