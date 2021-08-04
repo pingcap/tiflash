@@ -17,12 +17,13 @@ extern const int LOGICAL_ERROR;
 
 template <class StreamWriterPtr>
 StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_,
-    tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
+    TiDB::TiDBCollators collators_, tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
     std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_)
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_),
       exchange_type(exchange_type_),
       writer(writer_),
       partition_col_ids(std::move(partition_col_ids_)),
+      collators(std::move(collators_)),
       thread_pool(dag_context.final_concurrency)
 {
     rows_in_blocks = 0;
@@ -167,6 +168,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
         // 1) compute partition id
         // 2) partition each row
         // 3) encode each chunk and send it
+        std::vector<String> partition_key_containers(collators.size());
         for (auto & block : input_blocks)
         {
             std::vector<Block> dest_blocks(partition_num);
@@ -190,9 +192,9 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             WeakHash32 hash(rows);
 
             // get hash values by all partition key columns
-            for (auto i : partition_col_ids)
+            for (size_t i = 0; i < partition_col_ids.size(); i++)
             {
-                block.getByPosition(i).column->updateWeakHash32(hash);
+                block.getByPosition(partition_col_ids[i]).column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
             }
             const auto & hash_data = hash.getData();
 
