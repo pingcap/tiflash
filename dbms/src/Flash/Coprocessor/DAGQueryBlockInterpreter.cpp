@@ -799,9 +799,13 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
     if (query_block.aggregation)
     {
         /// collation sensitive group by is slower then normal group by, use normal group by by default
-        // todo better to let TiDB decide whether group by is collation sensitive or not
+        bool group_by_collation_sensitive = context.getSettingsRef().group_by_collation_sensitive;
+        if (context.getDAGContext()->isMPPTask())
+            /// in mpp task, here is no way to tell whether this aggregation is first stage aggregation or
+            /// final stage aggregation, to make sure the result is right, always do collation sensitive aggregation
+            group_by_collation_sensitive = true;
         analyzer->appendAggregation(chain, query_block.aggregation->aggregation(), res.aggregation_keys, res.aggregation_collators,
-            res.aggregate_descriptions, context.getSettingsRef().group_by_collation_sensitive);
+            res.aggregate_descriptions, group_by_collation_sensitive);
         res.need_aggregate = true;
         res.before_aggregation = chain.getLastActions();
 
