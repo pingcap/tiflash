@@ -886,12 +886,12 @@ void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
+        before_agg_streams = pipeline.streams.size();
         BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams);
         pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams, stream_with_non_joined_data,
             params, context.getFileProvider(), true, max_streams,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                                                                 : static_cast<size_t>(settings.max_threads));
-
         pipeline.streams.resize(1);
     }
     else
@@ -1454,6 +1454,17 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
             for (size_t i = 0; i < concurrency; i++)
                 pipeline.streams.push_back(std::make_shared<SimpleBlockInputStream>(shared_query_block_input_stream));
         }
+    }
+
+    /// expand concurrency after agg
+    if(!query_block.isRootQueryBlock() && before_agg_streams > 1 && pipeline.streams.size()==1)
+    {
+        size_t concurrency = before_agg_streams;
+        BlockInputStreamPtr shared_query_block_input_stream
+            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream());
+        pipeline.streams.clear();
+        for (size_t i = 0; i < concurrency; i++)
+            pipeline.streams.push_back(std::make_shared<SimpleBlockInputStream>(shared_query_block_input_stream));
     }
 
     return pipeline.streams;
