@@ -327,7 +327,6 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
             // Get storage schema atomically, will do schema sync if the storage does not exists.
             // Will return the storage even if it is tombstoned.
             const auto [table_drop_lock, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
-            (void)table_drop_lock;
             if (unlikely(schema_snap.storage == nullptr))
             {
                 // The storage must be physically dropped, throw exception and do cleanup.
@@ -346,14 +345,15 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
             // Read from SSTs and refine the boundary of blocks output to DTFiles
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
                 new_region, snaps, proxy_helper, schema_snap, gc_safepoint, force_decode, tmt, expected_block_size);
-            auto bounded_stream
-                = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, schema_snap);
+            auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, schema_snap);
             stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(bounded_stream, schema_snap, snapshot_apply_method, job_type, tmt);
 
             stream->writePrefix();
             stream->write();
             stream->writeSuffix();
             ids = stream->ingestIds();
+
+            (void)table_drop_lock; // the table should not be dropped during ingesting file
             break;
         }
         catch (DB::Exception & e)
@@ -375,7 +375,9 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 }
 
                 // Update schema and try to decode again
-                LOG_INFO(log, "Decoding Region data meet error: " << e.displayText() << ", sync schema and try to decode again");
+                LOG_INFO(log,
+                    "Decoding Region snapshot data meet error, sync schema and try to decode again " //
+                        << new_region->toString(true) << " [error=" << e.displayText() << "]");
                 auto metrics = context.getTiFlashMetrics();
                 GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
                 tmt.getSchemaSyncer()->syncSchemas(context);
@@ -387,9 +389,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
             else if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
             {
                 // We can ignore if storage is dropped.
-                LOG_INFO(log,
-                    "Pre-handle snapshot to DTFiles is ignored because the table is dropped. [region=" << new_region->toString(true)
-                                                                                                       << "]");
+                LOG_INFO(log, "Pre-handle snapshot to DTFiles is ignored because the table is dropped " << new_region->toString(true));
                 try_clean_up();
                 break;
             }
