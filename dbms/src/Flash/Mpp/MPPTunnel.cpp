@@ -3,6 +3,7 @@
 // TODO: remove this include after move MPPTask to a single file
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTunnel.h>
+#include <Flash/Mpp/Utils.h>
 #include <Flash/Mpp/TaskStatus.h>
 #include <fmt/core.h>
 

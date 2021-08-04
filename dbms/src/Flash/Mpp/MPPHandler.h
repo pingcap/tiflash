@@ -7,6 +7,7 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/TaskStatus.h>
+#include <Flash/Mpp/Utils.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
