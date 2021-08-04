@@ -220,8 +220,6 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 // PageFile::MetaMergingReader
 // =========================================================
 
-PageFile::MetaMergingReader::MetaMergingReader(PageFile & page_file_) : page_file(page_file_) {}
-
 PageFile::MetaMergingReader::~MetaMergingReader()
 {
     close();
