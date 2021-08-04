@@ -60,12 +60,15 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             reader->WaitForInitialMetadata();
             mpp::MPPDataPacket packet;
             String req_info = "tunnel" + std::to_string(sender_task->task_id()) + "+" + std::to_string(task_meta.task_id());
+	    bool has_data = false;
             for (;;)
             {
                 LOG_TRACE(log, "begin next ");
                 bool success = reader->Read(&packet);
                 if (!success)
                     break;
+		else
+		    has_data = true;
                 if (packet.has_error())
                 {
                     throw Exception("Exchange receiver meet error : " + packet.error().msg());
@@ -93,6 +96,9 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             {
                 LOG_WARNING(log,
                     "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
+		// if we have received some data, we should not retry.
+		if (has_data)
+			break;
 
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1s);
