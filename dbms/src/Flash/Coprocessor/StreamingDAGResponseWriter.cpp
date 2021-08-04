@@ -219,8 +219,8 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             // serialize each partitioned block and write it to its destination
             for (auto part_id = 0; part_id < partition_num; ++part_id)
             {
-                responses_row_count[part_id] += dest_blocks[part_id].rows();
                 dest_blocks[part_id].setColumns(std::move(dest_tbl_cols[part_id]));
+                responses_row_count[part_id] += dest_blocks[part_id].rows();
                 chunk_codec_stream[part_id]->encode(dest_blocks[part_id], 0, dest_blocks[part_id].rows());
                 auto dag_chunk = responses[part_id].add_chunks();
                 dag_chunk->set_rows_data(chunk_codec_stream[part_id]->getString());
