@@ -23,7 +23,6 @@
 #include <Storages/System/StorageSystemProcesses.h>
 #include <Storages/System/StorageSystemSettings.h>
 #include <Storages/System/StorageSystemTables.h>
-#include <Storages/System/StorageSystemZooKeeper.h>
 
 
 namespace DB
@@ -45,7 +44,7 @@ void attachSystemTablesLocal(IDatabase & system_database)
     system_database.attachTable("build_options", StorageSystemBuildOptions::create("build_options"));
 }
 
-void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
+void attachSystemTablesServer(IDatabase & system_database)
 {
     attachSystemTablesLocal(system_database);
     system_database.attachTable("parts", StorageSystemParts::create("parts"));
@@ -58,9 +57,6 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     system_database.attachTable("clusters", StorageSystemClusters::create("clusters"));
     system_database.attachTable("graphite_retentions", StorageSystemGraphite::create("graphite_retentions"));
     system_database.attachTable("macros", StorageSystemMacros::create("macros"));
-
-    if (has_zookeeper)
-        system_database.attachTable("zookeeper", StorageSystemZooKeeper::create("zookeeper"));
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

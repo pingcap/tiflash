@@ -11,6 +11,8 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 
@@ -29,6 +31,15 @@ extern const char exception_during_mpp_root_task_run[];
 extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char exception_during_mpp_close_tunnel[];
 } // namespace FailPoints
+
+mpp::MPPDataPacket getPacketWithError(String reason)
+{
+    mpp::MPPDataPacket data;
+    auto err = std::make_unique<mpp::Error>();
+    err->set_msg(std::move(reason));
+    data.set_allocated_error(err.release());
+    return data;
+}
 
 bool MPPTaskProgress::isTaskHanging(const Context & context)
 {
@@ -68,16 +79,13 @@ void MPPTunnel::close(const String & reason)
     std::unique_lock<std::mutex> lk(mu);
     if (finished)
         return;
-    if (connected)
+    if (connected && !reason.empty())
     {
         try
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(reason);
-            data.set_allocated_error(err);
-            writer->Write(data);
+            if (!writer->Write(getPacketWithError(reason)))
+                throw Exception("Failed to write err");
         }
         catch (...)
         {
@@ -199,7 +207,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout);
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, this->shared_from_this());
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->tunnel_id);
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->tunnels.emplace_back(tunnel);
@@ -214,15 +222,25 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     // get partition column ids
     auto part_keys = exchangeSender.partition_keys();
     std::vector<Int64> partition_col_id;
-    for (const auto & expr : part_keys)
+    TiDB::TiDBCollators collators;
+    for (int i = 0; i < part_keys.size(); i++)
     {
+        const auto & expr = part_keys[i];
         assert(isColumnExpr(expr));
         auto column_index = decodeDAGInt64(expr.val());
         partition_col_id.emplace_back(column_index);
+        if (getDataTypeByFieldType(expr.field_type())->isString())
+        {
+            collators.emplace_back(getCollatorFromFieldType(exchangeSender.types(i)));
+        }
+        else
+        {
+            collators.emplace_back(nullptr);
+        }
     }
     // construct writer
     std::unique_ptr<DAGResponseWriter> response_writer
-        = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, exchangeSender.tp(),
+        = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, collators, exchangeSender.tp(),
             context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), *dag_context);
     BlockOutputStreamPtr squash_stream = std::make_shared<DAGBlockOutputStream>(io.in->getHeader(), std::move(response_writer));
     io.out = std::make_shared<SquashingBlockOutputStream>(squash_stream, 20000, 0);
@@ -251,16 +269,19 @@ String taskStatusToString(TaskStatus ts)
 }
 void MPPTask::runImpl()
 {
-    auto current_status = static_cast<TaskStatus>(status.load());
-    if (current_status != INITIALIZING)
+    auto old_status = static_cast<Int32>(INITIALIZING);
+    if (!status.compare_exchange_strong(old_status, static_cast<Int32>(RUNNING)))
     {
-        LOG_WARNING(log, "task in " + taskStatusToString(current_status) + " state, skip running");
+        LOG_WARNING(log, "task not in initializing state, skip running");
         return;
     }
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
+    SCOPE_EXIT({
+        GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_duration_seconds, type_run_mpp_task)
+            .Observe(stopwatch.elapsedSeconds());
+    });
     LOG_INFO(log, "task starts running");
-    status = RUNNING;
     auto from = io.in;
     auto to = io.out;
     try
@@ -324,9 +345,32 @@ void MPPTask::runImpl()
     LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     auto process_info = context.getProcessListElement()->getInfo();
     auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
-    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_dispatch_mpp_task).Observe(peak_memory);
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
     unregisterTask();
     status = FINISHED;
+}
+
+bool MPPTunnel::isTaskCancelled()
+{
+    auto sp = current_task.lock();
+    return sp != nullptr && sp->status == CANCELLED;
+}
+
+void MPPTunnel::waitUntilConnect(std::unique_lock<std::mutex> & lk)
+{
+    if (timeout.count() > 0)
+    {
+        if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected || isTaskCancelled(); }))
+        {
+            throw Exception(tunnel_id + " is timeout");
+        }
+    }
+    else
+    {
+        cv_for_connected.wait(lk, [&]() { return connected || isTaskCancelled(); });
+    }
+    if (!connected)
+        throw Exception("MPPTunnel can not be connected because MPPTask is cancelled");
 }
 
 void MPPTask::writeErrToAllTunnel(const String & e)
@@ -336,11 +380,7 @@ void MPPTask::writeErrToAllTunnel(const String & e)
         try
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_write_err_to_tunnel);
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(e);
-            data.set_allocated_error(err);
-            it.second->write(data, true);
+            it.second->write(getPacketWithError(e), true);
         }
         catch (...)
         {
@@ -369,22 +409,7 @@ void MPPTask::cancel(const String & reason)
     LOG_WARNING(log, "Begin cancel task: " + id.toString());
     /// step 1. cancel query streams if it is running
     if (current_status == RUNNING)
-    {
-        auto process_list_element = context.getProcessListElement();
-        if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
-        {
-            BlockInputStreamPtr input_stream;
-            BlockOutputStreamPtr output_stream;
-            if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
-            {
-                IProfilingBlockInputStream * input_stream_casted;
-                if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
-                {
-                    input_stream_casted->cancel(true);
-                }
-            }
-        }
-    }
+        context.getProcessList().sendCancelToQuery(context.getCurrentQueryId(), context.getClientInfo().current_user, true);
     /// step 2. write Error msg and close the tunnel.
     /// Here we use `closeAllTunnel` because currently, `cancel` is a query level cancel, which
     /// means if this mpp task is cancelled, all the mpp tasks belonging to the same query are

@@ -75,19 +75,18 @@ struct RowKeyValue
             value = std::make_shared<String>(rowkey_value.data, rowkey_value.size);
         else
         {
-            std::stringstream ss;
+            WriteBufferFromOwnString ss;
             DB::EncodeInt64(rowkey_value.int_value, ss);
-            value = std::make_shared<String>(ss.str());
+            value = std::make_shared<String>(ss.releaseStr());
         }
         int_value = rowkey_value.int_value;
     }
 
     static RowKeyValue fromHandle(Handle value)
     {
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         DB::EncodeInt64(value, ss);
-        String s_value = ss.str();
-        return RowKeyValue(false, std::make_shared<String>(s_value), value);
+        return RowKeyValue(false, std::make_shared<String>(ss.releaseStr()), value);
     }
 
     // Format as a string
@@ -100,12 +99,12 @@ struct RowKeyValue
     DecodedTiKVKeyPtr toRegionKey(TableID table_id) const
     {
         // FIXME: move this to TiKVRecordFormat.h
-        std::stringstream ss;
-        ss.put('t');
+        WriteBufferFromOwnString ss;
+        ss.write('t');
         EncodeInt64(table_id, ss);
-        ss.put('_');
-        ss.put('r');
-        String prefix = ss.str();
+        ss.write('_');
+        ss.write('r');
+        String prefix = ss.releaseStr();
         return std::make_shared<DecodedTiKVKey>(prefix + *value);
     }
 
@@ -352,12 +351,12 @@ struct RowKeyRange
 
         TableRangeMinMax(TableID table_id, bool is_common_handle)
         {
-            std::stringstream ss;
-            ss.put('t');
+            WriteBufferFromOwnString ss;
+            ss.write('t');
             EncodeInt64(table_id, ss);
-            ss.put('_');
-            ss.put('r');
-            String prefix = ss.str();
+            ss.write('_');
+            ss.write('r');
+            String prefix = ss.releaseStr();
             if (is_common_handle)
             {
                 min = std::make_shared<String>(prefix + *RowKeyValue::COMMON_HANDLE_MIN_KEY.value);
@@ -582,12 +581,12 @@ struct RowKeyRange
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> toRegionRange(TableID table_id)
     {
         // FIXME: move this to TiKVRecordFormat.h
-        std::stringstream ss;
-        ss.put('t');
+        WriteBufferFromOwnString ss;
+        ss.write('t');
         EncodeInt64(table_id, ss);
-        ss.put('_');
-        ss.put('r');
-        String            prefix    = ss.str();
+        ss.write('_');
+        ss.write('r');
+        String            prefix    = ss.releaseStr();
         DecodedTiKVKeyPtr start_key = std::make_shared<DecodedTiKVKey>(prefix + *start.value);
         DecodedTiKVKeyPtr end_key   = std::make_shared<DecodedTiKVKey>(prefix + *end.value);
         return {start_key, end_key};
@@ -611,13 +610,13 @@ struct RowKeyRange
         {
             return RowKeyRange(RowKeyValue::INT_HANDLE_MIN_KEY, RowKeyValue::INT_HANDLE_MAX_KEY, /*is_common_handle=*/false, 1);
         }
-        std::stringstream ss;
+        WriteBufferFromOwnString ss;
         DB::EncodeInt64(handle_range.start, ss);
-        String start = ss.str();
+        String start = ss.releaseStr();
 
-        ss.str(std::string());
+        ss.restart();
         DB::EncodeInt64(handle_range.end, ss);
-        String end = ss.str();
+        String end = ss.releaseStr();
         /// when handle_range.end == HandleRange::MAX, according to previous implementation, it should be +Inf
         return RowKeyRange(RowKeyValue(false, std::make_shared<String>(start), handle_range.start),
                            handle_range.end == HandleRange::MAX ? RowKeyValue::INT_HANDLE_MAX_KEY

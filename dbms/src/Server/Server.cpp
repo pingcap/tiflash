@@ -17,6 +17,7 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/setThreadName.h>
+#include <Core/SIMD.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
@@ -27,7 +28,6 @@
 #include <IO/ReadHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
-#include <Interpreters/DDLWorker.h>
 #include <Interpreters/IDAsPathUpgrader.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/loadMetadata.h>
@@ -132,6 +132,32 @@ void loadMiConfig(Logger * log)
 }
 #undef TRY_LOAD_CONF
 #endif
+
+namespace
+{
+[[maybe_unused]] void loadBooleanConfig(Logger * log, bool & target, const char * name)
+{
+    auto config = getenv(name);
+    if (config)
+    {
+        LOG_INFO(log, "Got environment variable " << name << " = " << config);
+        try
+        {
+            auto result = std::stoul(config);
+            if (result != 0 && result != 1)
+            {
+                LOG_ERROR(log, "Environment variable" << name << " = " << result << " is not valid");
+                return;
+            }
+            target = result;
+        }
+        catch (...)
+        {
+        }
+    }
+}
+} // namespace
+
 namespace CurrentMetrics
 {
 extern const Metric Revision;
@@ -420,9 +446,9 @@ private:
 };
 
 // We only need this task run once.
-void backgroundInitStores(Context & global_context, Logger * log)
+void initStores(Context & global_context, Logger * log, bool lazily_init_store)
 {
-    auto initStores = [&global_context, log]() {
+    auto do_init_stores = [&global_context, log]() {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
         int init_cnt = 0;
         int err_cnt = 0;
@@ -443,20 +469,28 @@ void backgroundInitStores(Context & global_context, Logger * log)
             "Storage inited finish. [total_count=" << storages.size() << "] [init_count=" << init_cnt << "] [error_count=" << err_cnt
                                                    << "]");
     };
-    std::thread(initStores).detach();
+    if (lazily_init_store)
+    {
+        LOG_INFO(log, "Lazily init store.");
+        std::thread(do_init_stores).detach();
+    }
+    else
+    {
+        LOG_INFO(log, "Not lazily init store.");
+        do_init_stores();
+    }
 }
 
 class Server::FlashGrpcServerHolder
 {
 public:
-    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Logger * log_)
-        : log(log_)
+    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Logger * log_) : log(log_)
     {
         grpc::ServerBuilder builder;
         if (server.security_config.has_tls_config)
         {
             grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
-            auto options = server.security_config.ReadAndCacheSecurityInfo();
+            auto options = server.security_config.readAndCacheSecurityInfo();
             server_cred.pem_root_certs = options.pem_root_certs;
             server_cred.pem_key_cert_pairs.push_back(
                 grpc::SslServerCredentialsOptions::PemKeyCertPair{options.pem_private_key, options.pem_cert_chain});
@@ -502,6 +536,7 @@ public:
         flash_service.reset();
         LOG_INFO(log, "Shut down flash service");
     }
+
 private:
     Logger * log;
     std::unique_ptr<FlashService> flash_service = nullptr;
@@ -744,8 +779,9 @@ public:
         }
 
         LOG_DEBUG(log,
-            "Closed all listening sockets."
-                << (current_connections ? " Waiting for " + toString(current_connections) + " outstanding connections." : ""));
+            "Closed all listening sockets." << (current_connections
+                    ? " Waiting for " + toString(current_connections) + " outstanding connections."
+                    : ""));
 
         if (current_connections)
         {
@@ -771,16 +807,13 @@ public:
                                                           : ""));
     }
 
-    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const
-    {
-        return servers;
-    }
+    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const { return servers; }
+
 private:
     Server & server;
     Logger * log;
     Poco::ThreadPool server_pool;
     std::vector<std::unique_ptr<Poco::Net::TCPServer>> servers;
-
 };
 
 int Server::main(const std::vector<std::string> & /*args*/)
@@ -793,6 +826,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #endif
 
     UpdateMallocConfig(log);
+
+#ifdef DBMS_ENABLE_AVX_SUPPORT
+    loadBooleanConfig(log, DB::SIMDOption::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
+#endif
+
+#ifdef DBMS_ENABLE_AVX512_SUPPORT
+    loadBooleanConfig(log, DB::SIMDOption::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
+#endif
+
+#ifdef DBMS_ENABLE_ASIMD_SUPPORT
+    loadBooleanConfig(log, DB::SIMDOption::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
+#endif
+
+#ifdef DBMS_ENABLE_SVE_SUPPORT
+    loadBooleanConfig(log, DB::SIMDOption::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
+#endif
 
     registerFunctions();
     registerAggregateFunctions();
@@ -1139,7 +1188,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// After attaching system databases we can initialize system log.
     global_context->initializeSystemLogs();
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
-    attachSystemTablesServer(*global_context->getDatabase("system"), false);
+    attachSystemTablesServer(*global_context->getDatabase("system"));
 
     {
         /// create TMTContext
@@ -1188,7 +1237,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Sync schemas done.");
 
-    backgroundInitStores(*global_context, log);
+    initStores(*global_context, log, storage_config.lazily_init_store);
 
     // After schema synced, set current database.
     global_context->setCurrentDatabase(default_database);
@@ -1273,23 +1322,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
         SessionCleaner session_cleaner(*global_context);
         ClusterManagerService cluster_manager_service(*global_context, config_path);
 
+        auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
         {
-            tiflash_instance_wrap.tmt = &global_context->getTMTContext();
+            tiflash_instance_wrap.tmt = &tmt_context;
             LOG_INFO(log, "let tiflash proxy start all services");
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            LOG_INFO(log, "proxy is ready to serve, try to wake up all region leader by sending read index request");
-            {
-                std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
-                tiflash_instance_wrap.tmt->getKVStore()->traverseRegions([&batch_read_index_req](RegionID, const RegionPtr & region) {
-                    batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region));
-                });
-                tiflash_instance_wrap.proxy_helper->batchReadIndex(
-                    batch_read_index_req, tiflash_instance_wrap.tmt->batchReadIndexTimeout());
-            }
-            LOG_INFO(log, "start to wait for terminal signal");
+            LOG_INFO(log, "tiflash proxy is ready to serve, try to wake up all regions' leader");
+            WaitCheckRegionReady(tmt_context, terminate_signals_counter);
         }
 
         {
@@ -1299,12 +1341,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
             GET_METRIC(metrics, tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
-        global_context->getTMTContext().setStoreStatusRunning();
+        tmt_context.setStatusRunning();
+        LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
 
         {
-            global_context->getTMTContext().setTerminated();
-            LOG_INFO(log, "Set tmt context terminated");
+            LOG_INFO(log, "Set store status Stopping");
+            tmt_context.setStatusStopping();
+            {
+                // Wait until there is no read-index task.
+                while (tmt_context.getKVStore()->getReadIndexEvent())
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            }
+            tmt_context.setStatusTerminated();
+            LOG_INFO(log, "Set store status Terminated");
             // wait proxy to stop services
             if (proxy_conf.is_proxy_runnable)
             {

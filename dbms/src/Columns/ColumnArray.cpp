@@ -222,7 +222,7 @@ void ColumnArray::updateHashWithValues(IColumn::HashValues & hash_values, const 
     }
 }
 
-void ColumnArray::updateWeakHash32(WeakHash32 & hash) const
+void ColumnArray::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
 {
     auto s = offsets->size();
     if (hash.getData().size() != s)
@@ -230,7 +230,7 @@ void ColumnArray::updateWeakHash32(WeakHash32 & hash) const
                         ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     WeakHash32 internal_hash(data->size());
-    data->updateWeakHash32(internal_hash);
+    data->updateWeakHash32(internal_hash, collator, sort_key_container);
 
     Offset prev_offset = 0;
     const auto & offsets_data = getOffsets();

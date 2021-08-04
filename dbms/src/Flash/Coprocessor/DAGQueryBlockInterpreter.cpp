@@ -29,11 +29,11 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/makeDummyQuery.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
-#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/Region.h>
@@ -64,11 +64,12 @@ namespace FailPoints
 extern const char region_exception_after_read_from_storage_some_error[];
 extern const char region_exception_after_read_from_storage_all_error[];
 extern const char pause_after_learner_read[];
+extern const char pause_after_copr_streams_acquired[];
 extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
-    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_, ASTPtr dummy_query_,
+    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_,
     const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map_)
     : context(context_),
@@ -76,7 +77,6 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
       query_block(query_block_),
       keep_session_timezone_info(keep_session_timezone_info_),
       rqst(rqst_),
-      dummy_query(std::move(dummy_query_)),
       dag(dag_),
       subqueriesForSets(subqueriesForSets_),
       exchange_receiver_map(exchange_receiver_map_),
@@ -229,7 +229,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             }
             catch (const RegionException & e)
             {
-                if (tmt.getTerminated())
+                if (tmt.checkShuttingDown())
                     throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
                 // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
                 // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
@@ -304,7 +304,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
 
     SelectQueryInfo query_info;
     /// to avoid null point exception
-    query_info.query = dummy_query;
+    query_info.query = makeDummyQuery();
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns(), context.getTimezoneInfo());
     query_info.mvcc_query_info = std::move(mvcc_query_info);
@@ -383,6 +383,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             }
         });
     }
+    FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
 }
 
 void DAGQueryBlockInterpreter::readFromLocalStorage( //
@@ -763,7 +764,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, ExpressionActionsChain & chain)
+bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(const BoolVec & is_ts_column, ExpressionActionsChain & chain)
 {
     bool hasTSColumn = false;
     for (auto b : is_ts_column)
@@ -798,9 +799,13 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
     if (query_block.aggregation)
     {
         /// collation sensitive group by is slower then normal group by, use normal group by by default
-        // todo better to let TiDB decide whether group by is collation sensitive or not
+        bool group_by_collation_sensitive = context.getSettingsRef().group_by_collation_sensitive;
+        if (context.getDAGContext()->isMPPTask())
+            /// in mpp task, here is no way to tell whether this aggregation is first stage aggregation or
+            /// final stage aggregation, to make sure the result is right, always do collation sensitive aggregation
+            group_by_collation_sensitive = true;
         analyzer->appendAggregation(chain, query_block.aggregation->aggregation(), res.aggregation_keys, res.aggregation_collators,
-            res.aggregate_descriptions, context.getSettingsRef().group_by_collation_sensitive);
+            res.aggregate_descriptions, group_by_collation_sensitive);
         res.need_aggregate = true;
         res.before_aggregation = chain.getLastActions();
 
@@ -893,12 +898,12 @@ void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
+        before_agg_streams = pipeline.streams.size();
         BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams);
         pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams, stream_with_non_joined_data,
             params, context.getFileProvider(), true, max_streams,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                                                                 : static_cast<size_t>(settings.max_threads));
-
         pipeline.streams.resize(1);
     }
     else
@@ -1214,7 +1219,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, encode_type, rqst);
     DAGSchema schema;
     ColumnsWithTypeAndName columns;
-    std::vector<bool> is_ts_column;
+    BoolVec is_ts_column;
     std::vector<NameAndTypePair> source_columns;
     for (int i = 0; i < (int)query_block.output_field_types.size(); i++)
     {
@@ -1468,6 +1473,17 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
             for (size_t i = 0; i < concurrency; i++)
                 pipeline.streams.push_back(std::make_shared<SimpleBlockInputStream>(shared_query_block_input_stream));
         }
+    }
+
+    /// expand concurrency after agg
+    if(!query_block.isRootQueryBlock() && before_agg_streams > 1 && pipeline.streams.size()==1)
+    {
+        size_t concurrency = before_agg_streams;
+        BlockInputStreamPtr shared_query_block_input_stream
+            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream());
+        pipeline.streams.clear();
+        for (size_t i = 0; i < concurrency; i++)
+            pipeline.streams.push_back(std::make_shared<SimpleBlockInputStream>(shared_query_block_input_stream));
     }
 
     return pipeline.streams;

@@ -410,9 +410,9 @@ void constructStringLiteralTiExpr(tipb::Expr & expr, const String & value)
 void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value)
 {
     expr.set_tp(tipb::ExprType::Int64);
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     encodeDAGInt64(value, ss);
-    expr.set_val(ss.str());
+    expr.set_val(ss.releaseStr());
     auto * field_type = expr.mutable_field_type();
     field_type->set_tp(TiDB::TypeLongLong);
     field_type->set_flag(TiDB::ColumnFlagNotNull);
@@ -421,9 +421,9 @@ void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value)
 void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value)
 {
     expr.set_tp(tipb::ExprType::MysqlTime);
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     encodeDAGUInt64(packed_value, ss);
-    expr.set_val(ss.str());
+    expr.set_val(ss.releaseStr());
     auto * field_type = expr.mutable_field_type();
     field_type->set_tp(TiDB::TypeDatetime);
     field_type->set_flag(TiDB::ColumnFlagNotNull);
@@ -617,7 +617,12 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::IntDivideInt, "intDiv"},
     //{tipb::ScalarFuncSig::IntDivideDecimal, "divide"},
 
-    {tipb::ScalarFuncSig::ModReal, "modulo"}, {tipb::ScalarFuncSig::ModDecimal, "modulo"}, {tipb::ScalarFuncSig::ModInt, "modulo"},
+    {tipb::ScalarFuncSig::ModReal, "modulo"},
+    {tipb::ScalarFuncSig::ModDecimal, "modulo"},
+    {tipb::ScalarFuncSig::ModIntUnsignedUnsigned, "modulo"},
+    {tipb::ScalarFuncSig::ModIntUnsignedSigned, "modulo"},
+    {tipb::ScalarFuncSig::ModIntSignedUnsigned, "modulo"},
+    {tipb::ScalarFuncSig::ModIntSignedSigned, "modulo"},
 
     {tipb::ScalarFuncSig::MultiplyIntUnsigned, "multiply"}, {tipb::ScalarFuncSig::MinusIntUnsignedUnsigned, "minus"},
     {tipb::ScalarFuncSig::MinusIntUnsignedSigned, "minus"}, {tipb::ScalarFuncSig::MinusIntSignedUnsigned, "minus"},
@@ -641,26 +646,26 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::RoundWithFracDec, "cast"},
 
     {tipb::ScalarFuncSig::Log1Arg, "log"},
-    //{tipb::ScalarFuncSig::Log2Args, "cast"},
+    {tipb::ScalarFuncSig::Log2Args, "log2args"},
     {tipb::ScalarFuncSig::Log2, "log2"}, {tipb::ScalarFuncSig::Log10, "log10"},
 
     {tipb::ScalarFuncSig::Rand, "rand"},
     //{tipb::ScalarFuncSig::RandWithSeedFirstGen, "cast"},
 
     {tipb::ScalarFuncSig::Pow, "pow"},
-    //{tipb::ScalarFuncSig::Conv, "cast"},
-    //{tipb::ScalarFuncSig::CRC32, "cast"},
-    //{tipb::ScalarFuncSig::Sign, "cast"},
+    {tipb::ScalarFuncSig::Conv, "conv"},
+    {tipb::ScalarFuncSig::CRC32, "crc32"},
+    {tipb::ScalarFuncSig::Sign, "sign"},
 
     {tipb::ScalarFuncSig::Sqrt, "sqrt"}, {tipb::ScalarFuncSig::Acos, "acos"}, {tipb::ScalarFuncSig::Asin, "asin"},
     {tipb::ScalarFuncSig::Atan1Arg, "atan"},
     //{tipb::ScalarFuncSig::Atan2Args, "cast"},
     {tipb::ScalarFuncSig::Cos, "cos"},
     //{tipb::ScalarFuncSig::Cot, "cast"},
-    //{tipb::ScalarFuncSig::Degrees, "cast"},
+    {tipb::ScalarFuncSig::Degrees, "degrees"},
     {tipb::ScalarFuncSig::Exp, "exp"},
     //{tipb::ScalarFuncSig::PI, "cast"},
-    //{tipb::ScalarFuncSig::Radians, "cast"},
+    {tipb::ScalarFuncSig::Radians, "radians"},
     {tipb::ScalarFuncSig::Sin, "sin"}, {tipb::ScalarFuncSig::Tan, "tan"}, {tipb::ScalarFuncSig::TruncateInt, "trunc"},
     {tipb::ScalarFuncSig::TruncateReal, "trunc"},
     //{tipb::ScalarFuncSig::TruncateDecimal, "cast"},

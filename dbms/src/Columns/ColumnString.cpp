@@ -347,7 +347,7 @@ void ColumnString::getPermutationWithCollationImpl(const ICollator & collator, b
     }
 }
 
-void ColumnString::updateWeakHash32(WeakHash32 & hash) const
+void ColumnString::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
 {
     auto s = offsets.size();
 
@@ -359,15 +359,32 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash) const
     UInt32 * hash_data = hash.getData().data();
     Offset prev_offset = 0;
 
-    for (const auto & offset : offsets)
+    if (collator != nullptr)
     {
-        auto str_size = offset - prev_offset;
-        /// Skip last zero byte.
-        *hash_data = ::updateWeakHash32(pos, str_size - 1, *hash_data);
+        for (const auto & offset : offsets)
+        {
+            auto str_size = offset - prev_offset;
+            /// Skip last zero byte.
+            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(pos), str_size - 1, sort_key_container);
+            *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
 
-        pos += str_size;
-        prev_offset = offset;
-        ++hash_data;
+            pos += str_size;
+            prev_offset = offset;
+            ++hash_data;
+        }
+    }
+    else
+    {
+        for (const auto & offset : offsets)
+        {
+            auto str_size = offset - prev_offset;
+            /// Skip last zero byte.
+            *hash_data = ::updateWeakHash32(pos, str_size - 1, *hash_data);
+
+            pos += str_size;
+            prev_offset = offset;
+            ++hash_data;
+        }
     }
 }
 

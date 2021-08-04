@@ -8,24 +8,22 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <common/logger_useful.h>
+#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
 
 #include <atomic>
 #include <chrono>
 #include <iostream>
 #include <memory>
 #include <random>
-
-#include "gtest/gtest.h"
-#include <Storages/Page/PageStorage.h>
 
 namespace DB
 {
@@ -34,15 +32,10 @@ namespace tests
 
 using PSPtr = std::shared_ptr<DB::PageStorage>;
 
-class PageStorageMultiPaths_test : public ::testing::TestWithParam<size_t>
+class PageStorageMultiPaths_test : public DB::base::TiFlashStorageTestBasic, public ::testing::WithParamInterface<size_t>
 {
 public:
-    PageStorageMultiPaths_test()
-        : root_path(Poco::Path{TiFlashTestEnv::getTemporaryPath() + "/ps_multi_paths/data0"}.toString()),
-          storage(),
-          file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
-    {
-    }
+    PageStorageMultiPaths_test() : storage(), file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()} {}
 
     static void SetUpTestCase() {}
 
@@ -50,11 +43,7 @@ protected:
     void SetUp() override
     {
         // drop dir if exists
-        if (Poco::File p(root_path); p.exists())
-        {
-            Poco::File file(Poco::Path(root_path).parent());
-            file.remove(true);
-        }
+        dropDataOnDisk(getTemporaryPath());
         // default test config
         config.file_roll_size    = 4 * MB;
         config.gc_max_valid_rate = 0.5;
@@ -65,17 +54,16 @@ protected:
     {
         Strings paths;
         for (size_t i = 0; i < num_folders_for_test; ++i)
-            paths.emplace_back(Poco::Path{TiFlashTestEnv::getTemporaryPath() + "/ps_multi_paths/data" + toString(i)}.toString());
+            paths.emplace_back(Poco::Path{getTemporaryPath() + "/ps_multi_paths/data" + toString(i)}.toString());
         return paths;
     }
 
     String getParentPathForTable(const String & /*db*/, const String & table = "table")
     {
-        return Poco::Path{TiFlashTestEnv::getTemporaryPath() + "/ps_multi_paths/data" + toString(0) + "/" + table + "/log"}.toString();
+        return Poco::Path{getTemporaryPath() + "/ps_multi_paths/data" + toString(0) + "/" + table + "/log"}.toString();
     }
 
 protected:
-    String                       root_path;
     PageStorage::Config          config;
     std::shared_ptr<PageStorage> storage;
     const FileProviderPtr        file_provider;
