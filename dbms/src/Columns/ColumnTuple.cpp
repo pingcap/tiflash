@@ -154,7 +154,7 @@ void ColumnTuple::updateHashWithValues(IColumn::HashValues & hash_values, const 
         column->updateHashWithValues(hash_values, collator, sort_key_container);
 }
 
-void ColumnTuple::updateWeakHash32(WeakHash32 & hash) const
+void ColumnTuple::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
 {
     auto s = size();
 
@@ -163,7 +163,7 @@ void ColumnTuple::updateWeakHash32(WeakHash32 & hash) const
                         ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     for (const auto & column : columns)
-        column->updateWeakHash32(hash);
+        column->updateWeakHash32(hash, collator, sort_key_container);
 }
 
 void ColumnTuple::insertRangeFrom(const IColumn & src, size_t start, size_t length)

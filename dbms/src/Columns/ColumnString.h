@@ -184,18 +184,25 @@ public:
         offsets.resize_assume_reserved(offsets.size() - n);
     }
 
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const override
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
+        const void * src = &chars[offset];
 
         StringRef res;
+
+        if (collator != nullptr)
+        {
+            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(src), string_size, sort_key_container);
+            string_size = sort_key.size;
+            src = sort_key.data;
+        }
         res.size = sizeof(string_size) + string_size;
         char * pos = arena.allocContinue(res.size, begin);
         memcpy(pos, &string_size, sizeof(string_size));
-        memcpy(pos + sizeof(string_size), &chars[offset], string_size);
+        memcpy(pos + sizeof(string_size), src, string_size);
         res.data = pos;
-
         return res;
     }
 
@@ -259,7 +266,7 @@ public:
         }
     }
 
-    void updateWeakHash32(WeakHash32 & hash) const override;
+    void updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 

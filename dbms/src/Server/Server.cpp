@@ -136,7 +136,7 @@ void loadMiConfig(Logger * log)
 
 namespace
 {
-void loadBooleanConfig(Logger * log, bool & target, const char * name)
+[[maybe_unused]] void loadBooleanConfig(Logger * log, bool & target, const char * name)
 {
     auto config = getenv(name);
     if (config)
