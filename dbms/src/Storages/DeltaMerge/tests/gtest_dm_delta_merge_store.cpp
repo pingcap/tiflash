@@ -280,7 +280,7 @@ try
         store     = reload(cols, (pk_type == DMTestEnv::PkType::CommonHandle), 1);
 
         ASSERT_EQ(store->isCommonHandle(), pk_type == DMTestEnv::PkType::CommonHandle) << DMTestEnv::PkTypeToString(pk_type);
-        ASSERT_EQ(store->pkIsHandle(store->original_table_handle_define),
+        ASSERT_EQ(DeltaMergeStore::pkIsHandle(store->getHandle()),
                   (pk_type == DMTestEnv::PkType::PkIsHandleInt64 || pk_type == DMTestEnv::PkType::PkIsHandleInt32))
             << DMTestEnv::PkTypeToString(pk_type);
 
