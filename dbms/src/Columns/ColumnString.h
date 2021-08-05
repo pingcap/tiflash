@@ -194,7 +194,8 @@ public:
 
         if (collator != nullptr)
         {
-            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(src), string_size, sort_key_container);
+            /// Skip last zero byte.
+            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(src), string_size - 1, sort_key_container);
             string_size = sort_key.size;
             src = sort_key.data;
         }
