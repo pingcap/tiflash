@@ -32,7 +32,7 @@ struct MPPTaskId
 
 
 struct MPPTask;
-struct MPPTunnel
+class MPPTunnel : private boost::noncopyable
 {
     std::mutex mu;
     std::condition_variable cv_for_connected;
