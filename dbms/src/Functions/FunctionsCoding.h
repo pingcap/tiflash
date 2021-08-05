@@ -638,9 +638,13 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!arguments[0]->isString())
+        const IDataType * data_type = arguments[0].get();
+        if (auto * null_data_type = typeid_cast<const DataTypeNullable *>(data_type))
+            data_type = null_data_type->getNestedType().get();
+
+        if (!data_type->isString())
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                "Illegal type " + data_type->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return makeNullable(std::make_shared<DataTypeUInt32>());
     }
@@ -651,7 +655,7 @@ public:
     {
         // ip address should not end with '.'.
         if (size == 0 || pos[size - 1] == '.')
-            return {0, 1}
+            return {0, 1};
 
         UInt32 result = 0;
         UInt32 value = 0;
@@ -680,15 +684,13 @@ public:
         // 127.255      -> 127.0.0.255
         // 127.256      -> NULL
         // 127.2.1      -> 127.2.0.1
-        switch (dot_result)
+        switch (dot_count)
         {
-        // fallthrough
-        case 1: result << 8;
-        case 2: result << 8;
-        default: ;
+        case 1: result <<= 24; break;
+        case 2: result <<= 16; break;
+        case 3: result <<= 8; break;
         }
-        result = (result << 8) + value;
-        return {result, 0};
+        return {result + value, 0};
     }
 
     /// Need to return NULL for invalid input.
@@ -729,7 +731,7 @@ public:
                 {
                     const auto * p = reinterpret_cast<const char *>(&vec_src[prev_offset]);
                     /// discard the trailing '\0'
-                    auto size = (i == 0 ? offsets_src[0] : offsets[i] - offsets[i - 1]) - 1;
+                    auto size = (i == 0 ? offsets_src[0] : offsets_src[i] - offsets_src[i - 1]) - 1;
                     std::tie(vec_res[i], vec_res_nullmap[i]) = parseIPv4(p, size);
                 }
                 prev_offset = offsets_src[i];

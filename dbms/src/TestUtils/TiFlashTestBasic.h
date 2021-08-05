@@ -181,9 +181,6 @@ ColumnWithTypeAndName executeFunction(
     const DataVector<FieldType2> & column_data_2,
     size_t column_size = std::numeric_limits<size_t>::max())
 {
-    static_assert(std::is_integral_v<FieldType1> || std::is_floating_point_v<FieldType1> || isDecimalField<FieldType1>());
-    static_assert(std::is_integral_v<FieldType2> || std::is_floating_point_v<FieldType2> || isDecimalField<FieldType2>());
-
     if (column_size == std::numeric_limits<size_t>::max())
         column_size = std::max(column_data_1.size(), column_data_2.size());
 
@@ -204,8 +201,6 @@ ColumnWithTypeAndName executeFunction(
     const DataVector<FieldType> & column_data,
     size_t column_size = std::numeric_limits<size_t>::max())
 {
-    static_assert(std::is_integral_v<FieldType> || std::is_floating_point_v<FieldType> || isDecimalField<FieldType>());
-
     if (column_size == std::numeric_limits<size_t>::max())
         column_size = column_data.size();
 
@@ -225,6 +220,40 @@ protected:
 
     /// ignore column name
     void assertColumnEqual(const ColumnWithTypeAndName & actual, const ColumnWithTypeAndName & expect);
+
+    // e.g. data_type = DataTypeUInt64, FieldType = UInt64.
+    // if data vector contains only 1 element, a const column will be created.
+    // otherwise, two columns are expected to be of the same size.
+    // use std::nullopt for null values.
+    template <typename FieldType1, typename FieldType2, typename ResultFieldType>
+    void executeBinaryFunctionAndCheck(
+        const String & function_name,
+        const DataTypePtr & data_type_1,
+        const DataTypePtr & data_type_2,
+        const DataTypePtr & expected_data_type,
+        const DataVector<FieldType1> & column_data_1,
+        const DataVector<FieldType2> & column_data_2,
+        const DataVector<ResultFieldType> & expected_data)
+    {
+        auto result = executeFunction(function_name, data_type_1, data_type_2, column_data_1, column_data_2);
+        auto expect = makeColumnWithTypeAndName("ignore", expected_data.size(), expected_data_type, expected_data);
+
+        assertColumnEqual(result, expect);
+    }
+
+    template <typename FieldType, typename ResultFieldType>
+    void executeUnaryFunctionAndCheck(
+        const String & function_name,
+        const DataTypePtr & data_type,
+        const DataTypePtr & expected_data_type,
+        const DataVector<FieldType> & column_data,
+        const DataVector<ResultFieldType> & expected_data)
+    {
+        auto result = executeFunction(function_name, data_type, column_data);
+        auto expect = makeColumnWithTypeAndName("ignore", expected_data.size(), expected_data_type, expected_data);
+
+        assertColumnEqual(result, expect);
+    }
 };
 
 
@@ -305,6 +334,22 @@ private:
                      << ::testing::UnitTest::GetInstance()->current_test_info()->name() << " is disabled."); \
         return;                                                                                              \
     }
+
+#define EXECUTE_BINARY_FUNCTION_AND_CHECK(function_name, FIELD_TYPE_1, FIELD_TYPE_2, RESULT_FIELD_TYPE, ...) \
+    do {\
+        auto fn = (function_name);\
+        auto desc = fmt::format("Execute binary function {} at {}:{}", fn, __FILE__, __LINE__);\
+        SCOPED_TRACE(desc.c_str());\
+        executeBinaryFunctionAndCheck<FIELD_TYPE_1, FIELD_TYPE_2, RESULT_FIELD_TYPE>(function_name, ##__VA_ARGS__);\
+    } while (false)
+
+#define EXECUTE_UNARY_FUNCTION_AND_CHECK(function_name, FIELD_TYPE, RESULT_FIELD_TYPE, ...) \
+    do {\
+        auto fn = (function_name);\
+        auto desc = fmt::format("Execute unary function {} at {}:{}", fn, __FILE__, __LINE__);\
+        SCOPED_TRACE(desc.c_str());\
+        executeUnaryFunctionAndCheck<FIELD_TYPE, RESULT_FIELD_TYPE>(function_name, ##__VA_ARGS__);\
+    } while (false)
 
 } // namespace tests
 } // namespace DB
