@@ -1169,7 +1169,7 @@ struct DateTimeAddIntervalImpl
             const IColumn & delta_column = *block.getByPosition(arguments[1]).column;
 
             if (const auto * delta_const_column = typeid_cast<const ColumnConst *>(&delta_column))
-                Op::vector_constant(sources->getData(), col_to->getData(), delta_const_column->getField().get<Int64>(), time_zone);
+                Op::vector_constant(sources->getData(), col_to->getData(), delta_const_column->getInt(0), time_zone);
             else
                 Op::vector_vector(sources->getData(), col_to->getData(), delta_column, time_zone);
 

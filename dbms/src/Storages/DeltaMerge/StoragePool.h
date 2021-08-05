@@ -63,10 +63,10 @@ private:
 
 struct StorageSnapshot : private boost::noncopyable
 {
-    StorageSnapshot(StoragePool & storage, bool snapshot_read = true)
-        : log_reader(storage.log(), snapshot_read ? storage.log().getSnapshot() : nullptr),
-          data_reader(storage.data(), snapshot_read ? storage.data().getSnapshot() : nullptr),
-          meta_reader(storage.meta(), snapshot_read ? storage.meta().getSnapshot() : nullptr)
+    StorageSnapshot(StoragePool & storage, ReadLimiterPtr read_limiter, bool snapshot_read = true)
+        : log_reader(storage.log(), snapshot_read ? storage.log().getSnapshot() : nullptr, read_limiter),
+          data_reader(storage.data(), snapshot_read ? storage.data().getSnapshot() : nullptr, read_limiter),
+          meta_reader(storage.meta(), snapshot_read ? storage.meta().getSnapshot() : nullptr, read_limiter)
     {
     }
 

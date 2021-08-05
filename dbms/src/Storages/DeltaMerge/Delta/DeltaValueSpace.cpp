@@ -89,7 +89,7 @@ void DeltaValueSpace::abandon(DMContext & context)
 
 DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
 {
-    Page                 page = context.storage_pool.meta().read(id);
+    Page                 page = context.storage_pool.meta().read(id, nullptr);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     auto                 packs = deserializePacks(context, segment_range, buf);
     return std::make_shared<DeltaValueSpace>(id, packs);

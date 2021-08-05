@@ -228,35 +228,35 @@ DMFile::OffsetAndSize DMFile::writePackPropertyToBuffer(WriteBuffer & buffer)
     return std::make_tuple(offset, size);
 }
 
-void DMFile::writeMeta(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
+void DMFile::writeMeta(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
 {
     String meta_path     = metaPath();
     String tmp_meta_path = meta_path + ".tmp";
 
     {
-        WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, rate_limiter, 4096);
+        WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, write_limiter, 4096);
         writeMetaToBuffer(buf);
         buf.sync();
     }
     Poco::File(tmp_meta_path).renameTo(meta_path);
 }
 
-void DMFile::writePackProperty(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
+void DMFile::writePackProperty(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
 {
     String property_path     = packPropertyPath();
     String tmp_property_path = property_path + ".tmp";
     {
-        WriteBufferFromFileProvider buf(file_provider, tmp_property_path, encryptionPackPropertyPath(), false, rate_limiter, 4096);
+        WriteBufferFromFileProvider buf(file_provider, tmp_property_path, encryptionPackPropertyPath(), false, write_limiter, 4096);
         writePackPropertyToBuffer(buf);
         buf.sync();
     }
     Poco::File(tmp_property_path).renameTo(property_path);
 }
 
-void DMFile::writeMetadata(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
+void DMFile::writeMetadata(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
 {
-    writePackProperty(file_provider, rate_limiter);
-    writeMeta(file_provider, rate_limiter);
+    writePackProperty(file_provider, write_limiter);
+    writeMeta(file_provider, write_limiter);
 }
 
 void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver)
@@ -374,9 +374,9 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
     readPackStat(file_provider, footer.meta_pack_info);
 }
 
-void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
+void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
 {
-    writeMetadata(file_provider, rate_limiter);
+    writeMetadata(file_provider, write_limiter);
     if (unlikely(status != Status::WRITING))
         throw Exception("Expected WRITING status, now " + statusString(status));
     Poco::File old_file(path());
