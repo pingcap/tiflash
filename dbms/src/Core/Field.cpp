@@ -10,302 +10,336 @@
 
 namespace DB
 {
-    inline void readBinary(Array & x, ReadBuffer & buf)
+void readBinary(Array & x, ReadBuffer & buf)
+{
+    size_t size;
+    UInt8 type;
+    DB::readBinary(type, buf);
+    DB::readBinary(size, buf);
+
+    for (size_t index = 0; index < size; ++index)
     {
-        size_t size;
+        switch (type)
+        {
+            case Field::Types::Null:
+            {
+                x.push_back(DB::Field());
+                break;
+            }
+            case Field::Types::UInt64:
+            {
+                UInt64 value;
+                DB::readVarUInt(value, buf);
+                x.push_back(value);
+                break;
+            }
+            case Field::Types::UInt128:
+            {
+                UInt128 value;
+                DB::readBinary(value, buf);
+                x.push_back(value);
+                break;
+            }
+            case Field::Types::Int64:
+            {
+                Int64 value;
+                DB::readVarInt(value, buf);
+                x.push_back(value);
+                break;
+            }
+            case Field::Types::Float64:
+            {
+                Float64 value;
+                DB::readFloatBinary(value, buf);
+                x.push_back(value);
+                break;
+            }
+            case Field::Types::String:
+            {
+                std::string value;
+                DB::readStringBinary(value, buf);
+                x.push_back(value);
+                break;
+            }
+            case Field::Types::Array:
+            {
+                Array value;
+                DB::readBinary(value, buf);
+                x.push_back(value);
+                break;
+            }
+            case Field::Types::Tuple:
+            {
+                Tuple value;
+                DB::readBinary(value, buf);
+                x.push_back(value);
+                break;
+            }
+        };
+    }
+}
+
+void writeBinary(const Array & x, WriteBuffer & buf)
+{
+    UInt8 type = Field::Types::Null;
+    size_t size = x.size();
+    if (size)
+        type = x.front().getType();
+    DB::writeBinary(type, buf);
+    DB::writeBinary(size, buf);
+
+    for (Array::const_iterator it = x.begin(); it != x.end(); ++it)
+    {
+        switch (type)
+        {
+            case Field::Types::Null: break;
+            case Field::Types::UInt64:
+            {
+                DB::writeVarUInt(get<UInt64>(*it), buf);
+                break;
+            }
+            case Field::Types::UInt128:
+            {
+                DB::writeBinary(get<UInt128>(*it), buf);
+                break;
+            }
+            case Field::Types::Int64:
+            {
+                DB::writeVarInt(get<Int64>(*it), buf);
+                break;
+            }
+            case Field::Types::Float64:
+            {
+                DB::writeFloatBinary(get<Float64>(*it), buf);
+                break;
+            }
+            case Field::Types::String:
+            {
+                DB::writeStringBinary(get<std::string>(*it), buf);
+                break;
+            }
+            case Field::Types::Array:
+            {
+                DB::writeBinary(get<Array>(*it), buf);
+                break;
+            }
+            case Field::Types::Tuple:
+            {
+                DB::writeBinary(get<Tuple>(*it), buf);
+                break;
+            }
+        };
+    }
+}
+
+void writeText(const Array & x, WriteBuffer & buf)
+{
+    DB::String res = applyVisitor(DB::FieldVisitorToString(), DB::Field(x));
+    buf.write(res.data(), res.size());
+}
+
+void readBinary(Tuple & x_def, ReadBuffer & buf)
+{
+    auto & x = x_def.toUnderType();
+    size_t size;
+    DB::readBinary(size, buf);
+
+    for (size_t index = 0; index < size; ++index)
+    {
         UInt8 type;
         DB::readBinary(type, buf);
-        DB::readBinary(size, buf);
 
-        for (size_t index = 0; index < size; ++index)
+        switch (type)
         {
-            switch (type)
+            case Field::Types::Null:
             {
-                case Field::Types::Null:
-                {
-                    x.push_back(DB::Field());
-                    break;
-                }
-                case Field::Types::UInt64:
-                {
-                    UInt64 value;
-                    DB::readVarUInt(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-                case Field::Types::UInt128:
-                {
-                    UInt128 value;
-                    DB::readBinary(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-                case Field::Types::Int64:
-                {
-                    Int64 value;
-                    DB::readVarInt(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-                case Field::Types::Float64:
-                {
-                    Float64 value;
-                    DB::readFloatBinary(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-                case Field::Types::String:
-                {
-                    std::string value;
-                    DB::readStringBinary(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-                case Field::Types::Array:
-                {
-                    Array value;
-                    DB::readBinary(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-                case Field::Types::Tuple:
-                {
-                    Tuple value;
-                    DB::readBinary(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-            };
-        }
-    }
-
-    void writeBinary(const Array & x, WriteBuffer & buf)
-    {
-        UInt8 type = Field::Types::Null;
-        size_t size = x.size();
-        if (size)
-            type = x.front().getType();
-        DB::writeBinary(type, buf);
-        DB::writeBinary(size, buf);
-
-        for (Array::const_iterator it = x.begin(); it != x.end(); ++it)
-        {
-            switch (type)
+                x.push_back(DB::Field());
+                break;
+            }
+            case Field::Types::UInt64:
             {
-                case Field::Types::Null: break;
-                case Field::Types::UInt64:
-                {
-                    DB::writeVarUInt(get<UInt64>(*it), buf);
-                    break;
-                }
-                case Field::Types::UInt128:
-                {
-                    DB::writeBinary(get<UInt128>(*it), buf);
-                    break;
-                }
-                case Field::Types::Int64:
-                {
-                    DB::writeVarInt(get<Int64>(*it), buf);
-                    break;
-                }
-                case Field::Types::Float64:
-                {
-                    DB::writeFloatBinary(get<Float64>(*it), buf);
-                    break;
-                }
-                case Field::Types::String:
-                {
-                    DB::writeStringBinary(get<std::string>(*it), buf);
-                    break;
-                }
-                case Field::Types::Array:
-                {
-                    DB::writeBinary(get<Array>(*it), buf);
-                    break;
-                }
-                case Field::Types::Tuple:
-                {
-                    DB::writeBinary(get<Tuple>(*it), buf);
-                    break;
-                }
-            };
-        }
-    }
-
-    void writeText(const Array & x, WriteBuffer & buf)
-    {
-        DB::String res = applyVisitor(DB::FieldVisitorToString(), DB::Field(x));
-        buf.write(res.data(), res.size());
+                UInt64 value;
+                DB::readVarUInt(value, buf);
+                x.push_back(value);
+                break;
+            }
+            case Field::Types::UInt128:
+            {
+                UInt128 value;
+                DB::readBinary(value, buf);
+                x.push_back(value);
+                break;
+            }
+            case Field::Types::Int64:
+            {
+                Int64 value;
+                DB::readVarInt(value, buf);
+                x.push_back(value);
+                break;
+            }
+            case Field::Types::Float64:
+            {
+                Float64 value;
+                DB::readFloatBinary(value, buf);
+                x.push_back(value);
+                break;
+            }
+            case Field::Types::String:
+            {
+                std::string value;
+                DB::readStringBinary(value, buf);
+                x.push_back(value);
+                break;
+            }
+            case Field::Types::Array:
+            {
+                Array value;
+                DB::readBinary(value, buf);
+                x.push_back(value);
+                break;
+            }
+            case Field::Types::Tuple:
+            {
+                Tuple value;
+                DB::readBinary(value, buf);
+                x.push_back(value);
+                break;
+            }
+        };
     }
 }
 
-
-namespace DB
+void writeBinary(const Tuple & x_def, WriteBuffer & buf)
 {
-    inline void readBinary(Tuple & x_def, ReadBuffer & buf)
-    {
-        auto & x = x_def.toUnderType();
-        size_t size;
-        DB::readBinary(size, buf);
+    auto & x = x_def.toUnderType();
+    const size_t size = x.size();
+    DB::writeBinary(size, buf);
 
-        for (size_t index = 0; index < size; ++index)
+    for (auto it = x.begin(); it != x.end(); ++it)
+    {
+        const UInt8 type = it->getType();
+        DB::writeBinary(type, buf);
+
+        switch (type)
         {
-            UInt8 type;
-            DB::readBinary(type, buf);
-
-            switch (type)
+            case Field::Types::Null: break;
+            case Field::Types::UInt64:
             {
-                case Field::Types::Null:
-                {
-                    x.push_back(DB::Field());
-                    break;
-                }
-                case Field::Types::UInt64:
-                {
-                    UInt64 value;
-                    DB::readVarUInt(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-                case Field::Types::UInt128:
-                {
-                    UInt128 value;
-                    DB::readBinary(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-                case Field::Types::Int64:
-                {
-                    Int64 value;
-                    DB::readVarInt(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-                case Field::Types::Float64:
-                {
-                    Float64 value;
-                    DB::readFloatBinary(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-                case Field::Types::String:
-                {
-                    std::string value;
-                    DB::readStringBinary(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-                case Field::Types::Array:
-                {
-                    Array value;
-                    DB::readBinary(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-                case Field::Types::Tuple:
-                {
-                    Tuple value;
-                    DB::readBinary(value, buf);
-                    x.push_back(value);
-                    break;
-                }
-            };
-        }
-    }
-
-    void writeBinary(const Tuple & x_def, WriteBuffer & buf)
-    {
-        auto & x = x_def.toUnderType();
-        const size_t size = x.size();
-        DB::writeBinary(size, buf);
-
-        for (auto it = x.begin(); it != x.end(); ++it)
-        {
-            const UInt8 type = it->getType();
-            DB::writeBinary(type, buf);
-
-            switch (type)
+                DB::writeVarUInt(get<UInt64>(*it), buf);
+                break;
+            }
+            case Field::Types::UInt128:
             {
-                case Field::Types::Null: break;
-                case Field::Types::UInt64:
-                {
-                    DB::writeVarUInt(get<UInt64>(*it), buf);
-                    break;
-                }
-                case Field::Types::UInt128:
-                {
-                    DB::writeBinary(get<UInt128>(*it), buf);
-                    break;
-                }
-                case Field::Types::Int64:
-                {
-                    DB::writeVarInt(get<Int64>(*it), buf);
-                    break;
-                }
-                case Field::Types::Float64:
-                {
-                    DB::writeFloatBinary(get<Float64>(*it), buf);
-                    break;
-                }
-                case Field::Types::String:
-                {
-                    DB::writeStringBinary(get<std::string>(*it), buf);
-                    break;
-                }
-                case Field::Types::Array:
-                {
-                    DB::writeBinary(get<Array>(*it), buf);
-                    break;
-                }
-                case Field::Types::Tuple:
-                {
-                    DB::writeBinary(get<Tuple>(*it), buf);
-                    break;
-                }
-            };
-        }
+                DB::writeBinary(get<UInt128>(*it), buf);
+                break;
+            }
+            case Field::Types::Int64:
+            {
+                DB::writeVarInt(get<Int64>(*it), buf);
+                break;
+            }
+            case Field::Types::Float64:
+            {
+                DB::writeFloatBinary(get<Float64>(*it), buf);
+                break;
+            }
+            case Field::Types::String:
+            {
+                DB::writeStringBinary(get<std::string>(*it), buf);
+                break;
+            }
+            case Field::Types::Array:
+            {
+                DB::writeBinary(get<Array>(*it), buf);
+                break;
+            }
+            case Field::Types::Tuple:
+            {
+                DB::writeBinary(get<Tuple>(*it), buf);
+                break;
+            }
+        };
     }
-
-    void writeText(const Tuple & x, WriteBuffer & buf)
-    {
-        DB::String res = applyVisitor(DB::FieldVisitorToString(), DB::Field(x));
-        buf.write(res.data(), res.size());
-    }
-
-    template <typename T>
-    static bool decEqual(T x, T y, UInt32 x_scale, UInt32 y_scale)
-    {
-        using Comparator = DecimalComparison<T, T, EqualsOp>;
-        return Comparator::compare(x, y, x_scale, y_scale);
-    }
-
-    template <typename T>
-    static bool decLess(T x, T y, UInt32 x_scale, UInt32 y_scale)
-    {
-        using Comparator = DecimalComparison<T, T, LessOp>;
-        return Comparator::compare(x, y, x_scale, y_scale);
-    }
-
-    template <typename T>
-    static bool decLessOrEqual(T x, T y, UInt32 x_scale, UInt32 y_scale)
-    {
-        using Comparator = DecimalComparison<T, T, LessOrEqualsOp>;
-        return Comparator::compare(x, y, x_scale, y_scale);
-    }
-
-    template <> bool decimalEqual(Decimal32 x, Decimal32 y, UInt32 xs, UInt32 ys) { return decEqual(x, y, xs, ys); }
-    template <> bool decimalLess(Decimal32 x, Decimal32 y, UInt32 xs, UInt32 ys) { return decLess(x, y, xs, ys); }
-    template <> bool decimalLessOrEqual(Decimal32 x, Decimal32 y, UInt32 xs, UInt32 ys) { return decLessOrEqual(x, y, xs, ys); }
-
-    template <> bool decimalEqual(Decimal64 x, Decimal64 y, UInt32 xs, UInt32 ys) { return decEqual(x, y, xs, ys); }
-    template <> bool decimalLess(Decimal64 x, Decimal64 y, UInt32 xs, UInt32 ys) { return decLess(x, y, xs, ys); }
-    template <> bool decimalLessOrEqual(Decimal64 x, Decimal64 y, UInt32 xs, UInt32 ys) { return decLessOrEqual(x, y, xs, ys); }
-
-    template <> bool decimalEqual(Decimal128 x, Decimal128 y, UInt32 xs, UInt32 ys) { return decEqual(x, y, xs, ys); }
-    template <> bool decimalLess(Decimal128 x, Decimal128 y, UInt32 xs, UInt32 ys) { return decLess(x, y, xs, ys); }
-    template <> bool decimalLessOrEqual(Decimal128 x, Decimal128 y, UInt32 xs, UInt32 ys) { return decLessOrEqual(x, y, xs, ys); }
-
-    template <> bool decimalEqual(Decimal256 x, Decimal256 y, UInt32 xs, UInt32 ys) { return decEqual(x, y, xs, ys); }
-    template <> bool decimalLess(Decimal256 x, Decimal256 y, UInt32 xs, UInt32 ys) { return decLess(x, y, xs, ys); }
-    template <> bool decimalLessOrEqual(Decimal256 x, Decimal256 y, UInt32 xs, UInt32 ys) { return decLessOrEqual(x, y, xs, ys); }
 }
+
+void writeText(const Tuple & x, WriteBuffer & buf)
+{
+    DB::String res = applyVisitor(DB::FieldVisitorToString(), DB::Field(x));
+    buf.write(res.data(), res.size());
+}
+
+template <typename T>
+static bool decEqual(T x, T y, UInt32 x_scale, UInt32 y_scale)
+{
+    using Comparator = DecimalComparison<T, T, EqualsOp>;
+    return Comparator::compare(x, y, x_scale, y_scale);
+}
+
+template <typename T>
+static bool decLess(T x, T y, UInt32 x_scale, UInt32 y_scale)
+{
+    using Comparator = DecimalComparison<T, T, LessOp>;
+    return Comparator::compare(x, y, x_scale, y_scale);
+}
+
+template <typename T>
+static bool decLessOrEqual(T x, T y, UInt32 x_scale, UInt32 y_scale)
+{
+    using Comparator = DecimalComparison<T, T, LessOrEqualsOp>;
+    return Comparator::compare(x, y, x_scale, y_scale);
+}
+
+template <> bool decimalEqual(Decimal32 x, Decimal32 y, UInt32 xs, UInt32 ys) { return decEqual(x, y, xs, ys); }
+template <> bool decimalLess(Decimal32 x, Decimal32 y, UInt32 xs, UInt32 ys) { return decLess(x, y, xs, ys); }
+template <> bool decimalLessOrEqual(Decimal32 x, Decimal32 y, UInt32 xs, UInt32 ys) { return decLessOrEqual(x, y, xs, ys); }
+
+template <> bool decimalEqual(Decimal64 x, Decimal64 y, UInt32 xs, UInt32 ys) { return decEqual(x, y, xs, ys); }
+template <> bool decimalLess(Decimal64 x, Decimal64 y, UInt32 xs, UInt32 ys) { return decLess(x, y, xs, ys); }
+template <> bool decimalLessOrEqual(Decimal64 x, Decimal64 y, UInt32 xs, UInt32 ys) { return decLessOrEqual(x, y, xs, ys); }
+
+template <> bool decimalEqual(Decimal128 x, Decimal128 y, UInt32 xs, UInt32 ys) { return decEqual(x, y, xs, ys); }
+template <> bool decimalLess(Decimal128 x, Decimal128 y, UInt32 xs, UInt32 ys) { return decLess(x, y, xs, ys); }
+template <> bool decimalLessOrEqual(Decimal128 x, Decimal128 y, UInt32 xs, UInt32 ys) { return decLessOrEqual(x, y, xs, ys); }
+
+template <> bool decimalEqual(Decimal256 x, Decimal256 y, UInt32 xs, UInt32 ys) { return decEqual(x, y, xs, ys); }
+template <> bool decimalLess(Decimal256 x, Decimal256 y, UInt32 xs, UInt32 ys) { return decLess(x, y, xs, ys); }
+template <> bool decimalLessOrEqual(Decimal256 x, Decimal256 y, UInt32 xs, UInt32 ys) { return decLessOrEqual(x, y, xs, ys); }
+
+String Field::toString() const
+{
+    switch (which)
+    {
+        case Types::Null:
+            return "Null()";
+        case Types::UInt64:
+            return fmt::format("UInt64({})", get<UInt64>());
+        case Types::UInt128:
+            return fmt::format("UInt128({}, {})", get<UInt128>().low, get<UInt128>().high);
+        case Types::Int64:
+            return fmt::format("Int64({})", get<Int64>());
+        case Types::Float64:
+            return fmt::format("Float64({})", get<Float64>());
+        case Types::String:
+            return fmt::format("String({})", get<String>());
+        case Types::Array:
+            // TODO: fill array content
+            return fmt::format("Array()");
+        case Types::Tuple:
+            // TODO: fill tuple content
+            return fmt::format("Tuple()");
+        case Types::Decimal32:
+            return fmt::format("Decimal32({})", get<DecimalField<Decimal32>>().toString());
+        case Types::Decimal64:
+            return fmt::format("Decimal64({})", get<DecimalField<Decimal64>>().toString());
+        case Types::Decimal128:
+            return fmt::format("Decimal128({})", get<DecimalField<Decimal128>>().toString());
+        case Types::Decimal256:
+            return fmt::format("Decimal256({})", get<DecimalField<Decimal256>>().toString());
+
+        default:
+            throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
+    }
+}
+
+} // namespace DB
+

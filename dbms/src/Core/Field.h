@@ -11,6 +11,7 @@
 #include <Core/Defines.h>
 #include <Core/Types.h>
 #include <common/strong_typedef.h>
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -322,6 +323,7 @@ public:
 
     Types::Which getType() const { return which; }
     const char * getTypeName() const { return Types::toString(which); }
+    String toString() const;
 
     bool isNull() const { return which == Types::Null; }
 
@@ -577,7 +579,6 @@ private:
                 throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
         }
     }
-
 
     void create(const Field & x)
     {
