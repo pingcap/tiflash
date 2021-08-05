@@ -72,7 +72,10 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
     else
     {
         LOG_INFO(log, "Configuration raft.disable_bg_flush is set to true, background flush tasks are disabled.");
-        storage_gc_handle = background_pool.addTask([this] { return tmt.getGCManager().work(); }, false);
+        auto & global_settings = tmt.getContext().getSettingsRef();
+        storage_gc_handle = background_pool.addTask(
+            [this] { return tmt.getGCManager().work(); }, false, /*interval_ms=*/global_settings.dt_bg_gc_check_interval * 1000);
+        LOG_INFO(log, "Start background storage gc worker with interval " << global_settings.dt_bg_gc_check_interval << " seconds.");
     }
 }
 

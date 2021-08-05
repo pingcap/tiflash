@@ -301,72 +301,98 @@ void StorageIORateLimitConfig::parse(const String& storage_io_rate_limit, Poco::
     cpptoml::parser p(ss);
     auto config = p.parse();
 
-    if (auto max_bps = config->get_qualified_as<UInt64>("max-bytes-per-sec"); max_bps)
+    auto readConfig = [&](const std::string& name, auto& value)
     {
-        max_bytes_per_sec = *max_bps;
-    }
-
-    if (auto m = config->get_qualified_as<String>("mode"); m)
-    {
-        if (*m == "write-only")
+        if (auto p = config->get_qualified_as<typename std::remove_reference<decltype(value)>::type>(name); p)
         {
-            mode = IORateLimitMode::WRITE_ONLY;
-        }
-        else
-        {
-            String msg = "Invalid config: storage.io-rate-limit.mode = " + *m;
-            LOG_ERROR(log, msg);
-            throw Exception(msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
-        }
-    }
-    
-    // The weight config is not expose to external users by default.
-    // It is used for development and test.
-    auto readWeightConfig = [&](const std::string& name, UInt32& weight){
-        if (auto w = config->get_qualified_as<UInt32>(name); w)
-        {
-            if (*w == 0)
-            {
-                String msg = "Invalid config: storage.io-rate-limite." + name + " = 0";
-                LOG_ERROR(log, msg);
-                throw Exception(msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
-            }
-            else
-            {
-                weight = *w;
-            }
+            value = *p;
         }
     };
-    
-    readWeightConfig("foreground-write-weight", fg_write_weight);
-    readWeightConfig("background-write-weight", bg_write_weight);
 
-    LOG_INFO(log, "storage.io-rate-limit " << toString());
+    readConfig("max_bytes_per_sec", max_bytes_per_sec);
+    readConfig("max_read_bytes_per_sec", max_read_bytes_per_sec);
+    readConfig("max_write_bytes_per_sec", max_write_bytes_per_sec);
+    readConfig("foreground_write_weight", fg_write_weight);
+    readConfig("background_write_weight", bg_write_weight);
+    readConfig("foreground_read_weight", fg_read_weight);
+    readConfig("background_read_weight", bg_read_weight);
+    
+    use_max_bytes_per_sec = (max_read_bytes_per_sec == 0 && max_write_bytes_per_sec == 0);
+
+    LOG_INFO(log, "storage.io_rate_limit " << toString());
 }
 
 std::string StorageIORateLimitConfig::toString() const
 {
     return " max_bytes_per_sec: " + std::to_string(max_bytes_per_sec) +
-        " mode: " + std::to_string(static_cast<UInt32>(mode)) +
+        " max_read_bytes_per_sec: " + std::to_string(max_read_bytes_per_sec) +
+        " max_write_bytes_per_sec: " + std::to_string(max_write_bytes_per_sec) +
+        " use_max_bytes_per_sec: " + std::to_string(use_max_bytes_per_sec) +
         " fg_write_weight: " + std::to_string(fg_write_weight) +
-        " bg_write_weight: " + std::to_string(bg_write_weight);
+        " bg_write_weight: " + std::to_string(bg_write_weight) +
+        " fg_read_weight: " + std::to_string(fg_read_weight) +
+        " bg_read_weight: " + std::to_string(bg_read_weight);
+}
+
+UInt64 StorageIORateLimitConfig::readWeight() const
+{
+    return fg_read_weight + bg_read_weight;
+}
+
+UInt64 StorageIORateLimitConfig::writeWeight() const
+{
+    return fg_write_weight + bg_write_weight;
+}
+
+UInt64 StorageIORateLimitConfig::totalWeight() const
+{
+    return readWeight() + writeWeight();
 }
 
 UInt64 StorageIORateLimitConfig::getFgWriteMaxBytesPerSec() const
 {
-    return max_bytes_per_sec / (fg_write_weight + bg_write_weight) * fg_write_weight;
+    if (totalWeight() <= 0 || writeWeight() <= 0)
+    {
+        return 0;
+    }
+    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * fg_write_weight : max_write_bytes_per_sec / writeWeight() * fg_write_weight;
 }
 
 UInt64 StorageIORateLimitConfig::getBgWriteMaxBytesPerSec() const
 {
-    return max_bytes_per_sec / (fg_write_weight + bg_write_weight) * bg_write_weight;
+    if (totalWeight() <= 0 || writeWeight() <= 0)
+    {
+        return 0;
+    }
+    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * bg_write_weight : max_write_bytes_per_sec / writeWeight() * bg_write_weight;
+}
+
+UInt64 StorageIORateLimitConfig::getFgReadMaxBytesPerSec() const
+{
+    if (totalWeight() <= 0 || readWeight() <= 0)
+    {
+        return 0;
+    }
+    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * fg_read_weight : max_read_bytes_per_sec / readWeight() * fg_read_weight;
+}
+
+UInt64 StorageIORateLimitConfig::getBgReadMaxBytesPerSec() const
+{
+    if (totalWeight() <= 0 || readWeight() <= 0)
+    {
+        return 0;
+    }
+    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * bg_read_weight : max_read_bytes_per_sec / readWeight() * bg_read_weight;
 }
 
 bool StorageIORateLimitConfig::operator ==(const StorageIORateLimitConfig& config) const
 {
     return config.max_bytes_per_sec == max_bytes_per_sec &&
-        config.mode == mode &&
+        config.max_read_bytes_per_sec == max_read_bytes_per_sec &&
+        config.max_write_bytes_per_sec == max_write_bytes_per_sec &&
         config.bg_write_weight == bg_write_weight &&
-        config.fg_write_weight == fg_write_weight;
+        config.fg_write_weight == fg_write_weight &&
+        config.bg_read_weight == bg_read_weight &&
+        config.fg_read_weight == fg_read_weight;
 }
 } // namespace DB

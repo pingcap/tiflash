@@ -133,7 +133,7 @@ bool DeltaValueSpace::compact(DMContext & context)
     size_t total_compact_rows  = 0;
 
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
-    PageReader   reader(context.storage_pool.log(), std::move(log_storage_snap));
+    PageReader   reader(context.storage_pool.log(), std::move(log_storage_snap), context.getReadLimiter());
     for (auto & task : tasks)
     {
         auto & schema          = *(task.to_compact[0]->tryToBlock()->getSchema());

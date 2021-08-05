@@ -49,7 +49,7 @@ RowsAndBytes Segment::getRowsAndBytesInRange(DMContext &                dm_conte
     auto & version   = getVersionColumnDefine();
     auto   read_info = getReadInfo(dm_context, {handle, version}, segment_snap, {real_range});
 
-    auto storage_snap = std::make_shared<StorageSnapshot>(dm_context.storage_pool);
+    auto storage_snap = std::make_shared<StorageSnapshot>(dm_context.storage_pool, dm_context.getReadLimiter());
     auto pk_ver_col_defs
         = std::make_shared<ColumnDefines>(ColumnDefines{getExtraHandleColumnDefine(dm_context.is_common_handle), getVersionColumnDefine()});
     auto delta_reader = std::make_shared<DeltaValueReader>(dm_context, segment_snap->delta, pk_ver_col_defs, this->rowkey_range);
