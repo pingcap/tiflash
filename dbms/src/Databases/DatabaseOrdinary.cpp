@@ -372,7 +372,7 @@ void DatabaseOrdinary::alterTable(
     {
         char in_buf[METADATA_FILE_BUFFER_SIZE];
         ReadBufferFromFileProvider in(
-            context.getFileProvider(), table_metadata_path, EncryptionPath(table_metadata_path, ""), METADATA_FILE_BUFFER_SIZE, -1, in_buf);
+            context.getFileProvider(), table_metadata_path, EncryptionPath(table_metadata_path, ""), METADATA_FILE_BUFFER_SIZE, /*read_limiter*/ nullptr, -1, in_buf);
         readStringUntilEOF(statement, in);
     }
 
