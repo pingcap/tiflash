@@ -832,9 +832,8 @@ void PageStorage::drop()
     opt.remove_tmp_files  = false;
     auto page_files       = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
-    // TODO: count how many bytes in "archive" directory.
     for (const auto & page_file : page_files)
-        delegator->removePageFile(page_file.fileIdLevel(), page_file.getDiskSize());
+        delegator->removePageFile(page_file.fileIdLevel(), page_file.getDiskSize(), false);
 
     /// FIXME: Note that these drop directories actions are not atomic, may leave some broken files on disk.
 
@@ -1194,9 +1193,11 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
             if (Poco::File file(path); file.exists())
             {
                 // To ensure the atomic of deletion, move to the `archive` dir first and then remove the PageFile dir.
+                auto file_size = page_file.getDiskSize();
                 file.moveTo(dest);
                 file.remove(true);
                 page_file.deleteEncryptionInfo();
+                delegator->removePageFile(page_file.fileIdLevel(), file_size, false);
             }
         }
         LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
@@ -1265,7 +1266,7 @@ PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_file
             // Don't touch the <file_id, level> that are used for the sorting then you could
             // work around by using a const_cast
             size_t bytes_removed = const_cast<PageFile &>(page_file).setLegacy();
-            delegator->removePageFile(page_id_and_lvl, bytes_removed);
+            delegator->removePageFile(page_id_and_lvl, bytes_removed, true);
             num_data_removed += 1;
         }
     }
