@@ -35,11 +35,34 @@ public:
     UInt32 bg_write_weight;
     UInt32 fg_read_weight;
     UInt32 bg_read_weight;
-    
-    StorageIORateLimitConfig() : max_bytes_per_sec(0), max_read_bytes_per_sec(0), max_write_bytes_per_sec(0), use_max_bytes_per_sec(true),
-        fg_write_weight(1), bg_write_weight(3), fg_read_weight(5), bg_read_weight(3) {}
-    
-    void parse(const String& storage_io_rate_limit, Poco::Logger* log);
+
+    Int32 emergency_pct;
+    Int32 high_pct;
+    Int32 medium_pct;
+
+    Int32 tune_base;
+    Int64 min_bytes_per_sec;
+
+    Int32 auto_tune_sec;
+
+    StorageIORateLimitConfig()
+        : max_bytes_per_sec(0),
+          max_read_bytes_per_sec(0),
+          max_write_bytes_per_sec(0),
+          use_max_bytes_per_sec(true),
+          fg_write_weight(25),
+          bg_write_weight(25),
+          fg_read_weight(25),
+          bg_read_weight(25),
+          emergency_pct(96),
+          high_pct(85),
+          medium_pct(60),
+          tune_base(2),
+          min_bytes_per_sec(2 * 1024 * 1024),
+          auto_tune_sec(5)
+    {}
+
+    void parse(const String & storage_io_rate_limit, Poco::Logger * log);
 
     std::string toString() const;
 
@@ -47,11 +70,13 @@ public:
     UInt64 getBgWriteMaxBytesPerSec() const;
     UInt64 getFgReadMaxBytesPerSec() const;
     UInt64 getBgReadMaxBytesPerSec() const;
+    UInt64 getWriteMaxBytesPerSec() const;
+    UInt64 getReadMaxBytesPerSec() const;
     UInt64 readWeight() const;
     UInt64 writeWeight() const;
     UInt64 totalWeight() const;
 
-    bool operator ==(const StorageIORateLimitConfig& config) const;
+    bool operator==(const StorageIORateLimitConfig & config) const;
 };
 
 struct TiFlashStorageConfig

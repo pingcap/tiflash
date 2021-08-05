@@ -2,6 +2,7 @@
 
 #include <Common/Stopwatch.h>
 #include <Server/StorageConfigParser.h>
+#include <fmt/core.h>
 
 #include <atomic>
 #include <chrono>
@@ -9,6 +10,7 @@
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <thread>
 
 // TODO: separate IO utility(i.e. FileProvider, RateLimiter) from Encryption directory
 namespace Poco::Util
@@ -20,6 +22,8 @@ namespace DB
 
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
+class LimiterStat;
+class IOLimitTuner;
 
 enum class LimiterType
 {
@@ -60,7 +64,11 @@ public:
     void request(Int64 bytes);
 
     // just for test purpose
-    inline UInt64 getTotalBytesThrough() const { return total_bytes_through; }
+    inline UInt64 getTotalBytesThrough() const { return alloc_bytes; }
+
+    LimiterStat getStat();
+
+    void updateMaxBytesPerSec(Int64 max_bytes_per_sec);
 
     size_t setStop();
 protected:
@@ -90,8 +98,6 @@ protected:
     Int64 refill_balance_per_period;
     Int64 available_balance;
 
-    UInt64 total_bytes_through;
-
     bool stop;
     std::condition_variable exit_cv;
     UInt32 requests_to_wait;
@@ -103,6 +109,9 @@ protected:
     std::mutex request_mutex;
 
     LimiterType type;
+
+    Stopwatch stat_stop_watch;
+    UInt64 alloc_bytes;
 };
 
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
@@ -160,9 +169,12 @@ class IORateLimiter
 {
 public:
     IORateLimiter();
+    ~IORateLimiter();
 
     WriteLimiterPtr getWriteLimiter();
     ReadLimiterPtr getReadLimiter();
+    void init(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_);
+    void updateConfig(Poco::Util::AbstractConfiguration & config_);
 
     void updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_);
 
@@ -182,8 +194,8 @@ public:
 
         std::string toString() const
         {
-            return "total_write_bytes: " + std::to_string(total_write_bytes) + " total_read_bytes: " + std::to_string(total_read_bytes)
-                + " bg_write_bytes: " + std::to_string(bg_write_bytes) + " bg_read_bytes: " + std::to_string(bg_read_bytes);
+            return fmt::format("total_write_bytes {} total_read_bytes {} bg_write_bytes {} bg_read_bytes {}", total_write_bytes,
+                total_read_bytes, bg_write_bytes, bg_read_bytes);
         }
     };
 
@@ -193,6 +205,14 @@ private:
 
     std::pair<Int64, Int64> getReadWriteBytes(const std::string & fname);
     IOInfo getCurrentIOInfo();
+
+    std::unique_ptr<IOLimitTuner> createIOLimitTuner();
+    void autoTune();
+    void runAutoTune();
+    // readConfig return true if need to update limiter.
+    bool readConfig(Poco::Util::AbstractConfiguration & config_, StorageIORateLimitConfig & new_io_config);
+    void updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes);
+    void updateWriteLimiter(Int64 bg_bytes, Int64 fg_bytes);
 
     StorageIORateLimitConfig io_config;
     WriteLimiterPtr bg_write_limiter;
@@ -206,10 +226,190 @@ private:
     IOInfo last_io_info;
 
     Poco::Logger * log;
+
+    std::atomic<bool> stop;
+    std::thread auto_tune_thread;
+
+    TiFlashMetricsPtr metrics;
     // Noncopyable and nonmovable.
     IORateLimiter(const IORateLimiter & limiter) = delete;
     IORateLimiter & operator=(const IORateLimiter & limiter) = delete;
     IORateLimiter(IORateLimiter && limiter) = delete;
     IORateLimiter && operator=(IORateLimiter && limiter) = delete;
+};
+
+class LimiterStat
+{
+public:
+    LimiterStat(UInt64 alloc_bytes_, UInt64 elapsed_ms_, UInt64 refill_period_ms_, Int64 refill_bytes_per_period_)
+        : alloc_bytes(alloc_bytes_),
+          elapsed_ms(elapsed_ms_),
+          refill_period_ms(refill_period_ms_),
+          refill_bytes_per_period(refill_bytes_per_period_)
+    {
+        assert(refill_period_ms > 0);
+        assert(refill_bytes_per_period > 0);
+        assert(elapsed_ms >= refill_period_ms);
+    }
+
+    String toString() const
+    {
+        return fmt::format(
+            "alloc_bytes {} elapsed_ms {} refill_period_ms {} refill_bytes_per_period {} avg_bytes_per_sec {} max_bytes_per_sec {} pct {}",
+            alloc_bytes, elapsed_ms, refill_period_ms, refill_bytes_per_period, avgBytesPerSec(), maxBytesPerSec(), pct());
+    }
+
+    Int64 avgBytesPerSec() const { return alloc_bytes * 1000 / elapsed_ms; }
+    Int64 maxBytesPerSec() const { return refill_bytes_per_period * 1000 / refill_period_ms; }
+    Int32 pct() const { return avgBytesPerSec() * 100 / maxBytesPerSec(); }
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
+
+    UInt64 alloc_bytes;
+    UInt64 elapsed_ms;
+    UInt64 refill_period_ms;
+    Int64 refill_bytes_per_period;
+};
+
+using LimiterStatUPtr = std::unique_ptr<LimiterStat>;
+
+// IOLimitTuner will 
+class IOLimitTuner
+{
+public:
+    IOLimitTuner(LimiterStatUPtr bg_write_stat_, LimiterStatUPtr fg_write_stat_, LimiterStatUPtr bg_read_stat_,
+        LimiterStatUPtr fg_read_stat_, const StorageIORateLimitConfig & io_config_);
+
+    String toString() const
+    {
+        return fmt::format("bg_write {} fg_write {} bg_read {} fg_read {} io_config {}",
+            bg_write_stat ? bg_write_stat->toString() : "null",
+            fg_write_stat ? fg_write_stat->toString() : "null",
+            bg_read_stat ? bg_read_stat->toString() : "null",
+            fg_read_stat ? fg_read_stat->toString() : "null",
+            io_config.toString());
+    }
+
+    struct TuneResult
+    {
+        Int64 max_bg_read_bytes_per_sec;
+        Int64 max_fg_read_bytes_per_sec;
+        bool read_tuned;
+
+        Int64 max_bg_write_bytes_per_sec;
+        Int64 max_fg_write_bytes_per_sec;
+        bool write_tuned;
+
+        String toString() const
+        {
+            return fmt::format("max_bg_read_bytes_per_sec {} max_fg_read_bytes_per_sec {} read_tuned {} max_bg_write_bytes_per_sec {} "
+                               "max_fg_write_bytes_per_sec {} write_tuned {}",
+                max_bg_read_bytes_per_sec, max_fg_read_bytes_per_sec, read_tuned, max_bg_write_bytes_per_sec, max_fg_write_bytes_per_sec,
+                write_tuned);
+        };
+
+        bool operator==(const TuneResult & a) const
+        {
+            return max_bg_read_bytes_per_sec == a.max_bg_read_bytes_per_sec && max_fg_read_bytes_per_sec == a.max_fg_read_bytes_per_sec
+                && read_tuned == a.read_tuned && max_bg_write_bytes_per_sec == a.max_bg_write_bytes_per_sec
+                && max_fg_write_bytes_per_sec == a.max_fg_write_bytes_per_sec && write_tuned == a.write_tuned;
+        }
+    };
+
+    TuneResult tune() const;
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
+    int limiterCount() const { return writeLimiterCount() + readLimiterCount(); }
+    int writeLimiterCount() const { return (bg_write_stat != nullptr) + (fg_write_stat != nullptr); }
+    int readLimiterCount() const { return (bg_read_stat != nullptr) + (fg_read_stat != nullptr); }
+
+    // Background write and foreground write
+    Int64 avgWriteBytesPerSec() const
+    {
+        return (bg_write_stat ? bg_write_stat->avgBytesPerSec() : 0) + (fg_write_stat ? fg_write_stat->avgBytesPerSec() : 0);
+    }
+    Int64 maxWriteBytesPerSec() const
+    {
+        return (bg_write_stat ? bg_write_stat->maxBytesPerSec() : 0) + (fg_write_stat ? fg_write_stat->maxBytesPerSec() : 0);
+    }
+    int writePct() const
+    {
+        auto max = maxWriteBytesPerSec();
+        return max > 0 ? avgWriteBytesPerSec() * 100 / max : 0;
+    }
+
+    // Background read and foreground read
+    Int64 avgReadBytesPerSec() const
+    {
+        return (bg_read_stat ? bg_read_stat->avgBytesPerSec() : 0) + (fg_read_stat ? fg_read_stat->avgBytesPerSec() : 0);
+    }
+    Int64 maxReadBytesPerSec() const
+    {
+        return (bg_read_stat ? bg_read_stat->maxBytesPerSec() : 0) + (fg_read_stat ? fg_read_stat->maxBytesPerSec() : 0);
+    }
+    int readPct() const
+    {
+        auto max = maxReadBytesPerSec();
+        return max > 0 ? avgReadBytesPerSec() * 100 / max : 0;
+    }
+
+    // Watermark describes the I/O utilization roughly.
+    enum class Watermark
+    {
+        Low = 1,
+        Medium = 2,
+        High = 3,
+        Emergency = 4
+    };
+    Watermark writeWatermark() const { return getWatermark(writePct()); }
+    Watermark readWatermark() const { return getWatermark(readPct()); }
+    Watermark getWatermark(int pct) const;
+
+    // Returns <max_read_bytes_per_sec, max_write_bytes_per_sec, has_tuned>
+    std::tuple<Int64, Int64, bool> tuneReadWrite() const;
+    // Retunes <bg, fg, has_tune>
+    std::tuple<Int64, Int64, bool> tuneRead(Int64 max_bytes_per_sec) const;
+    // Retunes <bg, fg, has_tune>
+    std::tuple<Int64, Int64, bool> tuneWrite(Int64 max_bytes_per_sec) const;
+    // <bg, fg, has_tune>
+    std::tuple<Int64, Int64, bool> tuneBgFg(Int64 max_bytes_per_sec, const LimiterStatUPtr & bg, Int64 config_bg_max_bytes_per_sec,
+        const LimiterStatUPtr & fg, Int64 config_fg_max_bytes_per_sec) const;
+    // Returns true if to_add and to_sub are changed.
+    bool calculate(Int64 & to_add, Int64 & to_sub, Int64 delta) const;
+
+    struct TuneInfo
+    {
+        Int64 max_bytes_per_sec;
+        Int64 avg_bytes_per_sec;
+        Watermark watermark;
+
+        Int64 config_max_bytes_per_sec;
+
+        TuneInfo(Int64 max, Int64 avg, Watermark wm, Int64 config_max)
+            : max_bytes_per_sec(max), avg_bytes_per_sec(avg), watermark(wm), config_max_bytes_per_sec(config_max)
+        {}
+
+        String toString() const
+        {
+            return fmt::format(
+                "max {} avg {} watermark {} config_max {}", max_bytes_per_sec, avg_bytes_per_sec, watermark, config_max_bytes_per_sec);
+        }
+    };
+    // <max_bytes_per_sec1, max_bytes_per_sec2, has_tuned>
+    std::tuple<Int64, Int64, bool> tune(const TuneInfo & t1, const TuneInfo & t2) const;
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
+    LimiterStatUPtr bg_write_stat;
+    LimiterStatUPtr fg_write_stat;
+    LimiterStatUPtr bg_read_stat;
+    LimiterStatUPtr fg_read_stat;
+    StorageIORateLimitConfig io_config;
+    Poco::Logger * log;
 };
 } // namespace DB

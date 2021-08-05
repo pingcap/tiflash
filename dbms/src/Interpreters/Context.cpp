@@ -1556,7 +1556,7 @@ FileProviderPtr Context::getFileProvider() const
 
 void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config)
 {
-    getIORateLimiter().updateConfig(metrics, config);
+    getIORateLimiter().init(metrics, config);
     auto tids = getBackgroundPool().getThreadIds();
     auto blockable_tids = getBlockableBackgroundPool().getThreadIds();
     tids.insert(tids.end(), blockable_tids.begin(), blockable_tids.end());
