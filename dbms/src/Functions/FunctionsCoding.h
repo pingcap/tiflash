@@ -12,6 +12,7 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -624,6 +625,102 @@ public:
     }
 };
 
+class FunctionTiDBIPv4StringToNum : public IFunction
+{
+public:
+    static constexpr auto name = "tiDBIPv4StringToNum";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionTiDBIPv4StringToNum>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isString())
+            throw Exception(
+                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return makeNullable(std::make_shared<DataTypeUInt32>());
+    }
+
+    /// return <result, is_invalid>
+    static std::tuple<UInt32, UInt8> parseIPv4(const char * pos)
+    {
+        UInt32 res = 0;
+        for (int offset = 24; offset >= 0; offset -= 8)
+        {
+            UInt32 value = 0;
+            int len = 0;
+            /// if value == 255 then after next loop it must be larger than 255.
+            /// MySQL allows '00000.0.0.0', here we can't terminate loop by len.
+            while (isNumericASCII(*pos) && value < 255)
+            {
+                value = value * 10 + (*pos - '0');
+                ++len;
+                ++pos;
+            }
+            if (len == 0 || value > 255 || (offset > 0 && *pos != '.'))
+                return {0, 1};
+            res |= value << offset;
+            ++pos;
+        }
+        if (*(pos - 1) != '\0')
+            return {0, 1};
+        return {res, 0};
+    }
+
+    /// Need to return NULL for invalid input.
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    {
+        const IColumn * column = block.getByPosition(arguments[0]).column.get();
+        const NullMap * nullmap = nullptr;
+        if (column->isColumnNullable())
+        {
+            auto * nullable_column = typeid_cast<const ColumnNullable *>(column);
+            column = nullable_column->getNestedColumnPtr().get();
+            nullmap = &nullable_column->getNullMapData();
+        }
+
+        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column))
+        {
+            auto col_res = ColumnUInt32::create();
+            auto nullmap_res = ColumnUInt8::create();
+
+            ColumnUInt32::Container & vec_res = col_res->getData();
+            ColumnUInt8::Container & vec_res_nullmap = nullmap_res->getData();
+            vec_res.resize(col->size());
+            vec_res_nullmap.assign(col->size(), static_cast<UInt8>(0));
+
+            const ColumnString::Chars_t & vec_src = col->getChars();
+            const ColumnString::Offsets & offsets_src = col->getOffsets();
+            size_t prev_offset = 0;
+
+            for (size_t i = 0; i < vec_res.size(); ++i)
+            {
+                if (nullmap && (*nullmap)[i])
+                {
+                    vec_res_nullmap[i] = 1;
+                }
+                else
+                {
+                    auto * p = reinterpret_cast<const char *>(&vec_src[prev_offset]);
+                    std::tie(vec_res[i], vec_res_nullmap[i]) = parseIPv4(p);
+                }
+                prev_offset = offsets_src[i];
+            }
+
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(nullmap_res));
+        }
+        else
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
 
 class FunctionIPv4ToIPv6 : public IFunction
 {

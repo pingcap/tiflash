@@ -760,7 +760,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::RealAnyValue, "cast"},
     //{tipb::ScalarFuncSig::StringAnyValue, "cast"},
     //{tipb::ScalarFuncSig::TimeAnyValue, "cast"},
-    //{tipb::ScalarFuncSig::InetAton, "cast"},
+    {tipb::ScalarFuncSig::InetAton, "tiDBIPv4StringToNum"},
     //{tipb::ScalarFuncSig::InetNtoa, "cast"},
     //{tipb::ScalarFuncSig::Inet6Aton, "cast"},
     //{tipb::ScalarFuncSig::Inet6Ntoa, "cast"},

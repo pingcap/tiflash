@@ -17,6 +17,7 @@ void registerFunctionsCoding(FunctionFactory & factory)
     factory.registerFunction<FunctionIPv4NumToString<0, NameFunctionIPv4NumToString>>();
     factory.registerFunction<FunctionIPv4NumToString<1, NameFunctionIPv4NumToStringClassC>>();
     factory.registerFunction<FunctionIPv4StringToNum>();
+    factory.registerFunction<FunctionTiDBIPv4StringToNum>();
     factory.registerFunction<FunctionIPv4ToIPv6>();
     factory.registerFunction<FunctionMACNumToString>();
     factory.registerFunction<FunctionMACStringTo<ParseMACImpl>>();
