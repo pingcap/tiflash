@@ -882,7 +882,7 @@ try
         makeNullableDataType<Decimal64>(15, 5),
         {DecimalField32(3223456, 5)},
         {DecimalField64(9244, 3)},
-        {DecimalField64(450255, 5)});
+        {DecimalField64(450256, 5)});
 
     // real modulo
 
