@@ -699,10 +699,9 @@ public:
     {
         const IColumn * column = block.getByPosition(arguments[0]).column.get();
         const NullMap * nullmap = nullptr;
-        if (column->isColumnNullable())
+        if (auto * nullable_column = typeid_cast<const ColumnNullable *>(column))
         {
-            auto * nullable_column = typeid_cast<const ColumnNullable *>(column);
-            column = nullable_column->getNestedColumnPtr().get();
+            column = &nullable_column->getNestedColumn();
             nullmap = &nullable_column->getNullMapData();
         }
 
