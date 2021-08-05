@@ -35,9 +35,43 @@ struct MPPTaskId
 };
 
 
-struct MPPTask;
-struct MPPTunnel
+class MPPTask;
+class MPPTunnel : private boost::noncopyable
 {
+public:
+    MPPTunnel(
+        const mpp::TaskMeta & receiver_meta_,
+        const mpp::TaskMeta & sender_meta_,
+        const std::chrono::seconds timeout_,
+        const std::shared_ptr<MPPTask> & current_task_);
+
+    ~MPPTunnel();
+
+    const String & id() const { return tunnel_id; }
+
+    bool isTaskCancelled();
+
+    // write a single packet to the tunnel, it will block if tunnel is not ready.
+    void write(const mpp::MPPDataPacket & data, bool close_after_write = false);
+
+    // finish the writing.
+    void writeDone();
+
+    /// close() finishes the tunnel, if the tunnel is connected already, it will
+    /// write the error message to the tunnel, otherwise it just close the tunnel
+    void close(const String & reason);
+
+    // a MPPConn request has arrived. it will build connection by this tunnel;
+    void connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_);
+
+    // wait until all the data has been transferred.
+    void waitForFinish();
+private:
+    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
+
+    // must under mu's protection
+    void finishWithLock();
+
     std::mutex mu;
     std::condition_variable cv_for_connected;
     std::condition_variable cv_for_finished;
@@ -56,95 +90,6 @@ struct MPPTunnel
     String tunnel_id;
 
     Logger * log;
-
-    MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_, const std::chrono::seconds timeout_,
-        std::shared_ptr<MPPTask> current_task_)
-        : connected(false),
-          finished(false),
-          timeout(timeout_),
-          current_task(current_task_),
-          tunnel_id("tunnel" + std::to_string(sender_meta_.task_id()) + "+" + std::to_string(receiver_meta_.task_id())),
-          log(&Logger::get(tunnel_id))
-    {}
-
-    ~MPPTunnel()
-    {
-        try
-        {
-            if (!finished)
-                writeDone();
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
-        }
-    }
-
-    bool isTaskCancelled();
-
-    void waitUntilConnect(std::unique_lock<std::mutex> & lk);
-    // write a single packet to the tunnel, it will block if tunnel is not ready.
-    // TODO: consider to hold a buffer
-    void write(const mpp::MPPDataPacket & data, bool close_after_write = false)
-    {
-
-        LOG_TRACE(log, "ready to write");
-        std::unique_lock<std::mutex> lk(mu);
-
-        waitUntilConnect(lk);
-        if (finished)
-            throw Exception("write to tunnel which is already closed.");
-        if (!writer->Write(data))
-            throw Exception("Failed to write data");
-        if (close_after_write)
-        {
-            finished = true;
-            cv_for_finished.notify_all();
-        }
-        if (close_after_write)
-            LOG_TRACE(log, "finish write and close the tunnel");
-        else
-            LOG_TRACE(log, "finish write");
-    }
-
-    // finish the writing.
-    void writeDone()
-    {
-        std::unique_lock<std::mutex> lk(mu);
-        if (finished)
-            throw Exception("has finished");
-        /// make sure to finish the tunnel after it is connected
-        waitUntilConnect(lk);
-        finished = true;
-        cv_for_finished.notify_all();
-    }
-
-    /// close() finishes the tunnel, if the tunnel is connected already, it will
-    /// write the error message to the tunnel, otherwise it just close the tunnel
-    void close(const String & reason);
-
-    // a MPPConn request has arrived. it will build connection by this tunnel;
-    void connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
-    {
-        if (connected)
-        {
-            throw Exception("has connected");
-        }
-        std::lock_guard<std::mutex> lk(mu);
-        LOG_DEBUG(log, "ready to connect");
-        connected = true;
-        writer = writer_;
-
-        cv_for_connected.notify_all();
-    }
-
-    // wait until all the data has been transferred.
-    void waitForFinish()
-    {
-        std::unique_lock<std::mutex> lk(mu);
-
-        cv_for_finished.wait(lk, [&]() { return finished; });
-    }
 };
 
 using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;
@@ -310,11 +255,11 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
     {
         if (status == CANCELLED)
-            throw Exception("the tunnel " + tunnel->tunnel_id + " can not been registered, because the task is cancelled");
+            throw Exception("the tunnel " + tunnel->id() + " can not been registered, because the task is cancelled");
         std::unique_lock<std::mutex> lk(tunnel_mutex);
         if (tunnel_map.find(id) != tunnel_map.end())
         {
-            throw Exception("the tunnel " + tunnel->tunnel_id + " has been registered");
+            throw Exception("the tunnel " + tunnel->id() + " has been registered");
         }
         tunnel_map[id] = tunnel;
         cv.notify_all();

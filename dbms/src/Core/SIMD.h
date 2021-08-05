@@ -1,6 +1,8 @@
 #pragma once
 #if defined(__aarch64__)
+#if __has_include(<asm/hwcap.h>)
 #include <asm/hwcap.h>
+#endif
 #include <sys/auxv.h>
 #endif
 namespace DB
@@ -75,6 +77,11 @@ enum class SIMDFeature
 
 static inline bool SIMDRuntimeSupport(SIMDFeature feature)
 {
+    /// Notice that we do not detect support for Darwin/arm64 since
+    /// it does not have HWCAP support. However, if such feature is
+    /// ever needed in the future, a good reference can be:
+    /// https://github.com/golang/sys/pull/114
+#if __has_include(<asm/hwcap.h>)
     unsigned long hwcap;
     switch (feature)
     {
@@ -94,8 +101,9 @@ static inline bool SIMDRuntimeSupport(SIMDFeature feature)
             return hwcap & HWCAP2_SVE2;
 #else
             return false;
-#endif
+#endif // HWCAP2_SVE2
     }
+#endif // __has_include(<asm/hwcap.h>)
     return false;
 }
 #endif

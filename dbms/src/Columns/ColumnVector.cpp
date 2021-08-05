@@ -62,7 +62,7 @@ void ColumnVector<T>::updateHashWithValues(IColumn::HashValues & hash_values, co
 }
 
 template <typename T>
-void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash) const
+void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
 {
     auto s = data.size();
 

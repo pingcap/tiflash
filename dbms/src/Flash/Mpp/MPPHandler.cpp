@@ -12,6 +12,7 @@
 #include <Storages/Transaction/TMTContext.h>
 
 #include <ext/scope_guard.h>
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -74,6 +75,33 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
     return ret;
 }
 
+MPPTunnel::MPPTunnel(
+    const mpp::TaskMeta & receiver_meta_,
+    const mpp::TaskMeta & sender_meta_,
+    const std::chrono::seconds timeout_,
+    const MPPTaskPtr & current_task_)
+    : connected(false),
+      finished(false),
+      timeout(timeout_),
+      current_task(current_task_),
+      tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id())),
+      log(&Logger::get(tunnel_id))
+{
+}
+
+MPPTunnel::~MPPTunnel()
+{
+    try
+    {
+        if (!finished)
+            writeDone();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
+    }
+}
+
 void MPPTunnel::close(const String & reason)
 {
     std::unique_lock<std::mutex> lk(mu);
@@ -92,8 +120,7 @@ void MPPTunnel::close(const String & reason)
             tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
         }
     }
-    finished = true;
-    cv_for_finished.notify_all();
+    finishWithLock();
 }
 
 void MPPTask::unregisterTask()
@@ -208,7 +235,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, this->shared_from_this());
-        LOG_DEBUG(log, "begin to register the tunnel " << tunnel->tunnel_id);
+        LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->tunnels.emplace_back(tunnel);
         if (!dag_context->isRootMPPTask())
@@ -222,15 +249,25 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     // get partition column ids
     auto part_keys = exchangeSender.partition_keys();
     std::vector<Int64> partition_col_id;
-    for (const auto & expr : part_keys)
+    TiDB::TiDBCollators collators;
+    for (int i = 0; i < part_keys.size(); i++)
     {
+        const auto & expr = part_keys[i];
         assert(isColumnExpr(expr));
         auto column_index = decodeDAGInt64(expr.val());
         partition_col_id.emplace_back(column_index);
+        if (getDataTypeByFieldType(expr.field_type())->isString())
+        {
+            collators.emplace_back(getCollatorFromFieldType(exchangeSender.types(i)));
+        }
+        else
+        {
+            collators.emplace_back(nullptr);
+        }
     }
     // construct writer
     std::unique_ptr<DAGResponseWriter> response_writer
-        = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, exchangeSender.tp(),
+        = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, collators, exchangeSender.tp(),
             context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), *dag_context);
     BlockOutputStreamPtr squash_stream = std::make_shared<DAGBlockOutputStream>(io.in->getHeader(), std::move(response_writer));
     io.out = std::make_shared<SquashingBlockOutputStream>(squash_stream, 20000, 0);
@@ -346,21 +383,83 @@ bool MPPTunnel::isTaskCancelled()
     return sp != nullptr && sp->status == CANCELLED;
 }
 
-void MPPTunnel::waitUntilConnect(std::unique_lock<std::mutex> & lk)
+// TODO: consider to hold a buffer
+void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
 {
+
+    LOG_TRACE(log, "ready to write");
+    {
+        std::unique_lock<std::mutex> lk(mu);
+
+        waitUntilConnectedOrCancelled(lk);
+        if (finished)
+            throw Exception("write to tunnel which is already closed.");
+        if (!writer->Write(data))
+            throw Exception("Failed to write data");
+        if (close_after_write)
+            finishWithLock();
+    }
+    if (close_after_write)
+        LOG_TRACE(log, "finish write and close the tunnel");
+    else
+        LOG_TRACE(log, "finish write");
+}
+
+void MPPTunnel::writeDone()
+{
+    LOG_TRACE(log, "ready to finish");
+    {
+        std::unique_lock<std::mutex> lk(mu);
+        if (finished)
+            throw Exception("has finished");
+        /// make sure to finish the tunnel after it is connected
+        waitUntilConnectedOrCancelled(lk);
+        finishWithLock();
+    }
+    LOG_TRACE(log, "done to finish");
+}
+
+void MPPTunnel::connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
+{
+    std::lock_guard<std::mutex> lk(mu);
+    if (connected)
+    {
+        throw Exception("has connected");
+    }
+    LOG_DEBUG(log, "ready to connect");
+    connected = true;
+    writer = writer_;
+
+    cv_for_connected.notify_all();
+}
+
+void MPPTunnel::waitForFinish()
+{
+    std::unique_lock<std::mutex> lk(mu);
+
+    cv_for_finished.wait(lk, [&]() { return finished; });
+}
+
+void MPPTunnel::waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk)
+{
+    auto connected_or_cancelled = [&]() { return connected || isTaskCancelled(); };
     if (timeout.count() > 0)
     {
-        if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected || isTaskCancelled(); }))
-        {
+        if (!cv_for_connected.wait_for(lk, timeout, connected_or_cancelled))
             throw Exception(tunnel_id + " is timeout");
-        }
     }
     else
     {
-        cv_for_connected.wait(lk, [&]() { return connected || isTaskCancelled(); });
+        cv_for_connected.wait(lk, connected_or_cancelled);
     }
     if (!connected)
         throw Exception("MPPTunnel can not be connected because MPPTask is cancelled");
+}
+
+void MPPTunnel::finishWithLock()
+{
+    finished = true;
+    cv_for_finished.notify_all();
 }
 
 void MPPTask::writeErrToAllTunnel(const String & e)
@@ -375,7 +474,7 @@ void MPPTask::writeErrToAllTunnel(const String & e)
         catch (...)
         {
             it.second->close("Failed to write error msg to tunnel");
-            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->tunnel_id);
+            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->id());
         }
     }
 }
