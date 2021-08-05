@@ -431,7 +431,6 @@ bool IORateLimiter::readConfig(Poco::Util::AbstractConfiguration & config_, Stor
 void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
 {
     LOG_INFO(log, fmt::format("updateReadLimiter: bg_bytes {} fg_bytes {}", bg_bytes, fg_bytes));
-#ifdef __linux__
     auto getBgReadIOStatistic = [&]() { return getCurrentIOInfo().bg_read_bytes; };
     auto getFgReadIOStatistic = [&]() {
         auto io_info = getCurrentIOInfo();
@@ -463,7 +462,6 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
     {
         fg_read_limiter->updateMaxBytesPerSec(fg_bytes);
     }
-#endif
 }
 
 void IORateLimiter::updateWriteLimiter(Int64 bg_bytes, Int64 fg_bytes)
