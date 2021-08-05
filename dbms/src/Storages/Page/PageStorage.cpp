@@ -832,7 +832,6 @@ void PageStorage::drop()
     opt.remove_tmp_files  = false;
     auto page_files       = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
-    // TODO: count how many bytes in "archive" directory.
     for (const auto & page_file : page_files)
         delegator->removePageFile(page_file.fileIdLevel(), page_file.getDiskSize(), false);
 
