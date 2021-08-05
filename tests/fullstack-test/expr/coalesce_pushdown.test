@@ -227,6 +227,105 @@ mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_
 |  1 |
 +----+
 
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, char_, decimal_) = char_;
++----+
+| id |
++----+
+|  1 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, decimal_, char_) = decimal_;
++----+
+| id |
++----+
+|  1 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, id, char_) = id;
++----+
+| id |
++----+
+|  1 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, char_, id) = char_;
++----+
+| id |
++----+
+|  1 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, id, decimal_) = id;
++----+
+| id |
++----+
+|  1 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, decimal_, id) = decimal_;
++----+
+| id |
++----+
+|  1 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, datetime_, id) = datetime_;
++----+
+| id |
++----+
+|  1 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, id, datetime_) = id;
++----+
+| id |
++----+
+|  1 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, datetime_, decimal_) = datetime_;
++----+
+| id |
++----+
+|  1 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, decimal_, datetime_) = decimal_;
++----+
+| id |
++----+
+|  1 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, datetime_, char_) = datetime_;
++----+
+| id |
++----+
+|  1 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, char_, datetime_) = char_;
++----+
+| id |
++----+
+|  1 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, datetime_, decimal_) = datetime_;
++----+
+| id |
++----+
+|  1 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[books]) */ id from test.test_tb where coalesce(null, decimal_, datetime_) = decimal_;
++----+
+| id |
++----+
+|  1 |
++----+
+
+
 # test NULL
 mysql> INSERT INTO test.test_tb(id)VALUES(2);
 mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where ISNULL(coalesce(char_));
