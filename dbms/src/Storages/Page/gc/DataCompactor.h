@@ -28,7 +28,7 @@ public:
     };
 
 public:
-    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const RateLimiterPtr & rate_limiter_);
+    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const WriteLimiterPtr & write_limiter_, const ReadLimiterPtr & read_limiter_);
 
     /**
      * Take a snapshot from PageStorage and try to migrate data if some PageFiles used rate is low.
@@ -97,7 +97,8 @@ private:
     Poco::Logger * log;
     Poco::Logger * page_file_log;
 
-    const RateLimiterPtr rate_limiter;
+    const WriteLimiterPtr write_limiter;
+    const ReadLimiterPtr read_limiter;
 };
 
 } // namespace DB

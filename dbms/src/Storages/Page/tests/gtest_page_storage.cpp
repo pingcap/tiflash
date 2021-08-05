@@ -1209,14 +1209,14 @@ TEST_F(PageStorageWith2Pages_test, SnapshotReadSnapshotVersion)
         ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
 
         // read(PageId) with snapshot
-        Page page1 = storage->read(1, snapshot);
+        Page page1 = storage->read(1, nullptr, snapshot);
         ASSERT_EQ(*page1.data.begin(), ch_before);
 
         // read(vec<PageId>) with snapshot
         PageIds ids{
             1,
         };
-        auto pages = storage->read(ids, snapshot);
+        auto pages = storage->read(ids, nullptr, snapshot);
         ASSERT_EQ(pages.count(1), 1UL);
         ASSERT_EQ(*pages[1].data.begin(), ch_before);
         // TODO read(vec<PageId>, callback) with snapshot
@@ -1224,7 +1224,7 @@ TEST_F(PageStorageWith2Pages_test, SnapshotReadSnapshotVersion)
         // new page do appear while read with snapshot
         PageEntry p3_entry = storage->getEntry(3, snapshot);
         ASSERT_FALSE(p3_entry.isValid());
-        ASSERT_THROW({ storage->read(3, snapshot); }, DB::Exception);
+        ASSERT_THROW({ storage->read(3, nullptr, snapshot); }, DB::Exception);
     }
 }
 
@@ -1266,20 +1266,20 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     p1_entry = storage->getEntry(1, s3);
     ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
     // read(PageId) with snapshot
-    Page page1 = storage->read(1, s1);
+    Page page1 = storage->read(1, nullptr, s1);
     ASSERT_EQ(*page1.data.begin(), ch_before);
-    page1 = storage->read(1, s2);
+    page1 = storage->read(1, nullptr, s2);
     ASSERT_EQ(*page1.data.begin(), ch_before);
-    page1 = storage->read(1, s3);
+    page1 = storage->read(1, nullptr, s3);
     ASSERT_EQ(*page1.data.begin(), ch_before);
     // read(vec<PageId>) with snapshot
-    auto pages = storage->read(ids, s1);
+    auto pages = storage->read(ids, nullptr, s1);
     ASSERT_EQ(pages.count(1), 1UL);
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
-    pages = storage->read(ids, s2);
+    pages = storage->read(ids, nullptr, s2);
     ASSERT_EQ(pages.count(1), 1UL);
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
-    pages = storage->read(ids, s3);
+    pages = storage->read(ids, nullptr, s3);
     ASSERT_EQ(pages.count(1), 1UL);
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
     // TODO read(vec<PageId>, callback) with snapshot
@@ -1296,16 +1296,16 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     p1_entry = storage->getEntry(1, s3);
     ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
     // read(PageId) with snapshot
-    page1 = storage->read(1, s2);
+    page1 = storage->read(1, nullptr, s2);
     ASSERT_EQ(*page1.data.begin(), ch_before);
-    page1 = storage->read(1, s3);
+    page1 = storage->read(1, nullptr, s3);
     ASSERT_EQ(*page1.data.begin(), ch_before);
     // read(vec<PageId>) with snapshot
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
-    pages = storage->read(ids, s2);
+    pages = storage->read(ids, nullptr, s2);
     ASSERT_EQ(pages.count(1), 1UL);
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
-    pages = storage->read(ids, s3);
+    pages = storage->read(ids, nullptr, s3);
     ASSERT_EQ(pages.count(1), 1UL);
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
     // TODO read(vec<PageId>, callback) with snapshot
@@ -1320,10 +1320,10 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     p1_entry = storage->getEntry(1, s3);
     ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
     // read(PageId) with snapshot
-    page1 = storage->read(1, s3);
+    page1 = storage->read(1, nullptr, s3);
     ASSERT_EQ(*page1.data.begin(), ch_before);
     // read(vec<PageId>) with snapshot
-    pages = storage->read(ids, s3);
+    pages = storage->read(ids, nullptr, s3);
     ASSERT_EQ(pages.count(1), 1UL);
     ASSERT_EQ(*pages[1].data.begin(), ch_before);
     // TODO read(vec<PageId>, callback) with snapshot
