@@ -1110,6 +1110,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
+    /// Init TiFlash metrics.
+    global_context->initializeTiFlashMetrics();
+
+    /// Init Rate Limiter
+    global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), config());
+
     /// Initialize main config reloader.
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
@@ -1118,7 +1124,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
-            global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), *config);
+            global_context->getIORateLimiter().updateConfig(*config);
         },
         /* already_loaded = */ true);
 
@@ -1170,14 +1176,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
     size_t delta_index_cache_size = config().getUInt64("delta_index_cache_size", 0);
     global_context->setDeltaIndexManager(delta_index_cache_size);
-
-    /// Init TiFlash metrics.
-    global_context->initializeTiFlashMetrics();
-
-    /// Init Rate Limiter
-    {
-        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), config());
-    }
 
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
