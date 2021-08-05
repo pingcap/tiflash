@@ -398,7 +398,7 @@ public:
         _IAggregateFunctionImpl::CollatorHolder<with_collator>::setCollator(collator_);
     }
 
-    void create(AggregateDataPtr place) const override
+    void create(AggregateDataPtr __restrict place) const override
     {
         this->setDataCollator(new (place) Data);
     }
