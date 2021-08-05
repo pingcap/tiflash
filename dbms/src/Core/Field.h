@@ -11,7 +11,6 @@
 #include <Core/Defines.h>
 #include <Core/Types.h>
 #include <common/strong_typedef.h>
-#include <fmt/core.h>
 
 namespace DB
 {

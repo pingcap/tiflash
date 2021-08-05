@@ -6,6 +6,7 @@
 #include <Core/Field.h>
 #include <Core/DecimalComparison.h>
 #include <Common/FieldVisitors.h>
+#include <fmt/core.h>
 
 
 namespace DB
