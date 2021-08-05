@@ -35,7 +35,7 @@ struct MPPTaskId
 };
 
 
-class MPPTask;
+struct MPPTask;
 class MPPTunnel : private boost::noncopyable
 {
 public:
