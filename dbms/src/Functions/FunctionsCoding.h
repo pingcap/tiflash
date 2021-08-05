@@ -513,6 +513,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
+    bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
@@ -645,29 +646,49 @@ public:
     }
 
     /// return <result, is_invalid>
-    static std::tuple<UInt32, UInt8> parseIPv4(const char * pos)
+    /// Port from https://github.com/pingcap/tidb/blob/6063386a9d164399924ef046de76e8fa4b3dd91d/expression/builtin_miscellaneous.go#L417
+    static std::tuple<UInt32, UInt8> parseIPv4(const char * pos, size_t size)
     {
-        UInt32 res = 0;
-        for (int offset = 24; offset >= 0; offset -= 8)
+        // ip address should not end with '.'.
+        if (size == 0 || pos[size - 1] == '.')
+            return {0, 1}
+
+        UInt32 result = 0;
+        UInt32 value = 0;
+        int dot_count = 0;
+        for (size_t i = 0; i < size; ++i)
         {
-            UInt32 value = 0;
-            int len = 0;
-            /// if value == 255 then after next loop it must be larger than 255.
-            /// MySQL allows '00000.0.0.0', here we can't terminate loop by len.
-            while (isNumericASCII(*pos) && value < 255)
+            auto c = pos[i];
+            if (isNumericASCII(c))
             {
-                value = value * 10 + (*pos - '0');
-                ++len;
-                ++pos;
+                value = value * 10 + (c - '0');
+                if (value > 255)
+                    return {0, 1};
             }
-            if (len == 0 || value > 255 || (offset > 0 && *pos != '.'))
+            else if (c == '.')
+            {
+                ++dot_count;
+                if (dot_count > 3)
+                    return {0, 1};
+                result = (result << 8) + value;
+                value = 0;
+            }
+            else
                 return {0, 1};
-            res |= value << offset;
-            ++pos;
         }
-        if (*(pos - 1) != '\0')
-            return {0, 1};
-        return {res, 0};
+        // 127          -> 0.0.0.127
+        // 127.255      -> 127.0.0.255
+        // 127.256      -> NULL
+        // 127.2.1      -> 127.2.0.1
+        switch (dot_result)
+        {
+        // fallthrough
+        case 1: result << 8;
+        case 2: result << 8;
+        default: ;
+        }
+        result = (result << 8) + value;
+        return {result, 0};
     }
 
     /// Need to return NULL for invalid input.
@@ -707,8 +728,10 @@ public:
                 }
                 else
                 {
-                    auto * p = reinterpret_cast<const char *>(&vec_src[prev_offset]);
-                    std::tie(vec_res[i], vec_res_nullmap[i]) = parseIPv4(p);
+                    const auto * p = reinterpret_cast<const char *>(&vec_src[prev_offset]);
+                    /// discard the trailing '\0'
+                    auto size = (i == 0 ? offsets_src[0] : offsets[i] - offsets[i - 1]) - 1;
+                    std::tie(vec_res[i], vec_res_nullmap[i]) = parseIPv4(p, size);
                 }
                 prev_offset = offsets_src[i];
             }
