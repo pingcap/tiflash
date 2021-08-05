@@ -10,9 +10,9 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <fmt/core.h>
 
 #include <ext/scope_guard.h>
-#include <fmt/core.h>
 
 namespace DB
 {
@@ -75,8 +75,7 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
     return ret;
 }
 
-MPPTunnel::MPPTunnel(
-    const mpp::TaskMeta & receiver_meta_,
+MPPTunnel::MPPTunnel(const mpp::TaskMeta & receiver_meta_,
     const mpp::TaskMeta & sender_meta_,
     const std::chrono::seconds timeout_,
     const MPPTaskPtr & current_task_)
@@ -86,8 +85,7 @@ MPPTunnel::MPPTunnel(
       current_task(current_task_),
       tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id())),
       log(&Logger::get(tunnel_id))
-{
-}
+{}
 
 MPPTunnel::~MPPTunnel()
 {
@@ -304,7 +302,10 @@ void MPPTask::runImpl()
     }
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
     SCOPE_EXIT({
+        GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
         GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_duration_seconds, type_run_mpp_task)
             .Observe(stopwatch.elapsedSeconds());
     });
