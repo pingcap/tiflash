@@ -30,9 +30,9 @@ bool CompressedReadBufferFromFileProvider::nextImpl()
 
 
 CompressedReadBufferFromFileProvider::CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider, const std::string & path,
-    const EncryptionPath & encryption_path, size_t estimated_size, size_t aio_threshold, size_t buf_size)
+    const EncryptionPath & encryption_path, size_t estimated_size, size_t aio_threshold, const ReadLimiterPtr & read_limiter_, size_t buf_size)
     : BufferWithOwnMemory<ReadBuffer>(0),
-      p_file_in(createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, estimated_size, aio_threshold, buf_size)),
+      p_file_in(createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, estimated_size, aio_threshold, read_limiter_, buf_size)),
       file_in(*p_file_in)
 {
     compressed_in = &file_in;

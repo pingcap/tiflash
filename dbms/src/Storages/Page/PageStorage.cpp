@@ -263,7 +263,7 @@ void PageStorage::restore()
               || page_file.getType() == PageFile::Type::Checkpoint))
             throw Exception("Try to recover from " + page_file.toString() + ", illegal type.", ErrorCodes::LOGICAL_ERROR);
 
-        if (auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file)); //
+        if (auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file));
             reader->hasNext())
         {
             // Read one WriteBatch
@@ -523,7 +523,7 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
     return pages_reader;
 }
 
-void PageStorage::write(WriteBatch && wb, const RateLimiterPtr & rate_limiter)
+void PageStorage::write(WriteBatch && wb, const WriteLimiterPtr & write_limiter)
 {
     if (unlikely(wb.empty()))
         return;
@@ -562,7 +562,7 @@ void PageStorage::write(WriteBatch && wb, const RateLimiterPtr & rate_limiter)
                                     + DB::toString(wb.getSequence()) + " has been canceled",
                                 ErrorCodes::FAIL_POINT_ERROR);
         });
-        size_t bytes_written = file_to_write->write(wb, edit, rate_limiter);
+        size_t bytes_written = file_to_write->write(wb, edit, write_limiter);
         delegator->addPageFileUsedSize(file_to_write->fileIdLevel(),
                                        bytes_written,
                                        file_to_write->parentPath(),
@@ -623,7 +623,7 @@ std::tuple<size_t, double, unsigned> PageStorage::getSnapshotsStat() const
     return versioned_page_entries.getSnapshotsStat();
 }
 
-Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
+Page PageStorage::read(PageId page_id, const ReadLimiterPtr& read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -636,10 +636,10 @@ Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
     const auto       file_id_level = page_entry->fileIdLevel();
     PageIdAndEntries to_read       = {{page_id, *page_entry}};
     auto             file_reader   = getReader(file_id_level);
-    return file_reader->read(to_read)[page_id];
+    return file_reader->read(to_read, read_limiter)[page_id];
 }
 
-PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot)
+PageMap PageStorage::read(const std::vector<PageId> & page_ids, const ReadLimiterPtr& read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -675,14 +675,14 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snap
         (void)file_id_level;
         auto & page_id_and_entries = entries_and_reader.first;
         auto & reader              = entries_and_reader.second;
-        auto   page_in_file        = reader->read(page_id_and_entries);
+        auto   page_in_file        = reader->read(page_id_and_entries, read_limiter);
         for (auto & [page_id, page] : page_in_file)
             page_map.emplace(page_id, page);
     }
     return page_map;
 }
 
-void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot)
+void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr& read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -718,11 +718,11 @@ void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler &
         auto & page_id_and_entries = entries_and_reader.first;
         auto & reader              = entries_and_reader.second;
 
-        reader->read(page_id_and_entries, handler);
+        reader->read(page_id_and_entries, handler, read_limiter);
     }
 }
 
-PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, SnapshotPtr snapshot)
+PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr& read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
         snapshot = this->getSnapshot();
@@ -757,7 +757,7 @@ PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, Snaps
         (void)file_id_level;
         auto & reader       = entries_and_reader.first;
         auto & fields_infos = entries_and_reader.second;
-        auto   page_in_file = reader->read(fields_infos);
+        auto   page_in_file = reader->read(fields_infos, read_limiter);
         for (auto & [page_id, page] : page_in_file)
             page_map.emplace(page_id, std::move(page));
     }
@@ -785,7 +785,7 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
 
     for (const auto & p : file_and_pages)
     {
-        auto pages = read(p.second, snapshot);
+        auto pages = read(p.second, nullptr, snapshot);
         for (const auto & id_page : pages)
         {
             acceptor(id_page.second);
@@ -941,7 +941,7 @@ WriteBatch::SequenceID PageStorage::WritingFilesSnapshot::minPersistedSequence()
     return seq;
 }
 
-bool PageStorage::gc(bool not_skip, const RateLimiterPtr & rate_limiter)
+bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
     // If another thread is running gc, just return;
     bool v = false;
@@ -1123,7 +1123,7 @@ bool PageStorage::gc(bool not_skip, const RateLimiterPtr & rate_limiter)
     {
         // Try to compact consecutive Legacy PageFiles into a snapshot.
         // Legacy and checkpoint files will be removed from `page_files` after `tryCompact`.
-        LegacyCompactor compactor(*this, rate_limiter);
+        LegacyCompactor compactor(*this, write_limiter, read_limiter);
         PageFileSet     page_files_to_archive;
         std::tie(page_files, page_files_to_archive, gc_context.num_bytes_written_in_compact_legacy)
             = compactor.tryCompact(std::move(page_files), writing_files_snapshot);
@@ -1138,7 +1138,7 @@ bool PageStorage::gc(bool not_skip, const RateLimiterPtr & rate_limiter)
         Stopwatch watch_migrate;
 
         // Calculate a config by the gc context, maybe do a more aggressive GC
-        DataCompactor<PageStorage::SnapshotPtr> compactor(*this, gc_context.calculateGcConfig(config), rate_limiter);
+        DataCompactor<PageStorage::SnapshotPtr> compactor(*this, gc_context.calculateGcConfig(config), write_limiter, read_limiter);
         std::tie(gc_context.compact_result, gc_file_entries_edit) = compactor.tryMigrate(page_files, getSnapshot(), writing_files_snapshot);
 
         // We only care about those time cost in actually doing compaction on page data.
