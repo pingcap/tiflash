@@ -1,15 +1,22 @@
-#include <Common/Exception.h>
-#include <Common/setThreadName.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/Exception.h>
 #include <Common/MemoryTracker.h>
 #include <Common/randomSeed.h>
+#include <Common/setThreadName.h>
 #include <IO/WriteHelpers.h>
-#include <common/logger_useful.h>
+#include <Poco/Timespan.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
+#include <Interpreters/Context.h>
+#include <common/logger_useful.h>
+
 
 #include <pcg_random.hpp>
 #include <random>
 
+#ifdef __linux__
+#include <unistd.h>
+#include <sys/syscall.h>
+#endif
 
 namespace CurrentMetrics
 {
@@ -66,9 +73,9 @@ BackgroundProcessingPool::BackgroundProcessingPool(int size_) : size(size_)
 }
 
 
-BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::addTask(const Task & task, const bool multi)
+BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::addTask(const Task & task, const bool multi, const size_t interval_ms)
 {
-    TaskHandle res = std::make_shared<TaskInfo>(*this, task, multi);
+    TaskHandle res = std::make_shared<TaskInfo>(*this, task, multi, interval_ms);
 
     Poco::Timestamp current_time;
 
@@ -121,6 +128,9 @@ void BackgroundProcessingPool::threadFunction()
         const auto name = "BkgPool" + std::to_string(tid++);
         setThreadName(name.data());
         is_background_thread = true;
+        #ifdef __linux__
+        addThreadId(syscall(SYS_gettid));
+        #endif
     }
 
     MemoryTracker memory_tracker;
@@ -132,8 +142,9 @@ void BackgroundProcessingPool::threadFunction()
 
     while (!shutdown)
     {
-        bool done_work = false;
         TaskHandle task;
+        // The time to sleep before running next task, `sleep_seconds` by default.
+        Poco::Timespan next_sleep_time_span(sleep_seconds, 0);
 
         try
         {
@@ -185,6 +196,7 @@ void BackgroundProcessingPool::threadFunction()
             {
                 CurrentMetrics::Increment metric_increment{CurrentMetrics::BackgroundPoolTask};
 
+                bool done_work = false;
                 if (!task->multi)
                 {
                     bool expected = false;
@@ -198,6 +210,19 @@ void BackgroundProcessingPool::threadFunction()
                 }
                 else
                     done_work = task->function();
+
+                /// If task has done work, it could be executed again immediately.
+                /// If not, add delay before next run.
+                if (done_work)
+                {
+                    next_sleep_time_span = 0;
+                }
+                else if (task->interval_milliseconds != 0)
+                {
+                    // Update `next_sleep_time_span` by user-defined interval if the later one is non-zero
+                    next_sleep_time_span = Poco::Timespan(0, /*microseconds=*/task->interval_milliseconds * 1000);
+                }
+                // else `sleep_seconds` by default
             }
         }
         catch (...)
@@ -216,7 +241,7 @@ void BackgroundProcessingPool::threadFunction()
 
         /// If task has done work, it could be executed again immediately.
         /// If not, add delay before next run.
-        Poco::Timestamp next_time_to_execute = Poco::Timestamp() + (done_work ? 0 : sleep_seconds * 1000000);
+        Poco::Timestamp next_time_to_execute = Poco::Timestamp() + next_sleep_time_span;
 
         {
             std::unique_lock<std::mutex> lock(tasks_mutex);
@@ -230,6 +255,18 @@ void BackgroundProcessingPool::threadFunction()
     }
 
     current_memory_tracker = nullptr;
+}
+
+std::vector<pid_t> BackgroundProcessingPool::getThreadIds()
+{
+    std::lock_guard lock(thread_ids_mtx);
+    return thread_ids;
+}
+
+void BackgroundProcessingPool::addThreadId(pid_t tid)
+{
+    std::lock_guard lock(thread_ids_mtx);
+    thread_ids.push_back(tid);
 }
 
 }

@@ -21,7 +21,8 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
                              const String & file_name_base,
                              size_t         aio_threshold,
                              size_t         max_read_buffer_size,
-                             Logger *       log)
+                             Logger *       log,
+                             const ReadLimiterPtr & read_limiter)
     : single_file_mode(reader.single_file_mode), avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
 {
     // load mark data
@@ -33,7 +34,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
                 return res;
             size_t size        = sizeof(MarkWithSizeInCompressedFile) * reader.dmfile->getPacks();
             auto   file        = reader.file_provider->newRandomAccessFile(reader.dmfile->colMarkPath(file_name_base),
-                                                                  reader.dmfile->encryptionMarkPath(file_name_base));
+                                                                  reader.dmfile->encryptionMarkPath(file_name_base), nullptr, -1);
             auto   mark_size   = reader.dmfile->colMarkSize(file_name_base);
             auto   mark_offset = reader.dmfile->colMarkOffset(file_name_base);
             if (unlikely(mark_size != size))
@@ -42,7 +43,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
                                                + " vs. actual: " + std::to_string(mark_size),
                                            Errors::DeltaTree::Internal);
             }
-            PageUtil::readFile(file, mark_offset, reinterpret_cast<char *>(res->data()), size);
+            PageUtil::readFile(file, mark_offset, reinterpret_cast<char *>(res->data()), size, read_limiter);
 
             return res;
         };
@@ -57,7 +58,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
             size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
             auto   file = reader.file_provider->newRandomAccessFile(reader.dmfile->colMarkPath(file_name_base),
                                                                   reader.dmfile->encryptionMarkPath(file_name_base));
-            PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size);
+            PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size, read_limiter);
 
             return res;
         };
@@ -133,6 +134,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
                                                                  reader.dmfile->encryptionDataPath(file_name_base),
                                                                  estimated_size,
                                                                  aio_threshold,
+                                                                 read_limiter,
                                                                  buffer_size);
 }
 
@@ -154,13 +156,14 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                            size_t                      aio_threshold,
                            size_t                      max_read_buffer_size,
                            const FileProviderPtr &     file_provider_,
+                           const ReadLimiterPtr &      read_limiter,
                            size_t                      rows_threshold_per_read_,
                            bool                        read_one_pack_every_time_)
     : dmfile(dmfile_),
       read_columns(read_columns_),
       enable_clean_read(enable_clean_read_),
       max_read_version(max_read_version_),
-      pack_filter(dmfile_, index_cache_, hash_salt_, rowkey_range_, filter_, read_packs_, file_provider_),
+      pack_filter(dmfile_, index_cache_, hash_salt_, rowkey_range_, filter_, read_packs_, file_provider_, read_limiter),
       handle_res(pack_filter.getHandleRes()),
       use_packs(pack_filter.getUsePacks()),
       is_common_handle(rowkey_range_.is_common_handle),
@@ -196,7 +199,8 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                 stream_name,
                 aio_threshold,
                 max_read_buffer_size,
-                log);
+                log,
+                read_limiter);
             column_streams.emplace(stream_name, std::move(stream));
         };
         const auto data_type = dmfile->getColumnStat(cd.id).type;

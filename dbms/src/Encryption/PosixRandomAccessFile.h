@@ -11,13 +11,16 @@ extern const Metric OpenFileForRead;
 
 namespace DB
 {
+class ReadLimiter;
+using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
+
 class PosixRandomAccessFile : public RandomAccessFile
 {
 protected:
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForRead};
 
 public:
-    PosixRandomAccessFile(const std::string & file_name_, int flags);
+    PosixRandomAccessFile(const std::string & file_name_, int flags, const ReadLimiterPtr & read_limiter_ = nullptr);
 
     ~PosixRandomAccessFile() override;
 
@@ -38,6 +41,7 @@ public:
 private:
     std::string file_name;
     int fd;
+    ReadLimiterPtr read_limiter;
 };
 
 } // namespace DB
