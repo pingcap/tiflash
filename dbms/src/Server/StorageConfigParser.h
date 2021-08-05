@@ -76,7 +76,6 @@ public:
     UInt64 writeWeight() const;
     UInt64 totalWeight() const;
 
-    bool needUpdateLimiter(const StorageIORateLimitConfig & config) const;
     bool operator==(const StorageIORateLimitConfig & config) const;
 };
 

@@ -420,12 +420,9 @@ bool IORateLimiter::readConfig(Poco::Util::AbstractConfiguration & config_, Stor
         LOG_INFO(log, "storage.io_rate_limit is not changed.");
         return false;
     }
-    bool need_update_limiter = io_config.needUpdateLimiter(new_io_config);
-    LOG_INFO(log,
-        fmt::format("storage.io_rate_limit is changed: {} => {} need_update_limiter {}", io_config.toString(), new_io_config.toString(),
-            need_update_limiter));
+    LOG_INFO(log, fmt::format("storage.io_rate_limit is changed: {} => {}", io_config.toString(), new_io_config.toString()));
     io_config = new_io_config;
-    return need_update_limiter;
+    return true;
 }
 
 void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
@@ -613,11 +610,17 @@ void IORateLimiter::runAutoTune()
 
 std::unique_ptr<IOLimitTuner> IORateLimiter::createIOLimitTuner()
 {
-    auto getLimiters = [&]() -> std::tuple<WriteLimiterPtr, WriteLimiterPtr, ReadLimiterPtr, ReadLimiterPtr, StorageIORateLimitConfig> {
+    WriteLimiterPtr bg_write, fg_write;
+    ReadLimiterPtr bg_read, fg_read;
+    StorageIORateLimitConfig io_config_;
+    {
         std::lock_guard lock(mtx_);
-        return {bg_write_limiter, fg_write_limiter, bg_read_limiter, fg_read_limiter, io_config};
-    };
-    auto [bg_write, fg_write, bg_read, fg_read, io_config_] = getLimiters();
+        bg_write = bg_write_limiter;
+        fg_write = fg_write_limiter;
+        bg_read = bg_read_limiter;
+        fg_read = fg_read_limiter;
+        io_config_ = io_config;
+    }
     return std::make_unique<IOLimitTuner>(bg_write != nullptr ? std::make_unique<LimiterStat>(bg_write->getStat()) : nullptr,
         fg_write != nullptr ? std::make_unique<LimiterStat>(fg_write->getStat()) : nullptr,
         bg_read != nullptr ? std::make_unique<LimiterStat>(bg_read->getStat()) : nullptr,
@@ -695,8 +698,12 @@ IOLimitTuner::TuneResult IOLimitTuner::tune() const
     LOG_INFO(log,
         fmt::format(
             "tuneWrite: bg_write {} fg_write {} write_tuned {}", max_bg_write_bytes_per_sec, max_fg_write_bytes_per_sec, write_tuned));
-    return {max_bg_read_bytes_per_sec, max_fg_read_bytes_per_sec, read_tuned || rw_tuned, max_bg_write_bytes_per_sec,
-        max_fg_write_bytes_per_sec, write_tuned || rw_tuned};
+    return {.max_bg_read_bytes_per_sec = max_bg_read_bytes_per_sec,
+        .max_fg_read_bytes_per_sec = max_fg_read_bytes_per_sec,
+        .read_tuned = read_tuned || rw_tuned,
+        .max_bg_write_bytes_per_sec = max_bg_write_bytes_per_sec,
+        .max_fg_write_bytes_per_sec = max_fg_write_bytes_per_sec,
+        .write_tuned = write_tuned || rw_tuned};
 }
 
 // <max_read_bytes_per_sec, max_write_bytes_per_sec, has_tuned>

@@ -390,13 +390,6 @@ UInt64 StorageIORateLimitConfig::getWriteMaxBytesPerSec() const { return getBgWr
 
 UInt64 StorageIORateLimitConfig::getReadMaxBytesPerSec() const { return getBgReadMaxBytesPerSec() + getFgReadMaxBytesPerSec(); }
 
-bool StorageIORateLimitConfig::needUpdateLimiter(const StorageIORateLimitConfig & config) const
-{
-    return !(config.max_bytes_per_sec == max_bytes_per_sec && config.max_read_bytes_per_sec == max_read_bytes_per_sec
-        && config.max_write_bytes_per_sec == max_write_bytes_per_sec && config.bg_write_weight == bg_write_weight
-        && config.fg_write_weight == fg_write_weight && config.bg_read_weight == bg_read_weight && config.fg_read_weight == fg_read_weight);
-}
-
 bool StorageIORateLimitConfig::operator==(const StorageIORateLimitConfig & config) const
 {
     return config.max_bytes_per_sec == max_bytes_per_sec && config.max_read_bytes_per_sec == max_read_bytes_per_sec
