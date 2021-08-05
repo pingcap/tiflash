@@ -13,6 +13,12 @@ set -ueox pipefail
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
+
+# DO NOT enable format check until standards unified
+#curl -o "/usr/local/bin/clang-format" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/clang-format
+#chmod +x "/usr/local/bin/clang-format"
+#python3 ${SRCPATH}/format-diff.py --repo_path "${SRCPATH}" --check_formatted --diff_from `git merge-base origin/master HEAD`
+
 CI_CCACHE_USED_SRCPATH="/build/tics"
 export INSTALL_DIR=${INSTALL_DIR:-"$SRCPATH/release-centos7/tiflash"}
 
@@ -108,12 +114,12 @@ cmake "$SRCPATH" \
     -DUSE_CCACHE=${USE_CCACHE} \
     -DDEBUG_WITHOUT_DEBUG_INFO=ON
 
-make -j $NPROC tiflash
+make -j ${NPROC} tiflash
 
 # copy gtest binary under Debug mode
 if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST} -ne 0 ]]; then
-    #ctest -V -j $(nproc || grep -c ^processor /proc/cpuinfo)
-    make -j ${NPROC} gtests_dbms gtests_libcommon
+    make -j ${NPROC} page_ctl
+    make -j ${NPROC} gtests_dbms gtests_libcommon page_stress_testing
     cp -f "$build_dir/dbms/gtests_dbms" "${INSTALL_DIR}/"
     cp -f "$build_dir/libs/libcommon/src/tests/gtests_libcommon" "${INSTALL_DIR}/"
 fi

@@ -7,8 +7,6 @@
 #include <condition_variable>
 
 
-class MemoryTracker;
-
 namespace DB
 {
 
@@ -151,7 +149,7 @@ private:
 
     std::unique_ptr<ParallelMergeData> parallel_merge_data;
 
-    void mergeThread(MemoryTracker * memory_tracker);
+    void mergeThread();
 
     void finalize();
 };

@@ -28,9 +28,6 @@
     M(MemoryTrackingForMerges)                  \
     M(LeaderElection)                           \
     M(EphemeralNode)                            \
-    M(ZooKeeperSession)                         \
-    M(ZooKeeperWatch)                           \
-    M(ZooKeeperRequest)                         \
     M(DelayedInserts)                           \
     M(ContextLockWait)                          \
     M(StorageBufferRows)                        \

@@ -4,8 +4,8 @@
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Server/StorageConfigParser.h>
-#include <TestUtils/TiFlashTestBasic.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
 #if !__clang__

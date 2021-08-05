@@ -44,7 +44,7 @@ void buildScatterSelector(
         // TODO: Better mod calculating.
         key = UInt128(key.low % partition_mod);
 
-        typename Data::iterator it;
+        typename Data::LookupResult it;
         bool inserted;
         partitions_map.emplace(key, it, inserted);
 
@@ -53,7 +53,7 @@ void buildScatterSelector(
             partition_num_to_first_row.push_back(i);
             partition_num_to_key.push_back(key);
 
-            it->second = partitions_count;
+            it->getMapped() = partitions_count;
 
             ++partitions_count;
 
@@ -66,7 +66,7 @@ void buildScatterSelector(
         }
 
         if (partitions_count > 1)
-            selector[i] = it->second;
+            selector[i] = it->getMapped();
     }
 }
 

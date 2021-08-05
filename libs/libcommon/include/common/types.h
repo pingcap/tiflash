@@ -188,6 +188,21 @@ inline constexpr bool is_boost_number_v = is_boost_number<T>::value;
 template <typename T>
 inline constexpr bool is_fit_register = sizeof(T) <= sizeof(UInt64);
 
+template <typename T>
+struct actual_size {
+    static constexpr size_t value = sizeof(T);
+};
+
+template <> struct actual_size<Int256> { static constexpr size_t value = 32; };
+template <> struct actual_size<UInt256> { static constexpr size_t value = 32; };
+template <> struct actual_size<Int512> { static constexpr size_t value = 64; };
+
+template <> struct actual_size<BoostUInt256> { static constexpr size_t value = 32; };
+template <> struct actual_size<BoostUInt512> { static constexpr size_t value = 64; };
+
+template <typename T>
+inline constexpr size_t actual_size_v = actual_size<T>::value;
+
 /** This is not the best way to overcome an issue of different definitions
   * of uint64_t and size_t on Linux and Mac OS X (both 64 bit).
   *

@@ -27,6 +27,14 @@ public:
     CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
         std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
         const SizeLimits & network_transfer_limits, Int64 mpp_task_id_);
+    ~CreatingSetsBlockInputStream()
+    {
+        for (auto & worker : workers)
+        {
+            if (worker.joinable())
+                worker.join();
+        }
+    }
 
     String getName() const override { return "CreatingSets"; }
 
@@ -59,7 +67,7 @@ private:
     Logger * log = &Logger::get("CreatingSetsBlockInputStream");
 
     void createAll();
-    void createOne(SubqueryForSet & subquery, MemoryTracker * memory_tracker);
+    void createOne(SubqueryForSet & subquery);
 };
 
 } // namespace DB
