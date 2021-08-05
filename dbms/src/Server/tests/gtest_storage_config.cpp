@@ -450,12 +450,12 @@ background_read_weight=2
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
         ASSERT_TRUE(io_config.use_max_bytes_per_sec);
-        ASSERT_EQ(io_config.fg_write_weight, 10);
-        ASSERT_EQ(io_config.bg_write_weight, 10);
-        ASSERT_EQ(io_config.fg_read_weight, 70);
-        ASSERT_EQ(io_config.bg_read_weight, 10);
-        ASSERT_EQ(io_config.readWeight(), 80);
-        ASSERT_EQ(io_config.writeWeight(), 20);
+        ASSERT_EQ(io_config.fg_write_weight, 25);
+        ASSERT_EQ(io_config.bg_write_weight, 25);
+        ASSERT_EQ(io_config.fg_read_weight, 25);
+        ASSERT_EQ(io_config.bg_read_weight, 25);
+        ASSERT_EQ(io_config.readWeight(), 50);
+        ASSERT_EQ(io_config.writeWeight(), 50);
         ASSERT_EQ(io_config.totalWeight(), 100);
         ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 0);        
         ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 0);        
