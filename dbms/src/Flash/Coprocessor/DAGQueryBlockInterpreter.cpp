@@ -152,15 +152,20 @@ AnalysisResult analyzeExpressions(
     // There will be either Agg...
     if (query_block.aggregation)
     {
-        /// collation sensitive group by is slower then normal group by, use normal group by by default
-        // todo better to let TiDB decide whether group by is collation sensitive or not
+        bool group_by_collation_sensitive =
+            /// collation sensitive group by is slower then normal group by, use normal group by by default
+            context.getSettingsRef().group_by_collation_sensitive ||
+            /// in mpp task, here is no way to tell whether this aggregation is first stage aggregation or
+            /// final stage aggregation, to make sure the result is right, always do collation sensitive aggregation
+            context.getDAGContext()->isMPPTask();
+
         analyzer.appendAggregation(
             chain,
             query_block.aggregation->aggregation(),
             res.aggregation_keys,
             res.aggregation_collators,
             res.aggregate_descriptions,
-            context.getSettingsRef().group_by_collation_sensitive);
+            group_by_collation_sensitive);
         res.need_aggregate = true;
         res.before_aggregation = chain.getLastActions();
 
