@@ -21,6 +21,7 @@
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
+#include <Encryption/RateLimiter.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Functions/registerFunctions.h>
@@ -1117,7 +1118,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
-            global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), *config, log);
+            global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), *config);
         },
         /* already_loaded = */ true);
 
@@ -1175,7 +1176,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Init Rate Limiter
     {
-        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), config(), log);
+        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), config());
     }
 
     /// Set path for format schema files
@@ -1348,6 +1349,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             LOG_INFO(log, "Set store status Stopping");
             tmt_context.setStatusStopping();
+            // Set limiters stopping and wakeup threads in waitting queue.
+            global_context->getIORateLimiter().setStop();
             {
                 // Wait until there is no read-index task.
                 while (tmt_context.getKVStore()->getReadIndexEvent())

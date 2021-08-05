@@ -29,13 +29,13 @@ public:
                CompressionSettings    compression_settings,
                size_t                 max_compress_block_size,
                FileProviderPtr &      file_provider,
-               const RateLimiterPtr & rate_limiter_,
+               const WriteLimiterPtr & write_limiter_,
                bool                   do_index)
             : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
                                                                      dmfile->colDataPath(file_base_name),
                                                                      dmfile->encryptionDataPath(file_base_name),
                                                                      false,
-                                                                     rate_limiter_,
+                                                                     write_limiter_,
                                                                      0,
                                                                      0,
                                                                      max_compress_block_size)),
@@ -44,7 +44,7 @@ public:
               original_layer(compressed_buf),
               minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr),
               mark_file(
-                  file_provider, dmfile->colMarkPath(file_base_name), dmfile->encryptionMarkPath(file_base_name), false, rate_limiter_)
+                  file_provider, dmfile->colMarkPath(file_base_name), dmfile->encryptionMarkPath(file_base_name), false, write_limiter_)
         {
         }
 
@@ -83,12 +83,12 @@ public:
                          CompressionSettings     compression_settings,
                          size_t                  max_compress_block_size,
                          const FileProviderPtr & file_provider,
-                         const RateLimiterPtr &  rate_limiter_)
+                         const WriteLimiterPtr &  write_limiter_)
             : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
                                                                      dmfile->path(),
                                                                      EncryptionPath(dmfile->encryptionBasePath(), ""),
                                                                      true,
-                                                                     rate_limiter_,
+                                                                     write_limiter_,
                                                                      0,
                                                                      0,
                                                                      max_compress_block_size)),
@@ -183,7 +183,7 @@ public:
     DMFileWriter(const DMFilePtr &       dmfile_,
                  const ColumnDefines &   write_columns_,
                  const FileProviderPtr & file_provider_,
-                 const RateLimiterPtr &  rate_limiter_,
+                 const WriteLimiterPtr &  write_limiter_,
                  const Options &         options_);
 
     void write(const Block & block, const BlockProperty & block_property);
@@ -212,7 +212,7 @@ private:
     SingleFileStreamPtr single_file_stream;
 
     FileProviderPtr file_provider;
-    RateLimiterPtr  rate_limiter;
+    WriteLimiterPtr  write_limiter;
 };
 
 } // namespace DM

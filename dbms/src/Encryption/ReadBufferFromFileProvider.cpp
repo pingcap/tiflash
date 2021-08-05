@@ -28,9 +28,9 @@ extern const int CANNOT_SELECT;
 } // namespace ErrorCodes
 
 ReadBufferFromFileProvider::ReadBufferFromFileProvider(const FileProviderPtr & file_provider_, const std::string & file_name_,
-    const EncryptionPath & encryption_path_, size_t buf_size, int flags, char * existing_memory, size_t alignment)
+    const EncryptionPath & encryption_path_, size_t buf_size, const ReadLimiterPtr & read_limiter, int flags, char * existing_memory, size_t alignment)
     : ReadBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment),
-      file(file_provider_->newRandomAccessFile(file_name_, encryption_path_, flags))
+      file(file_provider_->newRandomAccessFile(file_name_, encryption_path_, read_limiter, flags))
 {
     fd = file->getFd();
 }

@@ -1554,14 +1554,28 @@ FileProviderPtr Context::getFileProvider() const
     return shared->file_provider;
 }
 
-void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config, Poco::Logger* log)
+void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config)
 {
-    shared->io_rate_limiter.updateConfig(metrics, config, log);
+    getIORateLimiter().updateConfig(metrics, config);
+    auto tids = getBackgroundPool().getThreadIds();
+    auto blockable_tids = getBlockableBackgroundPool().getThreadIds();
+    tids.insert(tids.end(), blockable_tids.begin(), blockable_tids.end());
+    getIORateLimiter().setBackgroundThreadIds(tids);
 }
 
-RateLimiterPtr Context::getWriteLimiter() const
+WriteLimiterPtr Context::getWriteLimiter() const
 {
-    return shared->io_rate_limiter.getWriteLimiter();
+    return getIORateLimiter().getWriteLimiter();
+}
+
+IORateLimiter& Context::getIORateLimiter() const
+{
+    return shared->io_rate_limiter;
+}
+
+ReadLimiterPtr Context::getReadLimiter() const
+{
+    return getIORateLimiter().getReadLimiter();
 }
 
 void Context::setInterserverIOAddress(const String & host, UInt16 port)
