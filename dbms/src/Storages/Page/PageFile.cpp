@@ -220,15 +220,31 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 // PageFile::MetaMergingReader
 // =========================================================
 
+PageFile::MetaMergingReader::MetaMergingReader(PageFile & page_file_) : page_file(page_file_) {}
+
 PageFile::MetaMergingReader::~MetaMergingReader()
 {
     page_file.free(meta_buffer, meta_size);
 }
 
+PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t max_meta_offset)
+{
+    auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
+    reader->initialize(max_meta_offset);
+    return reader;
+}
+
+PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file)
+{
+    auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
+    reader->initialize(std::nullopt);
+    return reader;
+}
+
 // Try to initiallize access to meta, read the whole metadata to memory.
 // Status -> Finished if metadata size is zero.
 //        -> Opened if metadata successfully load from disk.
-void PageFile::MetaMergingReader::initialize()
+void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offset)
 {
     if (status == Status::Opened)
         return;
@@ -240,7 +256,17 @@ void PageFile::MetaMergingReader::initialize()
     if (unlikely(!file.exists()))
         throw Exception("Try to read meta of " + page_file.toString() + ", but not exists. Path: " + path, ErrorCodes::LOGICAL_ERROR);
 
-    meta_size = file.getSize();
+    // If caller have not set the meta offset limit, we need to
+    // initialize `meta_size` with the file size.
+    if (!max_meta_offset)
+    {
+        meta_size = file.getSize();
+    }
+    else
+    {
+        meta_size = *max_meta_offset;
+    }
+
     if (meta_size == 0) // Empty file
     {
         status = Status::Finished;
@@ -259,7 +285,7 @@ void PageFile::MetaMergingReader::initialize()
 
 bool PageFile::MetaMergingReader::hasNext() const
 {
-    return (status == Status::Uninitialized) || (status == Status::Opened && meta_file_offset < meta_size);
+    return status == Status::Opened && meta_file_offset < meta_size;
 }
 
 void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
@@ -267,9 +293,6 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
     curr_edit.clear();
     curr_write_batch_sequence = 0;
 
-    if (status == Status::Uninitialized)
-        initialize();
-    // Note that we need to check if status is finished after initialize.
     if (status == Status::Finished)
         return;
 
@@ -495,12 +518,16 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     page_file.data_file_pos += data_buf.size();
     page_file.meta_file_pos += meta_buf.size();
 
+    // Caller should ensure there are no writing to this Writer while
+    // calling `tryCloseIdleFd`, so don't need to protect `last_write_time` now.
     last_write_time = Clock::now();
 
     // return how may bytes written
     return data_buf.size() + meta_buf.size();
 }
 
+// Caller should ensure there are no writing to this Writer while
+// calling `tryCloseIdleFd`
 void PageFile::Writer::tryCloseIdleFd(const Seconds & max_idle_time)
 {
     if (max_idle_time.count() == 0 || data_file->isClosed())

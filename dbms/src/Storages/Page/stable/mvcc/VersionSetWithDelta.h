@@ -126,10 +126,7 @@ public:
         Snapshot * next;
 
     public:
-        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_) : vset(vset_), view(std::move(tail_)), prev(this), next(this)
-        {
-            CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
-        }
+        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_) : vset(vset_), view(std::move(tail_)), prev(this), next(this) {}
 
         ~Snapshot()
         {
@@ -138,8 +135,6 @@ public:
             std::unique_lock lock = vset->acquireForLock();
             prev->next            = next;
             next->prev            = prev;
-
-            CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
         }
 
         const TVersionView * version() const { return &view; }
