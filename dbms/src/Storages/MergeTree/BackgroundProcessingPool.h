@@ -35,7 +35,9 @@ public:
         /// Wake up any thread.
         void wake();
 
-        TaskInfo(BackgroundProcessingPool & pool_, const Task & function_, const bool multi_) : pool(pool_), function(function_), multi(multi_) {}
+        TaskInfo(BackgroundProcessingPool & pool_, const Task & function_, const bool multi_, const uint64_t interval_ms_)
+            : pool(pool_), function(function_), multi(multi_), interval_milliseconds(interval_ms_)
+        {}
 
     private:
         friend class BackgroundProcessingPool;
@@ -51,6 +53,8 @@ public:
         const bool multi;
         std::atomic_bool occupied {false};
 
+        const uint64_t interval_milliseconds;
+
         std::multimap<Poco::Timestamp, std::shared_ptr<TaskInfo>>::iterator iterator;
     };
 
@@ -65,7 +69,9 @@ public:
     }
 
     /// if multi == false, this task can only be called by one thread at same time.
-    TaskHandle addTask(const Task & task, const bool multi = true);
+    /// If interval_ms is zero, this task will be scheduled with `sleep_seconds`.
+    /// If interval_ms is not zero, this task will be scheduled with `interval_ms`.
+    TaskHandle addTask(const Task & task, const bool multi = true, const size_t interval_ms = 0);
     void removeTask(const TaskHandle & task);
 
     ~BackgroundProcessingPool();
