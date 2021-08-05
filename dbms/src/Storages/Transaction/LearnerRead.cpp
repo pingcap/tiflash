@@ -292,9 +292,9 @@ LearnerReadSnapshot doLearnerRead(
             auto & region = regions_snapshot.find(region_to_query.region_id)->second;
 
             {
-                auto time_cost = region->waitIndex(batch_read_index_result.find(region_to_query.region_id)->second.read_index(), tmt);
-                // If server is being terminated, retry region to other store.
-                if (!tmt.checkRunning(std::memory_order_relaxed))
+                auto [ok, time_cost] = region->waitIndex(batch_read_index_result.find(region_to_query.region_id)->second.read_index(), tmt);
+                // If server is being terminated / time-out, retry region to other store.
+                if (!ok)
                 {
                     unavailable_regions.add(region_to_query.region_id, RegionException::RegionReadStatus::NOT_FOUND);
                     continue;

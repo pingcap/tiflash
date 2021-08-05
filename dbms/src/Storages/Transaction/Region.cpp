@@ -1,3 +1,4 @@
+#include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
@@ -12,6 +13,11 @@
 
 #include <ext/scope_guard.h>
 #include <memory>
+
+namespace ProfileEvents
+{
+extern const Event RaftWaitIndexTimeout;
+} // namespace ProfileEvents
 
 namespace DB
 {
@@ -547,7 +553,7 @@ ReadIndexResult Region::learnerRead(UInt64 start_ts)
     return {};
 }
 
-double Region::waitIndex(UInt64 index, const TMTContext & tmt)
+std::tuple<bool, double> Region::waitIndex(UInt64 index, const TMTContext & tmt)
 {
     if (proxy_helper != nullptr)
     {
@@ -555,13 +561,24 @@ double Region::waitIndex(UInt64 index, const TMTContext & tmt)
         {
             Stopwatch wait_index_watch;
             LOG_DEBUG(log, toString() << " need to wait learner index: " << index);
-            if (meta.waitIndex(index, [&tmt]() { return tmt.checkRunning(); }))
-                return wait_index_watch.elapsedSeconds();
+            if (meta.waitIndex(index, [&tmt, &wait_index_watch, index, this]() {
+                    bool ok = tmt.checkRunning();
+                    if (ok && wait_index_watch.elapsedMilliseconds() > tmt.waitIndexTimeout())
+                    {
+                        ok = false;
+                        ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
+                        LOG_WARNING(log, toString(false) << " wait learner index " << index << " timeout");
+                    }
+                    return ok;
+                }))
+            {
+                return {false, wait_index_watch.elapsedSeconds()};
+            }
             LOG_DEBUG(log, toString(false) << " wait learner index " << index << " done");
-            return wait_index_watch.elapsedSeconds();
+            return {true, wait_index_watch.elapsedSeconds()};
         }
     }
-    return 0;
+    return {true, 0};
 }
 
 UInt64 Region::version() const
