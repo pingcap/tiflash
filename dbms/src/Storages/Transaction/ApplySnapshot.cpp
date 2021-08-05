@@ -326,8 +326,8 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
         {
             // Get storage schema atomically, will do schema sync if the storage does not exists.
             // Will return the storage even if it is tombstoned.
-            const auto [table_drop_lock, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
-            if (unlikely(schema_snap.storage == nullptr))
+            const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
+            if (unlikely(storage == nullptr))
             {
                 // The storage must be physically dropped, throw exception and do cleanup.
                 throw Exception("", ErrorCodes::TABLE_IS_DROPPED);
@@ -346,7 +346,8 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
                 new_region, snaps, proxy_helper, schema_snap, gc_safepoint, force_decode, tmt, expected_block_size);
             auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, schema_snap);
-            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(bounded_stream, schema_snap, snapshot_apply_method, job_type, tmt);
+            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(
+                bounded_stream, storage, schema_snap, snapshot_apply_method, job_type, tmt);
 
             stream->writePrefix();
             stream->write();

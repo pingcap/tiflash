@@ -20,7 +20,6 @@ struct DecodingStorageSchemaSnapshot
     bool is_common_handle = false;
     TiDB::TableInfo table_info;
     ColumnsDescription columns;
-    std::shared_ptr<StorageDeltaMerge> storage = nullptr;
     DM::ColumnDefinesPtr column_defines;
     DM::ColumnDefine original_table_handle_define;
 
@@ -34,7 +33,7 @@ struct DecodingStorageSchemaSnapshot
     DecodingStorageSchemaSnapshot & operator=(DecodingStorageSchemaSnapshot &&) = default;
 };
 
-std::tuple<TableLockHolder, DecodingStorageSchemaSnapshot> //
+std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshot> //
 AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt);
 
 Block GenRegionBlockDatawithSchema(const RegionPtr & region, //
