@@ -31,12 +31,7 @@ struct MPPTaskId
 };
 
 
-<<<<<<< HEAD
 struct MPPTunnel
-=======
-struct MPPTask;
-class MPPTunnel : private boost::noncopyable
->>>>>>> 10c9a9f3f... Update store size when remove meta file of page file (#2592)
 {
     std::mutex mu;
     std::condition_variable cv_for_connected;
