@@ -2,7 +2,7 @@
 
 #include <Common/Decimal.h>
 #include <Common/TiFlashException.h>
-#include <Common/safeUnsignedAbs.h>
+#include <Common/toSafeUnsigned.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsArithmetic.h>
 #include <IO/WriteHelpers.h>
@@ -931,7 +931,7 @@ struct TiDBDecimalRound
         EXPECT(frac == 0);
 
         auto divider = Pow::result[input_scale];
-        auto absolute_value = safeUnsignedAbs<UnsignedNativeType>(input.value);
+        auto absolute_value = toSafeUnsigned<UnsignedNativeType>(input.value);
 
         // "round half away from zero"
         // examples:

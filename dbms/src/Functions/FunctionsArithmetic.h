@@ -5,7 +5,7 @@
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/FieldVisitors.h>
-#include <Common/safeUnsignedAbs.h>
+#include <Common/toSafeUnsigned.h>
 #include <Common/typeid_cast.h>
 #include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeDate.h>
@@ -549,8 +549,8 @@ struct ModuloImpl<A, B, false>
             // convert to unsigned before computing.
             // we have to prevent wrong result like UInt64(5) = UInt64(5) % Int64(-3).
             // in MySQL, UInt64(5) % Int64(-3) evaluates to UInt64(2).
-            auto x = safeUnsignedAbs<Result>(a);
-            auto y = safeUnsignedAbs<Result>(b);
+            auto x = toSafeUnsigned<Result>(a);
+            auto y = toSafeUnsigned<Result>(b);
 
             auto result = static_cast<Result>(x % y);
 
