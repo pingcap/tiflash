@@ -11,27 +11,36 @@
 #include <Storages/RegionQueryInfo.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 #include <tipb/select.pb.h>
-
 #pragma GCC diagnostic pop
+
+#include <vector>
 
 namespace DB
 {
 
 class Context;
 
-class RegionInfo
+struct RegionInfo
 {
-public:
-    const RegionVerID region_ver_id;
-    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
+    RegionID region_id;
+    UInt64 region_version;
+    UInt64 region_conf_version;
+
+    using RegionReadKeyRanges = std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>>;
+    RegionReadKeyRanges key_ranges;
     const std::unordered_set<UInt64> * bypass_lock_ts;
 
-    RegionInfo(const RegionVerID & region_ver_id_, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> && key_ranges_,
-        const std::unordered_set<UInt64> * bypass_lock_ts_)
-        : region_ver_id(region_ver_id_), key_ranges(std::move(key_ranges_)), bypass_lock_ts(bypass_lock_ts_)
+    RegionInfo(
+        RegionID id, UInt64 ver, UInt64 conf_ver, RegionReadKeyRanges && key_ranges_, const std::unordered_set<UInt64> * bypass_lock_ts_)
+        : region_id(id),
+          region_version(ver),
+          region_conf_version(conf_ver),
+          key_ranges(std::move(key_ranges_)),
+          bypass_lock_ts(bypass_lock_ts_)
     {}
 };
 
+using RegionInfoMap = std::unordered_map<RegionID, RegionInfo>;
 using RegionInfoList = std::vector<RegionInfo>;
 
 /// An abstraction of driver running DAG request.
@@ -41,11 +50,13 @@ template <bool batch = false>
 class DAGDriver
 {
 public:
-    DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const std::unordered_map<RegionVerID, RegionInfo> & regions_,
-        UInt64 start_ts, UInt64 schema_ver, tipb::SelectResponse * dag_response_, bool internal_ = false);
+    DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const RegionInfoMap & regions_,
+        const RegionInfoList & retry_regions_, UInt64 start_ts, UInt64 schema_ver, tipb::SelectResponse * dag_response_,
+        bool internal_ = false);
 
-    DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const std::unordered_map<RegionVerID, RegionInfo> & regions_,
-        UInt64 start_ts, UInt64 schema_ver, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer, bool internal_ = false);
+    DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const RegionInfoMap & regions_,
+        const RegionInfoList & retry_regions_, UInt64 start_ts, UInt64 schema_ver,
+        ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer, bool internal_ = false);
 
     void execute();
 
@@ -57,7 +68,8 @@ private:
 
     const tipb::DAGRequest & dag_request;
 
-    const std::unordered_map<RegionVerID, RegionInfo> & regions;
+    const RegionInfoMap & regions;
+    const RegionInfoList & retry_regions;
 
     tipb::SelectResponse * dag_response;
 

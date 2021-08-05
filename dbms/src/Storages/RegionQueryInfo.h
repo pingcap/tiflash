@@ -3,20 +3,16 @@
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <pingcap/kv/RegionCache.h>
-#pragma GCC diagnostic pop
-
 namespace DB
 {
 
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
-using RegionVerID = pingcap::kv::RegionVerID;
 
 struct RegionQueryInfo
 {
-    RegionVerID region_ver_id;
+    RegionID region_id;
+    UInt64 version;
+    UInt64 conf_version;
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
     // required handle ranges is the handle range specified in DAG request
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> required_handle_ranges;
@@ -33,14 +29,20 @@ struct RegionQueryInfo
 
 struct MvccQueryInfo
 {
-    bool resolve_locks = false;
+    const bool resolve_locks;
 
-    UInt64 read_tso = 0;
+    const UInt64 read_tso;
 
     Float32 concurrent = 1.0;
 
     using RegionsQueryInfo = std::vector<RegionQueryInfo>;
     RegionsQueryInfo regions_query_info;
+
+    using ReadIndexRes = std::unordered_map<RegionID, UInt64>;
+    ReadIndexRes read_index_res;
+
+public:
+    MvccQueryInfo(const bool resolve_locks_ = false, const UInt64 read_tso_ = 0) : resolve_locks(resolve_locks_), read_tso(read_tso_) {}
 };
 
 } // namespace DB

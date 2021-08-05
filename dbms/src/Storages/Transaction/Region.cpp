@@ -378,8 +378,6 @@ std::string Region::getDebugString(std::stringstream & ss) const
 
 RegionID Region::id() const { return meta.regionId(); }
 
-pingcap::kv::RegionVerID Region::verID() const { return RegionVerID(id(), confVer(), version()); }
-
 bool Region::isPendingRemove() const { return peerState() == raft_serverpb::PeerState::Tombstone; }
 
 bool Region::isMerging() const { return peerState() == raft_serverpb::PeerState::Merging; }
@@ -489,19 +487,21 @@ ReadIndexResult Region::learnerRead(UInt64 start_ts)
     return {};
 }
 
-TerminateWaitIndex Region::waitIndex(UInt64 index, const std::atomic_bool & terminated)
+double Region::waitIndex(UInt64 index, const TMTContext & tmt)
 {
     if (proxy_helper != nullptr)
     {
         if (!meta.checkIndex(index))
         {
+            Stopwatch wait_index_watch;
             LOG_DEBUG(log, toString() << " need to wait learner index: " << index);
-            if (meta.waitIndex(index, terminated))
-                return true;
+            if (meta.waitIndex(index, [&tmt]() { return tmt.checkRunning(); }))
+                return wait_index_watch.elapsedSeconds();
             LOG_DEBUG(log, toString(false) << " wait learner index " << index << " done");
+            return wait_index_watch.elapsedSeconds();
         }
     }
-    return false;
+    return 0;
 }
 
 UInt64 Region::version() const { return meta.version(); }
@@ -551,7 +551,7 @@ void Region::tryCompactionFilter(const Timestamp safe_point)
     // No need to check default cf. Because tikv will gc default cf before write cf.
     if (del_write)
     {
-        LOG_INFO(log, __FUNCTION__ << ": delete " << del_write << " in write cf");
+        LOG_INFO(log, __FUNCTION__ << ": delete " << del_write << " in write cf for region " << meta.regionId());
     }
 }
 

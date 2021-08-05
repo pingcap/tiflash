@@ -26,7 +26,6 @@
 #include <Storages/PrimaryKeyNotMatchException.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
-#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -620,13 +619,13 @@ BlockInputStreams StorageDeltaMerge::read( //
                 if (!region.required_handle_ranges.empty())
                 {
                     for (const auto & range : region.required_handle_ranges)
-                        ss << region.region_ver_id.toString() << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range) << ",";
+                        ss << region.region_id << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range) << ",";
                 }
                 else
                 {
                     /// only used for test cases
                     const auto & range = region.range_in_table;
-                    ss << region.region_ver_id.toString() << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range) << ",";
+                    ss << region.region_id << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range) << ",";
                 }
             }
             str_query_ranges = ss.str();

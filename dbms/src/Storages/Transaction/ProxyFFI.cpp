@@ -127,14 +127,11 @@ EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec s
     }
 }
 
-uint8_t HandleCheckTerminated(EngineStoreServerWrap * server)
-{
-    return server->tmt->getTerminated().load(std::memory_order_relaxed) ? 1 : 0;
-}
+uint8_t HandleCheckTerminated(EngineStoreServerWrap * server) { return server->tmt->checkTerminated(std::memory_order_relaxed) ? 1 : 0; }
 
 StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server)
 {
-    StoreStats res; // res.fs_stats.ok = false by default
+    StoreStats res{}; // res.fs_stats.ok = false by default
     try
     {
         auto global_capacity = server->tmt->getContext().getPathCapacity();
@@ -152,7 +149,7 @@ EngineStoreServerStatus HandleGetTiFlashStatus(EngineStoreServerWrap * server) {
 
 RaftProxyStatus TiFlashRaftProxyHelper::getProxyStatus() const { return fn_handle_get_proxy_status(proxy_ptr); }
 
-BaseBuffView strIntoView(const std::string & view) { return BaseBuffView(view.data(), view.size()); }
+BaseBuffView strIntoView(const std::string & view) { return BaseBuffView{view.data(), view.size()}; }
 
 bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const { return fn_is_encryption_enabled(proxy_ptr); }
 EncryptionMethod TiFlashRaftProxyHelper::getEncryptionMethod() const { return fn_encryption_method(proxy_ptr); }

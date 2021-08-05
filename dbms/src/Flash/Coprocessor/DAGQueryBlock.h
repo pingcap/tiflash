@@ -36,6 +36,8 @@ public:
     String selection_name;
     const tipb::Executor * aggregation = nullptr;
     String aggregation_name;
+    const tipb::Executor * having = nullptr;
+    String having_name;
     const tipb::Executor * limitOrTopN = nullptr;
     String limitOrTopN_name;
     const tipb::Executor * exchangeSender = nullptr;

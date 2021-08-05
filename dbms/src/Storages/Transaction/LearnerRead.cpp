@@ -11,18 +11,37 @@
 #include <common/ThreadPool.h>
 #include <common/likely.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 
-struct UnavailableRegions
+class LockWrap
+{
+    mutable std::mutex mutex;
+    bool need_lock{true};
+
+protected:
+    std::unique_lock<std::mutex> genLockGuard() const
+    {
+        if (need_lock)
+            return std::unique_lock(mutex);
+        return {};
+    }
+
+public:
+    void setNoNeedLock() { need_lock = false; }
+};
+
+struct UnavailableRegions : public LockWrap
 {
     using Result = RegionException::UnavailableRegions;
 
-    void add(const RegionVerID & id, RegionException::RegionReadStatus status_)
+    void add(RegionID id, RegionException::RegionReadStatus status_)
     {
         status = status_;
         auto _lock = genLockGuard();
-        ids.emplace(id);
+        doAdd(id);
     }
 
     size_t size() const
@@ -33,11 +52,11 @@ struct UnavailableRegions
 
     bool empty() const { return size() == 0; }
 
-    void setRegionLock(const RegionVerID & region_id_, LockInfoPtr && region_lock_)
+    void setRegionLock(RegionID region_id_, LockInfoPtr && region_lock_)
     {
         auto _lock = genLockGuard();
         region_lock = std::pair(region_id_, std::move(region_lock_));
-        ids.emplace(region_id_);
+        doAdd(region_id_);
     }
 
     void tryThrowRegionException(const MvccQueryInfo::RegionsQueryInfo & regions_info)
@@ -53,50 +72,79 @@ struct UnavailableRegions
             throw RegionException(std::move(ids), status);
     }
 
-    bool contains(const RegionVerID & region_ver_id) const
+    bool contains(RegionID region_id) const
     {
         auto _lock = genLockGuard();
-        return ids.count(region_ver_id);
+        return ids.count(region_id);
     }
 
 private:
-    std::lock_guard<std::mutex> genLockGuard() const { return std::lock_guard(mutex); }
+    inline void doAdd(RegionID id) { ids.emplace(id); }
 
 private:
     RegionException::UnavailableRegions ids;
-    mutable std::mutex mutex;
-    std::optional<std::pair<RegionVerID, LockInfoPtr>> region_lock;
+    std::optional<std::pair<RegionID, LockInfoPtr>> region_lock;
     std::atomic<RegionException::RegionReadStatus> status{RegionException::RegionReadStatus::NOT_FOUND};
 };
 
+class MvccQueryInfoWrap : boost::noncopyable, public LockWrap
+{
+    using Base = MvccQueryInfo;
+    Base & inner;
+    std::optional<Base::RegionsQueryInfo> regions_info;
+    Base::RegionsQueryInfo * regions_info_ptr;
+
+public:
+    MvccQueryInfoWrap(Base & mvcc_query_info, TMTContext & tmt, const TiDB::TableID table_id) : inner(mvcc_query_info)
+    {
+        if (likely(!inner.regions_query_info.empty()))
+        {
+            regions_info_ptr = &inner.regions_query_info;
+        }
+        else
+        {
+            regions_info = Base::RegionsQueryInfo();
+            regions_info_ptr = &*regions_info;
+            // Only for test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
+            auto regions = tmt.getRegionTable().getRegionsByTable(table_id);
+            regions_info_ptr->reserve(regions.size());
+            for (const auto & [id, region] : regions)
+            {
+                if (region == nullptr)
+                    continue;
+                regions_info_ptr->emplace_back(
+                    RegionQueryInfo{id, region->version(), region->confVer(), region->getRange()->rawKeys(), {}});
+            }
+        }
+    }
+    Base * operator->() { return &inner; }
+
+    const Base::RegionsQueryInfo & getRegionsInfo() const { return *regions_info_ptr; }
+    void addReadIndexRes(RegionID region_id, UInt64 read_index)
+    {
+        auto _lock = genLockGuard();
+        inner.read_index_res[region_id] = read_index;
+    }
+    UInt64 getReadIndexRes(RegionID region_id) const
+    {
+        auto _lock = genLockGuard();
+        if (auto it = inner.read_index_res.find(region_id); it != inner.read_index_res.end())
+            return it->second;
+        return 0;
+    }
+};
+
 LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
-    const MvccQueryInfo & mvcc_query_info,                      //
+    MvccQueryInfo & mvcc_query_info_,                           //
     size_t num_streams, TMTContext & tmt, Poco::Logger * log)
 {
     assert(log != nullptr);
 
-    const bool resolve_locks = mvcc_query_info.resolve_locks;
-    const Timestamp start_ts = mvcc_query_info.read_tso;
-    MvccQueryInfo::RegionsQueryInfo regions_info;
-    if (likely(!mvcc_query_info.regions_query_info.empty()))
-    {
-        regions_info = mvcc_query_info.regions_query_info;
-    }
-    else
-    {
-        // Only for test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
-        auto regions = tmt.getRegionTable().getRegionsByTable(table_id);
-        regions_info.reserve(regions.size());
-        for (const auto & region_info : regions)
-        {
-            if (region_info.second == nullptr)
-                continue;
-            regions_info.emplace_back(RegionQueryInfo{region_info.second->verID(), region_info.second->getRange()->rawKeys(), {}});
-        }
-    }
+    MvccQueryInfoWrap mvcc_query_info(mvcc_query_info_, tmt, table_id);
+    auto & regions_info = mvcc_query_info.getRegionsInfo();
 
     // adjust concurrency by num of regions or num of streams * mvcc_query_info.concurrent
-    size_t concurrent_num = std::max(1, std::min(static_cast<size_t>(num_streams * mvcc_query_info.concurrent), regions_info.size()));
+    size_t concurrent_num = std::max(1, std::min(static_cast<size_t>(num_streams * mvcc_query_info->concurrent), regions_info.size()));
 
     // use single thread to do replica read by default because there is some overhead from thread pool itself.
     concurrent_num = std::min(tmt.replicaReadMaxThread(), concurrent_num);
@@ -106,13 +154,13 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
     // check region is not null and store region map.
     for (const auto & info : regions_info)
     {
-        auto region = kvstore->getRegion(info.region_ver_id.id);
+        auto region = kvstore->getRegion(info.region_id);
         if (region == nullptr)
         {
-            LOG_WARNING(log, "[region " << info.region_ver_id.id << "] is not found in KVStore, try again");
-            throw RegionException({info.region_ver_id}, RegionException::RegionReadStatus::NOT_FOUND);
+            LOG_WARNING(log, "[region " << info.region_id << "] is not found in KVStore, try again");
+            throw RegionException({info.region_id}, RegionException::RegionReadStatus::NOT_FOUND);
         }
-        regions_snapshot.emplace(info.region_ver_id.id, std::move(region));
+        regions_snapshot.emplace(info.region_id, std::move(region));
     }
     // make sure regions are not duplicated.
     if (unlikely(regions_snapshot.size() != regions_info.size()))
@@ -127,110 +175,154 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
         Stopwatch batch_wait_index_watch;
 
         const size_t region_end_idx = std::min(region_begin_idx + batch_size, num_regions);
+        const size_t ori_batch_region_size = region_end_idx - region_begin_idx;
+        std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse> batch_read_index_result;
 
         std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
-        BatchReadIndexRes batch_read_index_result;
-        batch_read_index_req.reserve(region_end_idx - region_begin_idx);
-
-        for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
-        {
-            RegionQueryInfo & region_to_query = regions_info[region_idx];
-            const RegionVerID & region_ver_id = region_to_query.region_ver_id;
-            auto & region = regions_snapshot.find(region_ver_id.id)->second;
-            batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region, start_ts));
-        }
-
-        GET_METRIC(metrics, tiflash_raft_read_index_count).Increment(batch_read_index_req.size());
+        batch_read_index_req.reserve(ori_batch_region_size);
 
         {
-            /// Blocking learner read. Note that learner read must be performed ahead of data read,
-            /// otherwise the desired index will be blocked by the lock of data read.
-            if (auto proxy_helper = kvstore->getProxyHelper(); proxy_helper)
+            for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
             {
-                batch_read_index_result = proxy_helper->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
-            }
-            else
-            {
-                batch_read_index_result = std::make_unique<BatchReadIndexRes::element_type>();
-                for (const auto & req : batch_read_index_req)
+                auto & region_to_query = regions_info[region_idx];
+                const RegionID region_id = region_to_query.region_id;
+                if (auto ori_read_index = mvcc_query_info.getReadIndexRes(region_id); ori_read_index)
                 {
-                    batch_read_index_result->emplace_back(kvrpcpb::ReadIndexResponse(), req.context().region_id());
+                    auto resp = kvrpcpb::ReadIndexResponse();
+                    resp.set_read_index(ori_read_index);
+                    batch_read_index_result.emplace(region_id, std::move(resp));
+                }
+                else
+                {
+                    auto & region = regions_snapshot.find(region_id)->second;
+                    batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region, mvcc_query_info->read_tso));
                 }
             }
         }
 
+        GET_METRIC(metrics, tiflash_raft_read_index_count).Increment(batch_read_index_req.size());
+
+        const auto & make_default_batch_read_index_result = [&]() {
+            for (const auto & req : batch_read_index_req)
+            {
+                batch_read_index_result.emplace(req.context().region_id(), kvrpcpb::ReadIndexResponse());
+            }
+        };
+        [&]() {
+            if (!tmt.checkRunning(std::memory_order_relaxed))
+            {
+                make_default_batch_read_index_result();
+                return;
+            }
+            kvstore->addReadIndexEvent(1);
+            SCOPE_EXIT({ kvstore->addReadIndexEvent(-1); });
+            if (!tmt.checkRunning())
+            {
+                make_default_batch_read_index_result();
+                return;
+            }
+
+            /// Blocking learner read. Note that learner read must be performed ahead of data read,
+            /// otherwise the desired index will be blocked by the lock of data read.
+            if (auto proxy_helper = kvstore->getProxyHelper(); proxy_helper)
+            {
+                auto res = proxy_helper->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
+                for (auto && [resp, region_id] : *res)
+                {
+                    batch_read_index_result.emplace(region_id, std::move(resp));
+                }
+            }
+            else
+            {
+                make_default_batch_read_index_result();
+            }
+        }();
+
         {
             GET_METRIC(metrics, tiflash_raft_read_index_duration_seconds).Observe(batch_wait_index_watch.elapsedSeconds());
-            LOG_DEBUG(log,
-                "Batch read index send " << batch_read_index_req.size() << " request got " << batch_read_index_result->size()
-                                         << " response, cost " << batch_wait_index_watch.elapsedMilliseconds() << "ms");
+            const size_t cached_size = ori_batch_region_size - batch_read_index_req.size();
+            LOG_DEBUG(
+                log,
+                "Batch read index, original size " << ori_batch_region_size << ", send & get " << batch_read_index_req.size()
+                                                   << " message, cost " << batch_wait_index_watch.elapsedMilliseconds() << "ms";
+                do {
+                    if (cached_size)
+                    {
+                        oss_internal_rare << ", " << std::to_string(cached_size) << " in cache";
+                    }
+                } while (0));
             batch_wait_index_watch.restart();
         }
 
         // if size of batch_read_index_result is not equal with batch_read_index_req, there must be region_error/lock, find and return directly.
-        for (auto & [resp, region_id] : *batch_read_index_result)
+        for (auto & [region_id, resp] : batch_read_index_result)
         {
-            const auto & region_iter = regions_snapshot.find(region_id);
-            if (region_iter == regions_snapshot.end())
-                throw Exception("Should not reach here, can not found region in regions_snapshot");
-            RegionVerID region_ver_id = region_iter->second->verID();
             if (resp.has_region_error())
             {
                 auto & region_error = resp.region_error();
                 auto region_status = RegionException::RegionReadStatus::NOT_FOUND;
                 if (region_error.has_epoch_not_match())
                     region_status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
-                regions_snapshot.find(region_id)->second->verID();
-                unavailable_regions.add(region_ver_id, region_status);
+                unavailable_regions.add(region_id, region_status);
             }
             else if (resp.has_locked())
             {
-                unavailable_regions.setRegionLock(region_ver_id, LockInfoPtr(resp.release_locked()));
+                unavailable_regions.setRegionLock(region_id, LockInfoPtr(resp.release_locked()));
+            }
+            else
+            {
+                // cache read-index to avoid useless overhead about retry.
+                mvcc_query_info.addReadIndexRes(region_id, resp.read_index());
             }
         }
 
         for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < region_end_idx; ++region_idx, ++read_index_res_idx)
         {
-            RegionQueryInfo & region_to_query = regions_info[region_idx];
+            auto & region_to_query = regions_info[region_idx];
 
             // if region is unavailable, skip wait index.
-            if (unavailable_regions.contains(region_to_query.region_ver_id))
+            if (unavailable_regions.contains(region_to_query.region_id))
                 continue;
 
-            auto & region = regions_snapshot.find(region_to_query.region_ver_id.id)->second;
+            auto & region = regions_snapshot.find(region_to_query.region_id)->second;
 
             {
-                Stopwatch wait_index_watch;
-                if (region->waitIndex(batch_read_index_result->at(read_index_res_idx).first.read_index(), tmt.getTerminated()))
+                auto time_cost = region->waitIndex(batch_read_index_result.find(region_to_query.region_id)->second.read_index(), tmt);
+                // If server is being terminated, retry region to other store.
+                if (!tmt.checkRunning(std::memory_order_relaxed))
                 {
-                    unavailable_regions.add(region_to_query.region_ver_id, RegionException::RegionReadStatus::NOT_FOUND);
+                    unavailable_regions.add(region_to_query.region_id, RegionException::RegionReadStatus::NOT_FOUND);
                     continue;
                 }
-                GET_METRIC(metrics, tiflash_raft_wait_index_duration_seconds).Observe(wait_index_watch.elapsedSeconds());
+                if (time_cost > 0)
+                {
+                    // Only record information if wait-index does happen
+                    GET_METRIC(metrics, tiflash_raft_wait_index_duration_seconds).Observe(time_cost);
+                }
             }
-            if (resolve_locks)
+            if (mvcc_query_info->resolve_locks)
             {
                 auto res = RegionTable::resolveLocksAndWriteRegion( //
                     tmt,                                            //
                     table_id,                                       //
                     region,                                         //
-                    start_ts,                                       //
+                    mvcc_query_info->read_tso,                      //
                     region_to_query.bypass_lock_ts,                 //
-                    region_to_query.region_ver_id.ver,              //
-                    region_to_query.region_ver_id.conf_ver,         //
-                    region_to_query.range_in_table, log);
+                    region_to_query.version,                        //
+                    region_to_query.conf_version,                   //
+                    log);
 
                 std::visit(variant_op::overloaded{
-                               [&](LockInfoPtr & lock) { unavailable_regions.setRegionLock(region->verID(), std::move(lock)); },
+                               [&](LockInfoPtr & lock) { unavailable_regions.setRegionLock(region->id(), std::move(lock)); },
                                [&](RegionException::RegionReadStatus & status) {
                                    if (status != RegionException::RegionReadStatus::OK)
                                    {
                                        LOG_WARNING(log,
                                            "Check memory cache, region "
-                                               << region_to_query.region_ver_id.toString() << ", handle range "
+                                               << region_to_query.region_id << ", version " << region_to_query.version << ", handle range "
                                                << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table)
                                                << ", status " << RegionException::RegionReadStatusString(status));
-                                       unavailable_regions.add(region->verID(), status);
+                                       unavailable_regions.add(region->id(), status);
                                    }
                                },
                            },
@@ -245,6 +337,8 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
     auto start_time = Clock::now();
     if (concurrent_num <= 1)
     {
+        mvcc_query_info.setNoNeedLock();
+        unavailable_regions.setNoNeedLock();
         batch_wait_index(0);
     }
     else
@@ -278,13 +372,13 @@ void validateQueryInfo(
     for (const auto & region_query_info : mvcc_query_info.regions_query_info)
     {
         RegionException::RegionReadStatus status = RegionException::RegionReadStatus::OK;
-        auto region = tmt.getKVStore()->getRegion(region_query_info.region_ver_id.id);
-        if (auto iter = regions_snapshot.find(region_query_info.region_ver_id.id); //
+        auto region = tmt.getKVStore()->getRegion(region_query_info.region_id);
+        if (auto iter = regions_snapshot.find(region_query_info.region_id); //
             iter == regions_snapshot.end() || iter->second != region)
         {
             status = RegionException::RegionReadStatus::NOT_FOUND;
         }
-        else if (region->version() != region_query_info.region_ver_id.ver)
+        else if (region->version() != region_query_info.version)
         {
             // ABA problem may cause because one region is removed and inserted back.
             // if the version of region is changed, the `streams` may has less data because of compaction.
@@ -293,13 +387,13 @@ void validateQueryInfo(
 
         if (status != RegionException::RegionReadStatus::OK)
         {
-            fail_region_ids.emplace(region_query_info.region_ver_id);
+            fail_region_ids.emplace(region_query_info.region_id);
             fail_status = status;
             LOG_WARNING(log,
                 "Check after read from Storage, region "
-                    << region_query_info.region_ver_id.toString() << ", handle range "
-                    << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_query_info.range_in_table) << ", status "
-                    << RegionException::RegionReadStatusString(status));
+                    << region_query_info.region_id << ", version " << region_query_info.version //
+                    << ", handle range " << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_query_info.range_in_table)
+                    << ", status " << RegionException::RegionReadStatusString(status));
         }
     }
 

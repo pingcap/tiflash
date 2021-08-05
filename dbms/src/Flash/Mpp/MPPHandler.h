@@ -3,6 +3,8 @@
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGDriver.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
@@ -92,7 +94,8 @@ struct MPPTunnel
         }
         if (finished)
             throw Exception("write to tunnel which is already closed.");
-        writer->Write(data);
+        if (!writer->Write(data))
+            throw Exception("Failed to write data");
         if (close_after_write)
         {
             finished = true;
@@ -128,31 +131,16 @@ struct MPPTunnel
 
     /// close() finishes the tunnel, if the tunnel is connected already, it will
     /// write the error message to the tunnel, otherwise it just close the tunnel
-    void close(const String & reason)
-    {
-        std::unique_lock<std::mutex> lk(mu);
-        if (finished)
-            return;
-        if (connected)
-        {
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(reason);
-            data.set_allocated_error(err);
-            writer->Write(data);
-        }
-        finished = true;
-        cv_for_finished.notify_all();
-    }
+    void close(const String & reason);
 
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
     {
+        std::lock_guard<std::mutex> lk(mu);
         if (connected)
         {
             throw Exception("has connected");
         }
-        std::lock_guard<std::mutex> lk(mu);
         LOG_DEBUG(log, "ready to connect");
         connected = true;
         writer = writer_;
@@ -199,7 +187,8 @@ struct MPPTunnelSet
     void write(tipb::SelectResponse & response)
     {
         std::string data;
-        response.SerializeToString(&data);
+        if (!response.SerializeToString(&data))
+            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
         mpp::MPPDataPacket packet;
         packet.set_data(data);
         tunnels[0]->write(packet);
@@ -208,7 +197,8 @@ struct MPPTunnelSet
         {
             clearExecutionSummaries(response);
             data.clear();
-            response.SerializeToString(&data);
+            if (!response.SerializeToString(&data))
+                throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
             packet.set_data(data);
             for (size_t i = 1; i < tunnels.size(); i++)
             {
@@ -225,7 +215,8 @@ struct MPPTunnelSet
             clearExecutionSummaries(response);
         }
         std::string data;
-        response.SerializeToString(&data);
+        if (!response.SerializeToString(&data))
+            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
         mpp::MPPDataPacket packet;
         packet.set_data(data);
         tunnels[partition_id]->write(packet);
@@ -257,12 +248,14 @@ enum TaskStatus
 
 struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
-    /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
-    BlockIO io;
     Context context;
 
     std::unique_ptr<tipb::DAGRequest> dag_req;
     std::unique_ptr<DAGContext> dag_context;
+
+    /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
+    /// BlockIO contains some information stored in Context and DAGContext, so need deconstruct it before Context and DAGContext
+    BlockIO io;
     MemoryTracker * memory_tracker = nullptr;
 
     MPPTaskId id;
@@ -302,34 +295,9 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
     /// without waiting the tunnel to be connected
     void closeAllTunnel(const String & reason)
     {
-        try
+        for (auto & it : tunnel_map)
         {
-            for (auto & it : tunnel_map)
-            {
-                it.second->close(reason);
-            }
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Failed to close all tunnels");
-        }
-    }
-    void writeErrToAllTunnel(const String & e)
-    {
-        try
-        {
-            for (auto & it : tunnel_map)
-            {
-                mpp::MPPDataPacket data;
-                auto err = new mpp::Error();
-                err->set_msg(e);
-                data.set_allocated_error(err);
-                it.second->write(data, true);
-            }
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Failed to write error " + e + " to all tunnels");
+            it.second->close(reason);
         }
     }
 
@@ -340,6 +308,8 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
             it.second->writeDone();
         }
     }
+
+    void writeErrToAllTunnel(const String & e);
 
     std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
 
@@ -355,6 +325,8 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
     {
+        if (status == CANCELLED)
+            throw Exception("the tunnel " + tunnel->tunnel_id + " can not been registered, because the task is cancelled");
         std::unique_lock<std::mutex> lk(tunnel_mutex);
         if (tunnel_map.find(id) != tunnel_map.end())
         {
@@ -380,6 +352,8 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         /// MPPTask maybe destructed by different thread, set the query memory_tracker
         /// to current_memory_tracker in the destructor
         current_memory_tracker = memory_tracker;
+        closeAllTunnel("");
+        LOG_DEBUG(log, "finish MPPTask: " << id.toString());
     }
 };
 

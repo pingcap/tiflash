@@ -28,6 +28,11 @@ public:
         scale(scale_)
     {}
 
+    DecimalPaddedPODArray(size_t size, const T & x, UInt32 scale_)
+        :   Base(size, x),
+            scale(scale_)
+    {}
+
     DecimalPaddedPODArray(const DecimalPaddedPODArray & other)
     :   Base(other.begin(), other.end()),
         scale(other.scale)
@@ -72,6 +77,10 @@ private:
     ColumnDecimal(const size_t n, UInt32 scale_)
     :   data(n, scale_),
         scale(scale_)
+    {}
+    ColumnDecimal(const size_t n, const T & x, UInt32 scale_)
+        :   data(n, x, scale_),
+            scale(scale_)
     {}
 
     ColumnDecimal(const ColumnDecimal & src)

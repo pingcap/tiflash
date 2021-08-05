@@ -4,7 +4,6 @@
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -48,19 +47,23 @@ grpc::Status BatchCoprocessorHandler::execute()
                     dag_req.ParseFromString(cop_request->data());
                     std::move(dag_req);
                 });
-                std::unordered_map<RegionVerID, RegionInfo> regions;
+                RegionInfoMap regions;
+                RegionInfoList retry_regions;
                 for (auto & r : cop_request->regions())
                 {
-                    RegionVerID region_ver_id(r.region_id(), r.region_epoch().conf_ver(), r.region_epoch().version());
-                    auto res = regions.emplace(region_ver_id, RegionInfo(region_ver_id, GenCopKeyRange(r.ranges()), nullptr));
+                    auto res = regions.emplace(r.region_id(),
+                        RegionInfo(
+                            r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), GenCopKeyRange(r.ranges()), nullptr));
                     if (!res.second)
-                        throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + region_ver_id.toString(),
-                            Errors::Coprocessor::BadRequest);
+                    {
+                        retry_regions.emplace_back(RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
+                            CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+                    }
                 }
                 LOG_DEBUG(log,
                     __PRETTY_FUNCTION__ << ": Handling " << regions.size() << " regions in DAG request: " << dag_request.DebugString());
 
-                DAGDriver<true> driver(cop_context.db_context, dag_request, regions,
+                DAGDriver<true> driver(cop_context.db_context, dag_request, regions, retry_regions,
                     cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
                     writer);
                 // batch execution;
