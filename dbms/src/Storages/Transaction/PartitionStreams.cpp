@@ -479,10 +479,11 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     return std::make_unique<RegionPreDecodeBlockData>(std::move(res_block), schema_version, std::move(*data_list_read));
 }
 
-std::tuple<TableLockHolder, DecodingStorageSchemaSnapshot> //
+std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshot> //
 AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 {
     TableLockHolder drop_lock = nullptr;
+    std::shared_ptr<StorageDeltaMerge> dm_storage;
     DecodingStorageSchemaSnapshot schema_snapshot;
 
     auto table_id = region->getMappedTableID();
@@ -509,9 +510,8 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
                     + "] [engine_type=" + DB::toString(static_cast<Int32>(storage->engineType())) + "]",
                 ErrorCodes::LOGICAL_ERROR);
         }
-        if (auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage); dm_storage != nullptr)
+        if (dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage); dm_storage != nullptr)
         {
-            schema_snapshot.storage = dm_storage;
             auto store = dm_storage->getStore();
             schema_snapshot.column_defines = store->getStoreColumns();
             schema_snapshot.original_table_handle_define = store->getHandle();
@@ -530,7 +530,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
                 ErrorCodes::LOGICAL_ERROR);
     }
 
-    return {drop_lock, std::move(schema_snapshot)};
+    return {std::move(drop_lock), std::move(dm_storage), std::move(schema_snapshot)};
 }
 
 static Block sortColumnsBySchemaSnap(Block && ori, const DM::ColumnDefines & schema)

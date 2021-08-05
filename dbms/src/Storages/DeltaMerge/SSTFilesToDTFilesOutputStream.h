@@ -24,6 +24,7 @@ struct SSTViewVec;
 struct TiFlashRaftProxyHelper;
 struct SSTReader;
 class StorageDeltaMerge;
+using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
 struct DecodingStorageSchemaSnapshot;
 
 namespace DM
@@ -50,6 +51,7 @@ class SSTFilesToDTFilesOutputStream : private boost::noncopyable
 {
 public:
     SSTFilesToDTFilesOutputStream(BoundedSSTFilesToBlockInputStreamPtr  child_,
+                                  StorageDeltaMergePtr                  storage_,
                                   const DecodingStorageSchemaSnapshot & schema_snap_,
                                   TiDB::SnapshotApplyMethod             method_,
                                   FileConvertJobType                    job_type_,
@@ -73,6 +75,7 @@ private:
 
 private:
     BoundedSSTFilesToBlockInputStreamPtr  child;
+    StorageDeltaMergePtr                  storage;
     const DecodingStorageSchemaSnapshot & schema_snap;
     const TiDB::SnapshotApplyMethod       method;
     const FileConvertJobType              job_type;
