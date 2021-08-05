@@ -360,7 +360,10 @@ public:
     /// Compact fregment packs into bigger one.
     void compact(const Context & context, const RowKeyRange & range);
 
-    /// Apply `commands` on `table_columns`
+    /// Iterator over all segments and apply gc jobs.
+    UInt64 onSyncGc(Int64 limit);
+
+    /// Apply DDL `commands` on `table_columns`
     void applyAlters(const AlterCommands &         commands, //
                      const OptionTableInfoConstRef table_info,
                      ColumnID &                    max_column_id_used,
@@ -383,8 +386,6 @@ public:
     SegmentStats        getSegmentStats();
     bool                isCommonHandle() const { return is_common_handle; }
     size_t              getRowKeyColumnSize() const { return rowkey_column_size; }
-
-    UInt64 onSyncGc(Int64 limit);
 
 public:
     /// Methods mainly used by region split.

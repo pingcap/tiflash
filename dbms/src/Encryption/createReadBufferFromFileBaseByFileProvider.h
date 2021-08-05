@@ -24,6 +24,7 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
     const EncryptionPath & encryption_path_,
     size_t estimated_size,
     size_t aio_threshold,
+    const ReadLimiterPtr & read_limiter,
     size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE,
     int flags_ = -1,
     char * existing_memory_ = nullptr,
