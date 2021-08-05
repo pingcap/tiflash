@@ -11,6 +11,8 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 
@@ -200,7 +202,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout);
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, this->shared_from_this());
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->tunnel_id);
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->tunnels.emplace_back(tunnel);
@@ -260,6 +262,13 @@ void MPPTask::runImpl()
     }
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
+    SCOPE_EXIT({
+    	GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
+        GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_duration_seconds, type_run_mpp_task)
+            .Observe(stopwatch.elapsedSeconds());
+    });
     LOG_INFO(log, "task starts running");
     auto from = io.in;
     auto to = io.out;
@@ -321,9 +330,32 @@ void MPPTask::runImpl()
     LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     auto process_info = context.getProcessListElement()->getInfo();
     auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
-    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_dispatch_mpp_task).Observe(peak_memory);
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
     unregisterTask();
     status = FINISHED;
+}
+
+bool MPPTunnel::isTaskCancelled()
+{
+    auto sp = current_task.lock();
+    return sp != nullptr && sp->status == CANCELLED;
+}
+
+void MPPTunnel::waitUntilConnect(std::unique_lock<std::mutex> & lk)
+{
+    if (timeout.count() > 0)
+    {
+        if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected || isTaskCancelled(); }))
+        {
+            throw Exception(tunnel_id + " is timeout");
+        }
+    }
+    else
+    {
+        cv_for_connected.wait(lk, [&]() { return connected || isTaskCancelled(); });
+    }
+    if (!connected)
+        throw Exception("MPPTunnel can not be connected because MPPTask is cancelled");
 }
 
 void MPPTask::writeErrToAllTunnel(const String & e)
@@ -366,22 +398,7 @@ void MPPTask::cancel(const String & reason)
     LOG_WARNING(log, "Begin cancel task: " + id.toString());
     /// step 1. cancel query streams if it is running
     if (current_status == RUNNING)
-    {
-        auto process_list_element = context.getProcessListElement();
-        if (process_list_element != nullptr && !process_list_element->streamsAreReleased())
-        {
-            BlockInputStreamPtr input_stream;
-            BlockOutputStreamPtr output_stream;
-            if (process_list_element->tryGetQueryStreams(input_stream, output_stream))
-            {
-                IProfilingBlockInputStream * input_stream_casted;
-                if (input_stream && (input_stream_casted = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get())))
-                {
-                    input_stream_casted->cancel(true);
-                }
-            }
-        }
-    }
+        context.getProcessList().sendCancelToQuery(context.getCurrentQueryId(), context.getClientInfo().current_user, true);
     /// step 2. write Error msg and close the tunnel.
     /// Here we use `closeAllTunnel` because currently, `cancel` is a query level cancel, which
     /// means if this mpp task is cancelled, all the mpp tasks belonging to the same query are
