@@ -42,3 +42,14 @@ mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_
 +----+
 |  5 |
 +----+
+
+mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where isnull(trim(char_));
++----+
+| id |
++----+
+|  1 |
+|  2 |
+|  3 |
+|  4 |
+|  5 |
++----+

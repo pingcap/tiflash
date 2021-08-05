@@ -49,4 +49,45 @@ mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_
 |  5 |
 +----+
 
+# test NULL
+mysql> INSERT INTO test.test_tb(id, char_) VALUES (6, 'haha');
+mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where isnull(position(NULL in varchar_));
++----+
+| id |
++----+
+|  1 |
+|  2 |
+|  3 |
+|  4 |
+|  5 |
+|  6 |
++----+
 
+mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where isnull(position(NULL in char_));
++----+
+| id |
++----+
+|  1 |
+|  2 |
+|  3 |
+|  4 |
+|  5 |
+|  6 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where isnull(position('ppp' in varchar_));
++----+
+| id |
++----+
+|  6 |
++----+
+
+mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where isnull(position('ppp' in char_));
++----+
+| id |
++----+
+|  1 |
+|  2 |
+|  3 |
+|  4 |
++----+

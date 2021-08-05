@@ -227,3 +227,12 @@ mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_
 |  1 |
 +----+
 
+# test NULL
+mysql> INSERT INTO test.test_tb(id)VALUES(2);
+mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where ISNULL(coalesce(char_));
++----+
+| id |
++----+
+|  2 |
++----+
+

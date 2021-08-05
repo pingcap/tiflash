@@ -202,3 +202,12 @@ mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_
 +----+
 |  1 |
 +----+
+
+mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where isnull(length(char_));
++----+
+| id |
++----+
+|  2 |
+|  3 |
+|  4 |
++----+

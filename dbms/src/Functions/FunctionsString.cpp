@@ -10,6 +10,7 @@
 #include <Functions/GatherUtils/Algorithms.h>
 #include <IO/WriteHelpers.h>
 #include <Common/UTF8Helpers.h>
+#include <DataTypes/DataTypeNullable.h>
 
 
 #if __SSE2__
@@ -2806,8 +2807,13 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
 
-    DataTypePtr getReturnTypeImpl([[maybe_unused]] const DataTypes & arguments) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
+        if (arguments.size() != 1)
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                + ", should be 1.",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+    
         return std::make_shared<DataTypeInt64>();
     }
 
@@ -2817,7 +2823,7 @@ public:
         const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0_col);
         const ColumnFixedString * c0_fixed_string = checkAndGetColumn<ColumnFixedString>(c0_col);
-
+        
         Field res_field;
         int val_num = c0_col->size();
         auto col_res = ColumnInt64::create();
@@ -2829,7 +2835,8 @@ public:
         {
             c0_col->get(i, res_field);
             String handled_str = res_field.get<String>();
-            col_res->insert(static_cast<Int64>(handled_str[0]));
+            Int64 res = handled_str.size() == 0 ? 0 : static_cast<Int64>(handled_str[0]);
+            col_res->insert(res);
         }
 
         block.getByPosition(result).column = std::move(col_res);
@@ -2853,8 +2860,13 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
 
-    DataTypePtr getReturnTypeImpl([[maybe_unused]] const DataTypes & arguments) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
+        if (arguments.size() != 1)
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                + ", should be 1.",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
         return std::make_shared<DataTypeInt64>();
     }
 
@@ -2900,8 +2912,13 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
 
-    DataTypePtr getReturnTypeImpl([[maybe_unused]] const DataTypes & arguments) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
+        if (arguments.size() != 2)
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                + ", should be 2.",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
         return std::make_shared<DataTypeInt64>();
     }
 
@@ -2939,8 +2956,8 @@ public:
             String c1_str = c1_field.get<String>();
 
             // transform to lower case
-            std::transform(c0_str.begin(),c0_str.end(),c0_str.begin(), ::tolower);
-            std::transform(c1_str.begin(),c1_str.end(),c1_str.begin(), ::tolower);
+            std::transform(c0_str.begin(), c0_str.end(), c0_str.begin(), ::tolower);
+            std::transform(c1_str.begin(), c1_str.end(), c1_str.begin(), ::tolower);
 
             // return -1 when c1_str not contains the c0_str
             Int64 idx = c1_str.find(c0_str);

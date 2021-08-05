@@ -113,11 +113,11 @@ struct ConvImpl
 #if __has_include(<charconv>)
         UInt64 value;
         auto from_chars_res = std::from_chars(arg.data() + begin_pos, arg.data() + arg.size(), value, from_base);
-        if (from_chars_res.ec != std::errc{})
-        {
-            throw Exception(String("Int too big to conv: ") + (arg.c_str() + begin_pos));
-        }
-#else
+        // if(from_chars_res.ec != 0)
+        // {
+        //     throw Exception(String("Int too big to conv: ") + (arg.c_str() + begin_pos));
+        // }
+        #else
         UInt64 value = strtoull(arg.c_str() + begin_pos, nullptr, from_base);
         if (errno)
         {

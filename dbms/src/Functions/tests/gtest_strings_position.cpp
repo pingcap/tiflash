@@ -6,6 +6,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypeNullable.h>
 
 #include <string>
 #include <vector>
@@ -45,20 +46,20 @@ TEST_F(StringPosition, str_and_fixed_str_Test)
     auto & factory = FunctionFactory::instance();
 
     // case insensitive
-    std::vector<String> c0_var_strs{   "ell",     "LL",    "3",     "ElL",   "ye",    "aaaa",  "world" };
-    std::vector<String> c1_var_strs{   "hello",   "HELLO", "23333", "HeLlO", "hey",   "a",     "WoRlD" };
+    std::vector<String> c0_var_strs{   "ell",     "LL",    "3",     "ElL",   "ye",    "aaaa",  "world", "",      "",      "biu"  };
+    std::vector<String> c1_var_strs{   "hello",   "HELLO", "23333", "HeLlO", "hey",   "a",     "WoRlD", "",      "ping",  ""     };
 
-    std::vector<String> c0_fixed_strs{ "ell",     "LLo",   "333",   "ElL",   "yye",   "aaa",   "orl"   };
-    std::vector<String> c1_fixed_strs{ "hello",   "HELLO", "23333", "HeLlO", "heyyy", "aaaaa", "WoRlD" };
+    std::vector<String> c0_fixed_strs{ "ell",     "LLo",   "333",   "ElL",   "yye",   "aaa",   "orl",   "321",   "xzx",   "biu"  };
+    std::vector<String> c1_fixed_strs{ "hello",   "HELLO", "23333", "HeLlO", "heyyy", "aaaaa", "WoRlD", "12345", "apple", "b_i_u"};
 
     // var-var
-    std::vector<Int64> result0{2, 3, 2, 2, 0, 0, 1};
+    std::vector<Int64> result0{2, 3, 2, 2, 0, 0, 1, 1, 1, 0};
     // fixed-fixed
-    std::vector<Int64> result1{2, 3, 2, 2, 0, 1, 2};
+    std::vector<Int64> result1{2, 3, 2, 2, 0, 1, 2, 0, 0, 0};
     // var-fixed
-    std::vector<Int64> result2{2, 3, 2, 2, 0, 1, 1};
+    std::vector<Int64> result2{2, 3, 2, 2, 0, 1, 1, 1, 1, 0};
     // fixed-var
-    std::vector<Int64> result3{2, 3, 2, 2, 0, 0, 2};
+    std::vector<Int64> result3{2, 3, 2, 2, 0, 0, 2, 0, 0, 0};
 
     std::vector<String> c0_strs;
     std::vector<String> c1_strs;
@@ -247,6 +248,84 @@ TEST_F(StringPosition, utf8_str_and_fixed_str_Test)
             res_string->get(t, resField);
             Int64 res_val = resField.get<Int64>();
             EXPECT_EQ(results[t], res_val);
+        }
+    }
+}
+
+// test NULL
+TEST_F(StringPosition, null_Test)
+{
+    const Context context = TiFlashTestEnv::getContext();
+
+    auto & factory = FunctionFactory::instance();
+
+    std::vector<String> c0_strs{"aa", "c",  "香锅",      "cap",     "f"};
+    std::vector<String> c1_strs{"a",  "cc", "麻辣v香锅", "pingcap", "f"};
+    std::vector<Int64> results{0, 0, 4, 5, 0};
+
+    std::vector<int> c0_null_map{0, 1, 0, 0, 1};
+    std::vector<int> c1_null_map{1, 0, 0, 0, 1};
+    std::vector<int> c2_null_map{1, 1, 0, 0, 1}; // for result
+
+    auto input_str_col0 = ColumnString::create();
+    auto input_str_col1 = ColumnString::create();
+    for (size_t i = 0; i < c0_strs.size(); i++)
+    { 
+        Field field0(c0_strs[i].c_str(), c0_strs[i].size());
+        Field field1(c1_strs[i].c_str(), c1_strs[i].size());
+        input_str_col0->insert(field0);
+        input_str_col1->insert(field1);
+    }
+
+    auto input_null_map0 = ColumnUInt8::create(c0_strs.size(), 0);
+    auto input_null_map1 = ColumnUInt8::create(c1_strs.size(), 0);
+    ColumnUInt8::Container &input_vec_null_map0 = input_null_map0->getData();
+    ColumnUInt8::Container &input_vec_null_map1 = input_null_map1->getData();
+    for (size_t i = 0; i < c0_null_map.size(); i++)
+    {
+        input_vec_null_map0[i] = c0_null_map[i];
+        input_vec_null_map1[i] = c1_null_map[i];
+    }
+
+    DataTypePtr string_type = std::make_shared<DataTypeString>();
+    DataTypePtr nullable_string_type = makeNullable(string_type);
+
+    auto input_null_col0 = ColumnNullable::create(std::move(input_str_col0), std::move(input_null_map0));
+    auto input_null_col1 = ColumnNullable::create(std::move(input_str_col1), std::move(input_null_map1));
+    auto col0 = ColumnWithTypeAndName(std::move(input_null_col0), nullable_string_type, "position");
+    auto col1 = ColumnWithTypeAndName(std::move(input_null_col1), nullable_string_type, "position");
+    ColumnsWithTypeAndName ctns{col0, col1};
+
+    Block testBlock;
+    testBlock.insert(col0);
+    testBlock.insert(col1);
+    ColumnNumbers cns{0, 1};
+
+    auto bp = factory.tryGet("position", context);
+    ASSERT_TRUE(bp != nullptr);
+    ASSERT_FALSE(bp->isVariadic());
+    auto func = bp->build(ctns);
+    testBlock.insert({nullptr, func->getReturnType(), "res"});
+    func->execute(testBlock, cns, 2);
+    auto res_col = testBlock.getByPosition(2).column;
+
+    ColumnPtr result_null_map_column = static_cast<const ColumnNullable &>(*res_col).getNullMapColumnPtr();
+    MutableColumnPtr mutable_result_null_map_column = (*std::move(result_null_map_column)).mutate();
+    NullMap & result_null_map = static_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
+    const IColumn * res = testBlock.getByPosition(2).column.get();
+    const ColumnNullable * res_nullable_string = checkAndGetColumn<ColumnNullable>(res);
+    const IColumn & res_string = res_nullable_string->getNestedColumn();
+
+    Field resField;
+
+    for (size_t i = 0; i < c2_null_map.size(); i++)
+    {
+        EXPECT_EQ(result_null_map[i], c2_null_map[i]);
+        if (c2_null_map[i] == 0)
+        {
+            res_string.get(i, resField);
+            Int64 res_val = resField.get<Int64>();
+            EXPECT_EQ(results[i], res_val);
         }
     }
 }
