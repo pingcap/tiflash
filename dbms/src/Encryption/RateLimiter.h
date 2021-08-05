@@ -62,6 +62,7 @@ public:
     // just for test purpose
     inline UInt64 getTotalBytesThrough() const { return total_bytes_through; }
 
+    size_t setStop();
 protected:
     virtual bool canGrant(Int64 bytes);
     virtual void consumeBytes(Int64 bytes);
@@ -166,6 +167,8 @@ public:
     void updateConfig(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_);
 
     void setBackgroundThreadIds(std::vector<pid_t> thread_ids);
+
+    void setStop();
 
     struct IOInfo
     {

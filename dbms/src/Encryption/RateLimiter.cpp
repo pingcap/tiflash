@@ -78,19 +78,14 @@ WriteLimiter::WriteLimiter(TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_
       available_balance{refill_balance_per_period},
       total_bytes_through{0},
       stop{false},
+      requests_to_wait{0},
       metrics{std::move(metrics_)},
       type(type_)
 {}
 
 WriteLimiter::~WriteLimiter()
 {
-    std::unique_lock<std::mutex> lock(request_mutex);
-    stop = true;
-    requests_to_wait = req_queue.size();
-    for (auto * r : req_queue)
-        r->cv.notify_one();
-    while (requests_to_wait > 0)
-        exit_cv.wait(lock);
+    setStop();
 }
 
 void WriteLimiter::request(Int64 bytes)
@@ -170,6 +165,30 @@ void WriteLimiter::request(Int64 bytes)
             }
         }
     }
+}
+
+size_t WriteLimiter::setStop()
+{
+    std::unique_lock lock(request_mutex);
+    if (stop) // Already set stopped.
+    {
+        return 0;
+    }
+
+    stop = true;
+    // Notify all waitting threads.
+    requests_to_wait = req_queue.size();
+    auto sz = requests_to_wait;
+    for (auto * r : req_queue)
+    {
+        r->cv.notify_one();
+    }
+    // Wait threads wakeup and return.
+    while (requests_to_wait > 0)
+    {
+        exit_cv.wait(lock);
+    }
+    return sz;
 }
 
 bool WriteLimiter::canGrant(Int64 bytes) { return available_balance >= bytes; }
@@ -437,4 +456,28 @@ IORateLimiter::IOInfo IORateLimiter::getCurrentIOInfo()
     return io_info;
 }
 
+void IORateLimiter::setStop()
+{
+    std::lock_guard lock(mtx_);
+    if (bg_write_limiter != nullptr)
+    {
+        auto sz = bg_write_limiter->setStop();
+        LOG_DEBUG(log, "bg_write_limiter setStop request size " << sz);
+    }
+    if (fg_write_limiter != nullptr)
+    {
+        auto sz = fg_write_limiter->setStop();
+        LOG_DEBUG(log, "fg_write_limiter setStop request size " << sz);
+    }
+    if (bg_read_limiter != nullptr)
+    {
+        auto sz = bg_read_limiter->setStop();
+        LOG_DEBUG(log, "bg_read_limiter setStop request size " << sz);
+    }
+    if (fg_read_limiter != nullptr)
+    {
+        auto sz = fg_read_limiter->setStop();
+        LOG_DEBUG(log, "fg_read_limiter setStop request size " << sz);
+    }
+}
 } // namespace DB
