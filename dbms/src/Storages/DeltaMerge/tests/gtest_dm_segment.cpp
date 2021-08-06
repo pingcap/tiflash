@@ -599,7 +599,7 @@ try
 
     auto check_segment_squash_delete_range = [this](SegmentPtr & segment, const HandleRange & expect_range) {
         // set `is_update=false` to get full squash delete range
-        auto snap         = segment->createSnapshot(dmContext(), /*for_update*/ false);
+        auto snap         = segment->createSnapshot(dmContext(), /*for_update*/ false, CurrentMetrics::DT_SnapshotOfRead);
         auto squash_range = snap->delta->getSquashDeleteRange();
         ASSERT_ROWKEY_RANGE_EQ(squash_range, RowKeyRange::fromHandleRange(expect_range));
     };
