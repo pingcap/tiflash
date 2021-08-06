@@ -566,7 +566,7 @@ static Block sortColumnsBySchemaSnap(Block && ori, const DM::ColumnDefines & sch
 /// Decode region data into block and belonging schema snapshot, remove committed data from `region`
 /// The return value is a block that store the committed data scanned and removed from `region`.
 /// The columns of returned block is sorted by `schema_snap`.
-Block GenRegionBlockDatawithSchema(const RegionPtr & region, //
+Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
     const DecodingStorageSchemaSnapshot & schema_snap,
     Timestamp gc_safepoint,
     bool force_decode,

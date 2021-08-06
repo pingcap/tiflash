@@ -228,7 +228,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
     {
         // Read block from `region`. If the schema has been updated, it will
         // throw an exception with code `ErrorCodes::REGION_DATA_SCHEMA_UPDATED`
-        return GenRegionBlockDatawithSchema(region, schema_snap, gc_safepoint, force_decode, tmt);
+        return GenRegionBlockDataWithSchema(region, schema_snap, gc_safepoint, force_decode, tmt);
     }
     catch (DB::Exception & e)
     {
