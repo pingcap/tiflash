@@ -31,7 +31,7 @@ private:
 
 public:
     CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider, const std::string & path, const EncryptionPath & encryption_path,
-        size_t estimated_size, size_t aio_threshold, size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE);
+        size_t estimated_size, size_t aio_threshold, const ReadLimiterPtr & read_limiter_, size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE);
 
     void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block);
 
