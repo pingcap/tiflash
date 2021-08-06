@@ -525,8 +525,6 @@ struct ModuloImpl<A,B,false>
 {
     using ResultType = typename NumberTraits::ResultOfModulo<A, B>::Type;
 
-<<<<<<< HEAD
-=======
     template <typename To, typename From>
     static make_unsigned_t<To> to_unsigned(const From & value)
     {
@@ -560,7 +558,6 @@ struct ModuloImpl<A,B,false>
             return static_cast<ReturnType>(value);
     }
 
->>>>>>> c407b167c... Fix function `mod` decimal scale overflow (#2462)
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {

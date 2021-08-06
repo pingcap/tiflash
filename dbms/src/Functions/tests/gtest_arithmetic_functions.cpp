@@ -697,8 +697,6 @@ try
 }
 CATCH
 
-<<<<<<< HEAD
-=======
 TEST_F(TestBinaryArithmeticFunctions, Modulo)
 try
 {
@@ -933,6 +931,5 @@ try
 CATCH
 
 
->>>>>>> c407b167c... Fix function `mod` decimal scale overflow (#2462)
 } // namespace tests
 } // namespace DB
