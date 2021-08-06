@@ -201,7 +201,9 @@ void testSetStop(bool stop, int blocked_thread_cnt)
     // All the bytes are consumed in this request, and next refill time is about 100ms later.
     write_limiter->request(100);
 
-    auto worker = [&]() { 
+    std::atomic<UInt32> counter{0};
+    auto worker = [&]() {
+        counter.fetch_add(1, std::memory_order_relaxed);
         write_limiter->request(1); 
     };
     std::vector<std::thread> threads;
@@ -214,6 +216,11 @@ void testSetStop(bool stop, int blocked_thread_cnt)
     
     if (stop)
     {
+        // Wait threads to be scheduled.
+        while (counter.load(std::memory_order_relaxed) < threads.size())
+        {
+            std::this_thread::sleep_for(1ms);
+        }
         std::this_thread::sleep_for(10ms);  // Roughly wait for threads to request limiter.
         auto sz = write_limiter->setStop(); // Stop the limiter and notify threads that blocked inside limiter.
         ASSERT_EQ(sz, threads.size()) << sz;
