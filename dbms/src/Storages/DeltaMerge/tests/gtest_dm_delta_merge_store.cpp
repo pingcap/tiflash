@@ -312,11 +312,7 @@ try
                                                          handle.type,
                                                          store->isCommonHandle(),
                                                          store->getRowKeyColumnSize());
-<<<<<<< HEAD
-        block2         = store->addExtraColumnIfNeed(*context, std::move(block2));
-=======
-        block2         = DeltaMergeStore::addExtraColumnIfNeed(*db_context, store->getHandle(), std::move(block2));
->>>>>>> d20b39537 (Save storage schema snapshot for decoding Region snapshot)
+        block2         = DeltaMergeStore::addExtraColumnIfNeed(*context, store->getHandle(), std::move(block2));
         ASSERT_EQ(block2.rows(), nrows_2);
         ASSERT_TRUE(block2.has(EXTRA_HANDLE_COLUMN_NAME));
         for (const auto & c : block2)
