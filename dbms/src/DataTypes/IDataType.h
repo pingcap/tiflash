@@ -341,6 +341,10 @@ public:
     virtual bool isInteger() const { return false; };
     virtual bool isUnsignedInteger() const { return false; };
 
+    /** Floating point values. Not Nullable. Not Enums. Not Date/DateTime.
+     */
+    virtual bool isFloatingPoint() const { return false; }
+
     /** Date, DateTime, MyDate, MyDateTime. Not Nullable.
       */
     virtual bool isDateOrDateTime() const { return false; };
@@ -428,4 +432,3 @@ public:
 
 
 }
-
