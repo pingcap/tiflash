@@ -2,8 +2,8 @@
 #if defined(__aarch64__)
 #if __has_include(<asm/hwcap.h>)
 #include <asm/hwcap.h>
-#endif
 #include <sys/auxv.h>
+#endif
 #endif
 namespace DB
 {
