@@ -24,6 +24,8 @@ struct SSTViewVec;
 struct TiFlashRaftProxyHelper;
 struct SSTReader;
 class StorageDeltaMerge;
+using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
+struct DecodingStorageSchemaSnapshot;
 
 namespace DM
 {
@@ -48,11 +50,12 @@ enum class FileConvertJobType
 class SSTFilesToDTFilesOutputStream : private boost::noncopyable
 {
 public:
-    using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
-    SSTFilesToDTFilesOutputStream(BoundedSSTFilesToBlockInputStreamPtr child_,
-                                  TiDB::SnapshotApplyMethod            method_,
-                                  FileConvertJobType                   job_type_,
-                                  TMTContext &                         tmt_);
+    SSTFilesToDTFilesOutputStream(BoundedSSTFilesToBlockInputStreamPtr  child_,
+                                  StorageDeltaMergePtr                  storage_,
+                                  const DecodingStorageSchemaSnapshot & schema_snap_,
+                                  TiDB::SnapshotApplyMethod             method_,
+                                  FileConvertJobType                    job_type_,
+                                  TMTContext &                          tmt_);
     ~SSTFilesToDTFilesOutputStream();
 
     void writePrefix();
@@ -65,18 +68,19 @@ public:
     void cancel();
 
 private:
-
     bool newDTFileStream();
 
     // Stop the process for decoding committed data into DTFiles
     void stop();
 
 private:
-    BoundedSSTFilesToBlockInputStreamPtr child;
-    const TiDB::SnapshotApplyMethod      method;
-    const FileConvertJobType             job_type;
-    TMTContext &                         tmt;
-    Poco::Logger *                       log;
+    BoundedSSTFilesToBlockInputStreamPtr  child;
+    StorageDeltaMergePtr                  storage;
+    const DecodingStorageSchemaSnapshot & schema_snap;
+    const TiDB::SnapshotApplyMethod       method;
+    const FileConvertJobType              job_type;
+    TMTContext &                          tmt;
+    Poco::Logger *                        log;
 
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;
 

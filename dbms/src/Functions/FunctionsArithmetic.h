@@ -5,6 +5,7 @@
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/FieldVisitors.h>
+#include <Common/toSafeUnsigned.h>
 #include <Common/typeid_cast.h>
 #include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeDate.h>
@@ -525,39 +526,6 @@ struct ModuloImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfModulo<A, B>::Type;
 
-    template <typename To, typename From>
-    static make_unsigned_t<To> to_unsigned(const From & value)
-    {
-        using ReturnType = make_unsigned_t<To>;
-
-        if constexpr (is_signed_v<From>)
-        {
-            if constexpr (is_boost_number_v<ReturnType>)
-            {
-                // assert that negation of std::numeric_limits<From>::min() will not result in overflow.
-                // TODO: find credible source that describes numeric limits of boost multiprecision *checked* integers.
-                static_assert(-std::numeric_limits<From>::max() == std::numeric_limits<From>::min());
-                return static_cast<ReturnType>(boost::multiprecision::abs(value));
-            }
-            else
-            {
-                if (value < 0)
-                {
-                    // both signed to unsigned conversion [1] and negation of unsigned integers [2] are well defined in C++.
-                    //
-                    // see:
-                    // [1]: https://en.cppreference.com/w/c/language/conversion#Integer_conversions
-                    // [2]: https://en.cppreference.com/w/cpp/language/operator_arithmetic#Unary_arithmetic_operators
-                    return -static_cast<ReturnType>(value);
-                }
-                else
-                    return static_cast<ReturnType>(value);
-            }
-        }
-        else
-            return static_cast<ReturnType>(value);
-    }
-
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
@@ -581,8 +549,8 @@ struct ModuloImpl<A, B, false>
             // convert to unsigned before computing.
             // we have to prevent wrong result like UInt64(5) = UInt64(5) % Int64(-3).
             // in MySQL, UInt64(5) % Int64(-3) evaluates to UInt64(2).
-            auto x = to_unsigned<Result>(a);
-            auto y = to_unsigned<Result>(b);
+            auto x = toSafeUnsigned<Result>(a);
+            auto y = toSafeUnsigned<Result>(b);
 
             auto result = static_cast<Result>(x % y);
 
