@@ -70,7 +70,7 @@ protected:
         return s;
     }
 
-    static DataVectorString toBinariesV4(const std::vector<UInt32> & vec)
+    static DataVectorString toBinaries(const std::vector<UInt32> & vec)
     {
         DataVectorString res;
         for (const auto & v : vec)
@@ -78,7 +78,7 @@ protected:
         return res;
     }
 
-    static DataVectorString toBinariesV6(const std::vector<std::vector<UInt32>> & vec)
+    static DataVectorString toBinaries(const std::vector<std::vector<UInt32>> & vec)
     {
         DataVectorString res;
         for (const auto & v : vec)
@@ -232,7 +232,7 @@ try
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
         DataVectorString{"0.0.0.1"},
-        toBinariesV4({0x0000'0001}));
+        toBinaries({0x0000'0001}));
 
     // const non-null ipv6
     EXECUTE_UNARY_FUNCTION_AND_CHECK(
@@ -240,7 +240,7 @@ try
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
         DataVectorString{"fdfe::5a55:caff:fefa:9089"},
-        toBinariesV6({{0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089}}));
+        toBinaries({{0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089}}));
 
     // valid ipv4
     EXECUTE_UNARY_FUNCTION_AND_CHECK(
@@ -248,7 +248,7 @@ try
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
         DataVectorString{"1.2.3.4", "0.1.0.1", "1.0.1.0", "111.0.21.012", "0000.1.2.3", "00.000.0000.00000", "0.255.0.255", "255.255.255.255"},
-        toBinariesV4({0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF}));
+        toBinaries({0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF}));
 
     // invalid ipv4
     EXECUTE_UNARY_FUNCTION_AND_CHECK(
@@ -264,7 +264,7 @@ try
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
         DataVectorString{"1:2:3:4:5:6:7:8", "1:2:3:4:5:6::7", "1:2:3:4:5::", "1:2:3:4:5::7", "::", "fdfe::5a55:caff:fefa:9089", "FDFE::5A55:CAFF:FEFA:9089", "ff:ff:ff:ff:ff:ff:ff:ff"},
-        toBinariesV6({
+        toBinaries({
             {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0007'0008},
             {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0000'0007},
             {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0000},
@@ -280,36 +280,111 @@ try
         func_name,
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
-        DataVectorString{"::FFFF:169.219.13.133"},
-        toBinariesV6({
+        DataVectorString{"::FFFF:169.219.13.133", "::FFFF:1.1.1.1", "::1.1.1.1"},
+        toBinaries({
             {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0xA9DB'0D85},
+            {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0x0101'0101},
+            {0x0000'0000, 0x0000'0000, 0x0000'0000, 0x0101'0101},
         }));
+
+    // invalid ipv4-mapped ipv6
+    EXECUTE_UNARY_FUNCTION_AND_CHECK(
+        func_name,
+        makeNullableDataType<DataTypeString>(),
+        makeNullableDataType<DataTypeString>(),
+        DataVectorString{"::FFFF:169.256.13.133", "::1.1.1.x"},
+        DataVectorString{{}, {}});
 }
 CATCH
 
-TEST_F(TestInetAtonNtoa, Inet6NtoaV4Reversible)
+TEST_F(TestInetAtonNtoa, Inet6Ntoa)
 try
 {
-    const String aton = "tiDBIPv6StringToNum";
-    const String ntoa = "tiDBIPv6NumToString";
+    const String func_name = "tiDBIPv6NumToString";
 
-    std::random_device rd;
-    std::mt19937 mt(rd());
-    std::uniform_int_distribution<DB::UInt32> dist;
+    // empty column
+    EXECUTE_UNARY_FUNCTION_AND_CHECK(
+        func_name,
+        makeNullableDataType<DataTypeString>(),
+        makeNullableDataType<DataTypeString>(),
+        DataVectorString{},
+        DataVectorString{});
+    
+    // const null-only column
+    EXECUTE_UNARY_FUNCTION_AND_CHECK(
+        func_name,
+        makeNullableDataType<DataTypeString>(),
+        makeNullableDataType<DataTypeString>(),
+        DataVectorString{{}},
+        DataVectorString{{}});
 
-    std::vector<UInt32> num_vec;
-    for (size_t i = 0; i < 10000; ++i)
-        num_vec.emplace_back(dist(mt));
+    // const non-null ipv4
+    EXECUTE_UNARY_FUNCTION_AND_CHECK(
+        func_name,
+        makeNullableDataType<DataTypeString>(),
+        makeNullableDataType<DataTypeString>(),
+        toBinaries({0x0000'0001}),
+        DataVectorString{"0.0.0.1"});
 
-    auto bin_vec = toBinariesV4(num_vec);
-    auto bin_column = makeColumnWithTypeAndName("bin", bin_vec.size(), makeNullableDataType<DataTypeString>(), bin_vec);
-    auto str_column = executeFunction(ntoa, {bin_column});
-    auto bin_column_2 = executeFunction(aton, {str_column});
-    assertColumnEqual(bin_column, bin_column_2);
+    // const non-null ipv6
+    EXECUTE_UNARY_FUNCTION_AND_CHECK(
+        func_name,
+        makeNullableDataType<DataTypeString>(),
+        makeNullableDataType<DataTypeString>(),
+        toBinaries({{0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089}}),
+        DataVectorString{"fdfe::5a55:caff:fefa:9089"});
+
+    // valid ipv4
+    EXECUTE_UNARY_FUNCTION_AND_CHECK(
+        func_name,
+        makeNullableDataType<DataTypeString>(),
+        makeNullableDataType<DataTypeString>(),
+        toBinaries({0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF}),
+        DataVectorString{"1.2.3.4", "0.1.0.1", "1.0.1.0", "111.0.21.12", "0.1.2.3", "0.0.0.0", "0.255.0.255", "255.255.255.255"});
+
+    // valid ipv6
+    EXECUTE_UNARY_FUNCTION_AND_CHECK(
+        func_name,
+        makeNullableDataType<DataTypeString>(),
+        makeNullableDataType<DataTypeString>(),
+        toBinaries({
+            {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0007'0008},
+            {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0000'0007},
+            {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0000},
+            {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0007},
+            {0x0000'0000, 0x0000'0000, 0x0000'0000, 0x0000'0000},
+            {0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089},
+            {0x00FF'00FF, 0x00FF'00FF, 0x00FF'00FF, 0x00FF'00FF},
+        }),
+        DataVectorString{"1:2:3:4:5:6:7:8", "1:2:3:4:5:6:0:7", "1:2:3:4:5::", "1:2:3:4:5::7", "::", "fdfe::5a55:caff:fefa:9089", "ff:ff:ff:ff:ff:ff:ff:ff"});
+
+    // valid ipv4-mapped ipv6
+    EXECUTE_UNARY_FUNCTION_AND_CHECK(
+        func_name,
+        makeNullableDataType<DataTypeString>(),
+        makeNullableDataType<DataTypeString>(),
+        toBinaries({
+            {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0xA9DB'0D85},
+            {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0x0101'0101},
+            {0x0000'0000, 0x0000'0000, 0x0000'0000, 0x0101'0101},
+        }),
+        DataVectorString{"::ffff:169.219.13.133", "::ffff:1.1.1.1", "::1.1.1.1"});
+
+    // invalid cases: wrong length
+    EXECUTE_UNARY_FUNCTION_AND_CHECK(
+        func_name,
+        makeNullableDataType<DataTypeString>(),
+        makeNullableDataType<DataTypeString>(),
+        toBinaries({
+            {0x0001'0002, 0x0003'0004},
+            {0x0001'0002, 0x0003'0004, 0x0005'0006},
+            {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0000, 0x0000'0000},
+        }),
+        DataVectorString{{}, {}, {}});
 }
 CATCH
 
-TEST_F(TestInetAtonNtoa, Inet6NtoaV6Reversible)
+TEST_F(TestInetAtonNtoa, Inet6NtoaReversible)
 try
 {
     const String aton = "tiDBIPv6StringToNum";
@@ -320,6 +395,13 @@ try
     std::uniform_int_distribution<DB::UInt32> dist;
 
     std::vector<std::vector<UInt32>> num_vec;
+    // ipv4
+    for (size_t i = 0; i < 10000; ++i)
+    {
+        std::vector<UInt32> v = {dist(mt)};
+        num_vec.emplace_back(std::move(v));
+    }
+    // ipv6
     for (size_t i = 0; i < 10000; ++i)
     {
         std::vector<UInt32> v;
@@ -327,8 +409,14 @@ try
             v.emplace_back(dist(mt));
         num_vec.emplace_back(std::move(v));
     }
+    // ipv4-mapped ipv6
+    for (size_t i = 0; i < 10000; ++i)
+    {
+        std::vector<UInt32> v = {0, 0, 0x0000'FFFF, dist(mt)};
+        num_vec.emplace_back(std::move(v));
+    }
 
-    auto bin_vec = toBinariesV6(num_vec);
+    auto bin_vec = toBinaries(num_vec);
     auto bin_column = makeColumnWithTypeAndName("bin", bin_vec.size(), makeNullableDataType<DataTypeString>(), bin_vec);
     auto str_column = executeFunction(ntoa, {bin_column});
     auto bin_column_2 = executeFunction(aton, {str_column});
