@@ -3,7 +3,11 @@
 #if __has_include(<asm/hwcap.h>)
 #include <asm/hwcap.h>
 #endif
-#include <sys/auxv.h>
+// M1 does not support the general ARM instruction set
+// Include auxv.h will cause build error in M1
+#if not defined(__arm64__)
+    #include <sys/auxv.h>
+#endif
 #endif
 namespace DB
 {
