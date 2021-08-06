@@ -823,7 +823,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SubDateDurationInt, "cast"},
     //{tipb::ScalarFuncSig::SubDateDatetimeReal, "cast"},
     //{tipb::ScalarFuncSig::SubDateDatetimeDecimal, "cast"},
-    //{tipb::ScalarFuncSig::AddDateStringReal, "cast"},
+    {tipb::ScalarFuncSig::AddDateStringReal, "date_add"},
     //{tipb::ScalarFuncSig::AddDateIntReal, "cast"},
     //{tipb::ScalarFuncSig::AddDateIntDecimal, "cast"},
     //{tipb::ScalarFuncSig::AddDateDatetimeReal, "cast"},
@@ -833,7 +833,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::AddDateDurationInt, "cast"},
     //{tipb::ScalarFuncSig::AddDateDurationDecimal, "cast"},
 
-    //{tipb::ScalarFuncSig::Date, "cast"},
+    {tipb::ScalarFuncSig::Date, "toMyDate"},
     //{tipb::ScalarFuncSig::Hour, "cast"},
     //{tipb::ScalarFuncSig::Minute, "cast"},
     //{tipb::ScalarFuncSig::Second, "cast"},
