@@ -529,11 +529,6 @@ struct ModuloImpl<A,B,false>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-<<<<<<< HEAD
-        throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<A>::Type(a), typename NumberTraits::ToInteger<B>::Type(b));
-        return static_cast<Result>( typename NumberTraits::ToInteger<A>::Type(a)
-            % typename NumberTraits::ToInteger<B>::Type(b));
-=======
         if constexpr (std::is_floating_point_v<Result>)
         {
             auto x = static_cast<Result>(a);
@@ -571,7 +566,6 @@ struct ModuloImpl<A,B,false>
             else
                 return result;
         }
->>>>>>> 4997809a0... Push down `ROUND(x)` on decimal types (#2492)
     }
     template <typename Result = ResultType>
     static inline Result apply(A , B , UInt8 &)
