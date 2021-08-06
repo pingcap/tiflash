@@ -895,6 +895,8 @@ struct TiDBFloatingRound
         EXPECT(frac == 0);
 
         auto value = static_cast<EvalType>(input);
+
+        // floating-point environment is thread-local, so `fesetround` is thread-safe.
         std::fesetround(FE_TONEAREST);
         return std::nearbyint(value);
     }
@@ -946,7 +948,7 @@ struct TiDBDecimalRound
     }
 };
 
-static FracType getFracFromConstColumn(const ColumnConst *column)
+static FracType getFracFromConstColumn(const ColumnConst * column)
 {
     FracType result;
     auto frac_field = column->getField();
@@ -964,12 +966,14 @@ static FracType getFracFromConstColumn(const ColumnConst *column)
                 ErrorCodes::ILLEGAL_COLUMN);
         }
 
-        // in MySQL, frac is clamped to 30, which is identical to decimal_max_scale.
-        if (unsigned_frac > decimal_max_scale)
-            unsigned_frac = decimal_max_scale;
-
         result = static_cast<FracType>(unsigned_frac);
     }
+
+    // in MySQL, frac is clamped to 30, which is identical to decimal_max_scale.
+    // frac is signed but decimal_max_scale is unsigned, so we have to cast before
+    // comparison.
+    if (result > static_cast<FracType>(decimal_max_scale))
+        result = decimal_max_scale;
 
     return result;
 }
@@ -1051,6 +1055,7 @@ public:
 
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
+    bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
     bool hasInformationAboutMonotonicity() const override { return true; }
 
