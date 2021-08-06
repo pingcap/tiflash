@@ -42,7 +42,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@session.tidb_enforce_m
 +---------------+-----------------+
 | date(col_int) | col_int         |
 +---------------+-----------------+
-| 0000-00-00    |               0 |
+| NULL          |               0 |
 | NULL          |               1 |
 | NULL          |              -1 |
 | 2011-11-11    |          111111 |
