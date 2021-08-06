@@ -55,22 +55,12 @@ protected:
     static String toBinary(const std::vector<UInt32> & vec)
     {
         String s;
-        char bytes[4];
         for (auto v : vec)
-        {
-            bytes[3] = static_cast<char>(v & 0xff);
-            v >>= 8;
-            bytes[2] = static_cast<char>(v & 0xff);
-            v >>= 8;
-            bytes[1] = static_cast<char>(v & 0xff);
-            v >>= 8;
-            bytes[0] = static_cast<char>(v & 0xff);
-            s.append(bytes, 4);
-        }
+            s.append(toBinary(v));
         return s;
     }
 
-    static DataVectorString toBinaries(const std::vector<UInt32> & vec)
+    static DataVectorString toBinariesV4(const std::vector<UInt32> & vec)
     {
         DataVectorString res;
         for (const auto & v : vec)
@@ -78,7 +68,7 @@ protected:
         return res;
     }
 
-    static DataVectorString toBinaries(const std::vector<std::vector<UInt32>> & vec)
+    static DataVectorString toBinariesV6(const std::vector<std::vector<UInt32>> & vec)
     {
         DataVectorString res;
         for (const auto & v : vec)
@@ -232,7 +222,7 @@ try
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
         DataVectorString{"0.0.0.1"},
-        toBinaries({0x0000'0001}));
+        toBinariesV4({0x0000'0001}));
 
     // const non-null ipv6
     EXECUTE_UNARY_FUNCTION_AND_CHECK(
@@ -240,7 +230,7 @@ try
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
         DataVectorString{"fdfe::5a55:caff:fefa:9089"},
-        toBinaries({{0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089}}));
+        toBinariesV6({{0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089}}));
 
     // valid ipv4
     EXECUTE_UNARY_FUNCTION_AND_CHECK(
@@ -248,7 +238,7 @@ try
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
         DataVectorString{"1.2.3.4", "0.1.0.1", "1.0.1.0", "111.0.21.012", "0000.1.2.3", "00.000.0000.00000", "0.255.0.255", "255.255.255.255"},
-        toBinaries({0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF}));
+        toBinariesV4({0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF}));
 
     // invalid ipv4
     EXECUTE_UNARY_FUNCTION_AND_CHECK(
@@ -264,7 +254,7 @@ try
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
         DataVectorString{"1:2:3:4:5:6:7:8", "1:2:3:4:5:6::7", "1:2:3:4:5::", "1:2:3:4:5::7", "::", "fdfe::5a55:caff:fefa:9089", "FDFE::5A55:CAFF:FEFA:9089", "ff:ff:ff:ff:ff:ff:ff:ff"},
-        toBinaries({
+        toBinariesV6({
             {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0007'0008},
             {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0000'0007},
             {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0000},
@@ -281,7 +271,7 @@ try
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
         DataVectorString{"::FFFF:169.219.13.133", "::FFFF:1.1.1.1", "::1.1.1.1"},
-        toBinaries({
+        toBinariesV6({
             {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0xA9DB'0D85},
             {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0x0101'0101},
             {0x0000'0000, 0x0000'0000, 0x0000'0000, 0x0101'0101},
@@ -323,7 +313,7 @@ try
         func_name,
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
-        toBinaries({0x0000'0001}),
+        toBinariesV4({0x0000'0001}),
         DataVectorString{"0.0.0.1"});
 
     // const non-null ipv6
@@ -331,7 +321,7 @@ try
         func_name,
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
-        toBinaries({{0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089}}),
+        toBinariesV6({{0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089}}),
         DataVectorString{"fdfe::5a55:caff:fefa:9089"});
 
     // valid ipv4
@@ -339,7 +329,7 @@ try
         func_name,
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
-        toBinaries({0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF}),
+        toBinariesV4({0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF}),
         DataVectorString{"1.2.3.4", "0.1.0.1", "1.0.1.0", "111.0.21.12", "0.1.2.3", "0.0.0.0", "0.255.0.255", "255.255.255.255"});
 
     // valid ipv6
@@ -347,7 +337,7 @@ try
         func_name,
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
-        toBinaries({
+        toBinariesV6({
             {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0007'0008},
             {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0000'0007},
             {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0000},
@@ -363,7 +353,7 @@ try
         func_name,
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
-        toBinaries({
+        toBinariesV6({
             {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0xA9DB'0D85},
             {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0x0101'0101},
             {0x0000'0000, 0x0000'0000, 0x0000'0000, 0x0101'0101},
@@ -375,7 +365,7 @@ try
         func_name,
         makeNullableDataType<DataTypeString>(),
         makeNullableDataType<DataTypeString>(),
-        toBinaries({
+        toBinariesV6({
             {0x0001'0002, 0x0003'0004},
             {0x0001'0002, 0x0003'0004, 0x0005'0006},
             {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0000, 0x0000'0000},
@@ -416,7 +406,7 @@ try
         num_vec.emplace_back(std::move(v));
     }
 
-    auto bin_vec = toBinaries(num_vec);
+    auto bin_vec = toBinariesV6(num_vec);
     auto bin_column = makeColumnWithTypeAndName("bin", bin_vec.size(), makeNullableDataType<DataTypeString>(), bin_vec);
     auto str_column = executeFunction(ntoa, {bin_column});
     auto bin_column_2 = executeFunction(aton, {str_column});
