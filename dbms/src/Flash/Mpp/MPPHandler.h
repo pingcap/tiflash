@@ -5,6 +5,10 @@
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Mpp/MPPTunnel.h>
+#include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/TaskStatus.h>
+#include <Flash/Mpp/Utils.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
@@ -23,8 +27,6 @@
 namespace DB
 {
 
-mpp::MPPDataPacket getPacketWithError(String reason);
-
 // Identify a mpp task.
 struct MPPTaskId
 {
@@ -35,127 +37,6 @@ struct MPPTaskId
 };
 
 
-struct MPPTask;
-class MPPTunnel : private boost::noncopyable
-{
-public:
-    MPPTunnel(
-        const mpp::TaskMeta & receiver_meta_,
-        const mpp::TaskMeta & sender_meta_,
-        const std::chrono::seconds timeout_,
-        const std::shared_ptr<MPPTask> & current_task_);
-
-    ~MPPTunnel();
-
-    const String & id() const { return tunnel_id; }
-
-    bool isTaskCancelled();
-
-    // write a single packet to the tunnel, it will block if tunnel is not ready.
-    void write(const mpp::MPPDataPacket & data, bool close_after_write = false);
-
-    // finish the writing.
-    void writeDone();
-
-    /// close() finishes the tunnel, if the tunnel is connected already, it will
-    /// write the error message to the tunnel, otherwise it just close the tunnel
-    void close(const String & reason);
-
-    // a MPPConn request has arrived. it will build connection by this tunnel;
-    void connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_);
-
-    // wait until all the data has been transferred.
-    void waitForFinish();
-private:
-    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
-
-    // must under mu's protection
-    void finishWithLock();
-
-    std::mutex mu;
-    std::condition_variable cv_for_connected;
-    std::condition_variable cv_for_finished;
-
-    bool connected; // if the exchange in has connected this tunnel.
-
-    bool finished; // if the tunnel has finished its connection.
-
-    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
-
-    std::chrono::seconds timeout;
-
-    std::weak_ptr<MPPTask> current_task;
-
-    // tunnel id is in the format like "tunnel[sender]+[receiver]"
-    String tunnel_id;
-
-    Logger * log;
-};
-
-using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;
-
-struct MPPTunnelSet
-{
-    std::vector<MPPTunnelPtr> tunnels;
-
-    void clearExecutionSummaries(tipb::SelectResponse & response)
-    {
-        /// can not use response.clear_execution_summaries() because
-        /// TiDB assume all the executor should return execution summary
-        for (int i = 0; i < response.execution_summaries_size(); i++)
-        {
-            auto * mutable_execution_summary = response.mutable_execution_summaries(i);
-            mutable_execution_summary->set_num_produced_rows(0);
-            mutable_execution_summary->set_num_iterations(0);
-            mutable_execution_summary->set_concurrency(0);
-        }
-    }
-    /// for both broadcast writing and partition writing, only
-    /// return meaningful execution summary for the first tunnel,
-    /// because in TiDB, it does not know enough information
-    /// about the execution details for the mpp query, it just
-    /// add up all the execution summaries for the same executor,
-    /// so if return execution summary for all the tunnels, the
-    /// information in TiDB will be amplified, which may make
-    /// user confused.
-    // this is a broadcast writing.
-    void write(tipb::SelectResponse & response)
-    {
-        mpp::MPPDataPacket packet;
-        if (!response.SerializeToString(packet.mutable_data()))
-            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
-        tunnels[0]->write(packet);
-
-        if (tunnels.size() > 1)
-        {
-            clearExecutionSummaries(response);
-            if (!response.SerializeToString(packet.mutable_data()))
-                throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
-            for (size_t i = 1; i < tunnels.size(); i++)
-            {
-                tunnels[i]->write(packet);
-            }
-        }
-    }
-
-    // this is a partition writing.
-    void write(tipb::SelectResponse & response, int16_t partition_id)
-    {
-        if (partition_id != 0)
-        {
-            clearExecutionSummaries(response);
-        }
-        mpp::MPPDataPacket packet;
-        if (!response.SerializeToString(packet.mutable_data()))
-            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
-        tunnels[partition_id]->write(packet);
-    }
-
-    uint16_t getPartitionNum() { return tunnels.size(); }
-};
-
-using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
-
 class MPPTaskManager;
 
 struct MPPTaskProgress
@@ -165,14 +46,6 @@ struct MPPTaskProgress
     UInt64 epoch_when_found_no_progress = 0;
     bool found_no_progress = false;
     bool isTaskHanging(const Context & context);
-};
-
-enum TaskStatus
-{
-    INITIALIZING,
-    RUNNING,
-    FINISHED,
-    CANCELLED,
 };
 
 struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
