@@ -635,10 +635,12 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::FloorIntToDec, "floor"}, {tipb::ScalarFuncSig::FloorIntToInt, "floor"},
     {tipb::ScalarFuncSig::FloorDecToInt, "floorDecimalToInt"}, {tipb::ScalarFuncSig::FloorDecToDec, "floor"}, {tipb::ScalarFuncSig::FloorReal, "floor"},
 
-    {tipb::ScalarFuncSig::RoundReal, "round"}, {tipb::ScalarFuncSig::RoundInt, "round"}, {tipb::ScalarFuncSig::RoundDec, "round"},
-    //{tipb::ScalarFuncSig::RoundWithFracReal, "cast"},
-    //{tipb::ScalarFuncSig::RoundWithFracInt, "cast"},
-    //{tipb::ScalarFuncSig::RoundWithFracDec, "cast"},
+    {tipb::ScalarFuncSig::RoundReal, "tidbRound"},
+    {tipb::ScalarFuncSig::RoundInt, "tidbRound"},
+    {tipb::ScalarFuncSig::RoundDec, "tidbRound"},
+    // {tipb::ScalarFuncSig::RoundWithFracReal, "tidbRoundWithFrac"},
+    // {tipb::ScalarFuncSig::RoundWithFracInt, "tidbRoundWithFrac"},
+    // {tipb::ScalarFuncSig::RoundWithFracDec, "tidbRoundWithFrac"},
 
     {tipb::ScalarFuncSig::Log1Arg, "log"},
     //{tipb::ScalarFuncSig::Log2Args, "cast"},

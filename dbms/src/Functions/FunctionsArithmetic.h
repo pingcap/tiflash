@@ -5,6 +5,7 @@
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/FieldVisitors.h>
+#include <Common/toSafeUnsigned.h>
 #include <Common/typeid_cast.h>
 #include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeDate.h>
@@ -528,9 +529,49 @@ struct ModuloImpl<A,B,false>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
+<<<<<<< HEAD
         throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<A>::Type(a), typename NumberTraits::ToInteger<B>::Type(b));
         return static_cast<Result>( typename NumberTraits::ToInteger<A>::Type(a)
             % typename NumberTraits::ToInteger<B>::Type(b));
+=======
+        if constexpr (std::is_floating_point_v<Result>)
+        {
+            auto x = static_cast<Result>(a);
+            auto y = static_cast<Result>(b);
+
+            // assert no infinite or NaN values.
+            assert(std::isfinite(x) && std::isfinite(y));
+
+            // C++ does not allow operator% between floating point
+            // values, so we call into std::fmod.
+            return std::fmod(x, y);
+        }
+        else // both A and B are integrals.
+        {
+            // decimals are expected to be converted to integers or floating point values before computations.
+            static_assert(is_integer_v<Result>);
+
+            // convert to unsigned before computing.
+            // we have to prevent wrong result like UInt64(5) = UInt64(5) % Int64(-3).
+            // in MySQL, UInt64(5) % Int64(-3) evaluates to UInt64(2).
+            auto x = toSafeUnsigned<Result>(a);
+            auto y = toSafeUnsigned<Result>(b);
+
+            auto result = static_cast<Result>(x % y);
+
+            // in MySQL, the sign of a % b is the same as that of a.
+            // e.g. 5 % -3 = 2, -5 % 3 = -2.
+            if constexpr (is_signed_v<Result>)
+            {
+                if (a < 0)
+                    return -result;
+                else
+                    return result;
+            }
+            else
+                return result;
+        }
+>>>>>>> 4997809a0... Push down `ROUND(x)` on decimal types (#2492)
     }
     template <typename Result = ResultType>
     static inline Result apply(A , B , UInt8 &)
