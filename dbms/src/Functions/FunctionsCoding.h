@@ -12,6 +12,7 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -512,6 +513,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
+    bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
@@ -624,6 +626,122 @@ public:
     }
 };
 
+class FunctionTiDBIPv4StringToNum : public IFunction
+{
+public:
+    static constexpr auto name = "tiDBIPv4StringToNum";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionTiDBIPv4StringToNum>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        DataTypePtr data_type = removeNullable(arguments[0]);
+        if (!data_type->isString())
+            throw Exception(
+                "Illegal type " + data_type->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return makeNullable(std::make_shared<DataTypeUInt32>());
+    }
+
+    /// return <result, is_invalid>
+    /// Port from https://github.com/pingcap/tidb/blob/6063386a9d164399924ef046de76e8fa4b3dd91d/expression/builtin_miscellaneous.go#L417
+    static std::tuple<UInt32, UInt8> parseIPv4(const char * pos, size_t size)
+    {
+        // ip address should not end with '.'.
+        if (size == 0 || pos[size - 1] == '.')
+            return {0, 1};
+
+        UInt32 result = 0;
+        UInt32 value = 0;
+        int dot_count = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            auto c = pos[i];
+            if (isNumericASCII(c))
+            {
+                value = value * 10 + (c - '0');
+                if (value > 255)
+                    return {0, 1};
+            }
+            else if (c == '.')
+            {
+                ++dot_count;
+                if (dot_count > 3)
+                    return {0, 1};
+                result = (result << 8) + value;
+                value = 0;
+            }
+            else
+                return {0, 1};
+        }
+        // 127          -> 0.0.0.127
+        // 127.255      -> 127.0.0.255
+        // 127.256      -> NULL
+        // 127.2.1      -> 127.2.0.1
+        switch (dot_count)
+        {
+        case 1: result <<= 24; break;
+        case 2: result <<= 16; break;
+        case 3: result <<= 8; break;
+        }
+        return {result + value, 0};
+    }
+
+    /// Need to return NULL for invalid input.
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    {
+        const IColumn * column = block.getByPosition(arguments[0]).column.get();
+        const NullMap * nullmap = nullptr;
+        if (auto * nullable_column = typeid_cast<const ColumnNullable *>(column))
+        {
+            column = &nullable_column->getNestedColumn();
+            nullmap = &nullable_column->getNullMapData();
+        }
+
+        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column))
+        {
+            auto col_res = ColumnUInt32::create();
+            auto nullmap_res = ColumnUInt8::create();
+
+            ColumnUInt32::Container & vec_res = col_res->getData();
+            ColumnUInt8::Container & vec_res_nullmap = nullmap_res->getData();
+            vec_res.resize(col->size());
+            vec_res_nullmap.assign(col->size(), static_cast<UInt8>(0));
+
+            const ColumnString::Chars_t & vec_src = col->getChars();
+            const ColumnString::Offsets & offsets_src = col->getOffsets();
+            size_t prev_offset = 0;
+
+            for (size_t i = 0; i < vec_res.size(); ++i)
+            {
+                if (nullmap && (*nullmap)[i])
+                {
+                    vec_res_nullmap[i] = 1;
+                }
+                else
+                {
+                    const auto * p = reinterpret_cast<const char *>(&vec_src[prev_offset]);
+                    /// discard the trailing '\0'
+                    auto size = (i == 0 ? offsets_src[0] : offsets_src[i] - offsets_src[i - 1]) - 1;
+                    std::tie(vec_res[i], vec_res_nullmap[i]) = parseIPv4(p, size);
+                }
+                prev_offset = offsets_src[i];
+            }
+
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(nullmap_res));
+        }
+        else
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
 
 class FunctionIPv4ToIPv6 : public IFunction
 {
