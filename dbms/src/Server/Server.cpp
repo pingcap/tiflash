@@ -859,7 +859,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Sync schemas done.");
 
-    backgroundInitStores(*global_context, log);
+    initStores(*global_context, log, storage_config.lazily_init_store);
 
     // After schema synced, set current database.
     global_context->setCurrentDatabase(default_database);
@@ -1080,16 +1080,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     socket.setSendTimeout(settings.send_timeout);
                     servers.emplace_back(new TCPServer(new TCPHandlerFactory(*this), server_pool, socket, new Poco::Net::TCPServerParams));
 
-<<<<<<< HEAD
                     LOG_INFO(log, "Listening tcp: " + address.toString());
                 }
                 else if (security_config.has_tls_config)
                 {
                     LOG_INFO(log, "tcp_port is closed because tls config is set");
                 }
-=======
-    initStores(*global_context, log, storage_config.lazily_init_store);
->>>>>>> 9fc8ef3e9... Add switch for lazily init store and enable it by default. (#2531)
 
                 /// TCP with SSL
                 if (config().has("tcp_port_secure") && !security_config.has_tls_config)
