@@ -975,7 +975,8 @@ static FracType getFracFromConstColumn(const ColumnConst * column)
 
 struct TiDBRoundPrecisionInferer
 {
-    static std::tuple<PrecType, ScaleType> infer(PrecType prec, ScaleType scale, FracType frac, bool is_const_frac)
+    static std::tuple<PrecType, ScaleType> infer(
+        PrecType prec, ScaleType scale, FracType frac [[maybe_unused]], bool is_const_frac [[maybe_unused]])
     {
         // TODO: RoundWithFrac.
         assert(is_const_frac);
