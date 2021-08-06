@@ -76,6 +76,8 @@ ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWit
         cns.push_back(i);
 
     auto bp = factory.tryGet(func_name, context);
+    if (!bp)
+        throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
     auto func = bp->build(columns);
     block.insert({nullptr, func->getReturnType(), "res"});
     func->execute(block, cns, columns.size());
