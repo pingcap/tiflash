@@ -220,6 +220,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 // PageFile::MetaMergingReader
 // =========================================================
 
+PageFile::MetaMergingReader::MetaMergingReader(PageFile & page_file_) : page_file(page_file_) {}
+
 PageFile::MetaMergingReader::~MetaMergingReader()
 {
     close();
@@ -227,22 +229,22 @@ PageFile::MetaMergingReader::~MetaMergingReader()
 
 PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t max_meta_offset, size_t meta_file_buffer_size)
 {
-    auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file, meta_file_buffer_size);
-    reader->initialize(max_meta_offset);
+    auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
+    reader->initialize(max_meta_offset, meta_file_buffer_size);
     return reader;
 }
 
 PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t meta_file_buffer_size)
 {
-    auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file, meta_file_buffer_size);
-    reader->initialize(std::nullopt);
+    auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
+    reader->initialize(std::nullopt, meta_file_buffer_size);
     return reader;
 }
 
 // Try to initiallize access to meta, read the whole metadata to memory.
 // Status -> Finished if metadata size is zero.
 //        -> Opened if metadata successfully load from disk.
-void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offset)
+void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offset, size_t meta_file_buffer_size)
 {
     if (status == Status::Opened)
         return;

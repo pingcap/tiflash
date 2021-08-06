@@ -114,10 +114,7 @@ public:
     class MetaMergingReader : private boost::noncopyable
     {
     public:
-        MetaMergingReader(PageFile & page_file_, size_t meta_file_buffer_size)  // should only called by `createFrom`
-            : page_file(page_file_), meta_file_buffer_size(meta_file_buffer_size)
-        {
-        }
+        MetaMergingReader(PageFile & page_file_);  // should only called by `createFrom`
         static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset, size_t meta_file_buffer_size);
         static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t meta_file_buffer_size);
 
@@ -168,11 +165,10 @@ public:
     private:
         void close();
 
-        void initialize(std::optional<size_t> max_meta_offset);
+        void initialize(std::optional<size_t> max_meta_offset, size_t meta_file_buffer_size);
 
     private:
         PageFile & page_file;
-        size_t     meta_file_buffer_size;
 
         Status status = Status::Uninitialized;
 
