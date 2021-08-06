@@ -31,16 +31,22 @@ struct MPPTaskProgress
 class MPPTaskManager;
 class MPPTask : public std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
-    MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
-        : context(context_), meta(meta_), log(&Logger::get("task " + std::to_string(meta_.task_id())))
+    using Ptr = std::shared_ptr<MPPTask>;
+
+    /// Ensure all MPPTasks are allocated as std::shared_ptr
+    template <typename ... Args>
+    static Ptr newTask(Args &&... args)
     {
-        id.start_ts = meta.start_ts();
-        id.task_id = meta.task_id();
+        return Ptr(new MPPTask(std::forward<Args>(args)...));
     }
 
-    void unregisterTask();
+    const MPPTaskId & getId() const { return id; }
 
-    void runImpl();
+    bool isRootMPPTask() const { return dag_context->isRootMPPTask(); }
+
+    TaskStatus getStatus() const { return static_cast<TaskStatus>(status.load()); }
+
+    void unregisterTask();
 
     bool isTaskHanging();
 
@@ -121,6 +127,16 @@ class MPPTask : public std::enable_shared_from_this<MPPTask>, private boost::non
         LOG_DEBUG(log, "finish MPPTask: " << id.toString());
     }
 private:
+    MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
+        : context(context_), meta(meta_), log(&Logger::get("task " + std::to_string(meta_.task_id())))
+    {
+        id.start_ts = meta.start_ts();
+        id.task_id = meta.task_id();
+    }
+
+    void runImpl();
+
+
     Context context;
 
     std::unique_ptr<tipb::DAGRequest> dag_req;
