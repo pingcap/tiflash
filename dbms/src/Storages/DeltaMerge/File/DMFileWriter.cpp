@@ -11,7 +11,7 @@ namespace DM
 DMFileWriter::DMFileWriter(const DMFilePtr &             dmfile_,
                            const ColumnDefines &         write_columns_,
                            const FileProviderPtr &       file_provider_,
-                           const RateLimiterPtr &        rate_limiter_,
+                           const WriteLimiterPtr &        write_limiter_,
                            const DMFileWriter::Options & options_)
     : dmfile(dmfile_),
       write_columns(write_columns_),
@@ -24,16 +24,16 @@ DMFileWriter::DMFileWriter(const DMFilePtr &             dmfile_,
                                                                        dmfile->packStatPath(),
                                                                        dmfile->encryptionPackStatPath(),
                                                                        true,
-                                                                       rate_limiter_,
+                                                                       write_limiter_,
                                                                        0,
                                                                        0,
                                                                        options.max_compress_block_size)),
       single_file_stream((!options.flags.isSingleFile())
                              ? nullptr
                              : new SingleFileStream(
-                                 dmfile_, options.compression_settings, options.max_compress_block_size, file_provider_, rate_limiter_)),
+                                 dmfile_, options.compression_settings, options.max_compress_block_size, file_provider_, write_limiter_)),
       file_provider(file_provider_),
-      rate_limiter(rate_limiter_)
+      write_limiter(write_limiter_)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
@@ -76,7 +76,7 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
                                                options.compression_settings,
                                                options.max_compress_block_size,
                                                file_provider,
-                                               rate_limiter,
+                                               write_limiter,
                                                IDataType::isNullMap(substream_path) ? false : do_index);
         column_streams.emplace(stream_name, std::move(stream));
     };
@@ -139,7 +139,7 @@ void DMFileWriter::finalize()
     }
     else
     {
-        dmfile->finalizeForFolderMode(file_provider, rate_limiter);
+        dmfile->finalizeForFolderMode(file_provider, write_limiter);
     }
 }
 
@@ -300,7 +300,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             if (stream->minmaxes)
             {
                 WriteBufferFromFileProvider buf(
-                    file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name), false, rate_limiter);
+                    file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name), false, write_limiter);
                 stream->minmaxes->write(*type, buf);
                 buf.sync();
                 bytes_written += buf.getPositionInFile();
