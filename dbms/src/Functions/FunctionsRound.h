@@ -861,11 +861,6 @@ public:
  */
 using FracType = Int64;
 
-// for DEBUG only, will be removed after RoundWithFrac is implemented.
-#define EXPECT(expr) \
-    if (!(expr))     \
-        throw TiFlashException(fmt::format("\"{}\" failed", #expr), Errors::Coprocessor::Internal);
-
 template <typename InputType>
 struct TiDBIntegerRound
 {
@@ -874,7 +869,7 @@ struct TiDBIntegerRound
     static constexpr InputType eval(const InputType & input, FracType frac)
     {
         // TODO: RoundWithFrac.
-        EXPECT(frac == 0);
+        assert(frac == 0);
 
         return input;
     }
@@ -892,7 +887,7 @@ struct TiDBFloatingRound
     static constexpr EvalType eval(const InputType & input, FracType frac)
     {
         // TODO: RoundWithFrac.
-        EXPECT(frac == 0);
+        assert(frac == 0);
 
         auto value = static_cast<EvalType>(input);
 
@@ -930,7 +925,7 @@ struct TiDBDecimalRound
     static constexpr OutputType eval(const InputType & input, FracType frac, ScaleType input_scale)
     {
         // TODO: RoundWithFrac.
-        EXPECT(frac == 0);
+        assert(frac == 0);
 
         auto divider = Pow::result[input_scale];
         auto absolute_value = toSafeUnsigned<UnsignedNativeType>(input.value);
@@ -983,8 +978,8 @@ struct TiDBRoundPrecisionInferer
     static std::tuple<PrecType, ScaleType> infer(PrecType prec, ScaleType scale, FracType frac, bool is_const_frac)
     {
         // TODO: RoundWithFrac.
-        EXPECT(is_const_frac);
-        EXPECT(frac == 0);
+        assert(is_const_frac);
+        assert(frac == 0);
 
         assert(prec >= scale);
         PrecType new_prec = prec - scale;
@@ -1014,12 +1009,12 @@ struct TiDBRound
                 ErrorCodes::ILLEGAL_COLUMN);
 
         // TODO: RoundWithFrac.
-        EXPECT(frac_column->isColumnConst());
+        assert(frac_column->isColumnConst());
         auto frac_value = getFracFromConstColumn(frac_column);
-        EXPECT(frac_value == 0);
+        assert(frac_value == 0);
 
         // TODO: const input column.
-        EXPECT(!input_column->isColumnConst());
+        assert(!input_column->isColumnConst());
 
         auto & input_data = input_column->getData();
         size_t size = input_data.size();
@@ -1199,8 +1194,8 @@ private:
         using ResultColumn = std::conditional_t<IsDecimal<ReturnType>, ColumnDecimal<ReturnType>, ColumnVector<ReturnType>>;
 
         // TODO: RoundWithFrac
-        EXPECT(!input_column->isColumnConst());
-        EXPECT(frac_column->isColumnConst());
+        assert(!input_column->isColumnConst());
+        assert(frac_column->isColumnConst());
 
         TiDBRound<InputType, ReturnType, FracType, InputColumn, ResultColumn, ColumnConst>::apply(
             input_column, frac_column, result_column, input_scale, result_scale);
