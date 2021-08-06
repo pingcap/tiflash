@@ -403,7 +403,8 @@ inline Block getSubBlock(const Block & block, size_t offset, size_t limit)
     }
 }
 
-// Add an extra handle column if pkIsHandle
+// Add an extra handle column if the `handle_define` is used as the primary key
+// TODO: consider merging it into `RegionBlockReader`?
 Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const ColumnDefine & handle_define, Block && block)
 {
     if (pkIsHandle(handle_define))
