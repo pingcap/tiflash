@@ -471,7 +471,7 @@ bool PageFile::MetaLinkingReader::initialize()
     SCOPE_EXIT({ underlying_file->close(); });
 
     meta_buffer = (char *)page_file.alloc(meta_size);
-    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size);
+    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, nullptr);
 
     return true;
 }

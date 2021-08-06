@@ -39,6 +39,8 @@ public:
         const String &     parentPath() const;
         PageFileIdAndLevel fileIdLevel() const;
 
+        void pageFileLink(PageFile & linked_file, WriteBatch::SequenceID sid);
+
     private:
         void closeFd();
 
