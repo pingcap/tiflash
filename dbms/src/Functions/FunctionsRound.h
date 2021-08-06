@@ -866,7 +866,7 @@ struct TiDBIntegerRound
 {
     static_assert(is_integer_v<InputType>);
 
-    static constexpr InputType eval(const InputType & input, FracType frac)
+    static constexpr InputType eval(const InputType & input, FracType frac [[maybe_unused]])
     {
         // TODO: RoundWithFrac.
         assert(frac == 0);
@@ -884,7 +884,7 @@ struct TiDBFloatingRound
     // in MySQL, floating round always returns Float64.
     using EvalType = Float64;
 
-    static constexpr EvalType eval(const InputType & input, FracType frac)
+    static constexpr EvalType eval(const InputType & input, FracType frac [[maybe_unused]])
     {
         // TODO: RoundWithFrac.
         assert(frac == 0);
@@ -922,7 +922,7 @@ struct TiDBDecimalRound
     using UnsignedNativeType = make_unsigned_t<typename InputType::NativeType>;
     using Pow = ConstPowOf10<UnsignedNativeType, maxDecimalPrecision<InputType>()>;
 
-    static constexpr OutputType eval(const InputType & input, FracType frac, ScaleType input_scale)
+    static constexpr OutputType eval(const InputType & input, FracType frac [[maybe_unused]], ScaleType input_scale)
     {
         // TODO: RoundWithFrac.
         assert(frac == 0);
