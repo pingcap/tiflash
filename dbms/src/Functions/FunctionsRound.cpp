@@ -23,6 +23,8 @@ void registerFunctionsRound(FunctionFactory & factory)
     /// Compatibility aliases.
     factory.registerFunction<FunctionCeil>("ceiling", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionTrunc>("truncate", FunctionFactory::CaseInsensitive);
+
+    factory.registerFunction<FunctionTiDBRoundWithFrac>();
 }
 
 }

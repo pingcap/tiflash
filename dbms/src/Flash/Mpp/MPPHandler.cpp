@@ -12,7 +12,6 @@
 #include <Storages/Transaction/TMTContext.h>
 
 #include <ext/scope_guard.h>
-#include <fmt/core.h>
 
 namespace DB
 {
@@ -247,7 +246,10 @@ void MPPTask::runImpl()
     }
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
     SCOPE_EXIT({
+        GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
         GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_duration_seconds, type_run_mpp_task)
             .Observe(stopwatch.elapsedSeconds());
     });

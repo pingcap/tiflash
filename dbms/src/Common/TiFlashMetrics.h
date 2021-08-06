@@ -126,8 +126,6 @@ namespace DB
         F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}), F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_storage_logical_throughput_bytes, "The logical throughput of read tasks of storage in bytes", Histogram,                    \
         F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 50 * 1024 * 1024}))                                       \
-    M(tiflash_storage_rate_limiter_total_request_bytes, "RateLimiter total requested bytes", Counter)                                     \
-    M(tiflash_storage_rate_limiter_total_alloc_bytes, "RateLimiter total allocated bytes", Counter)                                       \
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                   \
         Histogram, /* these command usually cost servel seconds, increase the start bucket to 50ms */                                     \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                            \
@@ -140,7 +138,12 @@ namespace DB
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
-        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))
+        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                      \
+    M(tiflash_storage_io_limiter, "Storage I/O limiter metrics", Counter, F(type_fg_read_req_bytes, {"type", "fg_read_req_bytes"}),       \
+        F(type_fg_read_alloc_bytes, {"type", "fg_read_alloc_bytes"}), F(type_bg_read_req_bytes, {"type", "bg_read_req_bytes"}),           \
+        F(type_bg_read_alloc_bytes, {"type", "bg_read_alloc_bytes"}), F(type_fg_write_req_bytes, {"type", "fg_write_req_bytes"}),         \
+        F(type_fg_write_alloc_bytes, {"type", "fg_write_alloc_bytes"}), F(type_bg_write_req_bytes, {"type", "bg_write_req_bytes"}),       \
+        F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}))
 
 
 struct ExpBuckets
