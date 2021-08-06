@@ -638,10 +638,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        const IDataType * data_type = arguments[0].get();
-        if (auto * null_data_type = typeid_cast<const DataTypeNullable *>(data_type))
-            data_type = null_data_type->getNestedType().get();
-
+        DataTypePtr data_type = removeNullable(arguments[0]);
         if (!data_type->isString())
             throw Exception(
                 "Illegal type " + data_type->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
