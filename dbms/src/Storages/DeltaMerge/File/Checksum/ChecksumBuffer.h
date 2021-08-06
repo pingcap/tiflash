@@ -290,7 +290,7 @@ private:
         // we need to flush them to the destination
         if (working_buffer.end() - position() != 0)
         {
-            auto amount = std::min(size, working_buffer.end() - position());
+            auto amount = std::min(size, static_cast<size_t>(working_buffer.end() - position()));
             std::memcpy(buffer, position(), amount);
             size -= amount;
             position() += amount;
