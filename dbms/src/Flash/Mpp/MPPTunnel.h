@@ -1,8 +1,8 @@
 #pragma once
 
+#include <boost/noncopyable.hpp>
 #include <common/logger_useful.h>
 #include <common/types.h>
-#include <boost/noncopyable.hpp>
 #include <grpcpp/server_context.h>
 #include <kvproto/mpp.pb.h>
 #include <kvproto/tikvpb.grpc.pb.h>
