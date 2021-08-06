@@ -43,6 +43,7 @@ PathCapacityMetrics::PathCapacityMetrics(                                       
     {
         all_paths[main_paths_[i]] = safeGetQuota(main_capacity_quota_, i);
     }
+
     for (size_t i = 0; i < latest_paths_.size(); ++i)
     {
         if (auto iter = all_paths.find(latest_paths_[i]); iter != all_paths.end())
@@ -203,7 +204,8 @@ FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
 
     // capacity is limited by the actual disk capacity
     uint64_t capacity = 0;
-    const uint64_t disk_capacity_size = vfs.f_blocks * vfs.f_frsize;
+    const uint64_t disk_capacity_size = vfs.f_bfree * vfs.f_frsize;
+
     if (capacity_bytes == 0 || disk_capacity_size < capacity_bytes)
         capacity = disk_capacity_size;
     else
