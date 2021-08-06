@@ -72,7 +72,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     auto snap          = std::make_shared<DeltaValueSnapshot>(type);
     snap->is_update    = for_update;
     snap->_delta       = this->shared_from_this();
-    snap->storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, true);
+    snap->storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), true);
     snap->rows         = rows;
     snap->bytes        = bytes;
     snap->deletes      = deletes;
