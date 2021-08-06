@@ -45,11 +45,7 @@ namespace tests
                                                                                                    \
         text += "\n\n";                                                                            \
         if (text.find("Stack trace") == std::string::npos)                                         \
-        {                                                                                          \
-            text += "Stack trace:\n";                                                              \
-            text += e.getStackTrace().toString();                                                  \
-            text += "\n";                                                                          \
-        }                                                                                          \
+            text += fmt::format("Stack trace:\n{}\n", e.getStackTrace().toString());               \
                                                                                                    \
         FAIL() << text;                                                                            \
     }                                                                                              \
@@ -114,7 +110,7 @@ DataTypePtr makeNullableDataType(const Args &... args)
 }
 
 template <typename FieldType>
-Field makeField(std::optional<FieldType> value)
+Field makeField(const std::optional<FieldType> & value)
 {
     if (value.has_value())
         return Field(static_cast<FieldType>(value.value()));
@@ -125,13 +121,22 @@ Field makeField(std::optional<FieldType> value)
 template <typename T>
 using DataVector = std::vector<std::optional<T>>;
 
+using DataVectorUInt64 = DataVector<UInt64>;
+using DataVectorInt64 = DataVector<Int64>;
+using DataVectorFloat64 = DataVector<Float64>;
+using DataVectorString = DataVector<String>;
+using DataVectorDecimal32 = DataVector<Decimal32>;
+using DataVectorDecimal64 = DataVector<Decimal64>;
+using DataVectorDecimal128 = DataVector<Decimal128>;
+using DataVectorDecimal256 = DataVector<Decimal256>;
+
 /// if data_type is nullable, FieldType can be either T or std::optional<T>.
 template <typename FieldType>
 ColumnPtr makeColumn(size_t size, const DataTypePtr & data_type, const DataVector<FieldType> & column_data)
 {
-    auto makeAndCheckField = [&](std::optional<FieldType> value)
+    auto makeAndCheckField = [&](const std::optional<FieldType> & value)
     {
-        auto f = makeField(std::move(value));
+        auto f = makeField(value);
         if (f.isNull() && !data_type->isNullable())
             throw TiFlashTestException("Try to insert NULL into a non-nullable column");
         return f;
@@ -335,20 +340,20 @@ private:
         return;                                                                                              \
     }
 
-#define EXECUTE_BINARY_FUNCTION_AND_CHECK(function_name, FIELD_TYPE_1, FIELD_TYPE_2, RESULT_FIELD_TYPE, ...) \
+#define EXECUTE_BINARY_FUNCTION_AND_CHECK(function_name, ...) \
     do {\
         auto fn = (function_name);\
         auto desc = fmt::format("Execute binary function {} at {}:{}", fn, __FILE__, __LINE__);\
         SCOPED_TRACE(desc.c_str());\
-        executeBinaryFunctionAndCheck<FIELD_TYPE_1, FIELD_TYPE_2, RESULT_FIELD_TYPE>(function_name, ##__VA_ARGS__);\
+        executeBinaryFunctionAndCheck(function_name, ##__VA_ARGS__);\
     } while (false)
 
-#define EXECUTE_UNARY_FUNCTION_AND_CHECK(function_name, FIELD_TYPE, RESULT_FIELD_TYPE, ...) \
+#define EXECUTE_UNARY_FUNCTION_AND_CHECK(function_name, ...) \
     do {\
         auto fn = (function_name);\
         auto desc = fmt::format("Execute unary function {} at {}:{}", fn, __FILE__, __LINE__);\
         SCOPED_TRACE(desc.c_str());\
-        executeUnaryFunctionAndCheck<FIELD_TYPE, RESULT_FIELD_TYPE>(function_name, ##__VA_ARGS__);\
+        executeUnaryFunctionAndCheck(function_name, ##__VA_ARGS__);\
     } while (false)
 
 } // namespace tests

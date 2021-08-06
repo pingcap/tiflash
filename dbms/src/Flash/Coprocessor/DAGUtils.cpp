@@ -763,7 +763,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::InetAton, "tiDBIPv4StringToNum"},
     {tipb::ScalarFuncSig::InetNtoa, "IPv4NumToString"},
     //{tipb::ScalarFuncSig::Inet6Aton, "cast"},
-    {tipb::ScalarFuncSig::Inet6Ntoa, "IPv6NumToString"},
+    //{tipb::ScalarFuncSig::Inet6Ntoa, "IPv6NumToString"},
     //{tipb::ScalarFuncSig::IsIPv4, "cast"},
     //{tipb::ScalarFuncSig::IsIPv4Compat, "cast"},
     //{tipb::ScalarFuncSig::IsIPv4Mapped, "cast"},
