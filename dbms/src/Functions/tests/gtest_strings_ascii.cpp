@@ -141,8 +141,6 @@ TEST_F(StringASCII, null_Test)
 
     for (size_t i = 0; i < null_map.size(); i++) {
         EXPECT_EQ(result_null_map[i], null_map[i]);
-        res_string.get(i, resField);
-        Int64 re_val = resField.get<Int64>();
         if (result_null_map[i] == 0) {
             res_string.get(i, resField);
             Int64 res_val = resField.get<Int64>();
