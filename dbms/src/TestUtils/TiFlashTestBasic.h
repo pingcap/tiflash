@@ -45,11 +45,7 @@ namespace tests
                                                                                                    \
         text += "\n\n";                                                                            \
         if (text.find("Stack trace") == std::string::npos)                                         \
-        {                                                                                          \
-            text += "Stack trace:\n";                                                              \
-            text += e.getStackTrace().toString();                                                  \
-            text += "\n";                                                                          \
-        }                                                                                          \
+            text += fmt::format("Stack trace:\n{}\n", e.getStackTrace().toString());               \
                                                                                                    \
         FAIL() << text;                                                                            \
     }                                                                                              \
@@ -114,7 +110,7 @@ DataTypePtr makeNullableDataType(const Args &... args)
 }
 
 template <typename FieldType>
-Field makeField(std::optional<FieldType> value)
+Field makeField(const std::optional<FieldType> & value)
 {
     if (value.has_value())
         return Field(static_cast<FieldType>(value.value()));
@@ -125,13 +121,22 @@ Field makeField(std::optional<FieldType> value)
 template <typename T>
 using DataVector = std::vector<std::optional<T>>;
 
+using DataVectorUInt64 = DataVector<UInt64>;
+using DataVectorInt64 = DataVector<Int64>;
+using DataVectorFloat64 = DataVector<Float64>;
+using DataVectorString = DataVector<String>;
+using DataVectorDecimal32 = DataVector<Decimal32>;
+using DataVectorDecimal64 = DataVector<Decimal64>;
+using DataVectorDecimal128 = DataVector<Decimal128>;
+using DataVectorDecimal256 = DataVector<Decimal256>;
+
 /// if data_type is nullable, FieldType can be either T or std::optional<T>.
 template <typename FieldType>
 ColumnPtr makeColumn(size_t size, const DataTypePtr & data_type, const DataVector<FieldType> & column_data)
 {
-    auto makeAndCheckField = [&](std::optional<FieldType> value)
+    auto makeAndCheckField = [&](const std::optional<FieldType> & value)
     {
-        auto f = makeField(std::move(value));
+        auto f = makeField(value);
         if (f.isNull() && !data_type->isNullable())
             throw TiFlashTestException("Try to insert NULL into a non-nullable column");
         return f;
@@ -181,9 +186,6 @@ ColumnWithTypeAndName executeFunction(
     const DataVector<FieldType2> & column_data_2,
     size_t column_size = std::numeric_limits<size_t>::max())
 {
-    static_assert(std::is_integral_v<FieldType1> || std::is_floating_point_v<FieldType1> || isDecimalField<FieldType1>());
-    static_assert(std::is_integral_v<FieldType2> || std::is_floating_point_v<FieldType2> || isDecimalField<FieldType2>());
-
     if (column_size == std::numeric_limits<size_t>::max())
         column_size = std::max(column_data_1.size(), column_data_2.size());
 
@@ -204,8 +206,6 @@ ColumnWithTypeAndName executeFunction(
     const DataVector<FieldType> & column_data,
     size_t column_size = std::numeric_limits<size_t>::max())
 {
-    static_assert(std::is_integral_v<FieldType> || std::is_floating_point_v<FieldType> || isDecimalField<FieldType>());
-
     if (column_size == std::numeric_limits<size_t>::max())
         column_size = column_data.size();
 
@@ -225,6 +225,40 @@ protected:
 
     /// ignore column name
     void assertColumnEqual(const ColumnWithTypeAndName & actual, const ColumnWithTypeAndName & expect);
+
+    // e.g. data_type = DataTypeUInt64, FieldType = UInt64.
+    // if data vector contains only 1 element, a const column will be created.
+    // otherwise, two columns are expected to be of the same size.
+    // use std::nullopt for null values.
+    template <typename FieldType1, typename FieldType2, typename ResultFieldType>
+    void executeBinaryFunctionAndCheck(
+        const String & function_name,
+        const DataTypePtr & data_type_1,
+        const DataTypePtr & data_type_2,
+        const DataTypePtr & expected_data_type,
+        const DataVector<FieldType1> & column_data_1,
+        const DataVector<FieldType2> & column_data_2,
+        const DataVector<ResultFieldType> & expected_data)
+    {
+        auto result = executeFunction(function_name, data_type_1, data_type_2, column_data_1, column_data_2);
+        auto expect = makeColumnWithTypeAndName("ignore", expected_data.size(), expected_data_type, expected_data);
+
+        assertColumnEqual(result, expect);
+    }
+
+    template <typename FieldType, typename ResultFieldType>
+    void executeUnaryFunctionAndCheck(
+        const String & function_name,
+        const DataTypePtr & data_type,
+        const DataTypePtr & expected_data_type,
+        const DataVector<FieldType> & column_data,
+        const DataVector<ResultFieldType> & expected_data)
+    {
+        auto result = executeFunction(function_name, data_type, column_data);
+        auto expect = makeColumnWithTypeAndName("ignore", expected_data.size(), expected_data_type, expected_data);
+
+        assertColumnEqual(result, expect);
+    }
 };
 
 
@@ -305,6 +339,22 @@ private:
                      << ::testing::UnitTest::GetInstance()->current_test_info()->name() << " is disabled."); \
         return;                                                                                              \
     }
+
+#define EXECUTE_BINARY_FUNCTION_AND_CHECK(function_name, ...) \
+    do {\
+        auto fn = (function_name);\
+        auto desc = fmt::format("Execute binary function {} at {}:{}", fn, __FILE__, __LINE__);\
+        SCOPED_TRACE(desc.c_str());\
+        executeBinaryFunctionAndCheck(function_name, ##__VA_ARGS__);\
+    } while (false)
+
+#define EXECUTE_UNARY_FUNCTION_AND_CHECK(function_name, ...) \
+    do {\
+        auto fn = (function_name);\
+        auto desc = fmt::format("Execute unary function {} at {}:{}", fn, __FILE__, __LINE__);\
+        SCOPED_TRACE(desc.c_str());\
+        executeUnaryFunctionAndCheck(function_name, ##__VA_ARGS__);\
+    } while (false)
 
 } // namespace tests
 } // namespace DB
