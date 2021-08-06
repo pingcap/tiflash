@@ -1462,7 +1462,7 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, DAGContext * ctx
     if (number == 0)
     {
         result = datetime;
-        return false;
+        return true;
     }
 
     // datetime type
