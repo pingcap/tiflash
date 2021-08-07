@@ -8,7 +8,7 @@
 namespace DB
 {
 
-// mock an array that returns same value at all indexex.
+// mock an array that returns same value at all indexes.
 template <typename T>
 class FakeArray
 {
