@@ -6,9 +6,8 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/CoprocessorHandler.h>
-// TODO: replace by MPPTaskManager.h later
-#include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTask.h>
+#include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
