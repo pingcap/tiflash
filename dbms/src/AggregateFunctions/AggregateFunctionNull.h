@@ -521,12 +521,15 @@ class AggregateFunctionGroupConcatTuple final : public AggregateFunctionNullBase
 {
     using State = AggreagteFunctionGroupUniqArrayGenericData;
 
+/// the input argument is in following two types:
+/// 1. only one column with original data type
+/// 2. one column combined from more than one columns including order by items, it should should be like tuple(type0, type1...)
 public:
     AggregateFunctionGroupConcatTuple(AggregateFunctionPtr nested_function, const DataTypes & arguments, const String sep, const SortDescription & sort_desc_, const NamesAndTypes& names_and_types_)
         : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcatTuple<result_is_nullable>>(nested_function),
-          number_of_arguments(arguments.size()), seperator(sep), sort_desc(sort_desc_),names_and_types(names_and_types_)
+          seperator(sep), sort_desc(sort_desc_),names_and_types(names_and_types_)
     {
-        if (number_of_arguments != 1)
+        if (arguments.size() != 1)
             throw Exception("Logical error: not single argument is passed to AggregateFunctionGroupConcatTuple", ErrorCodes::LOGICAL_ERROR);
         nested_type = std::make_shared<DataTypeArray>(arguments[0]);
 
@@ -550,6 +553,7 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
+        /// remove the row with null, except for sort columns
         const ColumnTuple & tuple = static_cast<const ColumnTuple &>(*columns[0]);
         for (size_t i = 0; i < number_of_arguments; ++i)
         {
@@ -571,27 +575,24 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
     {
-        if constexpr (result_is_nullable)
+        ColumnNullable & to_concrete = static_cast<ColumnNullable &>(to);
+        if (this->getFlag(place))
         {
-            ColumnNullable & to_concrete = static_cast<ColumnNullable &>(to);
-            if (this->getFlag(place))
-            {
-                this->nested_function->insertResultInto(this->nestedPlace(place), to_concrete.getNestedColumn(), arena);
-                to_concrete.getNullMapData().push_back(0);
-            }
-            else
-            {
-                to_concrete.insertDefault();
-            }
-        }
-        else
-        {
+            ColumnString & col_str = static_cast<ColumnString &>(to_concrete.getNestedColumn());
+            //  ColumnString & col_str = static_cast<ColumnString &>(to);
             /// get results from nested function, named nested_results
             auto nested_col = nested_type->createColumn();
             this->nested_function->insertResultInto(this->nestedPlace(place), *nested_col, arena);
 
             /// sort the nested_col of Array type
             const auto column_array = checkAndGetColumn<ColumnArray>(nested_col.get());
+
+            if(column_array->size() == 0)
+            {
+                to_concrete.insertDefault();
+                return;
+            }
+            to_concrete.getNullMapData().push_back(0);
 
            // auto col_array =  ArraySortImpl<true>::execute(*column_array, column_array->getDataPtr());
             const IColumn & nested_column = column_array->getData();
@@ -628,8 +629,6 @@ public:
                 valid[i] = inserted;
             }
 
-
-            ColumnString & col_str = static_cast<ColumnString &>(to);
             auto col_to = ColumnString::create();
 
             ColumnString::Chars_t & data_to = col_to->getChars();
@@ -658,6 +657,10 @@ public:
 
             data_to.resize(write_buffer.count());
             col_str.insertData(data_to.raw_data(),write_buffer.count());
+        }
+        else
+        {
+            to_concrete.insertDefault();
         }
     }
 

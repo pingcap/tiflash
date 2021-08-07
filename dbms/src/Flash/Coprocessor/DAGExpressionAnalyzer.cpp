@@ -490,12 +490,6 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
 
                 delimiter = col_delim->getValue<String>();
             }
-//            types[1] = step.actions->getSampleBlock().getByName(arg_name).type;
-//            aggregate.argument_names[1] = arg_name;
-//            step.required_output.push_back(arg_name);
-
-
-
         }
         else
         {
@@ -525,10 +519,10 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         aggregate.column_name = func_string;
         aggregate.parameters = Array();
         /// if there is group by clause, there is no need to consider the empty input case
-        aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, agg.group_by_size() == 0 || expr.tp() == tipb::ExprType::GroupConcat);
+        aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, agg.group_by_size() == 0);
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
-              aggregate.function=  std::make_shared<AggregateFunctionGroupConcatTuple<false>>(aggregate.function, types,delimiter,sort_description,names_and_types);
+              aggregate.function=  std::make_shared<AggregateFunctionGroupConcatTuple<true>>(aggregate.function, types,delimiter,sort_description,names_and_types);
         }
 
         aggregate.function->setCollator(getCollatorFromExpr(expr));
