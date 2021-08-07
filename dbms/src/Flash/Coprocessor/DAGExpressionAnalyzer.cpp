@@ -1,4 +1,5 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/AggregateFunctionNull.h>
 #include <Columns/ColumnSet.h>
 #include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -9,6 +10,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConditional.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <Interpreters/Context.h>
@@ -204,16 +206,34 @@ static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
-static String buildTupleFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, const int tuple_size, ExpressionActionsPtr & actions)
+static String buildTupleFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, SortDescription& sort_desc, NamesAndTypes & names_and_types, ExpressionActionsPtr & actions)
 {
     const String & func_name = "tuple";
     Names argument_names;
-    for (auto i=0 ; i< tuple_size; ++i)
+
+    /// add the first N-1 expr into the tuple
+    int child_size = expr.children_size()-1;
+    for (auto i=0 ; i< child_size; ++i)
     {
         auto & child = expr.children(i);
         String name = analyzer->getActions(child, actions, false);
         argument_names.push_back(name);
+        auto type = actions->getSampleBlock().getByName(name).type;
+        names_and_types.emplace_back(name,type);
     }
+
+    std::vector<NameAndTypePair> order_columns;
+    for (auto i=0; i< expr.order_by_size(); ++i)
+    {
+        String name = analyzer->getActions(expr.order_by(i).expr(), actions);
+        argument_names.push_back(name);
+        auto type = actions->getSampleBlock().getByName(name).type;
+        order_columns.emplace_back(name,type);
+        names_and_types.emplace_back(name,type);
+
+    }
+    sort_desc = getSortDescription(order_columns,expr.order_by());
+
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
@@ -436,6 +456,10 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         AggregateDescription aggregate;
         auto child_size = expr.children_size();
         DataTypes types(child_size);
+        NamesAndTypes names_and_types;
+        String delimiter="";
+        SortDescription sort_description;
+
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
             /// the last parametric is the separator
@@ -444,38 +468,34 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
             types.resize(arg_size);
             aggregate.argument_names.resize(arg_size);
             String arg_name;
-            if (child_size == 1)
+            if (child_size == 1 && expr.order_by_size() == 0)
             {
                 arg_name = getActions(expr.children(0), step.actions);
             }
-            else if(child_size > 1)
-            {
-                /// or args... -> tuple(args...)
-                arg_name = buildTupleFunction(this, expr, child_size,step.actions);
-            }
             else
             {
-                throw Exception("invalid parameter size for group concat aggregation!");
+                /// args... -> tuple(args...)
+                arg_name = buildTupleFunction(this, expr, sort_description, names_and_types,step.actions);
             }
 
             types[0] = step.actions->getSampleBlock().getByName(arg_name).type;
             aggregate.argument_names[0] = arg_name;
             step.required_output.push_back(arg_name);
-/*
+
             /// the separator
             arg_name = getActions(expr.children(child_size), step.actions);
-            types[1] = step.actions->getSampleBlock().getByName(arg_name).type;
-            aggregate.argument_names[1] = arg_name;
-            step.required_output.push_back(arg_name);
-
-            for (auto i=0; i< expr.order_by_size(); ++i)
+            if (expr.children(child_size).tp() == tipb::String)
             {
-                String arg_name = getActions(expr.order_by(i).expr(), step.actions);
-                types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
-                aggregate.argument_names[i] = arg_name;
-                step.required_output.push_back(arg_name);
+                const ColumnConst * col_delim = checkAndGetColumnConstStringOrFixedString(step.actions->getSampleBlock().getByName(arg_name).column.get());
+
+                delimiter = col_delim->getValue<String>();
             }
-*/
+//            types[1] = step.actions->getSampleBlock().getByName(arg_name).type;
+//            aggregate.argument_names[1] = arg_name;
+//            step.required_output.push_back(arg_name);
+
+
+
         }
         else
         {
@@ -506,6 +526,11 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         aggregate.parameters = Array();
         /// if there is group by clause, there is no need to consider the empty input case
         aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, agg.group_by_size() == 0 || expr.tp() == tipb::ExprType::GroupConcat);
+        if (expr.tp() == tipb::ExprType::GroupConcat)
+        {
+              aggregate.function=  std::make_shared<AggregateFunctionGroupConcatTuple<false>>(aggregate.function, types,delimiter,sort_description,names_and_types);
+        }
+
         aggregate.function->setCollator(getCollatorFromExpr(expr));
         aggregate_descriptions.push_back(aggregate);
         DataTypePtr result_type = aggregate.function->getReturnType();
