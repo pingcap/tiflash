@@ -2954,10 +2954,6 @@ public:
             String c0_str = c0_field.get<String>();
             String c1_str = c1_field.get<String>();
 
-            // transform to lower case
-            std::transform(c0_str.begin(), c0_str.end(), c0_str.begin(), ::tolower);
-            std::transform(c1_str.begin(), c1_str.end(), c1_str.begin(), ::tolower);
-
             // return -1 when c1_str not contains the c0_str
             Int64 idx = c1_str.find(c0_str);
             col_res->insert(getPositionUTF8(c1_str, idx));

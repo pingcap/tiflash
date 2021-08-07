@@ -53,13 +53,13 @@ TEST_F(StringPosition, str_and_fixed_str_Test)
     std::vector<String> c1_fixed_strs{ "hello",   "HELLO", "23333", "HeLlO", "heyyy", "aaaaa", "WoRlD", "12345", "apple", "b_i_u"};
 
     // var-var
-    std::vector<Int64> result0{2, 3, 2, 2, 0, 0, 1, 1, 1, 0};
+    std::vector<Int64> result0{2, 3, 2, 0, 0, 0, 0, 1, 1, 0};
     // fixed-fixed
-    std::vector<Int64> result1{2, 3, 2, 2, 0, 1, 2, 0, 0, 0};
+    std::vector<Int64> result1{2, 0, 2, 0, 0, 1, 0, 0, 0, 0};
     // var-fixed
-    std::vector<Int64> result2{2, 3, 2, 2, 0, 1, 1, 1, 1, 0};
+    std::vector<Int64> result2{2, 3, 2, 0, 0, 1, 0, 1, 1, 0};
     // fixed-var
-    std::vector<Int64> result3{2, 3, 2, 2, 0, 0, 2, 0, 0, 0};
+    std::vector<Int64> result3{2, 0, 2, 0, 0, 0, 0, 0, 0, 0};
 
     std::vector<String> c0_strs;
     std::vector<String> c1_strs;

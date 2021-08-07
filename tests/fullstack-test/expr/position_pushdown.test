@@ -11,21 +11,21 @@ mysql> analyze table test.test_tb
 mysql> alter table test.test_tb set tiflash replica 1
 func> wait_table test test_tb
 
-mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where position('heLlo' in varchar_) = 1;
+mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where position('hello' in varchar_) = 1;
 +----+
 | id |
 +----+
 |  1 |
++----+
+
+
+mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where position('o WoR' in varchar_) = 5;
++----+
+| id |
++----+
 |  2 |
 +----+
 
-mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where position('O wOr' in varchar_) = 5;
-+----+
-| id |
-+----+
-|  1 |
-|  2 |
-+----+
 
 mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where position('平凯' in varchar_) = 1;
 +----+
