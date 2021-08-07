@@ -17,6 +17,12 @@ void registerFunctionsCoding(FunctionFactory & factory)
     factory.registerFunction<FunctionIPv4NumToString<0, NameFunctionIPv4NumToString>>();
     factory.registerFunction<FunctionIPv4NumToString<1, NameFunctionIPv4NumToStringClassC>>();
     factory.registerFunction<FunctionIPv4StringToNum>();
+<<<<<<< HEAD
+=======
+    factory.registerFunction<FunctionTiDBIPv4StringToNum>();
+    factory.registerFunction<FunctionTiDBIPv6StringToNum>();
+    factory.registerFunction<FunctionTiDBIPv6NumToString>();
+>>>>>>> 132472bf4... Push down INET6_ATON and INET6_NTOA (#2614)
     factory.registerFunction<FunctionIPv4ToIPv6>();
     factory.registerFunction<FunctionMACNumToString>();
     factory.registerFunction<FunctionMACStringTo<ParseMACImpl>>();
