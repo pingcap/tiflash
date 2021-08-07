@@ -149,5 +149,24 @@ private:
         return;                                                                                              \
     }
 
+<<<<<<< HEAD
+=======
+#define EXECUTE_BINARY_FUNCTION_AND_CHECK(function_name, ...) \
+    do {\
+        auto fn = (function_name);\
+        auto desc = fmt::format("Execute binary function {}", fn);\
+        SCOPED_TRACE(desc.c_str());\
+        executeBinaryFunctionAndCheck(function_name, ##__VA_ARGS__);\
+    } while (false)
+
+#define EXECUTE_UNARY_FUNCTION_AND_CHECK(function_name, ...) \
+    do {\
+        auto fn = (function_name);\
+        auto desc = fmt::format("Execute unary function {}", fn);\
+        SCOPED_TRACE(desc.c_str());\
+        executeUnaryFunctionAndCheck(function_name, ##__VA_ARGS__);\
+    } while (false)
+
+>>>>>>> 132472bf4... Push down INET6_ATON and INET6_NTOA (#2614)
 } // namespace tests
 } // namespace DB

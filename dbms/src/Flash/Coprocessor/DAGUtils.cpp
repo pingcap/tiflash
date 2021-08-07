@@ -755,10 +755,17 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::RealAnyValue, "cast"},
     //{tipb::ScalarFuncSig::StringAnyValue, "cast"},
     //{tipb::ScalarFuncSig::TimeAnyValue, "cast"},
+<<<<<<< HEAD
     //{tipb::ScalarFuncSig::InetAton, "cast"},
     //{tipb::ScalarFuncSig::InetNtoa, "cast"},
     //{tipb::ScalarFuncSig::Inet6Aton, "cast"},
     //{tipb::ScalarFuncSig::Inet6Ntoa, "cast"},
+=======
+    {tipb::ScalarFuncSig::InetAton, "tiDBIPv4StringToNum"},
+    {tipb::ScalarFuncSig::InetNtoa, "IPv4NumToString"},
+    {tipb::ScalarFuncSig::Inet6Aton, "tiDBIPv6StringToNum"},
+    {tipb::ScalarFuncSig::Inet6Ntoa, "tiDBIPv6NumToString"},
+>>>>>>> 132472bf4... Push down INET6_ATON and INET6_NTOA (#2614)
     //{tipb::ScalarFuncSig::IsIPv4, "cast"},
     //{tipb::ScalarFuncSig::IsIPv4Compat, "cast"},
     //{tipb::ScalarFuncSig::IsIPv4Mapped, "cast"},
