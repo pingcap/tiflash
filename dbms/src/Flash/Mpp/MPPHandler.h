@@ -5,9 +5,7 @@
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
-#include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/MPPTunnelSet.h>
-#include <Flash/Mpp/TaskStatus.h>
+#include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/Utils.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>

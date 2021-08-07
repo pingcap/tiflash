@@ -1,7 +1,6 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-// TODO: remove this include after move MPPTask to a single file
-#include <Flash/Mpp/MPPHandler.h>
+#include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Mpp/TaskStatus.h>
@@ -66,7 +65,7 @@ void MPPTunnel::close(const String & reason)
 bool MPPTunnel::isTaskCancelled()
 {
     auto sp = current_task.lock();
-    return sp != nullptr && sp->status == CANCELLED;
+    return sp != nullptr && sp->getStatus() == CANCELLED;
 }
 
 // TODO: consider to hold a buffer
