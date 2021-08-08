@@ -4,6 +4,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
@@ -24,7 +25,7 @@ namespace DB
 namespace tests
 {
 
-class TestBinaryArithmeticFunctions : public TiFlashTestBase
+class TestBinaryArithmeticFunctions : public ::testing::Test
 {
 protected:
     template <typename T>
@@ -98,30 +99,6 @@ protected:
             res_col->get(i, res_field);
             ASSERT_TRUE(res_field.isNull());
         }
-    }
-
-    // e.g. data_type = DataTypeUInt64, FieldType = UInt64.
-    // if data vector contains only 1 element, a const column will be created.
-    // otherwise, two columns are expected to be of the same size.
-    // use std::nullopt for null values.
-    template <typename FieldType1, typename FieldType2, typename ResultFieldType>
-    void executeFunctionWithData(
-        size_t line,
-        const String & function_name,
-        const DataTypePtr & data_type_1,
-        const DataTypePtr & data_type_2,
-        const DataTypePtr & expected_data_type,
-        const DataVector<FieldType1> & column_data_1,
-        const DataVector<FieldType2> & column_data_2,
-        const DataVector<ResultFieldType> & expected_data)
-    {
-        auto desc = fmt::format("executeFunctionWithData at line:{}", line);
-        SCOPED_TRACE(desc.c_str());
-
-        auto result = executeFunction(function_name, data_type_1, data_type_2, column_data_1, column_data_2);
-        auto expect = makeColumnWithTypeAndName("ignore", expected_data.size(), expected_data_type, expected_data);
-
-        assertColumnEqual(result, expect);
     }
 };
 
@@ -737,21 +714,22 @@ try
     const String func_name = "modulo";
 
     using uint64_limits = std::numeric_limits<UInt64>;
-    using int64_limits = std::numeric_limits<Int64>;
+    //using int64_limits = std::numeric_limits<Int64>;
 
     // "{}" is similar to std::nullopt.
 
     // integer modulo
 
-    executeFunctionWithData<UInt64, UInt64, UInt64>(
-        __LINE__,
-        func_name,
-        makeNullableDataType<DataTypeUInt64>(),
-        makeNullableDataType<DataTypeUInt64>(),
-        makeNullableDataType<DataTypeUInt64>(),
-        {5, 3, uint64_limits::max(), 1, 0, 0, {}, 0, {}},
-        {3, 5, uint64_limits::max() - 1, 0, 1, 0, 0, {}, {}},
-        {2, 3, 1, {}, 0, {}, {}, {}, {}});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt64>>({2, 3, 1, {}, 0, {}, {}, {}, {}}),
+        executeFunction(
+            func_name,
+            {
+                createColumn<Nullable<UInt64>>({5, 3, uint64_limits::max(), 1, 0, 0, {}, 0, {}}),
+                createColumn<Nullable<UInt64>>({3, 5, uint64_limits::max() - 1, 0, 1, 0, 0, {}, {}}),
+            }));
+
+#if 0
     executeFunctionWithData<UInt64, Int64, UInt64>(
         __LINE__,
         func_name,
@@ -998,12 +976,14 @@ try
         {{}},
         {{}},
         {{}});
+#endif
 }
 CATCH
 
 TEST_F(TestBinaryArithmeticFunctions, ModuloExtra)
 try
 {
+#if 0
     std::unordered_map<String, DataTypePtr> data_type_map =
     {
         {"Int64", makeNullableDataType<DataTypeInt64>()},
@@ -1090,6 +1070,7 @@ try
     MODULO_TESTCASE(DecimalField256, DecimalField256, DecimalField256, 65, 20, 20, 20);
 
 #undef MODULO_TESTCASE
+#endif
 }
 CATCH
 

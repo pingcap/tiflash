@@ -84,12 +84,12 @@ ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWit
     return block.getByPosition(columns.size());
 }
 
-void TiFlashTestBase::assertDataTypeEqual(const DataTypePtr & actual, const DataTypePtr & expect)
+void assertDataTypeEqual(const DataTypePtr & actual, const DataTypePtr & expect)
 {
     ASSERT_EQ(actual->getName(), expect->getName());
 }
 
-void TiFlashTestBase::assertColumnEqual(
+void assertColumnEqual(
     const ColumnPtr & actual,
     const ColumnPtr & expect)
 {
@@ -110,7 +110,7 @@ void TiFlashTestBase::assertColumnEqual(
     }
 }
 
-void TiFlashTestBase::assertColumnEqual(
+void assertColumnEqual(
     const ColumnWithTypeAndName & actual,
     const ColumnWithTypeAndName & expect)
 {
@@ -118,6 +118,18 @@ void TiFlashTestBase::assertColumnEqual(
 
     assertDataTypeEqual(actual.type, expect.type);
     assertColumnEqual(actual.column, expect.column);
+}
+
+::testing::AssertionResult DataTypeCompare(
+    const char * lhs_expr,
+    const char * rhs_expr,
+    const DataTypePtr & lhs,
+    const DataTypePtr & rhs)
+{
+    if (lhs->equals(*rhs))
+        return ::testing::AssertionSuccess();
+    else
+        return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs->getName(), rhs->getName(), false);
 }
 
 } // namespace DB::tests
