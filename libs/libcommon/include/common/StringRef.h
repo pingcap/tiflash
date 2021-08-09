@@ -12,13 +12,9 @@
 #include <string>
 #include <vector>
 
-#if defined(__SSE2__)
-#include <emmintrin.h>
-#endif
-
 #if defined(__SSE4_2__)
-#include <smmintrin.h>
 #include <nmmintrin.h>
+#include <smmintrin.h>
 #endif
 
 
@@ -59,7 +55,7 @@ constexpr const inline StringRef EMPTY_STRING_REF{&empty_string_ref_addr, 0};
 
 using StringRefs = std::vector<StringRef>;
 
-inline bool operator== (StringRef lhs, StringRef rhs)
+inline bool operator==(StringRef lhs, StringRef rhs)
 {
     if (lhs.size != rhs.size)
         return false;
@@ -70,18 +66,15 @@ inline bool operator== (StringRef lhs, StringRef rhs)
     return mem_utils::memoryEqual(lhs.data, rhs.data, lhs.size);
 }
 
-inline bool operator!= (StringRef lhs, StringRef rhs)
-{
-    return !(lhs == rhs);
-}
+inline bool operator!=(StringRef lhs, StringRef rhs) { return !(lhs == rhs); }
 
-inline bool operator< (StringRef lhs, StringRef rhs)
+inline bool operator<(StringRef lhs, StringRef rhs)
 {
     int cmp = memcmp(lhs.data, rhs.data, std::min(lhs.size, rhs.size));
     return cmp < 0 || (cmp == 0 && lhs.size < rhs.size);
 }
 
-inline bool operator> (StringRef lhs, StringRef rhs)
+inline bool operator>(StringRef lhs, StringRef rhs)
 {
     int cmp = memcmp(lhs.data, rhs.data, std::min(lhs.size, rhs.size));
     return cmp > 0 || (cmp == 0 && lhs.size > rhs.size);
@@ -98,30 +91,18 @@ inline bool operator> (StringRef lhs, StringRef rhs)
 
 struct StringRefHash64
 {
-    size_t operator() (StringRef x) const
-    {
-        return CityHash_v1_0_2::CityHash64(x.data, x.size);
-    }
+    size_t operator()(StringRef x) const { return CityHash_v1_0_2::CityHash64(x.data, x.size); }
 };
 
 #if defined(__SSE4_2__)
 
 /// Parts are taken from CityHash.
 
-inline UInt64 hashLen16(UInt64 u, UInt64 v)
-{
-    return CityHash_v1_0_2::Hash128to64(CityHash_v1_0_2::uint128(u, v));
-}
+inline UInt64 hashLen16(UInt64 u, UInt64 v) { return CityHash_v1_0_2::Hash128to64(CityHash_v1_0_2::uint128(u, v)); }
 
-inline UInt64 shiftMix(UInt64 val)
-{
-    return val ^ (val >> 47);
-}
+inline UInt64 shiftMix(UInt64 val) { return val ^ (val >> 47); }
 
-inline UInt64 rotateByAtLeast1(UInt64 val, int shift)
-{
-    return (val >> shift) | (val << (64 - shift));
-}
+inline UInt64 rotateByAtLeast1(UInt64 val, int shift) { return (val >> shift) | (val << (64 - shift)); }
 
 inline size_t hashLessThan8(const char * data, size_t size)
 {
@@ -161,7 +142,7 @@ inline size_t hashLessThan16(const char * data, size_t size)
 
 struct CRC32Hash
 {
-    size_t operator() (StringRef x) const
+    size_t operator()(StringRef x) const
     {
         const char * pos = x.data;
         size_t size = x.size;
@@ -185,42 +166,45 @@ struct CRC32Hash
             pos += 8;
         } while (pos + 8 < end);
 
-        UInt64 word = unalignedLoad<UInt64>(end - 8);    /// I'm not sure if this is normal.
+        UInt64 word = unalignedLoad<UInt64>(end - 8); /// I'm not sure if this is normal.
         res = _mm_crc32_u64(res, word);
 
         return res;
     }
 };
 
-struct StringRefHash : CRC32Hash {};
+struct StringRefHash : CRC32Hash
+{
+};
 
 #else
 
 struct CRC32Hash
 {
-    size_t operator() (StringRef /* x */) const
-    {
-       throw std::logic_error{"Not implemented CRC32Hash without SSE"};
-    }
+    size_t operator()(StringRef /* x */) const { throw std::logic_error{"Not implemented CRC32Hash without SSE"}; }
 };
 
-struct StringRefHash : StringRefHash64 {};
+struct StringRefHash : StringRefHash64
+{
+};
 
 #endif
 
 
 namespace std
 {
-    template <>
-    struct hash<StringRef> : public StringRefHash {};
-}
+template <>
+struct hash<StringRef> : public StringRefHash
+{
+};
+} // namespace std
 
 
 namespace ZeroTraits
 {
-    inline bool check(const StringRef & x) { return 0 == x.size; }
-    inline void set(StringRef & x) { x.size = 0; }
-}
+inline bool check(const StringRef & x) { return 0 == x.size; }
+inline void set(StringRef & x) { x.size = 0; }
+} // namespace ZeroTraits
 
 
 std::ostream & operator<<(std::ostream & os, const StringRef & str);
