@@ -26,6 +26,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+    extern const int OVERFLOW_ERROR;
 }
 
 
@@ -939,6 +940,36 @@ struct TiDBIntegerRound
     using UnsignedOutput = make_unsigned_t<OutputType>;
     using Pow = ConstPowOf10<UnsignedOutput, digits>;
 
+    static void report_overflow()
+    {
+        throw Exception(fmt::format("integer value is out of range in `round`"), ErrorCodes::OVERFLOW_ERROR);
+    }
+
+    static OutputType castBack(const InputType & input, const UnsignedOutput & value)
+    {
+        if constexpr (std::is_signed_v<OutputType>)
+        {
+            if (input < 0)
+            {
+                auto bound = -static_cast<UnsignedOutput>(std::numeric_limits<OutputType>::min());
+                if (value > bound)
+                    report_overflow();
+
+                return static_cast<OutputType>(-value);
+            }
+            else
+            {
+                auto bound = static_cast<UnsignedOutput>(std::numeric_limits<OutputType>::max());
+                if (value > bound)
+                    report_overflow();
+
+                return static_cast<OutputType>(value);
+            }
+        }
+        else
+            return value;
+    }
+
     static OutputType eval(const InputType & input, FracType frac)
     {
         auto value = static_cast<OutputType>(input);
@@ -951,7 +982,6 @@ struct TiDBIntegerRound
         {
             frac = -frac;
 
-            // rounding result may overflow, but it is expected in MySQL.
             // we need to cast input to unsigned first to ensure overflow is not
             // undefined behavior.
             auto absolute_value = toSafeUnsigned<OutputType>(value);
@@ -964,8 +994,8 @@ struct TiDBIntegerRound
                 // since `base` is integer, `x / 5 >= base` if and only if `floor(x / 5) >= base`.
                 if (absolute_value / 5 >= base)
                 {
-                    // round up.
-                    absolute_value = base * 10;
+                    // rounding up will definitely result in overflow.
+                    report_overflow();
                 }
                 else
                 {
@@ -982,31 +1012,16 @@ struct TiDBIntegerRound
                 if (remainder >= base / 2)
                 {
                     // round up.
-                    absolute_value += base;
+                    auto rounded_value = absolute_value + base;
+                    if (rounded_value < absolute_value)
+                        report_overflow();
+
+                    absolute_value = rounded_value;
                 }
             }
 
-            if constexpr (std::is_signed_v<OutputType>)
-            {
-                if (input < 0)
-                    return static_cast<OutputType>(-absolute_value);
-                else
-                    return static_cast<OutputType>(absolute_value);
-            }
-            else
-                return absolute_value;
+            return castBack(input, absolute_value);
         }
-    }
-};
-
-template <typename InputType>
-struct TiDBIntegerRound<InputType, Float64>
-{
-    static_assert(is_integer_v<InputType>);
-
-    static Float64 eval(const InputType & input, FracType frac)
-    {
-        return TiDBFloatingRound<Float64, Float64>::eval(static_cast<Float64>(input), frac);
     }
 };
 
@@ -1216,11 +1231,9 @@ private:
 
         if (input_type->isInteger())
         {
-            // in MySQL, integer round returns 64-bit integer if frac is const.
-            // otherwise returns Float64. the sign is the same as input.
-            if (!frac_column_const)
-                return std::make_shared<DataTypeFloat64>();
-            else if (input_type->isUnsignedInteger())
+            // in MySQL, integer round always returns 64-bit integer.
+            // the sign is the same as input.
+            if (input_type->isUnsignedInteger())
                 return std::make_shared<DataTypeUInt64>();
             else
                 return std::make_shared<DataTypeInt64>();
@@ -1346,8 +1359,7 @@ private:
             = is_signed_v<InputType> ? std::is_same_v<OutputType, Int64> : std::is_same_v<OutputType, UInt64>;
 
         if constexpr ((std::is_floating_point_v<InputType> && !std::is_same_v<OutputType, Float64>)
-            || (IsDecimal<InputType> && !IsDecimal<OutputType>)
-            || (is_integer_v<InputType> && !(std::is_same_v<OutputType, Float64> || check_integer_output)))
+            || (IsDecimal<InputType> && !IsDecimal<OutputType>) || (is_integer_v<InputType> && !check_integer_output))
             return false;
         else
         {
