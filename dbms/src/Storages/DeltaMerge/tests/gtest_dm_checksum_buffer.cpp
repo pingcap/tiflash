@@ -267,7 +267,7 @@ void runLargeReadingTest()
     auto [data, seed]        = randomData(size);
     {
         auto buffer = createWriteBufferFromFileBaseByFileProvider(
-            provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, true, limiter->getWriteLimiter(), config);
+            provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, limiter->getWriteLimiter(), config);
         buffer->write(data.data(), data.size());
     }
     {
@@ -293,6 +293,49 @@ TEST_LARGE_READING(CRC32)
 TEST_LARGE_READING(CRC64)
 TEST_LARGE_READING(City128)
 TEST_LARGE_READING(XXH3)
+
+template <ChecksumAlgo D>
+void runReadBigTest()
+{
+    auto [limiter, provider] = prepareIO();
+    auto   config            = DMConfiguration{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
+    size_t size              = 1024 * 1024 * 4;
+    auto [data, seed]        = randomData(size);
+    auto compare             = data;
+    {
+        auto buffer = createWriteBufferFromFileBaseByFileProvider(
+            provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, limiter->getWriteLimiter(), config);
+        buffer->write(data.data(), data.size());
+    }
+    {
+        auto file   = provider->newRandomAccessFile("/tmp/test", {"/tmp/test.enc", "test.enc"});
+        auto buffer = createReadBufferFromFileBaseByFileProvider(
+            provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, limiter->getReadLimiter(), config);
+        buffer->readBig(compare.data(), compare.size());
+        ASSERT_EQ(std::memcmp(compare.data(), data.data(), data.size()), 0) << "seed: " << seed;
+    }
+
+    for (size_t i = 1; i < data.size(); i <<= 1)
+    {
+        auto file   = provider->newRandomAccessFile("/tmp/test", {"/tmp/test.enc", "test.enc"});
+        auto buffer = createReadBufferFromFileBaseByFileProvider(
+            provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, limiter->getReadLimiter(), config);
+        buffer->seek(static_cast<ssize_t>(i));
+        buffer->readBig(compare.data(), i);
+        ASSERT_EQ(std::memcmp(compare.data(), data.data() + i, i), 0) << "seed: " << seed;
+    }
+    Poco::File file{"/tmp/test"};
+    file.remove();
+}
+
+#define TEST_BIG_READING(ALGO) \
+    TEST(DMChecksumBuffer, ALGO##BigReading) { runReadBigTest<ChecksumAlgo::ALGO>(); } // NOLINT(cert-err58-cpp)
+
+TEST_BIG_READING(None)
+TEST_BIG_READING(CRC32)
+TEST_BIG_READING(CRC64)
+TEST_BIG_READING(City128)
+TEST_BIG_READING(XXH3)
 
 
 } // namespace tests
