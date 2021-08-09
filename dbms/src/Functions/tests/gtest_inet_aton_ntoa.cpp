@@ -7,6 +7,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <random>
@@ -24,9 +25,11 @@ namespace DB
 namespace tests
 {
 
-class TestInetAtonNtoa: public TiFlashTestBase
+class TestInetAtonNtoa: public ::testing::Test
 {
 protected:
+    using DataVectorString = std::vector<std::optional<String>>;
+
     static void SetUpTestCase()
     {
         try
@@ -83,52 +86,41 @@ try
     const String func_name = "tiDBIPv4StringToNum";
 
     // empty column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeUInt32>(),
-        DataVectorString{},
-        DataVectorUInt64{});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt32>>({}),
+        executeFunction(func_name, createColumn<String>({})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt32>>({}),
+        executeFunction(func_name, createColumn<Nullable<String>>({})));
 
     // const null-only column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeUInt32>(),
-        DataVectorString{{}},
-        DataVectorUInt64{{}});
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<UInt32>>(1, {}),
+        executeFunction(func_name, createConstColumn<Nullable<String>>(1, {})));
 
     // const non-null column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeUInt32>(),
-        DataVectorString{"0.0.0.1"},
-        DataVectorUInt64{1});
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<UInt32>>(1, 1),
+        executeFunction(func_name, createConstColumn<Nullable<String>>(1, "0.0.0.1")));
 
     // normal valid cases
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeUInt32>(),
-        DataVectorString{"1.2.3.4", "0.1.0.1", "0.255.0.255", "0000.1.2.3", "00000.0000.0000.000", "1.0.1.0", "111.0.21.012"},
-        DataVectorUInt64{16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt32>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364}),
+        executeFunction(func_name, createColumn<Nullable<String>>(
+            {"1.2.3.4", "0.1.0.1", "0.255.0.255", "0000.1.2.3", "00000.0000.0000.000", "1.0.1.0", "111.0.21.012"})));
 
     // valid but weird cases
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeUInt32>(),
-        DataVectorString{"255", ".255", "..255", "...255", "..255.255", ".255.255", ".255..255", "1", "1.2", "1.2.3"},
-        DataVectorUInt64{255, 255, 255, 255, 65535, 16711935, 16711935, 1, 16777218, 16908291});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt32>>({255, 255, 255, 255, 65535, 16711935, 16711935, 1, 16777218, 16908291}),
+        executeFunction(func_name, createColumn<Nullable<String>>(
+            {"255", ".255", "..255", "...255", "..255.255", ".255.255", ".255..255", "1", "1.2", "1.2.3"})));
 
     // invalid cases
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeUInt32>(),
-        DataVectorString{{}, "", ".", "....255", "...255.255", ".255...255", ".255.255.", "1.0.a", "1.a", "a.1"},
-        DataVectorUInt64{{}, {}, {}, {}, {}, {}, {}, {}, {}, {}});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt32>>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}),
+        executeFunction(func_name, createColumn<Nullable<String>>(
+            {{}, "", ".", "....255", "...255.255", ".255...255", ".255.255.", "1.0.a", "1.a", "a.1"})));
 }
 CATCH
 
@@ -138,36 +130,29 @@ try
     const String func_name = "IPv4NumToString";
 
     // empty column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeUInt32>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorUInt64{},
-        DataVectorString{});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({}),
+        executeFunction(func_name, createColumn<Nullable<UInt32>>({})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({}),
+        executeFunction(func_name, createColumn<UInt32>({})));
 
     // const null-only column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeUInt32>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorUInt64{{}},
-        DataVectorString{{}});
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(1, {}),
+        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, {})));
 
     // const non-null column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeUInt32>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorUInt64{1},
-        DataVectorString{"0.0.0.1"});
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(1, "0.0.0.1"),
+        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, 1)));
 
     // normal cases
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeUInt32>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorUInt64{16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364},
-        DataVectorString{"1.2.3.4", "0.1.0.1", "0.255.0.255", "0.1.2.3", "0.0.0.0", "1.0.1.0", "111.0.21.12"});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"1.2.3.4", "0.1.0.1", "0.255.0.255", "0.1.2.3", "0.0.0.0", "1.0.1.0", "111.0.21.12"}),
+        executeFunction(func_name, createColumn<Nullable<UInt32>>(
+            {16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
 }
 CATCH
 
@@ -179,19 +164,19 @@ try
 
     std::random_device rd;
     std::mt19937 mt(rd());
-    std::uniform_int_distribution<DB::UInt32> dist;
+    std::uniform_int_distribution<UInt32> dist;
 
-    DataVectorUInt64 num_vec;
+    InferredDataVector<Nullable<UInt32>> num_vec;
     for (size_t i = 0; i < 10000; ++i)
     {
         num_vec.emplace_back(dist(mt));
     }
 
-    auto num_data_type = makeNullableDataType<DataTypeUInt32>();
-    auto num_column = makeColumnWithTypeAndName("num", num_vec.size(), num_data_type, num_vec);
-    auto str_column = executeFunction(ntoa, {num_column});
-    auto num_column_2 = executeFunction(aton, {str_column});
-    assertColumnEqual(num_column, num_column_2);
+    auto num_data_type = makeDataType<Nullable<UInt32>>();
+    ColumnWithTypeAndName num_column(makeColumn<Nullable<UInt32>>(num_data_type, num_vec), num_data_type, "num");
+    auto str_column = executeFunction(ntoa, num_column);
+    auto num_column_2 = executeFunction(aton, str_column);
+    ASSERT_COLUMN_EQ(num_column, num_column_2);
 }
 CATCH
 
@@ -201,60 +186,52 @@ try
     const String func_name = "tiDBIPv6StringToNum";
 
     // empty column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorString{},
-        DataVectorString{});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({}),
+        executeFunction(func_name, createColumn<String>({})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({}),
+        executeFunction(func_name, createColumn<Nullable<String>>({})));
 
     // const null-only column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorString{{}},
-        DataVectorString{{}});
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(1, {}),
+        executeFunction(func_name, createConstColumn<Nullable<String>>(1, {})));
 
     // const non-null ipv4
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorString{"0.0.0.1"},
-        toBinariesV4({0x0000'0001}));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(1, toBinary(0x0000'0001)),
+        executeFunction(
+            func_name,
+            createConstColumn<Nullable<String>>(1, "0.0.0.1")));
 
     // const non-null ipv6
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorString{"fdfe::5a55:caff:fefa:9089"},
-        toBinariesV6({{0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089}}));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(1, toBinary({{0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089}})),
+        executeFunction(
+            func_name,
+            createConstColumn<Nullable<String>>(1, "fdfe::5a55:caff:fefa:9089")));
 
     // valid ipv4
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorString{"1.2.3.4", "0.1.0.1", "1.0.1.0", "111.0.21.012", "0000.1.2.3", "00.000.0000.00000", "0.255.0.255", "255.255.255.255"},
-        toBinariesV4({0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF}));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>(
+            toBinariesV4({0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF})),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"1.2.3.4", "0.1.0.1", "1.0.1.0", "111.0.21.012", "0000.1.2.3", "00.000.0000.00000", "0.255.0.255", "255.255.255.255"})));
 
     // invalid ipv4
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorString{"", "1.2", "1.2.3", "1.0.1.0a", "a0.1.2.3", "255", "255.", "....255", "...255", "...255.255", "..255", "..255.255", ".255", ".255...255", ".255..255", ".255.255", ".255.255.", "1.2.3.256", "1.256.3.4", "1.2.256.4", "256.2.3.4"},
-        DataVectorString(21));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>(DataVectorString(21)),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"", "1.2", "1.2.3", "1.0.1.0a", "a0.1.2.3", "255", "255.", "....255", "...255", "...255.255", "..255", "..255.255", ".255", ".255...255", ".255..255", ".255.255", ".255.255.", "1.2.3.256", "1.256.3.4", "1.2.256.4", "256.2.3.4"})));
 
     // valid ipv6
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorString{"1:2:3:4:5:6:7:8", "1:2:3:4:5:6::7", "1:2:3:4:5::", "1:2:3:4:5::7", "::", "fdfe::5a55:caff:fefa:9089", "FDFE::5A55:CAFF:FEFA:9089", "ff:ff:ff:ff:ff:ff:ff:ff"},
-        toBinariesV6({
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>(toBinariesV6({
             {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0007'0008},
             {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0000'0007},
             {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0000},
@@ -263,27 +240,28 @@ try
             {0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089},
             {0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089},
             {0x00FF'00FF, 0x00FF'00FF, 0x00FF'00FF, 0x00FF'00FF},
-        }));
+        })),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"1:2:3:4:5:6:7:8", "1:2:3:4:5:6::7", "1:2:3:4:5::", "1:2:3:4:5::7", "::", "fdfe::5a55:caff:fefa:9089", "FDFE::5A55:CAFF:FEFA:9089", "ff:ff:ff:ff:ff:ff:ff:ff"})));
 
     // valid ipv4-mapped ipv6
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorString{"::FFFF:169.219.13.133", "::FFFF:1.1.1.1", "::1.1.1.1"},
-        toBinariesV6({
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>(toBinariesV6({
             {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0xA9DB'0D85},
             {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0x0101'0101},
             {0x0000'0000, 0x0000'0000, 0x0000'0000, 0x0101'0101},
-        }));
+        })),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"::FFFF:169.219.13.133", "::FFFF:1.1.1.1", "::1.1.1.1"})));
 
     // invalid ipv4-mapped ipv6
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorString{"::FFFF:169.256.13.133", "::1.1.1.x"},
-        DataVectorString{{}, {}});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({{}, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"::FFFF:169.256.13.133", "::1.1.1.x"})));
 }
 CATCH
 
@@ -293,84 +271,74 @@ try
     const String func_name = "tiDBIPv6NumToString";
 
     // empty column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorString{},
-        DataVectorString{});
-    
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({}),
+        executeFunction(func_name, createColumn<String>({})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({}),
+        executeFunction(func_name, createColumn<Nullable<String>>({})));
+
     // const null-only column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorString{{}},
-        DataVectorString{{}});
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(1, {}),
+        executeFunction(func_name, createConstColumn<Nullable<String>>(1, {})));
 
     // const non-null ipv4
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        toBinariesV4({0x0000'0001}),
-        DataVectorString{"0.0.0.1"});
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(1, "0.0.0.1"),
+        executeFunction(func_name, createConstColumn<Nullable<String>>(1, toBinary(0x0000'0001))));
 
     // const non-null ipv6
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        toBinariesV6({{0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089}}),
-        DataVectorString{"fdfe::5a55:caff:fefa:9089"});
+    ASSERT_COLUMN_EQ(
+            createConstColumn<Nullable<String>>(1, "fdfe::5a55:caff:fefa:9089"),
+        executeFunction(
+            func_name,
+            createConstColumn<Nullable<String>>(1, toBinary({{0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089}}))));
 
     // valid ipv4
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        toBinariesV4({0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF}),
-        DataVectorString{"1.2.3.4", "0.1.0.1", "1.0.1.0", "111.0.21.12", "0.1.2.3", "0.0.0.0", "0.255.0.255", "255.255.255.255"});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"1.2.3.4", "0.1.0.1", "1.0.1.0", "111.0.21.12", "0.1.2.3", "0.0.0.0", "0.255.0.255", "255.255.255.255"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>(toBinariesV4({0x0102'0304, 0x0001'0001, 0x0100'0100, 0x6F00'150C, 0x0001'0203, 0x0000'0000, 0x00FF'00FF, 0xFFFF'FFFF}))));
 
     // valid ipv6
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        toBinariesV6({
-            {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0007'0008},
-            {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0000'0007},
-            {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0000},
-            {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0007},
-            {0x0000'0000, 0x0000'0000, 0x0000'0000, 0x0000'0000},
-            {0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089},
-            {0x00FF'00FF, 0x00FF'00FF, 0x00FF'00FF, 0x00FF'00FF},
-        }),
-        DataVectorString{"1:2:3:4:5:6:7:8", "1:2:3:4:5:6:0:7", "1:2:3:4:5::", "1:2:3:4:5::7", "::", "fdfe::5a55:caff:fefa:9089", "ff:ff:ff:ff:ff:ff:ff:ff"});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"1:2:3:4:5:6:7:8", "1:2:3:4:5:6:0:7", "1:2:3:4:5::", "1:2:3:4:5::7", "::", "fdfe::5a55:caff:fefa:9089", "ff:ff:ff:ff:ff:ff:ff:ff"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>(toBinariesV6({
+                {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0007'0008},
+                {0x0001'0002, 0x0003'0004, 0x0005'0006, 0x0000'0007},
+                {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0000},
+                {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0007},
+                {0x0000'0000, 0x0000'0000, 0x0000'0000, 0x0000'0000},
+                {0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089},
+                {0x00FF'00FF, 0x00FF'00FF, 0x00FF'00FF, 0x00FF'00FF},
+            }))));
 
     // valid ipv4-mapped ipv6
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        toBinariesV6({
-            {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0xA9DB'0D85},
-            {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0x0101'0101},
-            {0x0000'0000, 0x0000'0000, 0x0000'0000, 0x0101'0101},
-        }),
-        DataVectorString{"::ffff:169.219.13.133", "::ffff:1.1.1.1", "::1.1.1.1"});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"::ffff:169.219.13.133", "::ffff:1.1.1.1", "::1.1.1.1"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>(toBinariesV6({
+                {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0xA9DB'0D85},
+                {0x0000'0000, 0x0000'0000, 0x0000'FFFF, 0x0101'0101},
+                {0x0000'0000, 0x0000'0000, 0x0000'0000, 0x0101'0101},
+            }))));
 
     // invalid cases: wrong length
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeString>(),
-        toBinariesV6({
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>(DataVectorString{{}, {}, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>(toBinariesV6({
             {0x0001'0002, 0x0003'0004},
             {0x0001'0002, 0x0003'0004, 0x0005'0006},
             {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0000, 0x0000'0000},
-        }),
-        DataVectorString{{}, {}, {}});
+        }))));
 }
 CATCH
 
@@ -407,10 +375,11 @@ try
     }
 
     auto bin_vec = toBinariesV6(num_vec);
-    auto bin_column = makeColumnWithTypeAndName("bin", bin_vec.size(), makeNullableDataType<DataTypeString>(), bin_vec);
-    auto str_column = executeFunction(ntoa, {bin_column});
-    auto bin_column_2 = executeFunction(aton, {str_column});
-    assertColumnEqual(bin_column, bin_column_2);
+    auto bin_data_type = makeDataType<Nullable<String>>();
+    ColumnWithTypeAndName bin_column(makeColumn<Nullable<String>>(bin_data_type, bin_vec), bin_data_type, "bin");
+    auto str_column = executeFunction(ntoa, bin_column);
+    auto bin_column_2 = executeFunction(aton, str_column);
+    ASSERT_COLUMN_EQ(bin_column, bin_column_2);
 }
 CATCH
 
