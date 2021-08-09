@@ -1,3 +1,5 @@
+#include <Core/ColumnNumbers.h>
+#include <Functions/FunctionFactory.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/core.h>
 
@@ -88,6 +90,25 @@ namespace tests
         return ret;
 
     return columnEqual(expected.column, actual.column);
+}
+
+ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns)
+{
+    const auto context = TiFlashTestEnv::getContext();
+    auto & factory = FunctionFactory::instance();
+
+    Block block(columns);
+    ColumnNumbers cns;
+    for (size_t i = 0; i < columns.size(); ++i)
+        cns.push_back(i);
+
+    auto bp = factory.tryGet(func_name, context);
+    if (!bp)
+        throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
+    auto func = bp->build(columns);
+    block.insert({nullptr, func->getReturnType(), "res"});
+    func->execute(block, cns, columns.size());
+    return block.getByPosition(columns.size());
 }
 
 } // namespace tests

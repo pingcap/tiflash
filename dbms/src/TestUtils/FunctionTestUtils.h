@@ -3,6 +3,7 @@
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
+#include <Core/Field.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -51,6 +52,20 @@ struct NullableTraits<Nullable<T>>
 {
     static constexpr bool is_nullable = true;
     using FieldType = std::optional<typename NearestFieldType<T>::Type>;
+};
+
+template <typename T>
+struct NullableTraits<Decimal<T>>
+{
+    static constexpr bool is_nullable = false;
+    using FieldType = DecimalField<Decimal<T>>;
+};
+
+template <typename T>
+struct NullableTraits<Nullable<Decimal<T>>>
+{
+    static constexpr bool is_nullable = true;
+    using FieldType = std::optional<DecimalField<Decimal<T>>>;;
 };
 
 template <typename T>
@@ -138,86 +153,86 @@ template <typename T>
 using InferredDataInitializerList = std::initializer_list<InferredFieldType<T>>;
 
 template <typename T, typename... Args>
-DataTypePtr makeDataType(Args &&... args)
+DataTypePtr makeDataType(const Args &... args)
 {
     if constexpr (NullableTraits<T>::is_nullable)
-        return makeNullable(makeDataType<typename T::NativeType, Args...>(std::forward<Args...>(args)...));
+        return makeNullable(makeDataType<typename T::NativeType, Args...>(args...));
     else
-        return std::make_shared<typename InferredDataType<T>::Type>(std::forward<Args...>(args)...);
+        return std::make_shared<typename InferredDataType<T>::Type>(args...);
 }
 
 template <typename T>
-Field makeField(T && value)
+Field makeField(const T & value)
 {
-    return Field(std::move(value));
+    return Field(value);
 }
 
 template <typename T>
-Field makeField(std::optional<T> && value)
+Field makeField(const std::optional<T> & value)
 {
     if (value.has_value())
-        return Field(std::move(value.value()));
+        return Field(value.value());
     else
         return Null();
 }
 
 template <typename T>
-ColumnPtr makeColumn(const DataTypePtr & data_type, InferredDataVector<T> && vec)
+ColumnPtr makeColumn(const DataTypePtr & data_type, const InferredDataVector<T> & vec)
 {
     auto column = data_type->createColumn();
 
-    for (auto && data : vec)
-        column->insert(makeField(std::move(data)));
+    for (const auto & data : vec)
+        column->insert(makeField(data));
 
     return column;
 }
 
 template <typename T>
-ColumnPtr makeConstColumn(const DataTypePtr & data_type, size_t size, T && value)
+ColumnPtr makeConstColumn(const DataTypePtr & data_type, size_t size, const InferredFieldType<T> & value)
 {
-    return data_type->createColumnConst(size, makeField(std::move(value)));
+    return data_type->createColumnConst(size, makeField(value));
 }
 
 template <typename T>
-ColumnWithTypeAndName createColumn(InferredDataVector<T> && vec, String name = "")
+ColumnWithTypeAndName createColumn(const InferredDataVector<T> & vec, String name = "")
 {
     DataTypePtr data_type = makeDataType<T>();
-    return {makeColumn<T>(data_type, std::move(vec)), std::move(data_type), std::move(name)};
+    return {makeColumn<T>(data_type, vec), data_type, name};
 }
 
 template <typename T>
 ColumnWithTypeAndName createColumn(InferredDataInitializerList<T> init)
 {
     auto vec = InferredDataVector<T>(init);
-    return createColumn<T>(std::move(vec), "");
+    return createColumn<T>(vec, "");
 }
 
 template <typename T>
-ColumnWithTypeAndName createConstColumn(size_t size, T && value, String name = "")
+ColumnWithTypeAndName createConstColumn(size_t size, const InferredFieldType<T> & value, const String & name = "")
 {
     DataTypePtr data_type = makeDataType<T>();
-    return {makeConstColumn(data_type, size, std::move(value)), std::move(data_type), std::move(name)};
+    return {makeConstColumn<T>(data_type, size, value), data_type, name};
 }
 
 template <typename T, typename ... Args>
-ColumnWithTypeAndName createColumn(std::tuple<Args...> && data_type_args, InferredDataVector<T> && vec, const String & name = "")
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, const InferredDataVector<T> & vec, String name = "")
 {
-    DataTypePtr data_type = std::apply(makeDataType<T, Args...>, std::move(data_type_args));
+    DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     return {makeColumn<T>(data_type, vec), data_type, name};
 }
 
 template <typename T, typename ... Args>
-ColumnWithTypeAndName createColumn(std::tuple<Args...> && data_type_args, InferredDataInitializerList<T> init, const String & name = "")
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, InferredDataInitializerList<T> init, String name = "")
 {
     auto vec = InferredDataVector<T>(init);
     return createColumn<T>(data_type_args, vec, name);
 }
 
 template <typename T, typename ... Args>
-ColumnWithTypeAndName createConstColumn(std::tuple<Args...> && data_type_args, size_t size, T && value, String name = "")
+ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, const InferredFieldType<T> & value, String name = "")
 {
-    DataTypePtr data_type = std::apply(makeDataType<T, Args...>, std::move(data_type_args));
-    return {makeConstColumn(data_type, size, std::move(value)), std::move(data_type), std::move(name)};
+    DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
+    return {makeConstColumn<T>(data_type, size, value), data_type, name};
 }
 
 ::testing::AssertionResult dataTypeEqual(
@@ -232,6 +247,15 @@ ColumnWithTypeAndName createConstColumn(std::tuple<Args...> && data_type_args, s
 ::testing::AssertionResult columnEqual(
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual);
+
+ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns);
+
+template <typename... Args>
+ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnWithTypeAndName & first_column, const Args & ... columns)
+{
+    ColumnsWithTypeAndName vec({first_column, columns...});
+    return executeFunction(func_name, vec);
+}
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
 

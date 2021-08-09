@@ -89,15 +89,6 @@ inline DataTypes typesFromString(const String & str)
     return data_types;
 }
 
-ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns);
-
-void assertDataTypeEqual(const DataTypePtr & actual, const DataTypePtr & expect);
-
-void assertColumnEqual(const ColumnPtr & actual, const ColumnPtr & expect);
-
-/// ignore column name
-void assertColumnEqual(const ColumnWithTypeAndName & actual, const ColumnWithTypeAndName & expect);
-
 class TiFlashTestEnv
 {
 public:

@@ -41,59 +41,47 @@ protected:
     }
 };
 
-#if 0
 TEST_F(TestInetAtonNtoa, InetAton)
 try
 {
     const String func_name = "tiDBIPv4StringToNum";
 
     // empty column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeUInt32>(),
-        DataVectorString{},
-        DataVectorUInt64{});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt32>>({}),
+        executeFunction(func_name, createColumn<String>({})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt32>>({}),
+        executeFunction(func_name, createColumn<Nullable<String>>({})));
 
     // const null-only column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeUInt32>(),
-        DataVectorString{{}},
-        DataVectorUInt64{{}});
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<UInt32>>(1, {}),
+        executeFunction(func_name, createConstColumn<Nullable<String>>(1, {})));
 
     // const non-null column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeUInt32>(),
-        DataVectorString{"0.0.0.1"},
-        DataVectorUInt64{1});
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<UInt32>>(1, 1),
+        executeFunction(func_name, createConstColumn<Nullable<String>>(1, "0.0.0.1")));
 
     // normal valid cases
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeUInt32>(),
-        DataVectorString{"1.2.3.4", "0.1.0.1", "0.255.0.255", "0000.1.2.3", "00000.0000.0000.000", "1.0.1.0", "111.0.21.012"},
-        DataVectorUInt64{16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt32>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364}),
+        executeFunction(func_name, createColumn<Nullable<String>>(
+            {"1.2.3.4", "0.1.0.1", "0.255.0.255", "0000.1.2.3", "00000.0000.0000.000", "1.0.1.0", "111.0.21.012"})));
 
     // valid but weird cases
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeUInt32>(),
-        DataVectorString{"255", ".255", "..255", "...255", "..255.255", ".255.255", ".255..255", "1", "1.2", "1.2.3"},
-        DataVectorUInt64{255, 255, 255, 255, 65535, 16711935, 16711935, 1, 16777218, 16908291});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt32>>({255, 255, 255, 255, 65535, 16711935, 16711935, 1, 16777218, 16908291}),
+        executeFunction(func_name, createColumn<Nullable<String>>(
+            {"255", ".255", "..255", "...255", "..255.255", ".255.255", ".255..255", "1", "1.2", "1.2.3"})));
 
     // invalid cases
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeString>(),
-        makeNullableDataType<DataTypeUInt32>(),
-        DataVectorString{{}, "", ".", "....255", "...255.255", ".255...255", ".255.255.", "1.0.a", "1.a", "a.1"},
-        DataVectorUInt64{{}, {}, {}, {}, {}, {}, {}, {}, {}, {}});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt32>>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}),
+        executeFunction(func_name, createColumn<Nullable<String>>(
+            {{}, "", ".", "....255", "...255.255", ".255...255", ".255.255.", "1.0.a", "1.a", "a.1"})));
 }
 CATCH
 
@@ -103,36 +91,29 @@ try
     const String func_name = "IPv4NumToString";
 
     // empty column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeUInt32>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorUInt64{},
-        DataVectorString{});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({}),
+        executeFunction(func_name, createColumn<Nullable<UInt32>>({})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({}),
+        executeFunction(func_name, createColumn<UInt32>({})));
 
     // const null-only column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeUInt32>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorUInt64{{}},
-        DataVectorString{{}});
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(1, {}),
+        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, {})));
 
     // const non-null column
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeUInt32>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorUInt64{1},
-        DataVectorString{"0.0.0.1"});
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(1, "0.0.0.1"),
+        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, 1)));
 
     // normal cases
-    EXECUTE_UNARY_FUNCTION_AND_CHECK(
-        func_name,
-        makeNullableDataType<DataTypeUInt32>(),
-        makeNullableDataType<DataTypeString>(),
-        DataVectorUInt64{16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364},
-        DataVectorString{"1.2.3.4", "0.1.0.1", "0.255.0.255", "0.1.2.3", "0.0.0.0", "1.0.1.0", "111.0.21.12"});
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"1.2.3.4", "0.1.0.1", "0.255.0.255", "0.1.2.3", "0.0.0.0", "1.0.1.0", "111.0.21.12"}),
+        executeFunction(func_name, createColumn<Nullable<UInt32>>(
+            {16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
 }
 CATCH
 
@@ -144,22 +125,21 @@ try
 
     std::random_device rd;
     std::mt19937 mt(rd());
-    std::uniform_int_distribution<DB::UInt32> dist;
+    std::uniform_int_distribution<UInt32> dist;
 
-    DataVectorUInt64 num_vec;
+    InferredDataVector<UInt32> num_vec;
     for (size_t i = 0; i < 10000; ++i)
     {
         num_vec.emplace_back(dist(mt));
     }
 
-    auto num_data_type = makeNullableDataType<DataTypeUInt32>();
-    auto num_column = makeColumnWithTypeAndName("num", num_vec.size(), num_data_type, num_vec);
-    auto str_column = executeFunction(ntoa, {num_column});
-    auto num_column_2 = executeFunction(aton, {str_column});
-    assertColumnEqual(num_column, num_column_2);
+    auto num_data_type = makeDataType<Nullable<UInt32>>();
+    ColumnWithTypeAndName num_column(makeColumn<UInt32>(num_data_type, num_vec), num_data_type, "num");
+    auto str_column = executeFunction(ntoa, num_column);
+    auto num_column_2 = executeFunction(aton, str_column);
+    ASSERT_COLUMN_EQ(num_column, num_column_2);
 }
 CATCH
-#endif
 
 } // namespace tests
 } // namespace DB

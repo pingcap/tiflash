@@ -1,6 +1,4 @@
-#include <Core/ColumnNumbers.h>
 #include <Encryption/MockKeyManager.h>
-#include <Functions/FunctionFactory.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -63,61 +61,6 @@ void TiFlashTestEnv::shutdown()
     global_context->getTMTContext().setStatusTerminated();
     global_context->shutdown();
     global_context.reset();
-}
-
-ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns)
-{
-    const auto context = TiFlashTestEnv::getContext();
-    auto & factory = FunctionFactory::instance();
-
-    Block block(columns);
-    ColumnNumbers cns;
-    for (size_t i = 0; i < columns.size(); ++i)
-        cns.push_back(i);
-
-    auto bp = factory.tryGet(func_name, context);
-    if (!bp)
-        throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-    auto func = bp->build(columns);
-    block.insert({nullptr, func->getReturnType(), "res"});
-    func->execute(block, cns, columns.size());
-    return block.getByPosition(columns.size());
-}
-
-void assertDataTypeEqual(const DataTypePtr & actual, const DataTypePtr & expect)
-{
-    ASSERT_EQ(actual->getName(), expect->getName());
-}
-
-void assertColumnEqual(
-    const ColumnPtr & actual,
-    const ColumnPtr & expect)
-{
-    ASSERT_EQ(actual->getName(), expect->getName());
-    ASSERT_EQ(actual->isColumnNullable(), expect->isColumnNullable());
-    ASSERT_EQ(actual->isColumnConst(), expect->isColumnConst());
-    ASSERT_EQ(actual->size(), expect->size());
-
-    for (size_t i = 0, size = actual->size(); i < size; ++i)
-    {
-        auto actual_field = (*actual)[i];
-        auto expect_field = (*expect)[i];
-
-        EXPECT_TRUE(actual_field == expect_field)
-            << "Value " << i << " mismatch."
-            << "\n  Actual: " << actual_field.toString()
-            << "\nExpected: " << expect_field.toString();
-    }
-}
-
-void assertColumnEqual(
-    const ColumnWithTypeAndName & actual,
-    const ColumnWithTypeAndName & expect)
-{
-    SCOPED_TRACE("assertColumnEqual");
-
-    assertDataTypeEqual(actual.type, expect.type);
-    assertColumnEqual(actual.column, expect.column);
 }
 
 ::testing::AssertionResult DataTypeCompare(
