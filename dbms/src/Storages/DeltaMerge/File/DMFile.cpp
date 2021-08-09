@@ -414,7 +414,7 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
     if (configuration)
     {
         auto buf = createReadBufferFromFileBaseByFileProvider(
-            file_provider, path, encryptionPackStatPath(), configuration->getChecksumFrameLength(), *configuration);
+            file_provider, path, encryptionPackStatPath(), configuration->getChecksumFrameLength(), nullptr, *configuration);
         buf->seek(meta_pack_info.pack_stat_offset);
         buf->readStrict((char *)pack_stats.data(), sizeof(PackStat) * packs);
     }
