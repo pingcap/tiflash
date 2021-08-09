@@ -138,5 +138,6 @@ private:
 
 
 ColumnPtr makeNullable(const ColumnPtr & column);
+std::tuple<const IColumn *, const NullMap *> removeNullable(const IColumn * column);
 
 }

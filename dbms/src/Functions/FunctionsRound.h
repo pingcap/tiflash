@@ -1011,7 +1011,7 @@ struct TiDBRound
 
         // TODO: RoundWithFrac.
         assert(frac_column->isColumnConst());
-        auto frac_value = getFracFromConstColumn(frac_column);
+        auto frac_value [[maybe_unused]] = getFracFromConstColumn(frac_column);
         assert(frac_value == 0);
 
         // TODO: const input column.
