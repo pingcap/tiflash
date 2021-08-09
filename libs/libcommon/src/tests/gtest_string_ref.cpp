@@ -25,6 +25,21 @@ struct TempOption
         simd_option::ENABLE_AVX512 = prev_enable_avx512;
     }
 };
+
+
+struct AlignedCharArray
+{
+    std::align_val_t alignment;
+    char * data;
+
+    AlignedCharArray(size_t size_, std::align_val_t alignment_)
+        : alignment(alignment_), data(static_cast<char *>(operator new(size_, alignment)))
+    {}
+
+    ~AlignedCharArray() { ::operator delete(data, alignment); }
+};
+
+
 struct StringRefTest : ::testing::TestWithParam<std::pair<bool, bool>>
 {
 };
@@ -55,9 +70,10 @@ TEST_P(StringRefTest, CompareLongEq)
     std::uniform_int_distribution<char> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1 = reinterpret_cast<char *>(::operator new (1024 * 1024 * 64, std::align_val_t{128}));
-    auto aligned2 = reinterpret_cast<char *>(::operator new (1024 * 1024 * 64 + 23, std::align_val_t{128}));
-
+    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64, std::align_val_t{128});
+    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23, std::align_val_t{128});
+    auto aligned1 = aligned1_.data;
+    auto aligned2 = aligned2_.data;
     aligned2 += 23;
 
     for (auto & i : data)
@@ -69,8 +85,6 @@ TEST_P(StringRefTest, CompareLongEq)
     strcpy(aligned2, data.data());
 
     ASSERT_EQ(StringRef(aligned1, data.size()), StringRef(aligned2, data.size())) << " seed: " << seed;
-    ::operator delete (aligned1, std::align_val_t{128});
-    ::operator delete (aligned2, std::align_val_t{128});
 }
 
 TEST_P(StringRefTest, CompareLongNe)
@@ -83,8 +97,10 @@ TEST_P(StringRefTest, CompareLongNe)
     std::uniform_int_distribution<char> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1 = reinterpret_cast<char *>(::operator new (1024 * 1024 * 64, std::align_val_t{128}));
-    auto aligned2 = reinterpret_cast<char *>(::operator new (1024 * 1024 * 64 + 23, std::align_val_t{128}));
+    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64, std::align_val_t{128});
+    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23, std::align_val_t{128});
+    auto aligned1 = aligned1_.data;
+    auto aligned2 = aligned2_.data;
 
     aligned2 += 23;
 
@@ -100,9 +116,6 @@ TEST_P(StringRefTest, CompareLongNe)
     aligned2[target] = static_cast<char>(~aligned2[target]);
 
     ASSERT_NE(StringRef(aligned1, data.size()), StringRef(aligned2, data.size())) << " seed: " << seed;
-
-    ::operator delete (aligned1, std::align_val_t{128});
-    ::operator delete (aligned2, std::align_val_t{128});
 }
 
 using Parm = std::pair<bool, bool>;
@@ -164,8 +177,10 @@ TEST_P(StringRefTest, CompareLongEq)
     std::uniform_int_distribution<char> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1 = reinterpret_cast<char *>(::operator new (1024 * 1024 * 64, std::align_val_t{128}));
-    auto aligned2 = reinterpret_cast<char *>(::operator new (1024 * 1024 * 64 + 23, std::align_val_t{128}));
+    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64, std::align_val_t{128});
+    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23, std::align_val_t{128});
+    auto aligned1 = aligned1_.data;
+    auto aligned2 = aligned2_.data;
 
     aligned2 += 23;
 
@@ -178,8 +193,6 @@ TEST_P(StringRefTest, CompareLongEq)
     strcpy(aligned2, data.data());
 
     ASSERT_EQ(StringRef(aligned1, data.size()), StringRef(aligned2, data.size())) << " seed: " << seed;
-    ::operator delete (aligned1, std::align_val_t{128});
-    ::operator delete (aligned2, std::align_val_t{128});
 }
 
 TEST_P(StringRefTest, CompareLongNe)
@@ -192,8 +205,10 @@ TEST_P(StringRefTest, CompareLongNe)
     std::uniform_int_distribution<char> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1 = reinterpret_cast<char *>(::operator new (1024 * 1024 * 64, std::align_val_t{128}));
-    auto aligned2 = reinterpret_cast<char *>(::operator new (1024 * 1024 * 64 + 23, std::align_val_t{128}));
+    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64, std::align_val_t{128});
+    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23, std::align_val_t{128});
+    auto aligned1 = aligned1_.data;
+    auto aligned2 = aligned2_.data;
 
     aligned2 += 23;
 
@@ -209,8 +224,6 @@ TEST_P(StringRefTest, CompareLongNe)
     aligned2[target] = static_cast<char>(~aligned2[target]);
 
     ASSERT_NE(StringRef(aligned1, data.size()), StringRef(aligned2, data.size())) << " seed: " << seed;
-    ::operator delete (aligned1, std::align_val_t{128});
-    ::operator delete (aligned2, std::align_val_t{128});
 }
 
 std::string parmToName(const ::testing::TestParamInfo<bool> & info)
