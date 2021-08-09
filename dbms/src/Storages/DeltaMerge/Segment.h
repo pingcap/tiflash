@@ -3,8 +3,9 @@
 #include <Core/Block.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
+#include <Storages/DeltaMerge/DeltaIndex.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
-#include <Storages/DeltaMerge/Index/MinMax.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
@@ -282,7 +283,9 @@ private:
         const RowKeyRanges & read_ranges,
         UInt64 max_version = MAX_UINT64) const;
 
-    static ColumnDefinesPtr arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
+    static ColumnDefinesPtr arrangeReadColumns(
+        const ColumnDefine & handle,
+        const ColumnDefines & columns_to_read);
 
     /// Create a stream which merged delta and stable streams together.
     template <bool skippable_place = false, class IndexIterator = DeltaIndexIterator>
@@ -304,7 +307,9 @@ private:
         const ReadInfo & read_info,
         const SegmentSnapshotPtr & segment_snap) const;
     /// Only look up in the stable vs.
-    std::optional<RowKeyValue> getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
+    std::optional<RowKeyValue> getSplitPointFast(
+        DMContext & dm_context,
+        const StableSnapshotPtr & stable_snap) const;
 
     std::optional<SplitInfo> prepareSplitLogical(
         DMContext & dm_context,
