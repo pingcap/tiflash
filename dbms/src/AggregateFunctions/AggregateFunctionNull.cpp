@@ -95,11 +95,6 @@ public:
                     return std::make_shared<AggregateFunctionFirstRowNull<false, false>>(nested_function);
             }
         }
-//        if (nested_function && (nested_function->getName() == "groupArray" || nested_function->getName() == "groupUniqArray")&& String(arguments[0]->getFamilyName()) == "Tuple")
-//        {
-//            /// checkDataTypeTuple
-//            return std::make_shared<AggregateFunctionGroupConcatTuple<false>>(nested_function, arguments);
-//        }
 
         if (arguments.size() == 1)
         {
