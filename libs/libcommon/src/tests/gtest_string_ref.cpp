@@ -11,7 +11,6 @@ struct TempOption
     bool prev_enable_avx;
     bool prev_enable_avx512;
 
-
     TempOption(bool enable_avx, bool enable_avx512)
     {
         prev_enable_avx = simd_option::ENABLE_AVX;
@@ -126,7 +125,6 @@ INSTANTIATE_TEST_CASE_P(Parm, StringRefTest,
 struct TempOption
 {
     bool prev_enable_asimd;
-
 
     TempOption(bool enable_asimd)
     {
