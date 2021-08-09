@@ -726,7 +726,7 @@ private:
         for (size_t i = 0; i < size; ++i)
         {
             bool inserted=false;
-            State::Set::iterator it;
+            State::Set::LookupResult it;
             const char * begin = nullptr;
             size_t values_size = 0;
             for (size_t j = 0; j< number_of_arguments; ++j)
