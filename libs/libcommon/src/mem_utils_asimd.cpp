@@ -1,7 +1,7 @@
 #ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
 #include <arm_neon.h>
-#include <common/MemUtils.h>
-namespace MemUtils::Detail
+#include <common/mem_utils.h>
+namespace mem_utils::_detail
 {
 
 namespace
@@ -199,6 +199,6 @@ __attribute__((pure)) bool memoryEqualASIMD(const char * p1, const char * p2, si
 
     return true;
 }
-} // namespace MemUtils::Detail
+} // namespace mem_utils::_detail
 
 #endif

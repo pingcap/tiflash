@@ -1,17 +1,16 @@
 #pragma once
 
+#include <city.h>
+#include <common/mem_utils.h>
+#include <common/types.h>
+#include <common/unaligned.h>
+
 #include <cassert>
+#include <functional>
+#include <iosfwd>
 #include <stdexcept> // for std::logic_error
 #include <string>
 #include <vector>
-#include <functional>
-#include <iosfwd>
-
-#include <common/types.h>
-#include <common/unaligned.h>
-#include <common/MemUtils.h>
-
-#include <city.h>
 
 #if defined(__SSE2__)
 #include <emmintrin.h>
@@ -68,7 +67,7 @@ inline bool operator== (StringRef lhs, StringRef rhs)
     if (lhs.size == 0)
         return true;
 
-    return MemUtils::memoryEqual(lhs.data, rhs.data, lhs.size);
+    return mem_utils::memoryEqual(lhs.data, rhs.data, lhs.size);
 }
 
 inline bool operator!= (StringRef lhs, StringRef rhs)

@@ -1,9 +1,9 @@
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
 
-#include <common/MemUtils.h>
+#include <common/mem_utils.h>
 #include <immintrin.h>
 
-namespace MemUtils::Detail
+namespace mem_utils::_detail
 {
 
 namespace
@@ -63,6 +63,6 @@ bool memoryEqualAVX512x4Loop(ConstBytePtr & p1, ConstBytePtr & p2, size_t & size
     }
     return true;
 }
-} // namespace MemUtils::Detail
+} // namespace mem_utils::_detail
 
 #endif

@@ -1,5 +1,5 @@
 #pragma once
-#include <common/SIMD.h>
+#include <common/simd.h>
 #include <common/unaligned.h>
 
 #include <cstddef>
@@ -8,9 +8,9 @@
 #include <emmintrin.h>
 #endif
 
-namespace MemUtils
+namespace mem_utils
 {
-namespace Detail
+namespace _detail
 {
 
 using ConstBytePtr = char const *;
@@ -116,7 +116,7 @@ __attribute__((always_inline, pure)) inline bool memoryEqualSSE2(const char * p1
 }
 // clang-format on
 #endif
-} // namespace Detail
+} // namespace _detail
 
 /// compare two memory area.
 /// this function tries to utilize runtime available vectorization technology.
@@ -129,7 +129,7 @@ __attribute__((always_inline, pure)) inline bool memoryEqual(const char * p1, co
 
     do
     {
-        using namespace SIMDOption;
+        using namespace simd_option;
 
 #ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
         // for ASIMD target, it is a little bit different because all the compare function is defined in a
@@ -143,7 +143,7 @@ __attribute__((always_inline, pure)) inline bool memoryEqual(const char * p1, co
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
         if (ENABLE_AVX512 && SIMDRuntimeSupport(SIMDFeature::avx512f) && SIMDRuntimeSupport(SIMDFeature::avx512vl))
         {
-            if (!Detail::memoryEqualAVX512x4Loop(p1, p2, size))
+            if (!_detail::memoryEqualAVX512x4Loop(p1, p2, size))
             {
                 return false;
             }
@@ -153,7 +153,7 @@ __attribute__((always_inline, pure)) inline bool memoryEqual(const char * p1, co
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
         if (ENABLE_AVX && SIMDRuntimeSupport(SIMDFeature::avx2))
         {
-            if (!Detail::memoryEqualAVX2x4Loop(p1, p2, size))
+            if (!_detail::memoryEqualAVX2x4Loop(p1, p2, size))
             {
                 return false;
             }
@@ -162,10 +162,10 @@ __attribute__((always_inline, pure)) inline bool memoryEqual(const char * p1, co
 #endif
     } while (false);
 #if defined(__SSE2__)
-    return Detail::memoryEqualSSE2(p1, p2, size);
+    return _detail::memoryEqualSSE2(p1, p2, size);
 #else
     return 0 == memcmp(p1, p2, size);
 #endif
 }
 
-} // namespace MemUtils
+} // namespace mem_utils

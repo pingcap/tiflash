@@ -14,16 +14,16 @@ struct TempOption
 
     TempOption(bool ENABLE_AVX_, bool ENABLE_AVX512_)
     {
-        ENABLE_AVX = SIMDOption::ENABLE_AVX;
-        ENABLE_AVX512 = SIMDOption::ENABLE_AVX512;
-        SIMDOption::ENABLE_AVX = ENABLE_AVX_;
-        SIMDOption::ENABLE_AVX512 = ENABLE_AVX512_;
+        ENABLE_AVX = simd_option::ENABLE_AVX;
+        ENABLE_AVX512 = simd_option::ENABLE_AVX512;
+        simd_option::ENABLE_AVX = ENABLE_AVX_;
+        simd_option::ENABLE_AVX512 = ENABLE_AVX512_;
     }
 
     ~TempOption()
     {
-        SIMDOption::ENABLE_AVX = ENABLE_AVX;
-        SIMDOption::ENABLE_AVX512 = ENABLE_AVX512;
+        simd_option::ENABLE_AVX = ENABLE_AVX;
+        simd_option::ENABLE_AVX512 = ENABLE_AVX512;
     }
 };
 struct StringRefTest : ::testing::TestWithParam<std::pair<bool, bool>>
@@ -48,7 +48,7 @@ TEST_P(StringRefTest, CompareTrivial)
 
 TEST_P(StringRefTest, CompareLongEq)
 {
-    using namespace SIMDOption;
+    using namespace simd_option;
     TempOption _option(GetParam().first, GetParam().second);
     std::random_device device{};
     auto seed = device();
@@ -74,7 +74,7 @@ TEST_P(StringRefTest, CompareLongEq)
 
 TEST_P(StringRefTest, CompareLongNe)
 {
-    using namespace SIMDOption;
+    using namespace simd_option;
     TempOption _option(GetParam().first, GetParam().second);
     std::random_device device{};
     auto seed = device();
@@ -125,11 +125,11 @@ struct TempOption
 
     TempOption(bool ENABLE_ASIMD_)
     {
-        ENABLE_ASIMD = SIMDOption::ENABLE_ASIMD;
-        SIMDOption::ENABLE_ASIMD = ENABLE_ASIMD_;
+        ENABLE_ASIMD = simd_option::ENABLE_ASIMD;
+        simd_option::ENABLE_ASIMD = ENABLE_ASIMD_;
     }
 
-    ~TempOption() { SIMDOption::ENABLE_ASIMD = ENABLE_ASIMD; }
+    ~TempOption() { simd_option::ENABLE_ASIMD = ENABLE_ASIMD; }
 };
 struct StringRefTest : ::testing::TestWithParam<bool>
 {
@@ -153,7 +153,7 @@ TEST_P(StringRefTest, CompareTrivial)
 
 TEST_P(StringRefTest, CompareLongEq)
 {
-    using namespace SIMDOption;
+    using namespace simd_option;
     TempOption _option(GetParam());
     std::random_device device{};
     auto seed = device();
@@ -179,7 +179,7 @@ TEST_P(StringRefTest, CompareLongEq)
 
 TEST_P(StringRefTest, CompareLongNe)
 {
-    using namespace SIMDOption;
+    using namespace simd_option;
     TempOption _option(GetParam());
     std::random_device device{};
     auto seed = device();

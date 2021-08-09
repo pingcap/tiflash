@@ -1,6 +1,6 @@
-#include <common/SIMD.h>
+#include <common/simd.h>
 
-namespace SIMDOption
+namespace simd_option
 {
 #ifdef __x86_64__
 
@@ -24,4 +24,4 @@ bool ENABLE_SVE = false;
 
 
 #endif
-}; // namespace SIMDOption
+} // namespace simd_option

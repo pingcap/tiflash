@@ -28,10 +28,10 @@ add_library (common ${SPLIT_SHARED}
     src/ThreadPool.cpp
     src/demangle.cpp
     src/StringRef.cpp
-    src/MemUtilsASIMD.cpp
-    src/MemUtilsAVX2.cpp
-    src/MemUtilsAVX512.cpp
-    src/SIMD.cpp
+    src/mem_utils_asimd.cpp
+    src/mem_utils_avx2.cpp
+    src/mem_utils_avx512.cpp
+    src/simd.cpp
 
     include/common/types.h
     include/common/DateLUT.h
@@ -48,10 +48,11 @@ add_library (common ${SPLIT_SHARED}
     include/common/MultiVersion.h
     include/common/strong_typedef.h
     include/common/JSON.h
-    include/common/SIMD.h
+    include/common/simd.h
     include/common/getMemoryAmount.h
     include/common/ThreadPool.h
     include/common/demangle.h
+    include/common/mem_utils.h
 
     include/ext/bit_cast.h
     include/ext/collection_cast.h
@@ -134,17 +135,17 @@ endif ()
 # Region for specialized CPU flags tuning
 if (TIFLASH_ENABLE_AVX_SUPPORT)
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
-    set_source_files_properties(src/MemUtilsAVX2.cpp APPEND COMPILE_FLAGS "-mavx -mavx2")
+    set_source_files_properties(src/mem_utils_avx2.cpp APPEND COMPILE_FLAGS "-mavx -mavx2")
 endif ()
 
 if (TIFLASH_ENABLE_AVX512_SUPPORT)
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
-    set_source_files_properties(src/MemUtilsAVX512.cpp APPEND COMPILE_FLAGS "-mavx512bw -mavx512vl -mavx512f")
+    set_source_files_properties(src/mem_utils_avx512.cpp APPEND COMPILE_FLAGS "-mavx512bw -mavx512vl -mavx512f")
 endif ()
 
 if (TIFLASH_ENABLE_ASIMD_SUPPORT)
     # https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
-    set_source_files_properties(src/MemUtilsASIMD.cpp APPEND COMPILE_FLAGS "-march=armv8-a+simd")
+    set_source_files_properties(src/mem_utils_asimd.cpp APPEND COMPILE_FLAGS "-march=armv8-a+simd")
 endif ()
 
 if (TIFLASH_ENABLE_SVE_SUPPORT)

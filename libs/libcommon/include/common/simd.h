@@ -5,7 +5,7 @@
 #include <sys/auxv.h>
 #endif
 #endif
-namespace SIMDOption
+namespace simd_option
 {
 #if defined(__x86_64__)
 
@@ -106,4 +106,4 @@ static inline bool SIMDRuntimeSupport(SIMDFeature feature)
 }
 #endif
 
-}; // namespace SIMDOption
+}; // namespace simd_option

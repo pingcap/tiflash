@@ -1,9 +1,9 @@
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-#include <common/MemUtils.h>
+#include <common/mem_utils.h>
 #include <immintrin.h>
 
 #include <cstdint>
-namespace MemUtils::Detail
+namespace mem_utils::_detail
 {
 
 namespace
@@ -193,6 +193,6 @@ bool memoryEqualAVX2x4Loop(ConstBytePtr & p1, ConstBytePtr & p2, size_t & size)
     // GCC should be happy to add its own VZEROUPPER at epilogue area.
     return true;
 }
-} // namespace MemUtils::Detail
+} // namespace mem_utils::_detail
 
 #endif
