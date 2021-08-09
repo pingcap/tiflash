@@ -1,0 +1,7 @@
+
+set(XXHASH_BUILD_ENABLE_INLINE_API OFF CACHE BOOL "Change XXHASH_BUILD_ENABLE_INLINE_API" FORCE)
+set(XXHASH_BUILD_XXHSUM OFF CACHE BOOL "Change XXHASH_BUILD_XXHSUM" FORCE)
+add_subdirectory(
+        ${ClickHouse_SOURCE_DIR}/contrib/xxHash/cmake_unofficial EXCLUDE_FROM_ALL)
+set(XXHASH_INCLUDE_DIR ${ClickHouse_SOURCE_DIR}/contrib/xxHash)
+
