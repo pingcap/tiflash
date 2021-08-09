@@ -128,7 +128,7 @@ public:
 
     PageId getMaxId();
 
-    void write(WriteBatch && write_batch, const RateLimiterPtr & rate_limiter = nullptr);
+    void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr);
 
     SnapshotPtr getSnapshot();
     // Get some statistics of all living snapshots and the oldest living snapshot.
@@ -138,13 +138,13 @@ public:
     std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
 
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {});
-    Page      read(PageId page_id, SnapshotPtr snapshot = {});
-    PageMap   read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot = {});
-    void      read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot = {});
+    Page      read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
+    PageMap   read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
+    void      read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
 
     using FieldIndices   = std::vector<size_t>;
     using PageReadFields = std::pair<PageId, FieldIndices>;
-    PageMap read(const std::vector<PageReadFields> & page_fields, SnapshotPtr snapshot = {});
+    PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
 
     void traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = {});
     void traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
@@ -154,7 +154,7 @@ public:
     void reloadSettings(const Config & new_config) { config.reload(new_config); }
 
     // We may skip the GC to reduce useless reading by default.
-    bool gc(const Context& global_context, bool not_skip = false);
+    bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
 
@@ -171,6 +171,28 @@ public:
                                         const ListPageFilesOption & option = ListPageFilesOption());
 
     static PageFormat::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
+
+    struct PersistState
+    {
+        // use to protect reading WriteBatches from writable PageFile's meta in GC
+        size_t meta_offset = 0;
+        // use to protect that legacy compactor won't exceed the sequence of minimum persisted
+        WriteBatch::SequenceID sequence = 0;
+    };
+
+    struct WritingFilesSnapshot
+    {
+        using const_iterator = std::map<PageFileIdAndLevel, PersistState>::const_iterator;
+
+        PageFileIdAndLevel     minFileIDLevel() const;
+        WriteBatch::SequenceID minPersistedSequence() const;
+
+        const_iterator find(const PageFileIdAndLevel & id) const { return states.find(id); }
+        const_iterator end() const { return states.end(); }
+        bool           contains(const PageFileIdAndLevel & id) const { return states.count(id) > 0; }
+
+        std::map<PageFileIdAndLevel, PersistState> states;
+    };
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -191,6 +213,8 @@ private:
                          const PageFileIdAndLevel &           writing_file_id_level,
                          const std::set<PageFileIdAndLevel> & live_files);
 
+    void getWritingSnapshot(std::lock_guard<std::mutex> &, WritingFilesSnapshot & writing_snapshot) const;
+
     friend class LegacyCompactor;
 
     template <typename SnapshotPtr>
@@ -206,12 +230,18 @@ private:
 
     FileProviderPtr file_provider;
 
+    struct WritingPageFile
+    {
+        PageFile     file;
+        PersistState persisted{};
+    };
     std::mutex write_mutex; // A mutex protect `idle_writers`,`write_files` and `statistics`.
 
-    std::condition_variable write_mutex_cv;
-    std::vector<PageFile>   write_files;
-    std::deque<WriterPtr>   idle_writers;
-    StatisticsInfo          statistics;
+    // TODO: Wrap `write_mutex_cv`, `write_files`, `idle_writers` to be a standalone class
+    std::condition_variable      write_mutex_cv;
+    std::vector<WritingPageFile> write_files;
+    std::deque<WriterPtr>        idle_writers;
+    StatisticsInfo               statistics;
 
     // A sequence number to keep ordering between multi-writers.
     std::atomic<WriteBatch::SequenceID> write_batch_seq = 0;
@@ -233,23 +263,32 @@ private:
 
     // For reporting metrics to prometheus
     TiFlashMetricsPtr metrics;
+
+private:
+    WriterPtr checkAndRenewWriter(WritingPageFile & page_file,
+                                  const String &    parent_path_hint,
+                                  WriterPtr &&      old_writer  = nullptr,
+                                  const String &    logging_msg = "");
 };
 
 class PageReader : private boost::noncopyable
 {
 public:
     /// Not snapshot read.
-    explicit PageReader(PageStorage & storage_) : storage(storage_), snap() {}
+    explicit PageReader(PageStorage & storage_, ReadLimiterPtr read_limiter_)
+        : storage(storage_), snap(), read_limiter(read_limiter_) {}
     /// Snapshot read.
-    PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_) : storage(storage_), snap(snap_) {}
-    PageReader(PageStorage & storage_, PageStorage::SnapshotPtr && snap_) : storage(storage_), snap(std::move(snap_)) {}
+    PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
+        : storage(storage_), snap(snap_), read_limiter(read_limiter_) {}
+    PageReader(PageStorage & storage_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
+        : storage(storage_), snap(std::move(snap_)), read_limiter(read_limiter_) {}
 
-    Page    read(PageId page_id) const { return storage.read(page_id, snap); }
-    PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, snap); }
-    void    read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, snap); }
+    Page    read(PageId page_id) const { return storage.read(page_id, read_limiter, snap); }
+    PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, read_limiter, snap); }
+    void    read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, read_limiter, snap); }
 
     using PageReadFields = PageStorage::PageReadFields;
-    PageMap read(const std::vector<PageReadFields> & page_fields) const { return storage.read(page_fields, snap); }
+    PageMap read(const std::vector<PageReadFields> & page_fields) const { return storage.read(page_fields, read_limiter, snap); }
 
     PageId    getNormalPageId(PageId page_id) const { return storage.getNormalPageId(page_id, snap); }
     UInt64    getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }
@@ -261,6 +300,7 @@ private:
 
     PageStorage &            storage;
     PageStorage::SnapshotPtr snap;
+    ReadLimiterPtr read_limiter;
 };
 
 } // namespace DB

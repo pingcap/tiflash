@@ -2,8 +2,8 @@
 
 #include <istream>
 
-#include "Poco/DOM/AutoPtr.h"
-#include "Poco/Util/MapConfiguration.h"
+#include <Poco/AutoPtr.h>
+#include <Poco/Util/MapConfiguration.h>
 
 namespace cpptoml
 {

@@ -28,9 +28,6 @@
     M(MemoryTrackingForMerges)                  \
     M(LeaderElection)                           \
     M(EphemeralNode)                            \
-    M(ZooKeeperSession)                         \
-    M(ZooKeeperWatch)                           \
-    M(ZooKeeperRequest)                         \
     M(DelayedInserts)                           \
     M(ContextLockWait)                          \
     M(StorageBufferRows)                        \
@@ -64,8 +61,11 @@
     M(DT_SnapshotOfSegmentMerge)                \
     M(DT_SnapshotOfDeltaMerge)                  \
     M(DT_SnapshotOfDeltaCompact)                \
-    M(DT_SnapshotOfPlaceIndex)
-
+    M(DT_SnapshotOfPlaceIndex)                  \
+    M(IOLimiterPendingBgWriteReq)               \
+    M(IOLimiterPendingFgWriteReq)               \
+    M(IOLimiterPendingBgReadReq)                \
+    M(IOLimiterPendingFgReadReq)
 
 namespace CurrentMetrics
 {

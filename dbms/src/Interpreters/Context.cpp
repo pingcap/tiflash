@@ -62,7 +62,6 @@
 #include <Parsers/parseQuery.h>
 
 #include <Common/Config/ConfigProcessor.h>
-#include <Common/ZooKeeper/ZooKeeper.h>
 #include <common/logger_useful.h>
 
 
@@ -115,10 +114,6 @@ struct ContextShared
     mutable std::mutex embedded_dictionaries_mutex;
     mutable std::mutex external_dictionaries_mutex;
     mutable std::mutex external_models_mutex;
-    /// Separate mutex for re-initialization of zookeer session. This operation could take a long time and must not interfere with another operations.
-    mutable std::mutex zookeeper_mutex;
-
-    mutable zkutil::ZooKeeperPtr zookeeper;                 /// Client for ZooKeeper.
 
     String interserver_io_host;                             /// The host name by which this server is available for other servers.
     UInt16 interserver_io_port = 0;                         /// and port.
@@ -155,7 +150,6 @@ struct ContextShared
     mutable TMTContextPtr tmt_context;                      /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros;                            /// Substitutions extracted from config.
     std::unique_ptr<Compiler> compiler;                     /// Used for dynamic compilation of queries' parts if it necessary.
-    std::shared_ptr<DDLWorker> ddl_worker;                  /// Process ddl commands from zk.
     /// Rules for selecting the compression settings, depending on the size of the part.
     mutable std::unique_ptr<CompressionSettingsSelector> compression_settings_selector;
     std::unique_ptr<MergeTreeSettings> merge_tree_settings; /// Settings of MergeTree* engines.
@@ -1474,22 +1468,6 @@ BackgroundProcessingPool & Context::getBlockableBackgroundPool()
     return *shared->blockable_background_pool;
 }
 
-void Context::setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker)
-{
-    auto lock = getLock();
-    if (shared->ddl_worker)
-        throw Exception("DDL background thread has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->ddl_worker = ddl_worker;
-}
-
-DDLWorker & Context::getDDLWorker() const
-{
-    auto lock = getLock();
-    if (!shared->ddl_worker)
-        throw Exception("DDL background thread is not initialized.", ErrorCodes::LOGICAL_ERROR);
-    return *shared->ddl_worker;
-}
-
 void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
 {
     auto lock = getLock();
@@ -1576,34 +1554,29 @@ FileProviderPtr Context::getFileProvider() const
     return shared->file_provider;
 }
 
-void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config, Poco::Logger* log)
+void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config)
 {
-    shared->io_rate_limiter.updateConfig(metrics, config, log);
+    getIORateLimiter().init(metrics, config);
+    auto tids = getBackgroundPool().getThreadIds();
+    auto blockable_tids = getBlockableBackgroundPool().getThreadIds();
+    tids.insert(tids.end(), blockable_tids.begin(), blockable_tids.end());
+    getIORateLimiter().setBackgroundThreadIds(tids);
 }
 
-RateLimiterPtr Context::getWriteLimiter() const
+WriteLimiterPtr Context::getWriteLimiter() const
 {
-    return shared->io_rate_limiter.getWriteLimiter();
+    return getIORateLimiter().getWriteLimiter();
 }
 
-zkutil::ZooKeeperPtr Context::getZooKeeper() const
+IORateLimiter& Context::getIORateLimiter() const
 {
-    std::lock_guard<std::mutex> lock(shared->zookeeper_mutex);
-
-    if (!shared->zookeeper)
-        shared->zookeeper = std::make_shared<zkutil::ZooKeeper>(getConfigRef(), "zookeeper");
-    else if (shared->zookeeper->expired())
-        shared->zookeeper = shared->zookeeper->startNewSession();
-
-    return shared->zookeeper;
+    return shared->io_rate_limiter;
 }
 
-bool Context::hasZooKeeper() const
+ReadLimiterPtr Context::getReadLimiter() const
 {
-    std::lock_guard<std::mutex> lock(shared->zookeeper_mutex);
-    return shared->zookeeper != nullptr;
+    return getIORateLimiter().getReadLimiter();
 }
-
 
 void Context::setInterserverIOAddress(const String & host, UInt16 port)
 {

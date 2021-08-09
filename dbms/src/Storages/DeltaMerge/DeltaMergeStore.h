@@ -301,7 +301,7 @@ public:
     // Stop all background tasks.
     void shutdown();
 
-    Block addExtraColumnIfNeed(const Context & db_context, Block && block) const;
+    static Block addExtraColumnIfNeed(const Context & db_context, const ColumnDefine & handle_define, Block && block);
 
     void write(const Context & db_context, const DB::Settings & db_settings, Block && block);
 
@@ -360,7 +360,10 @@ public:
     /// Compact fregment packs into bigger one.
     void compact(const Context & context, const RowKeyRange & range);
 
-    /// Apply `commands` on `table_columns`
+    /// Iterator over all segments and apply gc jobs.
+    UInt64 onSyncGc(Int64 limit);
+
+    /// Apply DDL `commands` on `table_columns`
     void applyAlters(const AlterCommands &         commands, //
                      const OptionTableInfoConstRef table_info,
                      ColumnID &                    max_column_id_used,
@@ -384,8 +387,6 @@ public:
     bool                isCommonHandle() const { return is_common_handle; }
     size_t              getRowKeyColumnSize() const { return rowkey_column_size; }
 
-    UInt64 onSyncGc(Int64 limit);
-
 public:
     /// Methods mainly used by region split.
 
@@ -404,7 +405,7 @@ private:
 
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id="");
 
-    bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
+    static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);

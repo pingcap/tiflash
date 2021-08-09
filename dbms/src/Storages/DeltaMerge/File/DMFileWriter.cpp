@@ -11,7 +11,7 @@ namespace DM
 DMFileWriter::DMFileWriter(const DMFilePtr &             dmfile_,
                            const ColumnDefines &         write_columns_,
                            const FileProviderPtr &       file_provider_,
-                           const RateLimiterPtr &        rate_limiter_,
+                           const WriteLimiterPtr &        write_limiter_,
                            const DMFileWriter::Options & options_)
     : dmfile(dmfile_),
       write_columns(write_columns_),
@@ -24,16 +24,16 @@ DMFileWriter::DMFileWriter(const DMFilePtr &             dmfile_,
                                                                        dmfile->packStatPath(),
                                                                        dmfile->encryptionPackStatPath(),
                                                                        true,
-                                                                       rate_limiter_,
+                                                                       write_limiter_,
                                                                        0,
                                                                        0,
                                                                        options.max_compress_block_size)),
       single_file_stream((!options.flags.isSingleFile())
                              ? nullptr
                              : new SingleFileStream(
-                                 dmfile_, options.compression_settings, options.max_compress_block_size, file_provider_, rate_limiter_)),
+                                 dmfile_, options.compression_settings, options.max_compress_block_size, file_provider_, write_limiter_)),
       file_provider(file_provider_),
-      rate_limiter(rate_limiter_)
+      write_limiter(write_limiter_)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
@@ -76,7 +76,7 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
                                                options.compression_settings,
                                                options.max_compress_block_size,
                                                file_provider,
-                                               rate_limiter,
+                                               write_limiter,
                                                IDataType::isNullMap(substream_path) ? false : do_index);
         column_streams.emplace(stream_name, std::move(stream));
     };
@@ -134,12 +134,12 @@ void DMFileWriter::finalize()
 
     if (options.flags.isSingleFile())
     {
-        dmfile->finalizeForSingleFileMode(single_file_stream->plain_hashing);
+        dmfile->finalizeForSingleFileMode(single_file_stream->plain_layer);
         single_file_stream->flush();
     }
     else
     {
-        dmfile->finalizeForFolderMode(file_provider, rate_limiter);
+        dmfile->finalizeForFolderMode(file_provider, write_limiter);
     }
 }
 
@@ -150,7 +150,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
     if (options.flags.isSingleFile())
     {
         auto callback = [&](const IDataType::SubstreamPath & substream) {
-            size_t     offset_in_compressed_file = single_file_stream->plain_hashing.count();
+            size_t     offset_in_compressed_file = single_file_stream->plain_layer.count();
             const auto stream_name               = DMFile::getFileNameBase(col_id, substream);
             if (unlikely(substream.size() > 1))
                 throw DB::TiFlashException("Substream_path shouldn't be more than one.", Errors::DeltaTree::Internal);
@@ -161,7 +161,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 iter->second->addPack(column, del_mark);
             }
 
-            auto offset_in_compressed_block = single_file_stream->original_hashing.offset();
+            auto offset_in_compressed_block = single_file_stream->original_layer.offset();
             if (unlikely(offset_in_compressed_block != 0))
                 throw DB::TiFlashException("Offset in compressed block is always expected to be 0 when single_file_mode is true, now "
                                                + DB::toString(offset_in_compressed_block),
@@ -173,7 +173,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 if (unlikely(type.isNullable()))
                     throw DB::TiFlashException("Type shouldn't be nullable when substream_path is empty.", Errors::DeltaTree::Internal);
 
-                type.serializeBinaryBulk(column, single_file_stream->original_hashing, 0, rows);
+                type.serializeBinaryBulk(column, single_file_stream->original_layer, 0, rows);
             }
             else if (substream[0].type == IDataType::Substream::NullMap)
             {
@@ -183,7 +183,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
                 const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
                 col.checkConsistency();
-                DataTypeUInt8().serializeBinaryBulk(col.getNullMapColumn(), single_file_stream->original_hashing, 0, rows);
+                DataTypeUInt8().serializeBinaryBulk(col.getNullMapColumn(), single_file_stream->original_layer, 0, rows);
             }
             else if (substream[0].type == IDataType::Substream::NullableElements)
             {
@@ -193,7 +193,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
                 const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(type);
                 const ColumnNullable &   col           = static_cast<const ColumnNullable &>(column);
-                nullable_type.getNestedType()->serializeBinaryBulk(col.getNestedColumn(), single_file_stream->original_hashing, 0, rows);
+                nullable_type.getNestedType()->serializeBinaryBulk(col.getNestedColumn(), single_file_stream->original_layer, 0, rows);
             }
             else
             {
@@ -201,7 +201,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                                            Errors::DeltaTree::Internal);
             }
             single_file_stream->flushCompressedData();
-            size_t mark_size_in_file = single_file_stream->plain_hashing.count() - offset_in_compressed_file;
+            size_t mark_size_in_file = single_file_stream->plain_layer.count() - offset_in_compressed_file;
             single_file_stream->column_mark_with_sizes.at(stream_name)
                 .push_back(MarkWithSizeInCompressedFile{MarkInCompressedFile{.offset_in_compressed_file    = offset_in_compressed_file,
                                                                              .offset_in_decompressed_block = offset_in_compressed_block},
@@ -220,12 +220,12 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                     stream->minmaxes->addPack(column, del_mark);
 
                 /// There could already be enough data to compress into the new block.
-                if (stream->original_hashing.offset() >= options.min_compress_block_size)
-                    stream->original_hashing.next();
+                if (stream->original_layer.offset() >= options.min_compress_block_size)
+                    stream->original_layer.next();
 
-                auto offset_in_compressed_block = stream->original_hashing.offset();
+                auto offset_in_compressed_block = stream->original_layer.offset();
 
-                writeIntBinary(stream->plain_hashing.count(), stream->mark_file);
+                writeIntBinary(stream->plain_layer.count(), stream->mark_file);
                 writeIntBinary(offset_in_compressed_block, stream->mark_file);
             },
             {});
@@ -234,7 +234,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                                                     [&](const IDataType::SubstreamPath & substream) {
                                                         const auto stream_name = DMFile::getFileNameBase(col_id, substream);
                                                         auto &     stream      = column_streams.at(stream_name);
-                                                        return &(stream->original_hashing);
+                                                        return &(stream->original_layer);
                                                     },
                                                     0,
                                                     rows,
@@ -245,7 +245,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             [&](const IDataType::SubstreamPath & substream) {
                 const auto name   = DMFile::getFileNameBase(col_id, substream);
                 auto &     stream = column_streams.at(name);
-                stream->original_hashing.nextIfAtEnd();
+                stream->original_layer.nextIfAtEnd();
             },
             {});
     }
@@ -266,23 +266,23 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             dmfile->addSubFileStat(DMFile::colDataFileName(stream_name), 0, single_file_stream->column_data_sizes.at(stream_name));
 
             // write mark
-            size_t mark_offset_in_file = single_file_stream->plain_hashing.count();
+            size_t mark_offset_in_file = single_file_stream->plain_layer.count();
             for (const auto & mark_with_size : single_file_stream->column_mark_with_sizes.at(stream_name))
             {
-                writeIntBinary(mark_with_size.mark.offset_in_compressed_file, single_file_stream->plain_hashing);
-                writeIntBinary(mark_with_size.mark.offset_in_decompressed_block, single_file_stream->plain_hashing);
-                writeIntBinary(mark_with_size.mark_size, single_file_stream->plain_hashing);
+                writeIntBinary(mark_with_size.mark.offset_in_compressed_file, single_file_stream->plain_layer);
+                writeIntBinary(mark_with_size.mark.offset_in_decompressed_block, single_file_stream->plain_layer);
+                writeIntBinary(mark_with_size.mark_size, single_file_stream->plain_layer);
             }
-            size_t mark_size_in_file = single_file_stream->plain_hashing.count() - mark_offset_in_file;
+            size_t mark_size_in_file = single_file_stream->plain_layer.count() - mark_offset_in_file;
             dmfile->addSubFileStat(DMFile::colMarkFileName(stream_name), mark_offset_in_file, mark_size_in_file);
 
             // write minmax
             auto & minmax_indexs = single_file_stream->minmax_indexs;
             if (auto iter = minmax_indexs.find(stream_name); iter != minmax_indexs.end())
             {
-                size_t minmax_offset_in_file = single_file_stream->plain_hashing.count();
-                iter->second->write(*type, single_file_stream->plain_hashing);
-                size_t minmax_size_in_file = single_file_stream->plain_hashing.count() - minmax_offset_in_file;
+                size_t minmax_offset_in_file = single_file_stream->plain_layer.count();
+                iter->second->write(*type, single_file_stream->plain_layer);
+                size_t minmax_size_in_file = single_file_stream->plain_layer.count() - minmax_offset_in_file;
                 bytes_written += minmax_size_in_file;
                 dmfile->addSubFileStat(DMFile::colIndexFileName(stream_name), minmax_offset_in_file, minmax_size_in_file);
             }
@@ -300,7 +300,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             if (stream->minmaxes)
             {
                 WriteBufferFromFileProvider buf(
-                    file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name), false, rate_limiter);
+                    file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name), false, write_limiter);
                 stream->minmaxes->write(*type, buf);
                 buf.sync();
                 bytes_written += buf.getPositionInFile();

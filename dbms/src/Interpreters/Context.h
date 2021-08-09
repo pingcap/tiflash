@@ -31,12 +31,6 @@ class IPAddress;
 }
 } // namespace Poco
 
-namespace zkutil
-{
-class ZooKeeper;
-}
-
-
 namespace DB
 {
 
@@ -67,7 +61,6 @@ class PartLog;
 struct MergeTreeSettings;
 class IDatabase;
 class DDLGuard;
-class DDLWorker;
 class IStorage;
 class ITableFunction;
 using StoragePtr = std::shared_ptr<IStorage>;
@@ -94,10 +87,13 @@ class KeyManager;
 using KeyManagerPtr = std::shared_ptr<KeyManager>;
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
-class RateLimiter;
-using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 struct TiFlashRaftConfig;
 class DAGContext;
+class IORateLimiter;
+class WriteLimiter;
+using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
+class ReadLimiter;
+using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 
 namespace DM
 {
@@ -358,11 +354,6 @@ public:
     MergeList & getMergeList();
     const MergeList & getMergeList() const;
 
-    /// If the current session is expired at the time of the call, synchronously creates and returns a new session with the startNewSession() call.
-    std::shared_ptr<zkutil::ZooKeeper> getZooKeeper() const;
-    /// Has ready or expired ZooKeeper
-    bool hasZooKeeper() const;
-
     /// Create a cache of uncompressed blocks of specified size. This can be done only once.
     void setUncompressedCache(size_t max_size_in_bytes);
     std::shared_ptr<UncompressedCache> getUncompressedCache() const;
@@ -404,9 +395,6 @@ public:
     BackgroundProcessingPool & getBackgroundPool();
     BackgroundProcessingPool & getBlockableBackgroundPool();
 
-    void setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker);
-    DDLWorker & getDDLWorker() const;
-
     void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
 
     void initializeSchemaSyncService();
@@ -427,8 +415,10 @@ public:
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
-    void initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config, Poco::Logger* log);
-    RateLimiterPtr getWriteLimiter() const;
+    void initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config);
+    WriteLimiterPtr getWriteLimiter() const;
+    ReadLimiterPtr getReadLimiter() const;
+    IORateLimiter& getIORateLimiter() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;

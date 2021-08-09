@@ -9,6 +9,7 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/LockException.h>
+#include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -24,6 +25,7 @@ namespace FailPoints
 {
 extern const char pause_before_apply_raft_cmd[];
 extern const char pause_before_apply_raft_snapshot[];
+extern const char force_set_safepoint_when_decode_block[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -477,12 +479,12 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     return std::make_unique<RegionPreDecodeBlockData>(std::move(res_block), schema_version, std::move(*data_list_read));
 }
 
-std::tuple<std::shared_ptr<StorageDeltaMerge>, bool, DM::ColumnDefinesPtr> //
+std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshot> //
 AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 {
-    bool is_common_handle = false;
+    TableLockHolder drop_lock = nullptr;
     std::shared_ptr<StorageDeltaMerge> dm_storage;
-    DM::ColumnDefinesPtr schema_snap;
+    DecodingStorageSchemaSnapshot schema_snapshot;
 
     auto table_id = region->getMappedTableID();
     auto context = tmt.getContext();
@@ -499,7 +501,9 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         // Get a structure read lock. It will throw exception if the table has been dropped,
         // the caller should handle this situation.
         auto table_lock = storage->lockStructureForShare(getThreadName());
-        is_common_handle = storage->isCommonHandle();
+        schema_snapshot.is_common_handle = storage->isCommonHandle();
+        schema_snapshot.table_info = storage->getTableInfo();
+        schema_snapshot.columns = storage->getColumns();
         if (unlikely(storage->engineType() != ::TiDB::StorageEngine::DT))
         {
             throw Exception("Try to get storage schema with unknown storage engine [table_id=" + DB::toString(table_id)
@@ -509,8 +513,10 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         if (dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage); dm_storage != nullptr)
         {
             auto store = dm_storage->getStore();
-            schema_snap = store->getStoreColumns();
+            schema_snapshot.column_defines = store->getStoreColumns();
+            schema_snapshot.original_table_handle_define = store->getHandle();
         }
+        std::tie(std::ignore, drop_lock) = std::move(table_lock).release();
         return true;
     };
 
@@ -523,31 +529,8 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
             throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",
                 ErrorCodes::LOGICAL_ERROR);
     }
-    return std::make_tuple(dm_storage, is_common_handle, schema_snap);
-}
 
-static bool needUpdateSchema(const DM::ColumnDefinesPtr & a, const DM::ColumnDefinesPtr & b)
-{
-    // Note that we consider `a` is not `b` and need to update schema if either of them is `nullptr`
-    if (unlikely(a == nullptr || b == nullptr))
-        return true;
-
-    // If the two schema is not the same, then it need to be updated.
-    if (a->size() != b->size())
-        return true;
-    for (size_t i = 0; i < a->size(); ++i)
-    {
-        const auto & ca = (*a)[i];
-        const auto & cb = (*b)[i];
-
-        bool col_ok = ca.id == cb.id;
-        // bool name_ok = ca.name == cb.name;
-        bool type_ok = ca.type->equals(*cb.type);
-
-        if (!col_ok || !type_ok)
-            return true;
-    }
-    return false;
+    return {std::move(drop_lock), std::move(dm_storage), std::move(schema_snapshot)};
 }
 
 static Block sortColumnsBySchemaSnap(Block && ori, const DM::ColumnDefines & schema)
@@ -583,15 +566,16 @@ static Block sortColumnsBySchemaSnap(Block && ori, const DM::ColumnDefines & sch
 /// Decode region data into block and belonging schema snapshot, remove committed data from `region`
 /// The return value is a block that store the committed data scanned and removed from `region`.
 /// The columns of returned block is sorted by `schema_snap`.
-Block GenRegionBlockDatawithSchema(const RegionPtr & region,
-    const std::shared_ptr<StorageDeltaMerge> & dm_storage,
-    const DM::ColumnDefinesPtr & schema_snap,
+Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
+    const DecodingStorageSchemaSnapshot & schema_snap,
     Timestamp gc_safepoint,
     bool force_decode,
     TMTContext & tmt)
 {
     // In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
     // If some rows were updated and add tiflash replica, tiflash store may receive region snapshot with unmatched data in write & default cf sst files.
+    fiu_do_on(FailPoints::force_set_safepoint_when_decode_block,
+        { gc_safepoint = 10000000; }); // Mock a GC safepoint for testing compaction filter
     region->tryCompactionFilter(gc_safepoint);
 
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
@@ -607,27 +591,24 @@ Block GenRegionBlockDatawithSchema(const RegionPtr & region,
 
     {
         Stopwatch watch;
-        // Get a structure read lock. It will throw exception if the table has been
-        // dropped, the caller should handle this situation.
-        auto table_lock = dm_storage->lockStructureForShare(getThreadName());
         // Compare schema_snap with current schema, throw exception if changed.
-        auto store = dm_storage->getStore();
-        auto cur_schema_snap = store->getStoreColumns();
-        if (needUpdateSchema(cur_schema_snap, schema_snap))
-            throw Exception("", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
-
-        auto reader = RegionBlockReader(dm_storage);
+        auto reader = RegionBlockReader(schema_snap.table_info, schema_snap.columns);
+        reader.setReorderUInt64PK(false); // DeltaTree don't need to reordered UInt64 pk
         auto [block, ok] = reader.read(*data_list_read, force_decode);
         if (unlikely(!ok))
-            throw Exception("", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
+            throw Exception("RegionBlockReader decode error", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
 
         GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
 
+        /** TODO: If the pk of the table has a common handle, the extra column is added in 
+          * `RegionBlockReader::read`. If the pk is handle, the extra column is added by
+          * `DM::DeltaMergeStore::addExtraColumnIfNeed`. We may need to do some refaction.
+          */
         // For DeltaMergeStore, we always store an extra column with column_id = -1
-        res_block = store->addExtraColumnIfNeed(context, std::move(block));
+        res_block = DM::DeltaMergeStore::addExtraColumnIfNeed(context, schema_snap.original_table_handle_define, std::move(block));
     }
 
-    res_block = sortColumnsBySchemaSnap(std::move(res_block), *schema_snap);
+    res_block = sortColumnsBySchemaSnap(std::move(res_block), *(schema_snap.column_defines));
 
     // Remove committed data
     RemoveRegionCommitCache(region, *data_list_read);

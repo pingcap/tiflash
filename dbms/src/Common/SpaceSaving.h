@@ -39,7 +39,7 @@ struct SpaceSavingArena
 
 /*
  * Specialized storage for StringRef with a freelist arena.
- * Keys of this type that are retained on insertion must be serialised into local storage,
+ * Keys of this type that are retained on insertion must be serialized into local storage,
  * otherwise the reference would be invalid after the processed block is released.
  */
 template <>
@@ -66,9 +66,7 @@ private:
 template
 <
     typename TKey,
-    typename Hash = DefaultHash<TKey>,
-    typename Grower = HashTableGrower<>,
-    typename Allocator = HashTableAllocator
+    typename Hash = DefaultHash<TKey>
 >
 class SpaceSaving
 {
@@ -78,15 +76,15 @@ private:
     constexpr uint64_t nextAlphaSize(uint64_t x)
     {
         constexpr uint64_t ALPHA_MAP_ELEMENTS_PER_COUNTER = 6;
-        return 1ULL<<(sizeof(uint64_t) * 8 - __builtin_clzll(x * ALPHA_MAP_ELEMENTS_PER_COUNTER));
+        return 1ULL << (sizeof(uint64_t) * 8 - __builtin_clzll(x * ALPHA_MAP_ELEMENTS_PER_COUNTER));
     }
 
 public:
-    using Self = SpaceSaving<TKey, Hash, Grower, Allocator>;
+    using Self = SpaceSaving;
 
     struct Counter
     {
-        Counter() {}
+        Counter() = default; //-V730
 
         Counter(const TKey & k, UInt64 c = 0, UInt64 e = 0, size_t h = 0)
           : key(k), slot(0), hash(h), count(c), error(e) {}
@@ -112,7 +110,8 @@ public:
         }
 
         TKey key;
-        size_t slot, hash;
+        size_t slot;
+        size_t hash;
         UInt64 count;
         UInt64 error;
     };
@@ -146,26 +145,36 @@ public:
     void insert(const TKey & key, UInt64 increment = 1, UInt64 error = 0)
     {
         // Increase weight of a key that already exists
-        // It uses hashtable for both value mapping as a presence test (c_i != 0)
         auto hash = counter_map.hash(key);
-        auto it = counter_map.find(key, hash);
-        if (it != counter_map.end())
+
+        if (auto * counter = findCounter(key, hash); counter)
         {
-            auto c = it->second;
-            c->count += increment;
-            c->error += error;
-            percolate(c);
+            counter->count += increment;
+            counter->error += error;
+            percolate(counter);
             return;
         }
+
         // Key doesn't exist, but can fit in the top K
-        else if (unlikely(size() < capacity()))
+        if (unlikely(size() < capacity()))
         {
-            auto c = new Counter(arena.emplace(key), increment, error, hash);
+            auto * c = new Counter(arena.emplace(key), increment, error, hash);
             push(c);
             return;
         }
 
-        auto min = counter_list.back();
+        auto * min = counter_list.back();
+        // The key doesn't exist and cannot fit in the current top K, but
+        // the new key has a bigger weight and is virtually more present
+        // compared to the element who is less present on the set. This part
+        // of the code is useful for the function topKWeighted
+        if (increment > min->count)
+        {
+            destroyLastElement();
+            push(new Counter(arena.emplace(key), increment, error, hash));
+            return;
+        }
+
         const size_t alpha_mask = alpha_map.size() - 1;
         auto & alpha = alpha_map[hash & alpha_mask];
         if (alpha + increment < min->count)
@@ -176,22 +185,9 @@ public:
 
         // Erase the current minimum element
         alpha_map[min->hash & alpha_mask] = min->count;
-        it = counter_map.find(min->key, min->hash);
+        destroyLastElement();
 
-        // Replace minimum with newly inserted element
-        if (it != counter_map.end())
-        {
-            arena.free(min->key);
-            min->hash = hash;
-            min->key = arena.emplace(key);
-            min->count = alpha + increment;
-            min->error = alpha + error;
-            percolate(min);
-
-            it->second = min;
-            it->first = min->key;
-            counter_map.reinsert(it, hash);
-        }
+        push(new Counter(arena.emplace(key), alpha + increment, alpha + error, hash));
     }
 
     /*
@@ -221,7 +217,7 @@ public:
          */
         if (m2 > 0)
         {
-            for (auto counter : counter_list)
+            for (auto * counter : counter_list)
             {
                 counter->count += m2;
                 counter->error += m2;
@@ -229,25 +225,43 @@ public:
         }
 
         // The list is sorted in descending order, we have to scan in reverse
-        for (auto counter : boost::adaptors::reverse(rhs.counter_list))
+        for (auto * counter : boost::adaptors::reverse(rhs.counter_list))
         {
-            if (counter_map.find(counter->key) != counter_map.end())
+            size_t hash = counter_map.hash(counter->key);
+            if (auto * current = findCounter(counter->key, hash))
             {
                 // Subtract m2 previously added, guaranteed not negative
-                insert(counter->key, counter->count - m2, counter->error - m2);
+                current->count += (counter->count - m2);
+                current->error += (counter->error - m2);
             }
             else
             {
                 // Counters not monitored in S1
-                insert(counter->key, counter->count + m1, counter->error + m1);
+                counter_list.push_back(new Counter(arena.emplace(counter->key), counter->count + m1, counter->error + m1, hash));
             }
         }
+
+        std::sort(counter_list.begin(), counter_list.end(), [](Counter * l, Counter * r) { return *l > *r; });
+
+        if (counter_list.size() > m_capacity)
+        {
+            for (size_t i = m_capacity; i < counter_list.size(); ++i)
+            {
+                arena.free(counter_list[i]->key);
+                delete counter_list[i];
+            }
+            counter_list.resize(m_capacity);
+        }
+
+        for (size_t i = 0; i < counter_list.size(); ++i)
+            counter_list[i]->slot = i;
+        rebuildCounterMap();
     }
 
     std::vector<Counter> topK(size_t k) const
     {
         std::vector<Counter> res;
-        for (auto counter : counter_list)
+        for (auto * counter : counter_list)
         {
             res.push_back(*counter);
             if (res.size() == k)
@@ -259,7 +273,7 @@ public:
     void write(WriteBuffer & wb) const
     {
         writeVarUInt(size(), wb);
-        for (auto counter : counter_list)
+        for (auto * counter : counter_list)
             counter->write(wb);
 
         writeVarUInt(alpha_map.size(), wb);
@@ -275,7 +289,7 @@ public:
 
         for (size_t i = 0; i < count; ++i)
         {
-            auto counter = new Counter();
+            auto * counter = new Counter();
             counter->read(rb);
             counter->hash = counter_map.hash(counter->key);
             push(counter);
@@ -310,7 +324,7 @@ protected:
     {
         while (counter->slot > 0)
         {
-            auto next = counter_list[counter->slot - 1];
+            auto * next = counter_list[counter->slot - 1];
             if (*counter > *next)
             {
                 std::swap(next->slot, counter->slot);
@@ -324,19 +338,55 @@ protected:
 private:
     void destroyElements()
     {
-        for (auto counter : counter_list)
+        for (auto * counter : counter_list)
+        {
+            arena.free(counter->key);
             delete counter;
+        }
 
         counter_map.clear();
         counter_list.clear();
         alpha_map.clear();
     }
 
-    HashMap<TKey, Counter *, Hash, Grower, Allocator> counter_map;
+    void destroyLastElement()
+    {
+        auto last_element = counter_list.back();
+        counter_map.erase(last_element->key);
+        arena.free(last_element->key);
+        delete last_element;
+        counter_list.pop_back();
+
+        ++removed_keys;
+        if (removed_keys * 2 > counter_map.size())
+            rebuildCounterMap();
+    }
+
+    Counter * findCounter(const TKey & key, size_t hash)
+    {
+        auto it = counter_map.find(key, hash);
+        if (!it)
+            return nullptr;
+
+        return it->getMapped();
+    }
+
+    void rebuildCounterMap()
+    {
+        removed_keys = 0;
+        counter_map.clear();
+        for (auto * counter : counter_list)
+            counter_map[counter->key] = counter;
+    }
+
+    using CounterMap = HashMapWithStackMemory<TKey, Counter *, Hash, 4>;
+
+    CounterMap counter_map;
     std::vector<Counter *> counter_list;
     std::vector<UInt64> alpha_map;
     SpaceSavingArena<TKey> arena;
     size_t m_capacity;
+    size_t removed_keys = 0;
 };
 
-};
+}

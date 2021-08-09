@@ -17,9 +17,11 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/setThreadName.h>
+#include <common/simd.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
+#include <Encryption/RateLimiter.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Functions/registerFunctions.h>
@@ -27,7 +29,6 @@
 #include <IO/ReadHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
-#include <Interpreters/DDLWorker.h>
 #include <Interpreters/IDAsPathUpgrader.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/loadMetadata.h>
@@ -132,6 +133,32 @@ void loadMiConfig(Logger * log)
 }
 #undef TRY_LOAD_CONF
 #endif
+
+namespace
+{
+[[maybe_unused]] void loadBooleanConfig(Logger * log, bool & target, const char * name)
+{
+    auto config = getenv(name);
+    if (config)
+    {
+        LOG_INFO(log, "Got environment variable " << name << " = " << config);
+        try
+        {
+            auto result = std::stoul(config);
+            if (result != 0 && result != 1)
+            {
+                LOG_ERROR(log, "Environment variable" << name << " = " << result << " is not valid");
+                return;
+            }
+            target = result;
+        }
+        catch (...)
+        {
+        }
+    }
+}
+} // namespace
+
 namespace CurrentMetrics
 {
 extern const Metric Revision;
@@ -420,9 +447,9 @@ private:
 };
 
 // We only need this task run once.
-void backgroundInitStores(Context & global_context, Logger * log)
+void initStores(Context & global_context, Logger * log, bool lazily_init_store)
 {
-    auto initStores = [&global_context, log]() {
+    auto do_init_stores = [&global_context, log]() {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
         int init_cnt = 0;
         int err_cnt = 0;
@@ -443,7 +470,16 @@ void backgroundInitStores(Context & global_context, Logger * log)
             "Storage inited finish. [total_count=" << storages.size() << "] [init_count=" << init_cnt << "] [error_count=" << err_cnt
                                                    << "]");
     };
-    std::thread(initStores).detach();
+    if (lazily_init_store)
+    {
+        LOG_INFO(log, "Lazily init store.");
+        std::thread(do_init_stores).detach();
+    }
+    else
+    {
+        LOG_INFO(log, "Not lazily init store.");
+        do_init_stores();
+    }
 }
 
 class Server::FlashGrpcServerHolder
@@ -455,7 +491,7 @@ public:
         if (server.security_config.has_tls_config)
         {
             grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
-            auto options = server.security_config.ReadAndCacheSecurityInfo();
+            auto options = server.security_config.readAndCacheSecurityInfo();
             server_cred.pem_root_certs = options.pem_root_certs;
             server_cred.pem_key_cert_pairs.push_back(
                 grpc::SslServerCredentialsOptions::PemKeyCertPair{options.pem_private_key, options.pem_cert_chain});
@@ -792,6 +828,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     UpdateMallocConfig(log);
 
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    loadBooleanConfig(log, simd_option::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
+#endif
+
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
+    loadBooleanConfig(log, simd_option::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
+#endif
+
+#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
+    loadBooleanConfig(log, DB::simd_option::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
+#endif
+
+#ifdef TIFLASH_ENABLE_SVE_SUPPORT
+    loadBooleanConfig(log, DB::simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
+#endif
+
     registerFunctions();
     registerAggregateFunctions();
     registerTableFunctions();
@@ -1058,6 +1110,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
+    /// Init TiFlash metrics.
+    global_context->initializeTiFlashMetrics();
+
+    /// Init Rate Limiter
+    global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), config());
+
     /// Initialize main config reloader.
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
@@ -1066,7 +1124,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
-            global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), *config, log);
+            global_context->getIORateLimiter().updateConfig(*config);
         },
         /* already_loaded = */ true);
 
@@ -1119,14 +1177,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     size_t delta_index_cache_size = config().getUInt64("delta_index_cache_size", 0);
     global_context->setDeltaIndexManager(delta_index_cache_size);
 
-    /// Init TiFlash metrics.
-    global_context->initializeTiFlashMetrics();
-
-    /// Init Rate Limiter
-    {
-        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), config(), log);
-    }
-
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
     global_context->setFormatSchemaPath(format_schema_path.path() + "/");
@@ -1137,7 +1187,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// After attaching system databases we can initialize system log.
     global_context->initializeSystemLogs();
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
-    attachSystemTablesServer(*global_context->getDatabase("system"), false);
+    attachSystemTablesServer(*global_context->getDatabase("system"));
 
     {
         /// create TMTContext
@@ -1186,7 +1236,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Sync schemas done.");
 
-    backgroundInitStores(*global_context, log);
+    initStores(*global_context, log, storage_config.lazily_init_store);
 
     // After schema synced, set current database.
     global_context->setCurrentDatabase(default_database);
@@ -1279,16 +1329,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            LOG_INFO(log, "proxy is ready to serve, try to wake up all region leader by sending read index request");
-            {
-                std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
-                tiflash_instance_wrap.tmt->getKVStore()->traverseRegions([&batch_read_index_req](RegionID, const RegionPtr & region) {
-                    batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region));
-                });
-                tiflash_instance_wrap.proxy_helper->batchReadIndex(
-                    batch_read_index_req, tiflash_instance_wrap.tmt->batchReadIndexTimeout());
-            }
-            LOG_INFO(log, "start to wait for terminal signal");
+            LOG_INFO(log, "tiflash proxy is ready to serve, try to wake up all regions' leader");
+            WaitCheckRegionReady(tmt_context, terminate_signals_counter);
         }
 
         {
@@ -1299,11 +1341,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         tmt_context.setStatusRunning();
+        LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
 
         {
             LOG_INFO(log, "Set store status Stopping");
             tmt_context.setStatusStopping();
+            // Set limiters stopping and wakeup threads in waitting queue.
+            global_context->getIORateLimiter().setStop();
             {
                 // Wait until there is no read-index task.
                 while (tmt_context.getKVStore()->getReadIndexEvent())

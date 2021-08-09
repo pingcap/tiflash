@@ -33,7 +33,7 @@ public:
         Writer(PageFile &, bool sync_on_write, bool create_new_file = true);
         ~Writer();
 
-        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const RateLimiterPtr & rate_limiter = nullptr);
+        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
         void                 tryCloseIdleFd(const Seconds & max_idle_time);
 
         const String &     parentPath() const;
@@ -49,7 +49,7 @@ public:
         WritableFilePtr data_file;
         WritableFilePtr meta_file;
 
-        Clock::time_point last_write_time;
+        Clock::time_point last_write_time; // use to free idle writers
     };
 
     /// Reader is safe to used by multi threads.
@@ -63,9 +63,9 @@ public:
 
         /// Read pages from files.
         /// After return, the items in to_read could be reordered, but won't be removed or added.
-        PageMap read(PageIdAndEntries & to_read);
+        PageMap read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter = nullptr);
 
-        void read(PageIdAndEntries & to_read, const PageHandler & handler);
+        void read(PageIdAndEntries & to_read, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr);
 
         struct FieldReadInfo
         {
@@ -76,7 +76,7 @@ public:
             FieldReadInfo(PageId id_, PageEntry entry_, std::vector<size_t> fields_) : page_id(id_), entry(entry_), fields(fields_) {}
         };
         using FieldReadInfos = std::vector<FieldReadInfo>;
-        PageMap read(FieldReadInfos & to_read);
+        PageMap read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter = nullptr);
 
         bool isIdle(const Seconds & max_idle_time);
 
@@ -107,10 +107,16 @@ public:
         }
     };
 
+    class MetaMergingReader;
+    using MetaMergingReaderPtr = std::shared_ptr<MetaMergingReader>;
+
     class MetaMergingReader : private boost::noncopyable
     {
     public:
-        MetaMergingReader(PageFile & page_file_) : page_file(page_file_) {}
+        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter = nullptr);
+        static MetaMergingReaderPtr createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter = nullptr);
+
+        MetaMergingReader(PageFile & page_file_); // should only called by `createFrom`
 
         ~MetaMergingReader();
 
@@ -157,7 +163,8 @@ public:
         }
 
     private:
-        void initialize();
+
+        void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter);
 
     private:
         PageFile & page_file;
@@ -175,7 +182,6 @@ public:
         size_t meta_file_offset = 0;
         size_t data_file_offset = 0;
     };
-    using MetaMergingReaderPtr = std::shared_ptr<MetaMergingReader>;
 
     struct MergingPtrComparator
     {
@@ -247,7 +253,6 @@ public:
     /// Destroy underlying system files.
     void destroy() const;
 
-    MetaMergingReaderPtr createMetaMergingReader() { return std::make_unique<MetaMergingReader>(*this); }
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
     /// And the meta_file_pos, data_file_pos should be properly set before creating writer.

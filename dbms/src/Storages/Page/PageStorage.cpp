@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
@@ -19,7 +20,11 @@
 #include <set>
 #include <utility>
 
-// #define PAGE_STORAGE_UTIL_DEBUGGGING
+#ifdef FIU_ENABLE
+#include <Common/randomSeed.h>
+
+#include <pcg_random.hpp>
+#endif
 
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
 extern DB::WriteBatch::SequenceID debugging_recover_stop_sequence;
@@ -32,6 +37,12 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char random_slow_page_storage_write[];
+extern const char random_exception_after_page_storage_sequence_acquired[];
+} // namespace FailPoints
 
 void PageStorage::StatisticsInfo::mergeEdits(const PageEntriesEdit & edit)
 {
@@ -98,20 +109,28 @@ PageFormat::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_
     if (page_files.empty())
         return STORAGE_FORMAT_CURRENT.page;
 
-    // Simply check the last PageFile is good enough
-    auto reader = const_cast<PageFile &>(*page_files.rbegin()).createMetaMergingReader();
-
+    bool                all_empty          = true;
     PageFormat::Version max_binary_version = PageFormat::V1;
     PageFormat::Version temp_version       = STORAGE_FORMAT_CURRENT.page;
-    reader->moveNext(&temp_version);
-    max_binary_version = std::max(max_binary_version, temp_version);
-    while (reader->hasNext())
+    for (auto iter = page_files.rbegin(); iter != page_files.rend(); ++iter)
     {
-        // Continue to read the binary version of next WriteBatch.
-        reader->moveNext(&temp_version);
-        max_binary_version = std::max(max_binary_version, temp_version);
+        // Skip those files without valid meta
+        if (iter->getMetaFileSize() == 0)
+            continue;
+
+        // Simply check the last non-empty PageFile is good enough
+        all_empty   = false;
+        auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(*iter));
+        while (reader->hasNext())
+        {
+            // Continue to read the binary version of next WriteBatch.
+            reader->moveNext(&temp_version);
+            max_binary_version = std::max(max_binary_version, temp_version);
+        }
+        LOG_DEBUG(log, "getMaxDataVersion done from " + reader->toString() << " [max version=" << max_binary_version << "]");
+        break;
     }
-    LOG_DEBUG(log, "getMaxDataVersion done from " + reader->toString() << " [max version=" << max_binary_version << "]");
+    max_binary_version = (all_empty ? STORAGE_FORMAT_CURRENT.page : max_binary_version);
     return max_binary_version;
 }
 
@@ -244,10 +263,14 @@ void PageStorage::restore()
               || page_file.getType() == PageFile::Type::Checkpoint))
             throw Exception("Try to recover from " + page_file.toString() + ", illegal type.", ErrorCodes::LOGICAL_ERROR);
 
-        auto reader = const_cast<PageFile &>(page_file).createMetaMergingReader();
-        // Read one WriteBatch
-        reader->moveNext();
-        merging_queue.push(std::move(reader));
+        if (auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file));
+            reader->hasNext())
+        {
+            // Read one WriteBatch
+            reader->moveNext();
+            merging_queue.push(std::move(reader));
+        }
+        // else the file doesn't contain any valid meta, just skip it.
     }
 
     StatisticsInfo restore_info;
@@ -278,16 +301,24 @@ void PageStorage::restore()
         // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
         // all edits after that checkpoint too. If checkpoint's WriteBatch sequence number is not 0, we
         // apply WriteBatch edits only if its WriteBatch sequence is larger than or equal to checkpoint.
+        const auto cur_sequence = reader->writeBatchSequence();
         if (!checkpoint_sequence.has_value() || //
-            (checkpoint_sequence.has_value() && (*checkpoint_sequence == 0 || *checkpoint_sequence <= reader->writeBatchSequence())))
+            (checkpoint_sequence.has_value() && (*checkpoint_sequence == 0 || *checkpoint_sequence <= cur_sequence)))
         {
+            if (unlikely(cur_sequence > write_batch_seq + 1))
+            {
+                LOG_WARNING(log,
+                            storage_name << " restore skip non-continuous sequence from " << write_batch_seq << " to " << cur_sequence
+                                         << ", {" << reader->toString() << "}");
+            }
+
             try
             {
                 // LOG_TRACE(log, storage_name << " recovering from " + reader->toString());
                 auto edits = reader->getEdits();
                 versioned_page_entries.apply(edits);
                 restore_info.mergeEdits(edits);
-                write_batch_seq = reader->writeBatchSequence();
+                write_batch_seq = cur_sequence;
             }
             catch (Exception & e)
             {
@@ -337,7 +368,11 @@ void PageStorage::restore()
             // Try best to reuse writable page files
             if (page_file.reusableForWrite() && isPageFileSizeFitsWritable(page_file, config))
             {
-                write_files[next_write_fill_idx[idx_in_delta_paths]] = page_file;
+                auto & writing_files    = write_files[next_write_fill_idx[idx_in_delta_paths]];
+                writing_files.file      = page_file;
+                writing_files.persisted = PersistState{.meta_offset = page_file.getMetaFileAppendPos(), .sequence = write_batch_seq};
+
+                // Next slot for writing files
                 next_write_fill_idx[idx_in_delta_paths] = (next_write_fill_idx[idx_in_delta_paths] + num_delta_paths) % write_files.size();
             }
         }
@@ -406,14 +441,15 @@ PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
 // - Not writable, renew the `page_file` and its belonging writer.
 //   The <id,level> of the new `page_file` is <max_id + 1, 0> of all `write_files`
 PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
-    PageFile &                page_file,
+    WritingPageFile &         writing_file,
     const String &            parent_path_hint,
     PageStorage::WriterPtr && old_writer,
     const String &            logging_msg)
 {
     WriterPtr write_file_writer;
 
-    bool is_writable = page_file.isValid() && page_file.getType() == PageFile::Type::Formal //
+    PageFile & page_file   = writing_file.file;
+    bool       is_writable = page_file.isValid() && page_file.getType() == PageFile::Type::Formal //
         && isPageFileSizeFitsWritable(page_file, config);
     if (is_writable)
     {
@@ -448,8 +484,8 @@ PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
         }
 
         PageFileIdAndLevel max_writing_id_lvl{0, 0};
-        for (const auto & pf : write_files)
-            max_writing_id_lvl = std::max(max_writing_id_lvl, pf.fileIdLevel());
+        for (const auto & wf : write_files)
+            max_writing_id_lvl = std::max(max_writing_id_lvl, wf.file.fileIdLevel());
         delegator->addPageFileUsedSize( //
             PageFileIdAndLevel(max_writing_id_lvl.first + 1, 0),
             0,
@@ -458,9 +494,12 @@ PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
         LOG_DEBUG(log,
                   storage_name << logging_msg << " create new PageFile_" << DB::toString(max_writing_id_lvl.first + 1)
                                << "_0 for write [path=" << pf_parent_path << "]");
-        page_file
+        // Renew the `file` and `persisted.meta_offset`, keep `persisted.sequence` unchanged.
+        writing_file.file
             = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log);
-        write_file_writer = page_file.createWriter(config.sync_on_write, true);
+        writing_file.persisted.meta_offset = 0;
+
+        write_file_writer = writing_file.file.createWriter(config.sync_on_write, true);
     }
     return write_file_writer;
 }
@@ -484,7 +523,7 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
     return pages_reader;
 }
 
-void PageStorage::write(WriteBatch && wb, const RateLimiterPtr & rate_limiter)
+void PageStorage::write(WriteBatch && wb, const WriteLimiterPtr & write_limiter)
 {
     if (unlikely(wb.empty()))
         return;
@@ -502,7 +541,28 @@ void PageStorage::write(WriteBatch && wb, const RateLimiterPtr & rate_limiter)
     try
     {
         wb.setSequence(++write_batch_seq); // Set sequence number to keep ordering between writers.
-        size_t bytes_written = file_to_write->write(wb, edit, rate_limiter);
+#ifdef FIU_ENABLE
+        static int num_call = 0;
+        num_call++;
+#endif
+        fiu_do_on(FailPoints::random_slow_page_storage_write, {
+            if (num_call % 10 == 7)
+            {
+                pcg64                     rng(randomSeed());
+                std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
+                LOG_WARNING(log,
+                            "Failpoint random_slow_page_storage_write sleep for " //
+                                << ms.count() << "ms, WriteBatch with sequence=" << wb.getSequence());
+                std::this_thread::sleep_for(ms);
+            }
+        });
+        fiu_do_on(FailPoints::random_exception_after_page_storage_sequence_acquired, {
+            if (num_call % 10 == 7)
+                throw Exception("Failpoint random_exception_after_page_storage_sequence_acquired is triggered, WriteBatch with sequence="
+                                    + DB::toString(wb.getSequence()) + " has been canceled",
+                                ErrorCodes::FAIL_POINT_ERROR);
+        });
+        size_t bytes_written = file_to_write->write(wb, edit, write_limiter);
         delegator->addPageFileUsedSize(file_to_write->fileIdLevel(),
                                        bytes_written,
                                        file_to_write->parentPath(),
@@ -520,20 +580,21 @@ void PageStorage::write(WriteBatch && wb, const RateLimiterPtr & rate_limiter)
     {
         // Return writer to idle queue
         std::unique_lock lock(write_mutex);
-
-        // Look if we need to roll to new PageFile
-        size_t index = 0;
+        size_t           index = 0;
         for (size_t i = 0; i < write_files.size(); ++i)
         {
-            if (write_files[i].fileIdLevel() == file_to_write->fileIdLevel())
+            if (write_files[i].file.fileIdLevel() == file_to_write->fileIdLevel())
             {
                 index = i;
                 break;
             }
         }
-        auto & page_file = write_files[index];
-        file_to_write    = checkAndRenewWriter(
-            page_file, "", std::move(file_to_write), /*logging_msg=*/" PageFile_" + DB::toString(page_file.getFileId()) + "_0 is full,");
+        auto & writing_file    = write_files[index];
+        writing_file.persisted = PersistState{.meta_offset = writing_file.file.getMetaFileAppendPos(), .sequence = wb.getSequence()};
+
+        // Check whether we need to roll to new PageFile and its writer
+        const auto logging_msg = " PageFile_" + DB::toString(writing_file.file.getFileId()) + "_0 is full,";
+        file_to_write          = checkAndRenewWriter(writing_file, "", std::move(file_to_write), logging_msg);
 
         idle_writers.emplace_back(std::move(file_to_write));
 
@@ -562,7 +623,7 @@ std::tuple<size_t, double, unsigned> PageStorage::getSnapshotsStat() const
     return versioned_page_entries.getSnapshotsStat();
 }
 
-Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
+Page PageStorage::read(PageId page_id, const ReadLimiterPtr& read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -575,10 +636,10 @@ Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
     const auto       file_id_level = page_entry->fileIdLevel();
     PageIdAndEntries to_read       = {{page_id, *page_entry}};
     auto             file_reader   = getReader(file_id_level);
-    return file_reader->read(to_read)[page_id];
+    return file_reader->read(to_read, read_limiter)[page_id];
 }
 
-PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot)
+PageMap PageStorage::read(const std::vector<PageId> & page_ids, const ReadLimiterPtr& read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -614,14 +675,14 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snap
         (void)file_id_level;
         auto & page_id_and_entries = entries_and_reader.first;
         auto & reader              = entries_and_reader.second;
-        auto   page_in_file        = reader->read(page_id_and_entries);
+        auto   page_in_file        = reader->read(page_id_and_entries, read_limiter);
         for (auto & [page_id, page] : page_in_file)
             page_map.emplace(page_id, page);
     }
     return page_map;
 }
 
-void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot)
+void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr& read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -657,11 +718,11 @@ void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler &
         auto & page_id_and_entries = entries_and_reader.first;
         auto & reader              = entries_and_reader.second;
 
-        reader->read(page_id_and_entries, handler);
+        reader->read(page_id_and_entries, handler, read_limiter);
     }
 }
 
-PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, SnapshotPtr snapshot)
+PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr& read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
         snapshot = this->getSnapshot();
@@ -696,7 +757,7 @@ PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, Snaps
         (void)file_id_level;
         auto & reader       = entries_and_reader.first;
         auto & fields_infos = entries_and_reader.second;
-        auto   page_in_file = reader->read(fields_infos);
+        auto   page_in_file = reader->read(fields_infos, read_limiter);
         for (auto & [page_id, page] : page_in_file)
             page_map.emplace(page_id, std::move(page));
     }
@@ -724,7 +785,7 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
 
     for (const auto & p : file_and_pages)
     {
-        auto pages = read(p.second, snapshot);
+        auto pages = read(p.second, nullptr, snapshot);
         for (const auto & id_page : pages)
         {
             acceptor(id_page.second);
@@ -771,9 +832,8 @@ void PageStorage::drop()
     opt.remove_tmp_files  = false;
     auto page_files       = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
-    // TODO: count how many bytes in "archive" directory.
     for (const auto & page_file : page_files)
-        delegator->removePageFile(page_file.fileIdLevel(), page_file.getDiskSize());
+        delegator->removePageFile(page_file.fileIdLevel(), page_file.getDiskSize(), false);
 
     /// FIXME: Note that these drop directories actions are not atomic, may leave some broken files on disk.
 
@@ -852,7 +912,36 @@ static String fileInfoToString(const PageFileIdAndLevel & id, const PageFile::Ty
     return "[" + DB::toString(id.first) + "," + DB::toString(id.second) + "," + PageFile::typeToString(type) + "]";
 }
 
-bool PageStorage::gc(const Context & global_context, bool not_skip)
+void PageStorage::getWritingSnapshot(std::lock_guard<std::mutex> &, WritingFilesSnapshot & writing_snapshot) const
+{
+    for (const auto & wf : write_files)
+    {
+        writing_snapshot.states.emplace(wf.file.fileIdLevel(), wf.persisted);
+    }
+}
+
+PageFileIdAndLevel PageStorage::WritingFilesSnapshot::minFileIDLevel() const
+{
+    if (likely(!states.empty()))
+        return states.cbegin()->first;
+    throw Exception("There is no writing files!", ErrorCodes::LOGICAL_ERROR);
+}
+
+WriteBatch::SequenceID PageStorage::WritingFilesSnapshot::minPersistedSequence() const
+{
+    if (unlikely(states.empty()))
+        throw Exception("There is no writing files! Can not get min persisted sequence", ErrorCodes::LOGICAL_ERROR);
+
+    auto                   iter = states.begin();
+    WriteBatch::SequenceID seq  = iter->second.sequence;
+    for (/**/; iter != states.end(); ++iter)
+    {
+        seq = std::min(seq, iter->second.sequence);
+    }
+    return seq;
+}
+
+bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
     // If another thread is running gc, just return;
     bool v = false;
@@ -888,24 +977,23 @@ bool PageStorage::gc(const Context & global_context, bool not_skip)
     gc_context.max_file_type  = page_files.rbegin()->getType();
     gc_context.num_page_files = page_files.size();
 
-    std::set<PageFileIdAndLevel> writing_file_id_levels;
-    PageFileIdAndLevel           min_writing_file_id_level;
-    StatisticsInfo               statistics_snapshot; // statistics snapshot copy with lock protection
+    WritingFilesSnapshot writing_files_snapshot;
+    StatisticsInfo       statistics_snapshot; // statistics snapshot copy with lock protection
     {
         std::lock_guard<std::mutex> lock(write_mutex);
-        for (size_t i = 0; i < write_files.size(); ++i)
-        {
-            writing_file_id_levels.insert(write_files[i].fileIdLevel());
-        }
-        min_writing_file_id_level = *writing_file_id_levels.begin();
+        getWritingSnapshot(lock, writing_files_snapshot);
 
         /// If writer has not been used for too long, close the opened file fd of them.
+        // Only close the idle fds in `idle_writers` under the `write_mutex` protection,
+        // not all writable page files, or we may happen to close a fd in the middle of
+        // writing.
         for (auto & writer : idle_writers)
         {
             writer->tryCloseIdleFd(config.open_file_max_idle_time);
         }
         statistics_snapshot = statistics;
     }
+    PageFileIdAndLevel min_writing_file_id_level = writing_files_snapshot.minFileIDLevel();
     LOG_TRACE(log, storage_name << " Before gc, " << statistics_snapshot.toString());
 
     // Helper function for apply edits and clean up before gc exit.
@@ -1023,17 +1111,24 @@ bool PageStorage::gc(const Context & global_context, bool not_skip)
                         ErrorCodes::LOGICAL_ERROR);
     }
 #endif
+
+    // Count how many PageFiles are "legacy" or "checkpoint", we need to adjust
+    // the GC param by `num_legacy_files`.
+    for (const auto & page_file : page_files)
+    {
+        gc_context.num_legacy_files
+            += static_cast<size_t>((page_file.getType() == PageFile::Type::Legacy) || (page_file.getType() == PageFile::Type::Checkpoint));
+    }
+
     {
         // Try to compact consecutive Legacy PageFiles into a snapshot.
         // Legacy and checkpoint files will be removed from `page_files` after `tryCompact`.
-        LegacyCompactor compactor(*this, global_context);
+        LegacyCompactor compactor(*this, write_limiter, read_limiter);
         PageFileSet     page_files_to_archive;
         std::tie(page_files, page_files_to_archive, gc_context.num_bytes_written_in_compact_legacy)
-            = compactor.tryCompact(std::move(page_files), writing_file_id_levels);
+            = compactor.tryCompact(std::move(page_files), writing_files_snapshot);
         archivePageFiles(page_files_to_archive);
         gc_context.num_files_archive_in_compact_legacy = page_files_to_archive.size();
-        if (gc_context.num_page_files > page_files.size())
-            gc_context.num_legacy_files = gc_context.num_page_files - page_files.size();
     }
 
     PageEntriesEdit gc_file_entries_edit;
@@ -1043,8 +1138,8 @@ bool PageStorage::gc(const Context & global_context, bool not_skip)
         Stopwatch watch_migrate;
 
         // Calculate a config by the gc context, maybe do a more aggressive GC
-        DataCompactor<PageStorage::SnapshotPtr> compactor(*this, gc_context.calculateGcConfig(config), global_context);
-        std::tie(gc_context.compact_result, gc_file_entries_edit) = compactor.tryMigrate(page_files, getSnapshot(), writing_file_id_levels);
+        DataCompactor<PageStorage::SnapshotPtr> compactor(*this, gc_context.calculateGcConfig(config), write_limiter, read_limiter);
+        std::tie(gc_context.compact_result, gc_file_entries_edit) = compactor.tryMigrate(page_files, getSnapshot(), writing_files_snapshot);
 
         // We only care about those time cost in actually doing compaction on page data.
         if (gc_context.compact_result.do_compaction && metrics)
@@ -1098,9 +1193,11 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
             if (Poco::File file(path); file.exists())
             {
                 // To ensure the atomic of deletion, move to the `archive` dir first and then remove the PageFile dir.
+                auto file_size = page_file.getDiskSize();
                 file.moveTo(dest);
                 file.remove(true);
                 page_file.deleteEncryptionInfo();
+                delegator->removePageFile(page_file.fileIdLevel(), file_size, false);
             }
         }
         LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
@@ -1169,7 +1266,7 @@ PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_file
             // Don't touch the <file_id, level> that are used for the sorting then you could
             // work around by using a const_cast
             size_t bytes_removed = const_cast<PageFile &>(page_file).setLegacy();
-            delegator->removePageFile(page_id_and_lvl, bytes_removed);
+            delegator->removePageFile(page_id_and_lvl, bytes_removed, true);
             num_data_removed += 1;
         }
     }

@@ -11,9 +11,9 @@
 namespace DB
 {
 
-RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_, const EncryptionPath & encryption_path_, int flags) const
+RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_, const EncryptionPath & encryption_path_, const ReadLimiterPtr & read_limiter, int flags) const
 {
-    RandomAccessFilePtr file = std::make_shared<PosixRandomAccessFile>(file_path_, flags);
+    RandomAccessFilePtr file = std::make_shared<PosixRandomAccessFile>(file_path_, flags, read_limiter);
     auto encryption_info = key_manager->getFile(encryption_path_.full_path);
     if (encryption_info.res != FileEncryptionRes::Disabled && encryption_info.method != EncryptionMethod::Plaintext)
     {
@@ -23,9 +23,9 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_,
 }
 
 WritableFilePtr FileProvider::newWritableFile(const String & file_path_, const EncryptionPath & encryption_path_, bool truncate_if_exists_,
-    bool create_new_encryption_info_, const RateLimiterPtr & rate_limiter_, int flags, mode_t mode) const
+    bool create_new_encryption_info_, const WriteLimiterPtr & write_limiter_, int flags, mode_t mode) const
 {
-    WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, rate_limiter_);
+    WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_);
     if (encryption_enabled && create_new_encryption_info_)
     {
         auto encryption_info = key_manager->newFile(encryption_path_.full_path);

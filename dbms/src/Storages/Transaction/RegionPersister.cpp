@@ -199,7 +199,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 bool RegionPersister::gc()
 {
     if (page_storage)
-        return page_storage->gc(global_context);
+        return page_storage->gc();
     else
         return stable_page_storage->gc();
 }

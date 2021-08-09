@@ -7,7 +7,6 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
@@ -192,7 +191,7 @@ public:
             const DB::PageId pageId = random() % MAX_PAGE_ID;
             try
             {
-                DB::Page page = storage->read(pageId);
+                DB::Page page = storage->read(pageId, nullptr);
                 ++pages_read;
                 bytes_read += page.data.size();
             }
@@ -220,7 +219,7 @@ public:
                     ++pages_read;
                     bytes_read += page.data.size();
                 };
-                storage->read(pageIds, handler);
+                storage->read(pageIds, handler, nullptr);
             }
             catch (DB::Exception & e)
             {
@@ -245,7 +244,7 @@ public:
             return;
         try
         {
-            storage->gc(TiFlashTestEnv::getContext());
+            storage->gc();
         }
         catch (DB::Exception & e)
         {
@@ -378,12 +377,12 @@ try
         ASSERT_EQ(old_entry.tag, entry.tag) << "of Page[" << page_id << "]";
         ASSERT_EQ(old_entry.checksum, entry.checksum) << "of Page[" << page_id << "]";
 
-        auto   old_page = old_storage->read(page_id, old_snapshot);
+        auto   old_page = old_storage->read(page_id, nullptr, old_snapshot);
         char * buf      = old_page.data.begin();
         for (size_t i = 0; i < old_page.data.size(); ++i)
             ASSERT_EQ(((size_t) * (buf + i)) % 0xFF, page_id % 0xFF);
 
-        auto page = storage->read(page_id, snapshot);
+        auto page = storage->read(page_id, nullptr, snapshot);
         buf       = page.data.begin();
         for (size_t i = 0; i < old_page.data.size(); ++i)
             ASSERT_EQ(((size_t) * (buf + i)) % 0xFF, page_id % 0xFF);
