@@ -278,7 +278,7 @@ private:
 
         auto readBody = [&]() {
             auto body_length = expectRead(buffer, frame.bytes);
-            if (unlikely(body_length != sizeof(ChecksumFrame<Backend>)))
+            if (unlikely(body_length != frame.bytes))
             {
                 throw TiFlashException(
                     fmt::format("readBig expects to read the body, but only {}/{} bytes returned", body_length, frame.bytes),
@@ -328,7 +328,7 @@ private:
         }
 
         // Finally, there may be still some bytes left.
-        assert(position() == working_buffer.end());
+        position() = working_buffer.end();
         return (expected - size) + (size ? read(buffer, size) : 0);
     }
 
