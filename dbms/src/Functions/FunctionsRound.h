@@ -3,7 +3,6 @@
 #include <Columns/getColumnData.h>
 #include <Common/Decimal.h>
 #include <Common/TiFlashException.h>
-#include <Common/debugAssert.h>
 #include <Common/toSafeUnsigned.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsArithmetic.h>
@@ -1046,7 +1045,7 @@ struct TiDBDecimalRound
         if (frac < info.input_scale)
         {
             FracType frac_index = info.input_scale - frac;
-            DEBUG_ASSERT(frac_index <= info.input_prec);
+            assert(frac_index <= info.input_prec);
 
             auto base = PowForInput::result[frac_index];
             auto remainder = absolute_value % base;
@@ -1066,7 +1065,7 @@ struct TiDBDecimalRound
             // in this case, all digits discarded by the following division should be zeroes.
             // they are reset to zeroes because of rounding.
             auto base = PowForInput::result[info.input_scale - info.output_scale];
-            DEBUG_ASSERT(absolute_value % base == 0);
+            assert(absolute_value % base == 0);
 
             absolute_value /= base;
         }
@@ -1091,7 +1090,7 @@ struct TiDBRoundPrecisionInferer
 {
     static std::tuple<PrecType, ScaleType> infer(PrecType prec, ScaleType scale, FracType frac, bool is_const_frac)
     {
-        DEBUG_ASSERT(prec >= scale);
+        assert(prec >= scale);
         PrecType int_prec = prec - scale;
         ScaleType new_scale = scale;
 
@@ -1131,7 +1130,7 @@ struct TiDBRound
                 ErrorCodes::ILLEGAL_COLUMN);
 
         auto output_column = typeid_cast<OutputColumn *>(output_column_.get());
-        DEBUG_ASSERT(output_column != nullptr);
+        assert(output_column != nullptr);
 
         size_t size = input_column->size();
         auto && input_data = getColumnData<InputType>(input_column);
@@ -1233,12 +1232,12 @@ private:
         }
         else
         {
-            DEBUG_ASSERT(input_type->isDecimal());
+            assert(input_type->isDecimal());
 
             auto prec = getDecimalPrecision(*input_type, std::numeric_limits<PrecType>::max());
             auto scale = getDecimalScale(*input_type, std::numeric_limits<ScaleType>::max());
-            DEBUG_ASSERT(prec != std::numeric_limits<PrecType>::max());
-            DEBUG_ASSERT(scale != std::numeric_limits<ScaleType>::max());
+            assert(prec != std::numeric_limits<PrecType>::max());
+            assert(scale != std::numeric_limits<ScaleType>::max());
 
             // if is_const_frac is false, the value of frac will be ignored.
             FracType frac = 0;
@@ -1247,7 +1246,7 @@ private:
             if (frac_column_const)
             {
                 auto column = typeid_cast<const ColumnConst *>(frac_column);
-                DEBUG_ASSERT(column != nullptr);
+                assert(column != nullptr);
 
                 is_const_frac = true;
                 frac = getFracFromConstColumn(column);
