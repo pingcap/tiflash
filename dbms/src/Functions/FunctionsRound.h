@@ -863,45 +863,6 @@ public:
  */
 using FracType = Int64;
 
-template <typename InputType>
-struct TiDBIntegerRound
-{
-    static_assert(is_integer_v<InputType>);
-
-    static InputType eval(const InputType & input, FracType frac [[maybe_unused]])
-    {
-        // TODO: RoundWithFrac.
-        if (frac != 0)
-            throw TiFlashException(fmt::format("integer round with frac = {} is not supported", frac), Errors::Coprocessor::Unimplemented);
-
-        return input;
-    }
-};
-
-template <typename InputType>
-struct TiDBFloatingRound
-{
-    static_assert(std::is_floating_point_v<InputType>);
-
-    // EvalType is the type used in evaluations.
-    // in MySQL, floating round always returns Float64.
-    using EvalType = Float64;
-
-    static EvalType eval(const InputType & input, FracType frac [[maybe_unused]])
-    {
-        // TODO: RoundWithFrac.
-        if (frac != 0)
-            throw TiFlashException(
-                fmt::format("floating point round with frac = {} is not supported", frac), Errors::Coprocessor::Unimplemented);
-
-        auto value = static_cast<EvalType>(input);
-
-        // floating-point environment is thread-local, so `fesetround` is thread-safe.
-        std::fesetround(FE_TONEAREST);
-        return std::nearbyint(value);
-    }
-};
-
 // build constant table of up to Nth power of 10 at compile time.
 template <typename T, size_t N>
 struct ConstPowOf10
@@ -919,6 +880,137 @@ struct ConstPowOf10
     static constexpr ArrayType result = build();
 };
 
+template <typename InputType, typename OutputType>
+struct TiDBFloatingRound
+{
+    static_assert(std::is_floating_point_v<InputType>);
+    static_assert(std::is_floating_point_v<OutputType>);
+
+    static OutputType eval(const InputType & input, FracType frac)
+    {
+        auto value = static_cast<OutputType>(input);
+        auto base = 1.0;
+
+        if (frac != 0)
+        {
+            base = std::pow(10.0, frac);
+            auto scaled_value = value * base;
+
+            if (std::isinf(scaled_value))
+            {
+                // if frac is too large, base will be +inf.
+                // at this time, it is usually beyond the effective precision of floating-point type.
+                // no rounding is needed.
+                return value;
+            }
+            else
+                value = scaled_value;
+        }
+
+        // floating-point environment is thread-local, so `fesetround` is thread-safe.
+        std::fesetround(FE_TONEAREST);
+        value = std::nearbyint(value);
+
+        if (frac != 0)
+        {
+            value /= base;
+
+            if (!std::isfinite(value))
+            {
+                // if frac is too small, base will be zero.
+                // at this time, even the maximum of possible floating-point values will be
+                // rounded to zero.
+                return 0.0;
+            }
+        }
+
+        return value;
+    }
+};
+
+template <typename InputType, typename OutputType>
+struct TiDBIntegerRound
+{
+    static_assert(is_integer_v<InputType>);
+    static_assert(is_integer_v<OutputType>);
+
+    static constexpr auto digits = std::numeric_limits<OutputType>::digits10;
+    static constexpr auto max_digits = digits + 1;
+
+    using UnsignedOutput = make_unsigned_t<OutputType>;
+    using Pow = ConstPowOf10<UnsignedOutput, digits>;
+
+    static OutputType eval(const InputType & input, FracType frac)
+    {
+        auto value = static_cast<OutputType>(input);
+
+        if (frac >= 0)
+            return value;
+        else if (frac < -max_digits)
+            return 0;
+        else
+        {
+            frac = -frac;
+
+            // rounding result may overflow, but it is expected in MySQL.
+            // we need to cast input to unsigned first to ensure overflow is not
+            // undefined behavior.
+            auto absolute_value = toSafeUnsigned<OutputType>(value);
+
+            if (frac == max_digits)
+            {
+                auto base = Pow::result[digits];
+
+                // test `x >= 5 * base`, but `5 * base` may overflow.
+                // since `base` is integer, `x / 5 >= base` if and only if `floor(x / 5) >= base`.
+                if (absolute_value / 5 >= base)
+                {
+                    // round up.
+                    absolute_value = base * 10;
+                }
+                else
+                {
+                    // round down.
+                    absolute_value = 0;
+                }
+            }
+            else
+            {
+                auto base = Pow::result[frac];
+                auto remainder = absolute_value % base;
+
+                absolute_value -= remainder;
+                if (remainder >= base / 2)
+                {
+                    // round up.
+                    absolute_value += base;
+                }
+            }
+
+            if constexpr (std::is_signed_v<OutputType>)
+            {
+                if (input < 0)
+                    return static_cast<OutputType>(-absolute_value);
+                else
+                    return static_cast<OutputType>(absolute_value);
+            }
+            else
+                return absolute_value;
+        }
+    }
+};
+
+template <typename InputType>
+struct TiDBIntegerRound<InputType, Float64>
+{
+    static_assert(is_integer_v<InputType>);
+
+    static Float64 eval(const InputType & input, FracType frac)
+    {
+        return TiDBFloatingRound<Float64, Float64>::eval(static_cast<Float64>(input), frac);
+    }
+};
+
 struct TiDBDecimalRoundInfo
 {
     FracType input_prec;
@@ -933,6 +1025,7 @@ template <typename InputType, typename OutputType>
 struct TiDBDecimalRound
 {
     static_assert(IsDecimal<InputType>);
+    static_assert(IsDecimal<OutputType>);
 
     // output type is promoted to prevent overflow.
     // this case is very rare, such as Decimal(90, 30) truncated to Decimal(65, 30).
@@ -960,7 +1053,10 @@ struct TiDBDecimalRound
 
             absolute_value -= remainder;
             if (remainder >= base / 2)
+            {
+                // round up.
                 absolute_value += base;
+            }
         }
 
         // convert from input_scale to output_scale
@@ -969,9 +1065,10 @@ struct TiDBDecimalRound
             // output_scale will be different from input_scale only if frac is const.
             // in this case, all digits discarded by the following division should be zeroes.
             // they are reset to zeroes because of rounding.
-            DEBUG_ASSERT(frac <= info.output_scale);
+            auto base = PowForInput::result[info.input_scale - info.output_scale];
+            DEBUG_ASSERT(absolute_value % base == 0);
 
-            absolute_value /= PowForInput::result[info.input_scale - info.output_scale];
+            absolute_value /= base;
         }
 
         auto scaled_value = static_cast<UnsignedOutput>(absolute_value);
@@ -1053,11 +1150,11 @@ struct TiDBRound
         for (size_t i = 0; i < size; ++i)
         {
             if constexpr (std::is_floating_point_v<InputType>)
-                output_data[i] = TiDBFloatingRound<InputType>::eval(input_data[i], frac_data[i]);
+                output_data[i] = TiDBFloatingRound<InputType, OutputType>::eval(input_data[i], frac_data[i]);
             else if constexpr (IsDecimal<InputType>)
                 output_data[i] = TiDBDecimalRound<InputType, OutputType>::eval(input_data[i], frac_data[i], info);
             else
-                output_data[i] = TiDBIntegerRound<InputType>::eval(input_data[i], frac_data[i]);
+                output_data[i] = TiDBIntegerRound<InputType, OutputType>::eval(input_data[i], frac_data[i]);
         }
     }
 };
@@ -1099,14 +1196,12 @@ private:
                     ErrorCodes::ILLEGAL_COLUMN);
             }
 
+            // to prevent overflow. Large frac is also useless in fact.
+            if (unsigned_frac > std::numeric_limits<FracType>::max())
+                unsigned_frac = std::numeric_limits<FracType>::max();
+
             result = static_cast<FracType>(unsigned_frac);
         }
-
-        // in MySQL, frac is clamped to 30, which is identical to decimal_max_scale.
-        // frac is signed but decimal_max_scale is unsigned, so we have to cast before
-        // comparison.
-        if (result > static_cast<FracType>(decimal_max_scale))
-            result = decimal_max_scale;
 
         return result;
     }
@@ -1117,11 +1212,23 @@ private:
 
         auto input_type = arguments[0].type;
 
+        auto frac_column = arguments[1].column.get();
+        bool frac_column_const = frac_column && frac_column->isColumnConst();
+
         if (input_type->isInteger())
-            return input_type;
+        {
+            // in MySQL, integer round returns 64-bit integer if frac is const.
+            // otherwise returns Float64. the sign is the same as input.
+            if (!frac_column_const)
+                return std::make_shared<DataTypeFloat64>();
+            else if (input_type->isUnsignedInteger())
+                return std::make_shared<DataTypeUInt64>();
+            else
+                return std::make_shared<DataTypeInt64>();
+        }
         else if (input_type->isFloatingPoint())
         {
-            // in MySQL, floating round always returns Float64.
+            // in MySQL, floating-point round always returns Float64.
             return std::make_shared<DataTypeFloat64>();
         }
         else
@@ -1137,8 +1244,7 @@ private:
             FracType frac = 0;
             bool is_const_frac = true;
 
-            auto frac_column = arguments[1].column.get();
-            if (frac_column->isColumnConst())
+            if (frac_column_const)
             {
                 auto column = typeid_cast<const ColumnConst *>(frac_column);
                 DEBUG_ASSERT(column != nullptr);
@@ -1183,13 +1289,17 @@ private:
         block.getByPosition(result).column = std::move(output_column);
     }
 
-#define NUMERIC_DATA_TYPES                                                                                                        \
-    DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256, DataTypeInt8, \
-        DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64, DataTypeUInt64
+    template <typename F>
+    bool castToNumericDataTypes(const IDataType * input_type, const F & f)
+    {
+        return castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128,
+            DataTypeDecimal256, DataTypeInt8, DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64,
+            DataTypeUInt64>(input_type, f);
+    }
 
     void checkInputTypeAndApply(const DispatchArguments & args)
     {
-        if (!castTypeToEither<NUMERIC_DATA_TYPES>(args.input_type.get(), [&](const auto & input_type, bool) {
+        if (!castToNumericDataTypes(args.input_type.get(), [&](const auto & input_type, bool) {
                 using InputDataType = std::decay_t<decltype(input_type)>;
                 checkFracTypeAndApply<typename InputDataType::FieldType>(args);
                 return true;
@@ -1219,7 +1329,7 @@ private:
     template <typename InputType, typename FracType>
     void checkOutputTypeAndApply(const DispatchArguments & args)
     {
-        if (!castTypeToEither<NUMERIC_DATA_TYPES>(args.output_type.get(), [&](const auto & output_type, bool) {
+        if (!castToNumericDataTypes(args.output_type.get(), [&](const auto & output_type, bool) {
                 using OutputDataType = std::decay_t<decltype(output_type)>;
                 return checkColumnsAndApply<InputType, FracType, typename OutputDataType::FieldType>(args);
             }))
@@ -1233,8 +1343,12 @@ private:
     template <typename InputType, typename FracType, typename OutputType>
     bool checkColumnsAndApply(const DispatchArguments & args)
     {
+        constexpr bool check_integer_output
+            = is_signed_v<InputType> ? std::is_same_v<OutputType, Int64> : std::is_same_v<OutputType, UInt64>;
+
         if constexpr ((std::is_floating_point_v<InputType> && !std::is_same_v<OutputType, Float64>)
-            || (IsDecimal<InputType> && !IsDecimal<OutputType>) || (is_integer_v<InputType> && !std::is_same_v<InputType, OutputType>))
+            || (IsDecimal<InputType> && !IsDecimal<OutputType>)
+            || (is_integer_v<InputType> && !(std::is_same_v<OutputType, Float64> || check_integer_output)))
             return false;
         else
         {
