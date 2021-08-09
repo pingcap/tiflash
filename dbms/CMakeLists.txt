@@ -107,6 +107,9 @@ list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctio
 list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
 
 add_library(clickhouse_common_io ${SPLIT_SHARED} ${clickhouse_common_io_headers} ${clickhouse_common_io_sources})
+target_include_directories(clickhouse_common_io BEFORE PUBLIC ${CRC64_INCLUDE_DIR})
+target_include_directories(clickhouse_common_io BEFORE PUBLIC ${CRC64_INCREMENTAL_DIR})
+target_include_directories(clickhouse_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR})
 
 if (ARCH_FREEBSD)
     target_compile_definitions (clickhouse_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
@@ -214,8 +217,6 @@ target_link_libraries (dbms
 
 target_include_directories (dbms BEFORE PRIVATE ${DIVIDE_INCLUDE_DIR})
 target_include_directories (dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
-target_include_directories (dbms BEFORE PRIVATE ${CRC64_INCLUDE_DIRS})
-target_include_directories (dbms BEFORE PRIVATE ${XXHASH_INCLUDE_DIR})
 
 if (NOT USE_INTERNAL_LZ4_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${LZ4_INCLUDE_DIR})

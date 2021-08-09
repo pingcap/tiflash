@@ -311,7 +311,6 @@ include (cmake/find_raftstore_proxy.cmake)
 include (cmake/find_crc64.cmake)
 include (cmake/find_xxhash.cmake)
 
-
 include (cmake/find_contrib_lib.cmake)
 find_contrib_lib(cityhash)
 find_contrib_lib(farmhash)
