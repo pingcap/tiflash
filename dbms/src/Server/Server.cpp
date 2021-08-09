@@ -17,7 +17,7 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/setThreadName.h>
-#include <Core/SIMD.h>
+#include <common/simd.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
@@ -828,20 +828,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     UpdateMallocConfig(log);
 
-#ifdef DBMS_ENABLE_AVX_SUPPORT
-    loadBooleanConfig(log, DB::SIMDOption::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    loadBooleanConfig(log, simd_option::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
 #endif
 
-#ifdef DBMS_ENABLE_AVX512_SUPPORT
-    loadBooleanConfig(log, DB::SIMDOption::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
+    loadBooleanConfig(log, simd_option::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
 #endif
 
-#ifdef DBMS_ENABLE_ASIMD_SUPPORT
-    loadBooleanConfig(log, DB::SIMDOption::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
+#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
+    loadBooleanConfig(log, DB::simd_option::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
 #endif
 
-#ifdef DBMS_ENABLE_SVE_SUPPORT
-    loadBooleanConfig(log, DB::SIMDOption::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
+#ifdef TIFLASH_ENABLE_SVE_SUPPORT
+    loadBooleanConfig(log, DB::simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
 
     registerFunctions();
