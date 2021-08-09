@@ -8,22 +8,22 @@
 
 struct TempOption
 {
-    bool ENABLE_AVX;
-    bool ENABLE_AVX512;
+    bool prev_enable_avx;
+    bool prev_enable_avx512;
 
 
-    TempOption(bool ENABLE_AVX_, bool ENABLE_AVX512_)
+    TempOption(bool enable_avx, bool enable_avx512)
     {
-        ENABLE_AVX = simd_option::ENABLE_AVX;
-        ENABLE_AVX512 = simd_option::ENABLE_AVX512;
-        simd_option::ENABLE_AVX = ENABLE_AVX_;
-        simd_option::ENABLE_AVX512 = ENABLE_AVX512_;
+        prev_enable_avx = simd_option::ENABLE_AVX;
+        prev_enable_avx512 = simd_option::ENABLE_AVX512;
+        simd_option::ENABLE_AVX = enable_avx;
+        simd_option::ENABLE_AVX512 = enable_avx512;
     }
 
     ~TempOption()
     {
-        simd_option::ENABLE_AVX = ENABLE_AVX;
-        simd_option::ENABLE_AVX512 = ENABLE_AVX512;
+        simd_option::ENABLE_AVX = prev_enable_avx;
+        simd_option::ENABLE_AVX512 = prev_enable_avx512;
     }
 };
 struct StringRefTest : ::testing::TestWithParam<std::pair<bool, bool>>
@@ -70,6 +70,8 @@ TEST_P(StringRefTest, CompareLongEq)
     strcpy(aligned2, data.data());
 
     ASSERT_EQ(StringRef(aligned1, data.size()), StringRef(aligned2, data.size())) << " seed: " << seed;
+    ::operator delete (aligned1, std::align_val_t{128});
+    ::operator delete (aligned2, std::align_val_t{128});
 }
 
 TEST_P(StringRefTest, CompareLongNe)
@@ -99,6 +101,9 @@ TEST_P(StringRefTest, CompareLongNe)
     aligned2[target] = static_cast<char>(~aligned2[target]);
 
     ASSERT_NE(StringRef(aligned1, data.size()), StringRef(aligned2, data.size())) << " seed: " << seed;
+
+    ::operator delete (aligned1, std::align_val_t{128});
+    ::operator delete (aligned2, std::align_val_t{128});
 }
 
 using Parm = std::pair<bool, bool>;
@@ -120,16 +125,16 @@ INSTANTIATE_TEST_CASE_P(Parm, StringRefTest,
 
 struct TempOption
 {
-    bool ENABLE_ASIMD;
+    bool prev_enable_asimd;
 
 
-    TempOption(bool ENABLE_ASIMD_)
+    TempOption(bool enable_asimd)
     {
-        ENABLE_ASIMD = simd_option::ENABLE_ASIMD;
-        simd_option::ENABLE_ASIMD = ENABLE_ASIMD_;
+        prev_enable_asimd = simd_option::ENABLE_ASIMD;
+        simd_option::ENABLE_ASIMD = enable_asimd;
     }
 
-    ~TempOption() { simd_option::ENABLE_ASIMD = ENABLE_ASIMD; }
+    ~TempOption() { simd_option::ENABLE_ASIMD = prev_enable_asimd; }
 };
 struct StringRefTest : ::testing::TestWithParam<bool>
 {
@@ -175,6 +180,8 @@ TEST_P(StringRefTest, CompareLongEq)
     strcpy(aligned2, data.data());
 
     ASSERT_EQ(StringRef(aligned1, data.size()), StringRef(aligned2, data.size())) << " seed: " << seed;
+    ::operator delete (aligned1, std::align_val_t{128});
+    ::operator delete (aligned2, std::align_val_t{128});
 }
 
 TEST_P(StringRefTest, CompareLongNe)
@@ -204,6 +211,8 @@ TEST_P(StringRefTest, CompareLongNe)
     aligned2[target] = static_cast<char>(~aligned2[target]);
 
     ASSERT_NE(StringRef(aligned1, data.size()), StringRef(aligned2, data.size())) << " seed: " << seed;
+    ::operator delete (aligned1, std::align_val_t{128});
+    ::operator delete (aligned2, std::align_val_t{128});
 }
 
 std::string parmToName(const ::testing::TestParamInfo<bool> & info)
