@@ -48,6 +48,9 @@ class DecimalField
     static_assert(IsDecimal<T>);
 
 public:
+    using DecimalType = T;
+    using NativeType = typename T::NativeType;
+
     DecimalField(T value, UInt32 scale_) : dec(value), scale(scale_) {}
 
     operator T() const { return dec; }
