@@ -519,13 +519,17 @@ TEST(IOLimitTuner_test, NotNeedTune)
     }
 }
 
-IOLimitTuner::Watermark watermarkOfBgWrite(const auto & tuner) { return tuner.getWatermark(tuner.bg_write_stat->pct()); }
+template <typename T>
+IOLimitTuner::Watermark watermarkOfBgWrite(const T & tuner) { return tuner.getWatermark(tuner.bg_write_stat->pct()); }
 
-IOLimitTuner::Watermark watermarkOfFgWrite(const auto & tuner) { return tuner.getWatermark(tuner.fg_write_stat->pct()); }
+template <typename T>
+IOLimitTuner::Watermark watermarkOfFgWrite(const T & tuner) { return tuner.getWatermark(tuner.fg_write_stat->pct()); }
 
-IOLimitTuner::Watermark watermarkOfBgRead(const auto & tuner) { return tuner.getWatermark(tuner.bg_read_stat->pct()); }
+template <typename T>
+IOLimitTuner::Watermark watermarkOfBgRead(const T & tuner) { return tuner.getWatermark(tuner.bg_read_stat->pct()); }
 
-IOLimitTuner::Watermark watermarkOfFgRead(const auto & tuner) { return tuner.getWatermark(tuner.fg_read_stat->pct()); }
+template <typename T>
+IOLimitTuner::Watermark watermarkOfFgRead(const T & tuner) { return tuner.getWatermark(tuner.fg_read_stat->pct()); }
 
 void updateWatermarkPct(StorageIORateLimitConfig & io_config, int emergency, int high, int medium)
 {
