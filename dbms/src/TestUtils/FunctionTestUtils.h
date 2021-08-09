@@ -9,25 +9,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/IDataType.h>
-#include <Interpreters/Context.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <fmt/core.h>
-
-#if !__clang__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-compare"
-#else
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-compare"
-#endif
-
-#include <gtest/gtest.h>
-
-#if !__clang__
-#pragma GCC diagnostic pop
-#else
-#pragma clang diagnostic pop
-#endif
 
 namespace DB
 {
@@ -201,10 +183,10 @@ ColumnWithTypeAndName createColumn(const InferredDataVector<T> & vec, String nam
 }
 
 template <typename T>
-ColumnWithTypeAndName createColumn(InferredDataInitializerList<T> init)
+ColumnWithTypeAndName createColumn(InferredDataInitializerList<T> init, const String & name = "")
 {
     auto vec = InferredDataVector<T>(init);
-    return createColumn<T>(vec, "");
+    return createColumn<T>(vec, name);
 }
 
 template <typename T>
@@ -215,21 +197,21 @@ ColumnWithTypeAndName createConstColumn(size_t size, const InferredFieldType<T> 
 }
 
 template <typename T, typename ... Args>
-ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, const InferredDataVector<T> & vec, String name = "")
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, const InferredDataVector<T> & vec, const String & name = "")
 {
     DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     return {makeColumn<T>(data_type, vec), data_type, name};
 }
 
 template <typename T, typename ... Args>
-ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, InferredDataInitializerList<T> init, String name = "")
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, InferredDataInitializerList<T> init, const String & name = "")
 {
     auto vec = InferredDataVector<T>(init);
     return createColumn<T>(data_type_args, vec, name);
 }
 
 template <typename T, typename ... Args>
-ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, const InferredFieldType<T> & value, String name = "")
+ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, const InferredFieldType<T> & value, const String & name = "")
 {
     DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     return {makeConstColumn<T>(data_type, size, value), data_type, name};
