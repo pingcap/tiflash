@@ -78,7 +78,7 @@ constexpr char DM_CHECKSUM_BUFFER_TEST_PATH[] = "/tmp/tiflash_dm_checksum_buffer
 auto prepareIO()
 {
     auto metric        = std::make_shared<DB::TiFlashMetrics>();
-    auto rate_limiter  = std::make_shared<DB::RateLimiter>(metric, 0);
+    auto rate_limiter  = std::make_shared<DB::IORateLimiter>();
     auto key_manager   = std::make_shared<DB::MockKeyManager>();
     auto file_provider = std::make_shared<DB::FileProvider>(key_manager, true);
     return std::make_pair(std::move(rate_limiter), std::move(file_provider));
@@ -176,14 +176,14 @@ void runStackingTest()
     {
         auto [data, seed] = randomData(size);
         {
-            auto buffer
-                = createWriteBufferFromFileBaseByFileProvider(provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, true, limiter, config);
+            auto buffer = createWriteBufferFromFileBaseByFileProvider(
+                provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, true, limiter->getReadLimiter(), config);
             auto compression_buffer = CompressedWriteBuffer<false>(*buffer);
             compression_buffer.write(data.data(), data.size());
         }
         {
             auto buffer = CompressedReadBufferFromFileProvider<false>(
-                provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, config.getChecksumFrameLength(), config);
+                provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, config.getChecksumFrameLength(), limiter->getReadLimiter(), config);
             auto cmp = std::vector<char>(size);
             ASSERT_EQ(buffer.read(cmp.data(), size), size) << "random seed: " << seed << std::endl;
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
@@ -213,8 +213,8 @@ void runStackedSeekingTest()
     std::vector<std::tuple<std::vector<char>, size_t, size_t>> slices;
     auto [data, seed] = randomData(size);
     {
-        auto buffer
-            = createWriteBufferFromFileBaseByFileProvider(provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, true, limiter, config);
+        auto buffer = createWriteBufferFromFileBaseByFileProvider(
+            provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, true, limiter->getWriteLimiter(), config);
         auto   compression_buffer = CompressedWriteBuffer<false>(*buffer);
         size_t acc                = 0;
         for (size_t length = 1; acc + length <= size; acc += length, length <<= 1)
@@ -234,7 +234,7 @@ void runStackedSeekingTest()
     }
     {
         auto buffer = CompressedReadBufferFromFileProvider<false>(
-            provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, config.getChecksumFrameLength(), config);
+            provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, config.getChecksumFrameLength(), limiter->getReadLimiter(), config);
         std::shuffle(slices.begin(), slices.end(), local_engine);
         for (const auto & [x, y, z] : slices)
         {
@@ -266,8 +266,8 @@ void runLargeReadingTest()
     size_t size              = 1024 * 1024 * 4;
     auto [data, seed]        = randomData(size);
     {
-        auto buffer
-            = createWriteBufferFromFileBaseByFileProvider(provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, true, limiter, config);
+        auto buffer = createWriteBufferFromFileBaseByFileProvider(
+            provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, true, limiter->getWriteLimiter(), config);
         buffer->write(data.data(), data.size());
     }
     {
@@ -277,7 +277,7 @@ void runLargeReadingTest()
             auto              offset = std::uniform_int_distribution<off_t>(0, static_cast<off_t>(size))(local_engine);
             auto              length = std::uniform_int_distribution<off_t>(0, static_cast<off_t>(size) - offset)(local_engine);
             std::vector<char> buffer(length);
-            PageUtil::readChecksumFramedFile(file, offset, buffer.data(), length, config);
+            PageUtil::readChecksumFramedFile(file, offset, buffer.data(), length, config, limiter->getReadLimiter());
             ASSERT_EQ(std::memcmp(buffer.data(), data.data() + offset, length), 0) << "seed: " << seed;
         }
     }
