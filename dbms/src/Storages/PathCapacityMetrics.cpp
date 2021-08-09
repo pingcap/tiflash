@@ -92,39 +92,86 @@ void PathCapacityMetrics::freeUsedSize(std::string_view file_path, size_t used_b
     path_infos[path_idx].used_bytes -= used_bytes;
 }
 
-FsStats PathCapacityMetrics::getFsStats() const
+void PathCapacityMetrics::getDiskStats(std::map<FSID, DiskCapacity> & disk_stats_map)
 {
-    /// Note that some disk usage is not count by this function.
-    /// - kvstore  <-- can be resolved if we use PageStorage instead of stable::PageStorage for `RegionPersister` later
-    /// - proxy's data
-    /// This function only report approximate used size and available size,
-    /// and we limit available size by first path. It is good enough for now.
-
-    // Now we assume the size of `path_infos` will not change, don't acquire heavy lock on `path_infos`.
-    FsStats total_stat{};
     for (size_t i = 0; i < path_infos.size(); ++i)
     {
+        struct statvfs vfs;
+        if (int code = statvfs(path_infos[i].path.data(), &vfs); code != 0)
+        {
+            // This disk may being hot remove, Just give up this disk.
+            LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: " << path_infos[i].path << ", errno: " << errno);
+            continue;
+        }
+
         FsStats path_stat = path_infos[i].getStats(log);
         if (!path_stat.ok)
         {
-            LOG_WARNING(log, "Can not get path_stat for path: " << path_infos[i].path);
-            return total_stat;
+            // same as upper
+            continue;
         }
 
+        auto entry = disk_stats_map.find(vfs.f_fsid);
+        if (entry == disk_stats_map.end())
+        {
+            disk_stats_map.insert(std::pair<FSID, DiskCapacity>(vfs.f_fsid, {vfs, {path_stat}}));
+        }
+        else
+        {
+            entry->second.path_stats.emplace_back(path_stat);
+        }
+    }
+}
+
+FsStats PathCapacityMetrics::getFsStats()
+{
+    // Now we assume the size of `path_infos` will not change, don't acquire heavy lock on `path_infos`.
+    FsStats total_stat{};
+
+    // Build the disk stats map
+    // which use to measure single disk capacoty and available size
+    std::map<FSID, DiskCapacity> disk_stats_map;
+    getDiskStats(disk_stats_map);
+
+    for (auto fs_it = disk_stats_map.begin(); fs_it != disk_stats_map.end(); ++fs_it)
+    {
+        FsStats disk_stat{};
+
+        auto disk_stat_vec = fs_it->second;
+        auto vfs_info = disk_stat_vec.vfs_info;
+
+        for (auto path_stats_it = disk_stat_vec.path_stats.begin(); path_stats_it != disk_stat_vec.path_stats.end(); ++path_stats_it)
+        {
+
+            auto single_path_stats = (*path_stats_it);
+            disk_stat.capacity_size += single_path_stats.capacity_size;
+            disk_stat.used_size += single_path_stats.used_size;
+            disk_stat.avail_size += single_path_stats.avail_size;
+        }
+
+        const uint64_t disk_capacity_size = vfs_info.f_blocks * vfs_info.f_frsize;
+        if (disk_stat.capacity_size == 0 || disk_capacity_size < disk_stat.capacity_size)
+            disk_stat.capacity_size = disk_capacity_size;
+
+        // Calutate single disk info
+        const uint64_t disk_free_bytes = vfs_info.f_bavail * vfs_info.f_frsize;
+        disk_stat.avail_size = std::min(disk_free_bytes, disk_stat.avail_size);
+
         // sum of all path's capacity and used_size
-        total_stat.capacity_size += path_stat.capacity_size;
-        total_stat.used_size += path_stat.used_size;
+        total_stat.capacity_size += disk_stat.capacity_size;
+        total_stat.used_size += disk_stat.used_size;
+        total_stat.avail_size += disk_stat.avail_size;
     }
 
     // If user set quota on the global quota, set the capacity to the quota.
     if (capacity_quota != 0 && capacity_quota < total_stat.capacity_size)
+    {
         total_stat.capacity_size = capacity_quota;
+        total_stat.avail_size = std::min(total_stat.avail_size, total_stat.capacity_size - total_stat.used_size);
+    }
 
     // PD get weird if used_size == 0, make it 1 byte at least
     total_stat.used_size = std::max<UInt64>(1, total_stat.used_size);
-
-    // avail size
-    total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
 
     const double avail_rate = 1.0 * total_stat.avail_size / total_stat.capacity_size;
     // Default threshold "schedule.low-space-ratio" in PD is 0.8, log warning message if avail ratio is low.
@@ -143,7 +190,7 @@ FsStats PathCapacityMetrics::getFsStats() const
     return total_stat;
 }
 
-FsStats PathCapacityMetrics::getFsStatsOfPath(std::string_view file_path) const
+FsStats PathCapacityMetrics::getFsStatsOfPath(std::string_view file_path)
 {
     ssize_t path_idx = locatePath(file_path);
     if (unlikely(path_idx == INVALID_INDEX))

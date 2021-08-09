@@ -61,6 +61,12 @@ protected:
         }
     }
 
+    void createIfNotExist(String path)
+    {
+        if (Poco::File file(path); !file.exists())
+            file.createDirectories();
+    }
+
     void SetUp() override
     {
         dropDataOnDisk(getTemporaryPath());
