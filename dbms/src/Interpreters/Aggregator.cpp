@@ -1591,7 +1591,7 @@ private:
 
     void scheduleThreadForNextBucket()
     {
-        int num = ++max_scheduled_bucket_num;
+        int num = max_scheduled_bucket_num.fetch_add(1) + 1;
         if (num >= NUM_BUCKETS)
             return;
 
