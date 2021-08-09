@@ -516,8 +516,8 @@ private:
     std::array<char, MAX_ARGS> is_nullable;    /// Plain array is better than std::vector due to one indirection less.
 };
 
-template <bool result_is_nullable>
-class AggregateFunctionGroupConcatTuple final : public AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcatTuple<result_is_nullable>>
+template <bool result_is_nullable, bool only_one_argument>
+class AggregateFunctionGroupConcatTuple final : public AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcatTuple<result_is_nullable, only_one_argument>>
 {
     using State = AggreagteFunctionGroupUniqArrayGenericData;
 
@@ -525,23 +525,65 @@ class AggregateFunctionGroupConcatTuple final : public AggregateFunctionNullBase
 /// 1. only one column with original data type
 /// 2. one column combined from more than one columns including order by items, it should should be like tuple(type0, type1...)
 public:
-    AggregateFunctionGroupConcatTuple(AggregateFunctionPtr nested_function, const DataTypes & arguments, const String sep, const SortDescription & sort_desc_, const NamesAndTypes& names_and_types_)
-        : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcatTuple<result_is_nullable>>(nested_function),
-          seperator(sep), sort_desc(sort_desc_),names_and_types(names_and_types_)
+    AggregateFunctionGroupConcatTuple(AggregateFunctionPtr nested_function, const DataTypes & arguments, const String sep, const SortDescription & sort_desc_, const NamesAndTypes& names_and_types_, const TiDB::TiDBCollators& collators_, const bool has_distinct)
+    : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcatTuple<result_is_nullable, only_one_argument>>(nested_function),
+    seperator(sep), sort_desc(sort_desc_),names_and_types(names_and_types_), collators(collators_)
     {
         if (arguments.size() != 1)
             throw Exception("Logical error: not single argument is passed to AggregateFunctionGroupConcatTuple", ErrorCodes::LOGICAL_ERROR);
-        nested_type = std::make_shared<DataTypeArray>(arguments[0]);
+        nested_type = std::make_shared<DataTypeArray>(removeNullable(arguments[0]));
 
         number_of_arguments = names_and_types.size() - sort_desc.size();
 
-        if (number_of_arguments > MAX_ARGS)
+        if (names_and_types.size() > MAX_ARGS)
             throw Exception("Maximum number of arguments for aggregate function with Nullable types is " + toString(size_t(MAX_ARGS)),
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (size_t i = 0; i < number_of_arguments; ++i)
+        {
             is_nullable[i] = names_and_types[i].type->isNullable();
+            if constexpr (only_one_argument)
+            {
+                names_and_types[i].type = removeNullable(names_and_types[i].type);
+            }
+        }
 
+        /// remove redundant rows excluding extra sort items or considering collation
+        if(has_distinct)
+        {
+            for (auto & desc : sort_desc)
+            {
+                bool is_extra = true;
+                for (size_t i = 0; i < number_of_arguments; ++i)
+                {
+                    if (desc.column_name == names_and_types[i].name)
+                    {
+                        is_extra = false;
+                        break;
+                    }
+                }
+                if (is_extra)
+                {
+                    toGetUnique = true;
+                    break;
+                }
+            }
+            /// because GroupUniqArray does consider collations, so if there are collations,
+            /// we should additionally remove redundant rows with consideration of collations
+            if(!toGetUnique)
+            {
+                bool has_collation = false;
+                for (size_t i = 0; i < number_of_arguments; ++i)
+                {
+                    if (collators[i] != nullptr)
+                    {
+                        has_collation = true;
+                        break;
+                    }
+                }
+                toGetUnique = has_collation;
+            }
+        }
     }
 
     DataTypePtr getReturnType() const override
@@ -553,114 +595,103 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        /// remove the row with null, except for sort columns
-        const ColumnTuple & tuple = static_cast<const ColumnTuple &>(*columns[0]);
-        for (size_t i = 0; i < number_of_arguments; ++i)
+        if constexpr (only_one_argument)
         {
-            if (is_nullable[i])
+            if(is_nullable[0])
             {
-                const ColumnNullable & nullable_col = static_cast<const ColumnNullable &>(tuple.getColumn(i));
-                if (nullable_col.isNullAt(row_num))
+                const ColumnNullable * column = static_cast<const ColumnNullable *>(columns[0]);
+                if (!column->isNullAt(row_num))
                 {
-                    /// If at least one column has a null value in the current row,
-                    /// we don't process this row.
-                    return;
+                    this->setFlag(place);
+                    const IColumn * nested_column = &column->getNestedColumn();
+                    this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
+                }
+                return;
+            }
+        }
+        else
+        {
+            /// remove the row with null, except for sort columns
+            const ColumnTuple & tuple = static_cast<const ColumnTuple &>(*columns[0]);
+            for (size_t i = 0; i < number_of_arguments; ++i)
+            {
+                if (is_nullable[i])
+                {
+                    const ColumnNullable & nullable_col = static_cast<const ColumnNullable &>(tuple.getColumn(i));
+                    if (nullable_col.isNullAt(row_num))
+                    {
+                        /// If at least one column has a null value in the current row,
+                        /// we don't process this row.
+                        return;
+                    }
                 }
             }
         }
-
         this->setFlag(place);
         this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
     }
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
     {
-        ColumnNullable & to_concrete = static_cast<ColumnNullable &>(to);
-        if (this->getFlag(place))
+        ColumnString * col_str= nullptr;
+        ColumnNullable * col_null= nullptr;
+        if constexpr (result_is_nullable)
         {
-            ColumnString & col_str = static_cast<ColumnString &>(to_concrete.getNestedColumn());
-            //  ColumnString & col_str = static_cast<ColumnString &>(to);
-            /// get results from nested function, named nested_results
-            auto nested_col = nested_type->createColumn();
-            this->nested_function->insertResultInto(this->nestedPlace(place), *nested_col, arena);
+            col_null = &static_cast<ColumnNullable &>(to);
+            col_str = &static_cast<ColumnString &>(col_null->getNestedColumn());
 
-            /// sort the nested_col of Array type
-            const auto column_array = checkAndGetColumn<ColumnArray>(nested_col.get());
-
-            if(column_array->size() == 0)
-            {
-                to_concrete.insertDefault();
-                return;
-            }
-            to_concrete.getNullMapData().push_back(0);
-
-           // auto col_array =  ArraySortImpl<true>::execute(*column_array, column_array->getDataPtr());
-            const IColumn & nested_column = column_array->getData();
-            auto  column_tuple =  checkAndGetColumn<ColumnTuple>(&nested_column);
-
-            Block res;
-            auto column_tuple_nested = column_tuple->getColumns();
-            int concat_size = column_tuple_nested.size();
-            for(int i = 0 ; i < concat_size; ++i )
-            {
-                res.insert(ColumnWithTypeAndName(column_tuple_nested[i],names_and_types[i].type,names_and_types[i].name));
-            }
-
-            sortBlock(res, sort_desc);
-            size_t size = res.rows();
-            auto block_cols = res.getColumns();
-            /// insert the unique of the first N of (N + M sort) internal columns within tuple
-            std::unique_ptr<State>  state = std::make_unique<State>();
-            //std::map<StringRef, bool> unique;
-            bool* valid  = new bool[size];
-            Arena arena1;
-            for (size_t i = 0; i < size; ++i)
-            {
-                bool inserted=false;
-                State::Set::iterator it;
-                const char * begin = nullptr;
-
-                size_t values_size = 0;
-                for (size_t j = 0; j< number_of_arguments; ++j)
-                    values_size += block_cols[j]->serializeValueIntoArena(i, arena1, begin).size;
-
-                StringRef str_serialized= StringRef(begin, values_size);
-                state->value.emplace(str_serialized, it, inserted);
-                valid[i] = inserted;
-            }
-
-            auto col_to = ColumnString::create();
-
-            ColumnString::Chars_t & data_to = col_to->getChars();
-            ColumnString::Offsets & offsets_to = col_to->getOffsets();
-
-            data_to.resize(size * 2); /// Using coefficient 2 for initial size is arbitary.
-            offsets_to.resize(size);
-
-            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
-            for (size_t i = 0; i < size; ++i)
-            {
-                if(valid[i])
-                {
-                    if (i != 0)
-                    {
-                        writeString(seperator, write_buffer);
-                    }
-                    for (size_t j = 0; j < concat_size - sort_desc.size(); ++j)
-                    {
-                        names_and_types[j].type->serializeText(*block_cols[j], i, write_buffer);
-                    }
-                    offsets_to[i] = write_buffer.count();
-                }
-            }
-            writeChar(0, write_buffer);
-
-            data_to.resize(write_buffer.count());
-            col_str.insertData(data_to.raw_data(),write_buffer.count());
         }
         else
         {
-            to_concrete.insertDefault();
+            col_str = & static_cast<ColumnString &>(to);
+        }
+
+        if (this->getFlag(place))
+        {
+            if constexpr (result_is_nullable)
+            {
+                col_null->getNullMapData().push_back(0);
+            }
+
+            /// get results from nested function, named nested_results
+            auto mutable_nested_cols = nested_type->createColumn();
+            this->nested_function->insertResultInto(this->nestedPlace(place), *mutable_nested_cols, arena);
+            const auto column_array = checkAndGetColumn<ColumnArray>(mutable_nested_cols.get());
+
+            /// nested_columns are not nullable, because the nullable rows are removed in add()
+            Columns nested_cols;
+            if constexpr (only_one_argument)
+            {
+                nested_cols.push_back(column_array->getDataPtr());
+            }
+            else
+            {
+                auto & cols =  checkAndGetColumn<ColumnTuple>(&column_array->getData())->getColumns();
+                nested_cols.insert(nested_cols.begin(),cols.begin(),cols.end());
+            }
+
+            /// sort the nested_col of Array type
+            if(!sort_desc.empty())
+                sortColumns(nested_cols);
+
+            /// get unique flags if with extra sort items
+            bool* unique= nullptr;
+            if (toGetUnique)
+                unique = getUnique(nested_cols);
+
+            writeToStringColumn(nested_cols,col_str, unique);
+
+            if(unique != nullptr)
+            {
+                free(unique);
+            }
+        }
+        else
+        {
+            if constexpr (result_is_nullable)
+                col_null->insertDefault();
+            else
+                col_str->insertDefault();
         }
     }
 
@@ -670,6 +701,68 @@ public:
     }
 
 private:
+    /// construct a block to sort in the case with order-by requirement
+    void sortColumns(Columns& nested_cols) const
+    {
+        Block res;
+        int concat_size = nested_cols.size();
+        for(int i = 0 ; i < concat_size; ++i )
+        {
+            res.insert(ColumnWithTypeAndName(nested_cols[i],names_and_types[i].type,names_and_types[i].name));
+        }
+        /// sort a block with collation
+        sortBlock(res, sort_desc);
+        nested_cols = res.getColumns();
+    }
+
+    /// get unique argument columns by inserting the unique of the first N of (N + M sort) internal columns within tuple
+    bool* getUnique(const Columns & cols) const
+    {
+        std::unique_ptr<State> state = std::make_unique<State>();
+        Arena arena1;
+        auto size = cols[0]->size();
+        bool* unique = new bool[size];
+        std::vector<String> containers(collators.size());
+        for (size_t i = 0; i < size; ++i)
+        {
+            bool inserted=false;
+            State::Set::iterator it;
+            const char * begin = nullptr;
+            size_t values_size = 0;
+            for (size_t j = 0; j< number_of_arguments; ++j)
+                values_size += cols[j]->serializeValueIntoArena(i, arena1, begin, collators[j],containers[j]).size;
+
+            StringRef str_serialized= StringRef(begin, values_size);
+            state->value.emplace(str_serialized, it, inserted);
+            unique[i] = inserted;
+        }
+        return unique;
+    }
+
+    /// write each column cell to string with separator
+    void writeToStringColumn(const Columns& cols, ColumnString * const col_str,  bool * unique) const
+    {
+        WriteBufferFromOwnString write_buffer;
+        auto size = cols[0]->size();
+        for (size_t i = 0; i < size; ++i)
+        {
+            if(unique == nullptr || unique[i])
+            {
+                if (i != 0)
+                {
+                    writeString(seperator, write_buffer);
+                }
+                for (size_t j = 0; j < number_of_arguments; ++j)
+                {
+                    names_and_types[j].type->serializeText(*cols[j], i, write_buffer);
+                }
+            }
+        }
+        writeChar(0, write_buffer);
+        col_str->insertData(write_buffer.str().c_str(),write_buffer.count());
+    }
+
+    bool toGetUnique=false;
     enum { MAX_ARGS = 16 };
     DataTypePtr ret_type = std::make_shared<DataTypeString>();
     DataTypePtr nested_type;
@@ -677,6 +770,7 @@ private:
     String seperator=",";
     SortDescription sort_desc;
     NamesAndTypes names_and_types;
+    TiDB::TiDBCollators collators;
     std::array<char, MAX_ARGS> is_nullable;    /// Plain array is better than std::vector due to one indirection less.
 };
 

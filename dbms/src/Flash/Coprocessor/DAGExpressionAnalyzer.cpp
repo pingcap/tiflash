@@ -206,7 +206,7 @@ static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
-static String buildTupleFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, SortDescription& sort_desc, NamesAndTypes & names_and_types, ExpressionActionsPtr & actions)
+static String buildTupleFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, SortDescription& sort_desc, NamesAndTypes & names_and_types, TiDB::TiDBCollators & collators, ExpressionActionsPtr & actions)
 {
     const String & func_name = "tuple";
     Names argument_names;
@@ -220,6 +220,7 @@ static String buildTupleFunction(DAGExpressionAnalyzer * analyzer, const tipb::E
         argument_names.push_back(name);
         auto type = actions->getSampleBlock().getByName(name).type;
         names_and_types.emplace_back(name,type);
+        collators.push_back(getCollatorFromExpr(expr.children(i)));
     }
 
     std::vector<NameAndTypePair> order_columns;
@@ -230,7 +231,7 @@ static String buildTupleFunction(DAGExpressionAnalyzer * analyzer, const tipb::E
         auto type = actions->getSampleBlock().getByName(name).type;
         order_columns.emplace_back(name,type);
         names_and_types.emplace_back(name,type);
-
+        collators.push_back(getCollatorFromExpr(expr.order_by(i).expr()));
     }
     sort_desc = getSortDescription(order_columns,expr.order_by());
 
@@ -459,7 +460,8 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         NamesAndTypes names_and_types;
         String delimiter="";
         SortDescription sort_description;
-
+        bool only_one_argument = true;
+        TiDB::TiDBCollators gc_collators;
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
             /// the last parametric is the separator
@@ -471,14 +473,17 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
             if (child_size == 1 && expr.order_by_size() == 0)
             {
                 arg_name = getActions(expr.children(0), step.actions);
+                types[0] = step.actions->getSampleBlock().getByName(arg_name).type;
+                names_and_types.emplace_back(arg_name,types[0]);
+                gc_collators.push_back(getCollatorFromExpr(expr.children(0)));
             }
             else
             {
                 /// args... -> tuple(args...)
-                arg_name = buildTupleFunction(this, expr, sort_description, names_and_types,step.actions);
+                arg_name = buildTupleFunction(this, expr, sort_description, names_and_types, gc_collators,step.actions);
+                only_one_argument = false;
+                types[0] = step.actions->getSampleBlock().getByName(arg_name).type;
             }
-
-            types[0] = step.actions->getSampleBlock().getByName(arg_name).type;
             aggregate.argument_names[0] = arg_name;
             step.required_output.push_back(arg_name);
 
@@ -487,7 +492,6 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
             if (expr.children(child_size).tp() == tipb::String)
             {
                 const ColumnConst * col_delim = checkAndGetColumnConstStringOrFixedString(step.actions->getSampleBlock().getByName(arg_name).column.get());
-
                 delimiter = col_delim->getValue<String>();
             }
         }
@@ -522,7 +526,42 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, agg.group_by_size() == 0);
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
-              aggregate.function=  std::make_shared<AggregateFunctionGroupConcatTuple<true>>(aggregate.function, types,delimiter,sort_description,names_and_types);
+            bool result_is_nullable=false;
+            int number_of_arguments = names_and_types.size() - sort_description.size();
+            for(int num=0; num < number_of_arguments; ++num)
+            {
+                if(names_and_types[num].type->isNullable())
+                {
+                    result_is_nullable = true;
+                    break;
+                }
+            }
+            if(result_is_nullable)
+            {
+                if (only_one_argument)
+                {
+                    aggregate.function = std::make_shared<AggregateFunctionGroupConcatTuple<true, true>>(
+                        aggregate.function, types, delimiter, sort_description, names_and_types, gc_collators, expr.has_distinct());
+                }
+                else
+                {
+                    aggregate.function = std::make_shared<AggregateFunctionGroupConcatTuple<true, false>>(
+                        aggregate.function, types, delimiter, sort_description, names_and_types, gc_collators, expr.has_distinct());
+                }
+            }
+            else
+            {
+                if (only_one_argument)
+                {
+                    aggregate.function = std::make_shared<AggregateFunctionGroupConcatTuple<false, true>>(
+                        aggregate.function, types, delimiter, sort_description, names_and_types, gc_collators, expr.has_distinct());
+                }
+                else
+                {
+                    aggregate.function = std::make_shared<AggregateFunctionGroupConcatTuple<false, false>>(
+                        aggregate.function, types, delimiter, sort_description, names_and_types, gc_collators, expr.has_distinct());
+                }
+            }
         }
 
         aggregate.function->setCollator(getCollatorFromExpr(expr));

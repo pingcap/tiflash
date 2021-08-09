@@ -35,6 +35,8 @@ public:
     AggregateFunctionPtr transformAggregateFunction(
         const AggregateFunctionPtr & nested_function, const DataTypes & arguments, const Array &) const override
     {
+        if (nested_function && (nested_function->getName() == "groupArray" || nested_function->getName() == "groupUniqArray"))
+            return nested_function;
         bool has_nullable_types = false;
         bool has_null_types = false;
         for (const auto & arg_type : arguments)
@@ -49,7 +51,6 @@ public:
                 }
             }
         }
-
 
         /// Special case for 'count' function. It could be called with Nullable arguments
         /// - that means - count number of calls, when all arguments are not NULL.
