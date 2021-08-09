@@ -123,7 +123,6 @@ inline RSOperatorPtr parseTiCompareExpr( //
     Field       value;
     OperandType left                = OperandType::Unknown;
     OperandType right               = OperandType::Unknown;
-    bool        is_timestamp_column = false;
     for (int32_t child_idx = 0; child_idx < expr.children_size(); child_idx++)
     {
         const auto & child = expr.children(child_idx);
