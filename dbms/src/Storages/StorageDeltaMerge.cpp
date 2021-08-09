@@ -578,6 +578,7 @@ BlockInputStreams StorageDeltaMerge::read( //
             }
             else
             {
+#if 0
                 // Query from ch client
                 auto create_attr_by_column_id = [this](const String & col_name) -> Attr {
                     const ColumnDefines & defines = this->store->getTableColumns();
@@ -590,6 +591,7 @@ BlockInputStreams StorageDeltaMerge::read( //
                         return Attr{.col_name = col_name, .col_id = 0, .type = DataTypePtr{}};
                 };
                 rs_operator = FilterParser::parseSelectQuery(select_query, std::move(create_attr_by_column_id), log);
+#endif
             }
             if (likely(rs_operator != DM::EMPTY_FILTER))
                 LOG_DEBUG(log, "Rough set filter: " << rs_operator->toDebugString());
