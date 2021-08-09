@@ -39,14 +39,14 @@ __attribute__((pure)) bool memoryEqualASIMD(ConstBytePtr p1, ConstBytePtr p2, si
   */
 
 // clang-format off
-__attribute__((always_inline, pure)) inline bool memoryEqualSSE2(const char * p1, const char * p2)
+__attribute__((always_inline, pure)) inline bool memoryEqualSSE2Fixed(const char * p1, const char * p2)
 {
     return 0xFFFF == _mm_movemask_epi8(_mm_cmpeq_epi8(
         _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1)),
         _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2))));
 }
 
-__attribute__((always_inline, pure)) inline bool memoryEqualSSE2x4(const char * p1, const char * p2)
+__attribute__((always_inline, pure)) inline bool memoryEqualSSE2x4Fixed(const char * p1, const char * p2)
 {
     return 0xFFFF == _mm_movemask_epi8(
         _mm_and_si128(
@@ -70,7 +70,7 @@ __attribute__((always_inline, pure)) inline bool memoryEqualSSE2(const char * p1
 {
     while (size >= 64)
     {
-        if (memoryEqualSSE2x4(p1, p2))
+        if (memoryEqualSSE2x4Fixed(p1, p2))
         {
             p1 += 64;
             p2 += 64;
@@ -82,9 +82,9 @@ __attribute__((always_inline, pure)) inline bool memoryEqualSSE2(const char * p1
 
     switch ((size % 64) / 16)
     {
-        case 3: if (!memoryEqualSSE2(p1 + 32, p2 + 32)) return false; [[fallthrough]];
-        case 2: if (!memoryEqualSSE2(p1 + 16, p2 + 16)) return false; [[fallthrough]];
-        case 1: if (!memoryEqualSSE2(p1     , p2     )) return false; [[fallthrough]];
+        case 3: if (!memoryEqualSSE2Fixed(p1 + 32, p2 + 32)) return false; [[fallthrough]];
+        case 2: if (!memoryEqualSSE2Fixed(p1 + 16, p2 + 16)) return false; [[fallthrough]];
+        case 1: if (!memoryEqualSSE2Fixed(p1     , p2     )) return false; [[fallthrough]];
         case 0: break;
     }
 
