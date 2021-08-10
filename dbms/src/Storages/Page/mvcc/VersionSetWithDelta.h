@@ -1,19 +1,29 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/mvcc/VersionSet.h>
 #include <stdint.h>
 
 #include <boost/core/noncopyable.hpp>
 #include <cassert>
+#include <chrono>
 #include <list>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <stack>
 #include <unordered_set>
+
+#ifdef FIU_ENABLE
+#include <Common/randomSeed.h>
+
+#include <pcg_random.hpp>
+#include <thread>
+#endif
 
 namespace ProfileEvents
 {
@@ -28,10 +38,17 @@ extern const Event PSMVCCApplyOnNewDelta;
 namespace CurrentMetrics
 {
 extern const Metric PSMVCCNumSnapshots;
+extern const Metric PSMVCCSnapshotsList;
 } // namespace CurrentMetrics
 
 namespace DB
 {
+
+namespace FailPoints
+{
+extern const char random_slow_page_storage_remove_expired_snapshots[];
+} // namespace FailPoints
+
 namespace MVCC
 {
 /// Base type for VersionType of VersionSetWithDelta
@@ -48,7 +65,7 @@ public:
 };
 
 // TODO: Merge `VersionSetWithDelta` with `PageEntriesVersionSetWithDelta`, template make things
-//       more complicated and hard to understand. 
+//       more complicated and hard to understand.
 //
 /// \tparam TVersion         -- Single version on version-list. Require for a `prev` member, see `MultiVersionDeltaCountable`
 /// \tparam TVersionView     -- A view to see a list of versions as a single version
@@ -80,8 +97,7 @@ public:
     {
         current.reset();
 
-        std::unique_lock lock(read_write_mutex);
-        removeExpiredSnapshots(lock);
+        removeExpiredSnapshots();
 
         // snapshot list is empty
         assert(snapshots.empty());
@@ -126,8 +142,15 @@ public:
         VersionSetWithDelta * vset;
         TVersionView          view;
 
+        using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
+        const unsigned t_id;
+
+    private:
+        const TimePoint create_time;
+
     public:
-        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_) : vset(vset_), view(std::move(tail_))
+        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_)
+            : vset(vset_), view(std::move(tail_)), t_id(Poco::ThreadNumber::get()), create_time(std::chrono::steady_clock::now())
         {
             CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
         }
@@ -144,6 +167,14 @@ public:
         }
 
         const TVersionView * version() const { return &view; }
+
+        // The time this snapshot living for
+        double elapsedSeconds() const
+        {
+            auto                          end  = std::chrono::steady_clock::now();
+            std::chrono::duration<double> diff = end - create_time;
+            return diff.count();
+        }
 
         template <typename V, typename VV, typename VE, typename B>
         friend class VersionSetWithDelta;
@@ -165,6 +196,7 @@ public:
         // Do not call `vset->removeExpiredSnapshots` inside `~Snapshot`, or it may cause incursive deadlock
         // on `vset->read_write_mutex`.
         snapshots.emplace_back(SnapshotWeakPtr(s));
+        CurrentMetrics::add(CurrentMetrics::PSMVCCSnapshotsList);
         return s;
     }
 
@@ -291,20 +323,55 @@ protected:
     }
 
 private:
-    void removeExpiredSnapshots(const std::unique_lock<std::shared_mutex> &) const
+    // Scan over all `snapshots`, remove the invalid snapshots and get some statistics
+    // of all living snapshots and the oldest living snapshot.
+    // Return < num of snapshots,
+    //          living time(seconds) of the oldest snapshot,
+    //          created thread id of the oldest snapshot      >
+    std::tuple<size_t, double, unsigned> removeExpiredSnapshots() const
     {
-        for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
+        // Notice: we should free those valid snapshots without locking, or it may cause
+        // incursive deadlock on `vset->read_write_mutex`.
+        std::vector<SnapshotPtr> valid_snapshots;
+        double                   longest_living_seconds        = 0.0;
+        unsigned                 longest_living_from_thread_id = 0;
+        DB::Int64                num_snapshots_removed         = 0;
         {
-            if (iter->expired())
+            std::unique_lock lock(read_write_mutex);
+            for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
             {
-                // Clear free snapshots
-                iter = snapshots.erase(iter);
+                auto snapshot_or_invalid = iter->lock();
+                if (snapshot_or_invalid == nullptr)
+                {
+                    // Clear expired snapshots weak_ptrs
+                    iter = snapshots.erase(iter);
+                    num_snapshots_removed += 1;
+                }
+                else
+                {
+                    fiu_do_on(FailPoints::random_slow_page_storage_remove_expired_snapshots, {
+                        pcg64                     rng(randomSeed());
+                        std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
+                        std::this_thread::sleep_for(ms);
+                    });
+                    const auto snapshot_lifetime = snapshot_or_invalid->elapsedSeconds();
+                    if (snapshot_lifetime > longest_living_seconds)
+                    {
+                        longest_living_seconds        = snapshot_lifetime;
+                        longest_living_from_thread_id = snapshot_or_invalid->t_id;
+                    }
+                    valid_snapshots.emplace_back(snapshot_or_invalid); // Save valid snapshot and release them without lock later
+                    iter++;
+                }
             }
-            else
-            {
-                iter++;
-            }
-        }
+        } // unlock `read_write_mutex`
+
+        const size_t num_valid_snapshots = valid_snapshots.size();
+        valid_snapshots.clear();
+
+        CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_snapshots_removed);
+        // Return some statistics of the oldest living snapshot.
+        return {num_valid_snapshots, longest_living_seconds, longest_living_from_thread_id};
     }
 
 public:
@@ -328,10 +395,11 @@ public:
 
     size_t numSnapshots() const
     {
-        // Note: this will scan and remove expired weak_ptr to snapshot
-        std::unique_lock lock(read_write_mutex);
-        removeExpiredSnapshots(lock);
-        return snapshots.size();
+        // Note: this will scan and remove expired weak_ptrs from `snapshots`
+        size_t num_snapshots = 0;
+
+        std::tie(num_snapshots, std::ignore, std::ignore) = removeExpiredSnapshots();
+        return num_snapshots;
     }
 
     std::string toDebugString() const
