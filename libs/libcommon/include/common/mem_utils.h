@@ -136,7 +136,7 @@ __attribute__((always_inline, pure)) inline bool memoryEqual(const char * p1, co
         // separate file other than the main loop itself.
         if (ENABLE_ASIMD && SIMDRuntimeSupport(SIMDFeature::asimd))
         {
-            return Detail::memoryEqualASIMD(p1, p2, size);
+            return _detail::memoryEqualASIMD(p1, p2, size);
         }
 #endif
 
@@ -168,4 +168,95 @@ __attribute__((always_inline, pure)) inline bool memoryEqual(const char * p1, co
 #endif
 }
 
+
+namespace _detail
+{
+/// the following part is used in `memoryIsByte`.
+/// @attention One should not use them directly:
+/// - these functions does not check platform support
+/// - these functions assume `size >= sizeof(vector)`
+
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
+__attribute__((pure)) bool memoryIsByteAVX512(const void * data, size_t size, std::byte target);
+#endif
+
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+__attribute__((pure)) bool memoryIsByteAVX2(const void * data, size_t size, std::byte target);
+#endif
+
+#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
+__attribute__((pure)) bool memoryIsByteASIMD(const void * data, size_t size, std::byte target);
+#endif
+
+#if __SSE2__
+__attribute__((pure)) bool memoryIsByteSSE2(const void * data, size_t size, std::byte target);
+#endif
+
+__attribute__((always_inline, pure)) inline bool memoryIsByteGeneric(const void * data, size_t size, std::byte target)
+{
+    const auto * ptr = reinterpret_cast<const std::byte *>(data);
+    return *ptr == target && memcmp(ptr, ptr + 1, size - 1) == 0;
+}
+} // namespace _detail
+
+/// Check whether a memory area is filled with target byte.
+/// this function tries to utilize runtime available vectorization technology.
+/// The following results are measured by checking 1 GB memory:
+///
+///  - AMD64 (Xeon)
+///    generic: 188699271 ms
+///    sse:     128459920 ms
+///    avx2:    115001450 ms
+///    avx512:  114275266 ms
+///
+///    (The results on amd64 seems to vary depending on the CPU architecture,
+///     on Zen 2, for example, avx2 performs much better than SSE)
+///
+///  - AARCH64
+///    generic: 203950600 ms
+///    asimd:   138887948 ms
+///
+/// \param data pointer to memory area
+/// \param size length of memory area
+/// \param target the byte to check
+/// \return whether the memory area is filled with target
+
+__attribute__((always_inline, pure)) inline bool memoryIsByte(const void * data, size_t size, std::byte target)
+{
+    using namespace simd_option;
+    if (size == 0)
+        return true;
+
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
+    if (size >= /* sizeof(_m512i) */ 64 && ENABLE_AVX512 && SIMDRuntimeSupport(SIMDFeature::avx512vl)
+        && SIMDRuntimeSupport(SIMDFeature::avx512bw))
+    {
+        return _detail::memoryIsByteAVX512(data, size, target);
+    }
+#endif
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    if (size >= /* sizeof(_m256i) */ 32 && ENABLE_AVX && SIMDRuntimeSupport(SIMDFeature::avx2))
+    {
+        return _detail::memoryIsByteAVX2(data, size, target);
+    }
+#endif
+#if __SSE2__
+    if (size >= /* sizeof(_m128i) */ 16)
+    {
+        return _detail::memoryIsByteSSE2(data, size, target);
+    }
+#endif
+#if TIFLASH_ENABLE_ASIMD_SUPPORT
+    if (size > /* sizeof(uint8x16_t) */ 16)
+    {
+        return _detail::memoryIsByteASIMD(data, size, target);
+    }
+#endif
+    return _detail::memoryIsByteGeneric(data, size, target);
+}
+
+__attribute__((always_inline, pure)) inline bool memoryIsZero(const void * data, size_t size)
+{
+    return memoryIsByte(data, size, std::byte{0});
+}
 } // namespace mem_utils

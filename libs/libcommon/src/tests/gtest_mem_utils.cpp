@@ -4,6 +4,18 @@
 #include <random>
 #include <utility>
 
+struct AlignedCharArray
+{
+    std::align_val_t alignment;
+    char * data;
+
+    AlignedCharArray(size_t size_, std::align_val_t alignment_)
+        : alignment(alignment_), data(static_cast<char *>(operator new(size_, alignment)))
+    {}
+
+    ~AlignedCharArray() { ::operator delete(data, alignment); }
+};
+
 #if defined(TIFLASH_ENABLE_AVX_SUPPORT) && defined(TIFLASH_ENABLE_AVX512_SUPPORT)
 
 struct TempOption
@@ -26,24 +38,10 @@ struct TempOption
     }
 };
 
-
-struct AlignedCharArray
-{
-    std::align_val_t alignment;
-    char * data;
-
-    AlignedCharArray(size_t size_, std::align_val_t alignment_)
-        : alignment(alignment_), data(static_cast<char *>(operator new(size_, alignment)))
-    {}
-
-    ~AlignedCharArray() { ::operator delete(data, alignment); }
-};
-
-
-struct StringRefTest : ::testing::TestWithParam<std::pair<bool, bool>>
+struct MemUtilsTest : ::testing::TestWithParam<std::pair<bool, bool>>
 {
 };
-TEST_P(StringRefTest, CompareTrivial)
+TEST_P(MemUtilsTest, CompareTrivial)
 {
     TempOption _option(GetParam().first, GetParam().second);
     for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
@@ -60,7 +58,7 @@ TEST_P(StringRefTest, CompareTrivial)
 }
 
 
-TEST_P(StringRefTest, CompareLongEq)
+TEST_P(MemUtilsTest, CompareLongEq)
 {
     using namespace simd_option;
     TempOption _option(GetParam().first, GetParam().second);
@@ -87,7 +85,7 @@ TEST_P(StringRefTest, CompareLongEq)
     ASSERT_EQ(StringRef(aligned1, data.size()), StringRef(aligned2, data.size())) << " seed: " << seed;
 }
 
-TEST_P(StringRefTest, CompareLongNe)
+TEST_P(MemUtilsTest, CompareLongNe)
 {
     using namespace simd_option;
     TempOption _option(GetParam().first, GetParam().second);
@@ -128,12 +126,103 @@ std::string parmToName(const ::testing::TestParamInfo<Parm> & info)
     return ss.str();
 }
 
-INSTANTIATE_TEST_CASE_P(Parm, StringRefTest,
+INSTANTIATE_TEST_CASE_P(Parm, MemUtilsTest,
     testing::Values(MAKE_PAIR(false, false), MAKE_PAIR(false, true), MAKE_PAIR(true, false), MAKE_PAIR(true, true)), parmToName);
 
 #endif
 
+TEST(MemUtilsTest, MemoryIsZeroGeneric)
+{
+    auto length = 1024 * 128 - 3;
+    auto memory = AlignedCharArray(length + 4, std::align_val_t{64});
+    std::memset(memory.data, 0, length + 4);
+    auto ptr = memory.data + 1;
+    ASSERT_TRUE(mem_utils::_detail::memoryIsByteGeneric(ptr, length, std::byte{0}));
+    for (auto i = 0; i < length; ++i)
+    {
+        ptr[i] = 1;
+        ASSERT_FALSE(mem_utils::_detail::memoryIsByteGeneric(ptr, length, std::byte{0}));
+        ptr[i] = 0;
+    }
+}
+
+#if defined(TIFLASH_ENABLE_AVX_SUPPORT)
+TEST(MemUtilsTest, MemoryIsZeroAVX2)
+{
+    using namespace simd_option;
+    if (!SIMDRuntimeSupport(SIMDFeature::avx2))
+    {
+        return GTEST_MESSAGE_("skipped", ::testing::TestPartResult::kSuccess);
+    }
+    auto length = 1024 * 128 - 3;
+    auto memory = AlignedCharArray(length + 4, std::align_val_t{64});
+    std::memset(memory.data, 0, length + 4);
+    auto ptr = memory.data + 1;
+    ASSERT_TRUE(mem_utils::_detail::memoryIsByteAVX2(ptr, length, std::byte{0}));
+    for (auto i = 0; i < length; ++i)
+    {
+        ptr[i] = 1;
+        ASSERT_FALSE(mem_utils::_detail::memoryIsByteAVX2(ptr, length, std::byte{0}));
+        ptr[i] = 0;
+    }
+}
+#endif
+
+#if defined(TIFLASH_ENABLE_AVX512_SUPPORT)
+TEST(MemUtilsTest, MemoryIsZeroAVX512)
+{
+    using namespace simd_option;
+    if (!SIMDRuntimeSupport(SIMDFeature::avx512vl) || !SIMDRuntimeSupport(SIMDFeature::avx512bw))
+    {
+        return GTEST_MESSAGE_("skipped", ::testing::TestPartResult::kSuccess);
+    }
+    auto length = 1024 * 128 - 3;
+    auto memory = AlignedCharArray(length + 4, std::align_val_t{64});
+    std::memset(memory.data, 0, length + 4);
+    auto ptr = memory.data + 1;
+    ASSERT_TRUE(mem_utils::_detail::memoryIsByteAVX512(ptr, length, std::byte{0}));
+    for (auto i = 0; i < length; ++i)
+    {
+        ptr[i] = 1;
+        ASSERT_FALSE(mem_utils::_detail::memoryIsByteAVX512(ptr, length, std::byte{0}));
+        ptr[i] = 0;
+    }
+}
+#endif
+
+#if __SSE2__
+TEST(MemUtilsTest, MemoryIsZeroSSE2)
+{
+    auto length = 1024 * 128 - 3;
+    auto memory = AlignedCharArray(length + 4, std::align_val_t{64});
+    std::memset(memory.data, 0, length + 4);
+    auto ptr = memory.data + 1;
+    ASSERT_TRUE(mem_utils::_detail::memoryIsByteSSE2(ptr, length, std::byte{0}));
+    for (auto i = 0; i < length; ++i)
+    {
+        ptr[i] = 1;
+        ASSERT_FALSE(mem_utils::_detail::memoryIsByteSSE2(ptr, length, std::byte{0}));
+        ptr[i] = 0;
+    }
+}
+#endif
+
 #if defined(TIFLASH_ENABLE_ASIMD_SUPPORT)
+
+TEST(MemUtilsTest, MemoryIsZeroASIMD)
+{
+    auto length = 1024 * 128 - 3;
+    auto memory = AlignedCharArray(length + 4, std::align_val_t{64});
+    std::memset(memory.data, 0, length + 4);
+    auto ptr = memory.data + 1;
+    ASSERT_TRUE(mem_utils::_detail::memoryIsByteASIMD(ptr, length, std::byte{0}));
+    for (auto i = 0; i < length; ++i)
+    {
+        ptr[i] = 1;
+        ASSERT_FALSE(mem_utils::_detail::memoryIsByteASIMD(ptr, length, std::byte{0}));
+        ptr[i] = 0;
+    }
+}
 
 struct TempOption
 {
@@ -147,10 +236,10 @@ struct TempOption
 
     ~TempOption() { simd_option::ENABLE_ASIMD = prev_enable_asimd; }
 };
-struct StringRefTest : ::testing::TestWithParam<bool>
+struct MemUtilsTest : ::testing::TestWithParam<bool>
 {
 };
-TEST_P(StringRefTest, CompareTrivial)
+TEST_P(MemUtilsTest, CompareTrivial)
 {
     TempOption _option(GetParam());
     for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
@@ -167,7 +256,7 @@ TEST_P(StringRefTest, CompareTrivial)
 }
 
 
-TEST_P(StringRefTest, CompareLongEq)
+TEST_P(MemUtilsTest, CompareLongEq)
 {
     using namespace simd_option;
     TempOption _option(GetParam());
@@ -195,7 +284,7 @@ TEST_P(StringRefTest, CompareLongEq)
     ASSERT_EQ(StringRef(aligned1, data.size()), StringRef(aligned2, data.size())) << " seed: " << seed;
 }
 
-TEST_P(StringRefTest, CompareLongNe)
+TEST_P(MemUtilsTest, CompareLongNe)
 {
     using namespace simd_option;
     TempOption _option(GetParam());
@@ -233,6 +322,6 @@ std::string parmToName(const ::testing::TestParamInfo<bool> & info)
     return "generic";
 }
 
-INSTANTIATE_TEST_CASE_P(bool, StringRefTest, testing::Values(false, true), parmToName);
+INSTANTIATE_TEST_CASE_P(bool, MemUtilsTest, testing::Values(false, true), parmToName);
 
 #endif

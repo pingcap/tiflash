@@ -6,6 +6,8 @@
 namespace mem_utils::_detail
 {
 
+using VectorType = __m256i;
+
 namespace
 {
 
@@ -48,8 +50,8 @@ namespace
 // P1 must be aligned to 32-byte boundary
 __attribute__((always_inline, pure)) inline bool memoryEqualAVX2x4HalfAligned(const char * p1, const char * p2)
 {
-    auto p1_ = reinterpret_cast<const __m256i *>(p1);
-    auto p2_ = reinterpret_cast<const __m256i *>(p2);
+    auto p1_ = reinterpret_cast<const VectorType *>(p1);
+    auto p2_ = reinterpret_cast<const VectorType *>(p2);
     // clang-format off
     return 0xFFFFFFFF == static_cast<unsigned>(_mm256_movemask_epi8(
         _mm256_and_si256(
@@ -73,8 +75,8 @@ __attribute__((always_inline, pure)) inline bool memoryEqualAVX2x4HalfAligned(co
 // Both P1 and P2 must be aligned to 32-byte boundary
 __attribute__((always_inline, pure)) inline bool memoryEqualAVX2x4FullAligned(const char * p1, const char * p2)
 {
-    auto p1_ = reinterpret_cast<const __m256i *>(p1);
-    auto p2_ = reinterpret_cast<const __m256i *>(p2);
+    auto p1_ = reinterpret_cast<const VectorType *>(p1);
+    auto p2_ = reinterpret_cast<const VectorType *>(p2);
     // clang-format off
     return 0xFFFFFFFF == static_cast<unsigned>(_mm256_movemask_epi8(
         _mm256_and_si256(
@@ -100,14 +102,14 @@ __attribute__((always_inline, pure)) inline bool memoryEqualAVX2x1(const char * 
 {
     return 0xFFFFFFFF
         == static_cast<unsigned>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(
-            _mm256_loadu_si256(reinterpret_cast<const __m256i *>(p1)), _mm256_loadu_si256(reinterpret_cast<const __m256i *>(p2)))));
+            _mm256_loadu_si256(reinterpret_cast<const VectorType *>(p1)), _mm256_loadu_si256(reinterpret_cast<const VectorType *>(p2)))));
 }
 
 } // namespace
 
 bool memoryEqualAVX2x4Loop(ConstBytePtr & p1, ConstBytePtr & p2, size_t & size)
 {
-    static constexpr auto vector_size = sizeof(__m256i);
+    static constexpr auto vector_size = sizeof(VectorType);
 
     // The following code tries to align up the pointer to 32 word boundary
     // There are two cases:
@@ -193,6 +195,97 @@ bool memoryEqualAVX2x4Loop(ConstBytePtr & p1, ConstBytePtr & p2, size_t & size)
     // GCC should be happy to add its own VZEROUPPER at epilogue area.
     return true;
 }
+
+template <size_t N>
+__attribute__((always_inline, pure)) inline bool compareArrayAVX2(const VectorType (&data)[N], VectorType filled_vector)
+{
+    static_assert(N >= 1 && N <= 4, "compare array can only be used within range");
+
+    VectorType compared [[maybe_unused]] [N - 1]{};
+
+    if constexpr (N >= 4)
+        compared[2] = _mm256_cmpeq_epi8(filled_vector, data[3]);
+    if constexpr (N >= 3)
+        compared[1] = _mm256_cmpeq_epi8(filled_vector, data[2]);
+    if constexpr (N >= 2)
+        compared[0] = _mm256_cmpeq_epi8(filled_vector, data[1]);
+
+    auto combined = _mm256_cmpeq_epi8(filled_vector, data[0]);
+
+    if constexpr (N >= 4)
+        combined = _mm256_and_si256(combined, compared[2]);
+    if constexpr (N >= 3)
+        combined = _mm256_and_si256(combined, compared[1]);
+    if constexpr (N >= 2)
+        combined = _mm256_and_si256(combined, compared[0]);
+
+    auto mask = _mm256_movemask_epi8(combined);
+    return static_cast<unsigned>(mask) == 0xFFFF'FFFF;
+}
+
+__attribute__((pure)) bool memoryIsByteAVX2(const void * data, size_t size, std::byte target)
+{
+    static constexpr size_t vector_length = sizeof(VectorType);
+    static constexpr size_t group_size = vector_length * 4;
+    size_t remaining = size;
+    auto filled_vector = _mm256_set1_epi8(static_cast<char>(target));
+    auto current_address = reinterpret_cast<const VectorType *>(data);
+    auto byte_address = reinterpret_cast<const uint8_t *>(data);
+
+    if (!compareArrayAVX2<1>({_mm256_loadu_si256(current_address)}, filled_vector))
+    {
+        return false;
+    }
+
+    auto numeric_address = reinterpret_cast<uintptr_t>(data);
+    auto alignment_offset = (-numeric_address) & (vector_length - 1);
+    current_address = reinterpret_cast<const VectorType *>(byte_address + alignment_offset);
+    remaining -= alignment_offset;
+
+    while (remaining >= group_size)
+    {
+        if (compareArrayAVX2(
+                {
+                    _mm256_load_si256(current_address + 0),
+                    _mm256_load_si256(current_address + 1),
+                    _mm256_load_si256(current_address + 2),
+                    _mm256_load_si256(current_address + 3),
+                },
+                filled_vector))
+        {
+            remaining -= group_size;
+            current_address += 4;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    auto tail = _mm256_loadu_si256(reinterpret_cast<const VectorType *>(byte_address + size - vector_length));
+
+    bool result = true;
+    switch ((remaining % group_size) / vector_length)
+    {
+        case 3:
+            result = compareArrayAVX2<4>({_mm256_load_si256(current_address + 0), _mm256_load_si256(current_address + 1),
+                                             _mm256_load_si256(current_address + 2), tail},
+                filled_vector);
+            break;
+        case 2:
+            result = compareArrayAVX2<3>(
+                {_mm256_load_si256(current_address + 0), _mm256_load_si256(current_address + 1), tail}, filled_vector);
+            break;
+        case 1:
+            result = compareArrayAVX2<2>({_mm256_load_si256(current_address + 0), tail}, filled_vector);
+            break;
+        case 0:
+            result = compareArrayAVX2<1>({tail}, filled_vector);
+            break;
+    }
+    return result;
+}
+
 } // namespace mem_utils::_detail
 
 #endif
