@@ -1,15 +1,8 @@
 #include <Common/FailPoint.h>
-#include <Common/TiFlashMetrics.h>
-#include <DataStreams/SquashingBlockOutputStream.h>
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
-#include <Flash/Coprocessor/DAGCodec.h>
-#include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
-#include <Flash/CoprocessorHandler.h>
+#include <Common/Stopwatch.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Mpp/MPPHandler.h>
-#include <Interpreters/ProcessList.h>
-#include <Interpreters/executeQuery.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Flash/Mpp/Utils.h>
 
 namespace DB
 {
@@ -20,7 +13,7 @@ extern const char exception_before_mpp_non_root_task_run[];
 extern const char exception_before_mpp_root_task_run[];
 } // namespace FailPoints
 
-void MPPHandler::handleError(MPPTaskPtr task, String error)
+void MPPHandler::handleError(const MPPTaskPtr & task, String error)
 {
     try
     {
