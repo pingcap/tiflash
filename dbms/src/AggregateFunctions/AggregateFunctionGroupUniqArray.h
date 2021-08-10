@@ -10,8 +10,10 @@
 #include <Columns/ColumnArray.h>
 
 #include <Common/HashTable/HashSet.h>
+#include <Common/assert_cast.h>
 
 #include <AggregateFunctions/IAggregateFunction.h>
+#include <AggregateFunctions/KeyHolderHelpers.h>
 
 #define AGGREGATE_FUNCTION_GROUP_ARRAY_UNIQ_MAX_SIZE 0xFFFFFF
 
@@ -24,12 +26,7 @@ template <typename T>
 struct AggregateFunctionGroupUniqArrayData
 {
     /// When creating, the hash table must be small.
-    using Set = HashSet<
-        T,
-        DefaultHash<T>,
-        HashTableGrower<4>,
-        HashTableAllocatorWithStackMemory<sizeof(T) * (1 << 4)>
-    >;
+    using Set = HashSetWithStackMemory<T, DefaultHash<T>, 4>;
 
     Set value;
 };
@@ -53,7 +50,7 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        this->data(place).value.insert(static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
+        this->data(place).value.insert(assert_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -66,7 +63,7 @@ public:
         auto & set = this->data(place).value;
         size_t size = set.size();
         writeVarUInt(size, buf);
-        for (auto & elem : set)
+        for (const auto & elem : set)
             writeIntBinary(elem, buf);
     }
 
@@ -77,7 +74,7 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        ColumnArray & arr_to = static_cast<ColumnArray &>(to);
+        ColumnArray & arr_to = assert_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
 
         const typename State::Set & set = this->data(place).value;
@@ -85,13 +82,13 @@ public:
 
         offsets_to.push_back((offsets_to.size() == 0 ? 0 : offsets_to.back()) + size);
 
-        typename ColumnVector<T>::Container & data_to = static_cast<ColumnVector<T> &>(arr_to.getData()).getData();
+        typename ColumnVector<T>::Container & data_to = assert_cast<ColumnVector<T> &>(arr_to.getData()).getData();
         size_t old_size = data_to.size();
         data_to.resize(old_size + size);
 
         size_t i = 0;
         for (auto it = set.begin(); it != set.end(); ++it, ++i)
-            data_to[old_size + i] = it->getKey();
+            data_to[old_size + i] = it->getValue();
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
@@ -101,9 +98,10 @@ public:
 /// Generic implementation, it uses serialized representation as object descriptor.
 struct AggregateFunctionGroupUniqArrayGenericData
 {
-    static constexpr size_t INIT_ELEMS = 2; /// adjustable
-    static constexpr size_t ELEM_SIZE = sizeof(HashSetCellWithSavedHash<StringRef, StringRefHash>);
-    using Set = HashSetWithSavedHash<StringRef, StringRefHash, HashTableGrower<INIT_ELEMS>, HashTableAllocatorWithStackMemory<INIT_ELEMS * ELEM_SIZE>>;
+    static constexpr size_t INITIAL_SIZE_DEGREE = 3; /// adjustable
+
+    using Set = HashSetWithSavedHashWithStackMemory<StringRef, StringRefHash,
+        INITIAL_SIZE_DEGREE>;
 
     Set value;
 };
@@ -118,10 +116,6 @@ class AggregateFunctionGroupUniqArrayGeneric
     DataTypePtr input_data_type;
 
     using State = AggregateFunctionGroupUniqArrayGenericData;
-
-    static StringRef getSerialization(const IColumn & column, size_t row_num, Arena & arena);
-
-    static void deserializeAndInsert(StringRef str, IColumn & data_to);
 
 public:
     AggregateFunctionGroupUniqArrayGeneric(const DataTypePtr & input_data_type)
@@ -146,7 +140,7 @@ public:
 
         for (const auto & elem : set)
         {
-            writeStringBinary(elem.key, buf);
+            writeStringBinary(elem.getValue(), buf);
         }
     }
 
@@ -169,20 +163,8 @@ public:
 
         bool inserted;
         State::Set::LookupResult it;
-
-        StringRef str_serialized = getSerialization(*columns[0], row_num, *arena);
-        set.emplace(str_serialized, it, inserted);
-
-        if constexpr (!is_plain_column)
-        {
-            if (!inserted)
-                arena->rollback(str_serialized.size);
-        }
-        else
-        {
-            if (inserted)
-                it->key = arena->insert(str_serialized.data, str_serialized.size);
-        }
+        auto key_holder = getKeyHolder<is_plain_column>(*columns[0], row_num, *arena);
+        set.emplace(key_holder, it, inserted);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
@@ -202,48 +184,19 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        ColumnArray & arr_to = static_cast<ColumnArray &>(to);
+        ColumnArray & arr_to = assert_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
         IColumn & data_to = arr_to.getData();
 
         auto & set = this->data(place).value;
-        offsets_to.push_back((offsets_to.size() == 0 ? 0 : offsets_to.back()) + set.size());
+        offsets_to.push_back(offsets_to.back() + set.size());
 
         for (auto & elem : set)
-        {
-            deserializeAndInsert(elem.key, data_to);
-        }
+            deserializeAndInsert<is_plain_column>(elem.getValue(), data_to);
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
-
-
-template <>
-inline StringRef AggregateFunctionGroupUniqArrayGeneric<false>::getSerialization(const IColumn & column, size_t row_num, Arena & arena)
-{
-    const char * begin = nullptr;
-    return column.serializeValueIntoArena(row_num, arena, begin);
-}
-
-template <>
-inline StringRef AggregateFunctionGroupUniqArrayGeneric<true>::getSerialization(const IColumn & column, size_t row_num, Arena &)
-{
-    return column.getDataAt(row_num);
-}
-
-template <>
-inline void AggregateFunctionGroupUniqArrayGeneric<false>::deserializeAndInsert(StringRef str, IColumn & data_to)
-{
-    data_to.deserializeAndInsertFromArena(str.data);
-}
-
-template <>
-inline void AggregateFunctionGroupUniqArrayGeneric<true>::deserializeAndInsert(StringRef str, IColumn & data_to)
-{
-    data_to.insertData(str.data, str.size);
-}
-
 
 #undef AGGREGATE_FUNCTION_GROUP_ARRAY_UNIQ_MAX_SIZE
 
