@@ -7,7 +7,7 @@ else ()
     option (USE_INTERNAL_UNWIND_LIBRARY "Set to FALSE to use system unwind library instead of bundled" OFF)
 endif ()
 
-option (ENABLE_UNWIgiND "Enable libunwind (better stacktraces)" ON)
+option (ENABLE_UNWIND "Enable libunwind (better stacktraces)" ON)
 
 if (ENABLE_UNWIND)
 
