@@ -15,7 +15,7 @@
 namespace DB
 {
 
-struct MPPTask;
+class MPPTask;
 class MPPTunnel : private boost::noncopyable
 {
 public:
