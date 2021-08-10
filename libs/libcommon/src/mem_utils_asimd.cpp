@@ -2,8 +2,6 @@
 #include <arm_neon.h>
 #include <common/mem_utils.h>
 
-#include <array>
-
 namespace mem_utils::_detail
 {
 
