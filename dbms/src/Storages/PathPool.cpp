@@ -330,6 +330,7 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
         }
     }
 
+    /// Calutate total_available_size and get a biggest fs
     size_t biggest_avail_size = 0;
     FSID biggest_fs = -1;
     for (auto fs_it = disk_stats_map.begin(); fs_it != disk_stats_map.end(); ++fs_it)
