@@ -25,6 +25,7 @@
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConversion.h>
@@ -1461,7 +1462,7 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, DAGContext * ctx
     if (number == 0)
     {
         result = datetime;
-        return false;
+        return true;
     }
 
     // datetime type

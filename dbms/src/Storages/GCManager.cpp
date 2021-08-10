@@ -34,7 +34,7 @@ bool GCManager::work()
     while (true)
     {
         // The TiFlash process receive a signal to terminate.
-        if (global_context.getTMTContext().getTerminated())
+        if (global_context.getTMTContext().checkShuttingDown())
             break;
         // All storages have been checked, stop here
         if (checked_storage_num >= storages.size())
