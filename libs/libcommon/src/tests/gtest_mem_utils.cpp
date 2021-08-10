@@ -211,6 +211,11 @@ TEST(MemUtilsTest, MemoryIsZeroSSE2)
 
 TEST(MemUtilsTest, MemoryIsZeroASIMD)
 {
+    using namespace simd_option;
+    if (!SIMDRuntimeSupport(SIMDFeature::asimd))
+    {
+        return GTEST_MESSAGE_("skipped", ::testing::TestPartResult::kSuccess);
+    }
     auto length = 1024 * 128 - 3;
     auto memory = AlignedCharArray(length + 4, std::align_val_t{64});
     std::memset(memory.data, 0, length + 4);
