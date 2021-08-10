@@ -46,8 +46,7 @@ if (ARCH_AMD64)
 endif ()
 
 if (ARCH_AARCH64)
-    ## TODO: The following options are reserved for AARCH64, but they are not considered in the code yet.
-    option(TIFLASH_ENABLE_ASIMD_SUPPORT "enable Advanced SIMD support" OFF)
+    option(TIFLASH_ENABLE_ASIMD_SUPPORT "enable Advanced SIMD support" ON)
     option(TIFLASH_ENABLE_SVE_SUPPORT "enable Scalable Vector Extension support" OFF)
 endif ()
 
