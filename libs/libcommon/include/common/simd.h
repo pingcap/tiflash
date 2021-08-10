@@ -106,4 +106,13 @@ static inline bool SIMDRuntimeSupport([[maybe_unused]] SIMDFeature feature)
 }
 #endif
 
-}; // namespace simd_option
+/// @todo: notice that currently we use plain SIMD without OOP abstraction:
+///     this gives several issues:
+///     - there may be similar code paragraph for each vectorization extension
+///     - this forbids passing SIMD type to template argument since GCC will give
+///       off warnings on discard attributes
+///     - some binary operations are ugly
+///     For future improvement, one should wrap SIMD types into structs/classes and
+///     https://gcc.gnu.org/onlinedocs/gcc/Vector-Extensions.html also gives a good example
+///     to reduce some burden of type-casting.
+} // namespace simd_option
