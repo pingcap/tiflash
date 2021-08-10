@@ -1,7 +1,8 @@
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-
 #include <common/mem_utils.h>
 #include <immintrin.h>
+
+#include <cassert>
 namespace mem_utils::_detail
 {
 
@@ -70,7 +71,7 @@ __attribute__((always_inline, pure)) inline bool compareArrayAVX512(const Vector
 {
     static_assert(N >= 1 && N <= 4, "compare array can only be used within range");
 
-    __mmask64 compared [[maybe_unused]] [N - 1]{};
+    __mmask64 compared [[maybe_unused]][N - 1]{};
 
     if constexpr (N >= 4)
         compared[2] = _mm512_cmpeq_epi8_mask(filled_vector, data[3]);
@@ -141,9 +142,9 @@ __attribute__((pure)) bool memoryIsByteAVX512(const void * data, size_t size, st
     }
 
     auto tail = _mm512_loadu_si512(reinterpret_cast<const VectorType *>(byte_address + size - vector_length));
-
+    assert(remaining / vector_length <= 3);
     bool result = true;
-    switch ((remaining % group_size) / vector_length)
+    switch (remaining / vector_length)
     {
         case 3:
             result = compareArrayAVX512<4>({_mm512_load_si512(current_address + 0), _mm512_load_si512(current_address + 1),

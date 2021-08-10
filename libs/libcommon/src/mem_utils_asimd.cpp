@@ -2,12 +2,12 @@
 #include <arm_neon.h>
 #include <common/mem_utils.h>
 
+#include <cassert>
+#include <cstdint>
 namespace mem_utils::_detail
 {
-
 namespace
 {
-
 __attribute__((always_inline, pure)) inline bool checkU64(uint64x2_t value)
 {
     auto result = value[0] & value[1];
@@ -271,11 +271,10 @@ __attribute__((pure)) bool memoryIsByteASIMD(const void * data, const size_t siz
     }
 
     auto tail = vld1q_u8(reinterpret_cast<const uint8_t *>(data) + size - vector_length);
-
-    bool result;
-    switch ((remaining % group_size) / vector_length)
+    assert(remaining / vector_length <= 3);
+    bool result = true;
+    switch (remaining / vector_length)
     {
-
         case 3:
             result = compareArrayASIMD<4>({vld1q_u8(current_address + 0 * vector_length), vld1q_u8(current_address + 1 * vector_length),
                                               vld1q_u8(current_address + 2 * vector_length), tail},

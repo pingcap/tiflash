@@ -2,6 +2,7 @@
 #include <common/mem_utils.h>
 #include <immintrin.h>
 
+#include <cassert>
 #include <cstdint>
 namespace mem_utils::_detail
 {
@@ -201,7 +202,7 @@ __attribute__((always_inline, pure)) inline bool compareArrayAVX2(const VectorTy
 {
     static_assert(N >= 1 && N <= 4, "compare array can only be used within range");
 
-    VectorType compared [[maybe_unused]] [N - 1]{};
+    VectorType compared [[maybe_unused]][N - 1]{};
 
     if constexpr (N >= 4)
         compared[2] = _mm256_cmpeq_epi8(filled_vector, data[3]);
@@ -276,9 +277,9 @@ __attribute__((pure)) bool memoryIsByteAVX2(const void * data, size_t size, std:
     }
 
     auto tail = _mm256_loadu_si256(reinterpret_cast<const VectorType *>(byte_address + size - vector_length));
-
+    assert(remaining / vector_length <= 3);
     bool result = true;
-    switch ((remaining % group_size) / vector_length)
+    switch (remaining / vector_length)
     {
         case 3:
             result = compareArrayAVX2<4>({_mm256_load_si256(current_address + 0), _mm256_load_si256(current_address + 1),
