@@ -101,6 +101,8 @@ static inline bool SIMDRuntimeSupport(SIMDFeature feature)
             return false;
 #endif // HWCAP2_SVE2
     }
+#else
+    (void)feature;
 #endif // __has_include(<asm/hwcap.h>)
     return false;
 }
