@@ -73,7 +73,7 @@ enum class SIMDFeature
 };
 
 
-static inline bool SIMDRuntimeSupport(SIMDFeature feature)
+static inline bool SIMDRuntimeSupport([[maybe_unused]] SIMDFeature feature)
 {
     /// Notice that we do not detect support for Darwin/arm64 since
     /// it does not have HWCAP support. However, if such feature is
