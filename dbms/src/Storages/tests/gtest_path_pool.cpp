@@ -348,7 +348,9 @@ class PathCapcatity : public DB::base::TiFlashStorageTestBasic
     {
         TiFlashStorageTestBasic::SetUp();
         if (int code = statvfs(".", &vfs_info); code != 0)
+        {
             ASSERT_TRUE(0);
+        }
 
         main_data_path = getTemporaryPath() + "/main";
         createIfNotExist(main_data_path);
@@ -445,27 +447,16 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
     ///             - capacity size : 1000
     ///             - used size     : 12
     ///             - avail size    : 50  // min(capacity size - used size, disk avail size);
-    disk_capacity_map[100] = {
-        .vfs_info = {
-            .f_blocks = 100,
-            .f_bavail = 50,
-            .f_frsize = 1,
-        },
+    struct statvfs fake_vfs = {};
+    fake_vfs.f_blocks = 100;
+    fake_vfs.f_bavail = 50;
+    fake_vfs.f_frsize = 1;
+
+    disk_capacity_map[100] = {.vfs_info = fake_vfs,
         .path_stats = {
-            {
-                .used_size = 4,
-                .avail_size = 50,
-                .capacity_size = 100,
-                .ok = 1
-            },
-            {
-                .used_size = 12,
-                .avail_size = 50,
-                .capacity_size = 1000,
-                .ok = 1
-            },
-        }
-    };
+            {.used_size = 4, .avail_size = 50, .capacity_size = 100, .ok = 1},
+            {.used_size = 12, .avail_size = 50, .capacity_size = 1000, .ok = 1},
+        }};
     capacity.setDiskStats(disk_capacity_map);
     FsStats total_stats = capacity.getFsStats();
     ASSERT_EQ(total_stats.capacity_size, 100);
@@ -486,27 +477,11 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
     ///             - capacity size : 50
     ///             - used size     : 12
     ///             - avail size    : 38  // min(capacity size - used size, disk avail size);
-    disk_capacity_map[101] = {
-        .vfs_info = {
-            .f_blocks = 100,
-            .f_bavail = 50,
-            .f_frsize = 1,
-        },
+    disk_capacity_map[101] = {.vfs_info = fake_vfs,
         .path_stats = {
-            {
-                .used_size = 40,
-                .avail_size = 8,
-                .capacity_size = 48,
-                .ok = 1
-            },
-            {
-                .used_size = 12,
-                .avail_size = 38,
-                .capacity_size = 50,
-                .ok = 1
-            },
-        }
-    };
+            {.used_size = 40, .avail_size = 8, .capacity_size = 48, .ok = 1},
+            {.used_size = 12, .avail_size = 38, .capacity_size = 50, .ok = 1},
+        }};
 
     total_stats = capacity.getFsStats();
     ASSERT_EQ(total_stats.capacity_size, 100 + 98);
