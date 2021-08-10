@@ -5,6 +5,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageFileSpec.h>
+#include <Storages/Page/PageFileSpecV1.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -28,10 +29,6 @@ extern const Metric OpenFileForRead;
 
 namespace DB
 {
-// =========================================================
-// Page Meta format
-// =========================================================
-
 namespace FailPoints
 {
 extern const char exception_before_page_file_write_sync[];
@@ -40,38 +37,6 @@ extern const char force_legacy_or_checkpoint_page_file_exists[];
 } // namespace FailPoints
 
 static constexpr bool PAGE_CHECKSUM_ON_READ = true;
-
-#ifndef O_DIRECT
-#define O_DIRECT 00040000
-#endif
-
-/**
- * FIXME: need remove
- */
-namespace PageMetaFormat
-{
-
-struct PageFlags
-{
-    UInt32 flags = 0x00000000;
-
-    // Detach page means the meta and data not in the same PageFile
-    void setIsDetachPage() { flags |= 0x1; }
-    bool isDetachPage() const { return flags & 0x1; }
-};
-static_assert(std::is_trivially_copyable_v<PageFlags>);
-static_assert(sizeof(PageFlags) == sizeof(UInt32));
-
-using WBSize = UInt32;
-// TODO we should align these alias with type in PageCache
-using PageTag    = UInt64;
-using IsPut      = std::underlying_type<WriteBatch::WriteType>::type;
-using PageOffset = UInt64;
-using Checksum   = UInt64;
-
-static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageFileId) + sizeof(PageFileLevel) + sizeof(PageFlags) + sizeof(PageTag)
-    + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
-} // namespace PageMetaFormat
 
 // =========================================================
 // PageFile::MetaMergingReader
@@ -84,7 +49,8 @@ PageFile::MetaMergingReader::~MetaMergingReader()
     page_file.free(meta_buffer, meta_size);
 }
 
-PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter)
+PageFile::MetaMergingReaderPtr
+PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter)
 {
     auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
     reader->initialize(max_meta_offset, read_limiter);
@@ -140,6 +106,188 @@ void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offs
     status = Status::Opened;
 }
 
+void PageFile::FiledOffsetReader::deserialize(struct ReadContext & ctx, PageEntry & entry, size_t size)
+{
+    entry.field_offsets.reserve(size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        auto _field_offset  = PageUtil::cast<PFWriteBatchFieldOffset>(ctx.meta_pos);
+        auto field_offset   = _field_offset->bits.field_offset;
+        auto field_checksum = _field_offset->bits.field_checksum;
+        entry.field_offsets.emplace_back(field_offset, field_checksum);
+    }
+}
+
+size_t PageFile::WriteBatchReader::readPUEdit(struct ReadContext & ctx)
+{
+    size_t    wb_pu_offset = 0;
+    PageEntry entry;
+
+    WriteBatch::WriteType type;
+    UInt64                page_id   = 0;
+    UInt8                 page_flag = 0;
+    switch (ctx.version)
+    {
+    case PageFormat::V1: {
+        auto wb_pu    = PageUtil::cast<PFWriteBatchTypePUV1>(ctx.meta_pos);
+        type          = static_cast<WriteBatch::WriteType>(wb_pu->bits.type);
+        page_id       = wb_pu->bits.page_id;
+        entry.file_id = ctx.page_file.getFileId();
+        entry.level   = ctx.page_file.getLevel();
+
+        entry.tag      = wb_pu->bits.tag;
+        entry.offset   = wb_pu->bits.page_offset;
+        entry.size     = wb_pu->bits.page_size;
+        entry.checksum = wb_pu->bits.page_checksum;
+
+        break;
+    }
+    case PageFormat::V2: {
+        auto wb_pu    = PageUtil::cast<PFWriteBatchTypePU>(ctx.meta_pos);
+        type          = static_cast<WriteBatch::WriteType>(wb_pu->bits.type);
+        page_id       = wb_pu->bits.page_id;
+        entry.file_id = wb_pu->bits.file_id;
+        entry.level   = wb_pu->bits.level;
+
+        entry.tag      = wb_pu->bits.tag;
+        entry.offset   = wb_pu->bits.page_offset;
+        entry.size     = wb_pu->bits.page_size;
+        entry.checksum = wb_pu->bits.page_checksum;
+        page_flag      = wb_pu->bits.flag;
+        fo_reader.deserialize(ctx, entry, wb_pu->bits.field_offset_len);
+
+        break;
+    }
+    default:
+        throw Exception("PageFile binary version not match [unknown_version=" + DB::toString(ctx.version)
+                            + "] [file=" + ctx.page_file.metaPath() + "]",
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+
+    if (type == WriteBatch::WriteType::PUT)
+    {
+        ctx.edit.put(page_id, entry);
+        wb_pu_offset += entry.size;
+    }
+    else if (type == WriteBatch::WriteType::UPSERT)
+    {
+        ctx.edit.upsertPage(page_id, entry);
+        // If it is a deatch page, don't move data offset.
+        wb_pu_offset += ctx.version == PageFormat::V1 ? entry.size : page_flag & PAGE_FLAG_DETACH ? 0 : entry.size;
+    }
+    else
+    {
+        // If type is not PUT/UPSERT, Do not call this method.
+        throw Exception("PageFile binary type not match [unknown_type=" + DB::toString((UInt8)type) + "] [file=" + ctx.page_file.metaPath()
+                            + "]",
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+
+    return wb_pu_offset;
+}
+
+void PageFile::WriteBatchReader::readDelEdit(struct ReadContext & ctx)
+{
+    auto wb_del = PageUtil::cast<PFWriteBatchTypeDel>(ctx.meta_pos);
+    ctx.edit.del(wb_del->bits.page_id);
+}
+
+void PageFile::WriteBatchReader::readRefEdit(struct ReadContext & ctx)
+{
+    auto wb_ref = PageUtil::cast<PFWriteBatchTypeRef>(ctx.meta_pos);
+    ctx.edit.ref(wb_ref->bits.page_id, wb_ref->bits.og_page_id);
+}
+
+int PageFile::WriteBatchReader::deserialize(struct ReadContext & ctx)
+{
+    size_t     wb_data_offset = 0;
+    const auto write_type     = static_cast<WriteBatch::WriteType>(PageUtil::get<PFWriteBatchType, false>(ctx.meta_pos));
+    switch (write_type)
+    {
+    case WriteBatch::WriteType::PUT:
+    case WriteBatch::WriteType::UPSERT: {
+        wb_data_offset += readPUEdit(ctx);
+        break;
+    }
+    case WriteBatch::WriteType::DEL: {
+        readDelEdit(ctx);
+        break;
+    }
+    case WriteBatch::WriteType::REF: {
+        readRefEdit(ctx);
+        break;
+    }
+    }
+
+    return wb_data_offset;
+}
+
+size_t PageFile::MetaMergingReader::deserialize(ReadContext & ctx, WriteBatch::SequenceID * sid, PageFormat::Version * v)
+{
+    char *       meta_start_pos = ctx.meta_pos;
+    PFMetaInfo * meta_info      = PageUtil::cast<PFMetaInfo>(ctx.meta_pos);
+    size_t       meta_bytes     = meta_info->bits.meta_byte_size;
+
+    // verify meta length
+    if (meta_start_pos + meta_bytes > meta_buffer + meta_size)
+    {
+        LOG_WARNING(page_file.log,
+                    "Incomplete write batch {" << toString() << "} [expect_batch_bytes=" << meta_bytes << "] [meta_size=" << meta_size
+                                               << "] [file=" << page_file.metaPath() << "] ignored.");
+        status = Status::Finished;
+        return 0;
+    }
+
+    // get sequence id
+    WriteBatch::SequenceID wb_sequence = 0;
+    switch (meta_info->bits.meta_info_version)
+    {
+    case PageFormat::V1:
+        wb_sequence = 0;
+        break;
+    case PageFormat::V2:
+        wb_sequence = meta_info->bits.meta_seq_id;
+        break;
+    default:
+        throw Exception("PageFile binary version not match {" + toString() + "} [unknown_version="
+                            + DB::toString(meta_info->bits.meta_info_version) + "] [file=" + page_file.metaPath() + "]",
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+    *sid = wb_sequence;
+    if (unlikely(v != nullptr))
+        *v = meta_info->bits.meta_info_version;
+
+
+    // check checksum
+    const auto meta_bytes_without_checksum = -sizeof(PFMetaInfoChecksum);
+    const auto meta_checksum               = PageUtil::get<PFMetaInfoChecksum, false>(meta_start_pos + meta_bytes_without_checksum);
+    const auto checksum_calc               = CityHash_v1_0_2::CityHash64(meta_start_pos, meta_bytes_without_checksum);
+    if (meta_checksum != checksum_calc)
+    {
+        std::stringstream ss;
+        ss << "[expecte_checksum=" << std::hex << meta_checksum << "] [actual_checksum" << checksum_calc << "]";
+        throw Exception("Write batch checksum not match {" + toString() + "} [path=" + page_file.folderPath()
+                            + "] [batch_bytes=" + DB::toString(meta_bytes) + "] " + ss.str(),
+                        ErrorCodes::CHECKSUM_DOESNT_MATCH);
+    }
+
+    size_t data_offset = 0;
+    while (ctx.meta_pos < meta_start_pos + (meta_bytes - sizeof(PFMetaInfoChecksum)))
+    {
+        data_offset += wb_reader.deserialize(ctx);
+    }
+
+    // Skip the meta Checksum, have already verify before parse.
+    ctx.meta_pos += sizeof(PFMetaInfoChecksum);
+
+    if (unlikely(ctx.meta_pos != meta_start_pos + meta_bytes))
+        throw Exception("pos not match {" + toString() + "} [batch_bytes=" + DB::toString(meta_bytes)
+                            + "] [actual_bytes=" + DB::toString(ctx.meta_pos - meta_start_pos) + "] [file=" + page_file.metaPath() + "]",
+                        ErrorCodes::LOGICAL_ERROR);
+
+    return data_offset;
+}
+
 bool PageFile::MetaMergingReader::hasNext() const
 {
     return status == Status::Opened && meta_file_offset < meta_size;
@@ -155,7 +303,9 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
 
     char * meta_data_end = meta_buffer + meta_size;
     char * pos           = meta_buffer + meta_file_offset;
-    if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
+
+    /// Verify at least remain meta info
+    if (pos + sizeof(PFMetaInfo) > meta_data_end)
     {
         LOG_WARNING(page_file.log,
                     "Incomplete write batch {" << toString() << "} [batch_start_pos=" << meta_file_offset << "] [meta_size=" << meta_size
@@ -163,135 +313,12 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
         status = Status::Finished;
         return;
     }
-    const char * wb_start_pos = pos;
-    const auto   wb_bytes     = PageUtil::get<PageMetaFormat::WBSize>(pos);
-    if (wb_start_pos + wb_bytes > meta_data_end)
-    {
-        LOG_WARNING(page_file.log,
-                    "Incomplete write batch {" << toString() << "} [expect_batch_bytes=" << wb_bytes << "] [meta_size=" << meta_size
-                                               << "] [file=" << page_file.metaPath() << "] ignored.");
-        status = Status::Finished;
-        return;
-    }
 
-    WriteBatch::SequenceID wb_sequence    = 0;
-    const auto             binary_version = PageUtil::get<PageFormat::Version>(pos);
-    switch (binary_version)
-    {
-    case PageFormat::V1:
-        wb_sequence = 0;
-        break;
-    case PageFormat::V2:
-        wb_sequence = PageUtil::get<WriteBatch::SequenceID>(pos);
-        break;
-    default:
-        throw Exception("PageFile binary version not match {" + toString() + "} [unknown_version=" + DB::toString(binary_version)
-                            + "] [file=" + page_file.metaPath() + "]",
-                        ErrorCodes::LOGICAL_ERROR);
-    }
+    ReadContext context = {.version = 0, .page_file = page_file, .edit = curr_edit, .meta_pos = pos};
 
-    // return the binary_version if `v` is not null
-    if (unlikely(v != nullptr))
-        *v = binary_version;
+    size_t curr_wb_data_offset = deserialize(context, &curr_write_batch_sequence, v);
 
-    // check the checksum of WriteBatch
-    const auto wb_bytes_without_checksum = wb_bytes - sizeof(PageMetaFormat::Checksum);
-    const auto wb_checksum               = PageUtil::get<PageMetaFormat::Checksum, false>(wb_start_pos + wb_bytes_without_checksum);
-    const auto checksum_calc             = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
-    if (wb_checksum != checksum_calc)
-    {
-        std::stringstream ss;
-        ss << "[expecte_checksum=" << std::hex << wb_checksum << "] [actual_checksum" << checksum_calc << "]";
-        throw Exception("Write batch checksum not match {" + toString() + "} [path=" + page_file.folderPath()
-                            + "] [batch_bytes=" + DB::toString(wb_bytes) + "] " + ss.str(),
-                        ErrorCodes::CHECKSUM_DOESNT_MATCH);
-    }
-
-    // recover WriteBatch
-    size_t curr_wb_data_offset = 0;
-    while (pos < wb_start_pos + wb_bytes_without_checksum)
-    {
-        const auto write_type = static_cast<WriteBatch::WriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
-        switch (write_type)
-        {
-        case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT: {
-            PageMetaFormat::PageFlags flags;
-
-            auto      page_id = PageUtil::get<PageId>(pos);
-            PageEntry entry;
-            switch (binary_version)
-            {
-            case PageFormat::V1: {
-                entry.file_id = page_file.getFileId();
-                entry.level   = page_file.getLevel();
-                break;
-            }
-            case PageFormat::V2: {
-                entry.file_id = PageUtil::get<PageFileId>(pos);
-                entry.level   = PageUtil::get<PageFileLevel>(pos);
-                flags         = PageUtil::get<PageMetaFormat::PageFlags>(pos);
-                break;
-            }
-            default:
-                throw Exception("PageFile binary version not match {" + toString() + "} [unknown_version=" + DB::toString(binary_version)
-                                    + "] [file=" + page_file.metaPath() + "]",
-                                ErrorCodes::LOGICAL_ERROR);
-            }
-
-            entry.tag      = PageUtil::get<PageMetaFormat::PageTag>(pos);
-            entry.offset   = PageUtil::get<PageMetaFormat::PageOffset>(pos);
-            entry.size     = PageUtil::get<PageSize>(pos);
-            entry.checksum = PageUtil::get<PageMetaFormat::Checksum>(pos);
-
-            if (binary_version == PageFormat::V2)
-            {
-                const UInt64 num_fields = PageUtil::get<UInt64>(pos);
-                entry.field_offsets.reserve(num_fields);
-                for (size_t i = 0; i < num_fields; ++i)
-                {
-                    auto field_offset   = PageUtil::get<UInt64>(pos);
-                    auto field_checksum = PageUtil::get<UInt64>(pos);
-                    entry.field_offsets.emplace_back(field_offset, field_checksum);
-                }
-            }
-
-            if (write_type == WriteBatch::WriteType::PUT)
-            {
-                curr_edit.put(page_id, entry);
-                curr_wb_data_offset += entry.size;
-            }
-            else if (write_type == WriteBatch::WriteType::UPSERT)
-            {
-                curr_edit.upsertPage(page_id, entry);
-                // If it is a deatch page, don't move data offset.
-                curr_wb_data_offset += flags.isDetachPage() ? 0 : entry.size;
-            }
-            break;
-        }
-        case WriteBatch::WriteType::DEL: {
-            auto page_id = PageUtil::get<PageId>(pos);
-            curr_edit.del(page_id);
-            break;
-        }
-        case WriteBatch::WriteType::REF: {
-            const auto ref_id  = PageUtil::get<PageId>(pos);
-            const auto page_id = PageUtil::get<PageId>(pos);
-            curr_edit.ref(ref_id, page_id);
-            break;
-        }
-        }
-    }
-    // move `pos` over the checksum of WriteBatch
-    pos += sizeof(PageMetaFormat::Checksum);
-
-    if (unlikely(pos != wb_start_pos + wb_bytes))
-        throw Exception("pos not match {" + toString() + "} [batch_bytes=" + DB::toString(wb_bytes)
-                            + "] [actual_bytes=" + DB::toString(pos - wb_start_pos) + "] [file=" + page_file.metaPath() + "]",
-                        ErrorCodes::LOGICAL_ERROR);
-
-    curr_write_batch_sequence = wb_sequence;
-    meta_file_offset          = pos - meta_buffer;
+    meta_file_offset = pos - meta_buffer;
     data_file_offset += curr_wb_data_offset;
 }
 
@@ -405,12 +432,6 @@ void PageFile::WriteBatchWriter::serialize(struct WriteContext & ctx, WriteBatch
     case WriteBatch::WriteType::PUT:
     case WriteBatch::WriteType::UPSERT: {
         PageEntry entry = {};
-        PageFlags flags;
-
-        if (!writer.read_buffer)
-        {
-            flags.setIsDetachPage();
-        }
 
         applyPUEdit(ctx, writer, page_data_file_off, entry);
         PFWriteBatchTypePU * wb_pu   = PageUtil::cast<PFWriteBatchTypePU>(ctx.meta_pos);
@@ -418,7 +439,7 @@ void PageFile::WriteBatchWriter::serialize(struct WriteContext & ctx, WriteBatch
         wb_pu->bits.page_id          = writer.page_id;
         wb_pu->bits.file_id          = entry.file_id;
         wb_pu->bits.level            = entry.level;
-        wb_pu->bits.flag             = flags.flags;
+        wb_pu->bits.flag             = !writer.read_buffer ? PAGE_FLAG_DETACH : PAGE_FLAG_NORMAL;
         wb_pu->bits.tag              = writer.tag;
         wb_pu->bits.page_offset      = entry.offset;
         wb_pu->bits.page_size        = writer.size;
@@ -542,7 +563,7 @@ void PageFile::Writer::serialize(ByteBuffer & meta_buf, ByteBuffer & data_buf, c
 #endif
 }
 
-size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const RateLimiterPtr & rate_limiter)
+size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -559,7 +580,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Ra
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
-    serialize(meta_buf, data_buf, rate_limiter);
+    serialize(meta_buf, data_buf, write_limiter);
 
     fiu_do_on(FailPoints::exception_before_page_file_write_sync,
               { // Mock that writing page file meta is not completed

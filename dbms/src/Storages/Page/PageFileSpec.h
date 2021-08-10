@@ -5,6 +5,10 @@
 
 namespace DB
 {
+
+#define PAGE_FLAG_NORMAL 0x0
+#define PAGE_FLAG_DETACH 0x1
+
 /**
      * Here is what page file look like :
      * +-------------------------------------------------------+
@@ -50,6 +54,8 @@ static_assert(sizeof(union PFMetaInfo) == 16, "Invaild size of PFMetaInfo.");
 
 // add in meta info end
 using PFMetaInfoChecksum = UInt64;
+
+using PFWriteBatchType = UInt8;
 
 // write batch type:PUT/UPSERT
 union PFWriteBatchTypePU

@@ -34,6 +34,15 @@ public:
         char * meta_pos;
     };
 
+    struct ReadContext
+    {
+        PageFormat::Version version;
+        PageFile &          page_file;
+        PageEntriesEdit &   edit;
+
+        char * meta_pos;
+    };
+
     class FiledOffsetWriter : private boost::noncopyable
     {
     public:
@@ -43,16 +52,6 @@ public:
     class WriteBatchWriter : private boost::noncopyable
     {
     public:
-        struct PageFlags
-        {
-            UInt32 flags = 0;
-            // Detach page means the meta and data not in the same PageFile
-            void setIsDetachPage() { flags |= 0x1; }
-            bool isDetachPage() const { return flags & 0x1; }
-        };
-        static_assert(std::is_trivially_copyable_v<PageFlags>);
-        static_assert(sizeof(PageFlags) == sizeof(UInt32), "Invalid size of PageFlags.");
-
         void                      serialize(struct WriteContext & ctx, WriteBatch::Write & writer, UInt64 & page_data_file_off);
         std::pair<size_t, size_t> measureWriteBatchsSize(WriteBatch & wb);
 
@@ -158,6 +157,26 @@ public:
         }
     };
 
+    class FiledOffsetReader : private boost::noncopyable
+    {
+    public:
+        void deserialize(struct ReadContext & ctx, PageEntry & entry, size_t size);
+    };
+
+    class WriteBatchReader : private boost::noncopyable
+    {
+    public:
+        int deserialize(struct ReadContext & ctx);
+
+    protected:
+        size_t readPUEdit(struct ReadContext & ctx);
+        void   readDelEdit(struct ReadContext & ctx);
+        void   readRefEdit(struct ReadContext & ctx);
+
+    protected:
+        FiledOffsetReader fo_reader;
+    };
+
     class MetaMergingReader;
     using MetaMergingReaderPtr = std::shared_ptr<MetaMergingReader>;
 
@@ -182,6 +201,8 @@ public:
         bool hasNext() const;
 
         void moveNext(PageFormat::Version * v = nullptr);
+
+        size_t deserialize(ReadContext & ctx, WriteBatch::SequenceID * sid, PageFormat::Version * v = nullptr);
 
         PageEntriesEdit getEdits() { return std::move(curr_edit); }
 
@@ -214,8 +235,10 @@ public:
         }
 
     private:
-
         void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter);
+
+    protected:
+        WriteBatchReader wb_reader;
 
     private:
         PageFile & page_file;

@@ -135,6 +135,7 @@ inline T get(std::conditional_t<advance, char *&, const char *> pos)
     return v;
 }
 
+/// Cast and advance sizeof(T) bytes.
 template <typename T, bool advance = true>
 T * cast(std::conditional_t<advance, char *&, const char *> pos)
 {
