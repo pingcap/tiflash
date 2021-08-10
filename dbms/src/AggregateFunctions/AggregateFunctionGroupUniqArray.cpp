@@ -30,11 +30,11 @@ static IAggregateFunction * createWithExtraTypes(const DataTypePtr & argument_ty
     else if (typeid_cast<const DataTypeDateTime *>(argument_type.get())) return new AggregateFunctionGroupUniqArrayDateTime;
     else
     {
-        /// Check that we can use plain version of AggreagteFunctionGroupUniqArrayGeneric
+        /// Check that we can use plain version of AggregateFunctionGroupUniqArrayGeneric
         if (argument_type->isValueUnambiguouslyRepresentedInContiguousMemoryRegion())
-            return new AggreagteFunctionGroupUniqArrayGeneric<true>(argument_type);
+            return new AggregateFunctionGroupUniqArrayGeneric<true>(argument_type);
         else
-            return new AggreagteFunctionGroupUniqArrayGeneric<false>(argument_type);
+            return new AggregateFunctionGroupUniqArrayGeneric<false>(argument_type);
     }
 }
 
