@@ -189,7 +189,7 @@ public:
         IColumn & data_to = arr_to.getData();
 
         auto & set = this->data(place).value;
-        offsets_to.push_back(offsets_to.back() + set.size());
+        offsets_to.push_back((offsets_to.size() == 0 ? 0 : offsets_to.back()) + set.size());
 
         for (auto & elem : set)
             deserializeAndInsert<is_plain_column>(elem.getValue(), data_to);
