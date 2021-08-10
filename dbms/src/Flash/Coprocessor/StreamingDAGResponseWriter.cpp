@@ -4,6 +4,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
+#include <Flash/Mpp/MPPTunnelSet.h>
 #include <Interpreters/AggregationCommon.h>
 
 namespace DB
