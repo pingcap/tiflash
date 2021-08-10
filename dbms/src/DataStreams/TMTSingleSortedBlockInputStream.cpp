@@ -97,7 +97,7 @@ Block TMTSingleSortedBlockInputStream::readImpl()
         const UInt8 * delmark_column
             = static_cast<const ColumnUInt8 *>(cur_block.getByPosition(delmark_column_index).column.get())->getData().data();
 
-        if (isPKDiffEachInSortedColumn(pk_column, rows) && pk_column[rows - 1] != next_block_first_pk && memoryIsZero(delmark_column, rows))
+        if (isPKDiffEachInSortedColumn(pk_column, rows) && pk_column[rows - 1] != next_block_first_pk && mem_utils::memoryIsZero(delmark_column, rows))
         {
             auto tmp_block = std::move(cur_block);
             updateNextBlock();
@@ -113,7 +113,7 @@ Block TMTSingleSortedBlockInputStream::readImpl()
         if (next_block_first_pk != pk_column[rows - 1])
             filter[rows - 1] = delmark_column[rows - 1] ^ (UInt8)1;
 
-        if (memoryIsZero(filter.data(), rows))
+        if (mem_utils::memoryIsZero(filter.data(), rows))
         {
             updateNextBlock();
             continue;
