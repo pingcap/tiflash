@@ -208,7 +208,7 @@ __attribute__((always_inline, pure)) inline bool compareArrayASIMD(const uint8x1
 {
     static_assert(N >= 1 && N <= 4, "compare array can only be used within range");
 
-    uint8x16_t compared[N - 1]{};
+    uint8x16_t compared [[maybe_unused]] [N - 1]{};
 
     if constexpr (N >= 4)
         compared[2] = vceqq_u8(filled_vector, data[3]);
