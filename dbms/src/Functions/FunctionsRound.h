@@ -1128,23 +1128,32 @@ struct TiDBRoundPrecisionInferer
     }
 };
 
+struct TiDBRoundArguments
+{
+    const DataTypePtr & input_type;
+    const DataTypePtr & frac_type;
+    const DataTypePtr & output_type;
+    const ColumnPtr & input_column;
+    const ColumnPtr & frac_column;
+    MutableColumnPtr & output_column;
+};
+
 template <typename InputType, typename FracType, typename OutputType, typename InputColumn, typename FracColumn, typename OutputColumn>
 struct TiDBRound
 {
-    static void apply(const ColumnPtr & input_column_, const ColumnPtr & frac_column_, MutableColumnPtr & output_column_,
-        const DataTypePtr & input_type, const DataTypePtr & output_type)
+    static void apply(const TiDBRoundArguments & args)
     {
-        auto input_column = checkAndGetColumn<InputColumn>(input_column_.get());
-        auto frac_column = checkAndGetColumn<FracColumn>(frac_column_.get());
+        auto input_column = checkAndGetColumn<InputColumn>(args.input_column.get());
+        auto frac_column = checkAndGetColumn<FracColumn>(args.frac_column.get());
 
         if (input_column == nullptr)
-            throw Exception(fmt::format("Illegal column {} for the first argument of function round", input_column_->getName()),
+            throw Exception(fmt::format("Illegal column {} for the first argument of function round", args.input_column->getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         if (frac_column == nullptr)
-            throw Exception(fmt::format("Illegal column {} for the second argument of function round", frac_column_->getName()),
+            throw Exception(fmt::format("Illegal column {} for the second argument of function round", args.frac_column->getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
 
-        auto output_column = typeid_cast<OutputColumn *>(output_column_.get());
+        auto output_column = typeid_cast<OutputColumn *>(args.output_column.get());
         assert(output_column != nullptr);
 
         size_t size = input_column->size();
@@ -1155,11 +1164,11 @@ struct TiDBRound
         output_data.resize(size);
 
         TiDBDecimalRoundInfo info;
-        info.input_prec = getDecimalPrecision(*input_type, 0);
-        info.input_scale = getDecimalScale(*input_type, 0);
+        info.input_prec = getDecimalPrecision(*args.input_type, 0);
+        info.input_scale = getDecimalScale(*args.input_type, 0);
         info.input_int_prec = info.input_prec - info.input_scale;
-        info.output_prec = getDecimalPrecision(*output_type, 0);
-        info.output_scale = getDecimalScale(*output_type, 0);
+        info.output_prec = getDecimalPrecision(*args.output_type, 0);
+        info.output_scale = getDecimalScale(*args.output_type, 0);
 
         for (size_t i = 0; i < size; ++i)
         {
@@ -1272,16 +1281,6 @@ private:
         }
     }
 
-    struct DispatchArguments
-    {
-        const DataTypePtr & input_type;
-        const DataTypePtr & frac_type;
-        const DataTypePtr & output_type;
-        const ColumnPtr & input_column;
-        const ColumnPtr & frac_column;
-        MutableColumnPtr & output_column;
-    };
-
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
     {
         ColumnsWithTypeAndName columns;
@@ -1309,7 +1308,7 @@ private:
             DataTypeUInt64>(input_type, f);
     }
 
-    void checkInputTypeAndApply(const DispatchArguments & args)
+    void checkInputTypeAndApply(const TiDBRoundArguments & args)
     {
         if (!castToNumericDataTypes(args.input_type.get(), [&](const auto & input_type, bool) {
                 using InputDataType = std::decay_t<decltype(input_type)>;
@@ -1324,7 +1323,7 @@ private:
     }
 
     template <typename InputType>
-    void checkFracTypeAndApply(const DispatchArguments & args)
+    void checkFracTypeAndApply(const TiDBRoundArguments & args)
     {
         if (!castTypeToEither<DataTypeInt64, DataTypeUInt64>(args.frac_type.get(), [&](const auto & frac_type, bool) {
                 using FracDataType = std::decay_t<decltype(frac_type)>;
@@ -1339,7 +1338,7 @@ private:
     }
 
     template <typename InputType, typename FracType>
-    void checkOutputTypeAndApply(const DispatchArguments & args)
+    void checkOutputTypeAndApply(const TiDBRoundArguments & args)
     {
         if (!castToNumericDataTypes(args.output_type.get(), [&](const auto & output_type, bool) {
                 using OutputDataType = std::decay_t<decltype(output_type)>;
@@ -1353,7 +1352,7 @@ private:
 #undef NUMERIC_DATA_TYPES
 
     template <typename InputType, typename FracType, typename OutputType>
-    bool checkColumnsAndApply(const DispatchArguments & args)
+    bool checkColumnsAndApply(const TiDBRoundArguments & args)
     {
         constexpr bool check_integer_output
             = is_signed_v<InputType> ? std::is_same_v<OutputType, Int64> : std::is_same_v<OutputType, UInt64>;
@@ -1370,20 +1369,16 @@ private:
             if (args.input_column->isColumnConst())
             {
                 if (args.frac_column->isColumnConst())
-                    TiDBRound<InputType, FracType, OutputType, ColumnConst, ColumnConst, OutputColumn>::apply(
-                        args.input_column, args.frac_column, args.output_column, args.input_type, args.output_type);
+                    TiDBRound<InputType, FracType, OutputType, ColumnConst, ColumnConst, OutputColumn>::apply(args);
                 else
-                    TiDBRound<InputType, FracType, OutputType, ColumnConst, FracColumn, OutputColumn>::apply(
-                        args.input_column, args.frac_column, args.output_column, args.input_type, args.output_type);
+                    TiDBRound<InputType, FracType, OutputType, ColumnConst, FracColumn, OutputColumn>::apply(args);
             }
             else
             {
                 if (args.frac_column->isColumnConst())
-                    TiDBRound<InputType, FracType, OutputType, InputColumn, ColumnConst, OutputColumn>::apply(
-                        args.input_column, args.frac_column, args.output_column, args.input_type, args.output_type);
+                    TiDBRound<InputType, FracType, OutputType, InputColumn, ColumnConst, OutputColumn>::apply(args);
                 else
-                    TiDBRound<InputType, FracType, OutputType, InputColumn, FracColumn, OutputColumn>::apply(
-                        args.input_column, args.frac_column, args.output_column, args.input_type, args.output_type);
+                    TiDBRound<InputType, FracType, OutputType, InputColumn, FracColumn, OutputColumn>::apply(args);
             }
 
             return true;
