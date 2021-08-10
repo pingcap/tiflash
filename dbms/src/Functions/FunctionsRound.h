@@ -1349,8 +1349,6 @@ private:
         }
     }
 
-#undef NUMERIC_DATA_TYPES
-
     template <typename InputType, typename FracType, typename OutputType>
     bool checkColumnsAndApply(const TiDBRoundArguments & args)
     {
