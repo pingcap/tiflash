@@ -32,6 +32,20 @@ __attribute__((always_inline, pure)) inline bool compareArraySSE2(const VectorTy
     return mask == 0xFFFF;
 }
 
+// The function checks whether the memory is filled with target byte with SIMD acceleration,
+// assuming that the size is always larger than the vector length.
+// There are several three stages of the whole procedure:
+//
+//    header                         tail
+//    |____|                        |____|
+//      |____|____|____|....|____|____|
+//
+// - at the beginning, one vector is read and compared at first;
+// - then, the main loop starts at the aligned memory boundary (may intersect with header and tail);
+//   checking 4 * vector_length for each iteration;
+// - finally, one more vector right at the ending position is compared;
+//
+// These three tiles cover the hole memory area.
 __attribute__((pure)) bool memoryIsByteSSE2(const void * data, size_t size, std::byte target)
 {
     static constexpr size_t vector_length = sizeof(VectorType);

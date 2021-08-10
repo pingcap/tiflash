@@ -208,7 +208,7 @@ __attribute__((always_inline, pure)) inline bool compareArrayASIMD(const uint8x1
 {
     static_assert(N >= 1 && N <= 4, "compare array can only be used within range");
 
-    uint8x16_t compared [[maybe_unused]] [N - 1]{};
+    uint8x16_t compared [[maybe_unused]][N - 1]{};
 
     if constexpr (N >= 4)
         compared[2] = vceqq_u8(filled_vector, data[3]);
@@ -230,6 +230,9 @@ __attribute__((always_inline, pure)) inline bool compareArrayASIMD(const uint8x1
     return (mask[0] & mask[1]) == 0xFFFF'FFFF'FFFF'FFFF;
 }
 
+// even though ASIMD instruction does not distinguish aligned or unaligned loading
+// it is a good choice to keep it aligned here.
+// see: https://stackoverflow.com/questions/45714535/performance-of-unaligned-simd-load-store-on-aarch64
 __attribute__((pure)) bool memoryIsByteASIMD(const void * data, const size_t size, std::byte target)
 {
     static constexpr size_t vector_length = sizeof(uint8x16_t);

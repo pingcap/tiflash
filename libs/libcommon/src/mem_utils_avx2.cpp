@@ -223,6 +223,19 @@ __attribute__((always_inline, pure)) inline bool compareArrayAVX2(const VectorTy
     return static_cast<unsigned>(mask) == 0xFFFF'FFFF;
 }
 
+// see `memoryIsByteSSE2` for detailed description
+// Another thing to notice is that, for AVX2 and AVX512, GCC is doing even
+// better here: under `-O3`, instead of using aligned loading, it uses the address directly, generating
+// something like:
+//     vmovdqa   0x60(%rdx),%ymm2
+//     vpcmpeqb  (%rdx),%ymm1,%ymm0
+//     vpcmpeqb  %ymm1,%ymm2,%ymm2
+//     vpand     %ymm2,%ymm0,%ymm0
+//     vpcmpeqb  0x40(%rdx),%ymm1,%ymm2
+//     vpand     %ymm2,%ymm0,%ymm0
+//     vpcmpeqb  0x20(%rdx),%ymm1,%ymm2
+//     vpand     %ymm2,%ymm0,%ymm0
+//     vpmovmskb %ymm0,%eax
 __attribute__((pure)) bool memoryIsByteAVX2(const void * data, size_t size, std::byte target)
 {
     static constexpr size_t vector_length = sizeof(VectorType);
