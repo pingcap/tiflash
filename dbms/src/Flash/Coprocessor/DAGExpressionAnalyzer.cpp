@@ -293,6 +293,13 @@ static String buildDateAddOrSubFunction(DAGExpressionAnalyzer * analyzer, const 
         arg_names.push_back(delta_column);
         delta_column = analyzer->applyFunction("toInt64OrNull", arg_names, actions, nullptr);
     }
+    else if (!delta_column_type->isInteger())
+    {
+        // convert to integer
+        Names arg_names;
+        arg_names.push_back(delta_column);
+        delta_column = analyzer->applyFunction("round", arg_names, actions, nullptr);
+    }
     Names argument_names;
     argument_names.push_back(date_column);
     argument_names.push_back(delta_column);
@@ -329,6 +336,27 @@ static String buildBitwiseFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
 }
 
+static String buildRoundFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    // ROUND(x) -> ROUND(x, 0)
+
+    if (expr.children_size() != 1)
+        throw TiFlashException("Invalid arguments of ROUND function", Errors::Coprocessor::BadRequest);
+
+
+    auto input_arg_name = analyzer->getActions(expr.children(0), actions);
+
+    auto const_zero = tipb::Expr();
+    constructInt64LiteralTiExpr(const_zero, 0);
+    auto const_zero_arg_name = analyzer->getActions(const_zero, actions);
+
+    Names argument_names;
+    argument_names.push_back(std::move(input_arg_name));
+    argument_names.push_back(std::move(const_zero_arg_name));
+
+    return analyzer->applyFunction("tidbRoundWithFrac", argument_names, actions, getCollatorFromExpr(expr));
+}
+
 static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
@@ -347,7 +375,8 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"multiIf", buildMultiIfFunction}, {"tidb_cast", buildCastFunction}, {"and", buildLogicalFunction}, {"or", buildLogicalFunction},
         {"xor", buildLogicalFunction}, {"not", buildLogicalFunction}, {"bitAnd", buildBitwiseFunction}, {"bitOr", buildBitwiseFunction},
         {"bitXor", buildBitwiseFunction}, {"bitNot", buildBitwiseFunction}, {"leftUTF8", buildLeftUTF8Function},
-        {"date_add", buildDateAddOrSubFunction<DateAdd>}, {"date_sub", buildDateAddOrSubFunction<DateSub>}});
+        {"date_add", buildDateAddOrSubFunction<DateAdd>}, {"date_sub", buildDateAddOrSubFunction<DateSub>},
+        {"tidbRound", buildRoundFunction}});
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_)), context(context_), after_agg(false), implicit_cast_count(0)

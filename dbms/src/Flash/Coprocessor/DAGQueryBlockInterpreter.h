@@ -7,7 +7,10 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/Coprocessor/DAGPipeline.h>
 #include <Interpreters/AggregateDescription.h>
+#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/TiDB.h>
@@ -17,76 +20,13 @@ namespace DB
 {
 
 class Context;
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
-struct RegionLearnerReadSnapshot;
-using LearnerReadSnapshot = std::unordered_map<RegionID, RegionLearnerReadSnapshot>;
-struct SelectQueryInfo;
 
-using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
-using DAGSchema = std::vector<DAGColumnInfo>;
 class DAGQuerySource;
 class DAGQueryBlock;
 struct RegionInfo;
 class ExchangeReceiver;
 class DAGExpressionAnalyzer;
-class ExpressionActions;
-using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
-struct ExpressionActionsChain;
-class IManageableStorage;
-using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
-using NameWithAlias = std::pair<std::string, std::string>;
-using NamesWithAliases = std::vector<NameWithAlias>;
-using RegionRetryList = std::list<std::reference_wrapper<const RegionInfo>>;
 
-struct DAGPipeline
-{
-    BlockInputStreams streams;
-    /** When executing FULL or RIGHT JOIN, there will be a data stream from which you can read "not joined" rows.
-      * It has a special meaning, since reading from it should be done after reading from the main streams.
-      * It is appended to the main streams in UnionBlockInputStream or ParallelAggregatingBlockInputStream.
-      */
-    BlockInputStreams streams_with_non_joined_data;
-
-    BlockInputStreamPtr & firstStream() { return streams.at(0); }
-
-    template <typename Transform>
-    void transform(Transform && transform)
-    {
-        for (auto & stream : streams)
-            transform(stream);
-        for (auto & stream : streams_with_non_joined_data)
-            transform(stream);
-    }
-
-    bool hasMoreThanOneStream() const { return streams.size() + streams_with_non_joined_data.size() > 1; }
-};
-
-struct AnalysisResult
-{
-    bool need_timezone_cast_after_tablescan = false;
-    bool has_where = false;
-    bool need_aggregate = false;
-    bool has_having = false;
-    bool has_order_by = false;
-
-    ExpressionActionsPtr timezone_cast;
-    ExpressionActionsPtr before_where;
-    ExpressionActionsPtr before_aggregation;
-    ExpressionActionsPtr before_having;
-    ExpressionActionsPtr before_order_and_select;
-    ExpressionActionsPtr final_projection;
-
-    String filter_column_name;
-    String having_column_name;
-    std::vector<NameAndTypePair> order_columns;
-    /// Columns from the SELECT list, before renaming them to aliases.
-    Names selected_columns;
-
-    Names aggregation_keys;
-    TiDB::TiDBCollators aggregation_collators;
-    AggregateDescriptions aggregate_descriptions;
-};
 /** build ch plan from dag request: dag executors -> ch plan
   */
 class DAGQueryBlockInterpreter
@@ -121,18 +61,9 @@ private:
         TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
 
-    void readFromLocalStorage(            //
-        const TableStructureLockHolder &, //
-        const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
-        const LearnerReadSnapshot & learner_read_snapshot, //
-        DAGPipeline & pipeline, RegionRetryList & region_retry);
-    std::tuple<ManageableStoragePtr, TableStructureLockHolder> getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
-    AnalysisResult analyzeExpressions();
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
-    bool addTimeZoneCastAfterTS(const BoolVec & is_ts_column, ExpressionActionsChain & chain);
 
-private:
     void executeRemoteQueryImpl(DAGPipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
         ::tipb::DAGRequest & dag_req, const DAGSchema & schema);
 
@@ -147,12 +78,12 @@ private:
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;
 
-    /// Table from where to read data, if not subquery.
-    ManageableStoragePtr storage;
+    /// How many streams before aggregation
+    size_t before_agg_streams = 1;
+
     TableLockHolder table_drop_lock;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
-
 
     std::vector<const tipb::Expr *> conditions;
     const DAGQuerySource & dag;

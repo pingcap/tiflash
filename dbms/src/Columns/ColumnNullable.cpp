@@ -3,6 +3,7 @@
 #include <Common/Arena.h>
 #include <Common/NaNUtils.h>
 #include <Common/SipHash.h>
+#include <Common/assert_cast.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
 
@@ -81,7 +82,7 @@ void ColumnNullable::updateHashWithValues(
     }
 }
 
-void ColumnNullable::updateWeakHash32(WeakHash32 & hash) const
+void ColumnNullable::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
 {
     auto s = size();
 
@@ -90,7 +91,7 @@ void ColumnNullable::updateWeakHash32(WeakHash32 & hash) const
                         ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     WeakHash32 old_hash = hash;
-    nested_column->updateWeakHash32(hash);
+    nested_column->updateWeakHash32(hash, collator, sort_key_container);
 
     const auto & null_map_data = getNullMapData();
     auto & hash_data = hash.getData();
@@ -521,6 +522,16 @@ ColumnPtr makeNullable(const ColumnPtr & column)
         return ColumnConst::create(makeNullable(static_cast<const ColumnConst &>(*column).getDataColumnPtr()), column->size());
 
     return ColumnNullable::create(column, ColumnUInt8::create(column->size(), 0));
+}
+
+std::tuple<const IColumn *, const NullMap *> removeNullable(const IColumn * column)
+{
+    if (!column->isColumnNullable())
+        return {column, nullptr};
+    const auto * nullable_column = assert_cast<const ColumnNullable *>(column);
+    const auto * res = &nullable_column->getNestedColumn();
+    const auto * nullmap = &nullable_column->getNullMapData();
+    return {res, nullmap};
 }
 
 } // namespace DB

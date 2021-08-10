@@ -28,7 +28,7 @@ public:
     };
 
 public:
-    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const RateLimiterPtr & rate_limiter_);
+    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const WriteLimiterPtr & write_limiter_, const ReadLimiterPtr & read_limiter_);
 
     /**
      * Take a snapshot from PageStorage and try to migrate data if some PageFiles used rate is low.
@@ -59,7 +59,7 @@ private:
      */
     static ValidPages collectValidPagesInPageFile(const SnapshotPtr & snapshot);
 
-    std::tuple<PageFileSet, size_t, size_t> //
+    std::tuple<PageFileSet, PageFileSet, size_t, size_t> //
     selectCandidateFiles(const PageFileSet &          page_files,
                          const ValidPages &           files_valid_pages,
                          const WritingFilesSnapshot & writing_files) const;
@@ -68,6 +68,7 @@ private:
     migratePages(const SnapshotPtr & snapshot,
                  const ValidPages &  files_valid_pages,
                  const PageFileSet & candidates,
+                 const PageFileSet & files_without_valid_pages,
                  const size_t        migrate_page_count) const;
 
     std::tuple<PageEntriesEdit, size_t> //
@@ -96,7 +97,8 @@ private:
     Poco::Logger * log;
     Poco::Logger * page_file_log;
 
-    const RateLimiterPtr rate_limiter;
+    const WriteLimiterPtr write_limiter;
+    const ReadLimiterPtr read_limiter;
 };
 
 } // namespace DB

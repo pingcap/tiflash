@@ -20,7 +20,6 @@ else ()
     message (WARNING "You are using an unsupported compiler! Compilation has only been tested with Clang 5+ and GCC 7+.")
 endif ()
 
-
 # Write compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
@@ -40,6 +39,33 @@ message (STATUS "CMAKE_BUILD_TYPE: " ${CMAKE_BUILD_TYPE} )
 set (CMAKE_CONFIGURATION_TYPES "RelWithDebInfo;Debug;Release;MinSizeRel;ASan;UBSan" CACHE STRING "" FORCE)
 
 include (cmake/arch.cmake)
+
+if (ARCH_AMD64)
+    option(TIFLASH_ENABLE_AVX_SUPPORT "enable AVX and AVX2 support" ON)
+    option(TIFLASH_ENABLE_AVX512_SUPPORT "enable AVX512 support" ON)
+endif ()
+
+if (ARCH_AARCH64)
+    ## TODO: The following options are reserved for AARCH64, but they are not considered in the code yet.
+    option(TIFLASH_ENABLE_ASIMD_SUPPORT "enable Advanced SIMD support" OFF)
+    option(TIFLASH_ENABLE_SVE_SUPPORT "enable Scalable Vector Extension support" OFF)
+endif ()
+
+if (TIFLASH_ENABLE_AVX_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_AVX_SUPPORT=1)
+endif ()
+
+if (TIFLASH_ENABLE_AVX512_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_AVX512_SUPPORT=1)
+endif ()
+
+if (TIFLASH_ENABLE_ASIMD_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_ASIMD_SUPPORT=1)
+endif ()
+
+if (TIFLASH_ENABLE_SVE_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_SVE_SUPPORT=1)
+endif ()
 
 if (NOT MSVC)
     set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wall")    # -Werror is also added inside directories with our own code.
@@ -337,3 +363,4 @@ add_subdirectory (libs)
 add_subdirectory (dbms)
 
 include (cmake/print_include_directories.cmake)
+

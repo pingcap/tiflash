@@ -23,6 +23,7 @@ public:
         const std::string & file_name_,
         const EncryptionPath & encryption_path_,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
+        const ReadLimiterPtr & read_limiter = nullptr,
         int flags = -1,
         char * existing_memory = nullptr,
         size_t alignment = 0);

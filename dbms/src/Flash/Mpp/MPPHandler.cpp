@@ -65,32 +65,6 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
     return ret;
 }
 
-void MPPTunnel::close(const String & reason)
-{
-    std::unique_lock<std::mutex> lk(mu);
-    if (finished)
-        return;
-    if (connected && !reason.empty())
-    {
-        try
-        {
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(reason);
-            data.set_allocated_error(err);
-            if (!writer->Write(data))
-                throw Exception("Failed to write err");
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
-        }
-    }
-    finished = true;
-    cv_for_finished.notify_all();
-}
-
 void MPPTask::unregisterTask()
 {
     if (manager != nullptr)
@@ -203,9 +177,9 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, this->shared_from_this());
-        LOG_DEBUG(log, "begin to register the tunnel " << tunnel->tunnel_id);
+        LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
-        tunnel_set->tunnels.emplace_back(tunnel);
+        tunnel_set->addTunnel(tunnel);
         if (!dag_context->isRootMPPTask())
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
@@ -217,15 +191,25 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     // get partition column ids
     auto part_keys = exchangeSender.partition_keys();
     std::vector<Int64> partition_col_id;
-    for (const auto & expr : part_keys)
+    TiDB::TiDBCollators collators;
+    for (int i = 0; i < part_keys.size(); i++)
     {
+        const auto & expr = part_keys[i];
         assert(isColumnExpr(expr));
         auto column_index = decodeDAGInt64(expr.val());
         partition_col_id.emplace_back(column_index);
+        if (getDataTypeByFieldType(expr.field_type())->isString())
+        {
+            collators.emplace_back(getCollatorFromFieldType(exchangeSender.types(i)));
+        }
+        else
+        {
+            collators.emplace_back(nullptr);
+        }
     }
     // construct writer
     std::unique_ptr<DAGResponseWriter> response_writer
-        = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, exchangeSender.tp(),
+        = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, collators, exchangeSender.tp(),
             context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), *dag_context);
     BlockOutputStreamPtr squash_stream = std::make_shared<DAGBlockOutputStream>(io.in->getHeader(), std::move(response_writer));
     io.out = std::make_shared<SquashingBlockOutputStream>(squash_stream, 20000, 0);
@@ -262,7 +246,10 @@ void MPPTask::runImpl()
     }
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
     SCOPE_EXIT({
+        GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
         GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_duration_seconds, type_run_mpp_task)
             .Observe(stopwatch.elapsedSeconds());
     });
@@ -335,29 +322,6 @@ void MPPTask::runImpl()
     status = FINISHED;
 }
 
-bool MPPTunnel::isTaskCancelled()
-{
-    auto sp = current_task.lock();
-    return sp != nullptr && sp->status == CANCELLED;
-}
-
-void MPPTunnel::waitUntilConnect(std::unique_lock<std::mutex> & lk)
-{
-    if (timeout.count() > 0)
-    {
-        if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected || isTaskCancelled(); }))
-        {
-            throw Exception(tunnel_id + " is timeout");
-        }
-    }
-    else
-    {
-        cv_for_connected.wait(lk, [&]() { return connected || isTaskCancelled(); });
-    }
-    if (!connected)
-        throw Exception("MPPTunnel can not be connected because MPPTask is cancelled");
-}
-
 void MPPTask::writeErrToAllTunnel(const String & e)
 {
     for (auto & it : tunnel_map)
@@ -365,16 +329,12 @@ void MPPTask::writeErrToAllTunnel(const String & e)
         try
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_write_err_to_tunnel);
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(e);
-            data.set_allocated_error(err);
-            it.second->write(data, true);
+            it.second->write(getPacketWithError(e), true);
         }
         catch (...)
         {
             it.second->close("Failed to write error msg to tunnel");
-            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->tunnel_id);
+            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->id());
         }
     }
 }

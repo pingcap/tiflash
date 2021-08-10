@@ -121,13 +121,13 @@
 => DBGInvoke dag('select * from default.test where col_2 > col_3',4,'encode_type:default,tz_offset:28800,tz_name:UTC') 
 
 # ts_col in group by clause
-=> DBGInvoke dag('select count(1) from default.test where col_2 > \'2019-06-11 15:00:00\' group by col_2',4,'encode_type:default,tz_offset:28800') 
+=> DBGInvoke dag('select count(1), col_2 from default.test where col_2 > \'2019-06-11 15:00:00\' group by col_2',4,'encode_type:default,tz_offset:28800') 
 ┌─count(1)─┬─────────────────────col_2─┐
 │        2 │ 2019-06-11 08:00:00.00000 │
 └──────────┴───────────────────────────┘
 
 # ts_col in agg clause
-=> DBGInvoke dag('select max(col_2) from default.test group by col_1',4,'encode_type:default,tz_offset:28800') 
+=> DBGInvoke dag('select max(col_2), col_1 from default.test group by col_1',4,'encode_type:default,tz_offset:28800') 
 ┌──────────max(col_2)───────┬──────col_1─┐
 │ 0000-00-00 00:00:00.00000 │ 0000-00-00 │
 │ 2019-06-11 08:00:00.00000 │ 2019-06-12 │
@@ -137,7 +137,7 @@
 └───────────────────────────┴────────────┘
 
 # ts_col in agg clause for chunk encode
-=> DBGInvoke dag('select max(col_2) from default.test group by col_1',4,'encode_type:chunk,tz_offset:28800') 
+=> DBGInvoke dag('select max(col_2), col_1 from default.test group by col_1',4,'encode_type:chunk,tz_offset:28800') 
 ┌──────────max(col_2)───────┬──────col_1─┐
 │ 0000-00-00 00:00:00.00000 │ 0000-00-00 │
 │ 2019-06-11 16:00:00.00000 │ 2019-06-12 │

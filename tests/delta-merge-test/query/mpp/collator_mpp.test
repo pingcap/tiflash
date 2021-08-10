@@ -1,0 +1,106 @@
+# Preparation.
+=> DBGInvoke __enable_schema_sync_service('true')
+
+=> DBGInvoke __drop_tidb_table(default, test1)
+=> drop table if exists default.test1
+=> DBGInvoke __drop_tidb_table(default, test2)
+=> drop table if exists default.test2
+
+=> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
+# Data.
+=> DBGInvoke __mock_tidb_table(default, test1, 'col_1 String, col_2 Int64')
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __put_region(4, 0, 100, default, test1)
+=> DBGInvoke __put_region(5, 100, 200, default, test1)
+=> DBGInvoke __put_region(6, 200, 300, default, test1)
+
+=> DBGInvoke __mock_tidb_table(default, test2, 'col_1 String, col_2 Int64')
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __put_region(7, 0, 100, default, test2)
+=> DBGInvoke __put_region(8, 100, 200, default, test2)
+=> DBGInvoke __put_region(9, 200, 300, default, test2)
+
+=> DBGInvoke __raft_insert_row(default, test1, 4, 52, 'Test3', 777)
+=> DBGInvoke __raft_insert_row(default, test1, 4, 53, 'Test4', 888)
+=> DBGInvoke __raft_insert_row(default, test1, 5, 152, 'test3', 777)
+=> DBGInvoke __raft_insert_row(default, test1, 5, 153, 'test4', 888)
+=> DBGInvoke __raft_insert_row(default, test1, 6, 252, 'Test3', 777)
+=> DBGInvoke __raft_insert_row(default, test1, 6, 253, 'Test4', 888)
+=> DBGInvoke __raft_insert_row(default, test1, 6, 254, 'test4', 999)
+=> DBGInvoke __raft_insert_row(default, test2, 7, 52, 'Test3', 777)
+=> DBGInvoke __raft_insert_row(default, test2, 7, 53, 'Test4', 888)
+=> DBGInvoke __raft_insert_row(default, test2, 8, 152, 'test3', 777)
+=> DBGInvoke __raft_insert_row(default, test2, 8, 153, 'test4', 888)
+=> DBGInvoke __raft_insert_row(default, test2, 9, 252, 'Test3', 777)
+=> DBGInvoke __raft_insert_row(default, test2, 9, 253, 'Test4', 888)
+
+# collator in selection
+=> DBGInvoke tidb_query('select * from default.test1 where col_1 = \'test3\'', 4,'mpp_query:true,mpp_partition_num:3,collator:-45')
+┌─exchange_receiver_0─┬─exchange_receiver_1─┐
+│ Test3               │                 777 │
+│ test3               │                 777 │
+│ Test3               │                 777 │
+└─────────────────────┴─────────────────────┘
+=> DBGInvoke tidb_query('select * from default.test1 where col_1 = \'test3\'', 4,'mpp_query:true,mpp_partition_num:3,collator:-46')
+┌─exchange_receiver_0─┬─exchange_receiver_1─┐
+│ test3               │                 777 │
+└─────────────────────┴─────────────────────┘
+# collator in aggregation
+=> DBGInvoke tidb_query('select count(1) from default.test1 group by col_1', 4,'mpp_query:true,mpp_partition_num:3,collator:-45')
+┌─exchange_receiver_0─┐
+│                   3 │
+│                   4 │
+└─────────────────────┘
+=> DBGInvoke tidb_query('select count(1), col_1 from default.test1 group by col_1 ', 4,'mpp_query:true,mpp_partition_num:3,collator:-46')
+┌─exchange_receiver_0─┬─exchange_receiver_1─┐
+│                   1 │ test3               │
+│                   2 │ Test4               │
+│                   2 │ test4               │
+│                   2 │ Test3               │
+└─────────────────────┴─────────────────────┘
+# collator in shuffle join
+=> DBGInvoke tidb_query('select * from default.test1 all inner join default.test2 using col_1', 4,'mpp_query:true,mpp_partition_num:3,collator:-45')
+┌─exchange_receiver_0─┬─exchange_receiver_1─┬─exchange_receiver_2─┬─exchange_receiver_3─┐
+│ Test3               │                 777 │ test3               │                 777 │
+│ Test3               │                 777 │ Test3               │                 777 │
+│ Test3               │                 777 │ Test3               │                 777 │
+│ Test4               │                 888 │ Test4               │                 888 │
+│ Test4               │                 888 │ Test4               │                 888 │
+│ Test4               │                 888 │ test4               │                 888 │
+│ test4               │                 999 │ Test4               │                 888 │
+│ test4               │                 999 │ Test4               │                 888 │
+│ test4               │                 999 │ test4               │                 888 │
+│ test3               │                 777 │ test3               │                 777 │
+│ test3               │                 777 │ Test3               │                 777 │
+│ test3               │                 777 │ Test3               │                 777 │
+│ test4               │                 888 │ Test4               │                 888 │
+│ test4               │                 888 │ Test4               │                 888 │
+│ test4               │                 888 │ test4               │                 888 │
+│ Test3               │                 777 │ test3               │                 777 │
+│ Test3               │                 777 │ Test3               │                 777 │
+│ Test3               │                 777 │ Test3               │                 777 │
+│ Test4               │                 888 │ Test4               │                 888 │
+│ Test4               │                 888 │ Test4               │                 888 │
+│ Test4               │                 888 │ test4               │                 888 │
+└─────────────────────┴─────────────────────┴─────────────────────┴─────────────────────┘
+=> DBGInvoke tidb_query('select * from default.test1 all inner join default.test2 using col_1', 4,'mpp_query:true,mpp_partition_num:3,collator:-46')
+┌─exchange_receiver_0─┬─exchange_receiver_1─┬─exchange_receiver_2─┬─exchange_receiver_3─┐
+│ test3               │                 777 │ test3               │                 777 │
+│ test4               │                 888 │ test4               │                 888 │
+│ Test3               │                 777 │ Test3               │                 777 │
+│ Test3               │                 777 │ Test3               │                 777 │
+│ Test4               │                 888 │ Test4               │                 888 │
+│ Test4               │                 888 │ Test4               │                 888 │
+│ test4               │                 999 │ test4               │                 888 │
+│ Test3               │                 777 │ Test3               │                 777 │
+│ Test3               │                 777 │ Test3               │                 777 │
+│ Test4               │                 888 │ Test4               │                 888 │
+│ Test4               │                 888 │ Test4               │                 888 │
+└─────────────────────┴─────────────────────┴─────────────────────┴─────────────────────┘
+
+# Clean up.
+=> DBGInvoke __drop_tidb_table(default, test1)
+=> drop table if exists default.test1
+=> DBGInvoke __drop_tidb_table(default, test2)
+=> drop table if exists default.test2
