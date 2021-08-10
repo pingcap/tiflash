@@ -2415,7 +2415,7 @@ private:
                 const auto & nullable_col = static_cast<const ColumnNullable &>(*col);
                 const auto & null_map = nullable_col.getNullMapData();
 
-                if (!memoryIsZero(null_map.data(), null_map.size()))
+                if (!mem_utils::memoryIsZero(null_map.data(), null_map.size()))
                     throw Exception{"Cannot convert NULL value to non-Nullable type",
                         ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
 
