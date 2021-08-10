@@ -99,7 +99,7 @@ public:
 
 
 /// Generic implementation, it uses serialized representation as object descriptor.
-struct AggreagteFunctionGroupUniqArrayGenericData
+struct AggregateFunctionGroupUniqArrayGenericData
 {
     static constexpr size_t INIT_ELEMS = 2; /// adjustable
     static constexpr size_t ELEM_SIZE = sizeof(HashSetCellWithSavedHash<StringRef, StringRefHash>);
@@ -112,19 +112,19 @@ struct AggreagteFunctionGroupUniqArrayGenericData
  *  For such columns groupUniqArray() can be implemented more efficently (especially for small numeric arrays).
  */
 template <bool is_plain_column = false>
-class AggreagteFunctionGroupUniqArrayGeneric
-    : public IAggregateFunctionDataHelper<AggreagteFunctionGroupUniqArrayGenericData, AggreagteFunctionGroupUniqArrayGeneric<is_plain_column>>
+class AggregateFunctionGroupUniqArrayGeneric
+    : public IAggregateFunctionDataHelper<AggregateFunctionGroupUniqArrayGenericData, AggregateFunctionGroupUniqArrayGeneric<is_plain_column>>
 {
     DataTypePtr input_data_type;
 
-    using State = AggreagteFunctionGroupUniqArrayGenericData;
+    using State = AggregateFunctionGroupUniqArrayGenericData;
 
     static StringRef getSerialization(const IColumn & column, size_t row_num, Arena & arena);
 
     static void deserializeAndInsert(StringRef str, IColumn & data_to);
 
 public:
-    AggreagteFunctionGroupUniqArrayGeneric(const DataTypePtr & input_data_type)
+    AggregateFunctionGroupUniqArrayGeneric(const DataTypePtr & input_data_type)
         : input_data_type(input_data_type) {}
 
     String getName() const override { return "groupUniqArray"; }
@@ -220,26 +220,26 @@ public:
 
 
 template <>
-inline StringRef AggreagteFunctionGroupUniqArrayGeneric<false>::getSerialization(const IColumn & column, size_t row_num, Arena & arena)
+inline StringRef AggregateFunctionGroupUniqArrayGeneric<false>::getSerialization(const IColumn & column, size_t row_num, Arena & arena)
 {
     const char * begin = nullptr;
     return column.serializeValueIntoArena(row_num, arena, begin);
 }
 
 template <>
-inline StringRef AggreagteFunctionGroupUniqArrayGeneric<true>::getSerialization(const IColumn & column, size_t row_num, Arena &)
+inline StringRef AggregateFunctionGroupUniqArrayGeneric<true>::getSerialization(const IColumn & column, size_t row_num, Arena &)
 {
     return column.getDataAt(row_num);
 }
 
 template <>
-inline void AggreagteFunctionGroupUniqArrayGeneric<false>::deserializeAndInsert(StringRef str, IColumn & data_to)
+inline void AggregateFunctionGroupUniqArrayGeneric<false>::deserializeAndInsert(StringRef str, IColumn & data_to)
 {
     data_to.deserializeAndInsertFromArena(str.data);
 }
 
 template <>
-inline void AggreagteFunctionGroupUniqArrayGeneric<true>::deserializeAndInsert(StringRef str, IColumn & data_to)
+inline void AggregateFunctionGroupUniqArrayGeneric<true>::deserializeAndInsert(StringRef str, IColumn & data_to)
 {
     data_to.insertData(str.data, str.size);
 }
