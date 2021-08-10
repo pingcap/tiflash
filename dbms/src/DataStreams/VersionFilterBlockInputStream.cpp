@@ -2,6 +2,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <DataStreams/VersionFilterBlockInputStream.h>
 #include <DataStreams/dedupUtils.h>
+#include <common/mem_utils.h>
 
 namespace DB
 {
@@ -79,7 +80,7 @@ Block VersionFilterBlockInputStream::readImpl()
                 filter_pos[0] = !(data_pos[0] > filter_greater_version);
         }
 
-        if (filter_start == data_start && memoryIsZero(col_filter.data(), rows))
+        if (filter_start == data_start && mem_utils::memoryIsZero(col_filter.data(), rows))
             continue;
 
         return filterBlock(block, col_filter);

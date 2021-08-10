@@ -1780,7 +1780,7 @@ private:
                 /// make sure if to_type is not nullable, then there is no null value in from_column
                 if (!to_type->isNullable())
                 {
-                    if (!memoryIsZero(from_null_map.data(), from_null_map.size()))
+                    if (!mem_utils::memoryIsZero(from_null_map.data(), from_null_map.size()))
                         throw Exception{
                             "Cannot convert NULL value to non-Nullable type", ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
                 }

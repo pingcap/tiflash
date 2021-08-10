@@ -31,6 +31,7 @@ add_library (common ${SPLIT_SHARED}
     src/mem_utils_asimd.cpp
     src/mem_utils_avx2.cpp
     src/mem_utils_avx512.cpp
+    src/mem_utils_sse2.cpp
     src/simd.cpp
 
     include/common/types.h

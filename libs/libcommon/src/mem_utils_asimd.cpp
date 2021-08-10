@@ -1,12 +1,13 @@
 #ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
 #include <arm_neon.h>
 #include <common/mem_utils.h>
+
+#include <cassert>
+#include <cstdint>
 namespace mem_utils::_detail
 {
-
 namespace
 {
-
 __attribute__((always_inline, pure)) inline bool checkU64(uint64x2_t value)
 {
     auto result = value[0] & value[1];
@@ -199,6 +200,100 @@ __attribute__((pure)) bool memoryEqualASIMD(const char * p1, const char * p2, si
 
     return true;
 }
+
+template <size_t N>
+__attribute__((always_inline, pure)) inline bool compareArrayASIMD(const uint8x16_t (&data)[N], uint8x16_t filled_vector)
+{
+    static_assert(N >= 1 && N <= 4, "compare array can only be used within range");
+
+    uint8x16_t compared [[maybe_unused]][N - 1]{};
+
+    if constexpr (N >= 4)
+        compared[2] = vceqq_u8(filled_vector, data[3]);
+    if constexpr (N >= 3)
+        compared[1] = vceqq_u8(filled_vector, data[2]);
+    if constexpr (N >= 2)
+        compared[0] = vceqq_u8(filled_vector, data[1]);
+
+    auto combined = vceqq_u8(filled_vector, data[0]);
+
+    if constexpr (N >= 4)
+        combined = vandq_u8(combined, compared[2]);
+    if constexpr (N >= 3)
+        combined = vandq_u8(combined, compared[1]);
+    if constexpr (N >= 2)
+        combined = vandq_u8(combined, compared[0]);
+
+    auto mask = vreinterpretq_u64_u8(combined);
+    return (mask[0] & mask[1]) == 0xFFFF'FFFF'FFFF'FFFF;
+}
+
+// even though ASIMD instruction does not distinguish aligned or unaligned loading
+// it is a good choice to keep it aligned here.
+// see: https://stackoverflow.com/questions/45714535/performance-of-unaligned-simd-load-store-on-aarch64
+__attribute__((pure)) bool memoryIsByteASIMD(const void * data, const size_t size, std::byte target)
+{
+    static constexpr size_t vector_length = sizeof(uint8x16_t);
+    static constexpr size_t group_size = vector_length * 4;
+    size_t remaining = size;
+    auto filled_vector = vdupq_n_u8(static_cast<uint8_t>(target));
+    auto current_address = reinterpret_cast<const uint8_t *>(data);
+
+    if (!compareArrayASIMD<1>({vld1q_u8(current_address)}, filled_vector))
+    {
+        return false;
+    }
+
+    auto numeric_address = reinterpret_cast<uintptr_t>(data);
+    auto alignment_offset = (-numeric_address) & (vector_length - 1);
+    current_address = reinterpret_cast<const uint8_t *>(data) + alignment_offset;
+    remaining -= alignment_offset;
+
+    while (remaining >= group_size)
+    {
+        __builtin_prefetch(current_address + group_size);
+        if (compareArrayASIMD(
+                {
+                    vld1q_u8(current_address + 0 * vector_length),
+                    vld1q_u8(current_address + 1 * vector_length),
+                    vld1q_u8(current_address + 2 * vector_length),
+                    vld1q_u8(current_address + 3 * vector_length),
+                },
+                filled_vector))
+        {
+            remaining -= group_size;
+            current_address += group_size;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    auto tail = vld1q_u8(reinterpret_cast<const uint8_t *>(data) + size - vector_length);
+    assert(remaining / vector_length <= 3);
+    bool result = true;
+    switch (remaining / vector_length)
+    {
+        case 3:
+            result = compareArrayASIMD<4>({vld1q_u8(current_address + 0 * vector_length), vld1q_u8(current_address + 1 * vector_length),
+                                              vld1q_u8(current_address + 2 * vector_length), tail},
+                filled_vector);
+            break;
+        case 2:
+            result = compareArrayASIMD<3>(
+                {vld1q_u8(current_address + 0 * vector_length), vld1q_u8(current_address + 1 * vector_length), tail}, filled_vector);
+            break;
+        case 1:
+            result = compareArrayASIMD<2>({vld1q_u8(current_address + 0 * vector_length), tail}, filled_vector);
+            break;
+        case 0:
+            result = compareArrayASIMD<1>({tail}, filled_vector);
+            break;
+    }
+    return result;
+}
+
 } // namespace mem_utils::_detail
 
 #endif

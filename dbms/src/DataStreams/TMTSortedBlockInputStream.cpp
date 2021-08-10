@@ -260,7 +260,7 @@ bool TMTSortedBlockInputStream<pk_type>::insertByColumn(TMTSortCursorPK current,
         // reverse_filter - 1: delete, 0: remain.
         // filter         - 0: delete, 1: remain.
         const IColumn::Filter & reverse_filter = del_column->getData();
-        direct_move = memoryIsZero(reverse_filter.data(), reverse_filter.size());
+        direct_move = mem_utils::memoryIsZero(reverse_filter.data(), reverse_filter.size());
 
         if (!direct_move)
         {
