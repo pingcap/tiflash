@@ -525,9 +525,9 @@ class AggregateFunctionGroupConcatTuple final : public AggregateFunctionNullBase
 /// 1. only one column with original data type
 /// 2. one column combined from more than one columns including order by items, it should should be like tuple(type0, type1...)
 public:
-    AggregateFunctionGroupConcatTuple(AggregateFunctionPtr nested_function, const DataTypes & arguments, const String sep, const SortDescription & sort_desc_, const NamesAndTypes& names_and_types_, const TiDB::TiDBCollators& collators_, const bool has_distinct)
+    AggregateFunctionGroupConcatTuple(AggregateFunctionPtr nested_function, const DataTypes & arguments, const String sep, const UInt64& max_len_, const SortDescription & sort_desc_, const NamesAndTypes& names_and_types_, const TiDB::TiDBCollators& collators_, const bool has_distinct)
     : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcatTuple<result_is_nullable, only_one_argument>>(nested_function),
-    seperator(sep), sort_desc(sort_desc_),names_and_types(names_and_types_), collators(collators_)
+    seperator(sep),max_len(max_len_), sort_desc(sort_desc_),names_and_types(names_and_types_), collators(collators_)
     {
         if (arguments.size() != 1)
             throw Exception("Logical error: not single argument is passed to AggregateFunctionGroupConcatTuple", ErrorCodes::LOGICAL_ERROR);
@@ -683,7 +683,7 @@ public:
 
             if(unique != nullptr)
             {
-                free(unique);
+                delete unique;
             }
         }
         else
@@ -757,9 +757,13 @@ private:
                     names_and_types[j].type->serializeText(*cols[j], i, write_buffer);
                 }
             }
+            if(write_buffer.count() >=max_len)
+            {
+                break;
+            }
         }
         writeChar(0, write_buffer);
-        col_str->insertData(write_buffer.str().c_str(),write_buffer.count());
+        col_str->insertData(write_buffer.str().substr(0,max_len).c_str(),std::min(max_len,write_buffer.count()));
     }
 
     bool toGetUnique=false;
@@ -768,6 +772,7 @@ private:
     DataTypePtr nested_type;
     size_t number_of_arguments = 0;
     String seperator=",";
+    UInt64 max_len;
     SortDescription sort_desc;
     NamesAndTypes names_and_types;
     TiDB::TiDBCollators collators;

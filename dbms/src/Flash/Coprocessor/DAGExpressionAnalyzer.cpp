@@ -527,6 +527,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
             bool result_is_nullable=false;
+            UInt64 max_len = decodeDAGUInt64(expr.val());
             int number_of_arguments = names_and_types.size() - sort_description.size();
             for(int num=0; num < number_of_arguments; ++num)
             {
@@ -541,12 +542,12 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
                 if (only_one_argument)
                 {
                     aggregate.function = std::make_shared<AggregateFunctionGroupConcatTuple<true, true>>(
-                        aggregate.function, types, delimiter, sort_description, names_and_types, gc_collators, expr.has_distinct());
+                        aggregate.function, types, delimiter,max_len, sort_description, names_and_types, gc_collators, expr.has_distinct());
                 }
                 else
                 {
                     aggregate.function = std::make_shared<AggregateFunctionGroupConcatTuple<true, false>>(
-                        aggregate.function, types, delimiter, sort_description, names_and_types, gc_collators, expr.has_distinct());
+                        aggregate.function, types, delimiter,max_len, sort_description, names_and_types, gc_collators, expr.has_distinct());
                 }
             }
             else
@@ -554,12 +555,12 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
                 if (only_one_argument)
                 {
                     aggregate.function = std::make_shared<AggregateFunctionGroupConcatTuple<false, true>>(
-                        aggregate.function, types, delimiter, sort_description, names_and_types, gc_collators, expr.has_distinct());
+                        aggregate.function, types, delimiter,max_len, sort_description, names_and_types, gc_collators, expr.has_distinct());
                 }
                 else
                 {
                     aggregate.function = std::make_shared<AggregateFunctionGroupConcatTuple<false, false>>(
-                        aggregate.function, types, delimiter, sort_description, names_and_types, gc_collators, expr.has_distinct());
+                        aggregate.function, types, delimiter,max_len, sort_description, names_and_types, gc_collators, expr.has_distinct());
                 }
             }
         }
