@@ -519,7 +519,7 @@ private:
 template <bool result_is_nullable, bool only_one_argument>
 class AggregateFunctionGroupConcatTuple final : public AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcatTuple<result_is_nullable, only_one_argument>>
 {
-    using State = AggreagteFunctionGroupUniqArrayGenericData;
+    using State = AggregateFunctionGroupUniqArrayGenericData;
 
 /// the input argument is in following two types:
 /// 1. only one column with original data type
