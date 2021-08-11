@@ -1,5 +1,5 @@
 mysql> drop table if exists test.t;
-mysql> create table test.t(id int not null, id int, name char(20) not null, nname char(20), score float not null, nscore float, birth date not null, birth date);
+mysql> create table test.t(id int not null, nid int, name char(20) not null, nname char(20), score float not null, nscore float, birth date not null, birth date);
 mysql> alter table test.t set tiflash replica 1;
 mysql> insert into test.t values(1,2, '2','2',1.1,1.2, '2021-08-01','2021-08-02'),(2,null,'B',null,2.3,null,'2021-08-12',null),
 (1,11, '1','11',1.1,1.2, '2021-08-01','2021-08-03'),(2,2,'2','2',2.2,null,'2021-08-4',null),(3,null,'B',null,2.2,null,'2021-08-12',null),(1,2, '2','2',1.1,1.2, '2021-08-01','2021-08-02'),(2,null,'B',null,2.3,null,'2021-08-12',null),
