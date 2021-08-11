@@ -1,5 +1,4 @@
 #pragma once
-#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <IO/HashingWriteBuffer.h>
 #include <Poco/Base64Decoder.h>
@@ -12,11 +11,6 @@
 #include <cstdint>
 #include <sstream>
 #include <type_traits>
-
-namespace CurrentMetrics
-{
-extern const Metric ChecksumDigest;
-} // namespace CurrentMetrics
 
 namespace ProfileEvents
 {
@@ -44,11 +38,7 @@ public:
     using HashType = std::byte;
     static constexpr size_t hash_size = sizeof(HashType);
     static constexpr auto algorithm = ::DB::ChecksumAlgo::None;
-    void update(const void *, size_t length)
-    {
-        CurrentMetrics::Increment increment{CurrentMetrics::ChecksumDigest, static_cast<Int64>(length)};
-        ProfileEvents::increment(ProfileEvents::ChecksumDigestBytes, length);
-    }
+    void update(const void *, size_t length) { ProfileEvents::increment(ProfileEvents::ChecksumDigestBytes, length); }
     [[nodiscard]] HashType checksum() const { return std::byte{0}; }
 };
 
@@ -60,7 +50,6 @@ public:
     static constexpr auto algorithm = ::DB::ChecksumAlgo::CRC32;
     void update(const void * src, size_t length)
     {
-        CurrentMetrics::Increment increment{CurrentMetrics::ChecksumDigest, static_cast<Int64>(length)};
         ProfileEvents::increment(ProfileEvents::ChecksumDigestBytes, length);
         state = crc32(state, reinterpret_cast<const Bytef *>(src), length);
     }
@@ -78,7 +67,6 @@ public:
     static constexpr auto algorithm = ::DB::ChecksumAlgo::City128;
     void update(const void * src, size_t length)
     {
-        CurrentMetrics::Increment increment{CurrentMetrics::ChecksumDigest, static_cast<Int64>(length)};
         ProfileEvents::increment(ProfileEvents::ChecksumDigestBytes, length);
         state = CityHash_v1_0_2::CityHash128WithSeed(static_cast<const char *>(src), length, state);
     }
@@ -96,7 +84,6 @@ public:
     static constexpr auto algorithm = ::DB::ChecksumAlgo::CRC64;
     void update(const void * src, size_t length)
     {
-        CurrentMetrics::Increment increment{CurrentMetrics::ChecksumDigest, static_cast<Int64>(length)};
         ProfileEvents::increment(ProfileEvents::ChecksumDigestBytes, length);
         state.update(src, length);
     }
@@ -114,7 +101,6 @@ public:
     static constexpr auto algorithm = ::DB::ChecksumAlgo::XXH3;
     void update(const void * src, size_t length)
     {
-        CurrentMetrics::Increment increment{CurrentMetrics::ChecksumDigest, static_cast<Int64>(length)};
         ProfileEvents::increment(ProfileEvents::ChecksumDigestBytes, length);
         state = XXH_INLINE_XXH3_64bits_withSeed(src, length, state);
     }

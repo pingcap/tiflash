@@ -65,8 +65,7 @@
     M(IOLimiterPendingBgWriteReq)               \
     M(IOLimiterPendingFgWriteReq)               \
     M(IOLimiterPendingBgReadReq)                \
-    M(IOLimiterPendingFgReadReq)                \
-    M(ChecksumDigest)
+    M(IOLimiterPendingFgReadReq)
 
 namespace CurrentMetrics
 {
