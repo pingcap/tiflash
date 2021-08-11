@@ -353,7 +353,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterTable(DBInfoPtr db_info, Table
     auto table_info = getter.getTableInfo(db_info->id, table_id);
     if (table_info == nullptr)
     {
-        throw TiFlashException("miss table in TiKV : " + std::to_string(table_id), Errors::DDL::MissingTable);
+        throw TiFlashException("miss table in TiKV : " + std::to_string(table_id), Errors::DDL::StaleSchema);
     }
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(table_info->id);
@@ -409,7 +409,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
 
     auto db_info = getter.getDatabase(diff.schema_id);
     if (db_info == nullptr)
-        throw TiFlashException("miss database: " + std::to_string(diff.schema_id), Errors::DDL::MissingTable);
+        throw TiFlashException("miss database: " + std::to_string(diff.schema_id), Errors::DDL::StaleSchema);
 
     TableID old_table_id = 0, new_table_id = 0;
 
@@ -491,7 +491,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
     auto table_info = getter.getTableInfo(db_info->id, table_id);
     if (table_info == nullptr)
     {
-        throw TiFlashException("miss old table id in TiKV " + std::to_string(table_id), Errors::DDL::MissingTable);
+        throw TiFlashException("miss old table id in TiKV " + std::to_string(table_id), Errors::DDL::StaleSchema);
     }
     if (!table_info->isLogicalPartitionTable())
     {
@@ -672,17 +672,17 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
         throw Exception("Incorrect schema diff, no affected_opts for alter table exchange partition schema diff", ErrorCodes::DDL_ERROR);
     auto npt_db_info = getter.getDatabase(diff.schema_id);
     if (npt_db_info == nullptr)
-        throw TiFlashException("miss database: " + std::to_string(diff.schema_id), Errors::DDL::MissingTable);
+        throw TiFlashException("miss database: " + std::to_string(diff.schema_id), Errors::DDL::StaleSchema);
     auto pt_db_info = getter.getDatabase(diff.affected_opts[0].schema_id);
     if (pt_db_info == nullptr)
-        throw TiFlashException("miss database: " + std::to_string(diff.affected_opts[0].schema_id), Errors::DDL::MissingTable);
+        throw TiFlashException("miss database: " + std::to_string(diff.affected_opts[0].schema_id), Errors::DDL::StaleSchema);
     auto npt_table_id = diff.old_table_id;
     auto pt_partition_id = diff.table_id;
     auto pt_table_info = diff.affected_opts[0].table_id;
     /// step 1 change the mete data of partition table
     auto table_info = getter.getTableInfo(pt_db_info->id, pt_table_info);
     if (table_info == nullptr)
-        throw TiFlashException("miss table in TiKV : " + std::to_string(pt_table_info), Errors::DDL::MissingTable);
+        throw TiFlashException("miss table in TiKV : " + std::to_string(pt_table_info), Errors::DDL::StaleSchema);
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
@@ -722,7 +722,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     /// step 3 change partition of the partition table to non partition table
     table_info = getter.getTableInfo(npt_db_info->id, pt_partition_id);
     if (table_info == nullptr)
-        throw TiFlashException("miss table in TiKV : " + std::to_string(pt_partition_id), Errors::DDL::MissingTable);
+        throw TiFlashException("miss table in TiKV : " + std::to_string(pt_partition_id), Errors::DDL::StaleSchema);
     storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
         throw TiFlashException(
@@ -1087,7 +1087,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(TiDB::DBInfoPtr d
     auto latest_table_info = getter.getTableInfo(db_info->id, table_id);
     if (unlikely(latest_table_info == nullptr))
     {
-        throw TiFlashException("miss table in TiKV : " + DB::toString(table_id), Errors::DDL::MissingTable);
+        throw TiFlashException("miss table in TiKV : " + DB::toString(table_id), Errors::DDL::StaleSchema);
     }
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(latest_table_info->id);
