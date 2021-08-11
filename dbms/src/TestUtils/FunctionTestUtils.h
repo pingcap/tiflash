@@ -349,11 +349,9 @@ typename NullableTraits<T>::FieldType parseDecimal(const InferredLiteralType<T> 
 
 // e.g. `createColumn<Decimal32>(std::make_tuple(9, 4), {"99999.9999"})`
 template <typename T, typename... Args>
-ColumnWithTypeAndName createColumn(
-    const std::tuple<Args...> & data_type_args, const InferredLiteralVector<T> & literals, const String & name = "")
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, const InferredLiteralVector<T> & literals,
+    const String & name = "", std::enable_if_t<NullableTraits<T>::is_decimal, int> = 0)
 {
-    static_assert(NullableTraits<T>::is_decimal);
-
     auto [data_type, prec, scale] = std::apply(makeDecimalDataType<T, Args...>, data_type_args);
 
     InferredDataVector<T> vec;
@@ -366,11 +364,9 @@ ColumnWithTypeAndName createColumn(
 
 // e.g. `createConstColumn<Decimal32>(std::make_tuple(9, 4), 1, "99999.9999")`
 template <typename T, typename... Args>
-ColumnWithTypeAndName createConstColumn(
-    const std::tuple<Args...> & data_type_args, size_t size, const InferredLiteralType<T> & literal, const String & name = "")
+ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, const InferredLiteralType<T> & literal,
+    const String & name = "", std::enable_if_t<NullableTraits<T>::is_decimal, int> = 0)
 {
-    static_assert(NullableTraits<T>::is_decimal);
-
     auto [data_type, prec, scale] = std::apply(makeDecimalDataType<T, Args...>, data_type_args);
     return {makeConstColumn<T>(data_type, size, parseDecimal<T>(literal, prec, scale)), data_type, name};
 }
