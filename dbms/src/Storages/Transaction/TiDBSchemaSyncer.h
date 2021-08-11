@@ -153,6 +153,15 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 builder.applyDiff(diff);
             }
         }
+        catch (TiFlashException & e)
+        {
+            if (!e.getError().is(Errors::DDL::StaleSchema))
+            {
+                GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_count, type_failed).Increment();
+            }
+            LOG_WARNING(log, "apply diff meets exception : " << e.displayText() << " \n stack is " << e.getStackTrace().toString());
+            return false;
+        }
         catch (Exception & e)
         {
             GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_count, type_failed).Increment();
