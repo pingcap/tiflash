@@ -349,7 +349,7 @@ class PathCapcatity : public DB::base::TiFlashStorageTestBasic
         TiFlashStorageTestBasic::SetUp();
         if (int code = statvfs(".", &vfs_info); code != 0)
         {
-            ASSERT_TRUE(0);
+            FAIL() << "statvfs failed.";
         }
 
         main_data_path = getTemporaryPath() + "/main";

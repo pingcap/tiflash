@@ -53,7 +53,7 @@ public:
     }
 
 protected:
-    void dropDataOnDisk(String path)
+    void dropDataOnDisk(const String & path)
     {
         if (Poco::File file(path); file.exists())
         {
@@ -61,7 +61,7 @@ protected:
         }
     }
 
-    void createIfNotExist(String path)
+    void createIfNotExist(const String & path)
     {
         if (Poco::File file(path); !file.exists())
             file.createDirectories();

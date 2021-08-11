@@ -104,7 +104,7 @@ void PathCapacityMetrics::getDiskStats(std::map<FSID, DiskCapacity> & disk_stats
             continue;
         }
 
-        FsStats path_stat = path_infos[i].getStats(log);
+        FsStats path_stat = path_infos[i].getStats(log, vfs);
         if (!path_stat.ok)
         {
             // same as upper
@@ -137,13 +137,11 @@ FsStats PathCapacityMetrics::getFsStats()
     {
         FsStats disk_stat{};
 
-        auto disk_stat_vec = fs_it->second;
-        auto vfs_info = disk_stat_vec.vfs_info;
+        auto & disk_stat_vec = fs_it->second;
+        auto & vfs_info = disk_stat_vec.vfs_info;
 
-        for (auto path_stats_it = disk_stat_vec.path_stats.begin(); path_stats_it != disk_stat_vec.path_stats.end(); ++path_stats_it)
+        for (const auto & single_path_stats : disk_stat_vec.path_stats)
         {
-
-            auto single_path_stats = (*path_stats_it);
             disk_stat.capacity_size += single_path_stats.capacity_size;
             disk_stat.used_size += single_path_stats.used_size;
             disk_stat.avail_size += single_path_stats.avail_size;
@@ -235,18 +233,9 @@ ssize_t PathCapacityMetrics::locatePath(std::string_view file_path) const
     return max_match_index;
 }
 
-FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
+FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log, const struct statvfs & vfs) const
 {
     FsStats res{};
-    /// Get capacity, used, available size for one path.
-    /// Similar to `handle_store_heartbeat` in TiKV release-4.0 branch
-    /// https://github.com/tikv/tikv/blob/f14e8288f3/components/raftstore/src/store/worker/pd.rs#L593
-    struct statvfs vfs;
-    if (int code = statvfs(path.data(), &vfs); code != 0)
-    {
-        LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: " << path << ", errno: " << errno);
-        return res;
-    }
 
     // capacity is limited by the actual disk capacity
     uint64_t capacity = 0;
@@ -276,6 +265,20 @@ FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
     res.ok = 1;
 
     return res;
+}
+
+FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
+{
+    /// Get capacity, used, available size for one path.
+    /// Similar to `handle_store_heartbeat` in TiKV release-4.0 branch
+    /// https://github.com/tikv/tikv/blob/f14e8288f3/components/raftstore/src/store/worker/pd.rs#L593
+    struct statvfs vfs;
+    if (int code = statvfs(path.data(), &vfs); code != 0)
+    {
+        LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: " << path << ", errno: " << errno);
+        return {};
+    }
+    return getStats(log, vfs);
 }
 
 
