@@ -9,6 +9,20 @@ namespace DB
 
 #pragma pack(1)
 
+union PFMetaInfoV1
+{
+    struct
+    {
+        // The meta buffer size
+        UInt32 meta_byte_size : 32;
+
+        // The page format version, should be V1 or V2
+        UInt32 meta_info_version : 32;
+    } bits;
+    UInt8 raws[8];
+};
+static_assert(sizeof(union PFMetaInfoV1) == 8, "Invaild size of PFMetaInfoV1.");
+
 union PFWriteBatchTypePUV1
 {
     struct
@@ -31,12 +45,10 @@ union PFWriteBatchTypePUV1
         // The page checksum
         UInt64 page_checksum : 64;
 
-        // The length of field offset
-        UInt64 field_offset_len : 64;
     } bits;
-    UInt8 raws[49];
+    UInt8 raws[41];
 };
-static_assert(sizeof(union PFWriteBatchTypePUV1) == 49, "Invaild size of PFWriteBatchTypePU.");
+static_assert(sizeof(union PFWriteBatchTypePUV1) == 41, "Invaild size of PFWriteBatchTypePUV1.");
 
 #pragma pack()
 } // namespace DB

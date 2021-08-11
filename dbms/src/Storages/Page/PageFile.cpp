@@ -223,9 +223,10 @@ int PageFile::WriteBatchReader::deserialize(struct ReadContext & ctx)
 
 size_t PageFile::MetaMergingReader::deserialize(ReadContext & ctx, WriteBatch::SequenceID * sid, PageFormat::Version * v)
 {
-    char *       meta_start_pos = ctx.meta_pos;
-    PFMetaInfo * meta_info      = PageUtil::cast<PFMetaInfo>(ctx.meta_pos);
-    size_t       meta_bytes     = meta_info->bits.meta_byte_size;
+    char * meta_start_pos = ctx.meta_pos;
+    /// Used PFMetaInfoV1 replace PFMetaInfo, Because If meta is V1, then meta_pos will out of range.
+    PFMetaInfoV1 * meta_info  = PageUtil::cast<PFMetaInfoV1>(ctx.meta_pos);
+    size_t         meta_bytes = meta_info->bits.meta_byte_size;
 
     // verify meta length
     if (meta_start_pos + meta_bytes > meta_buffer + meta_size)
@@ -245,7 +246,7 @@ size_t PageFile::MetaMergingReader::deserialize(ReadContext & ctx, WriteBatch::S
         wb_sequence = 0;
         break;
     case PageFormat::V2:
-        wb_sequence = meta_info->bits.meta_seq_id;
+        wb_sequence = PageUtil::get<WriteBatch::SequenceID>(ctx.meta_pos);
         break;
     default:
         throw Exception("PageFile binary version not match {" + toString() + "} [unknown_version="
@@ -322,8 +323,11 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
 
     size_t curr_wb_data_offset = deserialize(context, &curr_write_batch_sequence, v);
 
-    meta_file_offset = context.meta_pos - meta_buffer;
-    data_file_offset += curr_wb_data_offset;
+    if (status == Status::Opened)
+    {
+        meta_file_offset = context.meta_pos - meta_buffer;
+        data_file_offset += curr_wb_data_offset;
+    }
 }
 
 // =========================================================
