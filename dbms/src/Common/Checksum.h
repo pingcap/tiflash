@@ -41,7 +41,7 @@ namespace Digest
 class None
 {
 public:
-    using HashType = std::array<uint8_t, 8>;
+    using HashType = std::byte;
     static constexpr size_t hash_size = sizeof(HashType);
     static constexpr auto algorithm = ::DB::ChecksumAlgo::None;
     void update(const void *, size_t length)
@@ -49,7 +49,7 @@ public:
         CurrentMetrics::Increment increment{CurrentMetrics::ChecksumDigest, static_cast<Int64>(length)};
         ProfileEvents::increment(ProfileEvents::ChecksumDigestBytes, length);
     }
-    [[nodiscard]] HashType checksum() const { return {}; }
+    [[nodiscard]] HashType checksum() const { return std::byte{0}; }
 };
 
 class CRC32
