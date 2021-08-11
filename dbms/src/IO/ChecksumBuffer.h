@@ -106,7 +106,7 @@ private:
         current_frame++;
     }
 
-    off_t doSeek(off_t, int) override { throw Poco::FileException("framed file is not seekable in writing mode"); }
+    off_t doSeek(off_t, int) override { throw Exception("framed file is not seekable in writing mode"); }
 
     off_t getPositionInFile() override { return current_frame * frame_size + offset(); }
 
