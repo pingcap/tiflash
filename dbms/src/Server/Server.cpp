@@ -837,11 +837,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #endif
 
 #ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
-    loadBooleanConfig(log, DB::simd_option::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
+    loadBooleanConfig(log, simd_option::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
 #endif
 
 #ifdef TIFLASH_ENABLE_SVE_SUPPORT
-    loadBooleanConfig(log, DB::simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
+    loadBooleanConfig(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
 
     registerFunctions();
