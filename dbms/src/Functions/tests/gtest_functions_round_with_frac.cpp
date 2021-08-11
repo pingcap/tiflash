@@ -28,16 +28,14 @@ public:
 
     auto getFrac(size_t size, const std::optional<Int64> & frac) { return createConstColumn<Nullable<Int64>>(size, {frac}); }
 
-    template <typename... Args>
-    auto executeWithName(Args &&... args)
+    auto execute(const ColumnWithTypeAndName & input, const ColumnWithTypeAndName & frac)
     {
-        return executeFunction(func_name, {std::forward<Args>(args)...});
+        return executeFunction(func_name, input, frac);
     }
 
-    template <typename Input>
-    auto execute(const Input & input, std::optional<Int64> frac)
+    auto execute(const ColumnWithTypeAndName & input, std::optional<Int64> frac)
     {
-        return executeWithName(input, getFrac(input.column->size(), frac));
+        return execute(input, getFrac(input.column->size(), frac));
     }
 };
 
@@ -129,36 +127,36 @@ try
     auto output = createColumn<Nullable<Int64>>(DATA);
 #undef DATA
 
-    ASSERT_COLUMN_EQ(this->execute(input, std::numeric_limits<Int64>::max()), output);
+    ASSERT_COLUMN_EQ(output, this->execute(input, std::numeric_limits<Int64>::max()));
     for (int i = 0; i <= 100; ++i)
-        ASSERT_COLUMN_EQ(this->execute(input, i), output) << "i = " << i;
+        ASSERT_COLUMN_EQ(output, this->execute(input, i)) << "i = " << i;
 
-    ASSERT_COLUMN_EQ(this->execute(input, -1),
-        createColumn<Nullable<Int64>>({0, 0, 0, 0, 10, 0, -10, 50, 50, -50, -50, large, large, -large, -large, {}}));
+    ASSERT_COLUMN_EQ(createColumn<Nullable<Int64>>({0, 0, 0, 0, 10, 0, -10, 50, 50, -50, -50, large, large, -large, -large, {}}),
+        this->execute(input, -1));
 
     int start = -2;
     if (digits > 2)
     {
-        ASSERT_COLUMN_EQ(this->execute(input, -2),
-            createColumn<Nullable<Int64>>({0, 0, 0, 0, 0, 0, 0, 0, 100, 0, -100, large, large, -large, -large, {}}));
+        ASSERT_COLUMN_EQ(createColumn<Nullable<Int64>>({0, 0, 0, 0, 0, 0, 0, 0, 100, 0, -100, large, large, -large, -large, {}}),
+            this->execute(input, -2));
 
         start = -3;
     }
     for (int i = start; i >= -(digits - 1); --i)
         ASSERT_COLUMN_EQ(
-            this->execute(input, i), createColumn<Nullable<Int64>>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, large, large, -large, -large, {}}))
+            createColumn<Nullable<Int64>>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, large, large, -large, -large, {}}), this->execute(input, i))
             << "i = " << i;
 
     if (digits > 2)
     {
-        ASSERT_COLUMN_EQ(this->execute(input, -digits),
-            createColumn<Nullable<Int64>>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, large * 2, 0, -large * 2, {}}));
+        ASSERT_COLUMN_EQ(createColumn<Nullable<Int64>>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, large * 2, 0, -large * 2, {}}),
+            this->execute(input, -digits));
     }
 
     auto zeroes = createColumn<Nullable<Int64>>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {}});
     for (int i = -(digits + 1); i >= -100; --i)
-        ASSERT_COLUMN_EQ(this->execute(input, i), zeroes) << "i = " << i;
-    ASSERT_COLUMN_EQ(this->execute(input, std::numeric_limits<Int64>::min()), zeroes);
+        ASSERT_COLUMN_EQ(zeroes, this->execute(input, i)) << "i = " << i;
+    ASSERT_COLUMN_EQ(zeroes, this->execute(input, std::numeric_limits<Int64>::min()));
 }
 CATCH
 
@@ -189,31 +187,31 @@ try
     auto output = createColumn<Nullable<UInt64>>(DATA);
 #undef DATA
 
-    ASSERT_COLUMN_EQ(this->execute(input, std::numeric_limits<Int64>::max()), output);
+    ASSERT_COLUMN_EQ(output, this->execute(input, std::numeric_limits<Int64>::max()));
     for (int i = 0; i <= 100; ++i)
-        ASSERT_COLUMN_EQ(this->execute(input, i), output) << "i = " << i;
+        ASSERT_COLUMN_EQ(output, this->execute(input, i)) << "i = " << i;
 
-    ASSERT_COLUMN_EQ(this->execute(input, -1), createColumn<Nullable<UInt64>>({0, 0, 0, 10, 50, 50, large, large, {}}));
+    ASSERT_COLUMN_EQ(createColumn<Nullable<UInt64>>({0, 0, 0, 10, 50, 50, large, large, {}}), this->execute(input, -1));
 
     int start = -2;
     if (digits > 2)
     {
-        ASSERT_COLUMN_EQ(this->execute(input, -2), createColumn<Nullable<UInt64>>({0, 0, 0, 0, 0, 100, large, large, {}}));
+        ASSERT_COLUMN_EQ(createColumn<Nullable<UInt64>>({0, 0, 0, 0, 0, 100, large, large, {}}), this->execute(input, -2));
 
         start = -3;
     }
     for (int i = start; i >= -(digits - 1); --i)
-        ASSERT_COLUMN_EQ(this->execute(input, i), createColumn<Nullable<UInt64>>({0, 0, 0, 0, 0, 0, large, large, {}})) << "i = " << i;
+        ASSERT_COLUMN_EQ(createColumn<Nullable<UInt64>>({0, 0, 0, 0, 0, 0, large, large, {}}), this->execute(input, i)) << "i = " << i;
 
     if (digits > 2)
     {
-        ASSERT_COLUMN_EQ(this->execute(input, -digits), createColumn<Nullable<UInt64>>({0, 0, 0, 0, 0, 0, 0, large * 2, {}}));
+        ASSERT_COLUMN_EQ(createColumn<Nullable<UInt64>>({0, 0, 0, 0, 0, 0, 0, large * 2, {}}), this->execute(input, -digits));
     }
 
     auto zeroes = createColumn<Nullable<UInt64>>({0, 0, 0, 0, 0, 0, 0, 0, {}});
     for (int i = -(digits + 1); i >= -100; --i)
-        ASSERT_COLUMN_EQ(this->execute(input, i), zeroes) << "i = " << i;
-    ASSERT_COLUMN_EQ(this->execute(input, std::numeric_limits<Int64>::min()), zeroes);
+        ASSERT_COLUMN_EQ(zeroes, this->execute(input, i)) << "i = " << i;
+    ASSERT_COLUMN_EQ(zeroes, this->execute(input, std::numeric_limits<Int64>::min()));
 }
 CATCH
 
@@ -272,6 +270,194 @@ TEST_F(TestFunctionsRoundWithFrac, UInt64ConstFracOverflow)
     }
 
     EXPECT_NO_THROW(execute(input, std::numeric_limits<Int64>::min()));
+}
+
+TEST_F(TestFunctionsRoundWithFrac, IntConstInput)
+{
+    InferredDataVector<Nullable<Int64>> frac_data{0, -1, -2, -3, -4, -5, -6, -7, -8, -9, -10, {}};
+    size_t size = frac_data.size();
+
+    Int32 int32_input = 2147398765;
+    InferredDataVector<Nullable<Int64>> int32_result
+        = {2147398765, 2147398770, 2147398800, 2147399000, 2147400000, 2147400000, 2147000000, 2150000000, 2100000000, 2000000000, 0, {}};
+
+    UInt32 uint32_input = 4293876543;
+    InferredDataVector<Nullable<UInt64>> uint32_result
+        = {4293876543, 4293876540, 4293876500, 4293877000, 4293880000, 4293900000, 4294000000, 4290000000, 4300000000, 4000000000, 0, {}};
+
+    auto frac = createColumn<Nullable<Int64>>(frac_data);
+
+    {
+        // const signed
+        auto input = createConstColumn<Int32>(size, int32_input);
+        auto result = createColumn<Nullable<Int64>>(int32_result);
+        ASSERT_COLUMN_EQ(result, execute(input, frac));
+    }
+
+    {
+        // const unsigned
+        auto input = createConstColumn<UInt32>(size, uint32_input);
+        auto result = createColumn<Nullable<UInt64>>(uint32_result);
+        ASSERT_COLUMN_EQ(result, execute(input, frac));
+    }
+
+    {
+        // null constant
+        auto input = createConstColumn<Nullable<Int64>>(size, {});
+        auto result = createConstColumn<Nullable<Int64>>(size, {});
+        ASSERT_COLUMN_EQ(result, execute(input, frac));
+    }
+
+    {
+        // const signed - const frac
+        for (size_t i = 0; i < size; ++i)
+        {
+            ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(1, int32_result[i]),
+                execute(createConstColumn<Int32>(1, int32_input), createConstColumn<Nullable<Int64>>(1, frac_data[i])));
+            ASSERT_COLUMN_EQ(createConstColumn<Nullable<UInt64>>(1, uint32_result[i]),
+                execute(createConstColumn<UInt32>(1, uint32_input), createConstColumn<Nullable<Int64>>(1, frac_data[i])));
+            ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(1, {}),
+                execute(createConstColumn<Nullable<Int64>>(1, {}), createConstColumn<Nullable<Int64>>(1, frac_data[i])));
+        }
+    }
+}
+
+template <typename T>
+class TestFunctionsRoundWithFracFloating : public TestFunctionsRoundWithFrac
+{
+};
+
+using TestFunctionsRoundWithFracFloatingTypes = ::testing::Types<Float32, Float64>;
+TYPED_TEST_CASE(TestFunctionsRoundWithFracFloating, TestFunctionsRoundWithFracFloatingTypes);
+
+TYPED_TEST(TestFunctionsRoundWithFracFloating, All)
+{
+    using Float = TypeParam;
+
+    auto input = createColumn<Nullable<Float>>({0.0, 2.5, -2.5, 0.25, -0.25, 0.125, -0.125, 25, -25, 250, -250, 2.6, 2.4, -2.6, -2.4, {}});
+
+    // const frac
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Float64>>({0, 2, -2, 0.0, -0.0, 0.0, -0.0, 25, -25, 250, -250, 3, 2, -3, -2, {}}), this->execute(input, 0));
+    ASSERT_COLUMN_EQ(createColumn<Nullable<Float64>>({0, 2.5, -2.5, 0.2, -0.2, 0.1, -0.1, 25, -25, 250, -250, 2.6, 2.4, -2.6, -2.4, {}}),
+        this->execute(input, 1));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Float64>>({0, 2.5, -2.5, 0.25, -0.25, 0.12, -0.12, 25, -25, 250, -250, 2.6, 2.4, -2.6, -2.4, {}}),
+        this->execute(input, 2));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Float64>>({0, 2.5, -2.5, 0.25, -0.25, 0.125, -0.125, 25, -25, 250, -250, 2.6, 2.4, -2.6, -2.4, {}}),
+        this->execute(input, 3));
+    ASSERT_COLUMN_EQ(createColumn<Nullable<Float64>>({0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 20, -20, 250, -250, 0.0, 0.0, -0.0, -0.0, {}}),
+        this->execute(input, -1));
+    ASSERT_COLUMN_EQ(createColumn<Nullable<Float64>>({0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 200, -200, 0.0, 0.0, -0.0, -0.0, {}}),
+        this->execute(input, -2));
+    ASSERT_COLUMN_EQ(createColumn<Nullable<Float64>>({0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, 0.0, -0.0, -0.0, {}}),
+        this->execute(input, -3));
+
+    // const input
+
+    ASSERT_COLUMN_EQ(createColumn<Nullable<Float64>>({0, 0.1, 0.12, 0.125, {}}),
+        this->execute(createConstColumn<Float>(5, 0.125), createColumn<Nullable<Int64>>({0, 1, 2, 3, {}})));
+    ASSERT_COLUMN_EQ(createConstColumn<Nullable<Float64>>(5, {}),
+        this->execute(createConstColumn<Nullable<Float>>(5, {}), createColumn<Nullable<Int64>>({0, 1, 2, 3, {}})));
+
+    // const input & frac
+
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Float64>(1, 0.12), this->execute(createConstColumn<Float>(1, 0.125), createConstColumn<Int64>(1, 2)));
+    ASSERT_COLUMN_EQ(createConstColumn<Nullable<Float64>>(1, {}),
+        this->execute(createConstColumn<Float>(1, 0.125), createConstColumn<Nullable<Int64>>(1, {})));
+    ASSERT_COLUMN_EQ(createConstColumn<Nullable<Float64>>(1, {}),
+        this->execute(createConstColumn<Nullable<Float>>(1, {}), createConstColumn<Int64>(1, 2)));
+}
+
+template <typename T>
+class TestFunctionsRoundWithFracDecimal : public TestFunctionsRoundWithFrac
+{
+};
+
+using TestFunctionsRoundWithFracDecimalTypes = ::testing::Types<Decimal32, Decimal64, Decimal128, Decimal256>;
+TYPED_TEST_CASE(TestFunctionsRoundWithFracDecimal, TestFunctionsRoundWithFracDecimalTypes);
+
+TYPED_TEST(TestFunctionsRoundWithFracDecimal, Basic)
+try
+{
+    using Decimal = TypeParam;
+    constexpr int max_prec = maxDecimalPrecision<Decimal>();
+
+    auto column = [](std::tuple<PrecType, ScaleType> args, const std::vector<std::optional<String>> & data) {
+        return createColumn<Nullable<Decimal>>(args, data);
+    };
+
+    auto constColumn = [](std::tuple<PrecType, ScaleType> args, size_t size, const std::optional<String> & data) {
+        return createConstColumn<Nullable<Decimal>>(args, size, data);
+    };
+
+    // const frac
+
+    {
+        // Decimal(max_prec - 1, 3)
+        constexpr int prec = max_prec - 1;
+        auto large = String(prec - 3, '9') + ".999";
+        auto rounded = "1" + String(prec - 3, '0');
+        auto input = column(
+            {prec, 3}, {"0.000", "2.490", "-2.490", "2.500", "-2.500", "0.250", "-0.250", "25.000", "-25.000", large, "-" + large, {}});
+
+        ASSERT_COLUMN_EQ(input, this->execute(input, 3));
+        ASSERT_COLUMN_EQ(
+            column({prec, 2},
+                {"0.00", "2.49", "-2.49", "2.50", "-2.50", "0.25", "-0.25", "25.00", "-25.00", rounded + ".00", "-" + rounded + ".00", {}}),
+            this->execute(input, 2));
+        ASSERT_COLUMN_EQ(
+            column({prec - 1, 1},
+                {"0.0", "2.5", "-2.5", "2.5", "-2.5", "0.3", "-0.3", "25.0", "-25.0", rounded + ".0", "-" + rounded + ".0", {}}),
+            this->execute(input, 1));
+        ASSERT_COLUMN_EQ(
+            column({prec - 2, 0}, {"0", "2", "-2", "3", "-3", "0", "0", "25", "-25", rounded, "-" + rounded, {}}), this->execute(input, 0));
+        ASSERT_COLUMN_EQ(
+            column({prec - 2, 0}, {"0", "0", "0", "0", "0", "0", "0", "30", "-30", rounded, "-" + rounded, {}}), this->execute(input, -1));
+
+        for (int i = -2; i >= -(prec - 3); --i)
+            ASSERT_COLUMN_EQ(
+                column({prec - 2, 0}, {"0", "0", "0", "0", "0", "0", "0", "0", "0", rounded, "-" + rounded, {}}), this->execute(input, i))
+                << "i = " << i;
+
+        ASSERT_COLUMN_EQ(
+            column({prec - 2, 0}, {"0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", {}}), this->execute(input, -(prec - 2)));
+        ASSERT_COLUMN_EQ(column({prec - 2, 0}, {"0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", {}}),
+            this->execute(input, std::numeric_limits<Int64>::min()));
+    }
+
+    // const input
+
+    {
+        auto frac = createColumn<Nullable<Int64>>({3, 2, 1, 0, -1, -2, -3, -4, -5, -6, {}});
+
+        ASSERT_COLUMN_EQ(column({max_prec, 3},
+                             {"98765.432", "98765.430", "98765.400", "98765.000", "98770.000", "98800.000", "99000.000", "100000.000",
+                                 "100000.000", "0.000", {}}),
+            this->execute(constColumn({max_prec - 1, 3}, 11, "98765.432"), frac));
+        ASSERT_COLUMN_EQ(constColumn({max_prec, 3}, 11, {}), this->execute(constColumn({max_prec - 1, 3}, 11, {}), frac));
+    }
+
+    // const input & frac
+
+    ASSERT_COLUMN_EQ(constColumn({max_prec - 1, 2}, 1, "0.03"),
+        this->execute(constColumn({max_prec - 1, 3}, 1, "0.025"), createConstColumn<Int64>(1, 2)));
+    ASSERT_COLUMN_EQ(constColumn({max_prec - 1, 2}, 1, {}),
+        this->execute(constColumn({max_prec - 1, 3}, 1, {}), createConstColumn<Int64>(1, 2)));
+    ASSERT_COLUMN_EQ(constColumn({max_prec - 3, 0}, 1, {}),
+        this->execute(constColumn({max_prec - 1, 3}, 1, "0.025"), createConstColumn<Nullable<Int64>>(1, {})));
+}
+CATCH
+
+TEST_F(TestFunctionsRoundWithFrac, DecimalRound)
+{
+    // TODO:
+    // - decimal downgrade.
+    // - decimal upgrade: frac > scale.
+    // - decimal overflow.
 }
 
 } // namespace tests
