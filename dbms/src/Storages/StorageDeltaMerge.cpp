@@ -923,6 +923,7 @@ try
         tidb_table_info = table_info.value();
     }
 
+    std::lock_guard lock(store_mutex);  // Avoid concurrent init store and DDL.
     if (store_inited.load(std::memory_order_acquire))
     {
         _store->applyAlters(commands, table_info, max_column_id_used, context);
