@@ -8,6 +8,8 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/MPPHandler.h>
+#include <Flash/Mpp/MPPTaskManager.h>
+#include <Flash/Mpp/Utils.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -215,7 +217,7 @@ grpc::Status FlashService::Coprocessor(
     tunnel->connect(writer);
     LOG_DEBUG(log, "connect tunnel successfully and begin to wait");
     tunnel->waitForFinish();
-    LOG_INFO(log, "connection for " << tunnel->tunnel_id << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
+    LOG_INFO(log, "connection for " << tunnel->id() << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     // TODO: Check if there are errors in task.
 
     return grpc::Status::OK;

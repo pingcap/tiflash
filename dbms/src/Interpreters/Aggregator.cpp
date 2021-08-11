@@ -1572,8 +1572,8 @@ private:
     bool final;
     size_t threads;
 
-    Int32 current_bucket_num = -1;
-    Int32 max_scheduled_bucket_num = -1;
+    std::atomic<Int32> current_bucket_num = -1;
+    std::atomic<Int32> max_scheduled_bucket_num = -1;
     static constexpr Int32 NUM_BUCKETS = 256;
 
     struct ParallelMergeData
@@ -1591,12 +1591,12 @@ private:
 
     void scheduleThreadForNextBucket()
     {
-        ++max_scheduled_bucket_num;
-        if (max_scheduled_bucket_num >= NUM_BUCKETS)
+        int num = max_scheduled_bucket_num.fetch_add(1) + 1;
+        if (num >= NUM_BUCKETS)
             return;
 
         parallel_merge_data->pool.schedule(
-            ThreadFactory(true, "MergingAggregtd").newJob([this]{ thread(max_scheduled_bucket_num); }));
+            ThreadFactory(true, "MergingAggregtd").newJob([this, num]{ thread(num); }));
     }
 
     void thread(Int32 bucket_num)

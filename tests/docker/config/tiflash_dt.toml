@@ -61,11 +61,13 @@ http_port = 8123
     ## If not set, it will be the paths in `storage.latest.dir` appended with "/kvstore".
     # dir = [ ]
 
-    # [storage.io-rate-limit]
+    # [storage.io_rate_limit]
     ## The max I/O bandwith. Default value is 0 and I/O rate limit is disabled.
-    # max-bytes-per-sec = 268435456
-    ## The I/O rate limit mode. Currently, only write-only mode is supported. 
-    # mode = write-only
+    # max_bytes_per_sec = 268435456
+    ## max_read_bytes_per_sec and max_write_bytes_per_sec are the same meaning as max_bytes_per_sec,
+    ## but for disk that read bandwidth and write bandwith are calculated separatly, such as GCP's persistent disks.
+    # max_read_bytes_per_sec = 0
+    # max_write_bytes_per_sec = 0
 [flash]
 	tidb_status_addr = "tidb0:10080"
 	service_addr = "0.0.0.0:3930"

@@ -30,9 +30,10 @@ public:
                                      const RowKeyRange &         rowkey_range,
                                      const RSOperatorPtr &       filter,
                                      const IdSetPtr &            read_packs,
-                                     const FileProviderPtr &     file_provider)
+                                     const FileProviderPtr &     file_provider,
+                                     const ReadLimiterPtr &      read_limiter)
     {
-        auto pack_filter = DMFilePackFilter(dmfile, index_cache, hash_salt, rowkey_range, filter, read_packs, file_provider);
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, hash_salt, rowkey_range, filter, read_packs, file_provider, read_limiter);
         pack_filter.init();
         return pack_filter;
     }
@@ -88,7 +89,8 @@ private:
                      const RowKeyRange &         rowkey_range_, // filter by handle range
                      const RSOperatorPtr &       filter_,       // filter by push down where clause
                      const IdSetPtr &            read_packs_,   // filter by pack index
-                     const FileProviderPtr &     file_provider_)
+                     const FileProviderPtr &     file_provider_,
+                     const ReadLimiterPtr &      read_limiter_)
         : dmfile(dmfile_),
           index_cache(index_cache_),
           hash_salt(hash_salt_),
@@ -98,7 +100,8 @@ private:
           file_provider(file_provider_),
           handle_res(dmfile->getPacks(), RSResult::All),
           use_packs(dmfile->getPacks()),
-          log(&Logger::get("DMFilePackFilter"))
+          log(&Logger::get("DMFilePackFilter")),
+          read_limiter(read_limiter_)
     {
     }
 
@@ -180,7 +183,8 @@ private:
                           const DMFilePtr &           dmfile,
                           const FileProviderPtr &     file_provider,
                           const MinMaxIndexCachePtr & index_cache,
-                          ColId                       col_id)
+                          ColId                       col_id,
+                          const ReadLimiterPtr &      read_limiter)
     {
         auto &     type           = dmfile->getColumnStat(col_id).type;
         const auto file_name_base = DMFile::getFileNameBase(col_id);
@@ -190,7 +194,7 @@ private:
                 = ReadBufferFromFileProvider(file_provider,
                                              dmfile->colIndexPath(file_name_base),
                                              dmfile->encryptionIndexPath(file_name_base),
-                                             std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), dmfile->colIndexSize(file_name_base)));
+                                             std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), dmfile->colIndexSize(file_name_base)), read_limiter);
             index_buf.seek(dmfile->colIndexOffset(file_name_base));
             return MinMaxIndex::read(*type, index_buf, dmfile->colIndexSize(file_name_base));
         };
@@ -214,7 +218,7 @@ private:
         if (!dmfile->isColIndexExist(col_id))
             return;
 
-        loadIndex(param.indexes, dmfile, file_provider, index_cache, col_id);
+        loadIndex(param.indexes, dmfile, file_provider, index_cache, col_id, read_limiter);
     }
 
 private:
@@ -232,6 +236,7 @@ private:
     std::vector<UInt8>    use_packs;
 
     Logger * log;
+    ReadLimiterPtr read_limiter;
 };
 
 } // namespace DM

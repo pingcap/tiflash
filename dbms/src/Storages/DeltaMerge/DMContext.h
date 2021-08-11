@@ -111,7 +111,8 @@ public:
     {
     }
 
-    RateLimiterPtr getWriteLimiter() const { return db_context.getWriteLimiter(); }
+    WriteLimiterPtr getWriteLimiter() const { return db_context.getWriteLimiter(); }
+    ReadLimiterPtr getReadLimiter() const { return db_context.getReadLimiter(); }
 };
 
 } // namespace DM

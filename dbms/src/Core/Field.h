@@ -48,6 +48,9 @@ class DecimalField
     static_assert(IsDecimal<T>);
 
 public:
+    using DecimalType = T;
+    using NativeType = typename T::NativeType;
+
     DecimalField(T value, UInt32 scale_) : dec(value), scale(scale_) {}
 
     operator T() const { return dec; }
@@ -322,6 +325,7 @@ public:
 
     Types::Which getType() const { return which; }
     const char * getTypeName() const { return Types::toString(which); }
+    String toString() const;
 
     bool isNull() const { return which == Types::Null; }
 
@@ -577,7 +581,6 @@ private:
                 throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
         }
     }
-
 
     void create(const Field & x)
     {

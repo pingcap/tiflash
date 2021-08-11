@@ -77,7 +77,7 @@ public:
     ColumnPtr replicate(const Offsets & replicate_offsets) const override;
     void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
-    void updateWeakHash32(WeakHash32 & hash) const override;
+    void updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
     void getExtremes(Field & min, Field & max) const override;
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
@@ -138,5 +138,6 @@ private:
 
 
 ColumnPtr makeNullable(const ColumnPtr & column);
+std::tuple<const IColumn *, const NullMap *> removeNullable(const IColumn * column);
 
 }

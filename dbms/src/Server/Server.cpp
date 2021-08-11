@@ -17,10 +17,11 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/setThreadName.h>
-#include <Core/SIMD.h>
+#include <common/simd.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
+#include <Encryption/RateLimiter.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Functions/registerFunctions.h>
@@ -135,7 +136,7 @@ void loadMiConfig(Logger * log)
 
 namespace
 {
-void loadBooleanConfig(Logger * log, bool & target, const char * name)
+[[maybe_unused]] void loadBooleanConfig(Logger * log, bool & target, const char * name)
 {
     auto config = getenv(name);
     if (config)
@@ -827,20 +828,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     UpdateMallocConfig(log);
 
-#ifdef DBMS_ENABLE_AVX_SUPPORT
-    loadBooleanConfig(log, DB::SIMDOption::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    loadBooleanConfig(log, simd_option::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
 #endif
 
-#ifdef DBMS_ENABLE_AVX512_SUPPORT
-    loadBooleanConfig(log, DB::SIMDOption::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
+    loadBooleanConfig(log, simd_option::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
 #endif
 
-#ifdef DBMS_ENABLE_ASIMD_SUPPORT
-    loadBooleanConfig(log, DB::SIMDOption::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
+#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
+    loadBooleanConfig(log, simd_option::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
 #endif
 
-#ifdef DBMS_ENABLE_SVE_SUPPORT
-    loadBooleanConfig(log, DB::SIMDOption::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
+#ifdef TIFLASH_ENABLE_SVE_SUPPORT
+    loadBooleanConfig(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
 
     registerFunctions();
@@ -1109,6 +1110,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
+    /// Init TiFlash metrics.
+    global_context->initializeTiFlashMetrics();
+
+    /// Init Rate Limiter
+    global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), config());
+
     /// Initialize main config reloader.
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
@@ -1117,7 +1124,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
-            global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), *config, log);
+            global_context->getIORateLimiter().updateConfig(*config);
         },
         /* already_loaded = */ true);
 
@@ -1169,14 +1176,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
     size_t delta_index_cache_size = config().getUInt64("delta_index_cache_size", 0);
     global_context->setDeltaIndexManager(delta_index_cache_size);
-
-    /// Init TiFlash metrics.
-    global_context->initializeTiFlashMetrics();
-
-    /// Init Rate Limiter
-    {
-        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), config(), log);
-    }
 
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
@@ -1348,6 +1347,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             LOG_INFO(log, "Set store status Stopping");
             tmt_context.setStatusStopping();
+            // Set limiters stopping and wakeup threads in waitting queue.
+            global_context->getIORateLimiter().setStop();
             {
                 // Wait until there is no read-index task.
                 while (tmt_context.getKVStore()->getReadIndexEvent())
