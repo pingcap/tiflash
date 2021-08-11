@@ -70,6 +70,158 @@ TEST(PageFile_test, Compare)
     ASSERT_TRUE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Legacy, log));
 }
 
+TEST(PageFile_test, WriteRead)
+{
+    Poco::Logger *       log           = &Poco::Logger::get("PageFileLink");
+    const PageFileId     page_file_id  = 55;
+    const PageId         page_id       = 1;
+    const UInt64         tag           = 100;
+    const size_t         buf_sz        = 1024;
+    const PageFieldSizes field_offsets = {10, 20, 30, 50, 914};
+
+    const String path = TiFlashTestEnv::getTemporaryPath("PageFileLink/");
+    {
+        if (Poco::File p(path); p.exists())
+        {
+            Poco::File file(Poco::Path(path).parent());
+            file.remove(true);
+        }
+    }
+
+    const auto file_provider = TiFlashTestEnv::getGlobalContext().getFileProvider();
+    PageFile   pf0           = PageFile::newPageFile(page_file_id, 0, path, file_provider, PageFile::Type::Formal, log);
+
+    WriteBatch batch;
+    {
+        char c_buff1[buf_sz], c_buff2[buf_sz], c_buff3[buf_sz], c_buff4[buf_sz], c_buff5[buf_sz];
+
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            c_buff1[i] = i & 0xff;
+        }
+
+        memcpy(c_buff2, c_buff1, buf_sz);
+        memcpy(c_buff3, c_buff1, buf_sz);
+        memcpy(c_buff4, c_buff1, buf_sz);
+        memcpy(c_buff5, c_buff1, buf_sz);
+
+        ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(c_buff1, sizeof(c_buff1));
+        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff2, sizeof(c_buff2));
+        ReadBufferPtr buff3 = std::make_shared<ReadBufferFromMemory>(c_buff3, sizeof(c_buff3));
+        ReadBufferPtr buff4 = std::make_shared<ReadBufferFromMemory>(c_buff4, sizeof(c_buff4));
+        ReadBufferPtr buff5 = std::make_shared<ReadBufferFromMemory>(c_buff4, sizeof(c_buff4));
+
+        batch.putPage(page_id, tag, buff1, buf_sz);
+        batch.putPage(page_id + 1, tag, buff2, buf_sz);
+        batch.putPage(page_id + 2, tag, buff3, buf_sz);
+        batch.putPage(page_id + 3, tag, buff4, buf_sz);
+
+        batch.delPage(page_id + 2);
+        batch.upsertPage(page_id + 3, tag, {}, 0, buf_sz + 1, 0x123, {});
+        batch.putRefPage(page_id + 4, page_id);
+        batch.putPage(page_id + 5, tag, buff5, buf_sz, field_offsets);
+    }
+
+    auto writer = pf0.createWriter(true, true);
+    {
+        PageEntriesEdit edit;
+        auto            bytes = writer->write(batch, edit);
+        ASSERT_GT(bytes, 0);
+    }
+
+    auto reader = PageFile::MetaMergingReader::createFrom(pf0, nullptr);
+    {
+        while (reader->hasNext())
+        {
+            reader->moveNext();
+        }
+
+        auto records = reader->getEdits().getRecords();
+        {
+            auto record = records.begin();
+            // Check write batch 1 - 4 put
+            auto i = 0;
+            while (i < 4)
+            {
+                ASSERT_EQ(record->page_id, page_id + i);
+                ASSERT_EQ(record->type, WriteBatch::WriteType::PUT);
+                ASSERT_EQ(record->entry.file_id, page_file_id);
+                ASSERT_EQ(record->entry.size, buf_sz);
+                ASSERT_EQ(record->entry.level, 0);
+                ASSERT_EQ(record->entry.tag, tag);
+                ASSERT_EQ(record->entry.ref, 1);
+                record++;
+                i++;
+            }
+
+            // Check write batch 5 del
+            {
+                ASSERT_EQ(record->page_id, page_id + 2);
+                ASSERT_EQ(record->type, WriteBatch::WriteType::DEL);
+                record++;
+            }
+
+
+            // Check write bach 6 upsert
+            {
+                ASSERT_EQ(record->page_id, page_id + 3);
+                ASSERT_EQ(record->type, WriteBatch::WriteType::UPSERT);
+                ASSERT_EQ(record->entry.size, buf_sz + 1);
+                ASSERT_EQ(record->entry.level, 0);
+                ASSERT_EQ(record->entry.tag, tag);
+                ASSERT_EQ(record->entry.ref, 1);
+                record++;
+            }
+
+
+            // Check write bach 7 ref
+            {
+
+                ASSERT_EQ(record->page_id, page_id + 4);
+                ASSERT_EQ(record->ori_page_id, page_id);
+                ASSERT_EQ(record->type, WriteBatch::WriteType::REF);
+                record++;
+            }
+
+            // Check write bach 8 put with field offsets
+            {
+                ASSERT_EQ(record->page_id, page_id + 5);
+                ASSERT_EQ(record->type, WriteBatch::WriteType::PUT);
+                ASSERT_EQ(record->entry.file_id, page_file_id);
+                ASSERT_EQ(record->entry.size, buf_sz);
+
+                auto fo = record->entry.field_offsets;
+                ASSERT_EQ(fo.size(), field_offsets.size());
+
+                UInt64 offset     = -1;
+                UInt64 offset_crc = 0;
+
+                // Check field offsets
+                for (UInt32 j = 0; j < fo.size(); j++)
+                {
+                    std::tie(offset, offset_crc) = fo[j];
+                    if (j == 0)
+                    {
+                        ASSERT_EQ(offset, 0);
+                    }
+                    else
+                    {
+                        auto offset_exp = 0;
+                        for (UInt32 k = 0; k < j; k++)
+                            offset_exp += field_offsets[k];
+                        ASSERT_EQ(offset, offset_exp);
+                    }
+                    ASSERT_NE(offset_crc, 0);
+                }
+
+                record++;
+            }
+
+            ASSERT_EQ(record, records.end());
+        }
+    }
+}
+
 TEST(Page_test, GetField)
 {
     const size_t buf_sz = 1024;

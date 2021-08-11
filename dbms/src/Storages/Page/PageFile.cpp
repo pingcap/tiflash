@@ -81,14 +81,7 @@ void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offs
 
     // If caller have not set the meta offset limit, we need to
     // initialize `meta_size` with the file size.
-    if (!max_meta_offset)
-    {
-        meta_size = file.getSize();
-    }
-    else
-    {
-        meta_size = *max_meta_offset;
-    }
+    meta_size = !max_meta_offset ? file.getSize() : *max_meta_offset;
 
     if (meta_size == 0) // Empty file
     {
@@ -143,7 +136,8 @@ size_t PageFile::WriteBatchReader::readPUEdit(struct ReadContext & ctx)
         break;
     }
     case PageFormat::V2: {
-        auto wb_pu    = PageUtil::cast<PFWriteBatchTypePU>(ctx.meta_pos);
+        auto wb_pu = PageUtil::cast<PFWriteBatchTypePU>(ctx.meta_pos);
+
         type          = static_cast<WriteBatch::WriteType>(wb_pu->bits.type);
         page_id       = wb_pu->bits.page_id;
         entry.file_id = wb_pu->bits.file_id;
@@ -179,7 +173,7 @@ size_t PageFile::WriteBatchReader::readPUEdit(struct ReadContext & ctx)
     {
         // If type is not PUT/UPSERT, Do not call this method.
         throw Exception("PageFile binary type not match [unknown_type=" + DB::toString((UInt8)type) + "] [file=" + ctx.page_file.metaPath()
-                            + "]",
+                            + "]" + "[Page id =" + DB::toString(page_id) + "]",
                         ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -202,6 +196,7 @@ int PageFile::WriteBatchReader::deserialize(struct ReadContext & ctx)
 {
     size_t     wb_data_offset = 0;
     const auto write_type     = static_cast<WriteBatch::WriteType>(PageUtil::get<PFWriteBatchType, false>(ctx.meta_pos));
+
     switch (write_type)
     {
     case WriteBatch::WriteType::PUT:
@@ -217,6 +212,10 @@ int PageFile::WriteBatchReader::deserialize(struct ReadContext & ctx)
         readRefEdit(ctx);
         break;
     }
+    default:
+        throw Exception("PageFile write batch type not match [unknown_type=" + DB::toString((UInt8)write_type)
+                            + "] [file=" + ctx.page_file.metaPath() + "]",
+                        ErrorCodes::LOGICAL_ERROR);
     }
 
     return wb_data_offset;
@@ -256,10 +255,10 @@ size_t PageFile::MetaMergingReader::deserialize(ReadContext & ctx, WriteBatch::S
     *sid = wb_sequence;
     if (unlikely(v != nullptr))
         *v = meta_info->bits.meta_info_version;
-
+    ctx.version = meta_info->bits.meta_info_version;
 
     // check checksum
-    const auto meta_bytes_without_checksum = -sizeof(PFMetaInfoChecksum);
+    const auto meta_bytes_without_checksum = meta_bytes - sizeof(PFMetaInfoChecksum);
     const auto meta_checksum               = PageUtil::get<PFMetaInfoChecksum, false>(meta_start_pos + meta_bytes_without_checksum);
     const auto checksum_calc               = CityHash_v1_0_2::CityHash64(meta_start_pos, meta_bytes_without_checksum);
     if (meta_checksum != checksum_calc)
@@ -314,11 +313,16 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
         return;
     }
 
-    ReadContext context = {.version = 0, .page_file = page_file, .edit = curr_edit, .meta_pos = pos};
+    ReadContext context = {
+        .version   = 0,         //
+        .page_file = page_file, //
+        .edit      = curr_edit, //
+        .meta_pos  = pos        //
+    };
 
     size_t curr_wb_data_offset = deserialize(context, &curr_write_batch_sequence, v);
 
-    meta_file_offset = pos - meta_buffer;
+    meta_file_offset = context.meta_pos - meta_buffer;
     data_file_offset += curr_wb_data_offset;
 }
 
@@ -397,8 +401,8 @@ void PageFile::WriteBatchWriter::applyPUEdit(struct WriteContext & ctx,
         // page_data_file_off += 0;
     }
 
-    entry.file_id  = (writer.type == WriteBatch::WriteType::PUT ? ctx.page_file->getFileId() : writer.target_file_id.first);
-    entry.level    = (writer.type == WriteBatch::WriteType::PUT ? ctx.page_file->getLevel() : writer.target_file_id.second);
+    entry.file_id  = (writer.type == WriteBatch::WriteType::PUT ? ctx.page_file.getFileId() : writer.target_file_id.first);
+    entry.level    = (writer.type == WriteBatch::WriteType::PUT ? ctx.page_file.getLevel() : writer.target_file_id.second);
     entry.tag      = writer.tag;
     entry.size     = writer.size;
     entry.offset   = page_offset;
@@ -409,19 +413,19 @@ void PageFile::WriteBatchWriter::applyPUEdit(struct WriteContext & ctx,
     entry.field_offsets.swap(writer.offsets);
 
     if (writer.type == WriteBatch::WriteType::PUT)
-        ctx.edit->put(writer.page_id, entry);
+        ctx.edit.put(writer.page_id, entry);
     else if (writer.type == WriteBatch::WriteType::UPSERT)
-        ctx.edit->upsertPage(writer.page_id, entry);
+        ctx.edit.upsertPage(writer.page_id, entry);
 }
 
 void PageFile::WriteBatchWriter::applyDelEdit(struct WriteContext & ctx, WriteBatch::Write & writer)
 {
-    ctx.edit->del(writer.page_id);
+    ctx.edit.del(writer.page_id);
 }
 
 void PageFile::WriteBatchWriter::applyRefEdit(struct WriteContext & ctx, WriteBatch::Write & writer)
 {
-    ctx.edit->ref(writer.page_id, writer.ori_page_id);
+    ctx.edit.ref(writer.page_id, writer.ori_page_id);
 }
 
 
@@ -459,6 +463,7 @@ void PageFile::WriteBatchWriter::serialize(struct WriteContext & ctx, WriteBatch
 
     case WriteBatch::WriteType::REF: {
         PFWriteBatchTypeRef * wb_ref = PageUtil::cast<PFWriteBatchTypeRef>(ctx.meta_pos);
+        wb_ref->bits.type            = (UInt8)writer.type;
         wb_ref->bits.page_id         = writer.page_id;
         wb_ref->bits.og_page_id      = writer.ori_page_id;
         applyRefEdit(ctx, writer);
@@ -514,7 +519,13 @@ std::pair<ByteBuffer, ByteBuffer> PageFile::Writer::genWriteData(WriteBatch & wb
     char * meta_buffer = (char *)page_file.alloc(meta_write_bytes);
     char * data_buffer = (char *)page_file.alloc(data_write_bytes);
 
-    WriteContext write_ctx = {&wb, &page_file, &edit, data_buffer, meta_buffer};
+    WriteContext write_ctx = {
+        .wb        = wb,          //
+        .page_file = page_file,   //
+        .edit      = edit,        //
+        .data_pos  = data_buffer, //
+        .meta_pos  = meta_buffer  //
+    };
 
     PFMetaInfo * meta_info            = PageUtil::cast<PFMetaInfo>(write_ctx.meta_pos);
     meta_info->bits.meta_byte_size    = meta_write_bytes;
@@ -523,8 +534,8 @@ std::pair<ByteBuffer, ByteBuffer> PageFile::Writer::genWriteData(WriteBatch & wb
 
     // Serialize the write batchs
     {
-        UInt64 page_data_file_off = write_ctx.page_file->getDataFileAppendPos();
-        for (auto & writer : write_ctx.wb->getWrites())
+        UInt64 page_data_file_off = write_ctx.page_file.getDataFileAppendPos();
+        for (auto & writer : write_ctx.wb.getWrites())
         {
             wb_writer.serialize(write_ctx, writer, page_data_file_off);
         }

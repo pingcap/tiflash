@@ -26,9 +26,9 @@ class PageFile : public Allocator<false>
 public:
     struct WriteContext
     {
-        WriteBatch *      wb;
-        PageFile *        page_file;
-        PageEntriesEdit * edit;
+        WriteBatch &      wb;
+        PageFile &        page_file;
+        PageEntriesEdit & edit;
 
         char * data_pos;
         char * meta_pos;
