@@ -10,6 +10,7 @@ option (ENABLE_CLICKHOUSE_LOCAL "Enable local" OFF)
 option (ENABLE_CLICKHOUSE_BENCHMARK "Enable benchmark" OFF)
 option (ENABLE_CLICKHOUSE_PERFORMANCE "Enable performance" OFF)
 option (ENABLE_CLICKHOUSE_TOOLS "Enable tools: compressor format extract-from-config-lib" OFF)
+option (ENABLE_TIFLASH_DMTOOL "Enable dmtool: tools to manage dmfile" ${ENABLE_CLICKHOUSE_ALL})
 
 configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
 
@@ -59,6 +60,9 @@ target_link_libraries (clickhouse-compressor-lib clickhouse_common_io ${Boost_PR
 add_library (clickhouse-format-lib ${SPLIT_SHARED} Format.cpp)
 target_link_libraries (clickhouse-format-lib dbms clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
 
+add_library (tiflash-dmtool-lib ${SPLIT_SHARED} DMTool.cpp)
+target_link_libraries(tiflash-dmtool-lib dbms clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
+
 if (USE_EMBEDDED_COMPILER)
     link_directories (${LLVM_LIBRARY_DIRS})
     add_subdirectory ("Compiler-${LLVM_VERSION}")
@@ -82,6 +86,8 @@ if (CLICKHOUSE_SPLIT_BINARY)
     target_link_libraries (clickhouse-compressor clickhouse-compressor-lib)
     add_executable (clickhouse-format clickhouse-format.cpp)
     target_link_libraries (clickhouse-format clickhouse-format-lib)
+    add_executable (tiflash-dmtool tiflash-dmtool.cpp)
+    target_link_libraries (tiflash-dmtool tiflash-dmtool-lib)
 
     set (CLICKHOUSE_ALL_TARGETS clickhouse-server clickhouse-client clickhouse-local clickhouse-benchmark clickhouse-performance-test
             clickhouse-extract-from-config clickhouse-format)
@@ -123,6 +129,9 @@ else ()
     if (ENABLE_CLICKHOUSE_PERFORMANCE)
         target_link_libraries (tiflash clickhouse-performance-test-lib)
     endif ()
+    if (ENABLE_TIFLASH_DMTOOL)
+        target_link_libraries (tiflash tiflash-dmtool-lib)
+    endif()
     if (ENABLE_CLICKHOUSE_TOOLS)
     target_link_libraries (tiflash
         clickhouse-extract-from-config-lib
@@ -157,6 +166,11 @@ else ()
         install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-performance-test DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT tiflash)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-performance-test)
     endif ()
+    if (ENABLE_TIFLASH_DMTOOL)
+        add_custom_target (tiflash-dmtool ALL COMMAND ${CMAKE_COMMAND} -E create_symlink tiflash tiflash-dmtool DEPENDS tiflash)
+        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/tiflash-dmtool DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT tiflash)
+        list(APPEND CLICKHOUSE_BUNDLE tiflash-dmtool)
+    endif()
     if (ENABLE_CLICKHOUSE_TOOLS)
         add_custom_target (clickhouse-extract-from-config ALL COMMAND ${CMAKE_COMMAND} -E create_symlink tiflash clickhouse-extract-from-config DEPENDS tiflash)
         add_custom_target (clickhouse-compressor ALL COMMAND ${CMAKE_COMMAND} -E create_symlink tiflash clickhouse-compressor DEPENDS tiflash)

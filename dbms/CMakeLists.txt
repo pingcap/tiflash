@@ -234,7 +234,7 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
 
-target_include_directories(dbms BEFORE PRIVATE
+target_include_directories(dbms BEFORE PUBLIC
         ${CRC64_INCLUDE_DIRS} ${XXHASH_INCLUDE_DIR})
 
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})

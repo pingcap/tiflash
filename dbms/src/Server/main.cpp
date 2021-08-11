@@ -21,6 +21,9 @@
 #if ENABLE_CLICKHOUSE_LOCAL
 #include "LocalServer.h"
 #endif
+#if ENABLE_TIFLASH_DMTOOL
+#include <Server/DMTool.h>
+#endif
 #include <Common/StringUtils/StringUtils.h>
 
 /// Universal executable for various clickhouse applications
@@ -121,6 +124,9 @@ std::pair<const char *, MainFunc> clickhouse_applications[] = {
 #endif
 #if USE_EMBEDDED_COMPILER
     {"clang", mainEntryClickHouseClang}, {"clang++", mainEntryClickHouseClang}, {"lld", mainEntryClickHouseLLD},
+#endif
+#if ENABLE_TIFLASH_DMTOOL
+    {"dmtool", mainEntryTiFlashDMTool},
 #endif
     {"version", mainEntryVersion}, {"errgen", mainExportError}};
 
