@@ -118,8 +118,14 @@ public:
           frame_size(block_size_)
     {
         // adjust alignment, aligned memory boundary can make it fast for digesting
+        // avoid complaining about uninitialized bytes
         std::memset(this->working_buffer.begin(), 0, sizeof(ChecksumFrame<Backend>) + block_size_ + 512);
         auto shifted = this->working_buffer.begin() + sizeof(ChecksumFrame<Backend>);
+
+        // offset is the distance to a nearest aligned boundary, the calculation follows the following
+        // properties:
+        //   1. (-x) & (alignment - 1) == (-x) % alignment     [power of 2]
+        //   2. alignment - x % alignment == (-x) % alignment  [congruence property]
         auto offset = (-reinterpret_cast<uintptr_t>(shifted)) & (512u - 1u);
         auto result = this->working_buffer.begin() + offset;
         set(result + sizeof(ChecksumFrame<Backend>), block_size_);
