@@ -36,6 +36,15 @@ extern const String UniqRawResName;
 
 struct AggregateFunctionUniqUniquesHashSetData
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+    }
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
     using Set = UniquesHashSet<DefaultHash<UInt64>>;
     Set set;
 
@@ -45,14 +54,61 @@ struct AggregateFunctionUniqUniquesHashSetData
 /// For a function that takes multiple arguments. Such a function pre-hashes them in advance, so TrivialHash is used here.
 struct AggregateFunctionUniqUniquesHashSetDataForVariadic
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+    }
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
     using Set = UniquesHashSet<TrivialHash>;
     Set set;
 
     static String getName() { return "uniq"; }
 };
 
+struct AggregateFunctionUniqUniquesHashSetDataForRawRes
+{
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeBinary(collator == nullptr ? 0 : collator->getCollatorId(), buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        Int32 collator_id;
+        readBinary(collator_id, buf);
+        if (collator_id != 0)
+            collator = TiDB::ITiDBCollator::getCollator(collator_id);
+        else
+            collator = nullptr;
+    }
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_)
+    {
+        collator = collator_;
+    }
+    using Set = UniquesHashSet<TrivialHash, false>;
+    Set set;
+    std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr;
+    std::string sort_key_container;
+
+    static String getName() { return UniqRawResName; }
+};
+
 struct AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+    }
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
     using Set = UniquesHashSet<TrivialHash, false>;
     Set set;
 
@@ -64,6 +120,15 @@ struct AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes
 template <typename T>
 struct AggregateFunctionUniqHLL12Data
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+    }
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
     using Set = HyperLogLogWithSmallSetOptimization<T, 16, 12>;
     Set set;
 
@@ -73,6 +138,15 @@ struct AggregateFunctionUniqHLL12Data
 template <>
 struct AggregateFunctionUniqHLL12Data<String>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+    }
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
     using Set = HyperLogLogWithSmallSetOptimization<UInt64, 16, 12>;
     Set set;
 
@@ -82,6 +156,15 @@ struct AggregateFunctionUniqHLL12Data<String>
 template <>
 struct AggregateFunctionUniqHLL12Data<UInt128>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+    }
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
     using Set = HyperLogLogWithSmallSetOptimization<UInt64, 16, 12>;
     Set set;
 
@@ -90,6 +173,15 @@ struct AggregateFunctionUniqHLL12Data<UInt128>
 
 struct AggregateFunctionUniqHLL12DataForVariadic
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+    }
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
     using Set = HyperLogLogWithSmallSetOptimization<UInt64, 16, 12, TrivialHash>;
     Set set;
 
@@ -102,7 +194,16 @@ struct AggregateFunctionUniqHLL12DataForVariadic
 template <typename T>
 struct AggregateFunctionUniqExactData
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+    }
     using Key = T;
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
 
     /// When creating, the hash table must be small.
     using Set = HashSet<
@@ -120,6 +221,25 @@ struct AggregateFunctionUniqExactData
 template <>
 struct AggregateFunctionUniqExactData<String>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeBinary(collator == nullptr ? 0 : collator->getCollatorId(), buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        Int32 collator_id;
+        readBinary(collator_id, buf);
+        if (collator_id != 0)
+            collator = TiDB::ITiDBCollator::getCollator(collator_id);
+        else
+            collator = nullptr;
+    }
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_)
+    {
+        collator = collator_;
+    }
     using Key = UInt128;
 
     /// When creating, the hash table must be small.
@@ -130,6 +250,8 @@ struct AggregateFunctionUniqExactData<String>
         HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 3)>>;
 
     Set set;
+    std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr;
+    std::string sort_key_container;
 
     static String getName() { return "uniqExact"; }
 };
@@ -137,6 +259,15 @@ struct AggregateFunctionUniqExactData<String>
 template <typename T>
 struct AggregateFunctionUniqCombinedData
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+    }
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
     using Key = UInt32;
     using Set = CombinedCardinalityEstimator<
         Key,
@@ -157,6 +288,25 @@ struct AggregateFunctionUniqCombinedData
 template <>
 struct AggregateFunctionUniqCombinedData<String>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeBinary(collator == nullptr ? 0 : collator->getCollatorId(), buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        Int32 collator_id;
+        readBinary(collator_id, buf);
+        if (collator_id != 0)
+            collator = TiDB::ITiDBCollator::getCollator(collator_id);
+        else
+            collator = nullptr;
+    }
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_)
+    {
+        collator = collator_;
+    }
     using Key = UInt64;
     using Set = CombinedCardinalityEstimator<
         Key,
@@ -170,6 +320,8 @@ struct AggregateFunctionUniqCombinedData<String>
         HyperLogLogMode::FullFeatured>;
 
     Set set;
+    std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr;
+    std::string sort_key_container;
 
     static String getName() { return "uniqCombined"; }
 };
@@ -280,7 +432,9 @@ struct OneAdder
             }
             else
             {
-                StringRef value = column.getDataAt(row_num);
+                StringRef original_value = column.getDataAt(row_num);
+                StringRef value = data.collator != nullptr ? data.collator->sortKey(original_value.data, original_value.size,
+                                                                                    data.sort_key_container) :  original_value;
                 data.set.insert(CityHash_v1_0_2::CityHash64(value.data, value.size));
             }
         }
@@ -292,7 +446,9 @@ struct OneAdder
             }
             else
             {
-                StringRef value = column.getDataAt(row_num);
+                StringRef original_value = column.getDataAt(row_num);
+                StringRef value = data.collator != nullptr ? data.collator->sortKey(original_value.data, original_value.size,
+                    data.sort_key_container) :  original_value;
 
                 UInt128 key;
                 SipHash hash;
@@ -302,6 +458,15 @@ struct OneAdder
                 data.set.insert(key);
             }
         }
+        else if constexpr (std::is_same_v<Data, AggregateFunctionUniqUniquesHashSetDataForRawRes>)
+        {
+            StringRef original_value = column.getDataAt(row_num);
+            StringRef value = data.collator != nullptr ? data.collator->sortKey(original_value.data, original_value.size,
+                data.sort_key_container) : original_value;
+
+            UInt64 key = CityHash_v1_0_2::CityHash64(value.data, value.size);
+            data.set.insert(key);
+        }
     }
 };
 
@@ -310,14 +475,18 @@ struct OneAdder
 
 /// Calculates the number of different values approximately or exactly.
 template <typename T, typename Data>
-class AggregateFunctionUniq final : public IAggregateFunctionDataHelper<Data, AggregateFunctionUniq<T, Data>>
+class AggregateFunctionUniq final : public IAggregateFunctionDataHelper<Data, AggregateFunctionUniq<T, Data>, true>
 {
 public:
     String getName() const override { return Data::getName(); }
+    static constexpr bool raw_result = std::is_same_v<Data, AggregateFunctionUniqUniquesHashSetDataForRawRes>;
 
     DataTypePtr getReturnType() const override
     {
-        return std::make_shared<DataTypeUInt64>();
+        if constexpr (raw_result)
+            return std::make_shared<DataTypeString>();
+        else
+            return std::make_shared<DataTypeUInt64>();
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
@@ -332,17 +501,24 @@ public:
 
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
-        this->data(place).set.write(buf);
+        this->data(place).write(buf);
     }
 
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena *) const override
     {
-        this->data(place).set.read(buf);
+        this->data(place).read(buf);
     }
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        static_cast<ColumnUInt64 &>(to).getData().push_back(this->data(place).set.size());
+        if constexpr (raw_result)
+        {
+            WriteBufferFromOwnString buf;
+            serialize(place, buf);
+            static_cast<ColumnString &>(to).insertData(buf.str().data(), buf.count());
+        }
+        else
+            static_cast<ColumnUInt64 &>(to).getData().push_back(this->data(place).set.size());
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
