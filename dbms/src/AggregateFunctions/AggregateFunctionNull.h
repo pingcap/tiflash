@@ -169,6 +169,9 @@ public:
         }
         else
         {
+            if (!getFlag(place))
+                throw Exception("DEBUG: should not happen", ErrorCodes::LOGICAL_ERROR);
+
             nested_function->insertResultInto(nestedPlace(place), to, arena);
         }
     }
