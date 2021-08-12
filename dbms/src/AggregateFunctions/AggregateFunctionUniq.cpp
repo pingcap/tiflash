@@ -121,12 +121,6 @@ AggregateFunctionPtr createAggregateFunctionUniqRawRes(const std::string & name,
     for (const auto & type : argument_types)
         if (typeid_cast<const DataTypeTuple *>(type.get()))
             throw Exception("Tuple argument of function " + name + " must be the only argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-    if (argument_types.size() == 1)
-    {
-        const IDataType & argument_type = *argument_types[0];
-        if (typeid_cast<const DataTypeString *>(&argument_type))
-            return std::make_shared<AggregateFunctionUniq<String, AggregateFunctionUniqUniquesHashSetDataForRawRes>>();
-    }
 
     /// "Variadic" method also works as a fallback generic case for single argument.
     return std::make_shared<AggregateFunctionUniqVariadic<AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes, false, true>>(

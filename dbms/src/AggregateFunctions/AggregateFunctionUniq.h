@@ -71,25 +71,7 @@ struct AggregateFunctionUniqUniquesHashSetDataForVariadic : _IAggregateFunctionI
     static String getName() { return "uniq"; }
 };
 
-struct AggregateFunctionUniqUniquesHashSetDataForRawRes : _IAggregateFunctionImpl::DataCollatorsHolder<true>
-{
-    void write(WriteBuffer & buf) const
-    {
-        set.write(buf);
-        writeCollators(buf);
-    }
-    void read(ReadBuffer & buf)
-    {
-        set.read(buf);
-        readCollators(buf);
-    }
-    using Set = UniquesHashSet<TrivialHash, false>;
-    Set set;
-
-    static String getName() { return UniqRawResName; }
-};
-
-struct AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes : _IAggregateFunctionImpl::DataCollatorsHolder<false>
+struct AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes : _IAggregateFunctionImpl::DataCollatorsHolder<true>
 {
     void write(WriteBuffer & buf) const
     {
@@ -433,14 +415,6 @@ struct OneAdder
                 data.set.insert(key);
             }
         }
-        else if constexpr (std::is_same_v<Data, AggregateFunctionUniqUniquesHashSetDataForRawRes>)
-        {
-            StringRef value = column.getDataAt(row_num);
-            value = data.getUpdatedValueForCollator(value, 0);
-
-            UInt64 key = CityHash_v1_0_2::CityHash64(value.data, value.size);
-            data.set.insert(key);
-        }
     }
 };
 
@@ -453,14 +427,10 @@ class AggregateFunctionUniq final : public IAggregateFunctionDataHelper<Data, Ag
 {
 public:
     String getName() const override { return Data::getName(); }
-    static constexpr bool raw_result = std::is_same_v<Data, AggregateFunctionUniqUniquesHashSetDataForRawRes>;
 
     DataTypePtr getReturnType() const override
     {
-        if constexpr (raw_result)
-            return std::make_shared<DataTypeString>();
-        else
-            return std::make_shared<DataTypeUInt64>();
+        return std::make_shared<DataTypeUInt64>();
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
@@ -485,14 +455,7 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        if constexpr (raw_result)
-        {
-            WriteBufferFromOwnString buf;
-            serialize(place, buf);
-            static_cast<ColumnString &>(to).insertData(buf.str().data(), buf.count());
-        }
-        else
-            static_cast<ColumnUInt64 &>(to).getData().push_back(this->data(place).set.size());
+        static_cast<ColumnUInt64 &>(to).getData().push_back(this->data(place).set.size());
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
@@ -505,7 +468,7 @@ public:
   */
 template <typename Data, bool argument_is_tuple, bool raw_result = false>
 class AggregateFunctionUniqVariadic final
-    : public IAggregateFunctionDataHelper<Data, AggregateFunctionUniqVariadic<Data, argument_is_tuple, raw_result>>
+    : public IAggregateFunctionDataHelper<Data, AggregateFunctionUniqVariadic<Data, argument_is_tuple, raw_result>, true>
 {
 private:
     static constexpr bool is_exact = std::is_same_v<Data, AggregateFunctionUniqExactData<String>>;
