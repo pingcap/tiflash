@@ -247,8 +247,8 @@ ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_ar
 // - " 123.123" -> Error
 // - "+.123" -> Decimal(3, 3)
 // - "-0.123" -> Decimal(4, 3)
-// - "" -> Error
-// - "." -> Decimal(0, 0)
+// - "" -> Decimal(0, 0)
+// - "." -> Error
 // - "0" -> Decimal(1, 0)
 // - "0''''0" -> Decimal(2, 0)
 // - "0." -> Error
