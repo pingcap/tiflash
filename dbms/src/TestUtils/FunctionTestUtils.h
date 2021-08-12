@@ -280,21 +280,21 @@ typename NullableTraits<T>::FieldType parseDecimal(const InferredLiteralType<T> 
             return literal_;
     }();
 
-    if (literal.empty())
-        throw TiFlashTestException("Literal should not be empty");
-
     size_t pos = 0;
-
     bool negative = false;
-    if (literal[pos] == '-')
+
+    if (literal.size() > 0)
     {
-        negative = true;
-        ++pos;
-    }
-    else if (literal[pos] == '+')
-    {
-        //  ignore plus sign. e.g. "+10000" = "10000".
-        ++pos;
+        if (literal[pos] == '-')
+        {
+            negative = true;
+            ++pos;
+        }
+        else if (literal[pos] == '+')
+        {
+            //  ignore plus sign. e.g. "+10000" = "10000".
+            ++pos;
+        }
     }
 
     bool has_dot = false;
@@ -325,7 +325,7 @@ typename NullableTraits<T>::FieldType parseDecimal(const InferredLiteralType<T> 
 
                 ++prec;
                 if (prec > maxDecimalPrecision<DecimalType>())
-                    throw TiFlashTestException("Decimal overflow");
+                    throw TiFlashTestException(fmt::format("{} overflow", TypeName<DecimalType>::get()));
                 if (has_dot)
                     ++scale;
 
