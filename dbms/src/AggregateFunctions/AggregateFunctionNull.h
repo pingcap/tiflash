@@ -54,13 +54,13 @@ protected:
 
     static void initFlag(AggregateDataPtr __restrict place) noexcept
     {
-        if (result_is_nullable)
+        if constexpr (result_is_nullable)
             place[0] = 0;
     }
 
     static void setFlag(AggregateDataPtr __restrict place) noexcept
     {
-        if (result_is_nullable)
+        if constexpr (result_is_nullable)
             place[0] = 1;
     }
 
@@ -73,7 +73,7 @@ public:
     AggregateFunctionNullBase(AggregateFunctionPtr nested_function_)
         : nested_function{nested_function_}
     {
-        if (result_is_nullable)
+        if constexpr (result_is_nullable)
             prefix_size = nested_function->alignOfData();
         else
             prefix_size = 0;
@@ -134,7 +134,7 @@ public:
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         bool flag = getFlag(place);
-        if (result_is_nullable)
+        if constexpr (result_is_nullable)
             writeBinary(flag, buf);
         if (flag)
             nested_function->serialize(nestedPlace(place), buf);
@@ -143,7 +143,7 @@ public:
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena * arena) const override
     {
         bool flag = 1;
-        if (result_is_nullable)
+        if constexpr (result_is_nullable)
             readBinary(flag, buf);
         if (flag)
         {
@@ -212,13 +212,13 @@ protected:
 
     static void initFlag(AggregateDataPtr __restrict place) noexcept
     {
-        if (result_is_nullable)
+        if constexpr (result_is_nullable)
             place[0] = 0;
     }
 
-    static void setFlag(AggregateDataPtr __restrict place, UInt8 status) noexcept
+    static void setFlag(AggregateDataPtr __restrict place, UInt8 status [[maybe_unused]]) noexcept
     {
-        if (result_is_nullable)
+        if constexpr (result_is_nullable)
             place[0] = status;
     }
 
@@ -234,7 +234,7 @@ public:
     AggregateFunctionFirstRowNull(AggregateFunctionPtr nested_function_)
         : nested_function{nested_function_}
     {
-        if (result_is_nullable)
+        if constexpr (result_is_nullable)
             prefix_size = nested_function->alignOfData();
         else
             prefix_size = 0;
@@ -330,7 +330,7 @@ public:
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
         UInt8 flag = getFlag(place);
-        if (result_is_nullable)
+        if constexpr (result_is_nullable)
             writeBinary(flag, buf);
         if (flag == 1)
             nested_function->serialize(nestedPlace(place), buf);
@@ -339,7 +339,7 @@ public:
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena * arena) const override
     {
         UInt8 flag = 1;
-        if (result_is_nullable)
+        if constexpr (result_is_nullable)
             readBinary(flag, buf);
         if (flag == 1)
         {
@@ -370,6 +370,9 @@ public:
         }
         else
         {
+            if (!getFlag(place))
+                throw Exception("DEBUG: should not happen", ErrorCodes::LOGICAL_ERROR);
+
             nested_function->insertResultInto(nestedPlace(place), to, arena);
         }
     }
