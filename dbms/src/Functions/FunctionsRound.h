@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Columns/getColumnData.h>
 #include <Common/Decimal.h>
 #include <Common/TiFlashException.h>
 #include <Common/toSafeUnsigned.h>
@@ -888,6 +887,8 @@ struct TiDBFloatingRound
 
     static OutputType eval(const InputType & input, FracType frac)
     {
+        // modified from <https://github.com/pingcap/tidb/blob/26237b35f857c2388eab46f9ee3b351687143681/types/helper.go#L33-L48>.
+
         auto value = static_cast<OutputType>(input);
         auto base = 1.0;
 
@@ -1157,9 +1158,6 @@ struct TiDBRound
         assert(output_column != nullptr);
 
         size_t size = input_column->size();
-        auto && input_data = getColumnData<InputType>(input_column);
-        auto && frac_data = getColumnData<FracType>(frac_column);
-
         auto & output_data = output_column->getData();
         output_data.resize(size);
 
@@ -1170,14 +1168,68 @@ struct TiDBRound
         info.output_prec = getDecimalPrecision(*args.output_type, 0);
         info.output_scale = getDecimalScale(*args.output_type, 0);
 
-        for (size_t i = 0; i < size; ++i)
+        if constexpr (std::is_same_v<InputColumn, ColumnConst>)
         {
-            if constexpr (std::is_floating_point_v<InputType>)
-                output_data[i] = TiDBFloatingRound<InputType, OutputType>::eval(input_data[i], frac_data[i]);
-            else if constexpr (IsDecimal<InputType>)
-                output_data[i] = TiDBDecimalRound<InputType, OutputType>::eval(input_data[i], frac_data[i], info);
+            if constexpr (std::is_same_v<FracColumn, ColumnConst>)
+            {
+                auto input_data = input_column->template getValue<InputType>();
+                auto frac_data = frac_column->template getValue<FracType>();
+
+                if constexpr (std::is_floating_point_v<InputType>)
+                    output_data[0] = TiDBFloatingRound<InputType, OutputType>::eval(input_data, frac_data);
+                else if constexpr (IsDecimal<InputType>)
+                    output_data[0] = TiDBDecimalRound<InputType, OutputType>::eval(input_data, frac_data, info);
+                else
+                    output_data[0] = TiDBIntegerRound<InputType, OutputType>::eval(input_data, frac_data);
+            }
             else
-                output_data[i] = TiDBIntegerRound<InputType, OutputType>::eval(input_data[i], frac_data[i]);
+            {
+                auto input_data = input_column->template getValue<InputType>();
+                const auto & frac_data = frac_column->getData();
+
+                for (size_t i = 0; i < size; ++i)
+                {
+                    if constexpr (std::is_floating_point_v<InputType>)
+                        output_data[i] = TiDBFloatingRound<InputType, OutputType>::eval(input_data, frac_data[i]);
+                    else if constexpr (IsDecimal<InputType>)
+                        output_data[i] = TiDBDecimalRound<InputType, OutputType>::eval(input_data, frac_data[i], info);
+                    else
+                        output_data[i] = TiDBIntegerRound<InputType, OutputType>::eval(input_data, frac_data[i]);
+                }
+            }
+        }
+        else
+        {
+            if constexpr (std::is_same_v<FracColumn, ColumnConst>)
+            {
+                const auto & input_data = input_column->getData();
+                auto frac_data = frac_column->template getValue<FracType>();
+
+                for (size_t i = 0; i < size; ++i)
+                {
+                    if constexpr (std::is_floating_point_v<InputType>)
+                        output_data[i] = TiDBFloatingRound<InputType, OutputType>::eval(input_data[i], frac_data);
+                    else if constexpr (IsDecimal<InputType>)
+                        output_data[i] = TiDBDecimalRound<InputType, OutputType>::eval(input_data[i], frac_data, info);
+                    else
+                        output_data[i] = TiDBIntegerRound<InputType, OutputType>::eval(input_data[i], frac_data);
+                }
+            }
+            else
+            {
+                const auto & input_data = input_column->getData();
+                const auto & frac_data = frac_column->getData();
+
+                for (size_t i = 0; i < size; ++i)
+                {
+                    if constexpr (std::is_floating_point_v<InputType>)
+                        output_data[i] = TiDBFloatingRound<InputType, OutputType>::eval(input_data[i], frac_data[i]);
+                    else if constexpr (IsDecimal<InputType>)
+                        output_data[i] = TiDBDecimalRound<InputType, OutputType>::eval(input_data[i], frac_data[i], info);
+                    else
+                        output_data[i] = TiDBIntegerRound<InputType, OutputType>::eval(input_data[i], frac_data[i]);
+                }
+            }
         }
     }
 };
