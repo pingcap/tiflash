@@ -327,6 +327,7 @@ try
     const size_t num_rows_write = 100;
     {
         // write to segment
+        // write `num_rows_write` rows with pk from 0 to `num_rows_write` - 1
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
         segment->write(dmContext(), std::move(block));
     }
@@ -387,17 +388,14 @@ try
         // read raw after delete range
         auto in = segment->getInputStreamRaw(dmContext(), *tableColumns());
         in->readPrefix();
+        size_t num_rows = 0;
         while (Block block = in->read())
         {
             // Only 2 rows are left on disk, others are compacted.
-            ASSERT_EQ(block.rows(), 2UL);
-            // auto pk_col  = block.getByName(DMTestEnv::pk_name);
-            // auto ver_col = block.getByName(VERSION_COLUMN_NAME);
-            // auto tag_col = block.getByName(TAG_COLUMN_NAME);
-            // for (size_t i = 0; i < block.rows(); ++i)
-            //     std::cerr << pk_col.column->getInt(i) << "," << ver_col.column->getInt(i) << "," << tag_col.column->getInt(i) << std::endl;
+            num_rows += block.rows();
         }
         in->readSuffix();
+        ASSERT_EQ(num_rows, 2UL);
     }
 }
 CATCH
@@ -476,16 +474,13 @@ try
         // read raw after delete range
         auto in = segment->getInputStreamRaw(dmContext(), *tableColumns());
         in->readPrefix();
+        size_t num_rows = 0;
         while (Block block = in->read())
         {
             // Only 2 rows are left on disk, others are compacted.
-            ASSERT_EQ(block.rows(), 2UL);
-            // auto pk_col  = block.getByName(DMTestEnv::pk_name);
-            // auto ver_col = block.getByName(VERSION_COLUMN_NAME);
-            // auto tag_col = block.getByName(TAG_COLUMN_NAME);
-            // for (size_t i = 0; i < block.rows(); ++i)
-            //     std::cerr << pk_col.column->getInt(i) << "," << ver_col.column->getInt(i) << "," << tag_col.column->getInt(i) << std::endl;
+            num_rows += block.rows();
         }
+        ASSERT_EQ(num_rows, 2UL);
         in->readSuffix();
     }
 }
@@ -565,17 +560,14 @@ try
     {
         // read raw after delete range
         auto in = segment->getInputStreamRaw(dmContext(), *tableColumns());
+        size_t num_rows = 0;
         in->readPrefix();
         while (Block block = in->read())
         {
             // Only 2 rows are left on disk, others are compacted.
-            ASSERT_EQ(block.rows(), 2UL);
-            // auto pk_col  = block.getByName(DMTestEnv::pk_name);
-            // auto ver_col = block.getByName(VERSION_COLUMN_NAME);
-            // auto tag_col = block.getByName(TAG_COLUMN_NAME);
-            // for (size_t i = 0; i < block.rows(); ++i)
-            //     std::cerr << pk_col.column->getInt(i) << "," << ver_col.column->getInt(i) << "," << tag_col.column->getInt(i) << std::endl;
+            num_rows += block.rows();
         }
+        ASSERT_EQ(num_rows, 2UL);
         in->readSuffix();
     }
 }

@@ -203,7 +203,7 @@ public:
             return "Unknown";
         }
     }
-    
+
     static std::string toString(TaskType type)
     {
         switch (type)
