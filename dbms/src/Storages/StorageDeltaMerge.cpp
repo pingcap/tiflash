@@ -89,7 +89,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
     const ColumnsDescription & columns = getColumns();
 
     LOG_INFO(log,
-        __FILE__ << " " << __func__ << " TableName " << getTableName() << " ordinary " << columns.ordinary.toString() << " materialized "
+        __FILE__ << " " << __func__ << " TableName " << table_column_info->table_name << " ordinary " << columns.ordinary.toString() << " materialized "
                  << columns.materialized.toString());
 
     auto & pk_expr_ast = table_column_info->pk_expr_ast;
