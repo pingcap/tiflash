@@ -10,6 +10,8 @@
 #include <Columns/ColumnsNumber.h>
 #include <Common/Exception.h>
 #include <Common/assert_cast.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/Transaction/Collator.h>
 
 
@@ -179,7 +181,7 @@ public:
       */
     virtual const char * getHeaderFilePath() const = 0;
 
-    virtual void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
+    virtual void setCollators(TiDB::TiDBCollators & ) {}
 };
 
 /// Implement method to obtain an address of 'add' function.
@@ -352,39 +354,103 @@ public:
 namespace _IAggregateFunctionImpl
 {
 template <bool with_collator = false>
-struct CollatorHolder
+struct CollatorsHolder
 {
-    void setCollator(std::shared_ptr<TiDB::ITiDBCollator>)
+    void setCollators(TiDB::TiDBCollators &)
     {
     }
 
     template <typename T>
-    void setDataCollator(T *) const
+    void setDataCollators(T *) const
     {
     }
 };
 
 template <>
-struct CollatorHolder<true>
+struct CollatorsHolder<true>
 {
-    std::shared_ptr<TiDB::ITiDBCollator> collator;
+    TiDB::TiDBCollators collators;
 
-    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_)
+    void setCollators(TiDB::TiDBCollators & collators_)
     {
-        collator = std::move(collator_);
+        collators = collators_;
     }
 
     template <typename T>
-    void setDataCollator(T * data) const
+    void setDataCollators(T * data) const
     {
-        data->setCollator(collator);
+        data->setCollators(collators);
     }
+};
+
+template <bool with_collator = false>
+struct DataCollatorsHolder
+{
+    void setCollators(const TiDB::TiDBCollators &) {}
+    StringRef getUpdatedValueForCollator(StringRef & in, size_t)
+    {
+        return in;
+    }
+    std::pair<std::shared_ptr<TiDB::ITiDBCollator>, std::string *> getCollatorAndSortKeyContainer(size_t )
+    {
+        return std::make_pair(static_cast<std::shared_ptr<TiDB::ITiDBCollator>>(nullptr), &TiDB::dummy_sort_key_contaner);
+    }
+    void writeCollators(WriteBuffer & ) const {}
+    void readCollators(ReadBuffer & ) {}
+};
+
+template <>
+struct DataCollatorsHolder<true>
+{
+    void setCollators(const TiDB::TiDBCollators & collators_)
+    {
+        collators = collators_;
+        sort_key_containers.resize(collators.size());
+    }
+    StringRef getUpdatedValueForCollator(StringRef & in, size_t column_index)
+    {
+        if (collators.size() > column_index && collators[column_index] != nullptr)
+            return collators[column_index]->sortKey(in.data, in.size, sort_key_containers[column_index]);
+        return in;
+    }
+    std::pair<std::shared_ptr<TiDB::ITiDBCollator>, std::string *> getCollatorAndSortKeyContainer(size_t index)
+    {
+        if (index < collators.size())
+            return std::make_pair(collators[index], &sort_key_containers[index]);
+        else
+            return std::make_pair(static_cast<std::shared_ptr<TiDB::ITiDBCollator>>(nullptr), &TiDB::dummy_sort_key_contaner);
+    }
+    void writeCollators(WriteBuffer & buf) const
+    {
+        DB::writeBinary(collators.size(), buf);
+        for (auto & collator : collators)
+        {
+            DB::writeBinary(collator == nullptr ? 0 : collator->getCollatorId(), buf);
+        }
+    }
+    void readCollators(ReadBuffer & buf)
+    {
+        size_t collator_num;
+        DB::readBinary(collator_num, buf);
+        sort_key_containers.resize(collator_num);
+        for (size_t i = 0; i < collator_num; i++)
+        {
+            Int32 collator_id;
+            DB::readBinary(collator_id, buf);
+            if (collator_id != 0)
+                collators.push_back(TiDB::ITiDBCollator::getCollator(collator_id));
+            else
+                collators.push_back(nullptr);
+        }
+    }
+    TiDB::TiDBCollators collators;
+    std::vector<std::string> sort_key_containers;
 };
 } // namespace _IAggregateFunctionImpl
 
 /// Implements several methods for manipulation with data. T - type of structure with data for aggregation.
 template <typename T, typename Derived, bool with_collator = false>
-class IAggregateFunctionDataHelper : public IAggregateFunctionHelper<Derived>, protected _IAggregateFunctionImpl::CollatorHolder<with_collator>
+class IAggregateFunctionDataHelper : public IAggregateFunctionHelper<Derived>, protected _IAggregateFunctionImpl::CollatorsHolder<with_collator>
 {
 protected:
     using Data = T;
@@ -393,14 +459,14 @@ protected:
     static const Data & data(ConstAggregateDataPtr __restrict place) { return *reinterpret_cast<const Data *>(place); }
 
 public:
-    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_) override
+    void setCollators(TiDB::TiDBCollators & collators_) override
     {
-        _IAggregateFunctionImpl::CollatorHolder<with_collator>::setCollator(collator_);
+        _IAggregateFunctionImpl::CollatorsHolder<with_collator>::setCollators(collators_);
     }
 
     void create(AggregateDataPtr __restrict place) const override
     {
-        this->setDataCollator(new (place) Data);
+        this->setDataCollators(new (place) Data);
     }
 
     void destroy(AggregateDataPtr __restrict place) const noexcept override

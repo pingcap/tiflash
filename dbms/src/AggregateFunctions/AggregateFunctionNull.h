@@ -84,9 +84,9 @@ public:
         return nested_function->getName();
     }
 
-    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator) override
+    void setCollators(TiDB::TiDBCollators & collators) override
     {
-        nested_function->setCollator(collator);
+        nested_function->setCollators(collators);
     }
 
     DataTypePtr getReturnType() const override
@@ -245,9 +245,9 @@ public:
         return nested_function->getName();
     }
 
-    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator) override
+    void setCollators(TiDB::TiDBCollators & collators) override
     {
-        nested_function->setCollator(collator);
+        nested_function->setCollators(collators);
     }
 
     DataTypePtr getReturnType() const override
