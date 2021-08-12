@@ -870,7 +870,7 @@ struct ConstPowOf10
 
     static constexpr ArrayType build()
     {
-        ArrayType result = {1};
+        ArrayType result{1};
         for (size_t i = 1; i <= N; ++i)
             result[i] = result[i - 1] * static_cast<T>(10);
         return result;
@@ -1074,21 +1074,24 @@ struct TiDBDecimalRound
             }
         }
 
-        // convert from input_scale to output_scale
-        if (info.input_scale > info.output_scale)
+        // convert from input_scale to output_scale.
+        FracType difference = info.input_scale - info.output_scale;
+
+        if (difference > 0)
         {
             // output_scale will be different from input_scale only if frac is const.
             // in this case, all digits discarded by the following division should be zeroes.
             // they are reset to zeroes because of rounding.
-            auto base = PowForInput::result[info.input_scale - info.output_scale];
+            auto base = PowForInput::result[difference];
             assert(absolute_value % base == 0);
 
             absolute_value /= base;
         }
 
         auto scaled_value = static_cast<UnsignedOutput>(absolute_value);
-        if (info.input_scale < info.output_scale)
-            scaled_value *= PowForOutput::result[info.output_scale - info.input_scale];
+
+        if (difference < 0)
+            scaled_value *= PowForOutput::result[-difference];
 
         // check overflow and construct result.
         if (scaled_value > DecimalMaxValue::Get(info.output_prec))
@@ -1274,7 +1277,7 @@ private:
                     ErrorCodes::ILLEGAL_COLUMN);
             }
 
-            // to prevent overflow. Large frac is also useless in fact.
+            // to prevent overflow. Large frac is useless in fact.
             if (unsigned_frac > std::numeric_limits<FracType>::max())
                 unsigned_frac = std::numeric_limits<FracType>::max();
 
