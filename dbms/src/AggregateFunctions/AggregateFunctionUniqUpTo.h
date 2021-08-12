@@ -23,7 +23,7 @@ namespace DB
   */
 
 template <typename T>
-struct __attribute__((__packed__)) AggregateFunctionUniqUpToData
+struct __attribute__((__packed__)) AggregateFunctionUniqUpToData : _IAggregateFunctionImpl::DataCollatorsHolder<false>
 {
 /** If count == threshold + 1 - this means that it is "overflowed" (values greater than threshold).
   * In this case (for example, after calling the merge function), the `data` array does not necessarily contain the initialized values
@@ -83,6 +83,7 @@ struct __attribute__((__packed__)) AggregateFunctionUniqUpToData
         /// Write values only if the state is not overflowed. Otherwise, they are not needed, and only the fact that the state is overflowed is important.
         if (count <= threshold)
             wb.write(reinterpret_cast<const char *>(&data[0]), count * sizeof(data[0]));
+        writeCollators(wb);
     }
 
     void read(ReadBuffer & rb, UInt8 threshold)
@@ -91,6 +92,7 @@ struct __attribute__((__packed__)) AggregateFunctionUniqUpToData
 
         if (count <= threshold)
             rb.read(reinterpret_cast<char *>(&data[0]), count * sizeof(data[0]));
+        readCollators(rb);
     }
 
     void add(const IColumn & column, size_t row_num, UInt8 threshold)
@@ -108,6 +110,7 @@ struct AggregateFunctionUniqUpToData<String> : AggregateFunctionUniqUpToData<UIn
     {
         /// Keep in mind that calculations are approximate.
         StringRef value = column.getDataAt(row_num);
+        value = getUpdatedValueForCollator(value, 0);
         insert(CityHash_v1_0_2::CityHash64(value.data, value.size), threshold);
     }
 };
@@ -212,7 +215,7 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        this->data(place).insert(UniqVariadicHash<false, argument_is_tuple>::apply(num_args, columns, row_num), threshold);
+        this->data(place).insert(UniqVariadicHash<AggregateFunctionUniqUpToData<UInt64>, false, argument_is_tuple>::apply(this->data(place), num_args, columns, row_num), threshold);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override

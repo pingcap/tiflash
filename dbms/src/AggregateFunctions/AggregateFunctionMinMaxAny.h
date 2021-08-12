@@ -39,7 +39,7 @@ public:
         return has_value;
     }
 
-    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
+    void setCollators(const TiDB::TiDBCollators & ) {}
 
     void insertResultInto(IColumn & to) const
     {
@@ -238,9 +238,9 @@ public:
             static_cast<ColumnString &>(to).insertDefault();
     }
 
-    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_)
+    void setCollators(const TiDB::TiDBCollators & collators_)
     {
-        collator = collator_;
+        collator = collators_.size() > 0 ? collators_[0] : nullptr;
     }
 
     void write(WriteBuffer & buf, const IDataType & /*data_type*/) const
@@ -444,7 +444,7 @@ public:
         return !value.isNull();
     }
 
-    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
+    void setCollators(const TiDB::TiDBCollators & ) {}
 
     void insertResultInto(IColumn & to) const
     {
