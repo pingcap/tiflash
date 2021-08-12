@@ -423,7 +423,7 @@ struct DataCollatorsHolder<true>
     void writeCollators(WriteBuffer & buf) const
     {
         DB::writeBinary(collators.size(), buf);
-        for (auto & collator : collators)
+        for (const auto & collator : collators)
         {
             DB::writeBinary(collator == nullptr ? 0 : collator->getCollatorId(), buf);
         }
