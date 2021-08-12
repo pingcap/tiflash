@@ -33,6 +33,8 @@ struct StressOptions
     UInt32 verify_sleep_sec;
 
     std::vector<std::string> failpoints;
+    UInt32 min_restart_sec;
+    UInt32 max_restart_sec;
 };
 
 template <typename T>

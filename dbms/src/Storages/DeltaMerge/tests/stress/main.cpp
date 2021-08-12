@@ -57,6 +57,8 @@ StressOptions parseStressOptions(int argc, char * argv[])
     stress_options.table_name           = options["table_name"].as<String>();
     stress_options.verify               = options["verify"].as<bool>();
     stress_options.verify_sleep_sec     = options["verify_sleep_sec"].as<UInt32>();
+    stress_options.min_restart_sec      = options["min_restart_sec"].as<UInt32>();
+    stress_options.max_restart_sec      = options["max_restart_sec"].as<UInt32>();
 
     if (options.count("failpoints"))
         stress_options.failpoints = options["failpoints"].as<std::vector<std::string>>();
@@ -70,6 +72,8 @@ StressOptions parseStressOptions(int argc, char * argv[])
               << " table_name: " << stress_options.table_name << " verify: " << stress_options.verify
               << " verify_sleep_sec: " << stress_options.verify_sleep_sec //
               << fmt::format(" failpoints: [{}]", fmt::join(stress_options.failpoints.begin(), stress_options.failpoints.end(), ","))
+              << " min_restart_sec: " << stress_options.min_restart_sec
+              << " max_restart_sec: " << stress_options.max_restart_sec
               << std::endl;
 
     return stress_options;
@@ -120,7 +124,7 @@ int main(int argc, char * argv[])
     }
     auto log  = &Poco::Logger::get("DMStressProxy");
     UInt64 run_count = 0;
-    static std::uniform_int_distribution<unsigned> dist(1800, 3600);
+    static std::uniform_int_distribution<unsigned> dist(opts.min_restart_sec, opts.max_restart_sec);
     std::default_random_engine generator;
     generator.seed(::time(nullptr));
     for (;;)
