@@ -356,7 +356,7 @@ namespace _IAggregateFunctionImpl
 template <bool with_collator = false>
 struct CollatorsHolder
 {
-    void setCollators(TiDB::TiDBCollators &)
+    void setCollators(const TiDB::TiDBCollators &)
     {
     }
 
