@@ -26,16 +26,16 @@ try
     ASSERT_THROW(parse(" 123.123", 6, 3), TiFlashTestException);
     ASSERT_NO_THROW(parse("123.123", 60, 3));
     ASSERT_THROW(parse("123123123123123123.123", 60, 3), TiFlashTestException);
-    ASSERT_EQ(parse("+.123", 3, 3), DecimalField64(123, 3));
+    ASSERT_THROW(parse("+.123", 3, 3), TiFlashTestException);
+    ASSERT_EQ(parse("+0.123", 3, 3), DecimalField64(123, 3));
     ASSERT_EQ(parse("-0.123", 4, 3), DecimalField64(-123, 3));
     ASSERT_EQ(parse("", 0, 0), DecimalField64(0, 0));
-    ASSERT_EQ(parse("'''", 0, 0), DecimalField64(0, 0));
     ASSERT_THROW(parse(".", 0, 0), TiFlashTestException);
     ASSERT_EQ(parse("0", 1, 0), DecimalField64(0, 0));
-    ASSERT_EQ(parse("0''''0", 2, 0), DecimalField64(0, 0));
-    ASSERT_THROW(parse("0.", 1, 0), TiFlashTestException);
+    ASSERT_EQ(parse("00", 2, 0), DecimalField64(0, 0));
+    ASSERT_EQ(parse("0.", 1, 0), DecimalField64(0, 0));
     ASSERT_EQ(parse("0.0", 2, 1), DecimalField64(0, 1));
-    ASSERT_EQ(parse("000'000.000'000", 12, 6), DecimalField64(0, 6));
+    ASSERT_EQ(parse("000000.000000", 12, 6), DecimalField64(0, 6));
     ASSERT_THROW(parse("0..", 1, 0), TiFlashTestException);
     ASSERT_THROW(parse("abc", 3, 0), TiFlashTestException);
 }

@@ -110,8 +110,8 @@ template <>
 auto getTestData<DecimalField32, DecimalField32, 0>()
 {
     return TestData<DecimalField32, DecimalField32>{9, 0, 9, 0,
-        parseDecimalArray<DecimalField32>(9, 0, {"0", "1", "-1", "9'9999'9999", "-9'9999'9999", std::nullopt}),
-        parseDecimalArray<DecimalField32>(9, 0, {"0", "1", "-1", "9'9999'9999", "-9'9999'9999", std::nullopt})};
+        parseDecimalArray<DecimalField32>(9, 0, {"0", "1", "-1", "999999999", "-999999999", std::nullopt}),
+        parseDecimalArray<DecimalField32>(9, 0, {"0", "1", "-1", "999999999", "-999999999", std::nullopt})};
 }
 
 // Decimal(9, 1) -> Decimal(9, 0)
@@ -120,10 +120,10 @@ auto getTestData<DecimalField32, DecimalField32, 1>()
 {
     return TestData<DecimalField32, DecimalField32>{9, 1, 9, 0,
         parseDecimalArray<DecimalField32>(9, 1,
-            {"-2.5", "-1.5", "-0.6", "-0.5", "-0.4", "0.0", "0.4", "0.5", "0.6", "1.5", "2.5", "9999'9999.9", "-9999'9999.9",
+            {"-2.5", "-1.5", "-0.6", "-0.5", "-0.4", "0.0", "0.4", "0.5", "0.6", "1.5", "2.5", "99999999.9", "-99999999.9",
                 std::nullopt}),
         parseDecimalArray<DecimalField32>(
-            9, 0, {"-3", "-2", "-1", "-1", "0", "0", "0", "1", "1", "2", "3", "1'0000'0000", "-1'0000'0000", std::nullopt})};
+            9, 0, {"-3", "-2", "-1", "-1", "0", "0", "0", "1", "1", "2", "3", "100000000", "-100000000", std::nullopt})};
 }
 
 // Decimal(9, 9) -> Decimal(1, 0)
@@ -132,7 +132,7 @@ auto getTestData<DecimalField32, DecimalField32, 2>()
 {
     return TestData<DecimalField32, DecimalField32>{9, 9, 1, 0,
         parseDecimalArray<DecimalField32>(9, 9,
-            {".0000'0000'0", ".0000'0000'1", "-.0000'0000'1", ".50000'0000", "-.50000'0000", ".9999'9999'9", "-.9999'9999'9",
+            {"0.000000000", "0.000000001", "-0.000000001", "0.500000000", "-0.500000000", "0.999999999", "-0.999999999",
                 std::nullopt}),
         parseDecimalArray<DecimalField32>(1, 0, {"0", "0", "0", "1", "-1", "1", "-1", std::nullopt})};
 }
