@@ -147,66 +147,98 @@ public:
     using SegmentSortedMap = std::map<RowKeyValueRef, SegmentPtr, std::less<>>;
     using SegmentMap       = std::unordered_map<PageId, SegmentPtr>;
 
-#undef M_VALUE
-#undef M_TO_STR
-#undef DEF_ENUM
+    enum ThreadType
+    {
+        Init,
+        Write,
+        Read,
+        BG_Split,
+        BG_Merge,
+        BG_MergeDelta,
+        BG_Compact,
+        BG_Flush,
+        BG_GC,
+    };
 
-#define M_VALUE(ENUM_NAME, VAL) VAL,
-#define M_TO_STR(ENUM_NAME, VAL) \
-    case ENUM_NAME::VAL:         \
-        return #VAL;
-#define DEF_ENUM(ENUM_NAME, APPLY, M1, M2)      \
-    enum class ENUM_NAME                        \
-    {                                           \
-        APPLY(ENUM_NAME, M1)                    \
-    };                                          \
-    static std::string toString(ENUM_NAME type) \
-    {                                           \
-        switch (type)                           \
-        {                                       \
-            APPLY(ENUM_NAME, M2)                \
-        default:                                \
-            return "Unknown";                   \
-        }                                       \
+    enum TaskType
+    {
+        Split,
+        Merge,
+        MergeDelta,
+        Compact,
+        Flush,
+        PlaceIndex,
+    };
+
+    enum TaskRunThread
+    {
+        BackgroundThreadPool,
+        Foreground,
+        BackgroundGCThread,
+    };
+
+    static std::string toString(ThreadType type)
+    {
+        switch (type)
+        {
+        case Init:
+            return "Init";
+        case Write:
+            return "Write";
+        case Read:
+            return "Read";
+        case BG_Split:
+            return "BG_Split";
+        case BG_Merge:
+            return "BG_Merge";
+        case BG_MergeDelta:
+            return "BG_MergeDelta";
+        case BG_Compact:
+            return "BG_Compact";
+        case BG_Flush:
+            return "BG_Flush";
+        case BG_GC:
+            return "BG_GC";
+        default:
+            return "Unknown";
+        }
+    }
+    
+    static std::string toString(TaskType type)
+    {
+        switch (type)
+        {
+        case Split:
+            return "Split";
+        case Merge:
+            return "Merge";
+        case MergeDelta:
+            return "MergeDelta";
+        case Compact:
+            return "Compact";
+        case Flush:
+            return "Flush";
+        case PlaceIndex:
+            return "PlaceIndex";
+        default:
+            return "Unknown";
+        }
     }
 
-#undef APPLY_FOR_ENUM
-#define APPLY_FOR_ENUM(E, M) \
-    M(E, Init)               \
-    M(E, Write)              \
-    M(E, Read)               \
-    M(E, BG_Split)           \
-    M(E, BG_Merge)           \
-    M(E, BG_MergeDelta)      \
-    M(E, BG_Compact)         \
-    M(E, BG_Flush)           \
-    M(E, BG_GC)
-
-    DEF_ENUM(ThreadType, APPLY_FOR_ENUM, M_VALUE, M_TO_STR);
-
-#undef APPLY_FOR_ENUM
-#define APPLY_FOR_ENUM(E, M) \
-    M(E, Split)              \
-    M(E, Merge)              \
-    M(E, MergeDelta)         \
-    M(E, Compact)            \
-    M(E, Flush)              \
-    M(E, PlaceIndex)
-
-    DEF_ENUM(TaskType, APPLY_FOR_ENUM, M_VALUE, M_TO_STR);
-
-#undef APPLY_FOR_ENUM
-#define APPLY_FOR_ENUM(E, M)   \
-    M(E, BackgroundThreadPool) \
-    M(E, Foreground)           \
-    M(E, BackgroundGCThread)
-
-    DEF_ENUM(TaskRunThread, APPLY_FOR_ENUM, M_VALUE, M_TO_STR);
-
-#undef APPLY_FOR_ENUM
-#undef M_VALUE
-#undef M_TO_STR
-#undef DEF_ENUM
+    static std::string toString(TaskRunThread type)
+    {
+        switch (type)
+        {
+        case BackgroundThreadPool:
+            return "BackgroundThreadPool";
+        case Foreground:
+            return "Foreground";
+        case BackgroundGCThread:
+            return "BackgroundGCThread";
+        default:
+            return "Unknown";
+        }
+    }
 
     struct BackgroundTask
     {
