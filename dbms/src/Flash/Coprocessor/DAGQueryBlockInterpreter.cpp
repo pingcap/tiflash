@@ -368,7 +368,6 @@ void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
 void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query)
 {
     ASTTableJoin::Kind kind;
-    ASTTableJoin::Strictness strictness;
     bool is_semi_join, swap_join_side;
     {
         static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{

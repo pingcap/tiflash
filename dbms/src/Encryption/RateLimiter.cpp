@@ -497,7 +497,7 @@ void IORateLimiter::setBackgroundThreadIds(std::vector<pid_t> thread_ids)
     bg_thread_ids.swap(thread_ids);
 }
 
-std::pair<Int64, Int64> IORateLimiter::getReadWriteBytes(const std::string & fname)
+std::pair<Int64, Int64> IORateLimiter::getReadWriteBytes(const std::string & fname [[maybe_unused]])
 {
 #if __linux__
     std::ifstream ifs(fname);

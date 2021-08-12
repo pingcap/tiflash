@@ -38,7 +38,7 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         task = MPPTask::newTask(task_request.meta(), context);
 
         auto retry_regions = task->prepare(task_request);
-        for (auto region : retry_regions)
+        for (const auto & region : retry_regions)
         {
             auto * retry_region = response->add_retry_regions();
             retry_region->set_id(region.region_id);
