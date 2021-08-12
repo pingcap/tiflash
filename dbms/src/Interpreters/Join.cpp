@@ -37,7 +37,7 @@ static bool getFullness(ASTTableJoin::Kind kind)
 Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
     const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_,
     const TiDB::TiDBCollators & collators_, const String & left_filter_column_, const String & right_filter_column_,
-    const String & other_filter_column_, const String & other_eq_filter_from_in_column_, ExpressionActionsPtr other_condition_ptr_)
+    const String & other_filter_column_, ExpressionActionsPtr other_condition_ptr_)
     : kind(kind_), strictness(strictness_),
     key_names_left(key_names_left_),
     key_names_right(key_names_right_),
@@ -47,7 +47,6 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     left_filter_column(left_filter_column_),
     right_filter_column(right_filter_column_),
     other_filter_column(other_filter_column_),
-    other_eq_filter_from_in_column(other_eq_filter_from_in_column_),
     other_condition_ptr(other_condition_ptr_),
     original_strictness(strictness),
     have_finish_build(true),
@@ -59,7 +58,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
         pools.emplace_back(std::make_shared<Arena>());
     if (build_concurrency > 1 && getFullness(kind))
         pools.emplace_back(std::make_shared<Arena>());
-    if (other_condition_ptr != nullptr)
+    if (!other_filter_column.empty())
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
         if (strictness == ASTTableJoin::Strictness::Any)
@@ -945,11 +944,12 @@ namespace
 void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & anti_filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_columns) const
 {
     other_condition_ptr->execute(block);
-
-    auto filter_column = ColumnUInt8::create();
-    auto & filter = filter_column->getData();
-    filter.assign(block.rows(), (UInt8)1);
-    if (!other_filter_column.empty())
+    const ColumnVector<UInt8> * filter_column = nullptr;
+    ColumnVector<UInt8> * mutable_nested_column = nullptr;
+    auto orig_filter_column = block.getByName(other_filter_column).column;
+    if (orig_filter_column->isColumnConst())
+        orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
+    if (orig_filter_column->isColumnNullable())
     {
         auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
         mutable_nested_column = static_cast<ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr()->assumeMutable().get());
@@ -961,14 +961,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         }
         filter_column = mutable_nested_column;
     }
-
-    if (!other_eq_filter_from_in_column.empty())
+    else
     {
-        /// other_eq_filter_from_in_column is used in anti semi join:
-        /// if there is a row that return null or false for other_condition, then for anti semi join, this row should be returned.
-        /// otherwise, it will check other_eq_filter_from_in_column, if other_eq_filter_from_in_column return false, this row should
-        /// be returned, if other_eq_filter_from_in_column return true or null this row should not be returned.
-        mergeNullAndFilterResult(block, filter, other_eq_filter_from_in_column, isAntiJoin(kind));
+        filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
     }
     auto & filter = filter_column->getData();
 
@@ -1231,7 +1226,6 @@ void Join::joinBlockImplCross(Block & block) const
 
     /// NOTE It would be better to use `reserve`, as well as `replicate` methods to duplicate the values of the left block.
 
-    IColumn::Offset current_offset = 0;
     for (size_t i = 0; i < rows_left; ++i)
     {
         for (const Block & block_right : blocks)

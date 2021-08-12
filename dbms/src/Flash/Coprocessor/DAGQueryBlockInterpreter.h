@@ -107,8 +107,8 @@ private:
     void prepareJoin(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, Pipeline & pipeline,
         Names & key_names, bool left, bool is_right_out_join, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
-    ExpressionActionsPtr genJoinOtherConditionAction(const tipb::Join & join, std::vector<NameAndTypePair> & source_columns,
-        String & filter_column_for_other_condition, String & filter_column_for_other_eq_condition);
+    ExpressionActionsPtr genJoinOtherConditionAction(const google::protobuf::RepeatedPtrField<tipb::Expr> & other_conditions,
+        std::vector<NameAndTypePair> & source_columns, String & filter_column);
     void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeOrder(Pipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
