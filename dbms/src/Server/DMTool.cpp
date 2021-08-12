@@ -1,5 +1,7 @@
+#define NO_GTESTS
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/MockKeyManager.h>
+#include <Poco/Path.h>
 #include <Server/DMTool.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -9,7 +11,6 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -67,6 +68,16 @@ using namespace DB::DM;
 using namespace DB;
 std::unique_ptr<Context> global_context = nullptr;
 
+ColumnDefinesPtr getDefaultColumns()
+{
+    // Return [handle, ver, del] column defines
+    ColumnDefinesPtr columns = std::make_shared<ColumnDefines>();
+    columns->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
+    columns->emplace_back(getVersionColumnDefine());
+    columns->emplace_back(getTagColumnDefine());
+    return columns;
+}
+
 void initializeGlobalContext(String tmp_path, bool encryption)
 {
     // set itself as global context
@@ -84,11 +95,11 @@ void initializeGlobalContext(String tmp_path, bool encryption)
     // 3. TMTContext
 
     Strings testdata_path = {std::move(tmp_path)};
+    auto abs_path = Poco::Path{tmp_path}.absolute().toString();
     global_context->initializePathCapacityMetric(0, testdata_path, {}, {}, {});
 
-    auto paths = DB::tests::TiFlashTestEnv::getPathPool(testdata_path);
     global_context->setPathPool(
-        paths.first, paths.second, Strings{}, true, global_context->getPathCapacity(), global_context->getFileProvider());
+        {abs_path}, {abs_path}, Strings{}, true, global_context->getPathCapacity(), global_context->getFileProvider());
     TiFlashRaftConfig raft_config;
 
     raft_config.ignore_databases = {"default", "system"};
@@ -102,15 +113,14 @@ void initializeGlobalContext(String tmp_path, bool encryption)
 }
 
 typedef const String string;
-Context getContext(const DB::Settings & settings, String tmp_path)
+Context getContext(const DB::Settings & settings, const String & tmp_path)
 {
     Context context = *global_context;
     context.setGlobalContext(*global_context);
     // Load `testdata_path` as path if it is set.
-    String root_path = tmp_path;
-    context.setPath(root_path);
-    auto paths = DB::tests::TiFlashTestEnv::getPathPool({tmp_path});
-    context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
+    auto abs_path = Poco::Path{tmp_path}.absolute().toString();
+    context.setPath(abs_path);
+    context.setPathPool({abs_path}, {abs_path}, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
     context.getSettingsRef() = settings;
     return context;
 }
@@ -125,7 +135,7 @@ void shutdown()
 
 ColumnDefinesPtr createColumnDefines(size_t column_number)
 {
-    auto primitive = DB::DM::tests::DMTestEnv::getDefaultColumns();
+    auto primitive = getDefaultColumns();
     auto int_num = column_number / 2;
     auto str_num = column_number - int_num;
     for (size_t i = 0; i < int_num; ++i)
@@ -460,6 +470,8 @@ int benchEntry(const std::vector<std::string> & opts)
         {
             file.remove(true);
         }
+
+        benchmark::shutdown();
     }
     catch (const boost::wrapexcept<boost::bad_any_cast> & e)
     {
