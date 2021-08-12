@@ -1195,10 +1195,13 @@ public:
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
     bool useDefaultImplementationForNulls() const override { return true; }
-    bool useDefaultImplementationForConstants() const override { return true; }
     bool hasInformationAboutMonotonicity() const override { return true; }
-
     Monotonicity getMonotonicityForRange(const IDataType &, const Field &, const Field &) const override { return {true, true, true}; }
+
+    // no default implementaion because getReturnType relies on whether frac column is const.
+    // default implementation might make const frac column into a non-const one, and
+    // it will affect getReturnType during execution.
+    bool useDefaultImplementationForConstants() const override { return false; }
 
 private:
     FracType getFracFromConstColumn(const ColumnConst * column) const
@@ -1295,9 +1298,21 @@ private:
         auto frac_type = columns[1].type;
         auto frac_column = columns[1].column;
 
+        bool is_all_column_const = input_column->isColumnConst() && frac_column->isColumnConst();
+        if (is_all_column_const)
+        {
+            if (input_column->size() != 1)
+                input_column = input_column->cloneResized(1);
+            if (frac_column->size() != 1)
+                frac_column = frac_column->cloneResized(1);
+        }
+
         checkInputTypeAndApply({input_type, frac_type, output_type, input_column, frac_column, output_column});
 
-        block.getByPosition(result).column = std::move(output_column);
+        if (is_all_column_const)
+            block.getByPosition(result).column = ColumnConst::create(std::move(output_column), block.rows());
+        else
+            block.getByPosition(result).column = std::move(output_column);
     }
 
     template <typename F>

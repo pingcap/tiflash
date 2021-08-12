@@ -445,19 +445,83 @@ try
 
     ASSERT_COLUMN_EQ(constColumn({max_prec - 1, 2}, 1, "0.03"),
         this->execute(constColumn({max_prec - 1, 3}, 1, "0.025"), createConstColumn<Int64>(1, 2)));
-    ASSERT_COLUMN_EQ(constColumn({max_prec - 1, 2}, 1, {}),
-        this->execute(constColumn({max_prec - 1, 3}, 1, {}), createConstColumn<Int64>(1, 2)));
+    ASSERT_COLUMN_EQ(
+        constColumn({max_prec - 1, 2}, 1, {}), this->execute(constColumn({max_prec - 1, 3}, 1, {}), createConstColumn<Int64>(1, 2)));
     ASSERT_COLUMN_EQ(constColumn({max_prec - 3, 0}, 1, {}),
         this->execute(constColumn({max_prec - 1, 3}, 1, "0.025"), createConstColumn<Nullable<Int64>>(1, {})));
+    ASSERT_COLUMN_EQ(createConstColumn<Decimal>(std::make_tuple(max_prec, 5), 100, "1." + String(5, '0')),
+        this->execute(createConstColumn<Decimal>(std::make_tuple(max_prec - 5, 0), 100, "1"), createConstColumn<Int64>(100, 5)));
 }
 CATCH
 
 TEST_F(TestFunctionsRoundWithFrac, DecimalRound)
 {
-    // TODO:
-    // - decimal downgrade.
-    // - decimal upgrade: frac > scale.
-    // - decimal overflow.
+    // decimal downgrade
+
+    {
+        // Decimal(65, 30) -> Decimal(36, 0)
+        auto small = "0.5" + String(29, '0');
+        auto large = String(35, '9') + "." + String(30, '9');
+        auto large_rounded = "1" + String(35, '0');
+        ASSERT_COLUMN_EQ(createColumn<Decimal128>(std::make_tuple(36, 0), {"1", large_rounded}),
+            execute(createColumn<Decimal256>(std::make_tuple(65, 30), {small, large}), createConstColumn<UInt64>(2, 0)));
+    }
+
+    {
+        // Decimal(38, 30) -> Decimal(9, 0)
+        auto small = "0.49" + String(28, '0');
+        auto large = String(8, '9') + "." + String(30, '9');
+        auto large_rounded = "1" + String(8, '0');
+        ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(9, 0), {"0", large_rounded}),
+            execute(createColumn<Decimal128>(std::make_tuple(38, 30), {small, large}), createConstColumn<UInt64>(2, 0)));
+    }
+
+    // decimal upgrade
+
+    // Decimal(2, 1) -> Decimal(11, 10)
+    ASSERT_COLUMN_EQ(createConstColumn<Decimal64>(std::make_tuple(11, 10), 100, "9.9" + String(9, '0')),
+        execute(createConstColumn<Decimal32>(std::make_tuple(2, 1), 100, "9.9"), createConstColumn<Int64>(100, 10)));
+
+    // Decimal(5, 0) -> Decimal(35, 30)
+    ASSERT_COLUMN_EQ(createConstColumn<Decimal128>(std::make_tuple(35, 30), 100, "99999." + String(30, '0')),
+        execute(createConstColumn<Decimal32>(std::make_tuple(5, 0), 100, "99999"), createConstColumn<Int64>(100, 1000)));
+
+    // Decimal(9, 0) -> Decimal(39, 30)
+    ASSERT_COLUMN_EQ(createConstColumn<Decimal256>(std::make_tuple(39, 30), 100, "999999999." + String(30, '0')),
+        execute(createConstColumn<Decimal32>(std::make_tuple(9, 0), 100, "999999999"), createConstColumn<UInt64>(100, 30)));
+
+    // decimal overflow
+
+    {
+        auto large = String(65, '9');
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(65, 0), {large}), 0));
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(65, 0), {"0"}), 1));
+        ASSERT_THROW(execute(createColumn<Decimal256>(std::make_tuple(65, 0), {large}), 1), TiFlashException);
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(65, 0), {"0"}), -1));
+        ASSERT_THROW(execute(createColumn<Decimal256>(std::make_tuple(65, 0), {large}), -1), TiFlashException);
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(65, 0), {large}), createColumn<Int64>({1})));
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(65, 0), {large}), createColumn<Int64>({0})));
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(65, 0), {"0"}), createColumn<Int64>({-1})));
+        ASSERT_THROW(execute(createColumn<Decimal256>(std::make_tuple(65, 0), {large}), createColumn<Int64>({-1})), TiFlashException);
+    }
+
+    {
+        auto large = String(35, '9');
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(35, 0), {large}), 30));
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(35, 0), {large}), 100));
+    }
+
+    {
+        auto large = String(36, '9');
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(36, 0), {"0"}), 30));
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(36, 0), {"0"}), 100));
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(36, 0), {"0"}), 30));
+        ASSERT_THROW(execute(createColumn<Decimal256>(std::make_tuple(36, 0), {large}), 30), TiFlashException);
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(36, 0), {"0"}), 100));
+        ASSERT_THROW(execute(createColumn<Decimal256>(std::make_tuple(36, 0), {large}), 100), TiFlashException);
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(36, 0), {large}), createColumn<Int64>({30})));
+        ASSERT_NO_THROW(execute(createColumn<Decimal256>(std::make_tuple(36, 0), {large}), createColumn<Int64>({100})));
+    }
 }
 
 } // namespace tests
