@@ -327,7 +327,6 @@ try
     const size_t num_rows_write = 100;
     {
         // write to segment
-        // write `num_rows_write` rows with pk from 0 to `num_rows_write` - 1
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
         segment->write(dmContext(), std::move(block));
     }
