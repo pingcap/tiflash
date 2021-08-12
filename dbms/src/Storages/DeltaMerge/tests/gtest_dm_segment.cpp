@@ -391,10 +391,10 @@ try
         size_t num_rows = 0;
         while (Block block = in->read())
         {
-            // Only 2 rows are left on disk, others are compacted.
             num_rows += block.rows();
         }
         in->readSuffix();
+        // Only 2 rows are left on disk, others are compacted.
         ASSERT_EQ(num_rows, 2UL);
     }
 }
@@ -477,11 +477,11 @@ try
         size_t num_rows = 0;
         while (Block block = in->read())
         {
-            // Only 2 rows are left on disk, others are compacted.
             num_rows += block.rows();
         }
-        ASSERT_EQ(num_rows, 2UL);
         in->readSuffix();
+        // Only 2 rows are left on disk, others are compacted.
+        ASSERT_EQ(num_rows, 2UL);
     }
 }
 CATCH
@@ -564,11 +564,11 @@ try
         in->readPrefix();
         while (Block block = in->read())
         {
-            // Only 2 rows are left on disk, others are compacted.
             num_rows += block.rows();
         }
-        ASSERT_EQ(num_rows, 2UL);
         in->readSuffix();
+        // Only 2 rows are left on disk, others are compacted.
+        ASSERT_EQ(num_rows, 2UL);
     }
 }
 CATCH
