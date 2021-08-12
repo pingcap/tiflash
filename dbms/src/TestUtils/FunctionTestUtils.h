@@ -35,7 +35,7 @@ template <typename T>
 struct NullableTraits<Nullable<T>>
 {
     static constexpr bool is_nullable = true;
-    static constexpr bool is_decimal = true;
+    static constexpr bool is_decimal = false;
     using FieldType = std::optional<typename NearestFieldType<T>::Type>;
 };
 
