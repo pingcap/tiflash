@@ -60,31 +60,6 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
     return ret;
 }
 
-void MPPTunnel::close(const String & reason)
-{
-    std::unique_lock<std::mutex> lk(mu);
-    if (finished)
-        return;
-    if (connected && !reason.empty())
-    {
-        try
-        {
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(reason);
-            data.set_allocated_error(err);
-            writer->Write(data);
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
-        }
-    }
-    finished = true;
-    cv_for_finished.notify_all();
-}
-
 void MPPTask::unregisterTask()
 {
     if (manager != nullptr)
