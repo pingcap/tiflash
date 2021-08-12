@@ -371,7 +371,7 @@ struct CollatorsHolder<true>
 {
     TiDB::TiDBCollators collators;
 
-    void setCollators(TiDB::TiDBCollators & collators_)
+    void setCollators(const TiDB::TiDBCollators & collators_)
     {
         collators = collators_;
     }
@@ -570,4 +570,3 @@ public:
 using AggregateFunctionPtr = std::shared_ptr<IAggregateFunction>;
 
 } // namespace DB
-
