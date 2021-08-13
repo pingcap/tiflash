@@ -297,20 +297,11 @@ ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, c
 }
 
 template <typename T, typename... Args>
-ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, const InferredLiteralInitializerList<T> & literals,
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, InferredLiteralInitializerList<T> literals,
     const String & name = "", std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
 {
     auto vec = InferredLiteralVector<T>(literals);
     return createColumn<T, Args...>(data_type_args, vec, name);
-}
-
-// resolve ambiguous overloads for `createColumn<Nullable<Decimal>>(..., {std::nullopt})`.
-template <typename T, typename... Args>
-ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, std::initializer_list<std::nullopt_t> init,
-    const String & name = "", std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
-{
-    InferredDataVector<T> vec(init.size(), std::nullopt);
-    return createColumn<T>(data_type_args, vec, name);
 }
 
 // e.g. `createConstColumn<Decimal32>(std::make_tuple(9, 4), 1, "99999.9999")`
@@ -323,6 +314,23 @@ ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_ar
     ScaleType scale = getDecimalScale(*removeNullable(data_type), 0);
 
     return {makeConstColumn<T>(data_type, size, parseDecimal<T>(literal, prec, scale)), data_type, name};
+}
+
+// resolve ambiguous overloads for `createColumn<Nullable<Decimal>>(..., {std::nullopt})`.
+template <typename T, typename... Args>
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, std::initializer_list<std::nullopt_t> init,
+    const String & name = "", std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
+{
+    InferredDataVector<T> vec(init.size(), std::nullopt);
+    return createColumn<T>(data_type_args, vec, name);
+}
+
+// resolve ambiguous overloads for `createConstColumn<Nullable<Decimal>>(..., std::nullopt)`.
+template <typename T, typename... Args>
+ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, std::nullopt_t, const String & name = "",
+    std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
+{
+    return createConstColumn<T>(data_type_args, size, InferredFieldType<T>(std::nullopt), name);
 }
 
 ::testing::AssertionResult dataTypeEqual(

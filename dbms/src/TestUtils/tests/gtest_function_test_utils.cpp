@@ -38,6 +38,8 @@ try
     ASSERT_EQ(parse("000000.000000", 12, 6), DecimalField64(0, 6));
     ASSERT_THROW(parse("0..", 1, 0), TiFlashTestException);
     ASSERT_THROW(parse("abc", 3, 0), TiFlashTestException);
+    ASSERT_THROW(parse("+-0", 3, 0), TiFlashTestException);
+    ASSERT_THROW(parse("-+0", 3, 0), TiFlashTestException);
 }
 CATCH
 
@@ -167,6 +169,44 @@ try
         ASSERT_EQ(column->size(), 2);
         ASSERT_EQ((*column)[0], null);
         ASSERT_EQ((*column)[1], null);
+    }
+
+    {
+        auto column = createConstColumn<Decimal64>(args, 233, field).column;
+        ASSERT_NE(column, nullptr);
+        ASSERT_EQ(column->size(), 233);
+        ASSERT_EQ((*column)[0], field);
+    }
+
+    {
+        auto column = createConstColumn<Decimal64>(args, 233, "42.00").column;
+        ASSERT_NE(column, nullptr);
+        ASSERT_EQ(column->size(), 233);
+        ASSERT_EQ((*column)[0], field);
+    }
+
+    {
+        auto column = createConstColumn<Nullable<Decimal64>>(args, 233, field).column;
+        ASSERT_NE(column, nullptr);
+        ASSERT_EQ(column->size(), 233);
+        ASSERT_EQ((*column)[0], field);
+    }
+
+    {
+        auto column = createConstColumn<Nullable<Decimal64>>(args, 233, "42.00").column;
+        ASSERT_NE(column, nullptr);
+        ASSERT_EQ(column->size(), 233);
+        ASSERT_EQ((*column)[0], field);
+    }
+
+    {
+        // the following call is ambiguous:
+        // > createConstColumn<Nullable<Decimal64>>(args, 233, {})
+
+        auto column = createConstColumn<Nullable<Decimal64>>(args, 233, std::nullopt).column;
+        ASSERT_NE(column, nullptr);
+        ASSERT_EQ(column->size(), 233);
+        ASSERT_EQ((*column)[0], null);
     }
 }
 CATCH

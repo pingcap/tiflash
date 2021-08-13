@@ -85,6 +85,7 @@ std::optional<std::tuple<Int256, PrecType, ScaleType>> parseDecimal(const char *
 {
     bool negative = false;
 
+    // note: we only check the first character, so "+-" and "-+" are invalid.
     if (len > 0)
     {
         if (*str == '-')

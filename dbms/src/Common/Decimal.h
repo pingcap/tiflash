@@ -192,7 +192,11 @@ template <> inline constexpr bool IsDecimal<Decimal256> = true;
 
 class Field;
 
+// parse str into integer representation.
+// it returns std::nullopt if parsing fails. Otherwise, return value, corresponding precision and scale.
 std::optional<std::tuple<Int256, PrecType, ScaleType>> parseDecimal(const char * str, size_t len);
+
+// parse str into field. str should not contain "+" or "-".
 bool parseDecimal(const char * str, size_t len, bool negative, Field & field);
 
 class DecimalMaxValue final : public ext::singleton<DecimalMaxValue> {
