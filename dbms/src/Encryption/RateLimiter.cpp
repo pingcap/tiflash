@@ -266,9 +266,9 @@ void WriteLimiter::updateMaxBytesPerSec(Int64 max_bytes_per_sec)
     refill_balance_per_period = calculateRefillBalancePerPeriod(max_bytes_per_sec);
 }
 
-ReadLimiter::ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_,
+ReadLimiter::ReadLimiter(std::function<Int64()> getIOStatistic_, Int64 rate_limit_per_sec_, LimiterType type_,
     Int64 get_io_stat_period_us, UInt64 refill_period_ms_)
-    : WriteLimiter(metrics_, rate_limit_per_sec_, type_, refill_period_ms_),
+    : WriteLimiter(rate_limit_per_sec_, type_, refill_period_ms_),
       getIOStatistic(std::move(getIOStatistic_)),
       last_stat_bytes(getIOStatistic()),
       last_stat_time(now()),
@@ -359,9 +359,8 @@ IORateLimiter::~IORateLimiter()
     }
 }
 
-void IORateLimiter::init(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_)
+void IORateLimiter::init(Poco::Util::AbstractConfiguration & config_)
 {
-    metrics = metrics_;
     updateConfig(config_);
     runAutoTune();
 }
@@ -431,7 +430,7 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
     }
     else if (bg_read_limiter == nullptr) // bg_bytes != 0 && bg_read_limiter == nullptr
     {
-        bg_read_limiter = std::make_shared<ReadLimiter>(getBgReadIOStatistic, metrics, bg_bytes, LimiterType::BG_READ);
+        bg_read_limiter = std::make_shared<ReadLimiter>(getBgReadIOStatistic, bg_bytes, LimiterType::BG_READ);
     }
     else // bg_bytes != 0 && bg_read_limiter != nullptr
     {
@@ -444,7 +443,7 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
     }
     else if (fg_read_limiter == nullptr) // fg_bytes != 0 && fg_read_limiter == nullptr
     {
-        fg_read_limiter = std::make_shared<ReadLimiter>(getFgReadIOStatistic, metrics, fg_bytes, LimiterType::FG_READ);
+        fg_read_limiter = std::make_shared<ReadLimiter>(getFgReadIOStatistic, fg_bytes, LimiterType::FG_READ);
     }
     else // fg_bytes != 0 && fg_read_limiter != nullptr
     {
@@ -461,7 +460,7 @@ void IORateLimiter::updateWriteLimiter(Int64 bg_bytes, Int64 fg_bytes)
     }
     else if (bg_write_limiter == nullptr)
     {
-        bg_write_limiter = std::make_shared<WriteLimiter>(metrics, bg_bytes, LimiterType::BG_WRITE);
+        bg_write_limiter = std::make_shared<WriteLimiter>(bg_bytes, LimiterType::BG_WRITE);
     }
     else
     {
@@ -474,7 +473,7 @@ void IORateLimiter::updateWriteLimiter(Int64 bg_bytes, Int64 fg_bytes)
     }
     else if (fg_write_limiter == nullptr)
     {
-        fg_write_limiter = std::make_shared<WriteLimiter>(metrics, fg_bytes, LimiterType::FG_WRITE);
+        fg_write_limiter = std::make_shared<WriteLimiter>(fg_bytes, LimiterType::FG_WRITE);
     }
     else
     {

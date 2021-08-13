@@ -315,11 +315,11 @@ void MPPTask::runImpl()
     }
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
-    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
-    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
+    GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
     SCOPE_EXIT({
-        GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
-        GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_duration_seconds, type_run_mpp_task)
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task)
             .Observe(stopwatch.elapsedSeconds());
     });
     LOG_INFO(log, "task starts running");
@@ -382,11 +382,11 @@ void MPPTask::runImpl()
     }
     auto throughput = dag_context->getTableScanThroughput();
     if (throughput.first)
-        GET_METRIC(context.getTiFlashMetrics(), tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
+        GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
     LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     auto process_info = context.getProcessListElement()->getInfo();
     auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
-    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
+    GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
     unregisterTask();
     status = FINISHED;
 }

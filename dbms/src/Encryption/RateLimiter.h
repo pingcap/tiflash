@@ -171,8 +171,6 @@ public:
     void init(Poco::Util::AbstractConfiguration & config_);
     void updateConfig(Poco::Util::AbstractConfiguration & config_);
 
-    void updateConfig(Poco::Util::AbstractConfiguration & config_);
-
     void setBackgroundThreadIds(std::vector<pid_t> thread_ids);
 
     void setStop();

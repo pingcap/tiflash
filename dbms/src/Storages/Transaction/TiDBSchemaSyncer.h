@@ -157,7 +157,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         {
             if (!e.getError().is(Errors::DDL::StaleSchema))
             {
-                GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_count, type_failed).Increment();
+                GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
             }
             LOG_WARNING(log, "apply diff meets exception : " << e.displayText() << " \n stack is " << e.getStackTrace().toString());
             return false;

@@ -411,7 +411,7 @@ public:
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
-    void initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config);
+    void initializeRateLimiter(Poco::Util::AbstractConfiguration& config);
     WriteLimiterPtr getWriteLimiter() const;
     ReadLimiterPtr getReadLimiter() const;
     IORateLimiter& getIORateLimiter() const;

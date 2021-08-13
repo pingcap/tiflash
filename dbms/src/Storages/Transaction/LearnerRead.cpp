@@ -329,7 +329,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
                     res);
             }
         }
-        GET_METRIC(metrics, tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds());
+        GET_METRIC(tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds());
         LOG_DEBUG(log,
             "Finish wait index | resolve locks | check memory cache for " << batch_read_index_req.size() << " regions, cost "
                                                                           << batch_wait_index_watch.elapsedMilliseconds() << "ms");

@@ -1114,7 +1114,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializeTiFlashMetrics();
 
     /// Init Rate Limiter
-    global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), config());
+    global_context->initializeRateLimiter(config());
 
     /// Initialize main config reloader.
     auto main_config_reloader = std::make_unique<ConfigReloader>(
