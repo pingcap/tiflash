@@ -195,7 +195,7 @@ public:
             + ", file size: " + DB::toString(getBytesOnDisk()) + "}";
     }
 
-    DMConfigurationOpt getConfiguration() const { return configuration; }
+    const DMConfigurationOpt& getConfiguration() const { return configuration; }
 
 private:
     DMFile(UInt64             file_id_,

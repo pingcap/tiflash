@@ -1,3 +1,4 @@
+#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Server/DMTool.h>
 #include <Storages/DeltaMerge/File/Checksum/ChecksumBuffer.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -25,11 +26,74 @@ struct InspectArgs
     std::string workdir;
 };
 
+
 int inspectServiceMain(DB::Context & context, const InspectArgs & args)
 {
+    auto black_hole = reinterpret_cast<char *>(::operator new (DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
+    SCOPE_EXIT({ ::operator delete (black_hole, std::align_val_t{64}); });
+    auto consume = [&](DB::ReadBuffer & t) {
+        while (t.readBig(black_hole, DBMS_DEFAULT_BUFFER_SIZE) != 0) {}
+    };
     auto fp = context.getFileProvider();
     auto dmfile = DB::DM::DMFile::restore(fp, args.file_id, 0, args.workdir);
-    std::cout << "Bytes On Disk: " << dmfile->getBytesOnDisk() << std::endl;
+    std::cout << "bytes on disk: " << dmfile->getBytesOnDisk() << std::endl;
+    std::cout << "single file: " << dmfile->isSingleFileMode() << std::endl;
+    if (auto conf = dmfile->getConfiguration())
+    {
+        std::cout << "with new checksum: true" << std::endl;
+        switch (conf->getChecksumAlgorithm())
+        {
+            case DB::DM::ChecksumAlgo::None:
+                std::cout << "checksum algorithm: none" << std::endl;
+                break;
+            case DB::DM::ChecksumAlgo::CRC32:
+                std::cout << "checksum algorithm: crc32" << std::endl;
+                break;
+            case DB::DM::ChecksumAlgo::CRC64:
+                std::cout << "checksum algorithm: crc64" << std::endl;
+                break;
+            case DB::DM::ChecksumAlgo::City128:
+                std::cout << "checksum algorithm: city128" << std::endl;
+                break;
+            case DB::DM::ChecksumAlgo::XXH3:
+                std::cout << "checksum algorithm: xxh3" << std::endl;
+                break;
+        }
+    }
+    if (args.check && dmfile->isSingleFileMode())
+    {
+        std::cerr << "single file integrity checking is not yet supported" << std::endl;
+        return 1;
+    }
+    if (args.check)
+    {
+        auto prefix = args.workdir + "/dmf_" + DB::toString(args.file_id);
+        auto file = Poco::File{prefix};
+        std::vector<std::string> sub;
+        file.list(sub);
+        for (auto & i : sub)
+        {
+            if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".dat"))
+            {
+                auto full_path = prefix;
+                full_path += "/";
+                full_path += i;
+                std::cout << "checking " << i << ": ";
+                std::cout.flush();
+                if (dmfile->getConfiguration())
+                {
+                    consume(*DB::createReadBufferFromFileBaseByFileProvider(
+                        fp, full_path, DB::EncryptionPath(full_path, i), DBMS_DEFAULT_BUFFER_SIZE, nullptr, *dmfile->getConfiguration()));
+                }
+                else
+                {
+                    consume(*DB::createReadBufferFromFileBaseByFileProvider(
+                        fp, full_path, DB::EncryptionPath(full_path, i), DBMS_DEFAULT_BUFFER_SIZE, 0, nullptr));
+                }
+                std::cout << "[success]" << std::endl;
+            }
+        }
+    }
     return 0;
 }
 
