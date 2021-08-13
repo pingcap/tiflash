@@ -144,7 +144,7 @@ private:
     DataTypePtr getPKTypeImpl() const override;
 
     DM::DeltaMergeStorePtr& getAndMaybeInitStore();
-    bool storeInited() const { return store_inited.load(); }
+    bool storeInited() const { return store_inited.load(std::memory_order_acquire); }
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
     bool dataDirExist();
@@ -165,7 +165,7 @@ private:
     };
     const bool data_path_contains_database_name = false;
 
-    std::mutex store_mutex;
+    mutable std::mutex store_mutex;
 
     std::unique_ptr<TableColumnInfo> table_column_info;  // After create DeltaMergeStore object, it is deprecated.
     std::atomic<bool> store_inited;
