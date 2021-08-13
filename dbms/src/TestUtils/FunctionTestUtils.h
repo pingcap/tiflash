@@ -212,40 +212,26 @@ ColumnWithTypeAndName createConstColumn(size_t size, const InferredFieldType<T> 
     return {makeConstColumn<T>(data_type, size, value), data_type, name};
 }
 
-template <typename T, typename ... Args>
+template <typename T, typename... Args>
 ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, const InferredDataVector<T> & vec, const String & name = "")
 {
     DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     return {makeColumn<T>(data_type, vec), data_type, name};
 }
 
-template <typename T, typename ... Args>
+template <typename T, typename... Args>
 ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, InferredDataInitializerList<T> init, const String & name = "")
 {
     auto vec = InferredDataVector<T>(init);
     return createColumn<T>(data_type_args, vec, name);
 }
 
-template <typename T, typename ... Args>
+template <typename T, typename... Args>
 ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, const InferredFieldType<T> & value, const String & name = "")
 {
     DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     return {makeConstColumn<T>(data_type, size, value), data_type, name};
 }
-
-struct DecimalVisitor
-{
-    using ResultType = std::tuple<Int256, ScaleType>;
-
-    template <typename T>
-    ResultType operator()(const T & v) const
-    {
-        if constexpr (isDecimalField<T>())
-            return {static_cast<Int256>(v.getValue()), v.getScale()};
-        else
-            throw TiFlashTestException(fmt::format("Unexpected field type: {}", Field::Types::toString(Field::TypeToEnum<T>::value)));
-    }
-};
 
 // parse a string into decimal field.
 template <typename T>
@@ -274,36 +260,20 @@ typename TypeTraits<T>::FieldType parseDecimal(const InferredLiteralType<T> & li
             return literal_;
     }();
 
-    size_t pos = 0;
-    bool negative = false;
+    auto parsed = DB::parseDecimal(literal.data(), literal.size());
+    if (!parsed.has_value())
+        throw TiFlashTestException(fmt::format("Failed to parse '{}'", literal));
 
-    if (pos < literal.size())
-    {
-        if (literal[pos] == '-')
-        {
-            negative = true;
-            ++pos;
-        }
-        else if (literal[pos] == '+')
-        {
-            //  ignore plus sign. e.g. "+10000" = "10000".
-            ++pos;
-        }
-    }
-
-    Field field;
-    if (!parseDecimal(literal.data() + pos, literal.size() - pos, negative, field))
-        throw TiFlashTestException(fmt::format("Failed to parse \"{}\"", literal));
-
-    auto [parsed_value, scale] = applyVisitor(DecimalVisitor(), std::move(field));
+    auto [parsed_value, prec, scale] = parsed.value();
 
     max_prec = std::min(max_prec, maxDecimalPrecision<DecimalType>());
-    if (parsed_value > DecimalMaxValue::Get(max_prec))
-        throw TiFlashTestException(fmt::format("Value is too large for {}({})", TypeName<DecimalType>::get(), max_prec));
+    if (prec > max_prec)
+        throw TiFlashTestException(
+            fmt::format("Precision is too large for {}({}): prec = {}", TypeName<DecimalType>::get(), max_prec, prec));
     if (expected_scale != std::numeric_limits<ScaleType>::max() && scale != expected_scale)
         throw TiFlashTestException(fmt::format("Scale does not match: expected = {}, actual = {}", expected_scale, scale));
     if (scale > max_prec)
-        throw TiFlashTestException("Scale is larger than max_prec");
+        throw TiFlashTestException(fmt::format("Scale is larger than max_prec: max_prec = {}, scale = {}", max_prec, scale));
 
     auto value = static_cast<NativeType>(parsed_value);
     return DecimalField<DecimalType>(value, scale);
@@ -332,6 +302,15 @@ ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, c
 {
     auto vec = InferredLiteralVector<T>(literals);
     return createColumn<T, Args...>(data_type_args, vec, name);
+}
+
+// resolve ambiguous overloads for `createColumn<Nullable<Decimal>>(..., {std::nullopt})`.
+template <typename T, typename... Args>
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, std::initializer_list<std::nullopt_t> init,
+    const String & name = "", std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
+{
+    InferredDataVector<T> vec(init.size(), std::nullopt);
+    return createColumn<T>(data_type_args, vec, name);
 }
 
 // e.g. `createConstColumn<Decimal32>(std::make_tuple(9, 4), 1, "99999.9999")`

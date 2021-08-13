@@ -192,7 +192,8 @@ template <> inline constexpr bool IsDecimal<Decimal256> = true;
 
 class Field;
 
-bool parseDecimal(const char *str, size_t len, bool negative, Field& field);
+std::optional<std::tuple<Int256, PrecType, ScaleType>> parseDecimal(const char * str, size_t len);
+bool parseDecimal(const char * str, size_t len, bool negative, Field & field);
 
 class DecimalMaxValue final : public ext::singleton<DecimalMaxValue> {
     friend class ext::singleton<DecimalMaxValue>;
