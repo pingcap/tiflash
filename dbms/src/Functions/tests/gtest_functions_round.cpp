@@ -4,6 +4,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/registerFunctions.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
@@ -32,55 +33,9 @@ struct ToDecimalType<DecimalField<T>>
     using type = T;
 };
 
-// parse a string into decimal. You should the format of `literal` is valid.
-template <typename DecimalField>
-DecimalField parseDecimal(const std::string & literal)
-{
-    using DecimalType = typename ToDecimalType<DecimalField>::type;
-    using NativeType = typename DecimalType::NativeType;
-
-    static_assert(is_signed_v<NativeType>);
-
-    // the position of decimal point "." in `literal.
-    // `literal.size() - dot_index - 1` will be decimal scale.
-    assert(literal.size() > 0);
-    size_t dot_index = literal.size() - 1;
-
-    bool negative = false;
-    NativeType value = 0;
-    for (size_t i = 0; i < literal.size(); ++i)
-    {
-        switch (literal[i])
-        {
-            case '+':
-                //  ignore plus sign. e.g. "+10000" = "10000".
-                [[fallthrough]];
-            case '\'':
-                // use "'" as separator. e.g. 1'000'000'000.
-                continue;
-            case '-':
-                negative = true;
-                break;
-            case '.':
-                dot_index = i;
-                break;
-
-            default:
-                assert(isdigit(literal[i]));
-                value = value * 10 + (literal[i] - '0');
-        }
-    }
-
-    if (negative)
-        value = -value;
-
-    ScaleType scale = literal.size() - dot_index - 1;
-    return DecimalField(value, scale);
-}
-
 // parse an array of strings into array of decimals.
 template <typename DecimalField>
-auto parseDecimalArray(const std::vector<std::optional<std::string>> & literals)
+auto parseDecimalArray(PrecType prec, ScaleType scale, const std::vector<std::optional<std::string>> & literals)
 {
     std::vector<std::optional<DecimalField>> result;
 
@@ -88,7 +43,7 @@ auto parseDecimalArray(const std::vector<std::optional<std::string>> & literals)
     for (const auto & literal : literals)
     {
         if (literal.has_value())
-            result.push_back(parseDecimal<DecimalField>(literal.value()));
+            result.push_back(parseDecimal<typename ToDecimalType<DecimalField>::type>(literal.value(), prec, scale));
         else
             result.push_back(std::nullopt);
     }
@@ -155,8 +110,8 @@ template <>
 auto getTestData<DecimalField32, DecimalField32, 0>()
 {
     return TestData<DecimalField32, DecimalField32>{9, 0, 9, 0,
-        parseDecimalArray<DecimalField32>({"0", "1", "-1", "9'9999'9999", "-9'9999'9999", std::nullopt}),
-        parseDecimalArray<DecimalField32>({"0", "1", "-1", "9'9999'9999", "-9'9999'9999", std::nullopt})};
+        parseDecimalArray<DecimalField32>(9, 0, {"0", "1", "-1", "999999999", "-999999999", std::nullopt}),
+        parseDecimalArray<DecimalField32>(9, 0, {"0", "1", "-1", "999999999", "-999999999", std::nullopt})};
 }
 
 // Decimal(9, 1) -> Decimal(9, 0)
@@ -164,10 +119,11 @@ template <>
 auto getTestData<DecimalField32, DecimalField32, 1>()
 {
     return TestData<DecimalField32, DecimalField32>{9, 1, 9, 0,
-        parseDecimalArray<DecimalField32>({"-2.5", "-1.5", "-0.6", "-0.5", "-0.4", "0.0", "0.4", "0.5", "0.6", "1.5", "2.5", "9999'9999.9",
-            "-9999'9999.9", std::nullopt}),
+        parseDecimalArray<DecimalField32>(9, 1,
+            {"-2.5", "-1.5", "-0.6", "-0.5", "-0.4", "0.0", "0.4", "0.5", "0.6", "1.5", "2.5", "99999999.9", "-99999999.9",
+                std::nullopt}),
         parseDecimalArray<DecimalField32>(
-            {"-3", "-2", "-1", "-1", "0", "0", "0", "1", "1", "2", "3", "1'0000'0000", "-1'0000'0000", std::nullopt})};
+            9, 0, {"-3", "-2", "-1", "-1", "0", "0", "0", "1", "1", "2", "3", "100000000", "-100000000", std::nullopt})};
 }
 
 // Decimal(9, 9) -> Decimal(1, 0)
@@ -175,9 +131,10 @@ template <>
 auto getTestData<DecimalField32, DecimalField32, 2>()
 {
     return TestData<DecimalField32, DecimalField32>{9, 9, 1, 0,
-        parseDecimalArray<DecimalField32>({"0.0000'0000'0", "0.0000'0000'1", "-0.0000'0000'1", "0.50000'0000", "-0.50000'0000",
-            "0.9999'9999'9", "-0.9999'9999'9", std::nullopt}),
-        parseDecimalArray<DecimalField32>({"0", "0", "0", "1", "-1", "1", "-1", std::nullopt})};
+        parseDecimalArray<DecimalField32>(9, 9,
+            {"0.000000000", "0.000000001", "-0.000000001", "0.500000000", "-0.500000000", "0.999999999", "-0.999999999",
+                std::nullopt}),
+        parseDecimalArray<DecimalField32>(1, 0, {"0", "0", "0", "1", "-1", "1", "-1", std::nullopt})};
 }
 
 // Decimal(65, 0) -> Decimal(65, 0)
@@ -187,8 +144,8 @@ auto getTestData<DecimalField256, DecimalField256>()
     std::string extreme(65, '9');
 
     return TestData<DecimalField256, DecimalField256>{65, 0, 65, 0,
-        parseDecimalArray<DecimalField256>({"0", "1", "-1", extreme, "-" + extreme, std::nullopt}),
-        parseDecimalArray<DecimalField256>({"0", "1", "-1", extreme, "-" + extreme, std::nullopt})};
+        parseDecimalArray<DecimalField256>(65, 0, {"0", "1", "-1", extreme, "-" + extreme, std::nullopt}),
+        parseDecimalArray<DecimalField256>(65, 0, {"0", "1", "-1", extreme, "-" + extreme, std::nullopt})};
 }
 
 // Decimal(38, 1) -> Decimal(38, 0)
@@ -199,10 +156,10 @@ auto getTestData<DecimalField128, DecimalField128>()
     auto rounded_extreme = '1' + std::string(37, '0');
 
     return TestData<DecimalField128, DecimalField128>{38, 1, 38, 0,
-        parseDecimalArray<DecimalField128>(
+        parseDecimalArray<DecimalField128>(38, 1,
             {"-2.5", "-1.5", "-0.6", "-0.5", "-0.4", "0.0", "0.4", "0.5", "0.6", "1.5", "2.5", extreme, "-" + extreme, std::nullopt}),
         parseDecimalArray<DecimalField128>(
-            {"-3", "-2", "-1", "-1", "0", "0", "0", "1", "1", "2", "3", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
+            38, 0, {"-3", "-2", "-1", "-1", "0", "0", "0", "1", "1", "2", "3", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
 }
 
 // Decimal(18, 10) -> Decimal(9, 0)
@@ -215,8 +172,8 @@ auto getTestData<DecimalField64, DecimalField32>()
     auto rounded_extreme = '1' + std::string(8, '0');
 
     return TestData<DecimalField64, DecimalField32>{18, 10, 9, 0,
-        parseDecimalArray<DecimalField64>({"0" + zeros, "0" + half, "-0" + half, extreme, "-" + extreme, std::nullopt}),
-        parseDecimalArray<DecimalField32>({"0", "1", "-1", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
+        parseDecimalArray<DecimalField64>(18, 10, {"0" + zeros, "0" + half, "-0" + half, extreme, "-" + extreme, std::nullopt}),
+        parseDecimalArray<DecimalField32>(9, 0, {"0", "1", "-1", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
 }
 
 // Decimal(25, 10) -> Decimal(16, 0)
@@ -229,8 +186,8 @@ auto getTestData<DecimalField128, DecimalField64>()
     auto rounded_extreme = '1' + std::string(15, '0');
 
     return TestData<DecimalField128, DecimalField64>{25, 10, 16, 0,
-        parseDecimalArray<DecimalField128>({"0" + zeros, "0" + half, "-0" + half, extreme, "-" + extreme, std::nullopt}),
-        parseDecimalArray<DecimalField64>({"0", "1", "-1", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
+        parseDecimalArray<DecimalField128>(25, 10, {"0" + zeros, "0" + half, "-0" + half, extreme, "-" + extreme, std::nullopt}),
+        parseDecimalArray<DecimalField64>(16, 0, {"0", "1", "-1", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
 }
 
 // Decimal(40, 30) -> Decimal(11, 0)
@@ -243,8 +200,8 @@ auto getTestData<DecimalField256, DecimalField64>()
     auto rounded_extreme = '1' + std::string(10, '0');
 
     return TestData<DecimalField256, DecimalField64>{40, 30, 11, 0,
-        parseDecimalArray<DecimalField256>({"0" + zeros, "0" + half, "-0" + half, extreme, "-" + extreme, std::nullopt}),
-        parseDecimalArray<DecimalField64>({"0", "1", "-1", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
+        parseDecimalArray<DecimalField256>(40, 30, {"0" + zeros, "0" + half, "-0" + half, extreme, "-" + extreme, std::nullopt}),
+        parseDecimalArray<DecimalField64>(11, 0, {"0", "1", "-1", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
 }
 
 } // namespace
