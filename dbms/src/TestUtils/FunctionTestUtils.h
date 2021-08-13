@@ -159,16 +159,6 @@ DataTypePtr makeDataType(const Args &... args)
         return std::make_shared<typename InferredDataType<T>::Type>(args...);
 }
 
-template <typename T, typename... Args>
-std::tuple<DataTypePtr, PrecType, ScaleType> makeDecimalDataType(const Args &... args)
-{
-    DataTypePtr data_type = makeDataType<T, Args...>(args...);
-    PrecType prec = getDecimalPrecision(*removeNullable(data_type), 0);
-    ScaleType scale = getDecimalScale(*removeNullable(data_type), 0);
-
-    return std::make_tuple(data_type, prec, scale);
-}
-
 template <typename T>
 Field makeField(const T & value)
 {
