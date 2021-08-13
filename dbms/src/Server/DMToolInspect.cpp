@@ -73,7 +73,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         file.list(sub);
         for (auto & i : sub)
         {
-            if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".dat"))
+            if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx"))
             {
                 auto full_path = prefix;
                 full_path += "/";
