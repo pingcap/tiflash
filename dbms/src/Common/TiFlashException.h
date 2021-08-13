@@ -55,6 +55,9 @@ namespace DB
         E(Internal, "TiFlash DDL internal error.",                                                                                   \
             "Please contact with developer, \n"                                                                                      \
             "better providing information about your cluster(log, topology information etc.).",                                      \
+            "");                                                                                                                     \
+        E(StaleSchema, "Schema is stale and need to reload all schema.",                                                             \
+            "This error will be recover by reload all schema automatically.",                                                        \
             "");)                                                                                                                    \
     C(Coprocessor,                                                                                                                   \
         E(BadRequest, "Bad TiDB coprocessor request.",                                                                               \
@@ -115,7 +118,24 @@ namespace DB
             "better providing information about your cluster(log, topology information etc.).",                                      \
             "");)                                                                                                                    \
     C(Types, E(Truncated, "Data is truncated during conversion.", "", ""); E(WrongValue, "Input value is in wrong format", "", "");) \
-    C(Expression, E(DivisionByZero, "Division by 0.", "", "");)
+    C(Expression, E(DivisionByZero, "Division by 0.", "", "");)                                                                      \
+    C(Checksum,                                                                                                                      \
+        E(Missing, "Checksum info for disk I/O checksum was expected but not found.",                                                \
+            "This may be caused by a failure during data file format upgrade or file lost; \n"                                       \
+            "please contact with developer if you don't know what is going on.",                                                     \
+            "");                                                                                                                     \
+        E(DataCorruption, "Checksum hash mismatch was detected.",                                                                    \
+            "This usually indicates a disk failure happened at a TiFlash node, \n"                                                   \
+            "you may need to examine the health of your servers.",                                                                   \
+            "");                                                                                                                     \
+        E(IOFailure, "There are failed IO operations during checksum loading or writing.",                                           \
+            "Please check the permission of your data directories, \n"                                                               \
+            "if the problem persists, please contact the developer.",                                                                \
+            "");                                                                                                                     \
+        E(Internal, "Checksum internal error.",                                                                                      \
+            "Please contact with developer, \n"                                                                                      \
+            "better providing information about your cluster(log, topology information etc.).",                                      \
+            "");)
 
 /// TiFlashError is core struct of standard error,
 /// which contains all information about an error except message.

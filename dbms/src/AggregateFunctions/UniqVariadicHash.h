@@ -21,14 +21,14 @@ namespace DB
   * - for one argument-tuple.
   */
 
-template <bool exact, bool for_tuple>
+template <typename Data, bool exact, bool for_tuple>
 struct UniqVariadicHash;
 
 
-template <>
-struct UniqVariadicHash<false, false>
+template <typename Data>
+struct UniqVariadicHash<Data, false, false>
 {
-    static inline UInt64 apply(size_t num_args, const IColumn ** columns, size_t row_num)
+    static inline UInt64 apply(Data & data, size_t num_args, const IColumn ** columns, size_t row_num)
     {
         UInt64 hash;
 
@@ -37,6 +37,7 @@ struct UniqVariadicHash<false, false>
 
         {
             StringRef value = (*column)->getDataAt(row_num);
+            value = data.getUpdatedValueForCollator(value, 0);
             hash = CityHash_v1_0_2::CityHash64(value.data, value.size);
             ++column;
         }
@@ -44,6 +45,7 @@ struct UniqVariadicHash<false, false>
         while (column < columns_end)
         {
             StringRef value = (*column)->getDataAt(row_num);
+            value = data.getUpdatedValueForCollator(value, column - columns);
             hash = CityHash_v1_0_2::Hash128to64(CityHash_v1_0_2::uint128(CityHash_v1_0_2::CityHash64(value.data, value.size), hash));
             ++column;
         }
@@ -52,10 +54,10 @@ struct UniqVariadicHash<false, false>
     }
 };
 
-template <>
-struct UniqVariadicHash<false, true>
+template <typename Data>
+struct UniqVariadicHash<Data, false, true>
 {
-    static inline UInt64 apply(size_t num_args, const IColumn ** columns, size_t row_num)
+    static inline UInt64 apply(Data & , size_t num_args, const IColumn ** columns, size_t row_num)
     {
         UInt64 hash;
 
@@ -81,10 +83,10 @@ struct UniqVariadicHash<false, true>
     }
 };
 
-template <>
-struct UniqVariadicHash<true, false>
+template <typename Data>
+struct UniqVariadicHash<Data, true, false>
 {
-    static inline UInt128 apply(size_t num_args, const IColumn ** columns, size_t row_num)
+    static inline UInt128 apply(Data & data, size_t num_args, const IColumn ** columns, size_t row_num)
     {
         const IColumn ** column = columns;
         const IColumn ** columns_end = column + num_args;
@@ -93,7 +95,8 @@ struct UniqVariadicHash<true, false>
 
         while (column < columns_end)
         {
-            (*column)->updateHashWithValue(row_num, hash);
+            auto collator_and_sort_key_container = data.getCollatorAndSortKeyContainer(column - columns);
+            (*column)->updateHashWithValue(row_num, hash, collator_and_sort_key_container.first, *collator_and_sort_key_container.second);
             ++column;
         }
 
@@ -103,10 +106,10 @@ struct UniqVariadicHash<true, false>
     }
 };
 
-template <>
-struct UniqVariadicHash<true, true>
+template <typename Data>
+struct UniqVariadicHash<Data, true, true>
 {
-    static inline UInt128 apply(size_t num_args, const IColumn ** columns, size_t row_num)
+    static inline UInt128 apply(Data & , size_t num_args, const IColumn ** columns, size_t row_num)
     {
         const Columns & tuple_columns = static_cast<const ColumnTuple *>(columns[0])->getColumns();
 
