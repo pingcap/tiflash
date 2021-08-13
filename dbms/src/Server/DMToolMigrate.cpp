@@ -23,12 +23,11 @@ int migrateEntry(const std::vector<std::string> & opts)
     bpo::options_description options{"Delta Merge Migration"};
     bpo::variables_map vm;
     bpo::positional_options_description positional;
-    bool help_mode = false;
     bool dry_mode = false;
 
     // clang-format off
     options.add_options()
-        ("help", bpo::bool_switch(&help_mode))
+        ("help", "")
         ("version", bpo::value<size_t>()->default_value(2))
         ("algorithm", bpo::value<std::string>()->default_value("xxh3"))
         ("frame", bpo::value<size_t>()->default_value(TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE))
