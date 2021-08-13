@@ -4,10 +4,11 @@
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Field.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -23,31 +24,37 @@ struct Nullable
 };
 
 template <typename T>
-struct NullableTraits
+struct TypeTraits
 {
     static constexpr bool is_nullable = false;
+    static constexpr bool is_decimal = false;
     using FieldType = typename NearestFieldType<T>::Type;
 };
 
 template <typename T>
-struct NullableTraits<Nullable<T>>
+struct TypeTraits<Nullable<T>>
 {
     static constexpr bool is_nullable = true;
+    static constexpr bool is_decimal = false;
     using FieldType = std::optional<typename NearestFieldType<T>::Type>;
 };
 
 template <typename T>
-struct NullableTraits<Decimal<T>>
+struct TypeTraits<Decimal<T>>
 {
     static constexpr bool is_nullable = false;
-    using FieldType = DecimalField<Decimal<T>>;
+    static constexpr bool is_decimal = true;
+    using DecimalType = Decimal<T>;
+    using FieldType = DecimalField<DecimalType>;
 };
 
 template <typename T>
-struct NullableTraits<Nullable<Decimal<T>>>
+struct TypeTraits<Nullable<Decimal<T>>>
 {
     static constexpr bool is_nullable = true;
-    using FieldType = std::optional<DecimalField<Decimal<T>>>;;
+    static constexpr bool is_decimal = true;
+    using DecimalType = Decimal<T>;
+    using FieldType = std::optional<DecimalField<DecimalType>>;;
 };
 
 template <typename T>
@@ -126,7 +133,7 @@ struct InferredDataType<Decimal<T>>
 };
 
 template <typename T>
-using InferredFieldType = typename NullableTraits<T>::FieldType;
+using InferredFieldType = typename TypeTraits<T>::FieldType;
 
 template <typename T>
 using InferredDataVector = std::vector<InferredFieldType<T>>;
@@ -134,10 +141,19 @@ using InferredDataVector = std::vector<InferredFieldType<T>>;
 template <typename T>
 using InferredDataInitializerList = std::initializer_list<InferredFieldType<T>>;
 
+template <typename T>
+using InferredLiteralType = std::conditional_t<TypeTraits<T>::is_nullable, std::optional<String>, String>;
+
+template <typename T>
+using InferredLiteralVector = std::vector<InferredLiteralType<T>>;
+
+template <typename T>
+using InferredLiteralInitializerList = std::initializer_list<InferredLiteralType<T>>;
+
 template <typename T, typename... Args>
 DataTypePtr makeDataType(const Args &... args)
 {
-    if constexpr (NullableTraits<T>::is_nullable)
+    if constexpr (TypeTraits<T>::is_nullable)
         return makeNullable(makeDataType<typename T::NativeType, Args...>(args...));
     else
         return std::make_shared<typename InferredDataType<T>::Type>(args...);
@@ -196,25 +212,125 @@ ColumnWithTypeAndName createConstColumn(size_t size, const InferredFieldType<T> 
     return {makeConstColumn<T>(data_type, size, value), data_type, name};
 }
 
-template <typename T, typename ... Args>
+template <typename T, typename... Args>
 ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, const InferredDataVector<T> & vec, const String & name = "")
 {
     DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     return {makeColumn<T>(data_type, vec), data_type, name};
 }
 
-template <typename T, typename ... Args>
+template <typename T, typename... Args>
 ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, InferredDataInitializerList<T> init, const String & name = "")
 {
     auto vec = InferredDataVector<T>(init);
     return createColumn<T>(data_type_args, vec, name);
 }
 
-template <typename T, typename ... Args>
+template <typename T, typename... Args>
 ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, const InferredFieldType<T> & value, const String & name = "")
 {
     DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     return {makeConstColumn<T>(data_type, size, value), data_type, name};
+}
+
+// parse a string into decimal field.
+template <typename T>
+typename TypeTraits<T>::FieldType parseDecimal(const InferredLiteralType<T> & literal_,
+    PrecType max_prec = std::numeric_limits<PrecType>::max(),
+    ScaleType expected_scale = std::numeric_limits<ScaleType>::max())
+{
+    using Traits = TypeTraits<T>;
+    using DecimalType = typename Traits::DecimalType;
+    using NativeType = typename DecimalType::NativeType;
+    static_assert(is_signed_v<NativeType>);
+
+    if constexpr (Traits::is_nullable)
+    {
+        if (!literal_.has_value())
+            return std::nullopt;
+    }
+
+    const String & literal = [&] {
+        if constexpr (Traits::is_nullable)
+        {
+            assert(literal_.has_value());
+            return literal_.value();
+        }
+        else
+            return literal_;
+    }();
+
+    auto parsed = DB::parseDecimal(literal.data(), literal.size());
+    if (!parsed.has_value())
+        throw TiFlashTestException(fmt::format("Failed to parse '{}'", literal));
+
+    auto [parsed_value, prec, scale] = parsed.value();
+
+    max_prec = std::min(max_prec, maxDecimalPrecision<DecimalType>());
+    if (prec > max_prec)
+        throw TiFlashTestException(
+            fmt::format("Precision is too large for {}({}): prec = {}", TypeName<DecimalType>::get(), max_prec, prec));
+    if (expected_scale != std::numeric_limits<ScaleType>::max() && scale != expected_scale)
+        throw TiFlashTestException(fmt::format("Scale does not match: expected = {}, actual = {}", expected_scale, scale));
+    if (scale > max_prec)
+        throw TiFlashTestException(fmt::format("Scale is larger than max_prec: max_prec = {}, scale = {}", max_prec, scale));
+
+    auto value = static_cast<NativeType>(parsed_value);
+    return DecimalField<DecimalType>(value, scale);
+}
+
+// e.g. `createColumn<Decimal32>(std::make_tuple(9, 4), {"99999.9999"})`
+template <typename T, typename... Args>
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, const InferredLiteralVector<T> & literals,
+    const String & name = "", std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
+{
+    DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
+    PrecType prec = getDecimalPrecision(*removeNullable(data_type), 0);
+    ScaleType scale = getDecimalScale(*removeNullable(data_type), 0);
+
+    InferredDataVector<T> vec;
+    vec.reserve(literals.size());
+    for (const auto & literal : literals)
+        vec.push_back(parseDecimal<T>(literal, prec, scale));
+
+    return {makeColumn<T>(data_type, vec), data_type, name};
+}
+
+template <typename T, typename... Args>
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, InferredLiteralInitializerList<T> literals,
+    const String & name = "", std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
+{
+    auto vec = InferredLiteralVector<T>(literals);
+    return createColumn<T, Args...>(data_type_args, vec, name);
+}
+
+// e.g. `createConstColumn<Decimal32>(std::make_tuple(9, 4), 1, "99999.9999")`
+template <typename T, typename... Args>
+ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, const InferredLiteralType<T> & literal,
+    const String & name = "", std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
+{
+    DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
+    PrecType prec = getDecimalPrecision(*removeNullable(data_type), 0);
+    ScaleType scale = getDecimalScale(*removeNullable(data_type), 0);
+
+    return {makeConstColumn<T>(data_type, size, parseDecimal<T>(literal, prec, scale)), data_type, name};
+}
+
+// resolve ambiguous overloads for `createColumn<Nullable<Decimal>>(..., {std::nullopt})`.
+template <typename T, typename... Args>
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, std::initializer_list<std::nullopt_t> init,
+    const String & name = "", std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
+{
+    InferredDataVector<T> vec(init.size(), std::nullopt);
+    return createColumn<T>(data_type_args, vec, name);
+}
+
+// resolve ambiguous overloads for `createConstColumn<Nullable<Decimal>>(..., std::nullopt)`.
+template <typename T, typename... Args>
+ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, std::nullopt_t, const String & name = "",
+    std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
+{
+    return createConstColumn<T>(data_type_args, size, InferredFieldType<T>(std::nullopt), name);
 }
 
 ::testing::AssertionResult dataTypeEqual(
@@ -243,4 +359,3 @@ ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnWith
 
 } // namespace tests
 } // DB
-
