@@ -34,7 +34,7 @@ namespace DB
 
 extern const String UniqRawResName;
 
-struct AggregateFunctionUniqUniquesHashSetData : _IAggregateFunctionImpl::DataCollatorsHolder<false>
+struct AggregateFunctionUniqUniquesHashSetData : AggregationCollatorsWrapper<false>
 {
     void write(WriteBuffer & buf) const
     {
@@ -53,7 +53,7 @@ struct AggregateFunctionUniqUniquesHashSetData : _IAggregateFunctionImpl::DataCo
 };
 
 /// For a function that takes multiple arguments. Such a function pre-hashes them in advance, so TrivialHash is used here.
-struct AggregateFunctionUniqUniquesHashSetDataForVariadic : _IAggregateFunctionImpl::DataCollatorsHolder<false>
+struct AggregateFunctionUniqUniquesHashSetDataForVariadic : AggregationCollatorsWrapper<false>
 {
     void write(WriteBuffer & buf) const
     {
@@ -71,7 +71,7 @@ struct AggregateFunctionUniqUniquesHashSetDataForVariadic : _IAggregateFunctionI
     static String getName() { return "uniq"; }
 };
 
-struct AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes : _IAggregateFunctionImpl::DataCollatorsHolder<true>
+struct AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes : AggregationCollatorsWrapper<true>
 {
     void write(WriteBuffer & buf) const
     {
@@ -92,7 +92,7 @@ struct AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes : _IAggregateFun
 /// uniqHLL12
 
 template <typename T>
-struct AggregateFunctionUniqHLL12Data : _IAggregateFunctionImpl::DataCollatorsHolder<false>
+struct AggregateFunctionUniqHLL12Data : AggregationCollatorsWrapper<false>
 {
     void write(WriteBuffer & buf) const
     {
@@ -111,7 +111,7 @@ struct AggregateFunctionUniqHLL12Data : _IAggregateFunctionImpl::DataCollatorsHo
 };
 
 template <>
-struct AggregateFunctionUniqHLL12Data<String> : _IAggregateFunctionImpl::DataCollatorsHolder<false>
+struct AggregateFunctionUniqHLL12Data<String> : AggregationCollatorsWrapper<false>
 {
     void write(WriteBuffer & buf) const
     {
@@ -130,7 +130,7 @@ struct AggregateFunctionUniqHLL12Data<String> : _IAggregateFunctionImpl::DataCol
 };
 
 template <>
-struct AggregateFunctionUniqHLL12Data<UInt128> : _IAggregateFunctionImpl::DataCollatorsHolder<false>
+struct AggregateFunctionUniqHLL12Data<UInt128> : AggregationCollatorsWrapper<false>
 {
     void write(WriteBuffer & buf) const
     {
@@ -148,7 +148,7 @@ struct AggregateFunctionUniqHLL12Data<UInt128> : _IAggregateFunctionImpl::DataCo
     static String getName() { return "uniqHLL12"; }
 };
 
-struct AggregateFunctionUniqHLL12DataForVariadic : _IAggregateFunctionImpl::DataCollatorsHolder<false>
+struct AggregateFunctionUniqHLL12DataForVariadic : AggregationCollatorsWrapper<false>
 {
     void write(WriteBuffer & buf) const
     {
@@ -170,7 +170,7 @@ struct AggregateFunctionUniqHLL12DataForVariadic : _IAggregateFunctionImpl::Data
 /// uniqExact
 
 template <typename T>
-struct AggregateFunctionUniqExactData : _IAggregateFunctionImpl::DataCollatorsHolder<false>
+struct AggregateFunctionUniqExactData : AggregationCollatorsWrapper<false>
 {
     void write(WriteBuffer & buf) const
     {
@@ -198,7 +198,7 @@ struct AggregateFunctionUniqExactData : _IAggregateFunctionImpl::DataCollatorsHo
 
 /// For rows, we put the SipHash values (128 bits) into the hash table.
 template <>
-struct AggregateFunctionUniqExactData<String> : _IAggregateFunctionImpl::DataCollatorsHolder<true>
+struct AggregateFunctionUniqExactData<String> : AggregationCollatorsWrapper<true>
 {
     void write(WriteBuffer & buf) const
     {
@@ -225,7 +225,7 @@ struct AggregateFunctionUniqExactData<String> : _IAggregateFunctionImpl::DataCol
 };
 
 template <typename T>
-struct AggregateFunctionUniqCombinedData : _IAggregateFunctionImpl::DataCollatorsHolder<false>
+struct AggregateFunctionUniqCombinedData : AggregationCollatorsWrapper<false>
 {
     void write(WriteBuffer & buf) const
     {
@@ -255,7 +255,7 @@ struct AggregateFunctionUniqCombinedData : _IAggregateFunctionImpl::DataCollator
 };
 
 template <>
-struct AggregateFunctionUniqCombinedData<String> : _IAggregateFunctionImpl::DataCollatorsHolder<true>
+struct AggregateFunctionUniqCombinedData<String> : AggregationCollatorsWrapper<true>
 {
     void write(WriteBuffer & buf) const
     {

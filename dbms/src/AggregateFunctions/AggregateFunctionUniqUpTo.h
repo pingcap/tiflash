@@ -23,7 +23,7 @@ namespace DB
   */
 
 template <typename T>
-struct __attribute__((__packed__)) AggregateFunctionUniqUpToData : _IAggregateFunctionImpl::DataCollatorsHolder<false>
+struct __attribute__((__packed__)) AggregateFunctionUniqUpToData : AggregationCollatorsWrapper<false>
 {
 /** If count == threshold + 1 - this means that it is "overflowed" (values greater than threshold).
   * In this case (for example, after calling the merge function), the `data` array does not necessarily contain the initialized values

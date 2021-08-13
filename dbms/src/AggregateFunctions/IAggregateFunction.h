@@ -382,44 +382,56 @@ struct CollatorsHolder<true>
         data->setCollators(collators);
     }
 };
+} // namespace _IAggregateFunctionImpl
 
 template <bool with_collator = false>
-struct DataCollatorsHolder
+struct AggregationCollatorsWrapper
 {
     void setCollators(const TiDB::TiDBCollators &) {}
+
     StringRef getUpdatedValueForCollator(StringRef & in, size_t)
     {
         return in;
     }
+
     std::pair<std::shared_ptr<TiDB::ITiDBCollator>, std::string *> getCollatorAndSortKeyContainer(size_t )
     {
         return std::make_pair(static_cast<std::shared_ptr<TiDB::ITiDBCollator>>(nullptr), &TiDB::dummy_sort_key_contaner);
     }
+
     void writeCollators(WriteBuffer & ) const {}
+
     void readCollators(ReadBuffer & ) {}
 };
 
 template <>
-struct DataCollatorsHolder<true>
+struct AggregationCollatorsWrapper<true>
 {
     void setCollators(const TiDB::TiDBCollators & collators_)
     {
         collators = collators_;
         sort_key_containers.resize(collators.size());
     }
+
     StringRef getUpdatedValueForCollator(StringRef & in, size_t column_index)
     {
-        if (collators.size() > column_index && collators[column_index] != nullptr)
-            return collators[column_index]->sortKey(in.data, in.size, sort_key_containers[column_index]);
-        return in;
+        if (likely(collators.size() > column_index))
+        {
+            if (collators[column_index] != nullptr)
+                return collators[column_index]->sortKey(in.data, in.size, sort_key_containers[column_index]);
+            return in;
+        }
+        throw Exception("Should not here: collators for aggregation function is not set correctly");
     }
+
     std::pair<std::shared_ptr<TiDB::ITiDBCollator>, std::string *> getCollatorAndSortKeyContainer(size_t index)
     {
-        if (index < collators.size())
+        if (likely(index < collators.size()))
             return std::make_pair(collators[index], &sort_key_containers[index]);
         else
-            return std::make_pair(static_cast<std::shared_ptr<TiDB::ITiDBCollator>>(nullptr), &TiDB::dummy_sort_key_contaner);
+            throw Exception("Should not here: collators for aggregation function is not set correctly");
     }
+
     void writeCollators(WriteBuffer & buf) const
     {
         DB::writeBinary(collators.size(), buf);
@@ -428,6 +440,7 @@ struct DataCollatorsHolder<true>
             DB::writeBinary(collator == nullptr ? 0 : collator->getCollatorId(), buf);
         }
     }
+
     void readCollators(ReadBuffer & buf)
     {
         size_t collator_num;
@@ -443,10 +456,10 @@ struct DataCollatorsHolder<true>
                 collators.push_back(nullptr);
         }
     }
+
     TiDB::TiDBCollators collators;
     std::vector<std::string> sort_key_containers;
 };
-} // namespace _IAggregateFunctionImpl
 
 /// Implements several methods for manipulation with data. T - type of structure with data for aggregation.
 template <typename T, typename Derived, bool with_collator = false>
