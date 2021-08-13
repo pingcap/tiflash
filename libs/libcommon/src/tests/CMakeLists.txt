@@ -17,7 +17,7 @@ target_link_libraries (date_lut_default_timezone common ${PLATFORM_LIBS})
 target_link_libraries (multi_version common)
 add_check(multi_version)
 
-add_executable (gtests_libcommon gtest_json_test.cpp gtest_strong_typedef.cpp gtest_string_ref.cpp)
+add_executable (gtests_libcommon gtest_json_test.cpp gtest_strong_typedef.cpp gtest_mem_utils.cpp)
 target_link_libraries (gtests_libcommon gtest_main common)
 add_check(gtests_libcommon)
 
