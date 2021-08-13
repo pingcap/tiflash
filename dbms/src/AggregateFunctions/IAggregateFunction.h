@@ -421,13 +421,18 @@ struct AggregationCollatorsWrapper<true>
                 return collators[column_index]->sortKey(in.data, in.size, sort_key_containers[column_index]);
             return in;
         }
-        throw Exception("Should not here: collators for aggregation function is not set correctly");
+        else if (collators.empty())
+            return in;
+        else
+            throw Exception("Should not here: collators for aggregation function is not set correctly");
     }
 
     std::pair<std::shared_ptr<TiDB::ITiDBCollator>, std::string *> getCollatorAndSortKeyContainer(size_t index)
     {
         if (likely(index < collators.size()))
             return std::make_pair(collators[index], &sort_key_containers[index]);
+        else if (collators.empty())
+            return std::make_pair(static_cast<std::shared_ptr<TiDB::ITiDBCollator>>(nullptr), &TiDB::dummy_sort_key_contaner);
         else
             throw Exception("Should not here: collators for aggregation function is not set correctly");
     }
