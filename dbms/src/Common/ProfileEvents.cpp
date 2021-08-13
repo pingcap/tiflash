@@ -189,8 +189,14 @@
     \
     M(DMFileFilterNoFilter) \
     M(DMFileFilterAftPKAndPackSet) \
-    M(DMFileFilterAftRoughSet)
-
+    M(DMFileFilterAftRoughSet) \
+    \
+    M(ChecksumBufferRead) \
+    M(ChecksumBufferWrite) \
+    M(ChecksumBufferReadBytes) \
+    M(ChecksumBufferWriteBytes) \
+    M(ChecksumDigestBytes) \
+    M(ChecksumBufferSeek)
 
 namespace ProfileEvents
 {
