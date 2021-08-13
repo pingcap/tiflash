@@ -37,7 +37,7 @@ struct UniqVariadicHash<Data, false, false>
 
         {
             StringRef value = (*column)->getDataAt(row_num);
-            value = data.getUpdatedValueForCollator(value, column - columns);
+            value = data.getUpdatedValueForCollator(value, 0);
             hash = CityHash_v1_0_2::CityHash64(value.data, value.size);
             ++column;
         }
