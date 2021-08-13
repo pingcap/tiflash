@@ -461,7 +461,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         String delimiter="";
         SortDescription sort_description;
         bool only_one_argument = true;
-        TiDB::TiDBCollators gc_collators;
+        TiDB::TiDBCollators gc_collators,arg_collators;
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
             /// the last parametric is the separator
@@ -502,11 +502,14 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
             {
                 String arg_name = getActions(expr.children(i), step.actions);
                 types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+                if (removeNullable(types[i])->isString())
+                    arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
+                else
+                    arg_collators.push_back(nullptr);
                 aggregate.argument_names[i] = arg_name;
                 step.required_output.push_back(arg_name);
             }
         }
-
         String func_string = genFuncString(agg_func_name, aggregate.argument_names);
         bool duplicate = false;
         for (const auto & pre_agg : aggregate_descriptions)
@@ -565,7 +568,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
             }
         }
 
-        aggregate.function->setCollator(getCollatorFromExpr(expr));
+        aggregate.function->setCollators(arg_collators);
         aggregate_descriptions.push_back(aggregate);
         DataTypePtr result_type = aggregate.function->getReturnType();
         // this is a temp result since implicit cast maybe added on these aggregated_columns
@@ -604,6 +607,8 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
                 /// extra aggregation function any(group_by_column) here as the output of the group by column
                 const String & agg_func_name = "any";
                 AggregateDescription aggregate;
+                TiDB::TiDBCollators arg_collators;
+                arg_collators.push_back(collator);
 
                 DataTypes types(1);
                 aggregate.argument_names.resize(1);
@@ -626,7 +631,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
                 aggregate.column_name = func_string;
                 aggregate.parameters = Array();
                 aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, false);
-                aggregate.function->setCollator(getCollatorFromExpr(expr));
+                aggregate.function->setCollators(arg_collators);
                 aggregate_descriptions.push_back(aggregate);
                 DataTypePtr result_type = aggregate.function->getReturnType();
                 // this is a temp result since implicit cast maybe added on these aggregated_columns
