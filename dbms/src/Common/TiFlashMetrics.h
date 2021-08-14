@@ -273,8 +273,11 @@ public:
     }
     APPLY_FOR_METRICS(MAKE_METRIC_MEMBER_M, MAKE_METRIC_MEMBER_F)
 
-    TiFlashMetrics(TiFlashMetrics const &) = delete;
-    void operator=(TiFlashMetrics const &) = delete;
+    TiFlashMetrics(const TiFlashMetrics &) = delete;
+    TiFlashMetrics & operator=(const TiFlashMetrics &) = delete;
+
+    TiFlashMetrics(TiFlashMetrics &&) = delete;
+    TiFlashMetrics & operator=(TiFlashMetrics &&) = delete;
 
     friend class MetricsPrometheus;
 };

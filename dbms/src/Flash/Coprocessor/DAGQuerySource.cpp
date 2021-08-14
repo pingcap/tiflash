@@ -1,4 +1,3 @@
-#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Interpreters/Context.h>
