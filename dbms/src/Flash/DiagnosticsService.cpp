@@ -357,6 +357,45 @@ static void getCacheSize(const uint & level [[maybe_unused]], size_t & size, siz
     return;
 }
 
+struct CPUArchHelper
+{
+    CPUArchHelper() { arch_ = execOrElse("uname -m", "Unknown"); }
+    const std::string & get() const { return arch_; }
+
+protected:
+    std::string execOrElse(const char * cmd, const char * otherwise)
+    {
+#if defined(__unix__)
+        std::array<char, 128> buffer;
+        std::string result;
+        auto pipe = popen(cmd, "r");
+        if (!pipe)
+            throw Exception("Can not execute command " + std::string(cmd) + "!", ErrorCodes::LOGICAL_ERROR);
+        while (!feof(pipe))
+        {
+            if (fgets(buffer.data(), 128, pipe) != nullptr)
+                result += buffer.data();
+        }
+        auto rc = pclose(pipe);
+        if (rc == EXIT_FAILURE)
+        {
+            return otherwise;
+        }
+        return result;
+#else
+        return otherwise;
+#endif
+    }
+    std::string arch_;
+};
+
+static std::string getCPUArch()
+{
+    static CPUArchHelper helper;
+    return helper.get();
+}
+
+
 #ifdef __linux__
 static DiagnosticsService::Disk::DiskType getDiskTypeByNameLinux(const std::string & name)
 {
@@ -779,7 +818,7 @@ void DiagnosticsService::cpuHardwareInfo(std::vector<diagnosticspb::ServerInfoIt
         {"cpu-logical-cores",
             std::to_string(std::thread::hardware_concurrency())}, /// TODO: we should check both machine's core number and cgroup quota
         {"cpu-physical-cores", std::to_string(getPhysicalCoreNumber())}, //
-        {"cpu-frequency", std::to_string(getCPUFrequency()) + "MHz"}};
+        {"cpu-frequency", std::to_string(getCPUFrequency()) + "MHz"}, {"cpu-arch", getCPUArch()}};
 
     // L1 to L3 cache
     for (uint8_t level = 1; level <= 3; level++)
