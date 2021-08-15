@@ -265,8 +265,8 @@ int benchEntry(const std::vector<std::string> & opts)
         auto version = vm["version"].as<size_t>();
         if (version < 1 || version > 2)
         {
-            std::cerr << "invalid version: " << version << std::endl;
-            return 1;
+            std::cerr << "invalid dmfile version: " << version << std::endl;
+            return -EINVAL;
         }
         auto algorithm_ = vm["algorithm"].as<std::string>();
         DB::DM::ChecksumAlgo algorithm;
@@ -293,7 +293,7 @@ int benchEntry(const std::vector<std::string> & opts)
         else
         {
             std::cerr << "invalid algorithm: " << algorithm_ << std::endl;
-            return 1;
+            return -EINVAL;
         }
         auto frame = vm["frame"].as<size_t>();
         auto column = vm["column"].as<size_t>();
@@ -310,6 +310,14 @@ int benchEntry(const std::vector<std::string> & opts)
             random = std::random_device{}();
         }
         auto workdir = vm["workdir"].as<std::string>() + "/.tmp";
+        SCOPE_EXIT({
+            if (Poco::File file(workdir); file.exists())
+            {
+                file.remove(true);
+            }
+
+            benchmark::shutdown();
+        });
         static constexpr char SUMMARY_TEMPLATE_V1[] = "version:    {}\n"
                                                       "column:     {}\n"
                                                       "size:       {}\n"
@@ -443,18 +451,11 @@ int benchEntry(const std::vector<std::string> & opts)
                   << static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat) / static_cast<double>(read_records)
                 / 1024 / 1024
                   << std::endl;
-
-        if (Poco::File file(workdir); file.exists())
-        {
-            file.remove(true);
-        }
-
-        benchmark::shutdown();
     }
     catch (const boost::wrapexcept<boost::bad_any_cast> & e)
     {
         std::cerr << BENCH_HELP << std::endl;
-        return 1;
+        return -EINVAL;
     }
 
     return 0;

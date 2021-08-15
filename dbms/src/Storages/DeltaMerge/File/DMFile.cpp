@@ -363,7 +363,7 @@ void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo 
     auto         file_buf    = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.meta_size);
     auto         meta_buf    = std::vector<char>(meta_pack_info.meta_size);
     auto         meta_reader = ReadBufferFromMemory{meta_buf.data(), meta_buf.size()};
-    ReadBuffer * buf         = &meta_reader;
+    ReadBuffer * buf         = &file_buf;
     file_buf.seek(meta_pack_info.meta_offset);
 
     // checksum examination

@@ -63,7 +63,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
     if (args.check && dmfile->isSingleFileMode())
     {
         std::cerr << "single file integrity checking is not yet supported" << std::endl;
-        return 1;
+        return -EINVAL;
     }
     if (args.check)
     {
@@ -73,7 +73,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         file.list(sub);
         for (auto & i : sub)
         {
-            if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx"))
+            if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || i == "pack")
             {
                 auto full_path = prefix;
                 full_path += "/";
@@ -138,7 +138,7 @@ int inspectEntry(const std::vector<std::string> & opts)
     catch (const boost::wrapexcept<boost::program_options::required_option> & exception)
     {
         std::cerr << exception.what() << std::endl << INSPECT_HELP << std::endl;
-        return 1;
+        return -EINVAL;
     }
 
     return 0;

@@ -69,13 +69,13 @@ int mainEntryTiFlashDMTool(int argc, char ** argv)
         else
         {
             std::cerr << "unrecognized subcommand, type `help` to see the help message" << std::endl;
-            return 1;
+            return -EINVAL;
         }
     }
     catch (const boost::wrapexcept<boost::bad_any_cast> &)
     {
         std::cerr << MAIN_HELP << std::endl;
-        return 1;
+        return -EINVAL;
     }
 
     return 0;

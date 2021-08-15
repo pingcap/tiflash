@@ -16,7 +16,7 @@
 #include <common/logger_useful.h>
 
 #include <utility>
-
+int migrateServiceMain(DB::Context & context, const struct MigrateArgs & args);
 namespace DB
 {
 namespace DM
@@ -195,7 +195,7 @@ public:
             + ", file size: " + DB::toString(getBytesOnDisk()) + "}";
     }
 
-    const DMConfigurationOpt& getConfiguration() const { return configuration; }
+    DMConfigurationOpt & getConfiguration() { return configuration; }
 
 private:
     DMFile(UInt64             file_id_,
@@ -266,7 +266,7 @@ private:
     using OffsetAndSize = std::tuple<size_t, size_t>;
     OffsetAndSize writeMetaToBuffer(WriteBuffer & buffer);
     OffsetAndSize writePackStatToBuffer(WriteBuffer & buffer);
-    OffsetAndSize writePackPropertyToBuffer(WriteBuffer & buffer, UnifiedDigestBase* digest = nullptr);
+    OffsetAndSize writePackPropertyToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest = nullptr);
 
     void writeMeta(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
     void writePackProperty(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
@@ -325,6 +325,7 @@ private:
     friend class DMFileWriter;
     friend class DMFileReader;
     friend class DMFilePackFilter;
+    friend int ::migrateServiceMain(DB::Context & context, const struct MigrateArgs & args);
 };
 
 inline ReadBufferFromFileProvider
