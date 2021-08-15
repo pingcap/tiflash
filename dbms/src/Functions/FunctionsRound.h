@@ -967,11 +967,11 @@ struct TiDBIntegerRound
             throwOverflow();
     }
 
-    static OutputType castBack(InputType input, UnsignedOutput value)
+    static OutputType castBack(bool negative, UnsignedOutput value)
     {
         if constexpr (is_signed_v<OutputType>)
         {
-            if (input < 0)
+            if (negative)
             {
                 auto bound = toSafeUnsigned<UnsignedOutput>(std::numeric_limits<OutputType>::min());
                 throwOverflowIf(value > bound);
@@ -1039,7 +1039,7 @@ struct TiDBIntegerRound
                 }
             }
 
-            return castBack(input, absolute_value);
+            return castBack((input < 0), absolute_value);
         }
     }
 };
