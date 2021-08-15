@@ -868,15 +868,27 @@ struct ConstPowOf10
 {
     using ArrayType = std::array<T, N + 1>;
 
+    static constexpr T base = static_cast<T>(10);
+
     static constexpr ArrayType build()
     {
         ArrayType result{1};
         for (size_t i = 1; i <= N; ++i)
-            result[i] = result[i - 1] * static_cast<T>(10);
+            result[i] = result[i - 1] * base;
         return result;
     }
 
     static constexpr ArrayType result = build();
+
+    static constexpr bool assertNoOverflow()
+    {
+        bool okay = true;
+        for (size_t i = 1; i <= N; ++i)
+            okay &= (result[i] / base == result[i - 1]);
+        return okay;
+    }
+
+    static_assert(assertNoOverflow());
 };
 
 template <typename InputType, typename OutputType>
@@ -884,8 +896,9 @@ struct TiDBFloatingRound
 {
     static_assert(std::is_floating_point_v<InputType>);
     static_assert(std::is_floating_point_v<OutputType>);
+    static_assert(sizeof(OutputType) >= sizeof(InputType));
 
-    static OutputType eval(const InputType & input, FracType frac)
+    static OutputType eval(InputType input, FracType frac)
     {
         // modified from <https://github.com/pingcap/tidb/blob/26237b35f857c2388eab46f9ee3b351687143681/types/helper.go#L33-L48>.
 
@@ -894,6 +907,7 @@ struct TiDBFloatingRound
 
         if (frac != 0)
         {
+            // TODO: `std::pow` is expensive. Need optimization here.
             base = std::pow(10.0, frac);
             auto scaled_value = value * base;
 
@@ -934,6 +948,7 @@ struct TiDBIntegerRound
 {
     static_assert(is_integer_v<InputType>);
     static_assert(is_integer_v<OutputType>);
+    static_assert(actual_size_v<OutputType> >= actual_size_v<InputType>);
 
     static constexpr auto digits = std::numeric_limits<OutputType>::digits10;
     static constexpr auto max_digits = digits + 1;
@@ -941,37 +956,42 @@ struct TiDBIntegerRound
     using UnsignedOutput = make_unsigned_t<OutputType>;
     using Pow = ConstPowOf10<UnsignedOutput, digits>;
 
-    static void report_overflow()
+    static void throwOverflow()
     {
         throw Exception(fmt::format("integer value is out of range in `round`"), ErrorCodes::OVERFLOW_ERROR);
     }
 
-    static OutputType castBack(const InputType & input, const UnsignedOutput & value)
+    static void throwOverflowIf(bool condition)
     {
-        if constexpr (std::is_signed_v<OutputType>)
+        if (condition)
+            throwOverflow();
+    }
+
+    static OutputType castBack(InputType input, UnsignedOutput value)
+    {
+        if constexpr (is_signed_v<OutputType>)
         {
             if (input < 0)
             {
-                auto bound = -static_cast<UnsignedOutput>(std::numeric_limits<OutputType>::min());
-                if (value > bound)
-                    report_overflow();
-
+                auto bound = toSafeUnsigned<UnsignedOutput>(std::numeric_limits<OutputType>::min());
+                throwOverflowIf(value > bound);
                 return static_cast<OutputType>(-value);
             }
             else
             {
-                auto bound = static_cast<UnsignedOutput>(std::numeric_limits<OutputType>::max());
-                if (value > bound)
-                    report_overflow();
-
+                auto bound = toSafeUnsigned<UnsignedOutput>(std::numeric_limits<OutputType>::max());
+                throwOverflowIf(value > bound);
                 return static_cast<OutputType>(value);
             }
         }
         else
+        {
+            static_assert(std::is_same_v<OutputType, UnsignedOutput>);
             return value;
+        }
     }
 
-    static OutputType eval(const InputType & input, FracType frac)
+    static OutputType eval(InputType input, FracType frac)
     {
         auto value = static_cast<OutputType>(input);
 
@@ -992,11 +1012,11 @@ struct TiDBIntegerRound
                 auto base = Pow::result[digits];
 
                 // test `x >= 5 * base`, but `5 * base` may overflow.
-                // since `base` is integer, `x / 5 >= base` if and only if `floor(x / 5) >= base`.
+                // since `base` is integer, `x / 5 >= base` iff. `floor(x / 5) >= base`.
                 if (absolute_value / 5 >= base)
                 {
                     // rounding up will definitely result in overflow.
-                    report_overflow();
+                    throwOverflow();
                 }
                 else
                 {
@@ -1014,9 +1034,7 @@ struct TiDBIntegerRound
                 {
                     // round up.
                     auto rounded_value = absolute_value + base;
-                    if (rounded_value < absolute_value)
-                        report_overflow();
-
+                    throwOverflowIf(rounded_value < absolute_value);
                     absolute_value = rounded_value;
                 }
             }
@@ -1030,10 +1048,18 @@ struct TiDBDecimalRoundInfo
 {
     FracType input_prec;
     FracType input_scale;
-    FracType input_int_prec;
+    FracType input_int_prec; // number of digits before decimal point.
 
     FracType output_prec;
     FracType output_scale;
+
+    TiDBDecimalRoundInfo(const IDataType & input_type, const IDataType & output_type)
+        : input_prec(getDecimalPrecision(input_type, 0)),
+          input_scale(getDecimalScale(input_type, 0)),
+          input_int_prec(input_prec - input_scale),
+          output_prec(getDecimalPrecision(output_type, 0)),
+          output_scale(getDecimalScale(output_type, 0))
+    {}
 };
 
 template <typename InputType, typename OutputType>
@@ -1164,12 +1190,7 @@ struct TiDBRound
         auto & output_data = output_column->getData();
         output_data.resize(size);
 
-        TiDBDecimalRoundInfo info;
-        info.input_prec = getDecimalPrecision(*args.input_type, 0);
-        info.input_scale = getDecimalScale(*args.input_type, 0);
-        info.input_int_prec = info.input_prec - info.input_scale;
-        info.output_prec = getDecimalPrecision(*args.output_type, 0);
-        info.output_scale = getDecimalScale(*args.output_type, 0);
+        TiDBDecimalRoundInfo info [[maybe_unused]] (*args.input_type, *args.output_type);
 
         if constexpr (std::is_same_v<InputColumn, ColumnConst>)
         {
@@ -1261,30 +1282,27 @@ public:
 private:
     FracType getFracFromConstColumn(const ColumnConst * column) const
     {
-        FracType result;
-        auto frac_field = column->getField();
+        using UnsignedFrac = make_unsigned_t<FracType>;
 
-        if (!frac_field.tryGet(result))
+        auto field = column->getField();
+
+        if (field.getType() == Field::TypeToEnum<FracType>::value)
+            return field.get<FracType>();
+        else if (field.getType() == Field::TypeToEnum<UnsignedFrac>::value)
         {
-            // maybe field is unsigned.
-            static_assert(is_signed_v<FracType>);
-            make_unsigned_t<FracType> unsigned_frac;
-
-            if (!frac_field.tryGet(unsigned_frac))
-            {
-                throw Exception(
-                    fmt::format("Illegal frac column with type {}, expect const Int64/UInt64", column->getField().getTypeName()),
-                    ErrorCodes::ILLEGAL_COLUMN);
-            }
+            auto unsigned_frac = field.get<UnsignedFrac>();
 
             // to prevent overflow. Large frac is useless in fact.
             if (unsigned_frac > std::numeric_limits<FracType>::max())
                 unsigned_frac = std::numeric_limits<FracType>::max();
 
-            result = static_cast<FracType>(unsigned_frac);
+            return static_cast<FracType>(unsigned_frac);
         }
-
-        return result;
+        else
+        {
+            throw Exception(fmt::format("Illegal frac column with type {}, expect const Int64/UInt64", column->getField().getTypeName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
     }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
@@ -1354,12 +1372,14 @@ private:
         auto frac_column = columns[1].column;
 
         bool is_all_column_const = input_column->isColumnConst() && frac_column->isColumnConst();
-        if (is_all_column_const)
+
+        // if the result is const, we need to only compute once.
+        // but the column size may be greater than 1, so we resize them here.
+        assert(input_column->size() == frac_column->size());
+        if (is_all_column_const && input_column->size() != 1)
         {
-            if (input_column->size() != 1)
-                input_column = input_column->cloneResized(1);
-            if (frac_column->size() != 1)
-                frac_column = frac_column->cloneResized(1);
+            input_column = input_column->cloneResized(1);
+            frac_column = frac_column->cloneResized(1);
         }
 
         checkInputTypeAndApply({input_type, frac_type, output_type, input_column, frac_column, output_column});
