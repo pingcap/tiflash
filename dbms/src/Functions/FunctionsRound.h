@@ -967,7 +967,7 @@ struct TiDBIntegerRound
             throwOverflow();
     }
 
-    static OutputType castBack(bool negative, UnsignedOutput value)
+    static OutputType castBack(bool negative [[maybe_unused]], UnsignedOutput value)
     {
         if constexpr (is_signed_v<OutputType>)
         {
