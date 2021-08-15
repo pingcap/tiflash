@@ -1140,7 +1140,7 @@ struct TiDBRoundPrecisionInferer
         ScaleType new_scale = scale;
 
         // +1 for possible overflow, e.g. round(99999.9) => 100000
-        ScaleType scale_increment = 1;
+        ScaleType int_prec_increment = 1;
 
         if (is_const_frac)
         {
@@ -1150,10 +1150,10 @@ struct TiDBRoundPrecisionInferer
             new_scale = std::max(0, frac);
 
             if (frac >= static_cast<FracType>(scale))
-                scale_increment = 0;
+                int_prec_increment = 0;
         }
 
-        PrecType new_prec = std::min(decimal_max_prec, int_prec + new_scale + scale_increment);
+        PrecType new_prec = std::min(decimal_max_prec, int_prec + int_prec_increment + new_scale);
         return std::make_tuple(new_prec, new_scale);
     }
 };
