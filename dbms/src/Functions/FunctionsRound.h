@@ -873,22 +873,19 @@ struct ConstPowOf10
     static constexpr ArrayType build()
     {
         ArrayType result{1};
+
+        bool overflow = false;
         for (size_t i = 1; i <= N; ++i)
+        {
             result[i] = result[i - 1] * base;
+            overflow |= (result[i - 1] != result[i] / base);
+        }
+
+        assert(!overflow);
         return result;
     }
 
     static constexpr ArrayType result = build();
-
-    static constexpr bool assertNoOverflow()
-    {
-        bool okay = true;
-        for (size_t i = 1; i <= N; ++i)
-            okay &= (result[i] / base == result[i - 1]);
-        return okay;
-    }
-
-    static_assert(assertNoOverflow());
 };
 
 template <typename InputType, typename OutputType>
@@ -908,6 +905,7 @@ struct TiDBFloatingRound
         if (frac != 0)
         {
             // TODO: `std::pow` is expensive. Need optimization here.
+            // one possible optimization is pre-computation. See <https://golang.org/src/math/pow10.go>.
             base = std::pow(10.0, frac);
             auto scaled_value = value * base;
 
@@ -956,15 +954,10 @@ struct TiDBIntegerRound
     using UnsignedOutput = make_unsigned_t<OutputType>;
     using Pow = ConstPowOf10<UnsignedOutput, digits>;
 
-    static void throwOverflow()
-    {
-        throw Exception(fmt::format("integer value is out of range in `round`"), ErrorCodes::OVERFLOW_ERROR);
-    }
-
     static void throwOverflowIf(bool condition)
     {
         if (condition)
-            throwOverflow();
+            throw Exception(fmt::format("integer value is out of range in 'round'"), ErrorCodes::OVERFLOW_ERROR);
     }
 
     static OutputType castBack(bool negative [[maybe_unused]], UnsignedOutput value)
@@ -1013,16 +1006,11 @@ struct TiDBIntegerRound
 
                 // test `x >= 5 * base`, but `5 * base` may overflow.
                 // since `base` is integer, `x / 5 >= base` iff. `floor(x / 5) >= base`.
-                if (absolute_value / 5 >= base)
-                {
-                    // rounding up will definitely result in overflow.
-                    throwOverflow();
-                }
-                else
-                {
-                    // round down.
-                    absolute_value = 0;
-                }
+                // if true, x will round up. But rounding up will definitely result in overflow.
+                throwOverflowIf(absolute_value / 5 >= base);
+
+                // round down.
+                absolute_value = 0;
             }
             else
             {
@@ -1293,8 +1281,7 @@ private:
             auto unsigned_frac = field.get<UnsignedFrac>();
 
             // to prevent overflow. Large frac is useless in fact.
-            if (unsigned_frac > std::numeric_limits<FracType>::max())
-                unsigned_frac = std::numeric_limits<FracType>::max();
+            unsigned_frac = std::min(unsigned_frac, static_cast<UnsignedFrac>(std::numeric_limits<FracType>::max()));
 
             return static_cast<FracType>(unsigned_frac);
         }
