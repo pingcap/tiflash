@@ -118,8 +118,6 @@ public:
           frame_size(block_size_)
     {
         // adjust alignment, aligned memory boundary can make it fast for digesting
-        // avoid complaining about uninitialized bytes
-        std::memset(this->working_buffer.begin(), 0, sizeof(ChecksumFrame<Backend>) + block_size_ + 512);
         auto shifted = this->working_buffer.begin() + sizeof(ChecksumFrame<Backend>);
 
         // offset is the distance to a nearest aligned boundary, the calculation follows the following
@@ -130,6 +128,9 @@ public:
         auto result = this->working_buffer.begin() + offset;
         set(result + sizeof(ChecksumFrame<Backend>), block_size_);
         position() = working_buffer.begin(); // empty the buffer
+
+        // avoid complaining about uninitialized bytes in the header area
+        std::memset(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>), 0, sizeof(ChecksumFrame<Backend>));
     }
 
     ~FramedChecksumWriteBuffer() override { next(); }
