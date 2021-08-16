@@ -131,6 +131,7 @@ struct TiFlashError
     const std::string description;
 
     std::string standardName() const { return "FLASH:" + error_class + ":" + error_code; }
+    bool is(const TiFlashError & other) const { return error_class == other.error_class && error_code == other.error_code; }
 };
 
 namespace Errors
