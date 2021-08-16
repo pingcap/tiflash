@@ -1265,9 +1265,8 @@ public:
     bool hasInformationAboutMonotonicity() const override { return true; }
     Monotonicity getMonotonicityForRange(const IDataType &, const Field &, const Field &) const override { return {true, true, true}; }
 
-    // no default implementaion because getReturnType relies on whether frac column is const.
-    // default implementation might make const frac column into a non-const one, and
-    // it will affect getReturnType during execution.
+    // default implementation might make const frac column into a non-const one, while const frac and
+    // non-const frac column can generate different return types. Plese see TiDBRoundPrecisionInferer for details.
     bool useDefaultImplementationForConstants() const override { return false; }
 
 private:
