@@ -357,6 +357,48 @@ static void getCacheSize(const uint & level [[maybe_unused]], size_t & size, siz
     return;
 }
 
+<<<<<<< HEAD
+=======
+struct CPUArchHelper
+{
+    CPUArchHelper() { arch_ = execOrElse("uname -m", "Unknown"); }
+    const std::string & get() const { return arch_; }
+
+protected:
+    std::string execOrElse(const char * cmd [[ maybe_unused ]], const char * otherwise)
+    {
+#if defined(__unix__)
+        std::array<char, 128> buffer;
+        std::string result;
+        auto pipe = popen(cmd, "r");
+        if (!pipe)
+            throw Exception("Can not execute command " + std::string(cmd) + "!", ErrorCodes::LOGICAL_ERROR);
+        while (!feof(pipe))
+        {
+            if (fgets(buffer.data(), 128, pipe) != nullptr)
+                result += buffer.data();
+        }
+        auto rc = pclose(pipe);
+        if (rc == EXIT_FAILURE)
+        {
+            return otherwise;
+        }
+        return result;
+#else
+        return otherwise;
+#endif
+    }
+    std::string arch_;
+};
+
+static std::string getCPUArch()
+{
+    static CPUArchHelper helper;
+    return helper.get();
+}
+
+
+>>>>>>> b4c3ec561 (Fix bug that try to use collator to sort on constant column (#2695))
 #ifdef __linux__
 static DiagnosticsService::Disk::DiskType getDiskTypeByNameLinux(const std::string & name)
 {
