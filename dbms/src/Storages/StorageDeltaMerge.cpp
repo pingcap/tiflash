@@ -713,16 +713,14 @@ void StorageDeltaMerge::mergeDelta(const Context & context) { getAndMaybeInitSto
 
 void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings)
 {
-    auto metrics = global_context.getTiFlashMetrics();
-    GET_METRIC(metrics, tiflash_storage_command_count, type_delete_range).Increment();
+    GET_METRIC(tiflash_storage_command_count, type_delete_range).Increment();
     return getAndMaybeInitStore()->deleteRange(global_context, settings, range_to_delete);
 }
 
 void StorageDeltaMerge::ingestFiles(
     const DM::RowKeyRange & range, const std::vector<UInt64> & file_ids, bool clear_data_in_range, const Settings & settings)
 {
-    auto metrics = global_context.getTiFlashMetrics();
-    GET_METRIC(metrics, tiflash_storage_command_count, type_ingest).Increment();
+    GET_METRIC(tiflash_storage_command_count, type_ingest).Increment();
     return getAndMaybeInitStore()->ingestFiles(global_context, settings, range, file_ids, clear_data_in_range);
 }
 

@@ -409,7 +409,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
 
     auto sync_schema = [&] {
         auto start_time = Clock::now();
-        GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_trigger_count, type_cop_read).Increment();
+        GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
