@@ -2,6 +2,7 @@
 
 #include <Encryption/FileProvider.h>
 #include <IO/WriteBufferFromFileBase.h>
+#include <Storages/DeltaMerge/File/DMConfiguration.h>
 
 #include <string>
 
@@ -31,4 +32,12 @@ createWriteBufferFromFileBaseByFileProvider(
     char * existing_memory_ = nullptr,
     size_t alignment = 0);
 
+std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByFileProvider(const FileProviderPtr & file_provider,
+    const std::string & filename_,
+    const EncryptionPath & encryption_path_,
+    bool create_new_encryption_info_,
+    const WriteLimiterPtr & write_limiter_,
+    const DM::DMConfiguration & configuration,
+    int flags_ = -1,
+    mode_t mode = 0666);
 } // namespace DB

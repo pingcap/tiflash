@@ -55,4 +55,27 @@ createWriteBufferFromFileBaseByFileProvider(
     }
 }
 
+std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByFileProvider(const FileProviderPtr & file_provider,
+    const std::string & filename_, const EncryptionPath & encryption_path_, bool create_new_encryption_info_,
+    const WriteLimiterPtr & write_limiter_, const DM::DMConfiguration & configuration, int flags_, mode_t mode)
+{
+    ProfileEvents::increment(ProfileEvents::CreatedWriteBufferOrdinary);
+    auto file_ptr
+        = file_provider->newWritableFile(filename_, encryption_path_, true, create_new_encryption_info_, write_limiter_, flags_, mode);
+    switch (configuration.getChecksumAlgorithm())
+    {
+        case ChecksumAlgo::None:
+            return std::make_unique<FramedChecksumWriteBuffer<Digest::None>>(file_ptr, configuration.getChecksumFrameLength());
+        case ChecksumAlgo::CRC32:
+            return std::make_unique<FramedChecksumWriteBuffer<Digest::CRC32>>(file_ptr, configuration.getChecksumFrameLength());
+        case ChecksumAlgo::CRC64:
+            return std::make_unique<FramedChecksumWriteBuffer<Digest::CRC64>>(file_ptr, configuration.getChecksumFrameLength());
+        case ChecksumAlgo::City128:
+            return std::make_unique<FramedChecksumWriteBuffer<Digest::City128>>(file_ptr, configuration.getChecksumFrameLength());
+        case ChecksumAlgo::XXH3:
+            return std::make_unique<FramedChecksumWriteBuffer<Digest::XXH3>>(file_ptr, configuration.getChecksumFrameLength());
+    }
+    throw Exception("error creating framed checksum buffer instance: checksum unrecognized");
+}
+
 } // namespace DB
