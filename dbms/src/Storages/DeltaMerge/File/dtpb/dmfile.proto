@@ -12,3 +12,23 @@ message PackProperty {
 message PackProperties {
     repeated PackProperty property = 1;
 }
+
+message EmbeddedChecksum {
+    required string name = 1;
+    required bytes checksum = 2;
+}
+
+message DebugInfo {
+    required string name = 1;
+    required string content = 2;
+}
+
+message Configuration {
+    required uint64 checksum_algorithm = 1;
+    required uint64 checksum_frame_length = 2;
+    repeated EmbeddedChecksum embedded_checksum = 3;
+    // checksum of the above field
+    required bytes data_field_checksum = 4;
+    // additional information
+    repeated DebugInfo debug_info = 5;
+}
