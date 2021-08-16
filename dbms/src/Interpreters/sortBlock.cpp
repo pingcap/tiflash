@@ -41,6 +41,9 @@ static inline bool needCollation(const IColumn * column, const SortColumnDescrip
         return false;
     auto not_null_column = column->isColumnNullable() ? typeid_cast<const ColumnNullable *>(column)->getNestedColumnPtr().get() : column;
 
+    if (not_null_column->isColumnConst())
+        return false;
+
     if (!typeid_cast<const ColumnString *>(not_null_column))
         throw Exception("Collations could be specified only for String columns.", ErrorCodes::BAD_COLLATION);
 
