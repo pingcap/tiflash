@@ -28,8 +28,7 @@ BatchCoprocessorHandler::BatchCoprocessorHandler(CoprocessorContext & cop_contex
 grpc::Status BatchCoprocessorHandler::execute()
 {
     Stopwatch watch;
-    SCOPE_EXIT(
-        { GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_handle_seconds, type_super_batch).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_request_handle_seconds, type_super_batch).Observe(watch.elapsedSeconds()); });
 
     try
     {
@@ -37,10 +36,10 @@ grpc::Status BatchCoprocessorHandler::execute()
         {
             case COP_REQ_TYPE_DAG:
             {
-                GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_count, type_super_batch_cop_dag).Increment();
-                GET_METRIC(cop_context.metrics, tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Increment();
+                GET_METRIC(tiflash_coprocessor_request_count, type_super_batch_cop_dag).Increment();
+                GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Increment();
                 SCOPE_EXIT(
-                    { GET_METRIC(cop_context.metrics, tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Decrement(); });
+                    { GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Decrement(); });
 
                 const auto dag_request = ({
                     tipb::DAGRequest dag_req;
@@ -82,7 +81,7 @@ grpc::Status BatchCoprocessorHandler::execute()
     catch (const TiFlashException & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": TiFlash Exception: " << e.displayText() << "\n" << e.getStackTrace().toString());
-        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_internal_error).Increment();
+        GET_METRIC(tiflash_coprocessor_request_error, reason_internal_error).Increment();
         return recordError(grpc::StatusCode::INTERNAL, e.standardText());
     }
     catch (const Exception & e)

@@ -20,8 +20,6 @@ namespace DB
 {
 
 class Context;
-class TiFlashMetrics;
-using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
 struct StreamWriter
 {

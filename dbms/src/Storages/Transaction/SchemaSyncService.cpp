@@ -34,7 +34,7 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
                 stage = "Sync schemas";
                 done_anything = syncSchemas();
                 if (done_anything)
-                    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_trigger_count, type_timer).Increment();
+                    GET_METRIC(tiflash_schema_trigger_count, type_timer).Increment();
 
                 stage = "GC";
                 done_anything = gc(gc_safe_point);
