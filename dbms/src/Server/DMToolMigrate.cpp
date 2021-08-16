@@ -223,7 +223,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
     if (option)
     {
         auto target_path = migrate_path + "config";
-        std::cout << "writing new config to {}" << target_path << std::endl;
+        std::cout << "writing new config to " << target_path << std::endl;
         if (!args.dry_mode)
         {
             DB::WriteBufferFromFileProvider buf(fp, target_path, src_file->encryptionMetaPath(), false, nullptr, 4096);
