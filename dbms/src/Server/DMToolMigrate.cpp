@@ -213,7 +213,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
                 while (auto size = read_buffer->readBig(write_buffer->buffer().begin(), buffer_size))
                 {
                     write_buffer->buffer().resize(size);
-                    write_buffer->position() = write_buffer->buffer().end();
+                    write_buffer->position() = write_buffer->buffer().begin() + size;
                     write_buffer->next();
                 }
             }

@@ -19,15 +19,16 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByFileProvider(const FileProviderPtr & file_provider, const std::string & filename_,
-    const EncryptionPath & encryption_path_, bool create_new_encryption_info_, const WriteLimiterPtr & write_limiter_, size_t estimated_size,
-    size_t aio_threshold, size_t buffer_size_, int flags_, mode_t mode, char * existing_memory_, size_t alignment)
+std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByFileProvider(const FileProviderPtr & file_provider,
+    const std::string & filename_, const EncryptionPath & encryption_path_, bool create_new_encryption_info_,
+    const WriteLimiterPtr & write_limiter_, size_t estimated_size, size_t aio_threshold, size_t buffer_size_, int flags_, mode_t mode,
+    char * existing_memory_, size_t alignment)
 {
     if ((aio_threshold == 0) || (estimated_size < aio_threshold))
     {
         ProfileEvents::increment(ProfileEvents::CreatedWriteBufferOrdinary);
-        return std::make_unique<WriteBufferFromFileProvider>(file_provider, filename_, encryption_path_, create_new_encryption_info_, write_limiter_,
-            buffer_size_, flags_, mode, existing_memory_, alignment);
+        return std::make_unique<WriteBufferFromFileProvider>(file_provider, filename_, encryption_path_, create_new_encryption_info_,
+            write_limiter_, buffer_size_, flags_, mode, existing_memory_, alignment);
     }
     else
     {
@@ -46,15 +47,20 @@ std::unique_ptr<WriteBufferFromFileBase> createWriteBufferFromFileBaseByFileProv
     switch (configuration.getChecksumAlgorithm())
     {
         case DM::ChecksumAlgo::None:
-            return std::make_unique<DM::Checksum::FramedChecksumWriteBuffer<DM::Digest::None>>(filePtr);
+            return std::make_unique<DM::Checksum::FramedChecksumWriteBuffer<DM::Digest::None>>(
+                filePtr, configuration.getChecksumFrameLength());
         case DM::ChecksumAlgo::CRC32:
-            return std::make_unique<DM::Checksum::FramedChecksumWriteBuffer<DM::Digest::CRC32>>(filePtr);
+            return std::make_unique<DM::Checksum::FramedChecksumWriteBuffer<DM::Digest::CRC32>>(
+                filePtr, configuration.getChecksumFrameLength());
         case DM::ChecksumAlgo::CRC64:
-            return std::make_unique<DM::Checksum::FramedChecksumWriteBuffer<DM::Digest::CRC64>>(filePtr);
+            return std::make_unique<DM::Checksum::FramedChecksumWriteBuffer<DM::Digest::CRC64>>(
+                filePtr, configuration.getChecksumFrameLength());
         case DM::ChecksumAlgo::City128:
-            return std::make_unique<DM::Checksum::FramedChecksumWriteBuffer<DM::Digest::City128>>(filePtr);
+            return std::make_unique<DM::Checksum::FramedChecksumWriteBuffer<DM::Digest::City128>>(
+                filePtr, configuration.getChecksumFrameLength());
         case DM::ChecksumAlgo::XXH3:
-            return std::make_unique<DM::Checksum::FramedChecksumWriteBuffer<DM::Digest::XXH3>>(filePtr);
+            return std::make_unique<DM::Checksum::FramedChecksumWriteBuffer<DM::Digest::XXH3>>(
+                filePtr, configuration.getChecksumFrameLength());
     }
     throw Exception("error creating framed checksum buffer instance: checksum unrecognized");
 }

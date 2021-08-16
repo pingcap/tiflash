@@ -325,11 +325,18 @@ private:
             current_frame++;
             size -= frame.bytes;
             buffer += frame.bytes;
+            position() = working_buffer.end();
         }
 
         // Finally, there may be still some bytes left.
-        position() = working_buffer.end();
-        return (expected - size) + (size ? read(buffer, size) : 0);
+        if (size > 0)
+        {
+            return (expected - size) + read(buffer, size);
+        }
+        else
+        {
+            return expected;
+        }
     }
 
     off_t doSeek(off_t offset, int whence) override

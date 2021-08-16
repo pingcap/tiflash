@@ -509,11 +509,20 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
     }
     else
     {
+        auto recheck = [&](size_t size) {
+            if (this->configuration) {
+                auto frame_count = size / this->configuration->getChecksumFrameLength()
+                                   + (0 != size % this->configuration->getChecksumFrameLength());
+                size -= frame_count * this->configuration->getChecksumHeaderLength();
+            }
+            return size;
+        };
+
         if (auto file = Poco::File(packPropertyPath()); file.exists())
             footer.meta_pack_info.pack_property_size = file.getSize();
 
         footer.meta_pack_info.meta_size      = Poco::File(metaPath()).getSize();
-        footer.meta_pack_info.pack_stat_size = Poco::File(packStatPath()).getSize();
+        footer.meta_pack_info.pack_stat_size = recheck(Poco::File(packStatPath()).getSize());
     }
 
     if (footer.meta_pack_info.pack_property_size != 0)
