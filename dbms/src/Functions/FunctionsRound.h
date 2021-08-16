@@ -870,7 +870,7 @@ struct ConstPowOf10
 
     static constexpr T base = static_cast<T>(10);
 
-    static constexpr ArrayType build()
+    static constexpr std::pair<ArrayType, bool> build()
     {
         ArrayType result{1};
 
@@ -881,11 +881,14 @@ struct ConstPowOf10
             overflow |= (result[i - 1] != result[i] / base);
         }
 
-        assert(!overflow);
-        return result;
+        return {result, overflow};
     }
 
-    static constexpr ArrayType result = build();
+    static constexpr auto pair = build();
+    static constexpr auto result = pair.first;
+    static constexpr bool overflow = pair.second;
+
+    static_assert(!overflow, "Computation overflows");
 };
 
 template <typename InputType, typename OutputType>
