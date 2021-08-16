@@ -363,7 +363,7 @@ struct CPUArchHelper
     const std::string & get() const { return arch_; }
 
 protected:
-    std::string execOrElse(const char * cmd, const char * otherwise)
+    std::string execOrElse(const char * cmd [[ maybe_unused ]], const char * otherwise)
     {
 #if defined(__unix__)
         std::array<char, 128> buffer;
