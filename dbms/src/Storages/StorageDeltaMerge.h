@@ -154,13 +154,8 @@ private:
     };
     const bool data_path_contains_database_name = false;
 
-<<<<<<< HEAD
-    std::mutex store_mutex;
-    
-=======
     mutable std::mutex store_mutex;
-
->>>>>>> 9883cc9ac (Fix concurrency between init store and DDL. (#2671))
+    
     std::unique_ptr<TableColumnInfo> table_column_info;  // After create DeltaMergeStore object, it is deprecated.
     std::atomic<bool> store_inited;
     DM::DeltaMergeStorePtr _store;
