@@ -68,6 +68,7 @@ extern bool ENABLE_SVE;
 enum class SIMDFeature
 {
     asimd,
+    pmull,
     sve,
     sve2
 };
@@ -90,9 +91,14 @@ static inline bool SIMDRuntimeSupport([[maybe_unused]] SIMDFeature feature)
         // CentOS 7 default kernel does not support SVE2, so we just ignore SVE2 in that case.
         // (Maybe one can consider it after ARMv9 becomes more prevalent.)
         case SIMDFeature::sve:
+            hwcap = getauxval(AT_HWCAP);
+            return hwcap & HWCAP_SVE;
+        case SIMDFeature::pmull:
+            hwcap = getauxval(AT_HWCAP);
+            return hwcap & HWCAP_PMULL;
         case SIMDFeature::asimd:
             hwcap = getauxval(AT_HWCAP);
-            return hwcap & (feature == SIMDFeature::sve ? HWCAP_SVE : HWCAP_ASIMD);
+            return hwcap & HWCAP_ASIMD;
         case SIMDFeature::sve2:
 #ifdef HWCAP2_SVE2
             hwcap = getauxval(AT_HWCAP2);

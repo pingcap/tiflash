@@ -107,8 +107,6 @@ list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctio
 list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
 
 add_library(clickhouse_common_io ${SPLIT_SHARED} ${clickhouse_common_io_headers} ${clickhouse_common_io_sources})
-target_include_directories(clickhouse_common_io BEFORE PUBLIC ${CRC64_INCLUDE_DIR})
-target_include_directories(clickhouse_common_io BEFORE PUBLIC ${CRC64_INCREMENTAL_DIR})
 target_include_directories(clickhouse_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR})
 
 if (ARCH_FREEBSD)
@@ -233,7 +231,7 @@ target_include_directories (clickhouse_common_io BEFORE PUBLIC ${DOUBLE_CONVERSI
 # also for copy_headers.sh:
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
 # https://cmake.org/pipermail/cmake/2016-May/063400.html
-target_link_libraries (clickhouse_common_io PUBLIC crc64 xxHash::xxhash)
+target_link_libraries (clickhouse_common_io PUBLIC xxHash::xxhash)
 
 add_subdirectory (tests)
 
