@@ -14,10 +14,16 @@ set -ueox pipefail
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
 
-# DO NOT enable format check until standards unified
-#curl -o "/usr/local/bin/clang-format" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/clang-format
-#chmod +x "/usr/local/bin/clang-format"
-#python3 ${SRCPATH}/format-diff.py --repo_path "${SRCPATH}" --check_formatted --diff_from `git merge-base origin/master HEAD`
+CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Debug}
+BUILD_BRANCH=${BUILD_BRANCH:-master}
+ENABLE_FORMAT_CHECK=${ENABLE_FORMAT_CHECK:-true}
+
+curl -o "/usr/local/bin/clang-format" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/clang-format
+chmod +x "/usr/local/bin/clang-format"
+if [[ "${CMAKE_BUILD_TYPE}" == "Debug" && "${ENABLE_FORMAT_CHECK}" == "true" ]]; then
+  python3 ${SRCPATH}/format-diff.py --repo_path "${SRCPATH}" --check_formatted --diff_from `git merge-base origin/${BUILD_BRANCH} HEAD`
+  export ENABLE_FORMAT_CHECK=false
+fi
 
 CI_CCACHE_USED_SRCPATH="/build/tics"
 export INSTALL_DIR=${INSTALL_DIR:-"$SRCPATH/release-centos7/tiflash"}
@@ -33,9 +39,7 @@ fi
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 ENABLE_TEST=${ENABLE_TEST:-1}
 ENABLE_EMBEDDED_COMPILER="FALSE"
-CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Debug}
 UPDATE_CCACHE=${UPDATE_CCACHE:-false}
-BUILD_BRANCH=${BUILD_BRANCH:-master}
 BUILD_UPDATE_DEBUG_CI_CCACHE=${BUILD_UPDATE_DEBUG_CI_CCACHE:-false}
 CCACHE_REMOTE_TAR="${BUILD_BRANCH}-${CMAKE_BUILD_TYPE}.tar"
 CCACHE_REMOTE_TAR=$(echo "${CCACHE_REMOTE_TAR}" | tr 'A-Z' 'a-z')
