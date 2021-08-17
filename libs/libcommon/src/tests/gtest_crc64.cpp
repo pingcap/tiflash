@@ -25,7 +25,8 @@ bool check_basic_support()
 #if defined(__x86_64__)
     return __builtin_cpu_supports("pclmul");
 #elif defined(__aarch64__) || defined(__arm64__)
-    return simd_option::SIMDRuntimeSupport(simd_option::SIMDFeature::asimd);
+    return simd_option::SIMDRuntimeSupport(simd_option::SIMDFeature::asimd)
+        && simd_option::SIMDRuntimeSupport(simd_option::SIMDFeature::pmull);
 #endif
 }
 

@@ -29,3 +29,9 @@ if (ARCH_AMD64)
             gtest_crc64.cpp
             APPEND COMPILE_FLAGS "-mpclmul")
 endif()
+
+if (ARCH_AARCH64)
+    set_source_files_properties(
+            gtest_crc64.cpp
+            APPEND COMPILE_FLAGS "-march=armv8-a+simd+crypto")
+endif()

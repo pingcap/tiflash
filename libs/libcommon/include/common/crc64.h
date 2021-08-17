@@ -43,7 +43,7 @@ public:
                 return crc64::_detail::update_fast(crc64::_detail::update_simd, _state, _src, _length);
             };
 #ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
-            if (!ENABLE_ASIMD)
+            if (!ENABLE_ASIMD || !SIMDRuntimeSupport(SIMDFeature::pmull))
             {
                 update_fn = _detail::update_table;
             }

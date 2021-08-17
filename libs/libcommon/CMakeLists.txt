@@ -163,9 +163,8 @@ endif ()
 
 if (TIFLASH_ENABLE_ASIMD_SUPPORT)
     # https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
-    set_source_files_properties(src/mem_utils_asimd.cpp
-            src/crc64_sse2_asimd.cpp
-            APPEND COMPILE_FLAGS "-march=armv8-a+simd")
+    set_source_files_properties(src/mem_utils_asimd.cpp APPEND COMPILE_FLAGS "-march=armv8-a+simd")
+    set_source_files_properties(src/crc64_sse2_asimd.cpp APPEND COMPILE_FLAGS "-march=armv8-a+simd+crypto")
 endif ()
 
 if (TIFLASH_ENABLE_SVE_SUPPORT)
