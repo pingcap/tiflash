@@ -66,6 +66,10 @@ if (TIFLASH_ENABLE_SVE_SUPPORT)
     add_definitions(-DTIFLASH_ENABLE_SVE_SUPPORT=1)
 endif ()
 
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-mvpclmulqdq -Werror -Wall -Wextra" TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
+add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=${TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT})
+
 if (NOT MSVC)
     set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wall")    # -Werror is also added inside directories with our own code.
 endif ()
