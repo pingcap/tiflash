@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1626834446186,
+  "iteration": 1629195111449,
   "links": [],
   "panels": [
     {
@@ -4534,7 +4534,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 100
+            "y": 6
           },
           "id": 35,
           "legend": {
@@ -4622,7 +4622,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 100
+            "y": 6
           },
           "id": 36,
           "legend": {
@@ -4730,19 +4730,21 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 107
+            "y": 13
           },
           "id": 37,
           "legend": {
-            "alignAsTable": false,
+            "alignAsTable": true,
             "avg": false,
-            "current": false,
-            "max": false,
+            "current": true,
+            "hideEmpty": false,
+            "hideZero": false,
+            "max": true,
             "min": false,
-            "rightSide": false,
+            "rightSide": true,
             "show": true,
             "total": false,
-            "values": false
+            "values": true
           },
           "lines": true,
           "linewidth": 1,
@@ -4752,7 +4754,12 @@
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "/timeout/",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
@@ -4784,6 +4791,13 @@
               "intervalFactor": 1,
               "legendFormat": "80",
               "refId": "D"
+            },
+            {
+              "expr": "sum(increase(tiflash_system_profile_event_RaftWaitIndexTimeout{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "{{instance}}-timeout",
+              "refId": "E"
             }
           ],
           "thresholds": [],
@@ -4814,11 +4828,12 @@
               "show": true
             },
             {
-              "format": "short",
+              "decimals": 2,
+              "format": "opm",
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             }
           ],
@@ -4839,7 +4854,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 107
+            "y": 13
           },
           "id": 75,
           "legend": {
@@ -4933,7 +4948,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 114
+            "y": 20
           },
           "id": 82,
           "legend": {
@@ -5050,7 +5065,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 114
+            "y": 20
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -5116,7 +5131,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 121
+            "y": 27
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -5182,7 +5197,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 121
+            "y": 27
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -5241,7 +5256,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 128
+            "y": 34
           },
           "height": "",
           "id": 71,
@@ -5345,7 +5360,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 128
+            "y": 34
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -5411,7 +5426,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 135
+            "y": 41
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -5477,7 +5492,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 135
+            "y": 41
           },
           "heatmap": {},
           "hideZeroBuckets": true,
