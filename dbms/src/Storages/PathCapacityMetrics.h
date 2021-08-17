@@ -37,7 +37,7 @@ public:
 
     virtual void getDiskStats(std::map<FSID, DiskCapacity> & disk_stats_map);
 
-    FsStats getFsStatsOfPath(std::string_view file_path);
+    std::tuple<FsStats, struct statvfs> getFsStatsOfPath(std::string_view file_path);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -59,9 +59,7 @@ private:
         // Used bytes for this path
         std::atomic<uint64_t> used_bytes = 0;
 
-        FsStats getStats(Poco::Logger * log) const;
-
-        FsStats getStats(Poco::Logger * log, const struct statvfs & vfs) const;
+        std::tuple<FsStats, struct statvfs> getStats(Poco::Logger * log) const;
 
         CapacityInfo() = default;
         CapacityInfo(String p, uint64_t c) : path(std::move(p)), capacity_bytes(c) {}

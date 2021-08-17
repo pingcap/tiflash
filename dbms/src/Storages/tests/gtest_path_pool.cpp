@@ -65,7 +65,7 @@ try
 
         for (size_t i = 0; i < res.size(); ++i)
         {
-            auto stat = ctx.getPathCapacity()->getFsStatsOfPath(res[i]);
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
             LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
         }
 
@@ -98,7 +98,7 @@ try
 
         for (size_t i = 0; i < res.size(); ++i)
         {
-            auto stat = ctx.getPathCapacity()->getFsStatsOfPath(res[i]);
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
             LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
         }
 
@@ -132,7 +132,7 @@ try
 
         for (size_t i = 0; i < res.size(); ++i)
         {
-            auto stat = ctx.getPathCapacity()->getFsStatsOfPath(res[i]);
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
             LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
         }
 
@@ -166,7 +166,7 @@ try
 
         for (size_t i = 0; i < res.size(); ++i)
         {
-            auto stat = ctx.getPathCapacity()->getFsStatsOfPath(res[i]);
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
             LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
         }
 
@@ -209,7 +209,7 @@ try
 
         for (size_t i = 0; i < res.size(); ++i)
         {
-            auto stat = ctx.getPathCapacity()->getFsStatsOfPath(res[i]);
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
             LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
         }
 
@@ -242,7 +242,7 @@ try
 
         for (size_t i = 0; i < res.size(); ++i)
         {
-            auto stat = ctx.getPathCapacity()->getFsStatsOfPath(res[i]);
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
             LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
         }
 
@@ -276,7 +276,7 @@ try
 
         for (size_t i = 0; i < res.size(); ++i)
         {
-            auto stat = ctx.getPathCapacity()->getFsStatsOfPath(res[i]);
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
             LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
         }
 
@@ -310,7 +310,7 @@ try
 
         for (size_t i = 0; i < res.size(); ++i)
         {
-            auto stat = ctx.getPathCapacity()->getFsStatsOfPath(res[i]);
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
             LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
         }
 
@@ -391,12 +391,12 @@ TEST_F(PathCapcatity, SingleDiskSinglePathTest)
         ASSERT_EQ(stats.used_size, used);
         ASSERT_EQ(stats.avail_size, capactity * 2 - used);
 
-        auto main_path_stats = capacity.getFsStatsOfPath(main_data_path);
+        auto main_path_stats = std::get<0>(capacity.getFsStatsOfPath(main_data_path));
         ASSERT_EQ(main_path_stats.capacity_size, capactity);
         ASSERT_EQ(main_path_stats.used_size, used);
         ASSERT_EQ(main_path_stats.avail_size, capactity - used);
 
-        auto lastest_path_stats = capacity.getFsStatsOfPath(lastest_data_path);
+        auto lastest_path_stats = std::get<0>(capacity.getFsStatsOfPath(lastest_data_path));
         ASSERT_EQ(lastest_path_stats.capacity_size, capactity);
         ASSERT_EQ(lastest_path_stats.used_size, 0);
         ASSERT_EQ(lastest_path_stats.avail_size, capactity);
