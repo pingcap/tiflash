@@ -30,7 +30,6 @@ namespace DB
 
 void ExchangeReceiver::setUpConnection()
 {
-    live_connections = pb_exchange_receiver.encoded_task_meta_size();
     for (int index = 0; index < pb_exchange_receiver.encoded_task_meta_size(); index++)
     {
         auto & meta = pb_exchange_receiver.encoded_task_meta(index);
