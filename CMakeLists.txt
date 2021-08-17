@@ -68,7 +68,11 @@ endif ()
 
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-mvpclmulqdq -Werror -Wall -Wextra" TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
-add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=${TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT})
+if(TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
+    add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=1)
+else()
+    add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)
+endif()
 
 if (NOT MSVC)
     set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wall")    # -Werror is also added inside directories with our own code.
