@@ -59,6 +59,9 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                 std::cout << "checksum algorithm: xxh3" << std::endl;
                 break;
         }
+        for (const auto & [name, msg] : conf->getDebugInfo()) {
+            std::cout << name << ": " << msg << std::endl;
+        }
     }
     if (args.check && dmfile->isSingleFileMode())
     {
