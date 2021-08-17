@@ -3,6 +3,8 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
+#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <IO/IOSWrapper.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
@@ -12,9 +14,16 @@
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <utility>
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+extern const int CANNOT_READ_ALL_DATA;
+}
+
 namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
@@ -78,12 +87,17 @@ String DMFile::ngcPath() const
     return getNGCPath(parent_path, file_id, status, isSingleFileMode());
 }
 
-DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single_file_mode)
+DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single_file_mode, DMConfigurationOpt configuration)
 {
     Poco::Logger * log = &Poco::Logger::get("DMFile");
     // On create, ref_id is the same as file_id.
-    DMFilePtr new_dmfile(
-        new DMFile(file_id, file_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::WRITABLE, log));
+    DMFilePtr new_dmfile(new DMFile(file_id,
+                                    file_id,
+                                    parent_path,
+                                    single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER,
+                                    Status::WRITABLE,
+                                    log,
+                                    std::move(configuration)));
 
     auto path = new_dmfile->path();
     Poco::File file(path);
@@ -130,8 +144,13 @@ DMFilePtr DMFile::restore(
         single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER,
         Status::READABLE,
         &Poco::Logger::get("DMFile")));
-    if (!read_meta_mode.isNone())
+    if (!read_meta_mode.isNone()) {
+        if (!single_file_mode)
+        {
+            dmfile->readConfiguration(file_provider);
+        }
         dmfile->readMetadata(file_provider, read_meta_mode);
+    }
     return dmfile;
 }
 
@@ -208,6 +227,11 @@ const EncryptionPath DMFile::encryptionPackPropertyPath() const
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packPropertyFileName());
 }
 
+const EncryptionPath DMFile::encryptionConfigurationPath() const
+{
+    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : configurationFileName());
+}
+
 String DMFile::colDataFileName(const FileNameBase & file_name_base)
 {
     return file_name_base + details::DATA_FILE_SUFFIX;
@@ -225,7 +249,7 @@ DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer)
 {
     size_t meta_offset = buffer.count();
     writeString("DTFile format: ", buffer);
-    writeIntText(STORAGE_FORMAT_CURRENT.dm_file, buffer);
+    writeIntText(configuration ? DMFileFormat::V2 : DMFileFormat::V1, buffer);
     writeString("\n", buffer);
     writeText(column_stats, STORAGE_FORMAT_CURRENT.dm_file, buffer);
     size_t meta_size = buffer.count() - meta_offset;
@@ -243,12 +267,15 @@ DMFile::OffsetAndSize DMFile::writePackStatToBuffer(WriteBuffer & buffer)
     return std::make_tuple(pack_offset, pack_size);
 }
 
-DMFile::OffsetAndSize DMFile::writePackPropertyToBuffer(WriteBuffer & buffer)
+DMFile::OffsetAndSize DMFile::writePackPropertyToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest)
 {
     size_t offset = buffer.count();
-    String tmp_buf;
-    pack_properties.SerializeToString(&tmp_buf);
-    writeStringBinary(tmp_buf, buffer);
+    auto   data   = pack_properties.SerializeAsString();
+    if (digest)
+    {
+        digest->update(data.data(), data.size());
+    }
+    writeStringBinary(data, buffer);
     size_t size = buffer.count() - offset;
     return std::make_tuple(offset, size);
 }
@@ -260,7 +287,20 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const WriteLimiter
 
     {
         WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, write_limiter, 4096);
-        writeMetaToBuffer(buf);
+        if (configuration)
+        {
+            auto digest     = configuration->createUnifiedDigest();
+            auto tmp_buffer = WriteBufferFromOwnString{};
+            writeMetaToBuffer(tmp_buffer);
+            auto serialized = tmp_buffer.releaseStr();
+            digest->update(serialized.data(), serialized.length());
+            configuration->addChecksum(metaFileName(), digest->raw());
+            buf.write(serialized.data(), serialized.size());
+        }
+        else
+        {
+            writeMetaToBuffer(buf);
+        }
         buf.sync();
     }
     Poco::File(tmp_meta_path).renameTo(meta_path);
@@ -272,16 +312,47 @@ void DMFile::writePackProperty(const FileProviderPtr & file_provider, const Writ
     String tmp_property_path = property_path + ".tmp";
     {
         WriteBufferFromFileProvider buf(file_provider, tmp_property_path, encryptionPackPropertyPath(), false, write_limiter, 4096);
-        writePackPropertyToBuffer(buf);
+        if (configuration)
+        {
+            auto digest = configuration->createUnifiedDigest();
+            writePackPropertyToBuffer(buf, digest.get());
+            configuration->addChecksum(packPropertyFileName(), digest->raw());
+        }
+        else
+        {
+            writePackPropertyToBuffer(buf);
+        }
         buf.sync();
     }
     Poco::File(tmp_property_path).renameTo(property_path);
+}
+
+
+void DMFile::writeConfiguration(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
+{
+    assert(configuration);
+    String config_path     = configurationPath();
+    String tmp_config_path = config_path + ".tmp";
+    {
+        WriteBufferFromFileProvider buf(
+            file_provider, tmp_config_path, encryptionConfigurationPath(), false, write_limiter, DBMS_DEFAULT_BUFFER_SIZE);
+        {
+            auto stream = OutputStreamWrapper{buf};
+            stream << *configuration;
+        }
+        buf.sync();
+    }
+    Poco::File(tmp_config_path).renameTo(config_path);
 }
 
 void DMFile::writeMetadata(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
 {
     writePackProperty(file_provider, write_limiter);
     writeMeta(file_provider, write_limiter);
+    if (configuration)
+    {
+        writeConfiguration(file_provider, write_limiter);
+    }
 }
 
 void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver)
@@ -319,17 +390,49 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileForm
 
 void DMFile::readColumnStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
-    auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.column_stat_size);
-    buf.seek(meta_pack_info.column_stat_offset);
+    const auto   name        = metaFileName();
+    auto         file_buf    = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.meta_size);
+    auto         meta_buf    = std::vector<char>(meta_pack_info.meta_size);
+    auto         meta_reader = ReadBufferFromMemory{meta_buf.data(), meta_buf.size()};
+    ReadBuffer * buf         = &file_buf;
+    file_buf.seek(meta_pack_info.meta_offset);
+
+    // checksum examination
+    if (configuration)
+    {
+        auto location = configuration->getEmbeddedChecksum().find(name);
+        if (location != configuration->getEmbeddedChecksum().end())
+        {
+            auto digest = configuration->createUnifiedDigest();
+            file_buf.readBig(meta_buf.data(), meta_buf.size());
+            digest->update(meta_buf.data(), meta_buf.size());
+            if (unlikely(!digest->compareRaw(location->second)))
+            {
+                throw TiFlashException(fmt::format("checksum mismatch for {}", metaPath()), Errors::Checksum::DataCorruption);
+            }
+            buf = &meta_reader;
+        }
+        else
+        {
+            log->warning(fmt::format("checksum for {} not found", name));
+        }
+    }
 
     DMFileFormat::Version ver; // Binary version
-    assertString("DTFile format: ", buf);
-    DB::readText(ver, buf);
-    assertString("\n", buf);
-    readText(column_stats, ver, buf);
+    assertString("DTFile format: ", *buf);
+    DB::readText(ver, *buf);
+    assertString("\n", *buf);
+    readText(column_stats, ver, *buf);
+
     // No need to upgrade meta when mode is Mode::SINGLE_FILE
     if (mode == Mode::FOLDER)
     {
+        // for V2, we do not apply in-place upgrade for now
+        // but it should not affect the normal read procedure
+        if (unlikely(ver >= DMFileFormat::V2 && !configuration))
+        {
+            throw TiFlashException("configuration expected but not loaded", Errors::Checksum::Missing);
+        }
         upgradeMetaIfNeed(file_provider, ver);
     }
 }
@@ -338,18 +441,74 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
 {
     size_t packs = meta_pack_info.pack_stat_size / sizeof(PackStat);
     pack_stats.resize(packs);
-    auto buf = openForRead(file_provider, packStatPath(), encryptionPackStatPath(), meta_pack_info.pack_stat_size);
-    buf.seek(meta_pack_info.pack_stat_offset);
-    buf.readStrict((char *)pack_stats.data(), sizeof(PackStat) * packs);
+    const auto path = packStatPath();
+    if (configuration)
+    {
+        auto buf = createReadBufferFromFileBaseByFileProvider(
+            file_provider, path, encryptionPackStatPath(), configuration->getChecksumFrameLength(), nullptr, *configuration);
+        buf->seek(meta_pack_info.pack_stat_offset);
+        if(sizeof(PackStat) * packs != buf->readBig((char *)pack_stats.data(), sizeof(PackStat) * packs)) {
+            throw Exception("Cannot read all data", ErrorCodes::CANNOT_READ_ALL_DATA);
+        }
+    }
+    else
+    {
+        auto buf = openForRead(file_provider, path, encryptionPackStatPath(), meta_pack_info.pack_stat_size);
+        buf.seek(meta_pack_info.pack_stat_offset);
+        if(sizeof(PackStat) * packs != buf.readBig((char *)pack_stats.data(), sizeof(PackStat) * packs)) {
+            throw Exception("Cannot read all data", ErrorCodes::CANNOT_READ_ALL_DATA);
+        }
+    }
 }
+
+void DMFile::readConfiguration(const FileProviderPtr & file_provider)
+{
+    bool exist;
+    {
+        auto tester = Poco::File(configurationPath());
+        exist       = tester.exists();
+    }
+    if (exist)
+    {
+        auto file   = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
+        auto stream = InputStreamWrapper{file};
+        configuration.emplace(stream);
+    }
+    else
+    {
+        configuration.reset();
+    }
+}
+
 
 void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
-    String tmp_buf;
-    auto buf = openForRead(file_provider, packPropertyPath(), encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
+    String     tmp_buf;
+    const auto name = packPropertyFileName();
+    auto       buf  = openForRead(file_provider, packPropertyPath(), encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
     buf.seek(meta_pack_info.pack_property_offset);
+
     readStringBinary(tmp_buf, buf);
     pack_properties.ParseFromString(tmp_buf);
+
+    if (configuration)
+    {
+        auto location = configuration->getEmbeddedChecksum().find(name);
+        if (location != configuration->getEmbeddedChecksum().end())
+        {
+            auto         digest = configuration->createUnifiedDigest();
+            const auto & target = location->second;
+            digest->update(tmp_buf.data(), tmp_buf.size());
+            if (unlikely(!digest->compareRaw(target)))
+            {
+                throw TiFlashException(fmt::format("checksum mismatch for {}", packPropertyPath()), Errors::Checksum::DataCorruption);
+            }
+        }
+        else
+        {
+            log->warning(fmt::format("checksum for {} not found", name));
+        }
+    }
 }
 
 void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaMode & read_meta_mode)
@@ -393,8 +552,20 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaM
         if (auto file = Poco::File(packPropertyPath()); file.exists())
             footer.meta_pack_info.pack_property_size = file.getSize();
 
-        footer.meta_pack_info.column_stat_size = Poco::File(metaPath()).getSize();
-        footer.meta_pack_info.pack_stat_size = Poco::File(packStatPath()).getSize();
+        auto recheck = [&](size_t size) {
+            if (this->configuration) {
+                auto frame_count = size / this->configuration->getChecksumFrameLength()
+                                   + (0 != size % this->configuration->getChecksumFrameLength());
+                size -= frame_count * this->configuration->getChecksumHeaderLength();
+            }
+            return size;
+        };
+
+        if (auto file = Poco::File(packPropertyPath()); file.exists())
+            footer.meta_pack_info.pack_property_size = file.getSize();
+
+        footer.meta_pack_info.meta_size      = Poco::File(metaPath()).getSize();
+        footer.meta_pack_info.pack_stat_size = recheck(Poco::File(packStatPath()).getSize());
     }
 
     if (read_meta_mode.needPackProperty() && footer.meta_pack_info.pack_property_size != 0)
@@ -409,6 +580,11 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaM
 
 void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
 {
+
+    if (STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2 && !configuration)
+    {
+        log->warning("checksum disabled due to lack of configuration");
+    }
     writeMetadata(file_provider, write_limiter);
     if (unlikely(status != Status::WRITING))
         throw Exception("Expected WRITING status, now " + statusString(status));
