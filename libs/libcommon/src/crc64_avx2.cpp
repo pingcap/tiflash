@@ -50,7 +50,7 @@ uint64_t update_vpclmulqdq_avx2(uint64_t state, const void * src, size_t length)
             x[0] = _mm256_xor_si256(chunk[0][0], folded);
         }
         {
-            auto folded = fold(x[2], coeff);
+            auto folded = fold(x[0], coeff);
             x[0] = _mm256_xor_si256(chunk[1][0], folded);
         }
         {
