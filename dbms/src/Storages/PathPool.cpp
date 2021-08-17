@@ -276,11 +276,73 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
         return path_generator(paths, 0);
 
     UInt64 total_available_size = 0;
-    std::vector<FsStats> stats;
+    std::map<FSID, DiskCapacity> disk_stats_map;
+    std::map<FSID, std::vector<String>> fs_path_map;
+    std::map<String, std::pair<FsStats, size_t>> path_capacity;
+
     for (size_t i = 0; i < paths.size(); ++i)
     {
-        stats.emplace_back(std::get<0>(global_capacity->getFsStatsOfPath(paths[i].path)));
-        total_available_size += stats.back().avail_size;
+        const auto & [path_stat, vfs] = global_capacity->getFsStatsOfPath(paths[i].path);
+
+        if (!path_stat.ok)
+        {
+            continue;
+        }
+
+        path_capacity[paths[i].path] = std::pair(path_stat, i);
+
+        // update fs_path_map
+        {
+            const auto & entry = fs_path_map.find(vfs.f_fsid);
+            if (entry == fs_path_map.end())
+            {
+                fs_path_map.insert(std::pair<FSID, std::vector<String>>(vfs.f_fsid,
+                    {
+                        paths[i].path,
+                    }));
+            }
+            else
+            {
+                entry->second.emplace_back(paths[i].path);
+            }
+        }
+
+        // update disk_stats_map
+        {
+            const auto & entry = disk_stats_map.find(vfs.f_fsid);
+            if (entry == disk_stats_map.end())
+            {
+                disk_stats_map.insert(std::pair<FSID, DiskCapacity>(vfs.f_fsid, {vfs, {path_stat}}));
+            }
+            else
+            {
+                entry->second.path_stats.emplace_back(path_stat);
+            }
+        }
+    }
+
+    /// Calutate total_available_size and get a biggest fs
+    size_t biggest_avail_size = 0;
+    FSID biggest_fs = -1;
+    for (const auto & [fs_id, disk_stat_vec] : disk_stats_map)
+    {
+        UInt64 disk_stat_avail_size = 0;
+        auto & vfs_info = disk_stat_vec.vfs_info;
+
+        for (const auto & path_stats : disk_stat_vec.path_stats)
+        {
+            disk_stat_avail_size += path_stats.avail_size;
+        }
+
+        // Calutate single disk info
+        disk_stat_avail_size = std::min(vfs_info.f_bavail * vfs_info.f_frsize, disk_stat_avail_size);
+        if (disk_stat_avail_size > biggest_avail_size)
+        {
+            biggest_avail_size = disk_stat_avail_size;
+            biggest_fs = fs_id;
+        }
+
+        total_available_size += disk_stat_avail_size;
     }
 
     // We should choose path even if there is no available space.
@@ -288,31 +350,38 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
     // If available space is limited by the quota, then write down a GC-ed file can make
     // some files be deleted later.
     if (total_available_size == 0)
-        LOG_WARNING(log, "No available space for all disks, choose randomly.");
-    std::vector<double> ratio;
-    for (size_t i = 0; i < stats.size(); ++i)
     {
-        if (likely(total_available_size != 0))
-            ratio.push_back(1.0 * stats[i].avail_size / total_available_size);
-        else
+        LOG_WARNING(log, "No available space for all disks, choose randomly.");
+        // If no available space. direct return the first one.
+        // There is no need to calculate and choose.
+        return path_generator(paths, 0);
+    }
+
+    auto fs_paths = fs_path_map.find(biggest_fs);
+    if (fs_paths == fs_path_map.end())
+    {
+        LOG_WARNING(log, "Some of DISK have been removed.");
+        return path_generator(paths, 0);
+    }
+
+    auto & select_paths = fs_paths->second;
+
+    /// Find biggest available path in biggest available disk
+    size_t index = 0;
+    double ratio = 0, biggest_ratio = 0;
+    for (size_t i = 0; i < select_paths.size(); ++i)
+    {
+        auto & [single_path_stat, index_in_paths] = path_capacity.find(select_paths[i])->second;
+        ratio = 1.0 * single_path_stat.avail_size / total_available_size;
+        if (biggest_ratio < ratio)
         {
-            // No available space for all disks, choose randomly
-            ratio.push_back(1.0 / paths.size());
+            biggest_ratio = ratio;
+            index = index_in_paths;
         }
     }
 
-    double rand_number = (double)rand() / RAND_MAX;
-    double ratio_sum = 0.0;
-    for (size_t i = 0; i < ratio.size(); i++)
-    {
-        ratio_sum += ratio[i];
-        if ((rand_number < ratio_sum) || (i == ratio.size() - 1))
-        {
-            LOG_INFO(log, "Choose path [index=" << i << "] " << log_msg);
-            return path_generator(paths, i);
-        }
-    }
-    throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
+    LOG_INFO(log, "Choose path [index=" << index << "] " << log_msg);
+    return path_generator(paths, index);
 }
 
 //==========================================================================================
