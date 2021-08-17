@@ -15,7 +15,12 @@ struct RegionMergeResult;
 class Region;
 class MetaRaftCommandDelegate;
 class RegionRaftCommandDelegate;
-using TerminateWaitIndex = bool;
+enum class WaitIndexResult
+{
+    Finished,
+    Terminated,
+    Timeout,
+};
 
 struct RegionMetaSnapshot
 {
@@ -75,7 +80,7 @@ public:
 
     friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2);
 
-    TerminateWaitIndex waitIndex(UInt64 index, std::function<bool(void)> &&) const;
+    WaitIndexResult waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> &&) const;
     bool checkIndex(UInt64 index) const;
 
     RegionMetaSnapshot dumpRegionMetaSnapshot() const;

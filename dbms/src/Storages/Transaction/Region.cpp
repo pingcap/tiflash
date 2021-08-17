@@ -561,21 +561,28 @@ std::tuple<bool, double> Region::waitIndex(UInt64 index, const TMTContext & tmt)
         {
             Stopwatch wait_index_watch;
             LOG_DEBUG(log, toString() << " need to wait learner index: " << index);
-            if (meta.waitIndex(index, [&tmt, &wait_index_watch, index, this]() {
-                    bool ok = tmt.checkRunning();
-                    if (ok && wait_index_watch.elapsedMilliseconds() > tmt.waitIndexTimeout())
-                    {
-                        ok = false;
-                        ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
-                        LOG_WARNING(log, toString(false) << " wait learner index " << index << " timeout");
-                    }
-                    return ok;
-                }))
+            auto timeout_ms = tmt.waitIndexTimeout();
+            auto wait_idx_res = meta.waitIndex(index, timeout_ms, [&tmt]() { return tmt.checkRunning(); });
+            auto elapsed_secs = wait_index_watch.elapsedSeconds();
+            switch (wait_idx_res)
             {
-                return {false, wait_index_watch.elapsedSeconds()};
+            case WaitIndexResult::Finished:
+            {
+                LOG_DEBUG(log, toString(false) << " wait learner index " << index << " done");
+                return {true, elapsed_secs};
             }
-            LOG_DEBUG(log, toString(false) << " wait learner index " << index << " done");
-            return {true, wait_index_watch.elapsedSeconds()};
+            case WaitIndexResult::Terminated:
+            {
+                return {false, elapsed_secs};
+            }
+            case WaitIndexResult::Timeout:
+            {
+                ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
+                LOG_WARNING(log, toString(false) << " wait learner index " << index << " timeout");
+                return {false, elapsed_secs};
+            }
+            }
+            throw Exception("Unknown result of wait index:" + DB::toString(static_cast<int>(wait_idx_res)));
         }
     }
     return {true, 0};
