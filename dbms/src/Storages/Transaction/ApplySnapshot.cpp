@@ -254,9 +254,7 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
 
     Stopwatch watch;
     auto & ctx = tmt.getContext();
-    auto metrics = ctx.getTiFlashMetrics();
-    SCOPE_EXIT(
-        { GET_METRIC(metrics, tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
 
     {
         LOG_INFO(log, "Pre-handle snapshot " << new_region->toString(false) << " with " << snaps.len << " TiKV sst files");
@@ -280,7 +278,7 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
                 "Decode " << std::string_view(snapshot.path.data, snapshot.path.len) << " got [cf: " << CFToName(snapshot.type)
                           << ", kv size: " << kv_size << "]");
             // Note that number of keys in different cf will be aggregated into one metrics
-            GET_METRIC(metrics, tiflash_raft_process_keys, type_apply_snapshot).Increment(kv_size);
+            GET_METRIC(tiflash_raft_process_keys, type_apply_snapshot).Increment(kv_size);
         }
         {
             LOG_INFO(log, "Start to pre-decode " << new_region->toString() << " into block");
@@ -379,8 +377,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 LOG_INFO(log,
                     "Decoding Region snapshot data meet error, sync schema and try to decode again " //
                         << new_region->toString(true) << " [error=" << e.displayText() << "]");
-                auto metrics = context.getTiFlashMetrics();
-                GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
+                GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
                 tmt.getSchemaSyncer()->syncSchemas(context);
                 // Next time should force_decode
                 force_decode = true;
@@ -411,11 +408,7 @@ void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TMTContex
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 
     Stopwatch watch;
-    SCOPE_EXIT({
-        auto & ctx = tmt.getContext();
-        GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_command_duration_seconds, type_apply_snapshot_flush)
-            .Observe(watch.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_flush).Observe(watch.elapsedSeconds()); });
 
     checkAndApplySnapshot(new_region, tmt);
 
@@ -476,10 +469,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
 
     Stopwatch watch;
-    SCOPE_EXIT({
-        auto & ctx = tmt.getContext();
-        GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_command_duration_seconds, type_ingest_sst).Observe(watch.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_ingest_sst).Observe(watch.elapsedSeconds()); });
 
     const RegionPtr region = getRegion(region_id);
     if (region == nullptr)
@@ -530,7 +520,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     {
         // try to flush remain data in memory.
         func_try_flush();
-        region->handleIngestSSTInMemory(snaps, index, term, tmt);
+        region->handleIngestSSTInMemory(snaps, index, term);
         // after `handleIngestSSTInMemory`, all data are stored in `region`, try to flush committed data into storage
         func_try_flush();
     }

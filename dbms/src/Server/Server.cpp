@@ -1114,7 +1114,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializeTiFlashMetrics();
 
     /// Init Rate Limiter
-    global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), config());
+    global_context->initializeRateLimiter(config());
 
     /// Initialize main config reloader.
     auto main_config_reloader = std::make_unique<ConfigReloader>(
@@ -1335,9 +1335,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         {
             // Report the unix timestamp, git hash, release version
-            auto metrics = global_context->getTiFlashMetrics();
             Poco::Timestamp ts;
-            GET_METRIC(metrics, tiflash_server_info, start_time).Set(ts.epochTime());
+            GET_METRIC(tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
         tmt_context.setStatusRunning();

@@ -156,8 +156,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
                 "RegionPersister",
                 std::move(delegator),
                 config,
-                global_context.getFileProvider(),
-                global_context.getTiFlashMetrics());
+                global_context.getFileProvider());
             page_storage->restore();
         }
         else

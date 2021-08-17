@@ -42,7 +42,6 @@ static void writeRegionDataToStorage(
 {
     constexpr auto FUNCTION_NAME = __FUNCTION__;
     const auto & tmt = context.getTMTContext();
-    auto metrics = context.getTiFlashMetrics();
     TableID table_id = region->getMappedTableID();
     UInt64 region_decode_cost = -1, write_part_cost = -1;
 
@@ -107,7 +106,7 @@ static void writeRegionDataToStorage(
             if (!ok)
                 return false;
             region_decode_cost = watch.elapsedMilliseconds();
-            GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(region_decode_cost / 1000.0);
+            GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(region_decode_cost / 1000.0);
         }
 
         /// Write block into storage.
@@ -136,7 +135,7 @@ static void writeRegionDataToStorage(
                 throw Exception("Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())), ErrorCodes::LOGICAL_ERROR);
         }
         write_part_cost = watch.elapsedMilliseconds();
-        GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(write_part_cost / 1000.0);
+        GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(write_part_cost / 1000.0);
 
         LOG_TRACE(log,
             FUNCTION_NAME << ": table " << table_id << ", region " << region->id() << ", cost [region decode " << region_decode_cost
@@ -157,7 +156,7 @@ static void writeRegionDataToStorage(
 
     /// If first try failed, sync schema and force read then write.
     {
-        GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
+        GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
 
         if (!atomicReadWrite(true))
@@ -419,7 +418,6 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
             throw;
     }
 
-    auto metrics = context.getTiFlashMetrics();
     TableID table_id = region->getMappedTableID();
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
     Block res_block;
@@ -455,7 +453,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
             return false;
         schema_version = storage->getTableInfo().schema_version;
         res_block = std::move(block);
-        GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
         return true;
     };
 
@@ -466,7 +464,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
 
     if (!atomicDecode(false))
     {
-        GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
+        GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
 
         if (!atomicDecode(true))
@@ -488,7 +486,6 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 
     auto table_id = region->getMappedTableID();
     auto context = tmt.getContext();
-    auto metrics = context.getTiFlashMetrics();
     const auto atomicGet = [&](bool force_decode) -> bool {
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr)
@@ -522,7 +519,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
 
     if (!atomicGet(false))
     {
-        GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
+        GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
 
         if (!atomicGet(true))
@@ -587,7 +584,6 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
         return res_block;
 
     auto context = tmt.getContext();
-    auto metrics = context.getTiFlashMetrics();
 
     {
         Stopwatch watch;
@@ -598,7 +594,7 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
         if (unlikely(!ok))
             throw Exception("RegionBlockReader decode error", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
 
-        GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
 
         /** TODO: If the pk of the table has a common handle, the extra column is added in 
           * `RegionBlockReader::read`. If the pk is handle, the extra column is added by

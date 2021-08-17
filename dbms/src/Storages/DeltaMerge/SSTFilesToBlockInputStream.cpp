@@ -1,4 +1,3 @@
-#include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Poco/File.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>

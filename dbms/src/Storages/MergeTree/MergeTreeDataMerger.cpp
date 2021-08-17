@@ -674,7 +674,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
                 throw Exception("TMTContext is not initialized, throw exception", ErrorCodes::LOGICAL_ERROR);
             }
 
-            GET_METRIC(data.context.getTiFlashMetrics(), tiflash_tmt_merge_count).Increment();
+            GET_METRIC(tiflash_tmt_merge_count).Increment();
 
             const bool pk_is_uint64 = getTMTPKType(*data.primary_key_data_types[0]) == TMTPKType::UINT64;
 
@@ -740,7 +740,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
 
     Stopwatch watch;
     SCOPE_EXIT ({
-        GET_METRIC(data.context.getTiFlashMetrics(), tiflash_tmt_merge_duration_seconds).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_tmt_merge_duration_seconds).Observe(watch.elapsedSeconds());
     });
 
     MergedBlockOutputStream to{
