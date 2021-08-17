@@ -11,23 +11,25 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
                            const FileProviderPtr & file_provider_,
                            const WriteLimiterPtr & write_limiter_,
                            const DMFileWriter::Options & options_)
-    : dmfile(dmfile_)
-    , write_columns(write_columns_)
-    , options(options_, dmfile)
-    ,
-    // assume pack_stat_file is the first file created inside DMFile
-    // it will create encryption info for the whole DMFile
-    pack_stat_file((options.flags.isSingleFile()) //
-                       ? nullptr
-                       : createWriteBufferFromFileBaseByFileProvider(file_provider_,
-                                                                     dmfile->packStatPath(),
-                                                                     dmfile->encryptionPackStatPath(),
-                                                                     true,
-                                                                     write_limiter_,
-                                                                     0,
-                                                                     0,
-                                                                     options.max_compress_block_size))
-    , single_file_stream((!options.flags.isSingleFile())
+    : dmfile(dmfile_),
+      write_columns(write_columns_),
+      options(options_, dmfile),
+      // assume pack_stat_file is the first file created inside DMFile
+      // it will create encryption info for the whole DMFile
+      pack_stat_file(
+          (options.flags.isSingleFile()) //
+              ? nullptr
+              : (dmfile->configuration ? createWriteBufferFromFileBaseByFileProvider(
+                     file_provider_, dmfile->packStatPath(), dmfile->encryptionPackStatPath(), true, write_limiter_, *dmfile->configuration)
+                                       : createWriteBufferFromFileBaseByFileProvider(file_provider_,
+                                                                                     dmfile->packStatPath(),
+                                                                                     dmfile->encryptionPackStatPath(),
+                                                                                     true,
+                                                                                     write_limiter_,
+                                                                                     0,
+                                                                                     0,
+                                                                                     options.max_compress_block_size))),
+      single_file_stream((!options.flags.isSingleFile())
                              ? nullptr
                              : new SingleFileStream(
                                  dmfile_,
@@ -232,8 +234,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
                 auto offset_in_compressed_block = stream->original_layer.offset();
 
-                writeIntBinary(stream->plain_layer.count(), stream->mark_file);
-                writeIntBinary(offset_in_compressed_block, stream->mark_file);
+                writeIntBinary(stream->plain_layer.count(), *stream->mark_file);
+                writeIntBinary(offset_in_compressed_block, *stream->mark_file);
             },
             {});
 
@@ -307,15 +309,26 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
             if (stream->minmaxes)
             {
-                WriteBufferFromFileProvider buf(
-                    file_provider,
-                    dmfile->colIndexPath(stream_name),
-                    dmfile->encryptionIndexPath(stream_name),
-                    false,
-                    write_limiter);
-                stream->minmaxes->write(*type, buf);
-                buf.sync();
-                bytes_written += buf.getPositionInFile();
+                if (!dmfile->configuration)
+                {
+                    WriteBufferFromFileProvider buf(
+                        file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name), false, write_limiter);
+                    stream->minmaxes->write(*type, buf);
+                    buf.sync();
+                    bytes_written += buf.getPositionInFile();
+                }
+                else
+                {
+                    auto buf = createWriteBufferFromFileBaseByFileProvider(file_provider,
+                                                                           dmfile->colIndexPath(stream_name),
+                                                                           dmfile->encryptionIndexPath(stream_name),
+                                                                           false,
+                                                                           write_limiter,
+                                                                           *dmfile->configuration);
+                    stream->minmaxes->write(*type, *buf);
+                    buf->sync();
+                    bytes_written += buf->getPositionInFile();
+                }
             }
         };
         type->enumerateStreams(callback, {});

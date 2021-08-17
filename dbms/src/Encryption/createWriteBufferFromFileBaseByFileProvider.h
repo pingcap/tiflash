@@ -17,7 +17,7 @@ namespace DB
   * If aio_threshold = 0 or estimated_size < aio_threshold, the write operations are executed synchronously.
   * Otherwise, write operations are performed asynchronously.
   */
-WriteBufferFromFileBase *
+std::unique_ptr<WriteBufferFromFileBase>
 createWriteBufferFromFileBaseByFileProvider(
     const FileProviderPtr & file_provider,
     const std::string & filename_,
