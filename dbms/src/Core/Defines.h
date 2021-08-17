@@ -20,8 +20,6 @@
 
 /// The size of the I/O buffer by default.
 #define DBMS_DEFAULT_BUFFER_SIZE 1048576ULL
-/// The size of the meta reader buffer by default.
-#define DBMS_DEFAULT_META_READER_BUFFER_SIZE 1024
 
 /// When writing data, a buffer of `max_compress_block_size` size is allocated for compression. When the buffer overflows or if into the buffer
 /// more or equal data is written than `min_compress_block_size`, then with the next mark, the data will also compressed

@@ -118,8 +118,6 @@ public:
         static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter = nullptr);
         static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter = nullptr);
 
-        MetaMergingReader(PageFile & page_file_); // should only called by `createFrom`
-
         ~MetaMergingReader();
 
         enum class Status
