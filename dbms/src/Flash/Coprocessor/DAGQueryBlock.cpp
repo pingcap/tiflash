@@ -19,8 +19,6 @@ extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 class Context;
-class TiFlashMetrics;
-using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
 bool isSourceNode(const tipb::Executor * root)
 {
@@ -67,7 +65,7 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
 
 /// construct DAGQueryBlock from a tree struct based executors, which is the
 /// format after supporting join in dag request
-DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMetricsPtr metrics)
+DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
     : id(id_), root(&root_), qb_column_prefix("__QB_" + std::to_string(id_) + "_"), qb_join_subquery_alias(qb_column_prefix + "join")
 {
     const tipb::Executor * current = root;
@@ -83,13 +81,13 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
                     /// executed after aggregation.
                     // todo We should refine the DAGQueryBlock so DAGQueryBlockInterpreter
                     //  could compile the executor in DAG request directly without these preprocess.
-                    GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_sel).Increment();
+                    GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
                     assignOrThrowException(&having, current, HAVING_NAME);
                     having_name = current->executor_id();
                 }
                 else
                 {
-                    GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_sel).Increment();
+                    GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
                     assignOrThrowException(&selection, current, SEL_NAME);
                     selection_name = current->executor_id();
                 }
@@ -97,26 +95,26 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
                 break;
             case tipb::ExecType::TypeAggregation:
             case tipb::ExecType::TypeStreamAgg:
-                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_agg).Increment();
+                GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
                 assignOrThrowException(&aggregation, current, AGG_NAME);
                 aggregation_name = current->executor_id();
                 collectOutPutFieldTypesFromAgg(output_field_types, current->aggregation());
                 current = &current->aggregation().child();
                 break;
             case tipb::ExecType::TypeLimit:
-                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_limit).Increment();
+                GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
                 assignOrThrowException(&limitOrTopN, current, LIMIT_NAME);
                 limitOrTopN_name = current->executor_id();
                 current = &current->limit().child();
                 break;
             case tipb::ExecType::TypeTopN:
-                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_topn).Increment();
+                GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
                 assignOrThrowException(&limitOrTopN, current, TOPN_NAME);
                 limitOrTopN_name = current->executor_id();
                 current = &current->topn().child();
                 break;
             case tipb::ExecType::TypeExchangeSender:
-                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_exchange_sender).Increment();
+                GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_sender).Increment();
                 assignOrThrowException(&exchangeSender, current, EXCHANGE_SENDER_NAME);
                 exchangeServer_name = current->executor_id();
                 current = &current->exchange_sender().child();
@@ -137,29 +135,29 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
     {
         if (source->join().children_size() != 2)
             throw TiFlashException("Join executor children size not equal to 2", Errors::Coprocessor::BadRequest);
-        GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_join).Increment();
-        children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->join().children(0), metrics));
-        children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, source->join().children(1), metrics));
+        GET_METRIC(tiflash_coprocessor_executor_count, type_join).Increment();
+        children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->join().children(0)));
+        children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, source->join().children(1)));
     }
     else if (current->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_exchange_receiver).Increment();
+        GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_receiver).Increment();
     }
     else if (current->tp() == tipb::ExecType::TypeProjection)
     {
-        GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_projection).Increment();
-        children.push_back(std::make_shared<DAGQueryBlock>(id + 1, source->projection().child(), metrics));
+        GET_METRIC(tiflash_coprocessor_executor_count, type_projection).Increment();
+        children.push_back(std::make_shared<DAGQueryBlock>(id + 1, source->projection().child()));
     }
     else if (current->tp() == tipb::ExecType::TypeTableScan)
     {
-        GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_ts).Increment();
+        GET_METRIC(tiflash_coprocessor_executor_count, type_ts).Increment();
     }
     fillOutputFieldTypes();
 }
 
 /// construct DAGQueryBlock from a list struct based executors, which is the
 /// format before supporting join in dag request
-DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors, TiFlashMetricsPtr metrics)
+DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors)
     : id(id_), root(nullptr), qb_column_prefix("__QB_" + std::to_string(id_) + "_"), qb_join_subquery_alias(qb_column_prefix + "join")
 {
     for (int i = (int)executors.size() - 1; i >= 0; i--)
@@ -167,7 +165,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
         switch (executors[i].tp())
         {
             case tipb::ExecType::TypeTableScan:
-                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_ts).Increment();
+                GET_METRIC(tiflash_coprocessor_executor_count, type_ts).Increment();
                 assignOrThrowException(&source, &executors[i], SOURCE_NAME);
                 /// use index as the prefix for executor name so when we sort by
                 /// the executor name, it will result in the same order as it is
@@ -179,7 +177,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                     source_name = std::to_string(i) + "_tablescan";
                 break;
             case tipb::ExecType::TypeSelection:
-                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_sel).Increment();
+                GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
                 assignOrThrowException(&selection, &executors[i], SEL_NAME);
                 if (executors[i].has_executor_id())
                     selection_name = executors[i].executor_id();
@@ -188,7 +186,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 break;
             case tipb::ExecType::TypeStreamAgg:
             case tipb::ExecType::TypeAggregation:
-                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_agg).Increment();
+                GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
                 assignOrThrowException(&aggregation, &executors[i], AGG_NAME);
                 if (executors[i].has_executor_id())
                     aggregation_name = executors[i].executor_id();
@@ -197,7 +195,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 collectOutPutFieldTypesFromAgg(output_field_types, executors[i].aggregation());
                 break;
             case tipb::ExecType::TypeTopN:
-                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_topn).Increment();
+                GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
                 assignOrThrowException(&limitOrTopN, &executors[i], TOPN_NAME);
                 if (executors[i].has_executor_id())
                     limitOrTopN_name = executors[i].executor_id();
@@ -205,7 +203,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                     limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
                 break;
             case tipb::ExecType::TypeLimit:
-                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_limit).Increment();
+                GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
                 assignOrThrowException(&limitOrTopN, &executors[i], LIMIT_NAME);
                 if (executors[i].has_executor_id())
                     limitOrTopN_name = executors[i].executor_id();

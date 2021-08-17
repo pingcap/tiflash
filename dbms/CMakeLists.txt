@@ -33,17 +33,6 @@ if (ENABLE_FAILPOINTS)
     add_definitions(-DFIU_ENABLE)
 endif()
 
-if (ARCH_AMD64)
-    option(DBMS_ENABLE_AVX_SUPPORT "enable AVX and AVX2 support" ON)
-    option(DBMS_ENABLE_AVX512_SUPPORT "enable AVX512 support" ON)
-endif ()
-
-if (ARCH_AARCH64)
-    ## TODO: The following options are reserved for AARCH64, but they are not considered in the code yet.
-    option(DBMS_ENABLE_ASIMD_SUPPORT "enable Advanced SIMD support" OFF)
-    option(DBMS_ENABLE_SVE_SUPPORT "enable Scalable Vector Extension support" OFF)
-endif ()
-
 include_directories (src)
 add_subdirectory (src)
 
@@ -118,6 +107,9 @@ list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctio
 list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
 
 add_library(clickhouse_common_io ${SPLIT_SHARED} ${clickhouse_common_io_headers} ${clickhouse_common_io_sources})
+target_include_directories(clickhouse_common_io BEFORE PUBLIC ${CRC64_INCLUDE_DIR})
+target_include_directories(clickhouse_common_io BEFORE PUBLIC ${CRC64_INCREMENTAL_DIR})
+target_include_directories(clickhouse_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR})
 
 if (ARCH_FREEBSD)
     target_compile_definitions (clickhouse_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
@@ -240,6 +232,8 @@ target_include_directories (clickhouse_common_io BEFORE PUBLIC ${DOUBLE_CONVERSI
 
 # also for copy_headers.sh:
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
+# https://cmake.org/pipermail/cmake/2016-May/063400.html
+target_link_libraries (clickhouse_common_io PUBLIC crc64 xxHash::xxhash)
 
 add_subdirectory (tests)
 
@@ -267,6 +261,7 @@ if (ENABLE_TESTS)
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestBasic.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/FunctionTestUtils.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
@@ -300,29 +295,3 @@ if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
             EXECUTABLE gtests_dbms
     )
 endif()
-
-# Region for specialized CPU flags tuning
-if (DBMS_ENABLE_AVX_SUPPORT)
-    # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
-    # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS "-mavx -mavx2")
-    target_compile_definitions(dbms INTERFACE DBMS_ENABLE_AVX_SUPPORT=1)
-endif ()
-
-if (DBMS_ENABLE_AVX512_SUPPORT)
-    # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
-    # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS
-    #                             "-mavx512bw -mavx512lv -mavx512f -mavx512dq -mavx512_vnni -mavx512cd")
-    target_compile_definitions(dbms INTERFACE DBMS_ENABLE_AVX512_SUPPORT=1)
-endif ()
-
-if (DBMS_ENABLE_ASIMD_SUPPORT)
-    # https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
-    # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS "-march=armv8.6-a+simd")
-    target_compile_definitions(dbms INTERFACE DBMS_ENABLE_ASIMD_SUPPORT=1)
-endif ()
-
-if (DBMS_ENABLE_SVE_SUPPORT)
-    # https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
-    # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS "-march=armv8.6-a+sve")
-    target_compile_definitions(dbms INTERFACE DBMS_ENABLE_SVE_SUPPORT=1)
-endif ()

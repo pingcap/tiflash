@@ -160,7 +160,6 @@ struct ContextShared
     SchemaSyncServicePtr schema_sync_service;               /// Schema sync service instance.
     PartPathSelectorPtr part_path_selector_ptr;             /// PartPathSelector service instance.
     PathCapacityMetricsPtr path_capacity_ptr;               /// Path capacity metrics
-    TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
     FileProviderPtr file_provider;                          /// File provider.
     IORateLimiter io_rate_limiter;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
@@ -1529,15 +1528,7 @@ SchemaSyncServicePtr & Context::getSchemaSyncService()
 void Context::initializeTiFlashMetrics()
 {
     auto lock = getLock();
-    if (shared->tiflash_metrics)
-        throw Exception("TiFlash metrics has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->tiflash_metrics = std::make_shared<TiFlashMetrics>();
-}
-
-TiFlashMetricsPtr Context::getTiFlashMetrics() const
-{
-    auto lock = getLock();
-    return shared->tiflash_metrics;
+    (void)TiFlashMetrics::instance();
 }
 
 void Context::initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption)
@@ -1554,14 +1545,28 @@ FileProviderPtr Context::getFileProvider() const
     return shared->file_provider;
 }
 
-void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config, Poco::Logger* log)
+void Context::initializeRateLimiter(Poco::Util::AbstractConfiguration& config)
 {
-    shared->io_rate_limiter.updateConfig(metrics, config, log);
+    getIORateLimiter().init(config);
+    auto tids = getBackgroundPool().getThreadIds();
+    auto blockable_tids = getBlockableBackgroundPool().getThreadIds();
+    tids.insert(tids.end(), blockable_tids.begin(), blockable_tids.end());
+    getIORateLimiter().setBackgroundThreadIds(tids);
 }
 
-RateLimiterPtr Context::getWriteLimiter() const
+WriteLimiterPtr Context::getWriteLimiter() const
 {
-    return shared->io_rate_limiter.getWriteLimiter();
+    return getIORateLimiter().getWriteLimiter();
+}
+
+IORateLimiter& Context::getIORateLimiter() const
+{
+    return shared->io_rate_limiter;
+}
+
+ReadLimiterPtr Context::getReadLimiter() const
+{
+    return getIORateLimiter().getReadLimiter();
 }
 
 void Context::setInterserverIOAddress(const String & host, UInt16 port)

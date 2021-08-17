@@ -12,6 +12,7 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -59,6 +60,62 @@ constexpr size_t ipv6_bytes_length = 16;
 constexpr size_t uuid_bytes_length = 16;
 constexpr size_t uuid_text_length = 36;
 
+
+template <size_t mask_tail_octets>
+void formatIP(UInt32 ip, char *& out)
+{
+    char * begin = out;
+
+    if constexpr (mask_tail_octets > 0)
+    {
+        for (size_t octet = 0; octet < mask_tail_octets; ++octet)
+        {
+            if (octet > 0)
+            {
+                *out = '.';
+                ++out;
+            }
+
+            memcpy(out, "xxx", 3); /// Strange choice, but meets the specification.
+            out += 3;
+        }
+    }
+
+    /// Write everything backwards. NOTE The loop is unrolled.
+    for (size_t octet = mask_tail_octets; octet < 4; ++octet)
+    {
+        if (octet > 0)
+        {
+            *out = '.';
+            ++out;
+        }
+
+        /// Get the next byte.
+        UInt32 value = (ip >> (octet * 8)) & static_cast<UInt32>(0xFF);
+
+        /// Faster than sprintf. NOTE Actually not good enough. LUT will be better.
+        if (value == 0)
+        {
+            *out = '0';
+            ++out;
+        }
+        else
+        {
+            while (value > 0)
+            {
+                *out = '0' + value % 10;
+                ++out;
+                value /= 10;
+            }
+        }
+    }
+
+    /// And reverse.
+    std::reverse(begin, out);
+
+    *out = '\0';
+    ++out;
+}
 
 class FunctionIPv6NumToString : public IFunction
 {
@@ -118,6 +175,104 @@ public:
             vec_res.resize(pos - begin);
 
             block.getByPosition(result).column = std::move(col_res);
+        }
+        else
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
+
+
+class FunctionTiDBIPv6NumToString : public IFunction
+{
+private:
+    static UInt32 extractUInt32(const UInt8 * p)
+    {
+        UInt32 v = *p++;
+        v = (v << 8) + *p++;
+        v = (v << 8) + *p++;
+        v = (v << 8) + *p++;
+        return v;
+    }
+public:
+    static constexpr auto name = "tiDBIPv6NumToString";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionTiDBIPv6NumToString>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+    bool isInjective(const Block &) override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        DataTypePtr data_type = removeNullable(arguments[0]);
+        if (!data_type->isString())
+            throw Exception(
+                "Illegal type " + data_type->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    {
+        auto [column, nullmap] = removeNullable(block.getByPosition(arguments[0]).column.get());
+
+        if (const auto col = checkAndGetColumn<ColumnString>(column))
+        {
+            size_t size = col->size();
+
+            auto col_res = ColumnString::create();
+            auto nullmap_res = ColumnUInt8::create();
+
+            ColumnString::Chars_t & vec_res = col_res->getChars();
+            ColumnString::Offsets & offsets_res = col_res->getOffsets();
+            ColumnUInt8::Container & vec_res_nullmap = nullmap_res->getData();
+
+            vec_res.resize(size * (IPV6_MAX_TEXT_LENGTH + 1)); /// 1 for trailing '\0'
+            offsets_res.resize(size);
+            vec_res_nullmap.assign(size, static_cast<UInt8>(0));
+
+            char * begin = reinterpret_cast<char *>(&vec_res[0]);
+            char * pos = begin;
+
+            const ColumnString::Chars_t & vec_src = col->getChars();
+            const ColumnString::Offsets & offsets_src = col->getOffsets();
+            size_t prev_offset = 0;
+
+            for (size_t i = 0; i < size; ++i)
+            {
+                if (nullmap && (*nullmap)[i])
+                {
+                    *pos++ = '\0';
+                    vec_res_nullmap[i] = 1;
+                }
+                else
+                {
+                    auto size = (i == 0 ? offsets_src[0] : offsets_src[i] - offsets_src[i - 1]) - 1;
+                    if (size == ipv6_bytes_length)
+                    {
+                        formatIPv6(&vec_src[prev_offset], pos);
+                    }
+                    else if (size == ipv4_bytes_length)
+                    {
+                        auto v = extractUInt32(&vec_src[prev_offset]);
+                        formatIP<0>(v, pos);
+                    }
+                    else
+                    {
+                        *pos++ = '\0';
+                        vec_res_nullmap[i] = 1;
+                    }
+                }
+                offsets_res[i] = pos - begin;
+                prev_offset = offsets_src[i];
+            }
+            vec_res.resize(pos - begin);
+
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(nullmap_res));
         }
         else
             throw Exception(
@@ -432,68 +587,226 @@ public:
     }
 };
 
+class FunctionTiDBIPv6StringToNum : public IFunction
+{
+public:
+    static constexpr auto name = "tiDBIPv6StringToNum";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionTiDBIPv6StringToNum>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        DataTypePtr data_type = removeNullable(arguments[0]);
+        if (!data_type->isString())
+            throw Exception(
+                "Illegal type " + data_type->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+
+    static bool parseIPv4(const char * src, unsigned char * dst)
+    {
+        constexpr auto size = sizeof(UInt32);
+        char bytes[ipv4_bytes_length]{};
+
+        for (const auto i : ext::range(0, size))
+        {
+            UInt32 value = 0;
+            size_t len = 0;
+            while (isNumericASCII(*src) && value <= 255)
+            {
+                value = value * 10 + (*src - '0');
+                ++len;
+                ++src;
+            }
+
+            if (len == 0 || value > 255 || (i < size - 1 && *src != '.'))
+                return false;
+            bytes[i] = value;
+            ++src;
+        }
+
+        if (src[-1] != '\0')
+        {
+            return false;
+        }
+
+        memcpy(dst, bytes, sizeof(bytes));
+        return true;
+    }
+
+    /// slightly altered implementation from http://svn.apache.org/repos/asf/apr/apr/trunk/network_io/unix/inet_pton.c
+    static bool parseIPv6(const char * src, unsigned char * dst)
+    {
+        /// Leading :: requires some special handling.
+        if (*src == ':')
+            if (*++src != ':')
+                return false;
+
+        unsigned char tmp[ipv6_bytes_length]{};
+        auto tp = tmp;
+        auto endp = tp + ipv6_bytes_length;
+        auto curtok = src;
+        auto saw_xdigit = false;
+        UInt32 val{};
+        unsigned char * colonp = nullptr;
+
+        /// Assuming zero-terminated string.
+        while (const auto ch = *src++)
+        {
+            const auto num = unhex(ch);
+
+            if (num != '\xff')
+            {
+                val <<= 4;
+                val |= num;
+                if (val > 0xffffu)
+                    return false;
+
+                saw_xdigit = true;
+                continue;
+            }
+
+            if (ch == ':')
+            {
+                curtok = src;
+                if (!saw_xdigit)
+                {
+                    if (colonp)
+                        return 0;
+
+                    colonp = tp;
+                    continue;
+                }
+
+                if (tp + sizeof(UInt16) > endp)
+                    return 0;
+
+                *tp++ = static_cast<unsigned char>((val >> 8) & 0xffu);
+                *tp++ = static_cast<unsigned char>(val & 0xffu);
+                saw_xdigit = false;
+                val = 0;
+                continue;
+            }
+
+            if (ch == '.' && (tp + ipv4_bytes_length) <= endp)
+            {
+                if (!parseIPv4(curtok, tp))
+                    return 0;
+
+                tp += ipv4_bytes_length;
+                saw_xdigit = false;
+                break; /* '\0' was seen by ipv4_scan(). */
+            }
+
+            return 0;
+        }
+
+        if (saw_xdigit)
+        {
+            if (tp + sizeof(UInt16) > endp)
+                return 0;
+
+            *tp++ = static_cast<unsigned char>((val >> 8) & 0xffu);
+            *tp++ = static_cast<unsigned char>(val & 0xffu);
+        }
+
+        if (colonp)
+        {
+            /*
+             * Since some memmove()'s erroneously fail to handle
+             * overlapping regions, we'll do the shift by hand.
+             */
+            const auto n = tp - colonp;
+
+            for (int i = 1; i <= n; ++i)
+            {
+                endp[-i] = colonp[n - i];
+                colonp[n - i] = 0;
+            }
+            tp = endp;
+        }
+
+        if (tp != endp)
+            return 0;
+
+        memcpy(dst, tmp, sizeof(tmp));
+        return ipv6_bytes_length;
+    }
+
+
+    /// Need to return NULL for invalid input.
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    {
+        auto [column, nullmap] = removeNullable(block.getByPosition(arguments[0]).column.get());
+
+        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column))
+        {
+            size_t size = col->size();
+
+            auto col_res = ColumnString::create();
+            auto nullmap_res = ColumnUInt8::create();
+
+            ColumnString::Chars_t & vec_res = col_res->getChars();
+            ColumnString::Offsets & offsets_res = col_res->getOffsets();
+            ColumnUInt8::Container & vec_res_nullmap = nullmap_res->getData();
+
+            vec_res.resize(size * (ipv6_bytes_length + 1)); /// 1 for trailing '\0'
+            offsets_res.resize(size);
+            vec_res_nullmap.assign(size, static_cast<UInt8>(0));
+
+            unsigned char * begin = reinterpret_cast<unsigned char *>(&vec_res[0]);
+            unsigned char * pos = begin;
+
+            const ColumnString::Chars_t & vec_src = col->getChars();
+            const ColumnString::Offsets & offsets_src = col->getOffsets();
+            size_t prev_offset = 0;
+
+            for (size_t i = 0; i < size; ++i)
+            {
+                if (nullmap && (*nullmap)[i])
+                {
+                    *pos++ = '\0';
+                    vec_res_nullmap[i] = 1;
+                    offsets_res[i] = pos - begin;
+                }
+                else
+                {
+                    const auto * src = reinterpret_cast<const char *>(&vec_src[prev_offset]);
+                    if (parseIPv6(src, pos))
+                        pos += ipv6_bytes_length;
+                    else if (parseIPv4(src, pos))
+                        pos += ipv4_bytes_length;
+                    else
+                        vec_res_nullmap[i] = 1;
+                    *pos++ = '\0';
+                    offsets_res[i] = pos - begin;
+                }
+                prev_offset = offsets_src[i];
+            }
+            vec_res.resize(pos - begin);
+
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(nullmap_res));
+        }
+        else
+            throw Exception(
+                "Illegal column " + column->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
 
 /** If mask_tail_octets > 0, the last specified number of octets will be filled with "xxx".
   */
 template <size_t mask_tail_octets, typename Name>
 class FunctionIPv4NumToString : public IFunction
 {
-private:
-    static void formatIP(UInt32 ip, char *& out)
-    {
-        char * begin = out;
-
-        if constexpr (mask_tail_octets > 0)
-        {
-            for (size_t octet = 0; octet < mask_tail_octets; ++octet)
-            {
-                if (octet > 0)
-                {
-                    *out = '.';
-                    ++out;
-                }
-
-                memcpy(out, "xxx", 3); /// Strange choice, but meets the specification.
-                out += 3;
-            }
-        }
-
-        /// Write everything backwards. NOTE The loop is unrolled.
-        for (size_t octet = mask_tail_octets; octet < 4; ++octet)
-        {
-            if (octet > 0)
-            {
-                *out = '.';
-                ++out;
-            }
-
-            /// Get the next byte.
-            UInt32 value = (ip >> (octet * 8)) & static_cast<UInt32>(0xFF);
-
-            /// Faster than sprintf. NOTE Actually not good enough. LUT will be better.
-            if (value == 0)
-            {
-                *out = '0';
-                ++out;
-            }
-            else
-            {
-                while (value > 0)
-                {
-                    *out = '0' + value % 10;
-                    ++out;
-                    value /= 10;
-                }
-            }
-        }
-
-        /// And reverse.
-        std::reverse(begin, out);
-
-        *out = '\0';
-        ++out;
-    }
-
 public:
     static constexpr auto name = Name::name;
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionIPv4NumToString<mask_tail_octets, Name>>(); }
@@ -512,6 +825,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
+    bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
@@ -534,7 +848,7 @@ public:
 
             for (size_t i = 0; i < vec_in.size(); ++i)
             {
-                formatIP(vec_in[i], pos);
+                formatIP<mask_tail_octets>(vec_in[i], pos);
                 offsets_res[i] = pos - begin;
             }
 
@@ -624,6 +938,116 @@ public:
     }
 };
 
+class FunctionTiDBIPv4StringToNum : public IFunction
+{
+public:
+    static constexpr auto name = "tiDBIPv4StringToNum";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionTiDBIPv4StringToNum>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        DataTypePtr data_type = removeNullable(arguments[0]);
+        if (!data_type->isString())
+            throw Exception(
+                "Illegal type " + data_type->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return makeNullable(std::make_shared<DataTypeUInt32>());
+    }
+
+    /// return <result, is_invalid>
+    /// Port from https://github.com/pingcap/tidb/blob/6063386a9d164399924ef046de76e8fa4b3dd91d/expression/builtin_miscellaneous.go#L417
+    static std::tuple<UInt32, UInt8> parseIPv4(const char * pos, size_t size)
+    {
+        // ip address should not end with '.'.
+        if (size == 0 || pos[size - 1] == '.')
+            return {0, 1};
+
+        UInt32 result = 0;
+        UInt32 value = 0;
+        int dot_count = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            auto c = pos[i];
+            if (isNumericASCII(c))
+            {
+                value = value * 10 + (c - '0');
+                if (value > 255)
+                    return {0, 1};
+            }
+            else if (c == '.')
+            {
+                ++dot_count;
+                if (dot_count > 3)
+                    return {0, 1};
+                result = (result << 8) + value;
+                value = 0;
+            }
+            else
+                return {0, 1};
+        }
+        // 127          -> 0.0.0.127
+        // 127.255      -> 127.0.0.255
+        // 127.256      -> NULL
+        // 127.2.1      -> 127.2.0.1
+        switch (dot_count)
+        {
+        case 1: result <<= 24; break;
+        case 2: result <<= 16; break;
+        case 3: result <<= 8; break;
+        }
+        return {result + value, 0};
+    }
+
+    /// Need to return NULL for invalid input.
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    {
+        auto [column, nullmap] = removeNullable(block.getByPosition(arguments[0]).column.get());
+
+        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column))
+        {
+            auto col_res = ColumnUInt32::create();
+            auto nullmap_res = ColumnUInt8::create();
+
+            ColumnUInt32::Container & vec_res = col_res->getData();
+            ColumnUInt8::Container & vec_res_nullmap = nullmap_res->getData();
+            vec_res.resize(col->size());
+            vec_res_nullmap.assign(col->size(), static_cast<UInt8>(0));
+
+            const ColumnString::Chars_t & vec_src = col->getChars();
+            const ColumnString::Offsets & offsets_src = col->getOffsets();
+            size_t prev_offset = 0;
+
+            for (size_t i = 0; i < vec_res.size(); ++i)
+            {
+                if (nullmap && (*nullmap)[i])
+                {
+                    vec_res_nullmap[i] = 1;
+                }
+                else
+                {
+                    const auto * p = reinterpret_cast<const char *>(&vec_src[prev_offset]);
+                    /// discard the trailing '\0'
+                    auto size = (i == 0 ? offsets_src[0] : offsets_src[i] - offsets_src[i - 1]) - 1;
+                    std::tie(vec_res[i], vec_res_nullmap[i]) = parseIPv4(p, size);
+                }
+                prev_offset = offsets_src[i];
+            }
+
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(nullmap_res));
+        }
+        else
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
 
 class FunctionIPv4ToIPv6 : public IFunction
 {

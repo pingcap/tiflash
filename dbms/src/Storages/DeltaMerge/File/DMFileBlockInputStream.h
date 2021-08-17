@@ -42,6 +42,7 @@ public:
                  context.getSettingsRef().min_bytes_to_use_direct_io,
                  context.getSettingsRef().max_read_buffer_size,
                  context.getFileProvider(),
+                 context.getReadLimiter(),
                  expected_size,
                  read_one_pack_every_time_)
     {

@@ -34,7 +34,7 @@ public:
         Writer(PageFile &, bool sync_on_write, bool create_new_file = true);
         ~Writer();
 
-        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const RateLimiterPtr & rate_limiter = nullptr);
+        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
         void                 tryCloseIdleFd(const Seconds & max_idle_time);
 
         const String &     parentPath() const;
@@ -64,9 +64,9 @@ public:
 
         /// Read pages from files.
         /// After return, the items in to_read could be reordered, but won't be removed or added.
-        PageMap read(PageIdAndEntries & to_read);
+        PageMap read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter = nullptr);
 
-        void read(PageIdAndEntries & to_read, const PageHandler & handler);
+        void read(PageIdAndEntries & to_read, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr);
 
         struct FieldReadInfo
         {
@@ -77,7 +77,7 @@ public:
             FieldReadInfo(PageId id_, PageEntry entry_, std::vector<size_t> fields_) : page_id(id_), entry(entry_), fields(fields_) {}
         };
         using FieldReadInfos = std::vector<FieldReadInfo>;
-        PageMap read(FieldReadInfos & to_read);
+        PageMap read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter = nullptr);
 
         bool isIdle(const Seconds & max_idle_time);
 
@@ -115,8 +115,10 @@ public:
     {
     public:
         MetaMergingReader(PageFile & page_file_);  // should only called by `createFrom`
-        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset, size_t meta_file_buffer_size);
-        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t meta_file_buffer_size);
+        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter = nullptr);
+        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter = nullptr);
+
+        MetaMergingReader(PageFile & page_file_); // should only called by `createFrom`
 
         ~MetaMergingReader();
 
@@ -165,8 +167,7 @@ public:
     private:
         void close();
 
-        void initialize(std::optional<size_t> max_meta_offset, size_t meta_file_buffer_size);
-
+        void initialize(std::optional<size_t> max_meta_offset, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter);
     private:
         PageFile & page_file;
 

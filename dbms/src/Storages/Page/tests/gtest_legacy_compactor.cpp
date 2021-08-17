@@ -170,7 +170,7 @@ try
     opt.remove_tmp_files  = false;
     auto page_files       = PageStorage::listAllPageFiles(file_provider, delegator, storage.page_file_log, opt);
 
-    LegacyCompactor compactor(storage, nullptr);
+    LegacyCompactor compactor(storage, nullptr, nullptr);
     auto && [page_files_left, page_files_compacted, bytes_written] = compactor.tryCompact(std::move(page_files), {});
     (void)page_files_left;
     (void)bytes_written;
@@ -183,7 +183,7 @@ try
 
     PageStorage::MetaMergingQueue mergine_queue;
     {
-        if (auto reader = PageFile::MetaMergingReader::createFrom(page_file, /*meta_file_buffer_size=*/DBMS_DEFAULT_META_READER_BUFFER_SIZE); //
+        if (auto reader = PageFile::MetaMergingReader::createFrom(page_file, /*meta_file_buffer_size=*/DBMS_DEFAULT_META_READER_BUFFER_SIZE, ctx.getReadLimiter()); //
             reader->hasNext())
         {
             reader->moveNext();

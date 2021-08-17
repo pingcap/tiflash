@@ -14,10 +14,10 @@ namespace DB
 /// Central place to define metrics across all subsystems.
 /// Refer to gtest_tiflash_metrics.cpp for more sample defines.
 /// Usage:
-/// GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_response_bytes).Increment(1);
-/// GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_count, type_batch).Set(1);
+/// GET_METRIC(tiflash_coprocessor_response_bytes).Increment(1);
+/// GET_METRIC(tiflash_coprocessor_request_count, type_batch).Set(1);
 /// Maintenance notes:
-/// 1. Use same name prefix for metrics in same subsystem (coprocessor/schema/tmt/raft/etc.).
+/// 1. Use same name prefix for metrics in same subsystem (coprocessor/schema/storage/raft/etc.).
 /// 2. Keep metrics with same prefix next to each other.
 /// 3. Add metrics of new subsystems at tail.
 /// 4. Keep it proper formatted using clang-format.
@@ -126,8 +126,6 @@ namespace DB
         F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}), F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_storage_logical_throughput_bytes, "The logical throughput of read tasks of storage in bytes", Histogram,                    \
         F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 50 * 1024 * 1024}))                                       \
-    M(tiflash_storage_rate_limiter_total_request_bytes, "RateLimiter total requested bytes", Counter)                                     \
-    M(tiflash_storage_rate_limiter_total_alloc_bytes, "RateLimiter total allocated bytes", Counter)                                       \
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                   \
         Histogram, /* these command usually cost servel seconds, increase the start bucket to 50ms */                                     \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                            \
@@ -140,7 +138,12 @@ namespace DB
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
-        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))
+        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                      \
+    M(tiflash_storage_io_limiter, "Storage I/O limiter metrics", Counter, F(type_fg_read_req_bytes, {"type", "fg_read_req_bytes"}),       \
+        F(type_fg_read_alloc_bytes, {"type", "fg_read_alloc_bytes"}), F(type_bg_read_req_bytes, {"type", "bg_read_req_bytes"}),           \
+        F(type_bg_read_alloc_bytes, {"type", "bg_read_alloc_bytes"}), F(type_fg_write_req_bytes, {"type", "fg_write_req_bytes"}),         \
+        F(type_fg_write_alloc_bytes, {"type", "fg_write_alloc_bytes"}), F(type_bg_write_req_bytes, {"type", "bg_write_req_bytes"}),       \
+        F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}))
 
 
 struct ExpBuckets
@@ -246,9 +249,11 @@ private:
 class TiFlashMetrics
 {
 public:
-    TiFlashMetrics();
+    static TiFlashMetrics & instance();
 
 private:
+    TiFlashMetrics();
+
     static constexpr auto profile_events_prefix = "tiflash_system_profile_event_";
     static constexpr auto current_metrics_prefix = "tiflash_system_current_metric_";
     static constexpr auto async_metrics_prefix = "tiflash_system_asynchronous_metric_";
@@ -268,6 +273,12 @@ public:
     }
     APPLY_FOR_METRICS(MAKE_METRIC_MEMBER_M, MAKE_METRIC_MEMBER_F)
 
+    TiFlashMetrics(const TiFlashMetrics &) = delete;
+    TiFlashMetrics & operator=(const TiFlashMetrics &) = delete;
+
+    TiFlashMetrics(TiFlashMetrics &&) = delete;
+    TiFlashMetrics & operator=(TiFlashMetrics &&) = delete;
+
     friend class MetricsPrometheus;
 };
 
@@ -284,9 +295,14 @@ public:
 APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 #undef APPLY_FOR_METRICS
 
-#define __GET_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
-#define __GET_METRIC_0(ptr, family) (ptr)->family.get()
-#define __GET_METRIC_1(ptr, family, metric) (ptr)->family.get(family##_metrics::metric)
+#define __GET_METRIC_MACRO(_1, _2, NAME, ...) NAME
+#ifndef GTEST_TIFLASH_METRICS
+#define __GET_METRIC_0(family) TiFlashMetrics::instance().family.get()
+#define __GET_METRIC_1(family, metric) TiFlashMetrics::instance().family.get(family##_metrics::metric)
+#else
+#define __GET_METRIC_0(family) TestMetrics::instance().family.get()
+#define __GET_METRIC_1(family, metric) TestMetrics::instance().family.get(family##_metrics::metric)
+#endif
 #define GET_METRIC(...) __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0)(__VA_ARGS__)
 
 } // namespace DB

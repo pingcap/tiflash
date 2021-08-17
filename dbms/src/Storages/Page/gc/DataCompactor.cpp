@@ -15,14 +15,16 @@ extern const char force_set_page_data_compact_batch[];
 } // namespace FailPoints
 
 template <typename SnapshotPtr>
-DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const RateLimiterPtr & rate_limiter_)
+DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const WriteLimiterPtr & write_limiter_,
+                                          const ReadLimiterPtr & read_limiter_)
     : storage_name(storage.storage_name),
       delegator(storage.delegator),
       file_provider(storage.getFileProvider()),
       config(std::move(gc_config)),
       log(storage.log),
       page_file_log(storage.page_file_log),
-      rate_limiter(rate_limiter_)
+      write_limiter(write_limiter_),
+      read_limiter(read_limiter_)
 {
 }
 
@@ -305,7 +307,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
             }
 
             // Create meta reader and update `compact_seq`
-            auto meta_reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), config.meta_file_reading_buf_size);
+            auto meta_reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), config.meta_file_reading_buf_size, read_limiter);
             while (meta_reader->hasNext())
             {
                 meta_reader->moveNext();
@@ -387,7 +389,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
             // The changes will be recorded by `gc_file_edit` and the bytes written will be return.
             auto migrate_entries =
                 [compact_sequence, &data_reader, &gc_file_id, &gc_file_writer, &gc_file_edit, this](PageIdAndEntries & entries) -> size_t {
-                const PageMap pages = data_reader->read(entries);
+                const PageMap pages = data_reader->read(entries, read_limiter);
                 WriteBatch    wb;
                 wb.setSequence(compact_sequence);
                 for (const auto & [page_id, entry] : entries)
@@ -401,7 +403,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
                                   page.data.size(),
                                   entry.field_offsets);
                 }
-                return gc_file_writer->write(wb, gc_file_edit, rate_limiter);
+                return gc_file_writer->write(wb, gc_file_edit, write_limiter);
             };
 
 #ifndef NDEBUG

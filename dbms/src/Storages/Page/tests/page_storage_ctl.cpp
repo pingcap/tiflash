@@ -291,7 +291,7 @@ void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & sto
 
     DB::DataCompactor<DB::PageStorage::SnapshotPtr>::ValidPages file_valid_pages;
     {
-        DB::DataCompactor<DB::PageStorage::SnapshotPtr> compactor(storage, config, nullptr);
+        DB::DataCompactor<DB::PageStorage::SnapshotPtr> compactor(storage, config, nullptr, nullptr);
         file_valid_pages = compactor.collectValidPagesInPageFile(snapshot);
     }
 

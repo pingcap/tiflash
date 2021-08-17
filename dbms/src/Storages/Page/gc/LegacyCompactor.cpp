@@ -4,7 +4,7 @@
 
 namespace DB
 {
-LegacyCompactor::LegacyCompactor(const PageStorage & storage, const RateLimiterPtr & rate_limiter_)
+LegacyCompactor::LegacyCompactor(const PageStorage & storage, const WriteLimiterPtr & write_limiter_, const ReadLimiterPtr & read_limiter_)
     : storage_name(storage.storage_name),
       delegator(storage.delegator),
       file_provider(storage.getFileProvider()),
@@ -12,7 +12,8 @@ LegacyCompactor::LegacyCompactor(const PageStorage & storage, const RateLimiterP
       log(storage.log),
       page_file_log(storage.page_file_log),
       version_set(storage.storage_name + ".legacy_compactor", config.version_set_config, log),
-      rate_limiter(rate_limiter_)
+      write_limiter(write_limiter_),
+      read_limiter(read_limiter_)
 {
 }
 
@@ -91,7 +92,7 @@ LegacyCompactor::tryCompact(                 //
     size_t bytes_written = 0;
     if (!info.empty())
     {
-        bytes_written = writeToCheckpoint(storage_path, checkpoint_id, std::move(wb), file_provider, page_file_log, rate_limiter);
+        bytes_written = writeToCheckpoint(storage_path, checkpoint_id, std::move(wb), file_provider, page_file_log, write_limiter);
         // Don't need to insert location since Checkpoint PageFile won't be read except using listAllPageFiles in `PageStorage::restore`
         delegator->addPageFileUsedSize(checkpoint_id, bytes_written, storage_path, /*need_insert_location=*/false);
     }
@@ -129,11 +130,11 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         if (auto iter = writing_files.find(page_file.fileIdLevel()); iter != writing_files.end())
         {
             // create reader with max meta reading offset
-            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), iter->second.meta_offset, config.meta_file_reading_buf_size);
+            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), iter->second.meta_offset, config.meta_file_reading_buf_size, read_limiter);
         }
         else
         {
-            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), config.meta_file_reading_buf_size);
+            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), config.meta_file_reading_buf_size, read_limiter);
         }
         if (reader->hasNext())
         {
@@ -275,7 +276,7 @@ size_t LegacyCompactor::writeToCheckpoint(const String &             storage_pat
                                           WriteBatch &&              wb,
                                           FileProviderPtr &          file_provider,
                                           Poco::Logger *             log,
-                                          const RateLimiterPtr &     rate_limiter)
+                                          const WriteLimiterPtr &     write_limiter)
 {
     size_t bytes_written   = 0;
     auto   checkpoint_file = PageFile::newPageFile(file_id.first, file_id.second, storage_path, file_provider, PageFile::Type::Temp, log);
@@ -283,7 +284,7 @@ size_t LegacyCompactor::writeToCheckpoint(const String &             storage_pat
         auto checkpoint_writer = checkpoint_file.createWriter(false, true);
 
         PageEntriesEdit edit;
-        bytes_written += checkpoint_writer->write(wb, edit, rate_limiter);
+        bytes_written += checkpoint_writer->write(wb, edit, write_limiter);
     }
     // drop "data" part for checkpoint file.
     bytes_written -= checkpoint_file.setCheckpoint();

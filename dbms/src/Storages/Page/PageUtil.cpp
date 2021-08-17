@@ -55,16 +55,16 @@ void syncFile(WritableFilePtr & file)
 
 #ifndef NDEBUG
 void writeFile(
-    WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const RateLimiterPtr & rate_limiter, bool enable_failpoint)
+    WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter, bool enable_failpoint)
 #else
-void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const RateLimiterPtr & rate_limiter)
+void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter)
 #endif
 {
     ProfileEvents::increment(ProfileEvents::PSMWriteCalls);
     ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
 
-    if (rate_limiter)
-        rate_limiter->request(to_write);
+    if (write_limiter)
+        write_limiter->request(to_write);
     size_t bytes_written = 0;
     while (bytes_written != to_write)
     {
@@ -109,13 +109,17 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
 }
 
 
-void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes)
+void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes, const ReadLimiterPtr & read_limiter)
 {
     if (unlikely(expected_bytes == 0))
         return;
 
     ProfileEvents::increment(ProfileEvents::PSMReadCalls);
 
+    if (read_limiter != nullptr)
+    {
+        read_limiter->request(expected_bytes);
+    }
     size_t bytes_read = 0;
     while (bytes_read < expected_bytes)
     {

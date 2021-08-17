@@ -12,8 +12,6 @@
 namespace DB
 {
 
-class TiFlashMetrics;
-using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 struct DecodedTiKVKey;
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 
@@ -22,7 +20,6 @@ struct CoprocessorContext
     Context & db_context;
     const kvrpcpb::Context & kv_context;
     const grpc::ServerContext & grpc_server_context;
-    TiFlashMetricsPtr metrics;
 
     CoprocessorContext(Context & db_context_, const kvrpcpb::Context & kv_context_, const grpc::ServerContext & grpc_server_context_);
 };

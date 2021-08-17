@@ -227,24 +227,24 @@ PageFile::MetaMergingReader::~MetaMergingReader()
     close();
 }
 
-PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t max_meta_offset, size_t meta_file_buffer_size)
+PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t max_meta_offset, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter)
 {
     auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
-    reader->initialize(max_meta_offset, meta_file_buffer_size);
+    reader->initialize(max_meta_offset, meta_file_buffer_size, read_limiter);
     return reader;
 }
 
-PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t meta_file_buffer_size)
+PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter)
 {
     auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
-    reader->initialize(std::nullopt, meta_file_buffer_size);
+    reader->initialize(std::nullopt, meta_file_buffer_size, read_limiter);
     return reader;
 }
 
 // Try to initiallize access to meta, read the whole metadata to memory.
 // Status -> Finished if metadata size is zero.
 //        -> Opened if metadata successfully load from disk.
-void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offset, size_t meta_file_buffer_size)
+void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offset, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter)
 {
     if (status == Status::Opened)
         return;
@@ -274,7 +274,7 @@ void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offs
     }
     size_t reader_buffer_size = meta_file_buffer_size < meta_size ? meta_file_buffer_size : meta_size;
     meta_reading_buffer
-        = std::make_unique<ReadBufferFromFileProvider>(page_file.file_provider, path, page_file.metaEncryptionPath(), reader_buffer_size);
+        = std::make_unique<ReadBufferFromFileProvider>(page_file.file_provider, path, page_file.metaEncryptionPath(), reader_buffer_size, read_limiter);
     // File not exists.
     if (unlikely(meta_reading_buffer->getFD() < 0))
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
@@ -496,7 +496,7 @@ const String & PageFile::Writer::parentPath() const
     return page_file.parent_path;
 }
 
-size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const RateLimiterPtr & rate_limiter)
+size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -515,7 +515,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Ra
 
 #ifndef NDEBUG
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf, bool enable_failpoint) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), rate_limiter, enable_failpoint);
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), write_limiter, enable_failpoint);
         if (sync_on_write)
             PageUtil::syncFile(file);
     };
@@ -523,7 +523,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Ra
     write_buf(meta_file, page_file.meta_file_pos, meta_buf, true);
 #else
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), rate_limiter);
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), write_limiter);
         if (sync_on_write)
             PageUtil::syncFile(file);
     };
@@ -599,7 +599,7 @@ PageFile::Reader::~Reader()
     data_file->close();
 }
 
-PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
+PageMap PageFile::Reader::read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
 
@@ -626,7 +626,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
     PageMap page_map;
     for (const auto & [page_id, entry] : to_read)
     {
-        PageUtil::readFile(data_file, entry.offset, pos, entry.size);
+        PageUtil::readFile(data_file, entry.offset, pos, entry.size, read_limiter);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -657,7 +657,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
     return page_map;
 }
 
-void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & handler)
+void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & handler, const ReadLimiterPtr & read_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
 
@@ -679,7 +679,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     {
         auto && [page_id, entry] = *it;
 
-        PageUtil::readFile(data_file, entry.offset, data_buf, entry.size);
+        PageUtil::readFile(data_file, entry.offset, data_buf, entry.size, read_limiter);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -714,7 +714,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     last_read_time = Clock::now();
 }
 
-PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
+PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
 
@@ -757,7 +757,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
             // TODO: Continuously fields can read by one system call.
             const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
             const auto size_to_read             = end_offset - beg_offset;
-            PageUtil::readFile(data_file, entry.offset + beg_offset, write_offset, size_to_read);
+            PageUtil::readFile(data_file, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
             fields_offset_in_page.emplace(field_index, read_size_this_entry);
 
             if constexpr (PAGE_CHECKSUM_ON_READ)

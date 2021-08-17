@@ -50,20 +50,17 @@ StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const
       log_storage(name + ".log",
                   path_pool.getPSDiskDelegatorMulti("log"),
                   extractConfig(settings, StorageType::Log),
-                  global_ctx.getFileProvider(),
-                  global_ctx.getTiFlashMetrics()),
+                  global_ctx.getFileProvider()),
       // The iops in data_storage is low, only use the first disk for storing data
       data_storage(name + ".data",
                    path_pool.getPSDiskDelegatorSingle("data"),
                    extractConfig(settings, StorageType::Data),
-                   global_ctx.getFileProvider(),
-                   global_ctx.getTiFlashMetrics()),
+                   global_ctx.getFileProvider()),
       // The iops in meta_storage is relatively high, use multi-disks if possible
       meta_storage(name + ".meta",
                    path_pool.getPSDiskDelegatorMulti("meta"),
                    extractConfig(settings, StorageType::Meta),
-                   global_ctx.getFileProvider(),
-                   global_ctx.getTiFlashMetrics()),
+                   global_ctx.getFileProvider()),
       max_log_page_id(0),
       max_data_page_id(0),
       max_meta_page_id(0),
@@ -102,20 +99,20 @@ bool StoragePool::gc(const Settings & /*settings*/, const Seconds & try_gc_perio
     }
 
     bool done_anything = false;
-    auto rate_limiter  = global_context.getWriteLimiter();
-
+    auto write_limiter  = global_context.getWriteLimiter();
+    auto read_limiter  = global_context.getReadLimiter();
     // FIXME: The global_context.settings is mutable, we need a way to reload thses settings.
     // auto config = extractConfig(settings, StorageType::Meta);
     // meta_storage.reloadSettings(config);
-    done_anything |= meta_storage.gc(/*not_skip*/ false, rate_limiter);
+    done_anything |= meta_storage.gc(/*not_skip*/ false, write_limiter, read_limiter);
 
     // config = extractConfig(settings, StorageType::Data);
     // data_storage.reloadSettings(config);
-    done_anything |= data_storage.gc(/*not_skip*/ false, rate_limiter);
+    done_anything |= data_storage.gc(/*not_skip*/ false, write_limiter, read_limiter);
 
     // config = extractConfig(settings, StorageType::Log);
     // log_storage.reloadSettings(config);
-    done_anything |= log_storage.gc(/*not_skip*/ false, rate_limiter);
+    done_anything |= log_storage.gc(/*not_skip*/ false, write_limiter, read_limiter);
 
     return done_anything;
 }
