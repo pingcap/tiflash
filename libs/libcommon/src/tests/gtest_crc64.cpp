@@ -19,6 +19,7 @@ using namespace crc64;
 template <class A, class B>
 using Cases = std::vector<std::pair<A, B>>;
 
+
 bool check_basic_support()
 {
 #if defined(__x86_64__)
@@ -27,6 +28,46 @@ bool check_basic_support()
     return simd_option::SIMDRuntimeSupport(simd_option::SIMDFeature::asimd);
 #endif
 }
+
+struct FullFlagsGuard
+{
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    bool prev_enable_avx;
+#endif
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
+    bool prev_enable_avx512;
+#endif
+#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
+    bool prev_enable_asimd;
+#endif
+    FullFlagsGuard()
+    {
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+        prev_enable_avx = simd_option::ENABLE_AVX;
+        simd_option::ENABLE_AVX = true;
+#endif
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
+        prev_enable_avx512 = simd_option::ENABLE_AVX512;
+        simd_option::ENABLE_AVX512 = true;
+#endif
+#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
+        prev_enable_asimd = simd_option::ENABLE_ASIMD;
+        simd_option::ENABLE_ASIMD = true;
+#endif
+    }
+    ~FullFlagsGuard()
+    {
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+        simd_option::ENABLE_AVX = prev_enable_avx;
+#endif
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
+        simd_option::ENABLE_AVX512 = prev_enable_avx512;
+#endif
+#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
+        simd_option::ENABLE_ASIMD = prev_enable_asimd;
+#endif
+    }
+};
 
 TEST(CRC64, SizeAlign)
 {
@@ -94,8 +135,13 @@ TEST(CRC64, Barrett)
     ASSERT_EQ(b, 0x5e4d'0253'942a'd95dULL);
 }
 
-TEST(CRC64, Simple)
+struct CRC64 : ::testing::TestWithParam<crc64::Mode>
 {
+};
+
+TEST_P(CRC64, Simple)
+{
+    FullFlagsGuard _guard;
     auto cases = Cases<std::vector<char>, uint64_t>{{{}, 0}, {std::vector<char>(1, '@'), 0x7b1b'8ab9'8fa4'b8f8},
         {std::vector<char>{'1', '\x97'}, 0xfeb8'f7a1'ae3b'9bd4}, {std::vector<char>{'M', '\"', '\xdf'}, 0xc016'0ce8'dd46'74d3},
         {std::vector<char>{'l', '\xcd', '\x13', '\xd7'}, 0x5c60'a6af'8299'6ea8}, {std::vector<char>(32, 0), 0xc95a'f861'7cd5'330c},
@@ -107,7 +153,7 @@ TEST(CRC64, Simple)
         {std::vector<char>(1024, 0), 0xc378'6397'2069'270c}};
     for (auto [x, y] : cases)
     {
-        auto simd = crc64::Digest();
+        auto simd = crc64::Digest(GetParam());
         simd.update(x.data(), x.size());
         ASSERT_EQ(simd.checksum(), y) << " auto mode, hex: " << std::hex << y;
         auto table = crc64::Digest(crc64::Mode::Table);
@@ -116,8 +162,9 @@ TEST(CRC64, Simple)
     }
 }
 
-TEST(CRC64, Random)
+TEST_P(CRC64, Random)
 {
+    FullFlagsGuard _guard;
     auto dev = std::random_device{};
     auto seed = dev();
     auto eng = std::mt19937_64{seed};
@@ -131,7 +178,7 @@ TEST(CRC64, Random)
         {
             data[i] = dist(eng);
         }
-        auto simd = crc64::Digest();
+        auto simd = crc64::Digest(GetParam());
         auto table = crc64::Digest(crc64::Mode::Table);
         simd.update(data.data(), data.size());
         table.update(data.data(), data.size());
@@ -139,8 +186,9 @@ TEST(CRC64, Random)
     }
 }
 
-TEST(CRC64, Alignment)
+TEST_P(CRC64, Alignment)
 {
+    FullFlagsGuard _guard;
     auto dev = std::random_device{};
     auto seed = dev();
     auto eng = std::mt19937_64{seed};
@@ -150,7 +198,7 @@ TEST(CRC64, Alignment)
     {
         i = dist(eng);
     }
-    auto digest = crc64::Digest{};
+    auto digest = crc64::Digest{GetParam()};
     digest.update(data.data(), data.size());
     auto initial = digest.checksum();
     auto storage = reinterpret_cast<char *>(::operator new (8192 * 2, std::align_val_t{1024}));
@@ -158,7 +206,7 @@ TEST(CRC64, Alignment)
     for (auto align = 1; align <= 600; ++align)
     {
         std::memcpy(storage + align, data.data(), data.size());
-        auto inner = crc64::Digest{};
+        auto inner = crc64::Digest{GetParam()};
         inner.update(storage + align, data.size());
         ASSERT_EQ( // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
             inner.checksum(),
@@ -167,15 +215,16 @@ TEST(CRC64, Alignment)
     }
 }
 
-TEST(CRC64, Consection)
+TEST_P(CRC64, Consection)
 {
+    FullFlagsGuard _guard;
     auto dev = std::random_device{};
     auto seed = dev();
     auto eng = std::mt19937_64{seed};
     auto dist = std::uniform_int_distribution<char>{};
     auto data = std::vector<char>(65536);
     auto a = crc64::Digest{crc64::Mode::Table};
-    auto b = crc64::Digest{crc64::Mode::Auto};
+    auto b = crc64::Digest{GetParam()};
     for (auto & i : data)
     {
         i = dist(eng);
@@ -188,3 +237,25 @@ TEST(CRC64, Consection)
         ASSERT_EQ(a.checksum(), b.checksum()) << "random engine seeded with: 0x" << std::hex << seed << std::endl;
     }
 }
+
+std::string parmToName(const ::testing::TestParamInfo<crc64::Mode> & info)
+{
+    switch (info.param)
+    {
+        case Mode::Table:
+            return "table";
+        case Mode::Auto:
+            return "auto";
+        case Mode::SIMD_128:
+            return "simd128";
+        case Mode::SIMD_256:
+            return "simd256";
+        case Mode::SIMD_512:
+            return "simd512";
+    }
+    return "";
+}
+
+INSTANTIATE_TEST_CASE_P(Parm, CRC64,
+    testing::Values(crc64::Mode::Table, crc64::Mode::Auto, crc64::Mode::SIMD_128, crc64::Mode::SIMD_256, crc64::Mode::SIMD_512),
+    parmToName);
