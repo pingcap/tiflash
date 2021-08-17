@@ -11,9 +11,11 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/File/DMConfiguration.h>
 #include <Storages/FormatVersion.h>
 #include <common/logger_useful.h>
 
+int migrateServiceMain(DB::Context & context, const struct MigrateArgs & args);
 namespace DB
 {
 namespace DM
@@ -164,7 +166,8 @@ public:
     // `PackProperties` is similar to `PackStats` except it uses protobuf to do serialization
     using PackProperties = dtpb::PackProperties;
 
-    static DMFilePtr create(UInt64 file_id, const String & parent_path, bool single_file_mode = false);
+    static DMFilePtr
+    create(UInt64 file_id, const String & parent_path, bool single_file_mode = false, DMConfigurationOpt configuration = std::nullopt);
 
     static DMFilePtr restore(
         const FileProviderPtr & file_provider,
@@ -238,22 +241,31 @@ public:
     bool isColumnExist(ColId col_id) const { return column_stats.find(col_id) != column_stats.end(); }
     bool isSingleFileMode() const { return mode == Mode::SINGLE_FILE; }
 
-    String toString()
+    String toString() const
     {
         return "{DMFile, packs: " + DB::toString(getPacks()) + ", rows: " + DB::toString(getRows()) + ", bytes: " + DB::toString(getBytes())
             + ", file size: " + DB::toString(getBytesOnDisk()) + "}";
     }
 
+    DMConfigurationOpt & getConfiguration() { return configuration; }
+
 private:
-    DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Mode mode_, Status status_, Poco::Logger * log_)
-        : file_id(file_id_)
-        , ref_id(ref_id_)
-        , parent_path(parent_path_)
-        , column_indices()
-        , mode(mode_)
-        , status(status_)
-        , log(log_)
-    {}
+    DMFile(UInt64             file_id_,
+           UInt64             ref_id_,
+           String             parent_path_,
+           Mode               mode_,
+           Status             status_,
+           Logger *           log_,
+           DMConfigurationOpt configuration_ = std::nullopt)
+        : file_id(file_id_),
+          ref_id(ref_id_),
+          parent_path(std::move(parent_path_)),
+          mode(mode_),
+          status(status_),
+          configuration(std::move(configuration_)),
+          log(log_)
+    {
+    }
 
     bool isFolderMode() const { return mode == Mode::FOLDER; }
 
@@ -262,6 +274,7 @@ private:
     String metaPath() const { return subFilePath(metaFileName()); }
     String packStatPath() const { return subFilePath(packStatFileName()); }
     String packPropertyPath() const { return subFilePath(packPropertyFileName()); }
+    String configurationPath() const { return subFilePath(configurationFileName()); }
 
     using FileNameBase = String;
     String colDataPath(const FileNameBase & file_name_base) const { return subFilePath(colDataFileName(file_name_base)); }
@@ -286,6 +299,7 @@ private:
     const EncryptionPath encryptionMetaPath() const;
     const EncryptionPath encryptionPackStatPath() const;
     const EncryptionPath encryptionPackPropertyPath() const;
+    const EncryptionPath encryptionConfigurationPath() const;
 
     static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
     {
@@ -295,6 +309,7 @@ private:
     static String metaFileName() { return "meta.txt"; }
     static String packStatFileName() { return "pack"; }
     static String packPropertyFileName() { return "property"; }
+    static String configurationFileName() { return "config"; }
 
     static String colDataFileName(const FileNameBase & file_name_base);
     static String colIndexFileName(const FileNameBase & file_name_base);
@@ -303,13 +318,16 @@ private:
     using OffsetAndSize = std::tuple<size_t, size_t>;
     OffsetAndSize writeMetaToBuffer(WriteBuffer & buffer);
     OffsetAndSize writePackStatToBuffer(WriteBuffer & buffer);
-    OffsetAndSize writePackPropertyToBuffer(WriteBuffer & buffer);
+    OffsetAndSize writePackPropertyToBuffer(WriteBuffer & buffer, UnifiedDigestBase * digest = nullptr);
 
     void writeMeta(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
     void writePackProperty(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
+    void writeConfiguration(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
     void readColumnStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
+    void readMeta(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
     void readPackStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
     void readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
+    void readConfiguration(const FileProviderPtr & file_provider);
 
     void writeMetadata(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
     void readMetadata(const FileProviderPtr & file_provider, const ReadMetaMode & read_meta_mode);
@@ -328,7 +346,7 @@ private:
 
     bool isSubFileExists(const String & name) const { return sub_file_stats.find(name) != sub_file_stats.end(); }
 
-    const String subFilePath(const String & file_name) const { return isSingleFileMode() ? path() : path() + "/" + file_name; }
+    String subFilePath(const String & file_name) const { return isSingleFileMode() ? path() : path() + "/" + file_name; }
 
     size_t subFileOffset(const String & file_name) const { return isSingleFileMode() ? sub_file_stats.at(file_name).offset : 0; }
 
@@ -348,8 +366,9 @@ private:
     ColumnStats column_stats;
     std::unordered_set<ColId> column_indices;
 
-    Mode mode;
-    Status status;
+    Mode               mode;
+    Status             status;
+    DMConfigurationOpt configuration; // configuration
 
     SubFileStats sub_file_stats;
 
@@ -358,6 +377,7 @@ private:
     friend class DMFileWriter;
     friend class DMFileReader;
     friend class DMFilePackFilter;
+    friend int ::migrateServiceMain(DB::Context & context, const struct MigrateArgs & args);
 };
 
 inline ReadBufferFromFileProvider openForRead(
