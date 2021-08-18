@@ -114,20 +114,19 @@ try
         copyData(*streams.in, *dag_output_stream);
     }
 
-    auto metrics = context.getTiFlashMetrics();
     auto throughput = dag_context.getTableScanThroughput();
     if (throughput.first)
-        GET_METRIC(metrics, tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
+        GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
 
     auto process_info = context.getProcessListElement()->getInfo();
     auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
     if constexpr (!batch)
     {
-        GET_METRIC(metrics, tiflash_coprocessor_request_memory_usage, type_cop).Observe(peak_memory);
+        GET_METRIC(tiflash_coprocessor_request_memory_usage, type_cop).Observe(peak_memory);
     }
     else
     {
-        GET_METRIC(metrics, tiflash_coprocessor_request_memory_usage, type_super_batch).Observe(peak_memory);
+        GET_METRIC(tiflash_coprocessor_request_memory_usage, type_super_batch).Observe(peak_memory);
     }
 
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))

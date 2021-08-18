@@ -6,7 +6,7 @@
 #include <xxh3.h>
 #include <zlib.h>
 
-#include <crc64.hpp>
+#include <common/crc64.h>
 #include <cstddef>
 #include <cstdint>
 #include <sstream>

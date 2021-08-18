@@ -26,50 +26,42 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-inline void metricRequestBytes(TiFlashMetricsPtr & metrics, LimiterType type, Int64 bytes)
+inline void metricRequestBytes(LimiterType type, Int64 bytes)
 {
-    if (unlikely(metrics == nullptr))
-    {
-        return;
-    }
     switch (type)
     {
         case LimiterType::FG_READ:
-            GET_METRIC(metrics, tiflash_storage_io_limiter, type_fg_read_req_bytes).Increment(bytes);
+            GET_METRIC(tiflash_storage_io_limiter, type_fg_read_req_bytes).Increment(bytes);
             break;
         case LimiterType::BG_READ:
-            GET_METRIC(metrics, tiflash_storage_io_limiter, type_bg_read_req_bytes).Increment(bytes);
+            GET_METRIC(tiflash_storage_io_limiter, type_bg_read_req_bytes).Increment(bytes);
             break;
         case LimiterType::FG_WRITE:
-            GET_METRIC(metrics, tiflash_storage_io_limiter, type_fg_write_req_bytes).Increment(bytes);
+            GET_METRIC(tiflash_storage_io_limiter, type_fg_write_req_bytes).Increment(bytes);
             break;
         case LimiterType::BG_WRITE:
-            GET_METRIC(metrics, tiflash_storage_io_limiter, type_bg_write_req_bytes).Increment(bytes);
+            GET_METRIC(tiflash_storage_io_limiter, type_bg_write_req_bytes).Increment(bytes);
             break;
         default:
             break;
     }
 }
 
-inline void metricAllocBytes(TiFlashMetricsPtr & metrics, LimiterType type, Int64 bytes)
+inline void metricAllocBytes(LimiterType type, Int64 bytes)
 {
-    if (unlikely(metrics == nullptr))
-    {
-        return;
-    }
     switch (type)
     {
         case LimiterType::FG_READ:
-            GET_METRIC(metrics, tiflash_storage_io_limiter, type_fg_read_alloc_bytes).Increment(bytes);
+            GET_METRIC(tiflash_storage_io_limiter, type_fg_read_alloc_bytes).Increment(bytes);
             break;
         case LimiterType::BG_READ:
-            GET_METRIC(metrics, tiflash_storage_io_limiter, type_bg_read_alloc_bytes).Increment(bytes);
+            GET_METRIC(tiflash_storage_io_limiter, type_bg_read_alloc_bytes).Increment(bytes);
             break;
         case LimiterType::FG_WRITE:
-            GET_METRIC(metrics, tiflash_storage_io_limiter, type_fg_write_alloc_bytes).Increment(bytes);
+            GET_METRIC(tiflash_storage_io_limiter, type_fg_write_alloc_bytes).Increment(bytes);
             break;
         case LimiterType::BG_WRITE:
-            GET_METRIC(metrics, tiflash_storage_io_limiter, type_bg_write_alloc_bytes).Increment(bytes);
+            GET_METRIC(tiflash_storage_io_limiter, type_bg_write_alloc_bytes).Increment(bytes);
             break;
         default:
             break;
@@ -93,13 +85,12 @@ inline CurrentMetrics::Increment pendingRequestMetrics(LimiterType type)
     }
 }
 
-WriteLimiter::WriteLimiter(TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_)
+WriteLimiter::WriteLimiter(Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_)
     : refill_period_ms{refill_period_ms_},
       refill_balance_per_period{calculateRefillBalancePerPeriod(rate_limit_per_sec_)},
       available_balance{refill_balance_per_period},
       stop{false},
       requests_to_wait{0},
-      metrics{std::move(metrics_)},
       type(type_),
       alloc_bytes{0}
 {}
@@ -117,7 +108,7 @@ void WriteLimiter::request(Int64 bytes)
     if (!refill_balance_per_period)
         return;
 
-    metricRequestBytes(metrics, type, bytes);
+    metricRequestBytes(type, bytes);
     if (canGrant(bytes))
     {
         consumeBytes(bytes);
@@ -213,7 +204,7 @@ bool WriteLimiter::canGrant(Int64 bytes) { return available_balance >= bytes; }
 
 void WriteLimiter::consumeBytes(Int64 bytes)
 {
-    metricAllocBytes(metrics, type, bytes);
+    metricAllocBytes(type, bytes);
     available_balance -= bytes;
     alloc_bytes += bytes;
 }
@@ -232,7 +223,7 @@ void WriteLimiter::refillAndAlloc()
         {
             // Decrease remaining_bytes to avoid starvation of this request
             next_req->remaining_bytes -= available_balance;
-            metricAllocBytes(metrics, type, available_balance);
+            metricAllocBytes(type, available_balance);
             alloc_bytes += available_balance;
             available_balance = 0;
             break;
@@ -275,9 +266,9 @@ void WriteLimiter::updateMaxBytesPerSec(Int64 max_bytes_per_sec)
     refill_balance_per_period = calculateRefillBalancePerPeriod(max_bytes_per_sec);
 }
 
-ReadLimiter::ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_,
+ReadLimiter::ReadLimiter(std::function<Int64()> getIOStatistic_, Int64 rate_limit_per_sec_, LimiterType type_,
     Int64 get_io_stat_period_us, UInt64 refill_period_ms_)
-    : WriteLimiter(metrics_, rate_limit_per_sec_, type_, refill_period_ms_),
+    : WriteLimiter(rate_limit_per_sec_, type_, refill_period_ms_),
       getIOStatistic(std::move(getIOStatistic_)),
       last_stat_bytes(getIOStatistic()),
       last_stat_time(now()),
@@ -312,7 +303,7 @@ Int64 ReadLimiter::refreshAvailableBalance()
     else
     {
         Int64 real_alloc_bytes = bytes - last_stat_bytes;
-        metricAllocBytes(metrics, type, real_alloc_bytes);
+        metricAllocBytes(type, real_alloc_bytes);
         available_balance -= real_alloc_bytes;
         alloc_bytes += real_alloc_bytes;
     }
@@ -323,7 +314,7 @@ Int64 ReadLimiter::refreshAvailableBalance()
 
 void ReadLimiter::consumeBytes(Int64 bytes)
 {
-    metricRequestBytes(metrics, type, bytes);
+    metricRequestBytes(type, bytes);
     // Do nothing for read.
 }
 
@@ -368,9 +359,8 @@ IORateLimiter::~IORateLimiter()
     }
 }
 
-void IORateLimiter::init(TiFlashMetricsPtr metrics_, Poco::Util::AbstractConfiguration & config_)
+void IORateLimiter::init(Poco::Util::AbstractConfiguration & config_)
 {
-    metrics = metrics_;
     updateConfig(config_);
     runAutoTune();
 }
@@ -440,7 +430,7 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
     }
     else if (bg_read_limiter == nullptr) // bg_bytes != 0 && bg_read_limiter == nullptr
     {
-        bg_read_limiter = std::make_shared<ReadLimiter>(getBgReadIOStatistic, metrics, bg_bytes, LimiterType::BG_READ);
+        bg_read_limiter = std::make_shared<ReadLimiter>(getBgReadIOStatistic, bg_bytes, LimiterType::BG_READ);
     }
     else // bg_bytes != 0 && bg_read_limiter != nullptr
     {
@@ -453,7 +443,7 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
     }
     else if (fg_read_limiter == nullptr) // fg_bytes != 0 && fg_read_limiter == nullptr
     {
-        fg_read_limiter = std::make_shared<ReadLimiter>(getFgReadIOStatistic, metrics, fg_bytes, LimiterType::FG_READ);
+        fg_read_limiter = std::make_shared<ReadLimiter>(getFgReadIOStatistic, fg_bytes, LimiterType::FG_READ);
     }
     else // fg_bytes != 0 && fg_read_limiter != nullptr
     {
@@ -470,7 +460,7 @@ void IORateLimiter::updateWriteLimiter(Int64 bg_bytes, Int64 fg_bytes)
     }
     else if (bg_write_limiter == nullptr)
     {
-        bg_write_limiter = std::make_shared<WriteLimiter>(metrics, bg_bytes, LimiterType::BG_WRITE);
+        bg_write_limiter = std::make_shared<WriteLimiter>(bg_bytes, LimiterType::BG_WRITE);
     }
     else
     {
@@ -483,7 +473,7 @@ void IORateLimiter::updateWriteLimiter(Int64 bg_bytes, Int64 fg_bytes)
     }
     else if (fg_write_limiter == nullptr)
     {
-        fg_write_limiter = std::make_shared<WriteLimiter>(metrics, fg_bytes, LimiterType::FG_WRITE);
+        fg_write_limiter = std::make_shared<WriteLimiter>(fg_bytes, LimiterType::FG_WRITE);
     }
     else
     {

@@ -10,9 +10,6 @@ namespace DB
 
 class StoragePathPool;
 
-class TiFlashMetrics;
-using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
-
 namespace DM
 {
 
@@ -27,7 +24,6 @@ using DMContextPtr = std::shared_ptr<DMContext>;
 struct DMContext : private boost::noncopyable
 {
     const Context &         db_context;
-    const TiFlashMetricsPtr metrics;
 
     StoragePathPool & path_pool;
     StoragePool &     storage_pool;
@@ -85,7 +81,6 @@ public:
               const DB::Settings & settings,
               const String &       query_id_ = "")
         : db_context(db_context_),
-          metrics(db_context.getTiFlashMetrics()),
           path_pool(path_pool_),
           storage_pool(storage_pool_),
           hash_salt(hash_salt_),

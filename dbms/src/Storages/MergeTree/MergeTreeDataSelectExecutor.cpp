@@ -478,13 +478,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                 + std::to_string(region->getMappedTableID()) + ", got " + std::to_string(data.table_info->id),
                             ErrorCodes::LOGICAL_ERROR);
 
-                    GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_count).Increment();
+                    GET_METRIC(tiflash_raft_read_index_count).Increment();
                     Stopwatch read_index_watch;
 
                     /// Blocking learner read. Note that learner read must be performed ahead of data read,
                     /// otherwise the desired index will be blocked by the lock of data read.
                     auto read_index_result = region->learnerRead(mvcc_query_info.read_tso);
-                    GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_duration_seconds)
+                    GET_METRIC(tiflash_raft_read_index_duration_seconds)
                         .Observe(read_index_watch.elapsedSeconds());
 
                     switch (read_index_result.status)
@@ -514,7 +514,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                             region_status = RegionException::RegionReadStatus::NOT_FOUND;
                             continue;
                         }
-                        GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_wait_index_duration_seconds)
+                        GET_METRIC(tiflash_raft_wait_index_duration_seconds)
                             .Observe(wait_index_watch.elapsedSeconds());
                     }
 
@@ -1140,7 +1140,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     if (parts_with_ranges.empty() && !is_txn_engine)
         return {};
 
-    GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_tmt_read_parts_count).Increment(parts_with_ranges.size());
+    GET_METRIC(tiflash_tmt_read_parts_count).Increment(parts_with_ranges.size());
 
     ProfileEvents::increment(ProfileEvents::SelectedParts, parts_with_ranges.size());
     ProfileEvents::increment(ProfileEvents::SelectedRanges, sum_ranges);

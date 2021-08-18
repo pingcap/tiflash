@@ -2,7 +2,6 @@
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #include <gtest/gtest.h>
 #pragma GCC diagnostic pop
-#include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/PosixRandomAccessFile.h>
@@ -71,7 +70,6 @@ constexpr char CHECKSUM_BUFFER_TEST_PATH[] = "/tmp/tiflash_dm_checksum_buffer_gt
 
 auto prepareIO()
 {
-    auto metric = std::make_shared<DB::TiFlashMetrics>();
     auto rate_limiter = std::make_shared<DB::IORateLimiter>();
     auto key_manager = std::make_shared<DB::MockKeyManager>();
     auto file_provider = std::make_shared<DB::FileProvider>(key_manager, true);

@@ -1,3 +1,4 @@
+#define GTEST_TIFLASH_METRICS
 #include <Common/TiFlashMetrics.h>
 #include <gtest/gtest.h>
 
@@ -37,47 +38,47 @@ TEST_APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 
 TEST(TiFlashMetrics, Counter)
 {
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_counter).Increment(0));
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_counter).Increment(1));
-    ASSERT_DOUBLE_EQ(GET_METRIC(&TestMetrics::instance(), test_counter).Value(), 1);
+    ASSERT_NO_THROW(GET_METRIC(test_counter).Increment(0));
+    ASSERT_NO_THROW(GET_METRIC(test_counter).Increment(1));
+    ASSERT_DOUBLE_EQ(GET_METRIC(test_counter).Value(), 1);
 
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_counter_with_1_label).Increment(0));
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_counter_with_1_label, m1).Increment(2));
-    ASSERT_DOUBLE_EQ(GET_METRIC(&TestMetrics::instance(), test_counter_with_1_label).Value(), 2);
+    ASSERT_NO_THROW(GET_METRIC(test_counter_with_1_label).Increment(0));
+    ASSERT_NO_THROW(GET_METRIC(test_counter_with_1_label, m1).Increment(2));
+    ASSERT_DOUBLE_EQ(GET_METRIC(test_counter_with_1_label).Value(), 2);
 
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_counter_with_2_labels).Increment(2));
-    ASSERT_DOUBLE_EQ(GET_METRIC(&TestMetrics::instance(), test_counter_with_2_labels, m1).Value(), 2);
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_counter_with_2_labels, m2).Increment(3));
-    ASSERT_DOUBLE_EQ(GET_METRIC(&TestMetrics::instance(), test_counter_with_2_labels, m2).Value(), 3);
+    ASSERT_NO_THROW(GET_METRIC(test_counter_with_2_labels).Increment(2));
+    ASSERT_DOUBLE_EQ(GET_METRIC(test_counter_with_2_labels, m1).Value(), 2);
+    ASSERT_NO_THROW(GET_METRIC(test_counter_with_2_labels, m2).Increment(3));
+    ASSERT_DOUBLE_EQ(GET_METRIC(test_counter_with_2_labels, m2).Value(), 3);
 }
 
 TEST(TiFlashMetrics, Gauge)
 {
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_gauge).Set(10));
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_gauge).Increment(1));
-    ASSERT_DOUBLE_EQ(GET_METRIC(&TestMetrics::instance(), test_gauge).Value(), 11);
+    ASSERT_NO_THROW(GET_METRIC(test_gauge).Set(10));
+    ASSERT_NO_THROW(GET_METRIC(test_gauge).Increment(1));
+    ASSERT_DOUBLE_EQ(GET_METRIC(test_gauge).Value(), 11);
 
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_gauge_with_1_label).Set(-10));
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_gauge_with_1_label, m1).Increment(2));
-    ASSERT_DOUBLE_EQ(GET_METRIC(&TestMetrics::instance(), test_gauge_with_1_label).Value(), -8);
+    ASSERT_NO_THROW(GET_METRIC(test_gauge_with_1_label).Set(-10));
+    ASSERT_NO_THROW(GET_METRIC(test_gauge_with_1_label, m1).Increment(2));
+    ASSERT_DOUBLE_EQ(GET_METRIC(test_gauge_with_1_label).Value(), -8);
 
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_gauge_with_2_labels).Set(2));
-    ASSERT_DOUBLE_EQ(GET_METRIC(&TestMetrics::instance(), test_gauge_with_2_labels, m1).Value(), 2);
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_gauge_with_2_labels, m2).Set(3));
-    ASSERT_DOUBLE_EQ(GET_METRIC(&TestMetrics::instance(), test_gauge_with_2_labels, m2).Value(), 3);
+    ASSERT_NO_THROW(GET_METRIC(test_gauge_with_2_labels).Set(2));
+    ASSERT_DOUBLE_EQ(GET_METRIC(test_gauge_with_2_labels, m1).Value(), 2);
+    ASSERT_NO_THROW(GET_METRIC(test_gauge_with_2_labels, m2).Set(3));
+    ASSERT_DOUBLE_EQ(GET_METRIC(test_gauge_with_2_labels, m2).Value(), 3);
 }
 
 TEST(TiFlashMetrics, Histogram)
 {
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_histogram).Observe(0.5));
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_histogram).Observe(0.5));
+    ASSERT_NO_THROW(GET_METRIC(test_histogram).Observe(0.5));
+    ASSERT_NO_THROW(GET_METRIC(test_histogram).Observe(0.5));
 
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_histogram_with_1_label).Observe(-10));
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_histogram_with_1_label, m1).Observe(2));
+    ASSERT_NO_THROW(GET_METRIC(test_histogram_with_1_label).Observe(-10));
+    ASSERT_NO_THROW(GET_METRIC(test_histogram_with_1_label, m1).Observe(2));
 
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_histogram_with_2_labels).Observe(2));
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_histogram_with_2_labels, m1).Observe(2));
-    ASSERT_NO_THROW(GET_METRIC(&TestMetrics::instance(), test_histogram_with_2_labels, m2).Observe(3));
+    ASSERT_NO_THROW(GET_METRIC(test_histogram_with_2_labels).Observe(2));
+    ASSERT_NO_THROW(GET_METRIC(test_histogram_with_2_labels, m1).Observe(2));
+    ASSERT_NO_THROW(GET_METRIC(test_histogram_with_2_labels, m2).Observe(3));
 }
 
 } // namespace tests

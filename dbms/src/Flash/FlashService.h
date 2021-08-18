@@ -15,8 +15,6 @@ namespace DB
 {
 
 class IServer;
-class TiFlashMetrics;
-using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
 class FlashService final : public tikvpb::Tikv::Service, public std::enable_shared_from_this<FlashService>, private boost::noncopyable
 {
@@ -53,7 +51,6 @@ private:
 
 private:
     IServer & server;
-    TiFlashMetricsPtr metrics;
     const TiFlashSecurityConfig & security_config;
     Logger * log;
 
