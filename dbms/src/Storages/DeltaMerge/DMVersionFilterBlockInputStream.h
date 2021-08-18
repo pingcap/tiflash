@@ -230,6 +230,8 @@ private:
 
     Poco::Logger * const log;
 
+    /// @note: for this function, gcc does not have a good automatic SIMD for aarch64 yet
+    /// @date: Aug. 18, 2021
     Block readImpl(FilterPtr & res_filter, bool return_filter);
     Block readGeneric(FilterPtr & res_filter, bool return_filter);
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
