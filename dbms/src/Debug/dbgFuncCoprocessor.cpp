@@ -128,6 +128,14 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"cast_decimal_datetime", tipb::ScalarFuncSig::CastDecimalAsTime},
     {"cast_time_datetime", tipb::ScalarFuncSig::CastTimeAsTime},
     {"cast_string_datetime", tipb::ScalarFuncSig::CastStringAsTime},
+    {"round_int", tipb::ScalarFuncSig::RoundInt},
+    {"round_uint", tipb::ScalarFuncSig::RoundInt},
+    {"round_dec", tipb::ScalarFuncSig::RoundDec},
+    {"round_real", tipb::ScalarFuncSig::RoundReal},
+    {"round_with_frac_int", tipb::ScalarFuncSig::RoundWithFracInt},
+    {"round_with_frac_uint", tipb::ScalarFuncSig::RoundWithFracInt},
+    {"round_with_frac_dec", tipb::ScalarFuncSig::RoundWithFracDec},
+    {"round_with_frac_real", tipb::ScalarFuncSig::RoundWithFracReal},
 
 });
 
@@ -777,11 +785,41 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
                 ft->set_collate(collator_id);
                 break;
             }
+            case tipb::ScalarFuncSig::RoundInt:
+            case tipb::ScalarFuncSig::RoundWithFracInt:
+            {
+                expr->set_sig(it_sig->second);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                if (it_sig->first.find("uint") != std::string::npos)
+                    ft->set_flag(TiDB::ColumnFlagUnsigned);
+                ft->set_collate(collator_id);
+                break;
+            }
+            case tipb::ScalarFuncSig::RoundDec:
+            case tipb::ScalarFuncSig::RoundWithFracDec:
+            {
+                expr->set_sig(it_sig->second);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeNewDecimal);
+                ft->set_collate(collator_id);
+                break;
+            }
+            case tipb::ScalarFuncSig::RoundReal:
+            case tipb::ScalarFuncSig::RoundWithFracReal:
+            {
+                expr->set_sig(it_sig->second);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeDouble);
+                ft->set_collate(collator_id);
+                break;
+            }
             default:
             {
                 expr->set_sig(it_sig->second);
                 auto * ft = expr->mutable_field_type();
                 ft->set_tp(TiDB::TypeLongLong);
+                std::cerr << ft->flag() << std::endl;
                 ft->set_flag(TiDB::ColumnFlagUnsigned);
                 ft->set_collate(collator_id);
                 break;
@@ -1662,6 +1700,26 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
                 break;
             case tipb::ScalarFuncSig::CastIntAsReal:
             case tipb::ScalarFuncSig::CastRealAsReal:
+            {
+                ci.tp = TiDB::TypeDouble;
+                break;
+            }
+            case tipb::ScalarFuncSig::RoundInt:
+            case tipb::ScalarFuncSig::RoundWithFracInt:
+            {
+                ci.tp = TiDB::TypeLongLong;
+                if (it_sig->first.find("uint") != std::string::npos)
+                    ci.flag = TiDB::ColumnFlagUnsigned;
+                break;
+            }
+            case tipb::ScalarFuncSig::RoundDec:
+            case tipb::ScalarFuncSig::RoundWithFracDec:
+            {
+                ci.tp = TiDB::TypeNewDecimal;
+                break;
+            }
+            case tipb::ScalarFuncSig::RoundReal:
+            case tipb::ScalarFuncSig::RoundWithFracReal:
             {
                 ci.tp = TiDB::TypeDouble;
                 break;
