@@ -11,6 +11,7 @@
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PDTiKVClient.h>
+#include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataMover.h>
@@ -23,9 +24,6 @@
 
 namespace DB
 {
-
-std::tuple<std::shared_ptr<StorageDeltaMerge>, bool, DM::ColumnDefinesPtr> //
-AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt);
 
 namespace FailPoints
 {
@@ -256,9 +254,7 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
 
     Stopwatch watch;
     auto & ctx = tmt.getContext();
-    auto metrics = ctx.getTiFlashMetrics();
-    SCOPE_EXIT(
-        { GET_METRIC(metrics, tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
 
     {
         LOG_INFO(log, "Pre-handle snapshot " << new_region->toString(false) << " with " << snaps.len << " TiKV sst files");
@@ -282,7 +278,7 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
                 "Decode " << std::string_view(snapshot.path.data, snapshot.path.len) << " got [cf: " << CFToName(snapshot.type)
                           << ", kv size: " << kv_size << "]");
             // Note that number of keys in different cf will be aggregated into one metrics
-            GET_METRIC(metrics, tiflash_raft_process_keys, type_apply_snapshot).Increment(kv_size);
+            GET_METRIC(tiflash_raft_process_keys, type_apply_snapshot).Increment(kv_size);
         }
         {
             LOG_INFO(log, "Start to pre-decode " << new_region->toString() << " into block");
@@ -328,8 +324,8 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
         {
             // Get storage schema atomically, will do schema sync if the storage does not exists.
             // Will return the storage even if it is tombstoned.
-            auto [dm_storage, is_common_handle, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
-            if (unlikely(dm_storage == nullptr))
+            const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
+            if (unlikely(storage == nullptr))
             {
                 // The storage must be physically dropped, throw exception and do cleanup.
                 throw Exception("", ErrorCodes::TABLE_IS_DROPPED);
@@ -346,15 +342,17 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
 
             // Read from SSTs and refine the boundary of blocks output to DTFiles
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
-                new_region, snaps, proxy_helper, dm_storage, schema_snap, gc_safepoint, force_decode, tmt, expected_block_size);
-            auto bounded_stream
-                = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, is_common_handle);
-            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(bounded_stream, snapshot_apply_method, job_type, tmt);
+                new_region, snaps, proxy_helper, schema_snap, gc_safepoint, force_decode, tmt, expected_block_size);
+            auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, schema_snap);
+            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(
+                bounded_stream, storage, schema_snap, snapshot_apply_method, job_type, tmt);
 
             stream->writePrefix();
             stream->write();
             stream->writeSuffix();
             ids = stream->ingestIds();
+
+            (void)table_drop_lock; // the table should not be dropped during ingesting file
             break;
         }
         catch (DB::Exception & e)
@@ -376,8 +374,10 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 }
 
                 // Update schema and try to decode again
-                auto metrics = context.getTiFlashMetrics();
-                GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
+                LOG_INFO(log,
+                    "Decoding Region snapshot data meet error, sync schema and try to decode again " //
+                        << new_region->toString(true) << " [error=" << e.displayText() << "]");
+                GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
                 tmt.getSchemaSyncer()->syncSchemas(context);
                 // Next time should force_decode
                 force_decode = true;
@@ -387,9 +387,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
             else if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
             {
                 // We can ignore if storage is dropped.
-                LOG_INFO(log,
-                    "Pre-handle snapshot to DTFiles is ignored because the table is dropped. [region=" << new_region->toString(true)
-                                                                                                       << "]");
+                LOG_INFO(log, "Pre-handle snapshot to DTFiles is ignored because the table is dropped " << new_region->toString(true));
                 try_clean_up();
                 break;
             }
@@ -410,11 +408,7 @@ void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TMTContex
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 
     Stopwatch watch;
-    SCOPE_EXIT({
-        auto & ctx = tmt.getContext();
-        GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_command_duration_seconds, type_apply_snapshot_flush)
-            .Observe(watch.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_flush).Observe(watch.elapsedSeconds()); });
 
     checkAndApplySnapshot(new_region, tmt);
 
@@ -475,10 +469,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
 
     Stopwatch watch;
-    SCOPE_EXIT({
-        auto & ctx = tmt.getContext();
-        GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_command_duration_seconds, type_ingest_sst).Observe(watch.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_ingest_sst).Observe(watch.elapsedSeconds()); });
 
     const RegionPtr region = getRegion(region_id);
     if (region == nullptr)
@@ -529,7 +520,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     {
         // try to flush remain data in memory.
         func_try_flush();
-        region->handleIngestSSTInMemory(snaps, index, term, tmt);
+        region->handleIngestSSTInMemory(snaps, index, term);
         // after `handleIngestSSTInMemory`, all data are stored in `region`, try to flush committed data into storage
         func_try_flush();
     }

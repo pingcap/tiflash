@@ -20,7 +20,6 @@ else ()
     message (WARNING "You are using an unsupported compiler! Compilation has only been tested with Clang 5+ and GCC 7+.")
 endif ()
 
-
 # Write compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
@@ -40,6 +39,32 @@ message (STATUS "CMAKE_BUILD_TYPE: " ${CMAKE_BUILD_TYPE} )
 set (CMAKE_CONFIGURATION_TYPES "RelWithDebInfo;Debug;Release;MinSizeRel;ASan;UBSan" CACHE STRING "" FORCE)
 
 include (cmake/arch.cmake)
+
+if (ARCH_AMD64)
+    option(TIFLASH_ENABLE_AVX_SUPPORT "enable AVX and AVX2 support" ON)
+    option(TIFLASH_ENABLE_AVX512_SUPPORT "enable AVX512 support" ON)
+endif ()
+
+if (ARCH_AARCH64)
+    option(TIFLASH_ENABLE_ASIMD_SUPPORT "enable Advanced SIMD support" ON)
+    option(TIFLASH_ENABLE_SVE_SUPPORT "enable Scalable Vector Extension support" OFF)
+endif ()
+
+if (TIFLASH_ENABLE_AVX_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_AVX_SUPPORT=1)
+endif ()
+
+if (TIFLASH_ENABLE_AVX512_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_AVX512_SUPPORT=1)
+endif ()
+
+if (TIFLASH_ENABLE_ASIMD_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_ASIMD_SUPPORT=1)
+endif ()
+
+if (TIFLASH_ENABLE_SVE_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_SVE_SUPPORT=1)
+endif ()
 
 if (NOT MSVC)
     set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wall")    # -Werror is also added inside directories with our own code.
@@ -282,7 +307,7 @@ include (cmake/find_kvproto.cmake)
 include (cmake/find_tipb.cmake)
 include (cmake/find_prometheus.cmake)
 include (cmake/find_raftstore_proxy.cmake)
-
+include (cmake/find_xxhash.cmake)
 
 include (cmake/find_contrib_lib.cmake)
 find_contrib_lib(cityhash)
@@ -299,6 +324,9 @@ include (libs/libcommon/cmake/find_cctz.cmake)
 if (ENABLE_MYSQL_STORAGE)
     include (libs/libmysqlxx/cmake/find_mysqlclient.cmake)
 endif()
+
+option (ENABLE_UNWIND "Enable libunwind (better stacktraces)" ON)
+
 include (libs/libdaemon/cmake/find_unwind.cmake)
 
 include (cmake/print_flags.cmake)
@@ -333,7 +361,16 @@ if (ENABLE_TESTS)
     enable_testing()
 endif ()
 
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-mvpclmulqdq -Werror -Wall -Wextra" TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
+if(TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
+    add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=1)
+else()
+    add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)
+endif()
+
 add_subdirectory (libs)
 add_subdirectory (dbms)
 
 include (cmake/print_include_directories.cmake)
+

@@ -8,6 +8,8 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/MPPHandler.h>
+#include <Flash/Mpp/MPPTaskManager.h>
+#include <Flash/Mpp/Utils.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -27,7 +29,6 @@ constexpr char tls_err_msg[] = "common name check is failed";
 
 FlashService::FlashService(IServer & server_)
     : server(server_),
-      metrics(server.context().getTiFlashMetrics()),
       security_config(server_.securityConfig()),
       log(&Logger::get("FlashService"))
 {
@@ -55,13 +56,13 @@ grpc::Status FlashService::Coprocessor(
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
 
-    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_cop).Increment();
-    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cop).Increment();
+    GET_METRIC(tiflash_coprocessor_request_count, type_cop).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Increment();
     Stopwatch watch;
     SCOPE_EXIT({
-        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cop).Decrement();
-        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cop).Observe(watch.elapsedSeconds());
-        GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_cop).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
     grpc::Status ret = executeInThreadPool(cop_pool, [&] {
@@ -89,12 +90,12 @@ grpc::Status FlashService::Coprocessor(
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
 
-    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_super_batch).Increment();
-    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_super_batch).Increment();
+    GET_METRIC(tiflash_coprocessor_request_count, type_super_batch).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch).Increment();
     Stopwatch watch;
     SCOPE_EXIT({
-        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_super_batch).Decrement();
-        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_super_batch).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_super_batch).Observe(watch.elapsedSeconds());
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
@@ -122,13 +123,13 @@ grpc::Status FlashService::Coprocessor(
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
-    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_dispatch_mpp_task).Increment();
-    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Increment();
+    GET_METRIC(tiflash_coprocessor_request_count, type_dispatch_mpp_task).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Increment();
     Stopwatch watch;
     SCOPE_EXIT({
-        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Decrement();
-        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_dispatch_mpp_task).Observe(watch.elapsedSeconds());
-        GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_dispatch_mpp_task).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
     auto [context, status] = createDBContext(grpc_context);
@@ -171,12 +172,12 @@ grpc::Status FlashService::Coprocessor(
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
-    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
-    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
+    GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
     Stopwatch watch;
     SCOPE_EXIT({
-        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
-        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
@@ -231,13 +232,13 @@ grpc::Status FlashService::Coprocessor(
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
-    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_cancel_mpp_task).Increment();
-    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Increment();
+    GET_METRIC(tiflash_coprocessor_request_count, type_cancel_mpp_task).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Increment();
     Stopwatch watch;
     SCOPE_EXIT({
-        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Decrement();
-        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cancel_mpp_task).Observe(watch.elapsedSeconds());
-        GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_cancel_mpp_task).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
     auto [context, status] = createDBContext(grpc_context);
@@ -273,14 +274,14 @@ grpc::Status FlashService::BatchCommands(
     while (stream->Read(&request))
     {
         tikvpb::BatchCommandsResponse response;
-        GET_METRIC(metrics, tiflash_coprocessor_request_count, type_batch).Increment();
-        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_batch).Increment();
-        SCOPE_EXIT({ GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_batch).Decrement(); });
+        GET_METRIC(tiflash_coprocessor_request_count, type_batch).Increment();
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Increment();
+        SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Decrement(); });
         auto start_time = std::chrono::system_clock::now();
         SCOPE_EXIT({
             std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-            GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_batch).Observe(duration_sec.count());
-            GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response.ByteSizeLong());
+            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_batch).Observe(duration_sec.count());
+            GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response.ByteSizeLong());
         });
 
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling batch commands: " << request.DebugString());

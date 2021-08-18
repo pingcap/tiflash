@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <common/mem_utils.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsCommon.h>
@@ -84,9 +85,9 @@ public:
         return nested_function->getName();
     }
 
-    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator) override
+    void setCollators(TiDB::TiDBCollators & collators) override
     {
-        nested_function->setCollator(collator);
+        nested_function->setCollators(collators);
     }
 
     DataTypePtr getReturnType() const override
@@ -245,9 +246,9 @@ public:
         return nested_function->getName();
     }
 
-    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator) override
+    void setCollators(TiDB::TiDBCollators & collators) override
     {
-        nested_function->setCollator(collator);
+        nested_function->setCollators(collators);
     }
 
     DataTypePtr getReturnType() const override
@@ -433,7 +434,7 @@ public:
                 batch_size, this->nestedPlace(place), &nested_column, null_map, arena, if_argument_pos);
 
             if constexpr (result_is_nullable)
-                if (!memoryIsByte(null_map, batch_size, 1))
+                if (!mem_utils::memoryIsByte(null_map, batch_size, std::byte{1}))
                     this->setFlag(place);
         }
         else
