@@ -37,7 +37,7 @@ public:
 
     virtual std::map<FSID, DiskCapacity> getDiskStats();
 
-    std::tuple<FsStats, struct statvfs> getFsStatsOfPath(std::string_view file_path);
+    std::tuple<FsStats, struct statvfs> getFsStatsOfPath(std::string_view file_path) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

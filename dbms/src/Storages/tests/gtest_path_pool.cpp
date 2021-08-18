@@ -331,12 +331,12 @@ public:
         : PathCapacityMetrics(capacity_quota_, main_paths_, main_capacity_quota_, latest_paths_, latest_capacity_quota_)
     {}
 
-    std::map<FSID, DiskCapacity> getDiskStats() override { return *disk_stats_map; }
+    std::map<FSID, DiskCapacity> getDiskStats() override { return disk_stats_map; }
 
-    void setDiskStats(std::map<FSID, DiskCapacity> & disk_stats_map_) { disk_stats_map = &disk_stats_map_; }
+    void setDiskStats(std::map<FSID, DiskCapacity> & disk_stats_map_) { disk_stats_map = disk_stats_map_; }
 
 private:
-    std::map<FSID, DiskCapacity> * disk_stats_map = nullptr;
+    std::map<FSID, DiskCapacity> disk_stats_map;
 };
 
 class PathCapcatity : public DB::base::TiFlashStorageTestBasic
@@ -457,7 +457,6 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
     ASSERT_EQ(total_stats.used_size, 16);
     ASSERT_EQ(total_stats.avail_size, 50);
 
-
     /// disk 2:
     ///     - disk status:
     ///         - total size = 100 * 1
@@ -476,6 +475,7 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
             {.used_size = 40, .avail_size = 8, .capacity_size = 48, .ok = 1},
             {.used_size = 12, .avail_size = 38, .capacity_size = 50, .ok = 1},
         }};
+    capacity.setDiskStats(disk_capacity_map);
 
     total_stats = capacity.getFsStats();
     ASSERT_EQ(total_stats.capacity_size, 100 + 98);

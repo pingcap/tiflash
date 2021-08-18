@@ -184,7 +184,7 @@ FsStats PathCapacityMetrics::getFsStats()
     return total_stat;
 }
 
-std::tuple<FsStats, struct statvfs> PathCapacityMetrics::getFsStatsOfPath(std::string_view file_path)
+std::tuple<FsStats, struct statvfs> PathCapacityMetrics::getFsStatsOfPath(std::string_view file_path) const
 {
     ssize_t path_idx = locatePath(file_path);
     if (unlikely(path_idx == INVALID_INDEX))
