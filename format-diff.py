@@ -15,11 +15,10 @@ def run_cmd(cmd, show_cmd=False):
 def main():
     default_suffix = ['.cpp', '.h', '.cc', '.hpp']
     parser = argparse.ArgumentParser(description='TiFlash Code Format',
-                                     formatter_class=argparse.RawTextHelpFormatter)
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--repo_path', help='path of tics repository', default=os.getcwd())
     parser.add_argument('--suffix',
-                        help='suffix of files to format, split by space, default: {}'.format(' '.join(default_suffix)),
-                        default=' '.join(default_suffix))
+                        help='suffix of files to format, split by space', default=' '.join(default_suffix))
     parser.add_argument('--ignore_suffix', help='ignore files with suffix, split by space')
     parser.add_argument('--diff_from', help='commit hash/branch to check git diff', default='HEAD')
     parser.add_argument('--check_formatted', help='exit -1 if NOT formatted', action='store_true')
