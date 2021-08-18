@@ -92,8 +92,9 @@ void PathCapacityMetrics::freeUsedSize(std::string_view file_path, size_t used_b
     path_infos[path_idx].used_bytes -= used_bytes;
 }
 
-void PathCapacityMetrics::getDiskStats(std::map<FSID, DiskCapacity> & disk_stats_map)
+std::map<FSID, DiskCapacity> PathCapacityMetrics::getDiskStats()
 {
+    std::map<FSID, DiskCapacity> disk_stats_map;
     for (size_t i = 0; i < path_infos.size(); ++i)
     {
         struct statvfs vfs;
@@ -116,6 +117,7 @@ void PathCapacityMetrics::getDiskStats(std::map<FSID, DiskCapacity> & disk_stats
             entry->second.path_stats.emplace_back(path_stat);
         }
     }
+    return disk_stats_map;
 }
 
 FsStats PathCapacityMetrics::getFsStats()
@@ -125,8 +127,7 @@ FsStats PathCapacityMetrics::getFsStats()
 
     // Build the disk stats map
     // which use to measure single disk capacoty and available size
-    std::map<FSID, DiskCapacity> disk_stats_map;
-    getDiskStats(disk_stats_map);
+    auto disk_stats_map = getDiskStats();
 
     for (auto fs_it = disk_stats_map.begin(); fs_it != disk_stats_map.end(); ++fs_it)
     {

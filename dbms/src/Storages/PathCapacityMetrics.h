@@ -35,7 +35,7 @@ public:
 
     FsStats getFsStats();
 
-    virtual void getDiskStats(std::map<FSID, DiskCapacity> & disk_stats_map);
+    virtual std::map<FSID, DiskCapacity> getDiskStats();
 
     std::tuple<FsStats, struct statvfs> getFsStatsOfPath(std::string_view file_path);
 

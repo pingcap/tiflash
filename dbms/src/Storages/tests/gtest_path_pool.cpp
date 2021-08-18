@@ -331,7 +331,7 @@ public:
         : PathCapacityMetrics(capacity_quota_, main_paths_, main_capacity_quota_, latest_paths_, latest_capacity_quota_)
     {}
 
-    void getDiskStats(std::map<FSID, DiskCapacity> & disk_stats_map_) override { disk_stats_map_ = *disk_stats_map; }
+    std::map<FSID, DiskCapacity> getDiskStats() override { return *disk_stats_map; }
 
     void setDiskStats(std::map<FSID, DiskCapacity> & disk_stats_map_) { disk_stats_map = &disk_stats_map_; }
 
