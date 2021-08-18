@@ -1,122 +1,122 @@
 # const frac
 
-mysql> drop table if exists test.i8
-mysql> create table test.i8 (id bigint, a tinyint)
-mysql> alter table test.i8 set tiflash replica 1
-mysql> insert into test.i8 values (1, 0), (2, 1), (3, -1), (4, 49), (5, 50), (6, -49), (7, -50), (8, 127), (9, -128), (10, null)
-func> wait_table test i8
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(a), sum(round(a, 1)), sum(round(a, 0)), sum(round(a, -1)), sum(round(a, -2)), sum(round(a, -3)), sum(round(a, -4)) from test.i8 group by id order by id
-+--------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+
-| sum(a) | sum(round(a, 1)) | sum(round(a, 0)) | sum(round(a, -1)) | sum(round(a, -2)) | sum(round(a, -3)) | sum(round(a, -4)) |
-+--------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+
-|      0 |                0 |                0 |                 0 |                 0 |                 0 |                 0 |
-|      1 |                1 |                1 |                 0 |                 0 |                 0 |                 0 |
-|     -1 |               -1 |               -1 |                 0 |                 0 |                 0 |                 0 |
-|     49 |               49 |               49 |                50 |                 0 |                 0 |                 0 |
-|     50 |               50 |               50 |                50 |               100 |                 0 |                 0 |
-|    -49 |              -49 |              -49 |               -50 |                 0 |                 0 |                 0 |
-|    -50 |              -50 |              -50 |               -50 |              -100 |                 0 |                 0 |
-|    127 |              127 |              127 |               130 |               100 |                 0 |                 0 |
-|   -128 |             -128 |             -128 |              -130 |              -100 |                 0 |                 0 |
-|   NULL |             NULL |             NULL |              NULL |              NULL |              NULL |              NULL |
-+--------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+
-
-mysql> drop table if exists test.u8
-mysql> create table test.u8 (id bigint, a tinyint unsigned)
-mysql> alter table test.u8 set tiflash replica 1
-mysql> insert into test.u8 values (1, 0), (2, 4), (3, 5), (4, 49), (5, 50), (6, 255), (7, null)
-func> wait_table test u8
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(a), sum(round(a, 1)), sum(round(a, 0)), sum(round(a, -1)), sum(round(a, -2)), sum(round(a, -3)), sum(round(a, -4)) from test.u8 group by id order by id
-+--------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+
-| sum(a) | sum(round(a, 1)) | sum(round(a, 0)) | sum(round(a, -1)) | sum(round(a, -2)) | sum(round(a, -3)) | sum(round(a, -4)) |
-+--------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+
-|      0 |                0 |                0 |                 0 |                 0 |                 0 |                 0 |
-|      4 |                4 |                4 |                 0 |                 0 |                 0 |                 0 |
-|      5 |                5 |                5 |                10 |                 0 |                 0 |                 0 |
-|     49 |               49 |               49 |                50 |                 0 |                 0 |                 0 |
-|     50 |               50 |               50 |                50 |               100 |                 0 |                 0 |
-|    255 |              255 |              255 |               260 |               300 |                 0 |                 0 |
-|   NULL |             NULL |             NULL |              NULL |              NULL |              NULL |              NULL |
-+--------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+
-
-mysql> drop table if exists test.i32
-mysql> create table test.i32 (id bigint, a int)
-mysql> alter table test.i32 set tiflash replica 1
-mysql> insert into test.i32 value (1, 0), (2, 4), (3, 5), (4, -4), (5, -5), (6, 499999999), (7, 500000000), (8, -499999999), (9, -500000000), (10, 2147483647), (11, -2147483648), (12, null)
-func> wait_table test i32
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(a), sum(round(a, 1)), sum(round(a, 0)), sum(round(a, -1)), sum(round(a, -2)), sum(round(a, -8)), sum(round(a, -9)), sum(round(a, -10)) from test.i32 group by id order by id
-+-------------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+--------------------+
-| sum(a)      | sum(round(a, 1)) | sum(round(a, 0)) | sum(round(a, -1)) | sum(round(a, -2)) | sum(round(a, -8)) | sum(round(a, -9)) | sum(round(a, -10)) |
-+-------------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+--------------------+
-|           0 |                0 |                0 |                 0 |                 0 |                 0 |                 0 |                  0 |
-|           4 |                4 |                4 |                 0 |                 0 |                 0 |                 0 |                  0 |
-|           5 |                5 |                5 |                10 |                 0 |                 0 |                 0 |                  0 |
-|          -4 |               -4 |               -4 |                 0 |                 0 |                 0 |                 0 |                  0 |
-|          -5 |               -5 |               -5 |               -10 |                 0 |                 0 |                 0 |                  0 |
-|   499999999 |        499999999 |        499999999 |         500000000 |         500000000 |         500000000 |                 0 |                  0 |
-|   500000000 |        500000000 |        500000000 |         500000000 |         500000000 |         500000000 |        1000000000 |                  0 |
-|  -499999999 |       -499999999 |       -499999999 |        -500000000 |        -500000000 |        -500000000 |                 0 |                  0 |
-|  -500000000 |       -500000000 |       -500000000 |        -500000000 |        -500000000 |        -500000000 |       -1000000000 |                  0 |
-|  2147483647 |       2147483647 |       2147483647 |        2147483650 |        2147483600 |        2100000000 |        2000000000 |                  0 |
-| -2147483648 |      -2147483648 |      -2147483648 |       -2147483650 |       -2147483600 |       -2100000000 |       -2000000000 |                  0 |
-|        NULL |             NULL |             NULL |              NULL |              NULL |              NULL |              NULL |               NULL |
-+-------------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+--------------------+
-
-mysql> drop table if exists test.u32
-mysql> create table test.u32 (id bigint, a int unsigned)
-mysql> alter table test.u32 set tiflash replica 1
-mysql> insert into test.u32 value (1, 0), (2, 4), (3, 5), (4, 499999999), (5, 500000000), (6, 4294967295), (7, null)
-func> wait_table test u32
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(a), sum(round(a, 1)), sum(round(a, 0)), sum(round(a, -1)), sum(round(a, -2)), sum(round(a, -8)), sum(round(a, -9)), sum(round(a, -10)) from test.u32 group by id order by id
-+------------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+--------------------+
-| sum(a)     | sum(round(a, 1)) | sum(round(a, 0)) | sum(round(a, -1)) | sum(round(a, -2)) | sum(round(a, -8)) | sum(round(a, -9)) | sum(round(a, -10)) |
-+------------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+--------------------+
-|          0 |                0 |                0 |                 0 |                 0 |                 0 |                 0 |                  0 |
-|          4 |                4 |                4 |                 0 |                 0 |                 0 |                 0 |                  0 |
-|          5 |                5 |                5 |                10 |                 0 |                 0 |                 0 |                  0 |
-|  499999999 |        499999999 |        499999999 |         500000000 |         500000000 |         500000000 |                 0 |                  0 |
-|  500000000 |        500000000 |        500000000 |         500000000 |         500000000 |         500000000 |        1000000000 |                  0 |
-| 4294967295 |       4294967295 |       4294967295 |        4294967300 |        4294967300 |        4300000000 |        4000000000 |                  0 |
-|       NULL |             NULL |             NULL |              NULL |              NULL |              NULL |              NULL |               NULL |
-+------------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+--------------------+
-
-mysql> drop table if exists test.i64
-mysql> create table test.i64 (id bigint, a bigint)
-mysql> alter table test.i64 set tiflash replica 1
-mysql> insert into test.i64 values (1, 0), (2, 4), (3, 5), (4, -4), (5, -5), (6, 499999999999999999), (7, 500000000000000000), (8, -499999999999999999), (9, -500000000000000000), (10, null)
-func> wait_table test i64
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(a), sum(round(a, 1)), sum(round(a, 0)), sum(round(a, -1)), sum(round(a, -2)), sum(round(a, -18)), sum(round(a, -19)), sum(round(a, -20)) from test.i64 group by id order by id
-+---------------------+---------------------+---------------------+---------------------+---------------------+----------------------+--------------------+--------------------+
-| sum(a)              | sum(round(a, 1))    | sum(round(a, 0))    | sum(round(a, -1))   | sum(round(a, -2))   | sum(round(a, -18))   | sum(round(a, -19)) | sum(round(a, -20)) |
-+---------------------+---------------------+---------------------+---------------------+---------------------+----------------------+--------------------+--------------------+
-|                   0 |                   0 |                   0 |                   0 |                   0 |                    0 |                  0 |                  0 |
-|                   4 |                   4 |                   4 |                   0 |                   0 |                    0 |                  0 |                  0 |
-|                   5 |                   5 |                   5 |                  10 |                   0 |                    0 |                  0 |                  0 |
-|                  -4 |                  -4 |                  -4 |                   0 |                   0 |                    0 |                  0 |                  0 |
-|                  -5 |                  -5 |                  -5 |                 -10 |                   0 |                    0 |                  0 |                  0 |
-|  499999999999999999 |  499999999999999999 |  499999999999999999 |  500000000000000000 |  500000000000000000 |                    0 |                  0 |                  0 |
-|  500000000000000000 |  500000000000000000 |  500000000000000000 |  500000000000000000 |  500000000000000000 |  1000000000000000000 |                  0 |                  0 |
-| -499999999999999999 | -499999999999999999 | -499999999999999999 | -500000000000000000 | -500000000000000000 |                    0 |                  0 |                  0 |
-| -500000000000000000 | -500000000000000000 | -500000000000000000 | -500000000000000000 | -500000000000000000 | -1000000000000000000 |                  0 |                  0 |
-|                NULL |                NULL |                NULL |                NULL |                NULL |                 NULL |               NULL |               NULL |
-+---------------------+---------------------+---------------------+---------------------+---------------------+----------------------+--------------------+--------------------+
-
-mysql> drop table if exists test.u64
-mysql> create table test.u64 (id bigint, a bigint unsigned)
-mysql> alter table test.u64 set tiflash replica 1
-mysql> insert into test.u64 values (1, 0), (2, 4), (3, 5), (4, 4999999999999999999), (5, 5000000000000000000), (6, null)
-func> wait_table test u64
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(a), sum(round(a, 1)), sum(round(a, 0)), sum(round(a, -1)), sum(round(a, -2)), sum(round(a, -16)), sum(round(a, -18)), sum(round(a, -19)), sum(round(a, -20)) from test.u64 group by id order by id
-+---------------------+---------------------+---------------------+---------------------+---------------------+---------------------+---------------------+----------------------+--------------------+
-| sum(a)              | sum(round(a, 1))    | sum(round(a, 0))    | sum(round(a, -1))   | sum(round(a, -2))   | sum(round(a, -16))  | sum(round(a, -18))  | sum(round(a, -19))   | sum(round(a, -20)) |
-+---------------------+---------------------+---------------------+---------------------+---------------------+---------------------+---------------------+----------------------+--------------------+
-|                   0 |                   0 |                   0 |                   0 |                   0 |                   0 |                   0 |                    0 |                  0 |
-|                   4 |                   4 |                   4 |                   0 |                   0 |                   0 |                   0 |                    0 |                  0 |
-|                   5 |                   5 |                   5 |                  10 |                   0 |                   0 |                   0 |                    0 |                  0 |
-| 4999999999999999999 | 4999999999999999999 | 4999999999999999999 | 5000000000000000000 | 5000000000000000000 | 5000000000000000000 | 5000000000000000000 |                    0 |                  0 |
-| 5000000000000000000 | 5000000000000000000 | 5000000000000000000 | 5000000000000000000 | 5000000000000000000 | 5000000000000000000 | 5000000000000000000 | 10000000000000000000 |                  0 |
-|                NULL |                NULL |                NULL |                NULL |                NULL |                NULL |                NULL |                 NULL |               NULL |
-+---------------------+---------------------+---------------------+---------------------+---------------------+---------------------+---------------------+----------------------+--------------------+
+#mysql> drop table if exists test.i8
+#mysql> create table test.i8 (id bigint, a tinyint)
+#mysql> alter table test.i8 set tiflash replica 1
+#mysql> insert into test.i8 values (1, 0), (2, 1), (3, -1), (4, 49), (5, 50), (6, -49), (7, -50), (8, 127), (9, -128), (10, null)
+#func> wait_table test i8
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(a), sum(round(a, 1)), sum(round(a, 0)), sum(round(a, -1)), sum(round(a, -2)), sum(round(a, -3)), sum(round(a, -4)) from test.i8 group by id order by id
+#+--------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+
+#| sum(a) | sum(round(a, 1)) | sum(round(a, 0)) | sum(round(a, -1)) | sum(round(a, -2)) | sum(round(a, -3)) | sum(round(a, -4)) |
+#+--------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+
+#|      0 |                0 |                0 |                 0 |                 0 |                 0 |                 0 |
+#|      1 |                1 |                1 |                 0 |                 0 |                 0 |                 0 |
+#|     -1 |               -1 |               -1 |                 0 |                 0 |                 0 |                 0 |
+#|     49 |               49 |               49 |                50 |                 0 |                 0 |                 0 |
+#|     50 |               50 |               50 |                50 |               100 |                 0 |                 0 |
+#|    -49 |              -49 |              -49 |               -50 |                 0 |                 0 |                 0 |
+#|    -50 |              -50 |              -50 |               -50 |              -100 |                 0 |                 0 |
+#|    127 |              127 |              127 |               130 |               100 |                 0 |                 0 |
+#|   -128 |             -128 |             -128 |              -130 |              -100 |                 0 |                 0 |
+#|   NULL |             NULL |             NULL |              NULL |              NULL |              NULL |              NULL |
+#+--------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+
+#
+#mysql> drop table if exists test.u8
+#mysql> create table test.u8 (id bigint, a tinyint unsigned)
+#mysql> alter table test.u8 set tiflash replica 1
+#mysql> insert into test.u8 values (1, 0), (2, 4), (3, 5), (4, 49), (5, 50), (6, 255), (7, null)
+#func> wait_table test u8
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(a), sum(round(a, 1)), sum(round(a, 0)), sum(round(a, -1)), sum(round(a, -2)), sum(round(a, -3)), sum(round(a, -4)) from test.u8 group by id order by id
+#+--------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+
+#| sum(a) | sum(round(a, 1)) | sum(round(a, 0)) | sum(round(a, -1)) | sum(round(a, -2)) | sum(round(a, -3)) | sum(round(a, -4)) |
+#+--------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+
+#|      0 |                0 |                0 |                 0 |                 0 |                 0 |                 0 |
+#|      4 |                4 |                4 |                 0 |                 0 |                 0 |                 0 |
+#|      5 |                5 |                5 |                10 |                 0 |                 0 |                 0 |
+#|     49 |               49 |               49 |                50 |                 0 |                 0 |                 0 |
+#|     50 |               50 |               50 |                50 |               100 |                 0 |                 0 |
+#|    255 |              255 |              255 |               260 |               300 |                 0 |                 0 |
+#|   NULL |             NULL |             NULL |              NULL |              NULL |              NULL |              NULL |
+#+--------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+
+#
+#mysql> drop table if exists test.i32
+#mysql> create table test.i32 (id bigint, a int)
+#mysql> alter table test.i32 set tiflash replica 1
+#mysql> insert into test.i32 value (1, 0), (2, 4), (3, 5), (4, -4), (5, -5), (6, 499999999), (7, 500000000), (8, -499999999), (9, -500000000), (10, 2147483647), (11, -2147483648), (12, null)
+#func> wait_table test i32
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(a), sum(round(a, 1)), sum(round(a, 0)), sum(round(a, -1)), sum(round(a, -2)), sum(round(a, -8)), sum(round(a, -9)), sum(round(a, -10)) from test.i32 group by id order by id
+#+-------------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+--------------------+
+#| sum(a)      | sum(round(a, 1)) | sum(round(a, 0)) | sum(round(a, -1)) | sum(round(a, -2)) | sum(round(a, -8)) | sum(round(a, -9)) | sum(round(a, -10)) |
+#+-------------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+--------------------+
+#|           0 |                0 |                0 |                 0 |                 0 |                 0 |                 0 |                  0 |
+#|           4 |                4 |                4 |                 0 |                 0 |                 0 |                 0 |                  0 |
+#|           5 |                5 |                5 |                10 |                 0 |                 0 |                 0 |                  0 |
+#|          -4 |               -4 |               -4 |                 0 |                 0 |                 0 |                 0 |                  0 |
+#|          -5 |               -5 |               -5 |               -10 |                 0 |                 0 |                 0 |                  0 |
+#|   499999999 |        499999999 |        499999999 |         500000000 |         500000000 |         500000000 |                 0 |                  0 |
+#|   500000000 |        500000000 |        500000000 |         500000000 |         500000000 |         500000000 |        1000000000 |                  0 |
+#|  -499999999 |       -499999999 |       -499999999 |        -500000000 |        -500000000 |        -500000000 |                 0 |                  0 |
+#|  -500000000 |       -500000000 |       -500000000 |        -500000000 |        -500000000 |        -500000000 |       -1000000000 |                  0 |
+#|  2147483647 |       2147483647 |       2147483647 |        2147483650 |        2147483600 |        2100000000 |        2000000000 |                  0 |
+#| -2147483648 |      -2147483648 |      -2147483648 |       -2147483650 |       -2147483600 |       -2100000000 |       -2000000000 |                  0 |
+#|        NULL |             NULL |             NULL |              NULL |              NULL |              NULL |              NULL |               NULL |
+#+-------------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+--------------------+
+#
+#mysql> drop table if exists test.u32
+#mysql> create table test.u32 (id bigint, a int unsigned)
+#mysql> alter table test.u32 set tiflash replica 1
+#mysql> insert into test.u32 value (1, 0), (2, 4), (3, 5), (4, 499999999), (5, 500000000), (6, 4294967295), (7, null)
+#func> wait_table test u32
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(a), sum(round(a, 1)), sum(round(a, 0)), sum(round(a, -1)), sum(round(a, -2)), sum(round(a, -8)), sum(round(a, -9)), sum(round(a, -10)) from test.u32 group by id order by id
+#+------------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+--------------------+
+#| sum(a)     | sum(round(a, 1)) | sum(round(a, 0)) | sum(round(a, -1)) | sum(round(a, -2)) | sum(round(a, -8)) | sum(round(a, -9)) | sum(round(a, -10)) |
+#+------------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+--------------------+
+#|          0 |                0 |                0 |                 0 |                 0 |                 0 |                 0 |                  0 |
+#|          4 |                4 |                4 |                 0 |                 0 |                 0 |                 0 |                  0 |
+#|          5 |                5 |                5 |                10 |                 0 |                 0 |                 0 |                  0 |
+#|  499999999 |        499999999 |        499999999 |         500000000 |         500000000 |         500000000 |                 0 |                  0 |
+#|  500000000 |        500000000 |        500000000 |         500000000 |         500000000 |         500000000 |        1000000000 |                  0 |
+#| 4294967295 |       4294967295 |       4294967295 |        4294967300 |        4294967300 |        4300000000 |        4000000000 |                  0 |
+#|       NULL |             NULL |             NULL |              NULL |              NULL |              NULL |              NULL |               NULL |
+#+------------+------------------+------------------+-------------------+-------------------+-------------------+-------------------+--------------------+
+#
+#mysql> drop table if exists test.i64
+#mysql> create table test.i64 (id bigint, a bigint)
+#mysql> alter table test.i64 set tiflash replica 1
+#mysql> insert into test.i64 values (1, 0), (2, 4), (3, 5), (4, -4), (5, -5), (6, 499999999999999999), (7, 500000000000000000), (8, -499999999999999999), (9, -500000000000000000), (10, null)
+#func> wait_table test i64
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(a), sum(round(a, 1)), sum(round(a, 0)), sum(round(a, -1)), sum(round(a, -2)), sum(round(a, -18)), sum(round(a, -19)), sum(round(a, -20)) from test.i64 group by id order by id
+#+---------------------+---------------------+---------------------+---------------------+---------------------+----------------------+--------------------+--------------------+
+#| sum(a)              | sum(round(a, 1))    | sum(round(a, 0))    | sum(round(a, -1))   | sum(round(a, -2))   | sum(round(a, -18))   | sum(round(a, -19)) | sum(round(a, -20)) |
+#+---------------------+---------------------+---------------------+---------------------+---------------------+----------------------+--------------------+--------------------+
+#|                   0 |                   0 |                   0 |                   0 |                   0 |                    0 |                  0 |                  0 |
+#|                   4 |                   4 |                   4 |                   0 |                   0 |                    0 |                  0 |                  0 |
+#|                   5 |                   5 |                   5 |                  10 |                   0 |                    0 |                  0 |                  0 |
+#|                  -4 |                  -4 |                  -4 |                   0 |                   0 |                    0 |                  0 |                  0 |
+#|                  -5 |                  -5 |                  -5 |                 -10 |                   0 |                    0 |                  0 |                  0 |
+#|  499999999999999999 |  499999999999999999 |  499999999999999999 |  500000000000000000 |  500000000000000000 |                    0 |                  0 |                  0 |
+#|  500000000000000000 |  500000000000000000 |  500000000000000000 |  500000000000000000 |  500000000000000000 |  1000000000000000000 |                  0 |                  0 |
+#| -499999999999999999 | -499999999999999999 | -499999999999999999 | -500000000000000000 | -500000000000000000 |                    0 |                  0 |                  0 |
+#| -500000000000000000 | -500000000000000000 | -500000000000000000 | -500000000000000000 | -500000000000000000 | -1000000000000000000 |                  0 |                  0 |
+#|                NULL |                NULL |                NULL |                NULL |                NULL |                 NULL |               NULL |               NULL |
+#+---------------------+---------------------+---------------------+---------------------+---------------------+----------------------+--------------------+--------------------+
+#
+#mysql> drop table if exists test.u64
+#mysql> create table test.u64 (id bigint, a bigint unsigned)
+#mysql> alter table test.u64 set tiflash replica 1
+#mysql> insert into test.u64 values (1, 0), (2, 4), (3, 5), (4, 4999999999999999999), (5, 5000000000000000000), (6, null)
+#func> wait_table test u64
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(a), sum(round(a, 1)), sum(round(a, 0)), sum(round(a, -1)), sum(round(a, -2)), sum(round(a, -16)), sum(round(a, -18)), sum(round(a, -19)), sum(round(a, -20)) from test.u64 group by id order by id
+#+---------------------+---------------------+---------------------+---------------------+---------------------+---------------------+---------------------+----------------------+--------------------+
+#| sum(a)              | sum(round(a, 1))    | sum(round(a, 0))    | sum(round(a, -1))   | sum(round(a, -2))   | sum(round(a, -16))  | sum(round(a, -18))  | sum(round(a, -19))   | sum(round(a, -20)) |
+#+---------------------+---------------------+---------------------+---------------------+---------------------+---------------------+---------------------+----------------------+--------------------+
+#|                   0 |                   0 |                   0 |                   0 |                   0 |                   0 |                   0 |                    0 |                  0 |
+#|                   4 |                   4 |                   4 |                   0 |                   0 |                   0 |                   0 |                    0 |                  0 |
+#|                   5 |                   5 |                   5 |                  10 |                   0 |                   0 |                   0 |                    0 |                  0 |
+#| 4999999999999999999 | 4999999999999999999 | 4999999999999999999 | 5000000000000000000 | 5000000000000000000 | 5000000000000000000 | 5000000000000000000 |                    0 |                  0 |
+#| 5000000000000000000 | 5000000000000000000 | 5000000000000000000 | 5000000000000000000 | 5000000000000000000 | 5000000000000000000 | 5000000000000000000 | 10000000000000000000 |                  0 |
+#|                NULL |                NULL |                NULL |                NULL |                NULL |                NULL |                NULL |                 NULL |               NULL |
+#+---------------------+---------------------+---------------------+---------------------+---------------------+---------------------+---------------------+----------------------+--------------------+
 
 mysql> drop table if exists test.f32
 mysql> create table test.f32 (id bigint, a float)
@@ -399,12 +399,12 @@ mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(nul
 |                NULL |
 +---------------------+
 
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(-123456789123456789, i)) from test.t
-+------------------------------------+
-| sum(round(-123456789123456789, i)) |
-+------------------------------------+
-|               -6145515733034404627 |
-+------------------------------------+
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(-123456789123456789, i)) from test.t
+#+------------------------------------+
+#| sum(round(-123456789123456789, i)) |
+#+------------------------------------+
+#|               -6145515733034404627 |
+#+------------------------------------+
 
 mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(123456789123456789.123456789123456789, i)) from test.t
 +------------------------------------------------------+
@@ -415,61 +415,61 @@ mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(123
 
 # variable input & frac
 
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.i32 cross join test.t where a >= 0
-+------------------+
-| sum(round(a, i)) |
-+------------------+
-|     132001391875 |
-+------------------+
-
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.i32 cross join test.t where a < 0
-+------------------+
-| sum(round(a, i)) |
-+------------------+
-|    -132001391908 |
-+------------------+
-
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.u32 cross join test.t where a is null
-+------------------+
-| sum(round(a, i)) |
-+------------------+
-|             NULL |
-+------------------+
-
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.u32 cross join test.t
-+------------------+
-| sum(round(a, i)) |
-+------------------+
-|     222093792609 |
-+------------------+
-
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.i64 cross join test.t where a >= 0
-+----------------------+
-| sum(round(a, i))     |
-+----------------------+
-| 51000000000000000274 |
-+----------------------+
-
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.i64 cross join test.t where a < 0
-+-----------------------+
-| sum(round(a, i))      |
-+-----------------------+
-| -51000000000000000274 |
-+-----------------------+
-
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.u64 cross join test.t where a is null
-+------------------+
-| sum(round(a, i)) |
-+------------------+
-|             NULL |
-+------------------+
-
-mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.u64 cross join test.t
-+-----------------------+
-| sum(round(a, i))      |
-+-----------------------+
-| 520000000000000000274 |
-+-----------------------+
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.i32 cross join test.t where a >= 0
+#+------------------+
+#| sum(round(a, i)) |
+#+------------------+
+#|     132001391875 |
+#+------------------+
+#
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.i32 cross join test.t where a < 0
+#+------------------+
+#| sum(round(a, i)) |
+#+------------------+
+#|    -132001391908 |
+#+------------------+
+#
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.u32 cross join test.t where a is null
+#+------------------+
+#| sum(round(a, i)) |
+#+------------------+
+#|             NULL |
+#+------------------+
+#
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.u32 cross join test.t
+#+------------------+
+#| sum(round(a, i)) |
+#+------------------+
+#|     222093792609 |
+#+------------------+
+#
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.i64 cross join test.t where a >= 0
+#+----------------------+
+#| sum(round(a, i))     |
+#+----------------------+
+#| 51000000000000000274 |
+#+----------------------+
+#
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.i64 cross join test.t where a < 0
+#+-----------------------+
+#| sum(round(a, i))      |
+#+-----------------------+
+#| -51000000000000000274 |
+#+-----------------------+
+#
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.u64 cross join test.t where a is null
+#+------------------+
+#| sum(round(a, i)) |
+#+------------------+
+#|             NULL |
+#+------------------+
+#
+#mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.u64 cross join test.t
+#+-----------------------+
+#| sum(round(a, i))      |
+#+-----------------------+
+#| 520000000000000000274 |
+#+-----------------------+
 
 mysql> set @@session.tidb_isolation_read_engines='tiflash'; select sum(round(a, i)) from test.d9 cross join test.t where a >= 0
 +------------------+
