@@ -323,9 +323,6 @@ try
 }
 CATCH
 
-#define MAIN_DATA_PATHS "."
-#define LATEST_DATA_PATHS "."
-
 class MockPathCapacityMetrics : public PathCapacityMetrics
 {
 public:
@@ -379,13 +376,11 @@ TEST_F(PathCapcatity, SingleDiskSinglePathTest)
 
     ASSERT_GE(vfs_info.f_bavail * vfs_info.f_frsize, capactity * 2);
 
-    // Use the capacity limit in both main/latest path
-
     // Single disk with single path
     {
         auto capacity = PathCapacityMetrics(0, {main_data_path}, {capactity}, {lastest_data_path}, {capactity});
 
-        capacity.addUsedSize(main_data_path, 10);
+        capacity.addUsedSize(main_data_path, used);
         auto stats = capacity.getFsStats();
         ASSERT_EQ(stats.capacity_size, capactity * 2);
         ASSERT_EQ(stats.used_size, used);
@@ -410,17 +405,17 @@ TEST_F(PathCapcatity, SingleDiskSinglePathTest)
         createIfNotExist(lastest_data_path1);
 
         // Not use the capacity limit
-        auto capacity
-            = PathCapacityMetrics(0, {main_data_path, main_data_path1}, {100, 100}, {lastest_data_path, lastest_data_path1}, {50, 50});
+        auto capacity = PathCapacityMetrics(0, {main_data_path, main_data_path1}, {capactity * 2, capactity * 2},
+            {lastest_data_path, lastest_data_path1}, {capactity, capactity});
 
-        capacity.addUsedSize(main_data_path, 10);
-        capacity.addUsedSize(main_data_path1, 10);
-        capacity.addUsedSize(lastest_data_path, 10);
+        capacity.addUsedSize(main_data_path, used);
+        capacity.addUsedSize(main_data_path1, used);
+        capacity.addUsedSize(lastest_data_path, used);
 
         auto stats = capacity.getFsStats();
-        ASSERT_EQ(stats.capacity_size, 300);
-        ASSERT_EQ(stats.used_size, 30);
-        ASSERT_EQ(stats.avail_size, 300 - 30);
+        ASSERT_EQ(stats.capacity_size, capactity * 6);
+        ASSERT_EQ(stats.used_size, 3 * used);
+        ASSERT_EQ(stats.avail_size, capactity * 6 - (3 * used));
 
         dropDataOnDisk(main_data_path1);
         dropDataOnDisk(lastest_data_path1);
@@ -432,7 +427,6 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
     MockPathCapacityMetrics capacity = MockPathCapacityMetrics(0, {main_data_path}, {100}, {lastest_data_path}, {100});
 
     std::map<FSID, DiskCapacity> disk_capacity_map;
-
 
     /// disk 1 :
     ///     - disk status:

@@ -102,7 +102,7 @@ void PathCapacityMetrics::getDiskStats(std::map<FSID, DiskCapacity> & disk_stats
         std::tie(path_stat, vfs) = path_infos[i].getStats(log);
         if (!path_stat.ok)
         {
-            // same as upper
+            // Disk may be hot remove, Ignore this disk.
             continue;
         }
 
