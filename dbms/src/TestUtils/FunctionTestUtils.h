@@ -54,7 +54,7 @@ struct TypeTraits<Nullable<Decimal<T>>>
     static constexpr bool is_nullable = true;
     static constexpr bool is_decimal = true;
     using DecimalType = Decimal<T>;
-    using FieldType = std::optional<DecimalField<DecimalType>>;;
+    using FieldType = std::optional<DecimalField<DecimalType>>;
 };
 
 template <typename T>

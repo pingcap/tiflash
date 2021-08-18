@@ -643,9 +643,9 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::RoundReal, "tidbRound"},
     {tipb::ScalarFuncSig::RoundInt, "tidbRound"},
     {tipb::ScalarFuncSig::RoundDec, "tidbRound"},
-    // {tipb::ScalarFuncSig::RoundWithFracReal, "tidbRoundWithFrac"},
-    // {tipb::ScalarFuncSig::RoundWithFracInt, "tidbRoundWithFrac"},
-    // {tipb::ScalarFuncSig::RoundWithFracDec, "tidbRoundWithFrac"},
+    {tipb::ScalarFuncSig::RoundWithFracReal, "tidbRoundWithFrac"},
+    {tipb::ScalarFuncSig::RoundWithFracInt, "tidbRoundWithFrac"},
+    {tipb::ScalarFuncSig::RoundWithFracDec, "tidbRoundWithFrac"},
 
     {tipb::ScalarFuncSig::Log1Arg, "log"},
     {tipb::ScalarFuncSig::Log2Args, "log2args"},
