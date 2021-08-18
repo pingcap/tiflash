@@ -136,7 +136,7 @@ void     serializeSchema(WriteBuffer & buf, const BlockPtr & schema);
 BlockPtr deserializeSchema(ReadBuffer & buf);
 
 void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, bool compress);
-void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows);
+PODArray<char> deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows, PODArray<char>&& recycle_space);
 
 /// Serialize those packs' metadata into buf.
 /// Note that this method stop at the first unsaved pack.

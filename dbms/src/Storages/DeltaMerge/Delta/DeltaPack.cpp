@@ -112,16 +112,17 @@ void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const Data
     compressed.next();
 }
 
-void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows)
+PODArray<char> deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows, PODArray<char>&& recycle_space)
 {
     ReadBufferFromMemory buf(data_buf.begin(), data_buf.size());
-    CompressedReadBuffer compressed(buf);
+    CompressedReadBuffer compressed(buf, std::move(recycle_space));
     type->deserializeBinaryBulkWithMultipleStreams(column, //
                                                    [&](const IDataType::SubstreamPath &) { return &compressed; },
                                                    rows,
                                                    (double)(data_buf.size()) / rows,
                                                    true,
                                                    {});
+    return compressed.takeSpace();
 }
 
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <IO/CompressedReadBufferBase.h>
 #include <IO/BufferWithOwnMemory.h>
+#include <IO/CompressedReadBufferBase.h>
 #include <IO/ReadBuffer.h>
 
 
@@ -16,18 +16,17 @@ private:
     bool nextImpl() override;
 
 public:
-    CompressedReadBuffer(ReadBuffer & in_)
-        : CompressedReadBufferBase(&in_), BufferWithOwnMemory<ReadBuffer>(0)
-    {
-    }
+    CompressedReadBuffer(ReadBuffer & in_) : CompressedReadBufferBase(&in_), BufferWithOwnMemory<ReadBuffer>(0) {}
+
+    CompressedReadBuffer(ReadBuffer & in_, PODArray<char> && recycle_space)
+        : CompressedReadBufferBase(std::move(recycle_space), &in_), BufferWithOwnMemory<ReadBuffer>(0)
+    {}
+
 
     size_t readBig(char * to, size_t n) override;
 
     /// The compressed size of the current block.
-    size_t getSizeCompressed() const
-    {
-        return size_compressed;
-    }
+    size_t getSizeCompressed() const { return size_compressed; }
 };
 
-}
+} // namespace DB

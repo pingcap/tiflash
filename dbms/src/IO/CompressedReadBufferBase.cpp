@@ -129,6 +129,10 @@ CompressedReadBufferBase::CompressedReadBufferBase(ReadBuffer * in)
 {
 }
 
+CompressedReadBufferBase::CompressedReadBufferBase(PODArray<char> && recycle_space, ReadBuffer * in)
+    : compressed_in(in), own_compressed_buffer(std::move(recycle_space))
+{
+}
 
 CompressedReadBufferBase::~CompressedReadBufferBase() = default;    /// Proper destruction of unique_ptr of forward-declared type.
 

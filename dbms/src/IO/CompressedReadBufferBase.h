@@ -34,6 +34,7 @@ protected:
 public:
     /// 'compressed_in' could be initialized lazily, but before first call of 'readCompressedData'.
     CompressedReadBufferBase(ReadBuffer * in = nullptr);
+    CompressedReadBufferBase(PODArray<char>&& recycle_space, ReadBuffer * in = nullptr);
     ~CompressedReadBufferBase();
 
     /** Disable checksums.
@@ -43,6 +44,12 @@ public:
     void disableChecksumming()
     {
         disable_checksum = true;
+    }
+
+    PODArray<char> takeSpace() {
+        PODArray<char> result;
+        result.swap(own_compressed_buffer);
+        return result;
     }
 };
 

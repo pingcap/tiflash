@@ -122,12 +122,13 @@ Block DeltaPackBlock::readFromDisk(const PageReader & page_reader) const
     if (unlikely(columns.size() != page.fieldSize()))
         throw Exception("Column size and field size not the same");
 
+    PODArray<char> space(DBMS_DEFAULT_BUFFER_SIZE);
     for (size_t index = 0; index < schema_.columns(); ++index)
     {
         auto   data_buf = page.getFieldData(index);
         auto & type     = schema_.getByPosition(index).type;
         auto & column   = columns[index];
-        deserializeColumn(*column, type, data_buf, rows);
+        space = deserializeColumn(*column, type, data_buf, rows, std::move(space));
     }
 
     return schema_.cloneWithColumns(std::move(columns));
@@ -196,6 +197,7 @@ Columns DeltaPackBlock::readFromDisk(const PageReader &    page_reader, //
 
     auto page_map = page_reader.read({fields});
     Page page     = page_map[data_page_id];
+    PODArray<char> space (DBMS_DEFAULT_BUFFER_SIZE);
     for (size_t index = col_start; index < col_end; ++index)
     {
         const size_t index_in_read_columns = index - col_start;
@@ -211,8 +213,7 @@ Columns DeltaPackBlock::readFromDisk(const PageReader &    page_reader, //
         const auto & cd = column_defines[index];
         // Deserialize column by pack's schema
         auto [type, col_data] = getDataTypeAndEmptyColumn(cd.id);
-        deserializeColumn(*col_data, type, data_buf, rows);
-
+        space = deserializeColumn(*col_data, type, data_buf, rows, std::move(space));
         columns[index_in_read_columns] = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
     }
 
