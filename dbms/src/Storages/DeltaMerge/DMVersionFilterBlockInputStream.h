@@ -18,6 +18,7 @@ static constexpr int DM_VERSION_FILTER_MODE_MVCC = 0;
 /// 2. for the rows with smaller verion than version_limit, then take the biggest one of them, if it is not deleted.
 static constexpr int DM_VERSION_FILTER_MODE_COMPACT = 1;
 
+
 template <int MODE>
 class DMVersionFilterBlockInputStream : public IBlockInputStream
 {
@@ -68,7 +69,23 @@ public:
         return read(f, false);
     }
 
-    Block read(FilterPtr & res_filter, bool return_filter) override;
+    Block read(FilterPtr & res_filter, bool return_filter) override
+    {
+        using namespace simd_option;
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
+        if (ENABLE_AVX512 && SIMDRuntimeSupport(SIMDFeature::avx512vl) && SIMDRuntimeSupport(SIMDFeature::avx512bw))
+        {
+            return readAVX512(res_filter, return_filter);
+        }
+#endif
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+        if (ENABLE_AVX && SIMDRuntimeSupport(SIMDFeature::avx) && SIMDRuntimeSupport(SIMDFeature::avx2))
+        {
+            return readAVX2(res_filter, return_filter);
+        }
+#endif
+        return readGeneric(res_filter, return_filter);
+    };
 
     size_t getEffectiveNumRows() const { return effective_num_rows; }
     size_t getNotCleanRows() const { return not_clean_rows; }
@@ -212,6 +229,15 @@ private:
     size_t effective_num_rows  = 0;
 
     Poco::Logger * const log;
+
+    Block readImpl(FilterPtr & res_filter, bool return_filter);
+    Block readGeneric(FilterPtr & res_filter, bool return_filter);
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    Block readAVX2(FilterPtr & res_filter, bool return_filter);
+#endif
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
+    Block readAVX512(FilterPtr & res_filter, bool return_filter);
+#endif
 };
 } // namespace DM
 } // namespace DB

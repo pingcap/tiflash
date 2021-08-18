@@ -293,3 +293,16 @@ if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
             EXECUTABLE gtests_dbms
     )
 endif()
+
+if (TIFLASH_ENABLE_AVX_SUPPORT)
+    # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
+    set_source_files_properties(src/Storages/DeltaMerge/DMVersionFilterBlockInputStreamAVX2.cpp
+            APPEND COMPILE_FLAGS "-mavx -mavx2")
+endif ()
+
+if (TIFLASH_ENABLE_AVX512_SUPPORT)
+    # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
+    set_source_files_properties(src/Storages/DeltaMerge/DMVersionFilterBlockInputStreamAVX512.cpp
+            APPEND COMPILE_FLAGS "-mavx512vl -mavx512bw")
+endif ()
+
