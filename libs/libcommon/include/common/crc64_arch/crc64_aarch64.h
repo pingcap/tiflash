@@ -1,5 +1,5 @@
 #pragma once
-#if defined(__aarch64__) || defined(__arm64__)
+#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
 #include <arm_neon.h>
 
 #include <cstdint>
