@@ -144,22 +144,6 @@ __thread MemoryTracker * current_memory_tracker = nullptr;
 #else
 thread_local MemoryTracker * current_memory_tracker = nullptr;
 #endif
-#define CHECK_SUMBIT                                                           \
-    do                                                                         \
-    {                                                                          \
-        if (unlikely(local_delta.delta > MEMORY_TRACER_SUBMIT_THRESHOLD))       \
-        {                                                                      \
-            if (current_memory_tracker)                                        \
-                current_memory_tracker->alloc(local_delta.delta);               \
-            local_delta.delta = 0;                                              \
-        }                                                                      \
-        else if (unlikely(local_delta.delta < -MEMORY_TRACER_SUBMIT_THRESHOLD)) \
-        {                                                                      \
-            if (current_memory_tracker)                                        \
-                current_memory_tracker->free(-local_delta.delta);               \
-            local_delta.delta = 0;                                              \
-        }                                                                      \
-    } while (false);
 namespace CurrentMemoryTracker
 {
 
@@ -179,23 +163,45 @@ struct MemoryTrackerLocalDelta
             return;
         }
     }
+    void checkSubmit() {
+        if (unlikely(delta > MEMORY_TRACER_SUBMIT_THRESHOLD))
+        {
+            if (current_memory_tracker)
+                current_memory_tracker->alloc(delta);
+            delta = 0;
+        }
+        else if (unlikely(delta < -MEMORY_TRACER_SUBMIT_THRESHOLD))
+        {
+            if (current_memory_tracker)
+                current_memory_tracker->free(delta);
+            delta = 0;
+        }
+    }
+    MemoryTrackerLocalDelta& operator+=(Int64 patch) {
+        delta += patch;
+        checkSubmit();
+        return *this;
+    }
+    MemoryTrackerLocalDelta& operator-=(Int64 patch) {
+        delta -= patch;
+        checkSubmit();
+        return *this;
+    }
+
 };
 static thread_local MemoryTrackerLocalDelta local_delta{};
 void alloc(Int64 size)
 {
-    local_delta.delta += size;
-    CHECK_SUMBIT
+    local_delta += size;
 }
 
 void realloc(Int64 old_size, Int64 new_size)
 {
-    local_delta.delta += new_size - old_size;
-    CHECK_SUMBIT
+    local_delta += new_size - old_size;
 }
 
 void free(Int64 size)
 {
-    local_delta.delta -= size;
-    CHECK_SUMBIT
+    local_delta -= size;
 }
 } // namespace CurrentMemoryTracker
