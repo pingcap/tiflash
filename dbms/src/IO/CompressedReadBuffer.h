@@ -18,7 +18,7 @@ private:
 public:
     CompressedReadBuffer(ReadBuffer & in_) : CompressedReadBufferBase(&in_), BufferWithOwnMemory<ReadBuffer>(0) {}
 
-    CompressedReadBuffer(ReadBuffer & in_, PODArray<char> && recycle_space)
+    CompressedReadBuffer(PODArray<char> && recycle_space, ReadBuffer & in_)
         : CompressedReadBufferBase(std::move(recycle_space), &in_), BufferWithOwnMemory<ReadBuffer>(0)
     {}
 
