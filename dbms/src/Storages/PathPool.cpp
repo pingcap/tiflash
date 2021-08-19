@@ -1,4 +1,5 @@
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/escapeForFileName.h>
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
@@ -282,12 +283,65 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
 
     for (size_t i = 0; i < paths.size(); ++i)
     {
-        const auto & [path_stat, vfs] = global_capacity->getFsStatsOfPath(paths[i].path);
+        auto [path_stat, vfs] = global_capacity->getFsStatsOfPath(paths[i].path);
 
         if (!path_stat.ok)
         {
             continue;
         }
+
+        fiu_do_on(FailPoints::force_make_disk_full, {
+            // 1. All disks is full - return first. (put paths size 2)
+            // 2. Some of disks is full, some of disks is not full. return the biggest available disk (put paths size 3 or 4)
+            // 3. Disk capacity size bigger than disk available size but its disk available size smaller than other disk available size.(put paths size > 5)
+            switch (i)
+            {
+                case 0 ... 1:
+                {
+                    path_stat.avail_size = 0;
+                    path_stat.capacity_size = 200;
+                    path_stat.used_size = 100;
+
+                    vfs.f_fsid = 100;
+                    vfs.f_bavail = 0;
+                    vfs.f_frsize = 1;
+                    break;
+                }
+                case 2:
+                {
+                    path_stat.avail_size = 500;
+                    path_stat.capacity_size = 5000;
+                    path_stat.used_size = 420;
+
+                    vfs.f_fsid = 101;
+                    vfs.f_bavail = 500;
+                    vfs.f_frsize = 1;
+                    break;
+                }
+                case 3:
+                {
+                    path_stat.avail_size = 500;
+                    path_stat.capacity_size = 2000;
+                    path_stat.used_size = 250;
+
+                    vfs.f_fsid = 101;
+                    vfs.f_bavail = 500;
+                    vfs.f_frsize = 1;
+                    break;
+                }
+                default:
+                {
+                    path_stat.avail_size = 9000;
+                    path_stat.capacity_size = 2000;
+                    path_stat.used_size = 888;
+
+                    vfs.f_fsid = 102;
+                    vfs.f_bavail = 900;
+                    vfs.f_frsize = 1;
+                    break;
+                }
+            };
+        });
 
         path_capacity[paths[i].path] = std::pair(path_stat, i);
 

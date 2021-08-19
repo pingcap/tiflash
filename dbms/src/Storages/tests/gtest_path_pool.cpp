@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -6,7 +7,6 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
-
 
 namespace DB
 {
@@ -331,6 +331,12 @@ public:
         : PathCapacityMetrics(capacity_quota_, main_paths_, main_capacity_quota_, latest_paths_, latest_capacity_quota_)
     {}
 
+    static PathCapacityMetricsPtr getPathCapacityMetricsPtr(const Strings & main_paths_, const std::vector<size_t> main_capacity_quota_, //
+        const Strings & latest_paths_, const std::vector<size_t> latest_capacity_quota_)
+    {
+        return std::make_shared<PathCapacityMetrics>(0, main_paths_, main_capacity_quota_, latest_paths_, latest_capacity_quota_);
+    }
+
     std::map<FSID, DiskCapacity> getDiskStats() override { return disk_stats_map; }
 
     void setDiskStats(std::map<FSID, DiskCapacity> & disk_stats_map_) { disk_stats_map = disk_stats_map_; }
@@ -482,6 +488,57 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
     ASSERT_EQ(total_stats.used_size, 16 + 52);
     ASSERT_EQ(total_stats.avail_size, 50 + 46);
 }
+
+String callChoosePath(const Strings & main_paths_, const std::vector<size_t> main_capacity_quota_)
+{
+    auto capacity_ptr = MockPathCapacityMetrics::getPathCapacityMetricsPtr(main_paths_, main_capacity_quota_, {}, {});
+    StoragePathPool pool(main_paths_, {}, "test", "t", false, capacity_ptr, TiFlashTestEnv::getContext().getFileProvider());
+    StableDiskDelegator delegator(pool);
+    return delegator.choosePath();
+}
+
+TEST_F(PathCapcatity, ChoosePath)
+{
+    size_t unused_cap = 0;
+    const auto & main_data_path1 = getTemporaryPath() + "/main1";
+    const auto & main_data_path2 = getTemporaryPath() + "/main2";
+    const auto & main_data_path3 = getTemporaryPath() + "/main3";
+    const auto & main_data_path4 = getTemporaryPath() + "/main4";
+    createIfNotExist(main_data_path1);
+    createIfNotExist(main_data_path2);
+    createIfNotExist(main_data_path3);
+    createIfNotExist(main_data_path4);
+
+    FailPointHelper::enableFailPoint(DB::FailPoints::force_make_disk_full);
+
+    { // single path choose
+        String path = callChoosePath({main_data_path}, {0});
+        ASSERT_EQ(path.compare(0, main_data_path.size(), main_data_path), 0);
+    }
+
+    { // Disk all full
+        String path = callChoosePath({main_data_path, main_data_path1}, {unused_cap, unused_cap});
+        ASSERT_EQ(path.compare(0, main_data_path.size(), main_data_path), 0);
+    }
+
+    { // Some of disk not full
+        String path = callChoosePath({main_data_path, main_data_path1, main_data_path2}, {unused_cap, unused_cap, unused_cap});
+        ASSERT_EQ(path.compare(0, main_data_path2.size(), main_data_path2), 0);
+    }
+
+    {
+        String path = callChoosePath({main_data_path, main_data_path1, main_data_path2, main_data_path3, main_data_path4},
+            {unused_cap, unused_cap, unused_cap, unused_cap, unused_cap});
+        ASSERT_EQ(path.compare(0, main_data_path4.size(), main_data_path4), 0);
+    }
+    FailPointHelper::disableFailPoint(DB::FailPoints::force_make_disk_full);
+
+    dropDataOnDisk(main_data_path1);
+    dropDataOnDisk(main_data_path2);
+    dropDataOnDisk(main_data_path3);
+    dropDataOnDisk(main_data_path4);
+}
+
 
 } // namespace tests
 } // namespace DB
