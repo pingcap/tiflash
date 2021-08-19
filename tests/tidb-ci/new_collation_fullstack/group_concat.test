@@ -5,7 +5,6 @@ mysql> insert into test.t values (1, 'abc', 'abc '),(4, 'Abc', 'abc'),(3,'def', 
 func> wait_table test t
 
 >> DBGInvoke __try_flush()
-
 mysql>set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ upper(group_concat(distinct value)) from t;
 +-------------------------------------+
 | upper(group_concat(distinct value)) |
