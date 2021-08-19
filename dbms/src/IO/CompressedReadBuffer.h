@@ -16,7 +16,7 @@ private:
     bool nextImpl() override;
 
 public:
-    CompressedReadBuffer(ReadBuffer & in_) : CompressedReadBufferBase(&in_), BufferWithOwnMemory<ReadBuffer>(0) {}
+    explicit CompressedReadBuffer(ReadBuffer & in_) : CompressedReadBufferBase(&in_), BufferWithOwnMemory<ReadBuffer>(0) {}
 
     CompressedReadBuffer(PODArray<char> && recycle_space, ReadBuffer & in_)
         : CompressedReadBufferBase(std::move(recycle_space), &in_), BufferWithOwnMemory<ReadBuffer>(0)
