@@ -11,6 +11,7 @@ namespace CurrentMetrics
 }
 
 namespace Detail {
+/// @attention: same old GCCs are very buggy when handling `static inline thread_local`
 static inline thread_local Int64 MEMORY_TRACER_LOCAL_DELTA = 0;
 static inline constexpr Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 32 * 1024 * 1024; // 32 MiB
 }
