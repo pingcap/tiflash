@@ -1,11 +1,11 @@
-#include <common/likely.h>
-#include <common/logger_useful.h>
 #include <Common/Exception.h>
+#include <Common/MemoryTracker.h>
 #include <Common/formatReadable.h>
 #include <IO/WriteHelpers.h>
-#include <iomanip>
+#include <common/likely.h>
+#include <common/logger_useful.h>
 
-#include <Common/MemoryTracker.h>
+#include <iomanip>
 
 MemoryTracker::~MemoryTracker()
 {
@@ -39,12 +39,11 @@ MemoryTracker::~MemoryTracker()
 void MemoryTracker::logPeakMemoryUsage() const
 {
     LOG_DEBUG(&Logger::get("MemoryTracker"),
-        "Peak memory usage" << (description ? " " + std::string(description) : "")
-        << ": " << formatReadableSizeWithBinarySuffix(peak) << ".");
+        "Peak memory usage" << (description ? " " + std::string(description) : "") << ": " << formatReadableSizeWithBinarySuffix(peak)
+                            << ".");
 }
 
-
-void MemoryTracker::submitAlloc(Int64 size)
+void MemoryTracker::alloc(Int64 size)
 {
     {
         /** Using memory_order_relaxed means that if allocations are done simultaneously,
@@ -99,7 +98,7 @@ void MemoryTracker::submitAlloc(Int64 size)
 }
 
 
-void MemoryTracker::submitFree(Int64 size)
+void MemoryTracker::free(Int64 size)
 {
     Int64 new_amount = amount.fetch_sub(size, std::memory_order_relaxed) - size;
 
@@ -146,24 +145,57 @@ __thread MemoryTracker * current_memory_tracker = nullptr;
 #else
 thread_local MemoryTracker * current_memory_tracker = nullptr;
 #endif
-
+#define CHECK_SUMBIT                                                                \
+    {                                                                               \
+        if (MEMORY_TRACER_LOCAL_DELTA.delta > MEMORY_TRACER_SUBMIT_THRESHOLD)       \
+        {                                                                           \
+            if (current_memory_tracker)                                             \
+                current_memory_tracker->alloc(MEMORY_TRACER_LOCAL_DELTA.delta);     \
+            MEMORY_TRACER_LOCAL_DELTA.delta = 0;                                    \
+        }                                                                           \
+        else if (MEMORY_TRACER_LOCAL_DELTA.delta < -MEMORY_TRACER_SUBMIT_THRESHOLD) \
+        {                                                                           \
+            if (current_memory_tracker)                                             \
+                current_memory_tracker->free(-MEMORY_TRACER_LOCAL_DELTA.delta);     \
+            MEMORY_TRACER_LOCAL_DELTA.delta = 0;                                    \
+        }                                                                           \
+    }
 namespace CurrentMemoryTracker
 {
-    void alloc(Int64 size)
-    {
-        if (current_memory_tracker)
-            current_memory_tracker->alloc(size);
-    }
 
-    void realloc(Int64 old_size, Int64 new_size)
+struct MemoryTrackerLocalDelta
+{
+    Int64 delta = 0;
+    ~MemoryTrackerLocalDelta()
     {
-        if (current_memory_tracker)
-            current_memory_tracker->alloc(new_size - old_size);
+        if (current_memory_tracker && delta > 0)
+        {
+            current_memory_tracker->alloc(delta);
+            return;
+        }
+        if (current_memory_tracker && delta < 0)
+        {
+            current_memory_tracker->free(delta);
+            return;
+        }
     }
-
-    void free(Int64 size)
-    {
-        if (current_memory_tracker)
-            current_memory_tracker->free(size);
-    }
+};
+static thread_local MemoryTrackerLocalDelta MEMORY_TRACER_LOCAL_DELTA{};
+void alloc(Int64 size)
+{
+    MEMORY_TRACER_LOCAL_DELTA.delta += size;
+    CHECK_SUMBIT
 }
+
+void realloc(Int64 old_size, Int64 new_size)
+{
+    MEMORY_TRACER_LOCAL_DELTA.delta += new_size - old_size;
+    CHECK_SUMBIT
+}
+
+void free(Int64 size)
+{
+    MEMORY_TRACER_LOCAL_DELTA.delta -= size;
+    CHECK_SUMBIT
+}
+} // namespace CurrentMemoryTracker
