@@ -231,7 +231,9 @@ private:
     Poco::Logger * const log;
 
     /// @note: for this function, gcc does not have a good automatic SIMD for aarch64 yet
-    /// @date: Aug. 18, 2021
+    /// (GCC 7.3.0 / GCC 10.2.0 are checked)
+    /// readImpl will be marked as a `always_inline` function at `DMVersionFilterBlockInputStream`, so it will never
+    /// be instantiated: do not use it at public interface.
     Block readImpl(FilterPtr & res_filter, bool return_filter);
     Block readGeneric(FilterPtr & res_filter, bool return_filter);
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
