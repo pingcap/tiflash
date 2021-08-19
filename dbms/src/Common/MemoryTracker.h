@@ -52,13 +52,17 @@ public:
       */
     __attribute__((always_inline)) void alloc(Int64 size) {
         // inline all TLS access
+        if (fault_probability >= 0.0) {
+            // test mode
+            return submitAlloc(size);
+        }
         Detail::MEMORY_TRACER_LOCAL_DELTA += size;
         if (Detail::MEMORY_TRACER_SUBMIT_THRESHOLD < Detail::MEMORY_TRACER_LOCAL_DELTA) {
             submitAlloc(Detail::MEMORY_TRACER_LOCAL_DELTA);
             Detail::MEMORY_TRACER_LOCAL_DELTA = 0;
         }
         else if (-Detail::MEMORY_TRACER_SUBMIT_THRESHOLD > Detail::MEMORY_TRACER_LOCAL_DELTA) {
-            submitFree(Detail::MEMORY_TRACER_LOCAL_DELTA);
+            submitFree(-Detail::MEMORY_TRACER_LOCAL_DELTA);
             Detail::MEMORY_TRACER_LOCAL_DELTA = 0;
         }
     };
@@ -72,13 +76,17 @@ public:
       */
     __attribute__((always_inline)) void free(Int64 size) {
         // inline all TLS access
+        if (fault_probability >= 0.0) {
+            // test mode
+            return submitAlloc(size);
+        }
         Detail::MEMORY_TRACER_LOCAL_DELTA -= size;
         if (Detail::MEMORY_TRACER_SUBMIT_THRESHOLD < Detail::MEMORY_TRACER_LOCAL_DELTA) {
             submitAlloc(Detail::MEMORY_TRACER_LOCAL_DELTA);
             Detail::MEMORY_TRACER_LOCAL_DELTA = 0;
         }
         else if (-Detail::MEMORY_TRACER_SUBMIT_THRESHOLD > Detail::MEMORY_TRACER_LOCAL_DELTA) {
-            submitFree(Detail::MEMORY_TRACER_LOCAL_DELTA);
+            submitFree(-Detail::MEMORY_TRACER_LOCAL_DELTA);
             Detail::MEMORY_TRACER_LOCAL_DELTA = 0;
         }
     };
