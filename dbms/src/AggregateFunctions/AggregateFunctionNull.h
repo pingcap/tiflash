@@ -762,7 +762,6 @@ private:
                 break;
             }
         }
-        writeChar(0, write_buffer);
         col_str->insertData(write_buffer.str().substr(0,max_len).c_str(),std::min(max_len,write_buffer.count()));
     }
 

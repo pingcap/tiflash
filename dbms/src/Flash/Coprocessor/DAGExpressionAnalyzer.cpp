@@ -529,15 +529,14 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, agg.group_by_size() == 0);
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
-            bool result_is_nullable=false;
+            bool result_is_nullable=agg.group_by_size() == 0;  // empty input as null
             UInt64 max_len = decodeDAGUInt64(expr.val());
             int number_of_arguments = names_and_types.size() - sort_description.size();
-            for(int num=0; num < number_of_arguments; ++num)
+            for(int num=0; num < number_of_arguments && !result_is_nullable; ++num)
             {
                 if(names_and_types[num].type->isNullable())
                 {
                     result_is_nullable = true;
-                    break;
                 }
             }
             if(result_is_nullable)
