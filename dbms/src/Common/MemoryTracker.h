@@ -10,6 +10,10 @@ namespace CurrentMetrics
     extern const Metric MemoryTracking;
 }
 
+namespace Detail {
+static inline thread_local Int64 MEMORY_TRACER_LOCAL_DELTA = 0;
+static inline constexpr Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 32 * 1024 * 1024; // 32 MiB
+}
 
 /** Tracks memory consumption.
   * It throws an exception if amount of consumed memory become greater than certain limit.
@@ -34,6 +38,9 @@ class MemoryTracker
     /// This description will be used as prefix into log messages (if isn't nullptr)
     const char * description = nullptr;
 
+    void submitAlloc(Int64 size);
+    void submitFree(Int64 size);
+
 public:
     MemoryTracker() {}
     MemoryTracker(Int64 limit_) : limit(limit_) {}
@@ -42,7 +49,18 @@ public:
 
     /** Call the following functions before calling of corresponding operations with memory allocators.
       */
-    void alloc(Int64 size);
+    __attribute__((always_inline)) void alloc(Int64 size) {
+        // inline all TLS access
+        Detail::MEMORY_TRACER_LOCAL_DELTA += size;
+        if (Detail::MEMORY_TRACER_SUBMIT_THRESHOLD < Detail::MEMORY_TRACER_LOCAL_DELTA) {
+            submitAlloc(Detail::MEMORY_TRACER_LOCAL_DELTA);
+            Detail::MEMORY_TRACER_LOCAL_DELTA = 0;
+        }
+        else if (-Detail::MEMORY_TRACER_SUBMIT_THRESHOLD > Detail::MEMORY_TRACER_LOCAL_DELTA) {
+            submitFree(Detail::MEMORY_TRACER_LOCAL_DELTA);
+            Detail::MEMORY_TRACER_LOCAL_DELTA = 0;
+        }
+    };
 
     void realloc(Int64 old_size, Int64 new_size)
     {
@@ -51,7 +69,18 @@ public:
 
     /** This function should be called after memory deallocation.
       */
-    void free(Int64 size);
+    __attribute__((always_inline)) void free(Int64 size) {
+        // inline all TLS access
+        Detail::MEMORY_TRACER_LOCAL_DELTA -= size;
+        if (Detail::MEMORY_TRACER_SUBMIT_THRESHOLD < Detail::MEMORY_TRACER_LOCAL_DELTA) {
+            submitAlloc(Detail::MEMORY_TRACER_LOCAL_DELTA);
+            Detail::MEMORY_TRACER_LOCAL_DELTA = 0;
+        }
+        else if (-Detail::MEMORY_TRACER_SUBMIT_THRESHOLD > Detail::MEMORY_TRACER_LOCAL_DELTA) {
+            submitFree(Detail::MEMORY_TRACER_LOCAL_DELTA);
+            Detail::MEMORY_TRACER_LOCAL_DELTA = 0;
+        }
+    };
 
     Int64 get() const
     {
