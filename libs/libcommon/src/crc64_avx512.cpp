@@ -1,6 +1,10 @@
-#if defined(TIFLASH_ENABLE_AVX512_SUPPORT) && TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT
+#include <common/crc64_fast.h>
+#if defined(TIFLASH_CRC64_HAS_SIMD_SUPPORT) && defined(TIFLASH_ENABLE_AVX512_SUPPORT) && TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT
 #include <common/crc64.h>
 #include <common/crc64_arch/crc64_x86.h>
+#include <common/crc64_table.h>
+
+#include <array>
 namespace crc64::_detail
 {
 using avx512_t = __m512i;
