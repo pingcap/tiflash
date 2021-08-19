@@ -159,7 +159,7 @@ struct MemoryTrackerLocalDelta
         }
         if (current_memory_tracker && delta < 0)
         {
-            current_memory_tracker->free(delta);
+            current_memory_tracker->free(-delta);
             return;
         }
     }
@@ -173,7 +173,7 @@ struct MemoryTrackerLocalDelta
         else if (unlikely(delta < -MEMORY_TRACER_SUBMIT_THRESHOLD))
         {
             if (current_memory_tracker)
-                current_memory_tracker->free(delta);
+                current_memory_tracker->free(-delta);
             delta = 0;
         }
     }
