@@ -5,14 +5,15 @@ mysql> insert into test.t values (1, 'abc', 'abc '),(4, 'Abc', 'abc'),(3,'def', 
 func> wait_table test t
 
 >> DBGInvoke __try_flush()
-mysql>set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ upper(group_concat(distinct value)) from t;
-+-------------------------------------+
-| upper(group_concat(distinct value)) |
-+-------------------------------------+
-| ABC,DEF                             |
-+-------------------------------------+
 
-mysql>set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ upper(group_concat(value order by 1,value1,id)) from t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ upper(group_concat(distinct value order by 1)) from test.t;
++------------------------------------------------+
+| upper(group_concat(distinct value order by 1)) |
++------------------------------------------------+
+| ABC,DEF                                        |
++------------------------------------------------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ upper(group_concat(value order by 1,value1,id)) from test.t;
 +-------------------------------------------------+
 | upper(group_concat(value order by 1,value1,id)) |
 +-------------------------------------------------+
