@@ -42,8 +42,8 @@ extern const Int8 VAR_SIZE;
 
 UInt8 getFieldLengthForArrowEncode(Int32 tp);
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type);
-TiDBCollatorPtr getCollatorFromExpr(const tipb::Expr & expr);
-TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type);
+TiDB::TiDBCollatorPtr getCollatorFromExpr(const tipb::Expr & expr);
+TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type);
 bool hasUnsignedFlag(const tipb::FieldType & tp);
 grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code);
 void assertBlockSchema(const DataTypes & expected_types, const Block & block, const std::string & context_description);

@@ -436,14 +436,14 @@ void constructNULLLiteralTiExpr(tipb::Expr & expr)
     field_type->set_tp(TiDB::TypeNull);
 }
 
-TiDBCollatorPtr getCollatorFromExpr(const tipb::Expr & expr)
+TiDB::TiDBCollatorPtr getCollatorFromExpr(const tipb::Expr & expr)
 {
     if (expr.has_field_type())
         return getCollatorFromFieldType(expr.field_type());
     return nullptr;
 }
 
-TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type)
+TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type)
 {
     if (field_type.collate() < 0)
         return TiDB::ITiDBCollator::getCollator(-field_type.collate());

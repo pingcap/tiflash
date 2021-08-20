@@ -79,14 +79,14 @@ void ColumnFixedString::insertData(const char * pos, size_t length)
     memcpy(&chars[old_size], pos, length);
 }
 
-StringRef ColumnFixedString::serializeValueIntoArena(size_t index, Arena & arena, char const *& begin, const TiDBCollatorPtr &, String &) const
+StringRef ColumnFixedString::serializeValueIntoArena(size_t index, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const
 {
     auto pos = arena.allocContinue(n, begin);
     memcpy(pos, &chars[n * index], n);
     return StringRef(pos, n);
 }
 
-const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, const TiDBCollatorPtr &)
+const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &)
 {
     size_t old_size = chars.size();
     chars.resize(old_size + n);
@@ -94,7 +94,7 @@ const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, 
     return pos + n;
 }
 
-void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, const TiDBCollatorPtr &, String &) const
+void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     hash.update(reinterpret_cast<const char *>(&chars[n * index]), n);
 }

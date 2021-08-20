@@ -75,7 +75,7 @@ public:
     const std::vector<NameAndTypePair> & getCurrentInputColumns();
     void makeExplicitSet(const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name);
     String applyFunction(
-        const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, const TiDBCollatorPtr & collator);
+        const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, const TiDB::TiDBCollatorPtr & collator);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
     bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, const BoolVec & is_ts_column);
     bool appendJoinKeyAndJoinFilters(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,

@@ -153,7 +153,7 @@ public:
       *  For example, to obtain unambiguous representation of Array of strings, strings data should be interleaved with their sizes.
       * Parameter begin should be used with Arena::allocContinue.
       */
-    virtual StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDBCollatorPtr & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
+    virtual StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
 
     /** Deserializes a value that was serialized using IColumn::serializeValueIntoArena method.
       * Returns pointer to the position after the read data.
@@ -168,12 +168,12 @@ public:
       *     but it is only used by TiDB , which does not support complex columns, so just ignore
       *     the complex column will be ok.
       */
-    virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDBCollatorPtr & collator = nullptr) = 0;
+    virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator = nullptr) = 0;
 
     /// Update state of hash function with value of n-th element.
     /// On subsequent calls of this method for sequence of column values of arbitary types,
     ///  passed bytes to hash must identify sequence of values unambiguously.
-    virtual void updateHashWithValue(size_t n, SipHash & hash, const TiDBCollatorPtr & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
+    virtual void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
 
     using HashValues = PaddedPODArray<SipHash>;
     virtual void updateHashWithValues(HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;

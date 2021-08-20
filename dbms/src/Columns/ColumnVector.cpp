@@ -32,7 +32,7 @@ namespace ErrorCodes
 
 
 template <typename T>
-StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDBCollatorPtr &, String &) const
+StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const
 {
     auto pos = arena.allocContinue(sizeof(T), begin);
     memcpy(pos, &data[n], sizeof(T));
@@ -40,14 +40,14 @@ StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char
 }
 
 template <typename T>
-const char * ColumnVector<T>::deserializeAndInsertFromArena(const char * pos, const TiDBCollatorPtr &)
+const char * ColumnVector<T>::deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &)
 {
     data.push_back(*reinterpret_cast<const T *>(pos));
     return pos + sizeof(T);
 }
 
 template <typename T>
-void ColumnVector<T>::updateHashWithValue(size_t n, SipHash & hash, const TiDBCollatorPtr &, String &) const
+void ColumnVector<T>::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     hash.update(data[n]);
 }

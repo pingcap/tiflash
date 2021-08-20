@@ -56,7 +56,7 @@ public:
         return name;
     }
 
-    void setCollator(const TiDBCollatorPtr & collator_) override { collator = collator_; }
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
 
     size_t getNumberOfArguments() const override
     {
@@ -163,7 +163,7 @@ public:
     }
 
 private:
-    TiDBCollatorPtr collator;
+    TiDB::TiDBCollatorPtr collator;
 };
 
 

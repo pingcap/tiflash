@@ -277,7 +277,7 @@ struct StringComparisonWithCollatorImpl
     static void NO_INLINE string_vector_string_vector(
             const ColumnString::Chars_t & a_data, const ColumnString::Offsets & a_offsets,
             const ColumnString::Chars_t & b_data, const ColumnString::Offsets & b_offsets,
-            const TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
+            const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
     {
         size_t size = a_offsets.size();
 
@@ -307,7 +307,7 @@ struct StringComparisonWithCollatorImpl
     static void NO_INLINE string_vector_fixed_string_vector(
             const ColumnString::Chars_t & a_data, const ColumnString::Offsets & a_offsets,
             const ColumnString::Chars_t & b_data, ColumnString::Offset b_n,
-            const TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
+            const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
     {
         size_t size = a_offsets.size();
         for (size_t i = 0; i < size; ++i)
@@ -330,7 +330,7 @@ struct StringComparisonWithCollatorImpl
     static void NO_INLINE string_vector_constant(
             const ColumnString::Chars_t & a_data, const ColumnString::Offsets & a_offsets,
             const std::string & b,
-            const TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
+            const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
     {
         size_t size = a_offsets.size();
         ColumnString::Offset b_size = b.size();
@@ -354,7 +354,7 @@ struct StringComparisonWithCollatorImpl
     static void fixed_string_vector_string_vector(
             const ColumnString::Chars_t & a_data, ColumnString::Offset a_n,
             const ColumnString::Chars_t & b_data, const ColumnString::Offsets & b_offsets,
-            const TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
+            const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
     {
         StringComparisonWithCollatorImpl<typename Op::SymmetricOp>::string_vector_fixed_string_vector(b_data, b_offsets, a_data, a_n, collator, c);
     }
@@ -362,7 +362,7 @@ struct StringComparisonWithCollatorImpl
     static void NO_INLINE fixed_string_vector_fixed_string_vector(
             const ColumnString::Chars_t & a_data, ColumnString::Offset a_n,
             const ColumnString::Chars_t & b_data, ColumnString::Offset b_n,
-            const TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
+            const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
     {
         size_t size = a_data.size();
 
@@ -377,7 +377,7 @@ struct StringComparisonWithCollatorImpl
     static void NO_INLINE fixed_string_vector_constant(
             const ColumnString::Chars_t & a_data, ColumnString::Offset a_n,
             const std::string & b,
-            const TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
+            const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
     {
         ColumnString::Offset b_n = b.size();
         size_t size = a_data.size();
@@ -392,7 +392,7 @@ struct StringComparisonWithCollatorImpl
     static void constant_string_vector(
             const std::string & a,
             const ColumnString::Chars_t & b_data, const ColumnString::Offsets & b_offsets,
-            const TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
+            const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
     {
         StringComparisonWithCollatorImpl<typename Op::SymmetricOp>::string_vector_constant(b_data, b_offsets, a, collator, c);
     }
@@ -400,7 +400,7 @@ struct StringComparisonWithCollatorImpl
     static void constant_fixed_string_vector(
             const std::string & a,
             const ColumnString::Chars_t & b_data, ColumnString::Offset b_n,
-            const TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
+            const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<UInt8> & c)
     {
         StringComparisonWithCollatorImpl<typename Op::SymmetricOp>::fixed_string_vector_constant(b_data, b_n, a, collator, c);
     }
@@ -408,7 +408,7 @@ struct StringComparisonWithCollatorImpl
     static void constant_constant(
             const std::string & a,
             const std::string & b,
-            const TiDBCollatorPtr & collator, UInt8 & c)
+            const TiDB::TiDBCollatorPtr & collator, UInt8 & c)
     {
         size_t a_n = a.size();
         size_t b_n = b.size();
@@ -1400,7 +1400,7 @@ private:
         return true;
     }
 
-    TiDBCollatorPtr collator;
+    TiDB::TiDBCollatorPtr collator;
 
 public:
     String getName() const override
@@ -1408,7 +1408,7 @@ public:
         return name;
     }
 
-    void setCollator(const TiDBCollatorPtr & collator_) override {
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override {
         collator = collator_;
     }
 

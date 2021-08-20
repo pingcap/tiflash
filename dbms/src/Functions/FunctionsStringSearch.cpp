@@ -172,7 +172,7 @@ struct PositionImpl
         const ColumnString::Offsets & offsets,
         const std::string & needle,
         const UInt8 escape_char,
-        const TiDBCollatorPtr & collator,
+        const TiDB::TiDBCollatorPtr & collator,
         PaddedPODArray<UInt64> & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
@@ -215,7 +215,7 @@ struct PositionImpl
     /// Search for substring in string.
     static void constant_constant(std::string data, std::string needle,
             const UInt8 escape_char,
-            const TiDBCollatorPtr & collator,
+            const TiDB::TiDBCollatorPtr & collator,
             UInt64 & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
@@ -236,7 +236,7 @@ struct PositionImpl
         const ColumnString::Chars_t & needle_data,
         const ColumnString::Offsets & needle_offsets,
         const UInt8 escape_char,
-        const TiDBCollatorPtr & collator,
+        const TiDB::TiDBCollatorPtr & collator,
         PaddedPODArray<UInt64> & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
@@ -286,7 +286,7 @@ struct PositionImpl
         const ColumnString::Chars_t & needle_data,
         const ColumnString::Offsets & needle_offsets,
         const UInt8 escape_char,
-        const TiDBCollatorPtr & collator,
+        const TiDB::TiDBCollatorPtr & collator,
         PaddedPODArray<UInt64> & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
@@ -428,7 +428,7 @@ struct MatchImpl
         const ColumnString::Offsets & offsets,
         const std::string & orig_pattern,
         const UInt8 escape_char,
-        const TiDBCollatorPtr & collator,
+        const TiDB::TiDBCollatorPtr & collator,
         PaddedPODArray<UInt8> & res)
     {
         if (collator != nullptr)
@@ -587,7 +587,7 @@ struct MatchImpl
     }
 
     static void constant_constant(const std::string & data, const std::string & orig_pattern, const UInt8 escape_char,
-                                  const TiDBCollatorPtr & collator, UInt8 & res)
+                                  const TiDB::TiDBCollatorPtr & collator, UInt8 & res)
     {
         if (collator != nullptr)
         {

@@ -181,7 +181,7 @@ public:
     virtual void checkNumberOfArguments(size_t number_of_arguments) const = 0;
 
     /// Check arguments and return IFunctionBase.
-    virtual FunctionBasePtr build(const ColumnsWithTypeAndName & arguments, const TiDBCollatorPtr & collator = nullptr) const = 0;
+    virtual FunctionBasePtr build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator = nullptr) const = 0;
 
     /// For higher-order functions (functions, that have lambda expression as at least one argument).
     /// You pass data types with empty DataTypeFunction for lambda arguments.
@@ -194,7 +194,7 @@ using FunctionBuilderPtr = std::shared_ptr<IFunctionBuilder>;
 class FunctionBuilderImpl : public IFunctionBuilder
 {
 public:
-    FunctionBasePtr build(const ColumnsWithTypeAndName & arguments, const TiDBCollatorPtr & collator) const final
+    FunctionBasePtr build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator) const final
     {
         return buildImpl(arguments, getReturnType(arguments), collator);
     }
@@ -282,7 +282,7 @@ public:
         throw Exception("getReturnType is not implemented for IFunction", ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    virtual void setCollator(const TiDBCollatorPtr &) {};
+    virtual void setCollator(const TiDB::TiDBCollatorPtr &) {};
 
 protected:
     FunctionBasePtr buildImpl(

@@ -75,7 +75,7 @@ public:
     FunctionBuilderPtr function_builder;
     FunctionBasePtr function;
     Names argument_names;
-    TiDBCollatorPtr collator;
+    TiDB::TiDBCollatorPtr collator;
 
     /// For ARRAY_JOIN
     NameSet array_joined_columns;
@@ -90,7 +90,7 @@ public:
 
     /// If result_name_ == "", as name "function_name(arguments separated by commas) is used".
     static ExpressionAction applyFunction(
-        const FunctionBuilderPtr & function_, const std::vector<std::string> & argument_names_, std::string result_name_ = "", const TiDBCollatorPtr & collator_ = nullptr);
+        const FunctionBuilderPtr & function_, const std::vector<std::string> & argument_names_, std::string result_name_ = "", const TiDB::TiDBCollatorPtr & collator_ = nullptr);
 
     static ExpressionAction addColumn(const ColumnWithTypeAndName & added_column_);
     static ExpressionAction removeColumn(const std::string & removed_name);

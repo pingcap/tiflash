@@ -163,7 +163,7 @@ ColumnPtr ColumnAggregateFunction::permute(const Permutation & perm, size_t limi
 }
 
 /// Is required to support operations with Set
-void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash, const TiDBCollatorPtr &, String &) const
+void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     WriteBufferFromOwnString wbuf;
     func->serialize(getData()[n], wbuf);
@@ -310,7 +310,7 @@ void ColumnAggregateFunction::insertDefault()
     function->create(getData().back());
 }
 
-StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst, const char *& begin, const TiDBCollatorPtr &, String &) const
+StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst, const char *& begin, const TiDB::TiDBCollatorPtr &, String &) const
 {
     IAggregateFunction * function = func.get();
     WriteBufferFromArena out(dst, begin);
@@ -318,7 +318,7 @@ StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst
     return out.finish();
 }
 
-const char * ColumnAggregateFunction::deserializeAndInsertFromArena(const char * src_arena, const TiDBCollatorPtr &)
+const char * ColumnAggregateFunction::deserializeAndInsertFromArena(const char * src_arena, const TiDB::TiDBCollatorPtr &)
 {
     IAggregateFunction * function = func.get();
 
