@@ -2,6 +2,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/tests/stress/DMStressProxy.h>
 #include <sys/time.h>
+#include <Common/Stopwatch.h>
 
 namespace DB
 {
@@ -12,7 +13,7 @@ namespace tests
 
 IDGenerator<Int64> pk{0};
 
-IDGenerator<UInt64> tso{0};
+IDGenerator<UInt64> tso{StopWatchDetail::nanoseconds(CLOCK_MONOTONIC)};
 
 template <typename T>
 void insertColumn(Block & block, const DataTypePtr & type, const String & name, Int64 col_id, const std::vector<T> & values)
@@ -26,6 +27,53 @@ void insertColumn(Block & block, const DataTypePtr & type, const String & name, 
     }
     col.column = std::move(m_col);
     block.insert(std::move(col));
+}
+
+DMStressProxy::DMStressProxy(const StressOptions & opts_)
+    : name(opts_.table_name),
+      col_balance_define(2, "balance", std::make_shared<DataTypeUInt64>()),
+      col_random_define(3, "random_text", std::make_shared<DataTypeString>()),
+      log(&Poco::Logger::get("DMStressProxy")),
+      opts(opts_),
+      rnd(::time(nullptr)),
+      stop(false)
+{
+    context   = std::make_unique<Context>(DMTestEnv::getContext());
+    auto cols = DMTestEnv::getDefaultColumns();
+    cols->emplace_back(col_balance_define);
+    cols->emplace_back(col_random_define);
+    auto handle_col = (*cols)[0];
+    store = std::make_shared<DeltaMergeStore>(*context, true, "test", name, *cols, handle_col, false, 1, DeltaMergeStore::Settings());
+    if (opts_.verify)
+    {
+        ColumnDefines columns;
+        columns.emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
+        BlockInputStreamPtr in = store->read(*context,
+                                context->getSettingsRef(),
+                                columns,
+                                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                /* num_streams= */ 1,
+                                /* max_version= */ tso.get(),
+                                EMPTY_FILTER,
+                                /* expected_block_size= */ 1024)[0];
+        while (Block block = in->read())
+        {
+            if (block.columns() != 1)
+            {
+                LOG_ERROR(log, "block columns must be 1.");
+                throw DB::Exception("block columns must be 1.", ErrorCodes::LOGICAL_ERROR);
+            }
+            // only one columns, so only need to fetch begin iterator.
+            auto itr = block.begin();
+            std::vector<Int64> ids;
+            ids.reserve(itr->column->size());
+            for (size_t i = 0; i < itr->column->size(); i++)
+            {
+                ids.emplace_back(itr->column->getInt(i));
+            }
+            pks.insert(ids);
+        }
+    }
 }
 
 void DMStressProxy::genMultiThread()

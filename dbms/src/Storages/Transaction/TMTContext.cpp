@@ -1,5 +1,6 @@
 #include <Common/DNSCache.h>
 #include <Flash/Mpp/MPPHandler.h>
+#include <Flash/Mpp/MPPTaskManager.h>
 #include <Interpreters/Context.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/BackgroundService.h>

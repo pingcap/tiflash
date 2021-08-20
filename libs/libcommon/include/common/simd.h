@@ -5,17 +5,15 @@
 #include <sys/auxv.h>
 #endif
 #endif
-namespace DB
-{
-namespace SIMDOption
+namespace simd_option
 {
 #if defined(__x86_64__)
 
-#ifdef DBMS_ENABLE_AVX_SUPPORT
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
 extern bool ENABLE_AVX;
 #endif
 
-#ifdef DBMS_ENABLE_AVX512_SUPPORT
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
 extern bool ENABLE_AVX512;
 #endif
 
@@ -59,23 +57,24 @@ static inline bool SIMDRuntimeSupport(SIMDFeature feature)
 
 #elif defined(__aarch64__)
 
-#ifdef DBMS_ENABLE_ASIMD_SUPPORT
+#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
 extern bool ENABLE_ASIMD;
 #endif
 
-#ifdef DBMS_ENABLE_SVE_SUPPORT
+#ifdef TIFLASH_ENABLE_SVE_SUPPORT
 extern bool ENABLE_SVE;
 #endif
 
 enum class SIMDFeature
 {
     asimd,
+    pmull,
     sve,
     sve2
 };
 
 
-static inline bool SIMDRuntimeSupport(SIMDFeature feature)
+static inline bool SIMDRuntimeSupport([[maybe_unused]] SIMDFeature feature)
 {
     /// Notice that we do not detect support for Darwin/arm64 since
     /// it does not have HWCAP support. However, if such feature is
@@ -92,9 +91,14 @@ static inline bool SIMDRuntimeSupport(SIMDFeature feature)
         // CentOS 7 default kernel does not support SVE2, so we just ignore SVE2 in that case.
         // (Maybe one can consider it after ARMv9 becomes more prevalent.)
         case SIMDFeature::sve:
+            hwcap = getauxval(AT_HWCAP);
+            return hwcap & HWCAP_SVE;
+        case SIMDFeature::pmull:
+            hwcap = getauxval(AT_HWCAP);
+            return hwcap & HWCAP_PMULL;
         case SIMDFeature::asimd:
             hwcap = getauxval(AT_HWCAP);
-            return hwcap & (feature == SIMDFeature::sve ? HWCAP_SVE : HWCAP_ASIMD);
+            return hwcap & HWCAP_ASIMD;
         case SIMDFeature::sve2:
 #ifdef HWCAP2_SVE2
             hwcap = getauxval(AT_HWCAP2);
@@ -108,5 +112,13 @@ static inline bool SIMDRuntimeSupport(SIMDFeature feature)
 }
 #endif
 
-}; // namespace SIMDOption
-} // namespace DB
+/// @todo: notice that currently we use plain SIMD without OOP abstraction:
+///     this gives several issues:
+///     - there may be similar code paragraph for each vectorization extension
+///     - this forbids passing SIMD type to template argument since GCC will give
+///       off warnings on discard attributes
+///     - some binary operations are ugly
+///     For future improvement, one should wrap SIMD types into structs/classes and
+///     https://gcc.gnu.org/onlinedocs/gcc/Vector-Extensions.html also gives a good example
+///     to reduce some burden of type-casting.
+} // namespace simd_option

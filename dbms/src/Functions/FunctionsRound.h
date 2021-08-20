@@ -25,6 +25,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+    extern const int OVERFLOW_ERROR;
 }
 
 
@@ -861,180 +862,389 @@ public:
  */
 using FracType = Int64;
 
-template <typename InputType>
-struct TiDBIntegerRound
-{
-    static_assert(is_integer_v<InputType>);
-
-    static constexpr InputType eval(const InputType & input, FracType frac [[maybe_unused]])
-    {
-        // TODO: RoundWithFrac.
-        assert(frac == 0);
-
-        return input;
-    }
-};
-
-template <typename InputType>
-struct TiDBFloatingRound
-{
-    static_assert(std::is_floating_point_v<InputType>);
-
-    // EvalType is the type used in evaluations.
-    // in MySQL, floating round always returns Float64.
-    using EvalType = Float64;
-
-    static constexpr EvalType eval(const InputType & input, FracType frac [[maybe_unused]])
-    {
-        // TODO: RoundWithFrac.
-        assert(frac == 0);
-
-        auto value = static_cast<EvalType>(input);
-
-        // floating-point environment is thread-local, so `fesetround` is thread-safe.
-        std::fesetround(FE_TONEAREST);
-        return std::nearbyint(value);
-    }
-};
-
 // build constant table of up to Nth power of 10 at compile time.
 template <typename T, size_t N>
 struct ConstPowOf10
 {
     using ArrayType = std::array<T, N + 1>;
 
-    static constexpr ArrayType build()
+    static constexpr T base = static_cast<T>(10);
+
+    static constexpr std::pair<ArrayType, bool> build()
     {
-        ArrayType result = {1};
+        ArrayType result{1};
+
+        bool overflow = false;
         for (size_t i = 1; i <= N; ++i)
-            result[i] = result[i - 1] * static_cast<T>(10);
-        return result;
+        {
+            result[i] = result[i - 1] * base;
+            overflow |= (result[i - 1] != result[i] / base);
+        }
+
+        return {result, overflow};
     }
 
-    static constexpr ArrayType result = build();
+    static constexpr auto pair = build();
+    static constexpr auto result = pair.first;
+    static constexpr bool overflow = pair.second;
+
+    static_assert(!overflow, "Computation overflows");
+};
+
+template <typename InputType, typename OutputType>
+struct TiDBFloatingRound
+{
+    static_assert(std::is_floating_point_v<InputType>);
+    static_assert(std::is_floating_point_v<OutputType>);
+    static_assert(sizeof(OutputType) >= sizeof(InputType));
+
+    static OutputType eval(InputType input, FracType frac)
+    {
+        // modified from <https://github.com/pingcap/tidb/blob/26237b35f857c2388eab46f9ee3b351687143681/types/helper.go#L33-L48>.
+
+        auto value = static_cast<OutputType>(input);
+        auto base = 1.0;
+
+        if (frac != 0)
+        {
+            // TODO: `std::pow` is expensive. Need optimization here.
+            // one possible optimization is pre-computation. See <https://golang.org/src/math/pow10.go>.
+            base = std::pow(10.0, frac);
+            auto scaled_value = value * base;
+
+            if (std::isinf(scaled_value))
+            {
+                // if frac is too large, base will be +inf.
+                // at this time, it is usually beyond the effective precision of floating-point type.
+                // no rounding is needed.
+                return value;
+            }
+            else
+                value = scaled_value;
+        }
+
+        // floating-point environment is thread-local, so `fesetround` is thread-safe.
+        std::fesetround(FE_TONEAREST);
+        value = std::nearbyint(value);
+
+        if (frac != 0)
+        {
+            value /= base;
+
+            if (!std::isfinite(value))
+            {
+                // if frac is too small, base will be zero.
+                // at this time, even the maximum of possible floating-point values will be
+                // rounded to zero.
+                return 0.0;
+            }
+        }
+
+        return value;
+    }
+};
+
+template <typename InputType, typename OutputType>
+struct TiDBIntegerRound
+{
+    static_assert(is_integer_v<InputType>);
+    static_assert(is_integer_v<OutputType>);
+    static_assert(actual_size_v<OutputType> >= actual_size_v<InputType>);
+
+    static constexpr auto digits = std::numeric_limits<OutputType>::digits10;
+    static constexpr auto max_digits = digits + 1;
+
+    using UnsignedOutput = make_unsigned_t<OutputType>;
+    using Pow = ConstPowOf10<UnsignedOutput, digits>;
+
+    static void throwOverflowIf(bool condition)
+    {
+        if (condition)
+            throw Exception(fmt::format("integer value is out of range in 'round'"), ErrorCodes::OVERFLOW_ERROR);
+    }
+
+    static OutputType castBack(bool negative [[maybe_unused]], UnsignedOutput value)
+    {
+        if constexpr (is_signed_v<OutputType>)
+        {
+            if (negative)
+            {
+                auto bound = toSafeUnsigned<UnsignedOutput>(std::numeric_limits<OutputType>::min());
+                throwOverflowIf(value > bound);
+                return static_cast<OutputType>(-value);
+            }
+            else
+            {
+                auto bound = toSafeUnsigned<UnsignedOutput>(std::numeric_limits<OutputType>::max());
+                throwOverflowIf(value > bound);
+                return static_cast<OutputType>(value);
+            }
+        }
+        else
+        {
+            static_assert(std::is_same_v<OutputType, UnsignedOutput>);
+            return value;
+        }
+    }
+
+    static OutputType eval(InputType input, FracType frac)
+    {
+        auto value = static_cast<OutputType>(input);
+
+        if (frac >= 0)
+            return value;
+        else if (frac < -max_digits)
+            return 0;
+        else
+        {
+            frac = -frac;
+
+            // we need to cast input to unsigned first to ensure overflow is not
+            // undefined behavior.
+            auto absolute_value = toSafeUnsigned<OutputType>(value);
+
+            if (frac == max_digits)
+            {
+                auto base = Pow::result[digits];
+
+                // test `x >= 5 * base`, but `5 * base` may overflow.
+                // since `base` is integer, `x / 5 >= base` iff. `floor(x / 5) >= base`.
+                // if true, x will round up. But rounding up will definitely result in overflow.
+                throwOverflowIf(absolute_value / 5 >= base);
+
+                // round down.
+                absolute_value = 0;
+            }
+            else
+            {
+                auto base = Pow::result[frac];
+                auto remainder = absolute_value % base;
+
+                absolute_value -= remainder;
+                if (remainder >= base / 2)
+                {
+                    // round up.
+                    auto rounded_value = absolute_value + base;
+                    throwOverflowIf(rounded_value < absolute_value);
+                    absolute_value = rounded_value;
+                }
+            }
+
+            return castBack((input < 0), absolute_value);
+        }
+    }
+};
+
+struct TiDBDecimalRoundInfo
+{
+    FracType input_prec;
+    FracType input_scale;
+    FracType input_int_prec; // number of digits before decimal point.
+
+    FracType output_prec;
+    FracType output_scale;
+
+    TiDBDecimalRoundInfo(const IDataType & input_type, const IDataType & output_type)
+        : input_prec(getDecimalPrecision(input_type, 0)),
+          input_scale(getDecimalScale(input_type, 0)),
+          input_int_prec(input_prec - input_scale),
+          output_prec(getDecimalPrecision(output_type, 0)),
+          output_scale(getDecimalScale(output_type, 0))
+    {}
 };
 
 template <typename InputType, typename OutputType>
 struct TiDBDecimalRound
 {
     static_assert(IsDecimal<InputType>);
+    static_assert(IsDecimal<OutputType>);
 
-    using UnsignedNativeType = make_unsigned_t<typename InputType::NativeType>;
-    using Pow = ConstPowOf10<UnsignedNativeType, maxDecimalPrecision<InputType>()>;
+    // output type is promoted to prevent overflow.
+    // this case is very rare, such as Decimal(90, 30) truncated to Decimal(65, 30).
+    using UnsignedInput = make_unsigned_t<typename InputType::NativeType>;
+    using UnsignedOutput = make_unsigned_t<typename PromoteType<typename OutputType::NativeType>::Type>;
 
-    static constexpr OutputType eval(const InputType & input, FracType frac [[maybe_unused]], ScaleType input_scale)
+    using PowForInput = ConstPowOf10<UnsignedInput, maxDecimalPrecision<InputType>()>;
+    using PowForOutput = ConstPowOf10<UnsignedOutput, maxDecimalPrecision<OutputType>()>;
+
+    static OutputType eval(const InputType & input, FracType frac, const TiDBDecimalRoundInfo & info)
     {
-        // TODO: RoundWithFrac.
-        assert(frac == 0);
+        // e.g. round(999.9999, -4) = 0.
+        if (frac < -info.input_int_prec)
+            return static_cast<OutputType>(0);
 
-        auto divider = Pow::result[input_scale];
-        auto absolute_value = toSafeUnsigned<UnsignedNativeType>(input.value);
-
-        // "round half away from zero"
-        // examples:
-        // - input.value = 149, input_scale = 2, divider = 100, result = (149 + 100 / 2) / 100 = 1
-        // - input.value = 150, input_scale = 2, divider = 100, result = (150 + 100 / 2) / 100 = 2
-        auto absolute_result = static_cast<typename OutputType::NativeType>((absolute_value + divider / 2) / divider);
-
-        if (input.value < 0)
-            return -static_cast<OutputType>(absolute_result);
-        else
-            return static_cast<OutputType>(absolute_result);
-    }
-};
-
-static FracType getFracFromConstColumn(const ColumnConst * column)
-{
-    FracType result;
-    auto frac_field = column->getField();
-
-    if (!frac_field.tryGet(result))
-    {
-        // maybe field is unsigned.
-        static_assert(is_signed_v<FracType>);
-        make_unsigned_t<FracType> unsigned_frac;
-
-        if (!frac_field.tryGet(unsigned_frac))
+        // rounding.
+        auto absolute_value = toSafeUnsigned<UnsignedInput>(input.value);
+        if (frac < info.input_scale)
         {
-            throw Exception(
-                fmt::format("Illegal frac column with type {}, expected to const Int64/UInt64", column->getField().getTypeName()),
-                ErrorCodes::ILLEGAL_COLUMN);
+            FracType frac_index = info.input_scale - frac;
+            assert(frac_index <= info.input_prec);
+
+            auto base = PowForInput::result[frac_index];
+            auto remainder = absolute_value % base;
+
+            absolute_value -= remainder;
+            if (remainder >= base / 2)
+            {
+                // round up.
+                absolute_value += base;
+            }
         }
 
-        result = static_cast<FracType>(unsigned_frac);
+        // convert from input_scale to output_scale.
+        FracType difference = info.input_scale - info.output_scale;
+
+        if (difference > 0)
+        {
+            // output_scale will be different from input_scale only if frac is const.
+            // in this case, all digits discarded by the following division should be zeroes.
+            // they are reset to zeroes because of rounding.
+            auto base = PowForInput::result[difference];
+            assert(absolute_value % base == 0);
+
+            absolute_value /= base;
+        }
+
+        auto scaled_value = static_cast<UnsignedOutput>(absolute_value);
+
+        if (difference < 0)
+            scaled_value *= PowForOutput::result[-difference];
+
+        // check overflow and construct result.
+        if (scaled_value > DecimalMaxValue::Get(info.output_prec))
+            throw TiFlashException("Data truncated", Errors::Decimal::Overflow);
+
+        auto result = static_cast<typename OutputType::NativeType>(scaled_value);
+        if (input.value < 0)
+            return -static_cast<OutputType>(result);
+        else
+            return static_cast<OutputType>(result);
     }
-
-    // in MySQL, frac is clamped to 30, which is identical to decimal_max_scale.
-    // frac is signed but decimal_max_scale is unsigned, so we have to cast before
-    // comparison.
-    if (result > static_cast<FracType>(decimal_max_scale))
-        result = decimal_max_scale;
-
-    return result;
-}
+};
 
 struct TiDBRoundPrecisionInferer
 {
-    static std::tuple<PrecType, ScaleType> infer(
-        PrecType prec, ScaleType scale, FracType frac [[maybe_unused]], bool is_const_frac [[maybe_unused]])
+    static std::tuple<PrecType, ScaleType> infer(PrecType prec, ScaleType scale, FracType frac, bool is_const_frac)
     {
-        // TODO: RoundWithFrac.
-        assert(is_const_frac);
-        assert(frac == 0);
-
         assert(prec >= scale);
-        PrecType new_prec = prec - scale;
+        PrecType int_prec = prec - scale;
+        ScaleType new_scale = scale;
 
         // +1 for possible overflow, e.g. round(99999.9) => 100000
-        if (scale > 0)
-            new_prec += 1;
+        ScaleType int_prec_increment = 1;
 
-        return std::make_tuple(new_prec, 0);
+        if (is_const_frac)
+        {
+            if (frac > static_cast<FracType>(decimal_max_scale))
+                frac = decimal_max_scale;
+
+            new_scale = std::max(0, frac);
+
+            if (frac >= static_cast<FracType>(scale))
+                int_prec_increment = 0;
+        }
+
+        PrecType new_prec = std::min(decimal_max_prec, int_prec + int_prec_increment + new_scale);
+        return std::make_tuple(new_prec, new_scale);
     }
 };
 
-template <typename InputType, typename OutputType, typename FracType, typename InputColumn, typename OutputColumn, typename FracColumn>
+struct TiDBRoundArguments
+{
+    const DataTypePtr & input_type;
+    const DataTypePtr & frac_type;
+    const DataTypePtr & output_type;
+    const ColumnPtr & input_column;
+    const ColumnPtr & frac_column;
+    MutableColumnPtr & output_column;
+};
+
+template <typename InputType, typename FracType, typename OutputType, typename InputColumn, typename FracColumn, typename OutputColumn>
 struct TiDBRound
 {
-    static void apply(const ColumnPtr & input_column_, const ColumnPtr & frac_column_, MutableColumnPtr & output_column_,
-        ScaleType input_scale [[maybe_unused]], ScaleType output_scale [[maybe_unused]])
+    static void apply(const TiDBRoundArguments & args)
     {
-        auto input_column = checkAndGetColumn<InputColumn>(input_column_.get());
-        auto frac_column = checkAndGetColumn<FracColumn>(frac_column_.get());
+        auto input_column = checkAndGetColumn<InputColumn>(args.input_column.get());
+        auto frac_column = checkAndGetColumn<FracColumn>(args.frac_column.get());
 
         if (input_column == nullptr)
-            throw Exception(fmt::format("Illegal column {} for the first argument of function round", input_column_->getName()),
+            throw Exception(fmt::format("Illegal column {} for the first argument of function round", args.input_column->getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         if (frac_column == nullptr)
-            throw Exception(fmt::format("Illegal column {} for the second argument of function round", frac_column_->getName()),
+            throw Exception(fmt::format("Illegal column {} for the second argument of function round", args.frac_column->getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
 
-        // TODO: RoundWithFrac.
-        assert(frac_column->isColumnConst());
-        auto frac_value = getFracFromConstColumn(frac_column);
-        assert(frac_value == 0);
-
-        // TODO: const input column.
-        assert(!input_column->isColumnConst());
-
-        auto & input_data = input_column->getData();
-        size_t size = input_data.size();
-
-        auto output_column = typeid_cast<OutputColumn *>(output_column_.get());
+        auto output_column = typeid_cast<OutputColumn *>(args.output_column.get());
         assert(output_column != nullptr);
 
+        size_t size = input_column->size();
         auto & output_data = output_column->getData();
         output_data.resize(size);
 
-        for (size_t i = 0; i < size; ++i)
+        TiDBDecimalRoundInfo info [[maybe_unused]] (*args.input_type, *args.output_type);
+
+        if constexpr (std::is_same_v<InputColumn, ColumnConst>)
         {
-            // TODO: RoundWithFrac.
-            if constexpr (std::is_floating_point_v<InputType>)
-                output_data[i] = TiDBFloatingRound<InputType>::eval(input_data[i], 0);
-            else if constexpr (IsDecimal<InputType>)
-                output_data[i] = TiDBDecimalRound<InputType, OutputType>::eval(input_data[i], 0, input_scale);
+            if constexpr (std::is_same_v<FracColumn, ColumnConst>)
+            {
+                auto input_data = input_column->template getValue<InputType>();
+                auto frac_data = frac_column->template getValue<FracType>();
+
+                if constexpr (std::is_floating_point_v<InputType>)
+                    output_data[0] = TiDBFloatingRound<InputType, OutputType>::eval(input_data, frac_data);
+                else if constexpr (IsDecimal<InputType>)
+                    output_data[0] = TiDBDecimalRound<InputType, OutputType>::eval(input_data, frac_data, info);
+                else
+                    output_data[0] = TiDBIntegerRound<InputType, OutputType>::eval(input_data, frac_data);
+            }
             else
-                output_data[i] = TiDBIntegerRound<InputType>::eval(input_data[i], 0);
+            {
+                auto input_data = input_column->template getValue<InputType>();
+                const auto & frac_data = frac_column->getData();
+
+                for (size_t i = 0; i < size; ++i)
+                {
+                    if constexpr (std::is_floating_point_v<InputType>)
+                        output_data[i] = TiDBFloatingRound<InputType, OutputType>::eval(input_data, frac_data[i]);
+                    else if constexpr (IsDecimal<InputType>)
+                        output_data[i] = TiDBDecimalRound<InputType, OutputType>::eval(input_data, frac_data[i], info);
+                    else
+                        output_data[i] = TiDBIntegerRound<InputType, OutputType>::eval(input_data, frac_data[i]);
+                }
+            }
+        }
+        else
+        {
+            if constexpr (std::is_same_v<FracColumn, ColumnConst>)
+            {
+                const auto & input_data = input_column->getData();
+                auto frac_data = frac_column->template getValue<FracType>();
+
+                for (size_t i = 0; i < size; ++i)
+                {
+                    if constexpr (std::is_floating_point_v<InputType>)
+                        output_data[i] = TiDBFloatingRound<InputType, OutputType>::eval(input_data[i], frac_data);
+                    else if constexpr (IsDecimal<InputType>)
+                        output_data[i] = TiDBDecimalRound<InputType, OutputType>::eval(input_data[i], frac_data, info);
+                    else
+                        output_data[i] = TiDBIntegerRound<InputType, OutputType>::eval(input_data[i], frac_data);
+                }
+            }
+            else
+            {
+                const auto & input_data = input_column->getData();
+                const auto & frac_data = frac_column->getData();
+
+                for (size_t i = 0; i < size; ++i)
+                {
+                    if constexpr (std::is_floating_point_v<InputType>)
+                        output_data[i] = TiDBFloatingRound<InputType, OutputType>::eval(input_data[i], frac_data[i]);
+                    else if constexpr (IsDecimal<InputType>)
+                        output_data[i] = TiDBDecimalRound<InputType, OutputType>::eval(input_data[i], frac_data[i], info);
+                    else
+                        output_data[i] = TiDBIntegerRound<InputType, OutputType>::eval(input_data[i], frac_data[i]);
+                }
+            }
         }
     }
 };
@@ -1052,23 +1262,59 @@ public:
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
     bool useDefaultImplementationForNulls() const override { return true; }
-    bool useDefaultImplementationForConstants() const override { return true; }
     bool hasInformationAboutMonotonicity() const override { return true; }
-
     Monotonicity getMonotonicityForRange(const IDataType &, const Field &, const Field &) const override { return {true, true, true}; }
 
+    // default implementation might make const frac column into a non-const one, while const frac and
+    // non-const frac column can generate different return types. Plese see TiDBRoundPrecisionInferer for details.
+    bool useDefaultImplementationForConstants() const override { return false; }
+
 private:
+    FracType getFracFromConstColumn(const ColumnConst * column) const
+    {
+        using UnsignedFrac = make_unsigned_t<FracType>;
+
+        auto field = column->getField();
+
+        if (field.getType() == Field::TypeToEnum<FracType>::value)
+            return field.get<FracType>();
+        else if (field.getType() == Field::TypeToEnum<UnsignedFrac>::value)
+        {
+            auto unsigned_frac = field.get<UnsignedFrac>();
+
+            // to prevent overflow. Large frac is useless in fact.
+            unsigned_frac = std::min(unsigned_frac, static_cast<UnsignedFrac>(std::numeric_limits<FracType>::max()));
+
+            return static_cast<FracType>(unsigned_frac);
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal frac column with type {}, expect const Int64/UInt64", column->getField().getTypeName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
+    }
+
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         checkArguments(arguments);
 
         auto input_type = arguments[0].type;
 
+        auto frac_column = arguments[1].column.get();
+        bool frac_column_const = frac_column && frac_column->isColumnConst();
+
         if (input_type->isInteger())
-            return input_type;
+        {
+            // in MySQL, integer round always returns 64-bit integer.
+            // the sign is the same as input.
+            if (input_type->isUnsignedInteger())
+                return std::make_shared<DataTypeUInt64>();
+            else
+                return std::make_shared<DataTypeInt64>();
+        }
         else if (input_type->isFloatingPoint())
         {
-            // in MySQL, floating round always returns Float64.
+            // in MySQL, floating-point round always returns Float64.
             return std::make_shared<DataTypeFloat64>();
         }
         else
@@ -1084,8 +1330,7 @@ private:
             FracType frac = 0;
             bool is_const_frac = true;
 
-            auto frac_column = arguments[1].column.get();
-            if (frac_column->isColumnConst())
+            if (frac_column_const)
             {
                 auto column = typeid_cast<const ColumnConst *>(frac_column);
                 assert(column != nullptr);
@@ -1107,99 +1352,114 @@ private:
         for (const auto & position : arguments)
             columns.push_back(block.getByPosition(position));
 
-        auto return_type = getReturnTypeImpl(columns);
-        auto result_column = return_type->createColumn();
+        auto output_type = getReturnTypeImpl(columns);
+        auto output_column = output_type->createColumn();
 
         auto input_type = columns[0].type;
         auto input_column = columns[0].column;
         auto frac_type = columns[1].type;
         auto frac_column = columns[1].column;
 
-        auto input_scale = getDecimalScale(*input_type, 0);
-        auto result_scale = getDecimalScale(*return_type, 0);
+        bool is_all_column_const = input_column->isColumnConst() && frac_column->isColumnConst();
 
-        checkInputTypeAndApply(input_type, return_type, frac_type, input_column, frac_column, result_column, input_scale, result_scale);
+        // if the result is const, we need to only compute once.
+        // but the column size may be greater than 1, so we resize them here.
+        assert(input_column->size() == frac_column->size());
+        if (is_all_column_const && input_column->size() != 1)
+        {
+            input_column = input_column->cloneResized(1);
+            frac_column = frac_column->cloneResized(1);
+        }
 
-        block.getByPosition(result).column = std::move(result_column);
+        checkInputTypeAndApply({input_type, frac_type, output_type, input_column, frac_column, output_column});
+
+        if (is_all_column_const)
+            block.getByPosition(result).column = ColumnConst::create(std::move(output_column), block.rows());
+        else
+            block.getByPosition(result).column = std::move(output_column);
     }
 
-    void checkInputTypeAndApply(const DataTypePtr & input_type, const DataTypePtr & return_type, const DataTypePtr & frac_type,
-        const ColumnPtr & input_column, const ColumnPtr & frac_column, MutableColumnPtr & result_column, ScaleType input_scale,
-        ScaleType result_scale)
+    template <typename F>
+    bool castToNumericDataTypes(const IDataType * input_type, const F & f)
     {
-        if (!castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256,
-                DataTypeInt8, DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64, DataTypeUInt64>(
-                input_type.get(), [&](const auto & input_type, bool) {
-                    using InputDataType = std::decay_t<decltype(input_type)>;
+        return castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128,
+            DataTypeDecimal256, DataTypeInt8, DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64,
+            DataTypeUInt64>(input_type, f);
+    }
 
-                    checkReturnTypeAndApply<typename InputDataType::FieldType>(
-                        return_type, frac_type, input_column, frac_column, result_column, input_scale, result_scale);
-
-                    return true;
-                }))
+    void checkInputTypeAndApply(const TiDBRoundArguments & args)
+    {
+        if (!castToNumericDataTypes(args.input_type.get(), [&](const auto & input_type, bool) {
+                using InputDataType = std::decay_t<decltype(input_type)>;
+                checkFracTypeAndApply<typename InputDataType::FieldType>(args);
+                return true;
+            }))
         {
-            throw Exception(fmt::format("Illegal column type {} for the first argument of function {}", input_type->getName(), getName()),
+            throw Exception(
+                fmt::format("Illegal column type {} for the first argument of function {}", args.input_type->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 
     template <typename InputType>
-    void checkReturnTypeAndApply(const DataTypePtr & return_type, const DataTypePtr & frac_type, const ColumnPtr & input_column,
-        const ColumnPtr & frac_column, MutableColumnPtr & result_column, ScaleType input_scale, ScaleType result_scale)
+    void checkFracTypeAndApply(const TiDBRoundArguments & args)
     {
-        if (!castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256,
-                DataTypeInt8, DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64, DataTypeUInt64>(
-                return_type.get(), [&](const auto & return_type, bool) {
-                    using ReturnDataType = std::decay_t<decltype(return_type)>;
+        if (!castTypeToEither<DataTypeInt64, DataTypeUInt64>(args.frac_type.get(), [&](const auto & frac_type, bool) {
+                using FracDataType = std::decay_t<decltype(frac_type)>;
+                checkOutputTypeAndApply<InputType, typename FracDataType::FieldType>(args);
+                return true;
+            }))
+        {
+            throw Exception(
+                fmt::format("Illegal column type {} for the second argument of function {}", args.frac_type->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
+    }
 
-                    return checkFracTypeAndApply<InputType, typename ReturnDataType::FieldType>(
-                        frac_type, input_column, frac_column, result_column, input_scale, result_scale);
-                }))
+    template <typename InputType, typename FracType>
+    void checkOutputTypeAndApply(const TiDBRoundArguments & args)
+    {
+        if (!castToNumericDataTypes(args.output_type.get(), [&](const auto & output_type, bool) {
+                using OutputDataType = std::decay_t<decltype(output_type)>;
+                return checkColumnsAndApply<InputType, FracType, typename OutputDataType::FieldType>(args);
+            }))
         {
             throw TiFlashException(fmt::format("Unexpected return type for function {}", getName()), Errors::Coprocessor::Internal);
         }
     }
 
-    template <typename InputType, typename ReturnType>
-    bool checkFracTypeAndApply(const DataTypePtr & frac_type, const ColumnPtr & input_column, const ColumnPtr & frac_column,
-        MutableColumnPtr & result_column, ScaleType input_scale [[maybe_unused]], ScaleType result_scale [[maybe_unused]])
+    template <typename InputType, typename FracType, typename OutputType>
+    bool checkColumnsAndApply(const TiDBRoundArguments & args)
     {
-        if constexpr ((std::is_floating_point_v<InputType> && !std::is_same_v<ReturnType, Float64>)
-            || (IsDecimal<InputType> && !IsDecimal<ReturnType>) || (is_integer_v<InputType> && !std::is_same_v<InputType, ReturnType>))
+        constexpr bool check_integer_output
+            = is_signed_v<InputType> ? std::is_same_v<OutputType, Int64> : std::is_same_v<OutputType, UInt64>;
+
+        if constexpr ((std::is_floating_point_v<InputType> && !std::is_same_v<OutputType, Float64>)
+            || (IsDecimal<InputType> && !IsDecimal<OutputType>) || (is_integer_v<InputType> && !check_integer_output))
             return false;
         else
         {
-            if (!castTypeToEither<DataTypeInt64, DataTypeUInt64>(frac_type.get(), [&](const auto & frac_type, bool) {
-                    using FracDataType = std::decay_t<decltype(frac_type)>;
+            using InputColumn = std::conditional_t<IsDecimal<InputType>, ColumnDecimal<InputType>, ColumnVector<InputType>>;
+            using FracColumn = ColumnVector<FracType>;
+            using OutputColumn = std::conditional_t<IsDecimal<OutputType>, ColumnDecimal<OutputType>, ColumnVector<OutputType>>;
 
-                    checkColumnsAndApply<InputType, ReturnType, typename FracDataType::FieldType>(
-                        input_column, frac_column, result_column, input_scale, result_scale);
-
-                    return true;
-                }))
+            if (args.input_column->isColumnConst())
             {
-                throw Exception(
-                    fmt::format("Illegal column type {} for the second argument of function {}", frac_type->getName(), getName()),
-                    ErrorCodes::ILLEGAL_COLUMN);
+                if (args.frac_column->isColumnConst())
+                    TiDBRound<InputType, FracType, OutputType, ColumnConst, ColumnConst, OutputColumn>::apply(args);
+                else
+                    TiDBRound<InputType, FracType, OutputType, ColumnConst, FracColumn, OutputColumn>::apply(args);
+            }
+            else
+            {
+                if (args.frac_column->isColumnConst())
+                    TiDBRound<InputType, FracType, OutputType, InputColumn, ColumnConst, OutputColumn>::apply(args);
+                else
+                    TiDBRound<InputType, FracType, OutputType, InputColumn, FracColumn, OutputColumn>::apply(args);
             }
 
             return true;
         }
-    }
-
-    template <typename InputType, typename ReturnType, typename FracType>
-    void checkColumnsAndApply(const ColumnPtr & input_column, const ColumnPtr & frac_column, MutableColumnPtr & result_column,
-        ScaleType input_scale, ScaleType result_scale)
-    {
-        using InputColumn = std::conditional_t<IsDecimal<InputType>, ColumnDecimal<InputType>, ColumnVector<InputType>>;
-        using ResultColumn = std::conditional_t<IsDecimal<ReturnType>, ColumnDecimal<ReturnType>, ColumnVector<ReturnType>>;
-
-        // TODO: RoundWithFrac
-        assert(!input_column->isColumnConst());
-        assert(frac_column->isColumnConst());
-
-        TiDBRound<InputType, ReturnType, FracType, InputColumn, ResultColumn, ColumnConst>::apply(
-            input_column, frac_column, result_column, input_scale, result_scale);
     }
 
     void checkArguments(const ColumnsWithTypeAndName & arguments) const

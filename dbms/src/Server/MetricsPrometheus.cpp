@@ -114,8 +114,9 @@ constexpr long INIT_DELAY = 5;
 
 MetricsPrometheus::MetricsPrometheus(
     Context & context, const AsynchronousMetrics & async_metrics_, const TiFlashSecurityConfig & security_config)
-    : timer("Prometheus"), tiflash_metrics(context.getTiFlashMetrics()), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
+    : timer("Prometheus"), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
 {
+    auto & tiflash_metrics = TiFlashMetrics::instance();
     auto & conf = context.getConfigRef();
 
     metrics_interval = conf.getInt(status_metrics_interval, 15);
@@ -159,7 +160,7 @@ MetricsPrometheus::MetricsPrometheus(
             ::gethostname(hostname, sizeof(hostname));
 
             gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, prometheus::Gateway::GetInstanceLabel(hostname));
-            gateway->RegisterCollectable(tiflash_metrics->registry);
+            gateway->RegisterCollectable(tiflash_metrics.registry);
 
             LOG_INFO(log, "Enable prometheus push mode; interval =" << metrics_interval << "; addr = " << metrics_addr);
         }
@@ -170,14 +171,14 @@ MetricsPrometheus::MetricsPrometheus(
         auto metrics_port = conf.getString(status_metrics_port);
         if (security_config.has_tls_config)
         {
-            server = getHTTPServer(security_config, tiflash_metrics->registry, metrics_port);
+            server = getHTTPServer(security_config, tiflash_metrics.registry, metrics_port);
             server->start();
             LOG_INFO(log, "Enable prometheus secure pull mode; Metrics Port = " << metrics_port);
         }
         else
         {
             exposer = std::make_shared<prometheus::Exposer>(metrics_port);
-            exposer->RegisterCollectable(tiflash_metrics->registry);
+            exposer->RegisterCollectable(tiflash_metrics.registry);
             LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = " << metrics_port);
         }
     }
@@ -194,16 +195,17 @@ MetricsPrometheus::~MetricsPrometheus() { timer.cancel(true); }
 
 void MetricsPrometheus::run()
 {
+    auto & tiflash_metrics = TiFlashMetrics::instance();
     for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); event++)
     {
         const auto value = ProfileEvents::counters[event].load(std::memory_order_relaxed);
-        tiflash_metrics->registered_profile_events[event]->Set(value);
+        tiflash_metrics.registered_profile_events[event]->Set(value);
     }
 
     for (CurrentMetrics::Metric metric = 0; metric < CurrentMetrics::end(); metric++)
     {
         const auto value = CurrentMetrics::values[metric].load(std::memory_order_relaxed);
-        tiflash_metrics->registered_current_metrics[metric]->Set(value);
+        tiflash_metrics.registered_current_metrics[metric]->Set(value);
     }
 
     auto async_metric_values = async_metrics.getValues();
@@ -211,7 +213,7 @@ void MetricsPrometheus::run()
     {
         const auto & origin_name = metric.first;
         const auto & value = metric.second;
-        if (!tiflash_metrics->registered_async_metrics.count(origin_name))
+        if (!tiflash_metrics.registered_async_metrics.count(origin_name))
         {
             // Register this async metric into registry on flight, as async metrics are not accumulated at once.
             auto prometheus_name = TiFlashMetrics::async_metrics_prefix + metric.first;
@@ -220,11 +222,11 @@ void MetricsPrometheus::run()
             auto & family = prometheus::BuildGauge()
                                 .Name(prometheus_name)
                                 .Help("System asynchronous metric " + prometheus_name)
-                                .Register(*tiflash_metrics->registry);
+                                .Register(*(tiflash_metrics.registry));
             // Use original name as key for the sake of further accesses.
-            tiflash_metrics->registered_async_metrics.emplace(origin_name, &family.Add({}));
+            tiflash_metrics.registered_async_metrics.emplace(origin_name, &family.Add({}));
         }
-        tiflash_metrics->registered_async_metrics[origin_name]->Set(value);
+        tiflash_metrics.registered_async_metrics[origin_name]->Set(value);
     }
 
     if (gateway != nullptr)

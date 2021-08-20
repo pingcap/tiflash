@@ -1907,7 +1907,7 @@ public:
         if (const auto in = checkAndGetColumn<ColumnVector<T>>(in_untyped))
         {
             const auto & in_data = in->getData();
-            if (!memoryIsZero(in_data.data(), in_data.size() * sizeof(in_data[0])))
+            if (!mem_utils::memoryIsZero(in_data.data(), in_data.size() * sizeof(in_data[0])))
                 throw Exception("Value passed to 'throwIf' function is non zero", ErrorCodes::FUNCTION_THROW_IF_VALUE_IS_NON_ZERO);
 
             /// We return non constant to avoid constant folding.
