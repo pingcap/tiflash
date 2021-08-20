@@ -1,6 +1,7 @@
 
 #include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/PathPool.h>
 #include <Storages/PathSelector.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
@@ -66,6 +67,19 @@ String choose(const std::vector<T> & paths, const PathCapacityMetricsPtr & globa
     LOG_INFO(log, "Choose path [" << chosen_path << "] " << log_msg);
     return path_generator(chosen_path);
 }
+
+template String choose<StoragePathPool::MainPathInfo>( //
+    const std::vector<StoragePathPool::MainPathInfo> & paths, const PathCapacityMetricsPtr & global_capacity,
+    std::function<String(const String & path)> && path_generator, Poco::Logger * log, const String & log_msg);
+
+template String choose<StoragePathPool::LatestPathInfo>( //
+    const std::vector<StoragePathPool::LatestPathInfo> & paths, const PathCapacityMetricsPtr & global_capacity,
+    std::function<String(const String & path)> && path_generator, Poco::Logger * log, const String & log_msg);
+
+template String choose<PSDiskDelegatorRaft::RaftPathInfo>( //
+    const std::vector<PSDiskDelegatorRaft::RaftPathInfo> & paths, const PathCapacityMetricsPtr & global_capacity,
+    std::function<String(const String & path)> && path_generator, Poco::Logger * log, const String & log_msg);
+
 } // namespace PathSelector
 
 } // namespace DB
