@@ -1227,7 +1227,7 @@ struct TiDBRound
 
             auto [input_column, frac_column, output_column, size] = ctx.checkAndGetColumns<InputColumn, FracColumn, OutputColumn>();
             auto & output_data = output_column->getData();
-            auto info = ctx.getDecimalInfo();
+            auto info [[maybe_unused]] = ctx.getDecimalInfo();
 
             if constexpr (std::is_same_v<InputColumn, ColumnConst>)
             {
