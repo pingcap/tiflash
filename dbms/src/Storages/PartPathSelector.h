@@ -13,6 +13,7 @@ class MergeTreeData;
 struct MergeTreePartInfo;
 using String = std::string;
 
+// TODO: Move this to MergeTree directory
 class PartPathSelector
 {
 public:
