@@ -343,8 +343,7 @@ Strings StableDiskDelegator::listPaths() const
 
 String StableDiskDelegator::choosePath() const
 {
-    std::function<String(const String & path)> path_generator
-        = [](const String & path) -> String { return path + "/" + StoragePathPool::STABLE_FOLDER_NAME; };
+    auto path_generator = [](const String & path) -> String { return path + "/" + StoragePathPool::STABLE_FOLDER_NAME; };
     const String log_msg = "[type=stable] [database=" + pool.database + "] [table=" + pool.table + "]";
     return genericChoosePath(pool.main_path_infos, pool.global_capacity, std::move(path_generator), pool.log, log_msg);
 }
@@ -420,8 +419,7 @@ Strings PSDiskDelegatorMulti::listPaths() const
 
 String PSDiskDelegatorMulti::choosePath(const PageFileIdAndLevel & id_lvl)
 {
-    std::function<String(const String & path)> path_generator
-        = [this](const String & path) -> String { return path + "/" + this->path_prefix; };
+    auto path_generator = [this](const String & path) -> String { return path + "/" + this->path_prefix; };
 
     {
         std::lock_guard<std::mutex> lock{pool.mutex};
@@ -546,7 +544,7 @@ Strings PSDiskDelegatorRaft::listPaths() const { return pool.kvstore_paths; }
 
 String PSDiskDelegatorRaft::choosePath(const PageFileIdAndLevel & id_lvl)
 {
-    std::function<String(const String & path)> path_generator = [](const String & path) -> String { return path; };
+    auto path_generator = [](const String & path) -> String { return path; };
 
     {
         std::lock_guard lock{mutex};
