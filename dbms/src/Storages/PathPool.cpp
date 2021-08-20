@@ -276,9 +276,7 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
     if (paths.size() == 1)
         return path_generator(paths, 0);
 
-    UInt64 total_available_size = 0;
-    std::map<FSID, DiskCapacity> disk_stats_map;
-    std::map<FSID, std::vector<String>> fs_path_map;
+    DisksCapacity all_disks_stats_map;
     std::map<String, std::pair<FsStats, size_t>> path_capacity;
 
     for (size_t i = 0; i < paths.size(); ++i)
@@ -345,65 +343,21 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
 
         path_capacity[paths[i].path] = std::pair(path_stat, i);
 
-        // update fs_path_map
-        {
-            const auto & entry = fs_path_map.find(vfs.f_fsid);
-            if (entry == fs_path_map.end())
-            {
-                fs_path_map.insert(std::pair<FSID, std::vector<String>>(vfs.f_fsid,
-                    {
-                        paths[i].path,
-                    }));
-            }
-            else
-            {
-                entry->second.emplace_back(paths[i].path);
-            }
-        }
-
-        // update disk_stats_map
-        {
-            const auto & entry = disk_stats_map.find(vfs.f_fsid);
-            if (entry == disk_stats_map.end())
-            {
-                disk_stats_map.insert(std::pair<FSID, DiskCapacity>(vfs.f_fsid, {vfs, {path_stat}}));
-            }
-            else
-            {
-                entry->second.path_stats.emplace_back(path_stat);
-            }
-        }
+        // update all_disks_stats_map
+        all_disks_stats_map.insert(vfs, path_stat, paths[i].path);
     }
 
     /// Calutate total_available_size and get a biggest fs
+    size_t total_available_size = 0;
     size_t biggest_avail_size = 0;
-    FSID biggest_fs = -1;
-    for (const auto & [fs_id, disk_stat_vec] : disk_stats_map)
-    {
-        UInt64 disk_stat_avail_size = 0;
-        auto & vfs_info = disk_stat_vec.vfs_info;
-
-        for (const auto & path_stats : disk_stat_vec.path_stats)
-        {
-            disk_stat_avail_size += path_stats.avail_size;
-        }
-
-        // Calutate single disk info
-        disk_stat_avail_size = std::min(vfs_info.f_bavail * vfs_info.f_frsize, disk_stat_avail_size);
-        if (disk_stat_avail_size > biggest_avail_size)
-        {
-            biggest_avail_size = disk_stat_avail_size;
-            biggest_fs = fs_id;
-        }
-
-        total_available_size += disk_stat_avail_size;
-    }
+    DisksCapacity::Iterator biggest_disk_iter = all_disks_stats_map.end();
+    std::tie(total_available_size, biggest_avail_size, biggest_disk_iter) = all_disks_stats_map.getBiggestAvailableDisk();
 
     // We should choose path even if there is no available space.
     // If the actual disk space is running out, let the later `write` to throw exception.
     // If available space is limited by the quota, then write down a GC-ed file can make
     // some files be deleted later.
-    if (total_available_size == 0)
+    if (unlikely(total_available_size == 0))
     {
         LOG_WARNING(log, "No available space for all disks, choose randomly.");
         // If no available space. direct return the first one.
@@ -411,14 +365,14 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
         return path_generator(paths, 0);
     }
 
-    auto fs_paths = fs_path_map.find(biggest_fs);
-    if (fs_paths == fs_path_map.end())
+    if (unlikely(biggest_disk_iter == all_disks_stats_map.end()))
     {
         LOG_WARNING(log, "Some of DISK have been removed.");
         return path_generator(paths, 0);
     }
 
-    auto & select_paths = fs_paths->second;
+    const auto & biggest_disk = biggest_disk_iter->second;
+    const auto & select_paths = biggest_disk.paths;
 
     /// Find biggest available path in biggest available disk
     size_t index = 0;

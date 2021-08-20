@@ -20,6 +20,26 @@ struct DiskCapacity
     std::vector<FsStats> path_stats;
 };
 
+class DisksCapacity
+{
+public:
+    struct DiskInfo
+    {
+        DiskCapacity disk;
+        Strings paths;
+    };
+
+    void insert(const struct statvfs & vfs, const FsStats & fs_stat, const String & path);
+
+    using Iterator = std::unordered_map<FSID, DiskInfo>::const_iterator;
+    std::tuple<size_t, size_t, Iterator> getBiggestAvailableDisk() const;
+
+    Iterator end() const { return disks_stats.end(); }
+
+private:
+    std::unordered_map<FSID, DiskInfo> disks_stats;
+};
+
 class PathCapacityMetrics : private boost::noncopyable
 {
 public:
