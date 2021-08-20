@@ -98,6 +98,8 @@ class RateLimiter;
 using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 struct TiFlashRaftConfig;
 class DAGContext;
+class CPUAffinityManager;
+using CPUAffinityManagerPtr = std::shared_ptr<CPUAffinityManager>;
 
 namespace DM
 {
@@ -492,6 +494,8 @@ public:
     const TimezoneInfo & getTimezoneInfo() const { return timezone_info; };
     TimezoneInfo & getTimezoneInfo() { return timezone_info; };
 
+    void initCPUAffinityManager();
+    const CPUAffinityManager & getCPUAffinityManager() const;
     /// User name and session identifier. Named sessions are local to users.
     using SessionKey = std::pair<String, String>;
 

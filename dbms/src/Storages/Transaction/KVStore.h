@@ -147,6 +147,8 @@ private:
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
 
 private:
+    Context & global_context;
+
     RegionManager region_manager;
 
     RegionPersister region_persister;
@@ -174,6 +176,8 @@ private:
 
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     std::atomic_int64_t read_index_event_flag{0};
+
+    void setCPUAffinity();
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

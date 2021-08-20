@@ -1,6 +1,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
+#include <Common/CPUAffinityManager.h>
 #include <Core/Types.h>
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/BatchCoprocessorHandler.h>
@@ -32,17 +33,24 @@ FlashService::FlashService(IServer & server_)
       log(&Logger::get("FlashService"))
 {
     auto settings = server_.context().getSettingsRef();
+    const auto & cpu_affinity = server_.context().getCPUAffinityManager();
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
 
     size_t cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with " << cop_pool_size << " threads to handle cop requests.");
-    cop_pool = std::make_unique<ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
+    cop_pool = std::make_unique<ThreadPool>(cop_pool_size, [&cpu_affinity] { 
+        setThreadName("cop-pool"); 
+        cpu_affinity.setSelfReadThread();
+        });
 
     size_t batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with " << batch_cop_pool_size << " threads to handle batch cop requests.");
-    batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
+    batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [&cpu_affinity] {
+        setThreadName("batch-cop-pool"); 
+        cpu_affinity.setSelfReadThread();
+        });
 }
 
 grpc::Status FlashService::Coprocessor(

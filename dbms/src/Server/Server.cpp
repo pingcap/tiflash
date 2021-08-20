@@ -4,6 +4,7 @@
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/CPUAffinityManager.h>
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -856,7 +857,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setCurrentDatabase(default_database);
 
     global_context->initializeSchemaSyncService();
-
+    global_context->initCPUAffinityManager();
+    LOG_INFO(log, "CPUAffinity: " << global_context->getCPUAffinityManager().toString());
     SCOPE_EXIT({
         /** Ask to cancel background jobs all table engines,
           *  and also query_log.

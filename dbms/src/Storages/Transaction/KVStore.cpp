@@ -1,6 +1,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
+#include <Common/CPUAffinityManager.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
@@ -25,7 +26,8 @@ extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
 KVStore::KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_)
-    : region_persister(context, region_manager),
+    : global_context(context),
+      region_persister(context, region_manager),
       raft_cmd_res(std::make_unique<RaftCommandResult>()),
       snapshot_apply_method(snapshot_apply_method_),
       log(&Logger::get("KVStore"))
@@ -190,9 +192,25 @@ RegionMap & KVStore::regionsMut() { return region_manager.regions; }
 const RegionMap & KVStore::regions() const { return region_manager.regions; }
 KVStore::RegionManageLock KVStore::genRegionManageLock() const { return RegionManageLock(region_manager.mutex); }
 
+#if __APPLE__ && __clang__  
+    static __thread bool has_set_cpu_affinity = false;
+#else
+    static thread_local bool has_set_cpu_affinity = false;
+#endif
+
+void KVStore::setCPUAffinity()
+{
+    if (unlikely(!has_set_cpu_affinity))
+    {
+        global_context.getCPUAffinityManager().setSelfWriteThread();
+        has_set_cpu_affinity = true;   
+    }
+}
+
 EngineStoreApplyRes KVStore::handleWriteRaftCmd(
     raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
 {
+    setCPUAffinity();
     std::vector<BaseBuffView> keys;
     std::vector<BaseBuffView> vals;
     std::vector<WriteCmdType> cmd_types;
