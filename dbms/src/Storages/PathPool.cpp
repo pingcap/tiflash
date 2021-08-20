@@ -271,14 +271,14 @@ void StoragePathPool::renamePath(const String & old_path, const String & new_pat
 
 template <typename T>
 String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetricsPtr & global_capacity,
-    std::function<String(const std::vector<T> & paths, size_t idx)> path_generator, Poco::Logger * log, const String & log_msg)
+    std::function<String(const String & path)> && path_generator, Poco::Logger * log, const String & log_msg)
 {
     assert(!paths.empty());
     if (paths.size() == 1)
-        return path_generator(paths, 0);
+        return path_generator(paths[0].path);
 
     DisksCapacity all_disks;
-    std::map<String, std::pair<FsStats, size_t>> path_capacity;
+    std::map<String, FsStats> path_capacity;
 
     for (size_t i = 0; i < paths.size(); ++i)
     {
@@ -342,7 +342,7 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
             };
         });
 
-        path_capacity[paths[i].path] = std::pair(path_stat, i);
+        path_capacity[paths[i].path] = path_stat;
 
         // update all_disks
         all_disks.insert(vfs, path_stat, paths[i].path);
@@ -363,13 +363,13 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
         LOG_WARNING(log, "No available space for all disks, choose randomly.");
         // If no available space. direct return the first one.
         // There is no need to calculate and choose.
-        return path_generator(paths, 0);
+        return path_generator(paths[0].path);
     }
 
     if (unlikely(biggest_disk_iter == all_disks.end()))
     {
         LOG_WARNING(log, "Some of DISK have been removed.");
-        return path_generator(paths, 0);
+        return path_generator(paths[0].path);
     }
 
     const auto & biggest_disk = biggest_disk_iter->second;
@@ -377,21 +377,21 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
 
     // FIXME: all paths in `select_paths` are on the same disk, just choose randomly from them is ok?
     /// Find biggest available path in biggest available disk
-    size_t index = 0;
+    String chosen_path;
     double ratio = 0, biggest_ratio = 0;
     for (size_t i = 0; i < select_paths.size(); ++i)
     {
-        auto & [single_path_stat, index_in_paths] = path_capacity.find(select_paths[i])->second;
+        auto & single_path_stat = path_capacity.find(select_paths[i])->second;
         ratio = 1.0 * single_path_stat.avail_size / total_available_size;
         if (biggest_ratio < ratio)
         {
             biggest_ratio = ratio;
-            index = index_in_paths;
+            chosen_path = select_paths[i];
         }
     }
 
-    LOG_INFO(log, "Choose path [index=" << index << "] " << log_msg);
-    return path_generator(paths, index);
+    LOG_INFO(log, "Choose path [" << chosen_path << "] " << log_msg);
+    return path_generator(chosen_path);
 }
 
 //==========================================================================================
@@ -410,12 +410,10 @@ Strings StableDiskDelegator::listPaths() const
 
 String StableDiskDelegator::choosePath() const
 {
-    std::function<String(const StoragePathPool::MainPathInfos & paths, size_t idx)> path_generator
-        = [](const StoragePathPool::MainPathInfos & paths, size_t idx) -> String {
-        return paths[idx].path + "/" + StoragePathPool::STABLE_FOLDER_NAME;
-    };
+    std::function<String(const String & path)> path_generator
+        = [](const String & path) -> String { return path + "/" + StoragePathPool::STABLE_FOLDER_NAME; };
     const String log_msg = "[type=stable] [database=" + pool.database + "] [table=" + pool.table + "]";
-    return genericChoosePath(pool.main_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
+    return genericChoosePath(pool.main_path_infos, pool.global_capacity, std::move(path_generator), pool.log, log_msg);
 }
 
 String StableDiskDelegator::getDTFilePath(UInt64 file_id) const
@@ -489,18 +487,18 @@ Strings PSDiskDelegatorMulti::listPaths() const
 
 String PSDiskDelegatorMulti::choosePath(const PageFileIdAndLevel & id_lvl)
 {
-    std::function<String(const StoragePathPool::LatestPathInfos & paths, size_t idx)> path_generator =
-        [this](const StoragePathPool::LatestPathInfos & paths, size_t idx) -> String { return paths[idx].path + "/" + this->path_prefix; };
+    std::function<String(const String & path)> path_generator
+        = [this](const String & path) -> String { return path + "/" + this->path_prefix; };
 
     {
         std::lock_guard<std::mutex> lock{pool.mutex};
         /// If id exists in page_path_map, just return the same path
         if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
-            return path_generator(pool.latest_path_infos, iter->second);
+            return path_generator(pool.latest_path_infos[iter->second].path);
     }
 
     const String log_msg = "[type=ps_multi] [database=" + pool.database + "] [table=" + pool.table + "]";
-    return genericChoosePath(pool.latest_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
+    return genericChoosePath(pool.latest_path_infos, pool.global_capacity, std::move(path_generator), pool.log, log_msg);
 }
 
 size_t PSDiskDelegatorMulti::addPageFileUsedSize(
@@ -615,19 +613,18 @@ Strings PSDiskDelegatorRaft::listPaths() const { return pool.kvstore_paths; }
 
 String PSDiskDelegatorRaft::choosePath(const PageFileIdAndLevel & id_lvl)
 {
-    std::function<String(const RaftPathInfos & paths, size_t idx)> path_generator
-        = [](const RaftPathInfos & paths, size_t idx) -> String { return paths[idx].path; };
+    std::function<String(const String & path)> path_generator = [](const String & path) -> String { return path; };
 
     {
         std::lock_guard lock{mutex};
         /// If id exists in page_path_map, just return the same path
         if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
-            return path_generator(raft_path_infos, iter->second);
+            return path_generator(raft_path_infos[iter->second].path);
     }
 
     // Else choose path randomly
     const String log_msg = "[type=ps_raft]";
-    return genericChoosePath(raft_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
+    return genericChoosePath(raft_path_infos, pool.global_capacity, std::move(path_generator), pool.log, log_msg);
 }
 
 size_t PSDiskDelegatorRaft::addPageFileUsedSize(
