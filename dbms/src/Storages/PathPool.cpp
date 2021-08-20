@@ -273,10 +273,11 @@ template <typename T>
 String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetricsPtr & global_capacity,
     std::function<String(const std::vector<T> & paths, size_t idx)> path_generator, Poco::Logger * log, const String & log_msg)
 {
+    assert(!paths.empty());
     if (paths.size() == 1)
         return path_generator(paths, 0);
 
-    DisksCapacity all_disks_stats_map;
+    DisksCapacity all_disks;
     std::map<String, std::pair<FsStats, size_t>> path_capacity;
 
     for (size_t i = 0; i < paths.size(); ++i)
@@ -343,15 +344,15 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
 
         path_capacity[paths[i].path] = std::pair(path_stat, i);
 
-        // update all_disks_stats_map
-        all_disks_stats_map.insert(vfs, path_stat, paths[i].path);
+        // update all_disks
+        all_disks.insert(vfs, path_stat, paths[i].path);
     }
 
     /// Calutate total_available_size and get a biggest fs
     size_t total_available_size = 0;
     size_t biggest_avail_size = 0;
-    DisksCapacity::Iterator biggest_disk_iter = all_disks_stats_map.end();
-    std::tie(total_available_size, biggest_avail_size, biggest_disk_iter) = all_disks_stats_map.getBiggestAvailableDisk();
+    DisksCapacity::Iterator biggest_disk_iter = all_disks.end();
+    std::tie(total_available_size, biggest_avail_size, biggest_disk_iter) = all_disks.getBiggestAvailableDisk();
 
     // We should choose path even if there is no available space.
     // If the actual disk space is running out, let the later `write` to throw exception.
@@ -365,7 +366,7 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
         return path_generator(paths, 0);
     }
 
-    if (unlikely(biggest_disk_iter == all_disks_stats_map.end()))
+    if (unlikely(biggest_disk_iter == all_disks.end()))
     {
         LOG_WARNING(log, "Some of DISK have been removed.");
         return path_generator(paths, 0);
@@ -374,6 +375,7 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
     const auto & biggest_disk = biggest_disk_iter->second;
     const auto & select_paths = biggest_disk.paths;
 
+    // FIXME: all paths in `select_paths` are on the same disk, just choose randomly from them is ok?
     /// Find biggest available path in biggest available disk
     size_t index = 0;
     double ratio = 0, biggest_ratio = 0;
