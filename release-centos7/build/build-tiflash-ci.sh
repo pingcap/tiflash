@@ -9,6 +9,14 @@ else
   echo "ccache has been installed"
 fi
 
+command -v clang-format > /dev/null 2>&1
+if [[ $? != 0 ]]; then
+  curl -o "/usr/local/bin/clang-format" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/clang-format
+  chmod +x "/usr/local/bin/clang-format"
+else
+  echo "clang-format has been installed"
+fi
+
 set -ueox pipefail
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
@@ -16,11 +24,9 @@ SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
 
 CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Debug}
 BUILD_BRANCH=${BUILD_BRANCH:-master}
-ENABLE_FORMAT_CHECK=${ENABLE_FORMAT_CHECK:-true}
+ENABLE_FORMAT_CHECK=${ENABLE_FORMAT_CHECK:-false}
 
-curl -o "/usr/local/bin/clang-format" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/clang-format
-chmod +x "/usr/local/bin/clang-format"
-if [[ "${CMAKE_BUILD_TYPE}" == "Debug" && "${ENABLE_FORMAT_CHECK}" == "true" ]]; then
+if [[ "${ENABLE_FORMAT_CHECK}" == "true" ]]; then
   python3 ${SRCPATH}/format-diff.py --repo_path "${SRCPATH}" --check_formatted --diff_from `git merge-base origin/${BUILD_BRANCH} HEAD`
   export ENABLE_FORMAT_CHECK=false
 fi
