@@ -173,7 +173,7 @@ struct ExtractParamImpl
 
     /// It is assumed that `res` is the correct size and initialized with zeros.
     static void vector_constant(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets,
-        std::string needle, const UInt8 escape_char, std::shared_ptr<TiDB::ITiDBCollator> collator,
+        std::string needle, const UInt8 escape_char, const TiDBCollatorPtr & collator,
         PaddedPODArray<ResultType> & res)
     {
         if (escape_char != '\\' || collator != nullptr)
@@ -213,7 +213,7 @@ struct ExtractParamImpl
         memset(&res[i], 0, (res.size() - i) * sizeof(res[0]));
     }
 
-    static void constant_constant(const std::string & data, std::string needle, const UInt8 escape_char, std::shared_ptr<TiDB::ITiDBCollator> collator, ResultType & res)
+    static void constant_constant(const std::string & data, std::string needle, const UInt8 escape_char, const TiDBCollatorPtr & collator, ResultType & res)
     {
         if (escape_char != '\\' || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);

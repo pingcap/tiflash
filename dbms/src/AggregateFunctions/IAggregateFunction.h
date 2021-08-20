@@ -394,9 +394,9 @@ struct AggregationCollatorsWrapper
         return in;
     }
 
-    std::pair<std::shared_ptr<TiDB::ITiDBCollator>, std::string *> getCollatorAndSortKeyContainer(size_t )
+    std::pair<TiDBCollatorPtr, std::string *> getCollatorAndSortKeyContainer(size_t )
     {
-        return std::make_pair(static_cast<std::shared_ptr<TiDB::ITiDBCollator>>(nullptr), &TiDB::dummy_sort_key_contaner);
+        return std::make_pair(static_cast<TiDBCollatorPtr>(nullptr), &TiDB::dummy_sort_key_contaner);
     }
 
     void writeCollators(WriteBuffer & ) const {}
@@ -427,12 +427,12 @@ struct AggregationCollatorsWrapper<true>
             throw Exception("Should not here: collators for aggregation function is not set correctly");
     }
 
-    std::pair<std::shared_ptr<TiDB::ITiDBCollator>, std::string *> getCollatorAndSortKeyContainer(size_t index)
+    std::pair<const TiDBCollatorPtr &, std::string *> getCollatorAndSortKeyContainer(size_t index)
     {
         if (likely(index < collators.size()))
             return std::make_pair(collators[index], &sort_key_containers[index]);
         else if (collators.empty())
-            return std::make_pair(static_cast<std::shared_ptr<TiDB::ITiDBCollator>>(nullptr), &TiDB::dummy_sort_key_contaner);
+            return std::make_pair(static_cast<const TiDBCollatorPtr &>(nullptr), &TiDB::dummy_sort_key_contaner);
         else
             throw Exception("Should not here: collators for aggregation function is not set correctly");
     }

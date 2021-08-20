@@ -61,9 +61,9 @@ public:
     void get(size_t n, Field & res) const override;
     StringRef getDataAt(size_t n) const override;
     void insertData(const char * pos, size_t length) override;
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
-    const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
-    void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDBCollatorPtr &, String &) const override;
+    const char * deserializeAndInsertFromArena(const char * pos, const TiDBCollatorPtr &) override;
+    void updateHashWithValue(size_t n, SipHash & hash, const TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
     void updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;

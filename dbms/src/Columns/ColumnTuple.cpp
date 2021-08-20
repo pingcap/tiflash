@@ -125,7 +125,7 @@ void ColumnTuple::popBack(size_t n)
         column->assumeMutableRef().popBack(n);
 }
 
-StringRef ColumnTuple::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
+StringRef ColumnTuple::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     size_t values_size = 0;
     for (auto & column : columns)
@@ -134,7 +134,7 @@ StringRef ColumnTuple::serializeValueIntoArena(size_t n, Arena & arena, char con
     return StringRef(begin, values_size);
 }
 
-const char * ColumnTuple::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator> collator)
+const char * ColumnTuple::deserializeAndInsertFromArena(const char * pos, const TiDBCollatorPtr & collator)
 {
     for (auto & column : columns)
         pos = column->assumeMutableRef().deserializeAndInsertFromArena(pos, collator);
@@ -142,7 +142,7 @@ const char * ColumnTuple::deserializeAndInsertFromArena(const char * pos, std::s
     return pos;
 }
 
-void ColumnTuple::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
+void ColumnTuple::updateHashWithValue(size_t n, SipHash & hash, const TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     for (auto & column : columns)
         column->updateHashWithValue(n, hash, collator, sort_key_container);

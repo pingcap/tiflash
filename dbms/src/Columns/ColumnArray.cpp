@@ -167,7 +167,7 @@ void ColumnArray::insertData(const char * pos, size_t length)
 }
 
 
-StringRef ColumnArray::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
+StringRef ColumnArray::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     size_t array_size = sizeAt(n);
     size_t offset = offsetAt(n);
@@ -183,7 +183,7 @@ StringRef ColumnArray::serializeValueIntoArena(size_t n, Arena & arena, char con
 }
 
 
-const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator> collator)
+const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const TiDBCollatorPtr & collator)
 {
     size_t array_size = *reinterpret_cast<const size_t *>(pos);
     pos += sizeof(array_size);
@@ -196,7 +196,7 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, std::s
 }
 
 
-void ColumnArray::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
+void ColumnArray::updateHashWithValue(size_t n, SipHash & hash, const TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     size_t array_size = sizeAt(n);
     size_t offset = offsetAt(n);

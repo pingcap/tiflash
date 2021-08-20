@@ -177,7 +177,10 @@ public:
 protected:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName &) const override { return return_type; }
     bool useDefaultImplementationForNulls() const override { return false; }
-    FunctionBasePtr buildImpl(const ColumnsWithTypeAndName &, const DataTypePtr &, std::shared_ptr<TiDB::ITiDBCollator>) const override
+    FunctionBasePtr buildImpl(
+        const ColumnsWithTypeAndName &,
+        const DataTypePtr &,
+        const std::shared_ptr<TiDB::ITiDBCollator> &) const override
     {
         return std::const_pointer_cast<FunctionCapture>(shared_from_this());
     }

@@ -56,7 +56,8 @@ protected:
     int32_t collator_id;
 };
 
-using TiDBCollators = std::vector<std::shared_ptr<ITiDBCollator>>;
+using TiDBCollatorPtr = std::shared_ptr<ITiDBCollator>;
+using TiDBCollators = std::vector<TiDBCollatorPtr>;
 
 /// these dummy_xxx are used as the default value to avoid too many meaningless
 /// modification on the legacy ClickHouse code

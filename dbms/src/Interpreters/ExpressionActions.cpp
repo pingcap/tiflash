@@ -52,7 +52,7 @@ Names ExpressionAction::getNeededColumns() const
 
 ExpressionAction ExpressionAction::applyFunction(const FunctionBuilderPtr & function_,
     const std::vector<std::string> & argument_names_,
-    std::string result_name_, std::shared_ptr<TiDB::ITiDBCollator> collator_)
+    std::string result_name_, const TiDBCollatorPtr & collator_)
 {
     if (result_name_ == "")
     {

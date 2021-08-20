@@ -49,8 +49,8 @@ public:
     UInt64 get64(size_t n) const override { return nested_column->get64(n); }
     StringRef getDataAt(size_t n) const override;
     void insertData(const char * pos, size_t length) override;
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
-    const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDBCollatorPtr &, String &) const override;
+    const char * deserializeAndInsertFromArena(const char * pos, const TiDBCollatorPtr &) override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;;
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src, size_t n) override;
@@ -75,7 +75,7 @@ public:
     size_t byteSize(size_t offset, size_t limit) const override;
     size_t allocatedBytes() const override;
     ColumnPtr replicate(const Offsets & replicate_offsets) const override;
-    void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
+    void updateHashWithValue(size_t n, SipHash & hash, const TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
     void updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
     void getExtremes(Field & min, Field & max) const override;

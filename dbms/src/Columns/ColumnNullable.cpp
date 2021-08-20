@@ -35,7 +35,7 @@ ColumnNullable::ColumnNullable(MutableColumnPtr && nested_column_, MutableColumn
 
 
 void ColumnNullable::updateHashWithValue(
-    size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
+    size_t n, SipHash & hash, const TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     const auto & arr = getNullMapData();
     if (arr[n] == 0)
@@ -146,7 +146,7 @@ void ColumnNullable::insertData(const char * /*pos*/, size_t /*length*/)
 }
 
 StringRef ColumnNullable::serializeValueIntoArena(
-    size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
+    size_t n, Arena & arena, char const *& begin, const TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     const auto & arr = getNullMapData();
     static constexpr auto s = sizeof(arr[0]);
@@ -162,7 +162,7 @@ StringRef ColumnNullable::serializeValueIntoArena(
     return StringRef{begin, s + nested_size};
 }
 
-const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator> collator)
+const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos, const TiDBCollatorPtr & collator)
 {
     UInt8 val = *reinterpret_cast<const UInt8 *>(pos);
     pos += sizeof(val);

@@ -183,7 +183,7 @@ private:
     Int32 size = -1;    /// -1 indicates that there is no value.
     Int32 capacity = 0;    /// power of two or zero
     char * large_data;
-    std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr;
+    TiDBCollatorPtr collator;
 
     bool less(const StringRef &a, const StringRef &b) const
     {

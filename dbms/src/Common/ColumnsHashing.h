@@ -83,7 +83,7 @@ struct HashMethodString
 
     const IColumn::Offset * offsets;
     const UInt8 * chars;
-    std::shared_ptr<TiDB::ITiDBCollator> collator;
+    TiDBCollatorPtr collator;
 
     HashMethodString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {
@@ -131,7 +131,7 @@ struct HashMethodFixedString
 
     size_t n;
     const ColumnFixedString::Chars_t * chars;
-    std::shared_ptr<TiDB::ITiDBCollator> collator;
+    TiDBCollatorPtr collator;
 
     HashMethodFixedString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {
