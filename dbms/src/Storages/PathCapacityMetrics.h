@@ -57,11 +57,32 @@ public:
 
     virtual std::map<FSID, DiskCapacity> getDiskStats();
 
-    std::tuple<FsStats, struct statvfs> getFsStatsOfPath(std::string_view file_path) const;
+    template <typename T>
+    std::tuple<DisksCapacity, std::map<String, FsStats>> getDiskStatsForPaths(const std::vector<T> & paths)
+    {
+        DisksCapacity all_disks;
+        std::map<String, FsStats> path_capacity;
+        for (size_t i = 0; i < paths.size(); ++i)
+        {
+            auto [path_stat, vfs] = getFsStatsOfPath(paths[i].path);
+            if (!path_stat.ok)
+            {
+                continue;
+            }
+
+            path_capacity[paths[i].path] = path_stat;
+
+            // update all_disks
+            all_disks.insert(vfs, path_stat, paths[i].path);
+        }
+        return {std::move(all_disks), std::move(path_capacity)};
+    }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+
+    std::tuple<FsStats, struct statvfs> getFsStatsOfPath(std::string_view file_path) const;
 
     static constexpr ssize_t INVALID_INDEX = -1;
     // Return the index of the longest prefix matching path in `path_info`
