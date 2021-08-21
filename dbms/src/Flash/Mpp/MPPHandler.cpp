@@ -28,7 +28,7 @@ void MPPHandler::handleError(const MPPTaskPtr & task, String error)
         tryLogCurrentException(log, "Fail to handle error and clean task");
     }
 }
-// execute is responsible for making plan , register tasks and tunnels and start the running thread.
+// execute is responsible for making plan, register tasks and tunnels and start the running thread.
 grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * response)
 {
     MPPTaskPtr task = nullptr;

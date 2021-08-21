@@ -270,7 +270,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
         }
     }
-    // read index , this may take a long time.
+    // read index ,this may take a long time.
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
 
     // get partition column ids
