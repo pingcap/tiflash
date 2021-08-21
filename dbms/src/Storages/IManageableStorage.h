@@ -131,6 +131,8 @@ public:
 
     virtual size_t getRowKeyColumnSize() const { return 1; }
 
+    virtual void addMPPTaskLog([[maybe_unused]] Logger * mpp_task_log_) {}
+
 private:
     virtual DataTypePtr getPKTypeImpl() const = 0;
 

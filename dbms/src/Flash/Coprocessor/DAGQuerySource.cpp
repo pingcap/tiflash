@@ -5,6 +5,7 @@
 #include <Parsers/ParserQuery.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Parsers/parseQuery.h>
+#include <deque>
 
 namespace DB
 {
@@ -69,7 +70,41 @@ String DAGQuerySource::str(size_t) { return dag_request.DebugString(); }
 
 std::unique_ptr<IInterpreter> DAGQuerySource::interpreter(Context &, QueryProcessingStage::Enum)
 {
-    return std::make_unique<InterpreterDAG>(context, *this);
+    return std::make_unique<InterpreterDAG>(context, *this, mpp_task_log);
+}
+
+std::string DAGQuerySource::getExecutorNames() const
+{
+    std::string names("");
+    std::deque<std::shared_ptr<DAGQueryBlock>> dq;
+    dq.push_back(root_query_block);
+ 
+    while (!dq.empty())
+    {
+        std::shared_ptr<DAGQueryBlock> dag_query_block = dq.front();
+        dq.pop_front();
+
+        if (dag_query_block == nullptr)
+            continue;
+
+        if (dag_query_block->source != nullptr)
+            names += "<" + dag_query_block->source_name + "> ";
+        if (dag_query_block->selection != nullptr)
+            names += "<" + dag_query_block->selection_name + "> ";
+        if (dag_query_block->aggregation != nullptr)
+            names += "<" + dag_query_block->aggregation_name + "> ";
+        if (dag_query_block->having != nullptr)
+            names += "<" + dag_query_block->having_name + "> ";
+        if (dag_query_block->limitOrTopN != nullptr)
+            names += "<" + dag_query_block->limitOrTopN_name + "> ";
+        if (dag_query_block->exchangeSender != nullptr)
+            names += "<" + dag_query_block->exchangeServer_name + "> ";
+        
+        for (auto child : dag_query_block->children)
+            dq.push_back(child);
+    }
+
+    return names;
 }
 
 } // namespace DB

@@ -22,11 +22,12 @@ class CreatingSetsBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     CreatingSetsBlockInputStream(
-        const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets_, const SizeLimits & network_transfer_limits);
+        const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets_, const SizeLimits & network_transfer_limits, Poco::Logger * mpp_task_log_ = nullptr);
 
     CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
         std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
-        const SizeLimits & network_transfer_limits, Int64 mpp_task_id_);
+        const SizeLimits & network_transfer_limits, Int64 mpp_task_id_,
+        Poco::Logger * mpp_task_log_ = nullptr);
     ~CreatingSetsBlockInputStream()
     {
         for (auto & worker : workers)
@@ -65,6 +66,7 @@ private:
 
     using Logger = Poco::Logger;
     Logger * log = &Logger::get("CreatingSetsBlockInputStream");
+    Logger * mpp_task_log;
 
     void createAll();
     void createOne(SubqueryForSet & subquery);

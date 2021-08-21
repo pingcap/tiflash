@@ -64,7 +64,8 @@ StorageDeltaMerge::StorageDeltaMerge( //
       store_inited(false),
       max_column_id_used(0),
       global_context(global_context_.getGlobalContext()),
-      log(&Logger::get("StorageDeltaMerge"))
+      log(&Logger::get("StorageDeltaMerge")),
+      mpp_task_log(nullptr)
 {
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
@@ -551,6 +552,7 @@ BlockInputStreams StorageDeltaMerge::read( //
     unsigned num_streams)
 {
     auto & store = getAndMaybeInitStore();
+    store->addMPPTaskLog(mpp_task_log);
     // Note that `columns_to_read` should keep the same sequence as ColumnRef
     // in `Coprocessor.TableScan.columns`, or rough set filter could be
     // failed to parsed.

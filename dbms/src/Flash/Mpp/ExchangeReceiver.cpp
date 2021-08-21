@@ -42,15 +42,23 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 {
     bool meet_error = false;
     String local_err_msg;
+    Int64 src_task_id = -1;
+    Int64 dst_task_id = task_meta.task_id();
+
     try
     {
         auto sender_task = new mpp::TaskMeta();
         sender_task->ParseFromString(meta_raw);
+        src_task_id = sender_task->task_id();
+
         auto req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
         req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
         req->set_allocated_sender_meta(sender_task);
+
         LOG_DEBUG(log, "begin start and read : " << req->DebugString());
+
         ::grpc::Status status = ::grpc::Status::OK;
+
         for (int i = 0; i < 10; i++)
         {
             pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
@@ -58,7 +66,12 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             auto reader = cluster->rpc_client->sendStreamRequest(req->sender_meta().address(), &client_context, call);
             reader->WaitForInitialMetadata();
             mpp::MPPDataPacket packet;
-            String req_info = "tunnel" + std::to_string(sender_task->task_id()) + "+" + std::to_string(task_meta.task_id());
+            String req_info = "tunnel" + std::to_string(src_task_id) + "+" + std::to_string(dst_task_id);
+            
+            // "Task 1 -> Task 2" means Task 1 sends data to Task 2
+            if (mpp_task_log != nullptr)
+                LOG_TRACE(mpp_task_log, "Data direction: Task " + std::to_string(src_task_id) + " -> Task " + std::to_string(dst_task_id));
+            
             bool has_data = false;
             for (;;)
             {
@@ -126,12 +139,23 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
     }
     std::lock_guard<std::mutex> lock(mu);
     live_connections--;
+
+    // copy the variable so that we can avoid the concurrent conflict
+    int live_connections_copy = live_connections;
+
     if (meet_error && state == NORMAL)
         state = ERROR;
     if (meet_error && err_msg.empty())
         err_msg = local_err_msg;
     cv.notify_all();
-    LOG_DEBUG(log, "read thread end!!! live connections: " << std::to_string(live_connections));
+
+    Logger * tmp_log = mpp_task_log != nullptr ? mpp_task_log : log;
+    LOG_DEBUG(tmp_log, "Data direction: Task " + std::to_string(src_task_id) + " -> Task " + std::to_string(dst_task_id) << 
+                        ", this read thread end!!! live connections: " << std::to_string(live_connections_copy));
+
+    if (live_connections_copy == 0)
+        LOG_DEBUG(tmp_log, "ExchangeReceiver: All threads exit");
+
 }
 
 } // namespace DB

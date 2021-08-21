@@ -19,16 +19,19 @@ extern const int LOGICAL_ERROR;
 template <class StreamWriterPtr>
 StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_, tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_)
+    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, Logger * mpp_task_log_)
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_),
       exchange_type(exchange_type_),
       writer(writer_),
       partition_col_ids(std::move(partition_col_ids_)),
       collators(std::move(collators_)),
-      thread_pool(dag_context.final_concurrency)
+      thread_pool(dag_context.final_concurrency),
+      mpp_task_log(mpp_task_log_)
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
+    if (mpp_task_log != nullptr)
+        LOG_TRACE(mpp_task_log, "StreamingDAGResponseWriter: Thread number:" << thread_pool.size());
 }
 
 template <class StreamWriterPtr>
@@ -46,6 +49,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
     {
         thread_pool.schedule(getEncodeTask(blocks, response));
     }
+    if (mpp_task_log != nullptr)
+        LOG_TRACE(mpp_task_log, "StreamingDAGResponseWriter: Thread pool active jobs:" << thread_pool.active());
     blocks.clear();
     rows_in_blocks = 0;
 }
@@ -254,6 +259,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
     size_t rows = block.rows();
     rows_in_blocks += rows;
+    if (mpp_task_log != nullptr)
+        LOG_TRACE(mpp_task_log, "StreamingDAGResponseWriter writes " << rows << " rows");
+    
     if (rows > 0)
     {
         blocks.push_back(block);

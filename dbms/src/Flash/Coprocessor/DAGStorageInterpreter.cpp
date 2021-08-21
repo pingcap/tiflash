@@ -107,7 +107,8 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     const tipb::TableScan & ts,
     const std::vector<const tipb::Expr *> & conditions_,
     size_t max_streams_,
-    Poco::Logger * log_)
+    Poco::Logger * log_,
+    Poco::Logger * mpp_task_log_)
     : context(context_),
       dag(dag_),
       query_block(query_block_),
@@ -118,7 +119,8 @@ DAGStorageInterpreter::DAGStorageInterpreter(
       table_id(ts.table_id()),
       settings(context.getSettingsRef()),
       tmt(context.getTMTContext()),
-      mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
+      mvcc_query_info(new MvccQueryInfo(true, settings.read_tso)),
+      mpp_task_log(mpp_task_log_)
 {
 }
 
@@ -130,6 +132,8 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
         learner_read_snapshot = doCopLearnerRead();
 
     std::tie(storage, table_structure_lock) = getAndLockStorage(settings.schema_version);
+
+    storage->addMPPTaskLog(mpp_task_log);
 
     std::tie(required_columns, source_columns, is_timestamp_column, handle_column_name) = getColumnsForTableScan(settings.max_columns_to_read);
 

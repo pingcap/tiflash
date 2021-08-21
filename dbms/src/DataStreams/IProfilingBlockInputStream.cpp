@@ -124,8 +124,8 @@ void IProfilingBlockInputStream::readSuffix()
         return false;
     });
 
-    readSuffixImpl();
     info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    readSuffixImpl();
 }
 
 

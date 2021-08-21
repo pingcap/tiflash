@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 class MPPHandler
 {
     const mpp::DispatchTaskRequest & task_request;

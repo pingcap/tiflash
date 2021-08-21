@@ -399,6 +399,8 @@ public:
 
     RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
+    void addMPPTaskLog(Logger * mpp_task_log_) { mpp_task_log = mpp_task_log_; }
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -478,6 +480,7 @@ private:
 
     UInt64   hash_salt;
     Logger * log;
+    Logger * mpp_task_log = nullptr;
 }; // namespace DM
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;

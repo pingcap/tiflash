@@ -2,6 +2,7 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Columns/FilterDescription.h>
+#include <Flash/Mpp/MPPHandler.h>
 
 
 namespace DB
@@ -20,7 +21,8 @@ private:
     using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
 public:
-    FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name_);
+    FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_,
+        const String & filter_column_name_, Logger * mpp_task_log_ = nullptr);
 
     String getName() const override;
     Block getTotals() override;
@@ -28,6 +30,7 @@ public:
 
 protected:
     Block readImpl() override;
+    void readSuffixImpl() override;
 
 private:
     ExpressionActionsPtr expression;
@@ -35,6 +38,8 @@ private:
     ssize_t filter_column;
 
     ConstantFilterDescription constant_filter_description;
+
+    Logger * mpp_task_log;
 };
 
 }

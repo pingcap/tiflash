@@ -958,7 +958,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
             MAX_UINT64,
             DEFAULT_BLOCK_SIZE,
             true,
-            db_settings.dt_raw_filter_range);
+            db_settings.dt_raw_filter_range,
+            mpp_task_log);
         res.push_back(stream);
     }
     return res;
@@ -1000,7 +1001,8 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
             max_version,
             expected_block_size,
             false,
-            db_settings.dt_raw_filter_range);
+            db_settings.dt_raw_filter_range,
+            mpp_task_log);
         res.push_back(stream);
     }
 

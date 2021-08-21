@@ -30,7 +30,8 @@ public:
                                UInt64                         max_version_,
                                size_t                         expected_block_size_,
                                bool                           is_raw_,
-                               bool                           do_range_filter_for_raw_)
+                               bool                           do_range_filter_for_raw_,
+                               Logger *                       mpp_task_log_ = nullptr)
         : dm_context(dm_context_),
           task_pool(task_pool_),
           after_segment_read(after_segment_read_),
@@ -41,7 +42,8 @@ public:
           expected_block_size(expected_block_size_),
           is_raw(is_raw_),
           do_range_filter_for_raw(do_range_filter_for_raw_),
-          log(&Logger::get("DMSegmentThreadInputStream"))
+          log(&Logger::get("DMSegmentThreadInputStream")),
+          mpp_task_log(mpp_task_log_)
     {
     }
 
@@ -110,6 +112,18 @@ protected:
         }
     }
 
+    void readSuffixImpl()
+    {
+        if (mpp_task_log != nullptr)
+        {
+            LOG_TRACE(mpp_task_log, "DMSegmentThreadInputStream  total time:"
+                << std::to_string(info.execution_time / 1000000UL) + "ms"
+                << " total rows: " << info.rows
+                << " total blocks: " << info.blocks
+                << " total bytes:" << info.bytes);
+        }
+    }
+
 private:
     DMContextPtr           dm_context;
     SegmentReadTaskPoolPtr task_pool;
@@ -129,6 +143,7 @@ private:
     SegmentPtr cur_segment;
 
     Logger * log;
+    Logger * mpp_task_log;
 };
 
 } // namespace DM

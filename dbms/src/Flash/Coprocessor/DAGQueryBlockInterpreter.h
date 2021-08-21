@@ -15,6 +15,7 @@
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/TiDB.h>
 #include <pingcap/coprocessor/Client.h>
+#include <Flash/Mpp/MPPHandler.h>
 
 namespace DB
 {
@@ -35,7 +36,8 @@ public:
     DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
         const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst,
         const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
-        const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map);
+        const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map,
+        Poco::Logger * mpp_task_log_ = nullptr);
 
     ~DAGQueryBlockInterpreter() = default;
 
@@ -92,5 +94,6 @@ private:
     BoolVec timestamp_column_flag_for_tablescan;
 
     Poco::Logger * log;
+    Poco::Logger * mpp_task_log;
 };
 } // namespace DB

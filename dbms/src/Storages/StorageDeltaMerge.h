@@ -115,6 +115,8 @@ public:
 
     bool initStoreIfDataDirExist() override;
 
+    void addMPPTaskLog(Logger * mpp_task_log_) { mpp_task_log = mpp_task_log_; }
+
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #endif
@@ -189,6 +191,7 @@ private:
 
     Context & global_context;
     Logger * log;
+    Logger * mpp_task_log;
 };
 
 

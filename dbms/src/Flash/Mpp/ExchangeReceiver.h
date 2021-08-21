@@ -7,6 +7,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
+#include <Flash/Mpp/MPPHandler.h>
 
 #include <chrono>
 #include <mutex>
@@ -71,6 +72,12 @@ private:
     State state;
     String err_msg;
     Logger * log;
+    Logger * mpp_task_log;
+
+    // control the log frequency
+    uint64_t log_frequency;
+
+    bool isLog() { return log_frequency++ % 5 == 0; }
 
     void setUpConnection();
 
@@ -98,12 +105,17 @@ private:
         {
             ret = false;
         }
+
+        if (mpp_task_log != nullptr && isLog())
+            // decodePacket buffer available nummber
+            LOG_TRACE(mpp_task_log, "ExchangeReceiver::dP buf ava num:" << result_buffer.size());
+
         cv.notify_all();
         return ret;
     }
 
 public:
-    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_)
+    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_, Logger * log_ = nullptr)
         : cluster(context_.getTMTContext().getKVCluster()),
           pb_exchange_receiver(exc),
           source_num(pb_exchange_receiver.encoded_task_meta_size()),
@@ -111,7 +123,9 @@ public:
           max_buffer_size(max_buffer_size_),
           live_connections(pb_exchange_receiver.encoded_task_meta_size()),
           state(NORMAL),
-          log(&Logger::get("exchange_receiver"))
+          log(&Logger::get("exchange_receiver")),
+          mpp_task_log(log_),
+          log_frequency(0)
     {
         for (int i = 0; i < exc.field_types_size(); i++)
         {
@@ -171,6 +185,12 @@ public:
             result = result_buffer.front();
             result_buffer.pop();
         }
+
+        size_t num = result_buffer.size();
+        if (mpp_task_log != nullptr && isLog())
+            // nextResult buffer available num
+            LOG_TRACE(mpp_task_log, "ExchangeReceiver::nR buf ava num:" << num);
+        
         cv.notify_all();
         return result;
     }

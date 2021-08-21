@@ -75,7 +75,7 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
 }
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
-    : context(context_), meta(meta_), log(&Logger::get(fmt::format("task {}", meta_.task_id())))
+    : context(context_), meta(meta_), log(&Logger::get(fmt::format("task {} {}", meta_.task_id(), meta_.start_ts())))
 {
     id.start_ts = meta.start_ts();
     id.task_id = meta.task_id();
@@ -243,6 +243,9 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     }
 
     DAGQuerySource dag(context, regions, retry_regions, *dag_req, true);
+    dag.addMPPTaskLog(log);
+
+    LOG_TRACE(log, dag.getExecutorNames());
 
     if (dag_context->isRootMPPTask())
     {

@@ -38,7 +38,8 @@ public:
         const tipb::TableScan & ts,
         const std::vector<const tipb::Expr *> & conditions_,
         size_t max_streams_,
-        Poco::Logger * log_);
+        Poco::Logger * log_,
+        Poco::Logger * mpp_task_log_ = nullptr);
 
     DAGStorageInterpreter(DAGStorageInterpreter &&) = delete;
     DAGStorageInterpreter & operator=(DAGStorageInterpreter &&) = delete;
@@ -81,6 +82,7 @@ private:
     const std::vector<const tipb::Expr *> & conditions;
     size_t max_streams;
     Poco::Logger * log;
+    Poco::Logger * mpp_task_log;
 
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime
 
