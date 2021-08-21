@@ -116,11 +116,11 @@ DAGStorageInterpreter::DAGStorageInterpreter(
       conditions(conditions_),
       max_streams(max_streams_),
       log(log_),
+      mpp_task_log(mpp_task_log_),
       table_id(ts.table_id()),
       settings(context.getSettingsRef()),
       tmt(context.getTMTContext()),
       mvcc_query_info(new MvccQueryInfo(true, settings.read_tso)),
-      mpp_task_log(mpp_task_log_)
 {
 }
 

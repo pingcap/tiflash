@@ -27,9 +27,9 @@ protected:
     void readSuffixImpl() override;
 
 private:
-    Logger * mpp_task_log;
     JoinPtr join;
     size_t stream_index;
+    Logger * mpp_task_log;
 };
 
 } // namespace DB
