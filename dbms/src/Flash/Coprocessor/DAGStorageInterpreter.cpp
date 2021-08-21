@@ -120,7 +120,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
       table_id(ts.table_id()),
       settings(context.getSettingsRef()),
       tmt(context.getTMTContext()),
-      mvcc_query_info(new MvccQueryInfo(true, settings.read_tso)),
+      mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
 {
 }
 
