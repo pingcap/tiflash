@@ -1,6 +1,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <chrono>
+#include <fmt/core.h>
 
 
 namespace DB
@@ -50,12 +51,9 @@ void ExpressionBlockInputStream::readSuffixImpl()
         String action_name("no action");
         if (expression != nullptr && expression->getActions().size() != 0)
             expression->getActions()[0].toString();
-
-        LOG_TRACE(mpp_task_log, "ExpressionBlockInputStream-" << action_name
-            << "total time:" << std::to_string(info.execution_time / 1000000UL) + "ms"
-            << " total rows: " << info.rows
-            << " total blocks: " << info.blocks
-            << " total bytes:" << info.bytes);
+        auto log_content = fmt::format("ExpressionBlockInputStream-{} total time: {} total rows: {} total blocks: {} total bytes: {}",
+                                info.execution_time / 1000000UL, info.execution_time, info.rows, info.blocks, info.bytes);
+        LOG_TRACE(mpp_task_log, log_content);
     }
 }
 
