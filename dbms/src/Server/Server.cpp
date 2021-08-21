@@ -17,7 +17,6 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/setThreadName.h>
-#include <common/simd.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
@@ -874,6 +873,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_gc_raw_cpp_ptr = GcRawCppPtr,
         .fn_gen_batch_read_index_res = GenBatchReadIndexRes,
         .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
+        .fn_set_server_info_resp = SetSetverInfoResp,
     };
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
