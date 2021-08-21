@@ -35,6 +35,7 @@ add_library (common ${SPLIT_SHARED}
     src/crc64_sse2_asimd.cpp
     src/crc64_avx2.cpp
     src/crc64_avx512.cpp
+    src/crc64.cpp
     src/simd.cpp
 
     include/common/types.h

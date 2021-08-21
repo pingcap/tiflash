@@ -53,12 +53,18 @@ public:
     }
 
 protected:
-    void dropDataOnDisk(String path)
+    void dropDataOnDisk(const String & path)
     {
         if (Poco::File file(path); file.exists())
         {
             file.remove(true);
         }
+    }
+
+    void createIfNotExist(const String & path)
+    {
+        if (Poco::File file(path); !file.exists())
+            file.createDirectories();
     }
 
     void SetUp() override
