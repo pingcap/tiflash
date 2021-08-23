@@ -122,7 +122,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     return snap;
 }
 
-RowKeyRange DeltaValueSnapshot::getSquashDeleteRange() const
+RowKeyRange DeltaValueSnapshot::getMergedDeleteRange() const
 {
     RowKeyRange squashed_delete_range = RowKeyRange::newNone(is_common_handle, rowkey_column_size);
     for (auto iter = packs.cbegin(); iter != packs.cend(); ++iter)
