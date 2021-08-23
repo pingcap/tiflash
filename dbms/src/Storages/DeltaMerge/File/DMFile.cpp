@@ -145,7 +145,7 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
     }
     else
     {
-        auto file_name = DMFile::getFileNameBase(col_id);
+        auto file_name = DMFile::getFileNameBase(col_id) + ".idx";
         return column_indices.count(file_name) != 0;
     }
 }
