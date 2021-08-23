@@ -278,8 +278,9 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     bool has_collator_info = exchangeSender.types_size() != 0;
     if (has_collator_info && part_keys.size() != exchangeSender.types_size())
     {
-        throw TiFlashException(
-            std::string(__PRETTY_FUNCTION__) + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same",
+        throw TiFlashException(std::string(__PRETTY_FUNCTION__)
+                + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is "
+                  "enabled",
             Errors::Coprocessor::BadRequest);
     }
     for (int i = 0; i < part_keys.size(); i++)
