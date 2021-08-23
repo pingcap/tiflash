@@ -3,6 +3,9 @@
 #include <Flash/LogSearch.h>
 #include <Poco/Path.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>
 #include <re2/re2.h>
 
@@ -363,7 +366,7 @@ struct CPUArchHelper
     const std::string & get() const { return arch_; }
 
 protected:
-    std::string execOrElse(const char * cmd, const char * otherwise)
+    std::string execOrElse(const char * cmd [[maybe_unused]], const char * otherwise)
     {
 #if defined(__unix__)
         std::array<char, 128> buffer;
@@ -942,6 +945,19 @@ try
 {
     (void)context;
 
+#if true 
+    //defined(__APPLE__)
+    const TiFlashRaftProxyHelper * helper = server.context().getTMTContext().getKVStore()->getProxyHelper();
+    if (helper)
+    {
+        std::string req = request->SerializeAsString();
+        helper->fn_server_info(helper->proxy_ptr, strIntoView(req), response);
+    }
+    else
+    {
+        LOG_ERROR(log, "TiFlashRaftProxyHelper is nullptr");
+    }
+#else
     auto tp = request->tp();
     std::vector<ServerInfoItem> items;
 
@@ -1006,12 +1022,17 @@ try
             added_pair->set_value(pair.value());
         }
     }
-
+#endif
     return ::grpc::Status::OK;
 }
 catch (const Exception & e)
 {
     LOG_ERROR(log, e.displayText());
+    return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
+}
+catch (const std::exception & e)
+{
+    LOG_ERROR(log, e.what());
     return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
 }
 

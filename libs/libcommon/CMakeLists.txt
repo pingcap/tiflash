@@ -32,6 +32,10 @@ add_library (common ${SPLIT_SHARED}
     src/mem_utils_avx2.cpp
     src/mem_utils_avx512.cpp
     src/mem_utils_sse2.cpp
+    src/crc64_sse2_asimd.cpp
+    src/crc64_avx2.cpp
+    src/crc64_avx512.cpp
+    src/crc64.cpp
     src/simd.cpp
 
     include/common/types.h
@@ -54,6 +58,11 @@ add_library (common ${SPLIT_SHARED}
     include/common/ThreadPool.h
     include/common/demangle.h
     include/common/mem_utils.h
+    include/common/crc64_arch/crc64_aarch64.h
+    include/common/crc64_arch/crc64_x86.h
+    include/common/crc64_table.h
+    include/common/crc64_fast.h
+    include/common/crc64.h
 
     include/ext/bit_cast.h
     include/ext/collection_cast.h
@@ -137,19 +146,35 @@ endif ()
 if (TIFLASH_ENABLE_AVX_SUPPORT)
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     set_source_files_properties(src/mem_utils_avx2.cpp APPEND COMPILE_FLAGS "-mavx -mavx2")
+    if (TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
+        set_source_files_properties(src/crc64_avx2.cpp
+                APPEND COMPILE_FLAGS "-mavx2 -mpclmul -mvpclmulqdq -Wno-ignored-attributes")
+    endif()
 endif ()
 
 if (TIFLASH_ENABLE_AVX512_SUPPORT)
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
-    set_source_files_properties(src/mem_utils_avx512.cpp APPEND COMPILE_FLAGS "-mavx512bw -mavx512vl -mavx512f")
+    set_source_files_properties(src/mem_utils_avx512.cpp
+            APPEND COMPILE_FLAGS "-mavx512bw -mavx512vl -mavx512f")
+    if (TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
+        set_source_files_properties(src/crc64_avx512.cpp
+                APPEND COMPILE_FLAGS "-mpclmul -mvpclmulqdq -mavx512dq -mavx512f -Wno-ignored-attributes")
+    endif()
 endif ()
 
 if (TIFLASH_ENABLE_ASIMD_SUPPORT)
     # https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
     set_source_files_properties(src/mem_utils_asimd.cpp APPEND COMPILE_FLAGS "-march=armv8-a+simd")
+    set_source_files_properties(src/crc64_sse2_asimd.cpp APPEND COMPILE_FLAGS "-march=armv8-a+simd+crypto")
 endif ()
 
 if (TIFLASH_ENABLE_SVE_SUPPORT)
     # https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
     # set_source_files_properties(<SOURCE_FILE> APPEND COMPILE_FLAGS "-march=armv8.6-a+sve")
 endif ()
+
+if (ARCH_AMD64)
+    set_source_files_properties(
+            src/crc64_sse2_asimd.cpp
+            APPEND COMPILE_FLAGS "-mpclmul")
+endif()

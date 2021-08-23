@@ -33,7 +33,6 @@ class PSDiskDelegatorMulti;
 class PSDiskDelegatorSingle;
 class PSDiskDelegatorRaft;
 
-
 /// A class to manage global paths.
 class PathPool
 {
