@@ -53,6 +53,16 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
         }
+
+        static auto explain = [](auto explain, auto & string, int indents, IBlockInputStream & stream) -> bool {
+            string.append(std::string(2*indents, ' ') + stream.getName() + "\n");
+            stream.forEachChild(std::bind(explain, explain, std::ref(string), indents+1, std::placeholders::_1));
+            return false;
+        };
+        std::string log_for_compiled_task = "MPP task compiled. [timestamp="+std::to_string(task->getId().start_ts)+"] [ID="+std::to_string(task->getId().task_id)+"] plan is:\n";
+        explain(explain, log_for_compiled_task, 0, *(task->io.in));
+        LOG_INFO(log, log_for_compiled_task);
+
         task->run();
         LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
     }

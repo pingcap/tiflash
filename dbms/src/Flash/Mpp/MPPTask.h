@@ -124,6 +124,7 @@ private:
     std::mutex tunnel_mutex;
 
     friend class MPPTaskManager;
+    friend class MPPHandler;
 };
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;
