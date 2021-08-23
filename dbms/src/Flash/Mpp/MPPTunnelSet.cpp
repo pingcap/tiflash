@@ -51,4 +51,3 @@ void MPPTunnelSet::write(tipb::SelectResponse & response, int16_t partition_id)
 }
 
 } // namespace DB
-
