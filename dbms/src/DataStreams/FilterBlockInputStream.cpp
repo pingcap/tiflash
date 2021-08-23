@@ -3,9 +3,8 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
-#include <Interpreters/ExpressionActions.h>
-
 #include <DataStreams/FilterBlockInputStream.h>
+#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
