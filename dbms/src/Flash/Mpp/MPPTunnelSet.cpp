@@ -1,8 +1,17 @@
 #include <Common/Exception.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <fmt/core.h>
 
 namespace DB
 {
+
+static mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & response)
+{
+    mpp::MPPDataPacket packet;
+    if (!response.SerializeToString(packet.mutable_data()))
+        throw Exception(fmt::format("Fail to serialize response, response size: {}", response.ByteSizeLong()));
+    return packet;
+}
 
 void MPPTunnelSet::clearExecutionSummaries(tipb::SelectResponse & response)
 {
@@ -19,8 +28,15 @@ void MPPTunnelSet::clearExecutionSummaries(tipb::SelectResponse & response)
 
 void MPPTunnelSet::write(tipb::SelectResponse & response)
 {
-    for (size_t i = 0; i < tunnels.size(); ++i)
-        write(response, i);
+    tunnels[0]->write(serializeToPacket(response));
+
+    if (tunnels.size() > 1)
+    {
+        clearExecutionSummaries(response);
+        auto packet = serializeToPacket(response);
+        for (size_t i = 1; i < tunnels.size(); ++i)
+            tunnels[i]->write(packet);
+    }
 }
 
 void MPPTunnelSet::write(tipb::SelectResponse & response, int16_t partition_id)
@@ -28,10 +44,7 @@ void MPPTunnelSet::write(tipb::SelectResponse & response, int16_t partition_id)
     if (partition_id != 0)
         clearExecutionSummaries(response);
 
-    mpp::MPPDataPacket packet;
-    if (!response.SerializeToString(packet.mutable_data()))
-        throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
-    tunnels[partition_id]->write(packet);
+    tunnels[partition_id]->write(serializeToPacket(response));
 }
 
 } // namespace DB
