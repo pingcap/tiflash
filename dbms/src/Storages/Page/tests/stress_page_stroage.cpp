@@ -399,6 +399,11 @@ try
     if (options.clean_before_run)
         LOG_INFO(logger, "All pages have been drop.");
 
+    signal(SIGINT, [](int /*signal*/) {
+        fmt::print(stderr, "Receive finish signal. Wait for the GC threads to end.\n");
+        running_without_timeout = false;
+    });
+
     // create PageStorage
     DB::PageStorage::Config config;
     config.num_write_slots            = options.num_writer_slots;
@@ -455,10 +460,10 @@ try
 
     // start one gc thread
     PSGc        gc(ps);
-    Poco::Timer timer_gc(0);
-    timer_gc.setStartInterval(1000);
-    timer_gc.setPeriodicInterval(30 * 1000);
-    timer_gc.start(Poco::TimerCallback<PSGc>(gc, &PSGc::onTime));
+    Poco::Timer gc_timer(0);
+    gc_timer.setStartInterval(1000);
+    gc_timer.setPeriodicInterval(30 * 1000);
+    gc_timer.start(Poco::TimerCallback<PSGc>(gc, &PSGc::onTime));
 
     PSScanner   scanner(ps);
     Poco::Timer scanner_timer(0);
