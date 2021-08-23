@@ -74,7 +74,7 @@ String choose(const std::vector<T> & paths, const PathCapacityMetricsPtr & globa
 
 INSTANTIATE_CHOOSE_FUNC(StoragePathPool::MainPathInfo);
 INSTANTIATE_CHOOSE_FUNC(StoragePathPool::LatestPathInfo);
-INSTANTIATE_CHOOSE_FUNC(StoragePathPool::RaftPathInfo);
+INSTANTIATE_CHOOSE_FUNC(PSDiskDelegatorRaft::RaftPathInfo);
 
 } // namespace PathSelector
 
