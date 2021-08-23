@@ -191,7 +191,7 @@ public:
 
 private:
     DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Mode mode_, Status status_, Logger * log_)
-        : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), mode(mode_), status(status_), log(log_)
+        : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), column_indices(), mode(mode_), status(status_), log(log_)
     {}
 
     bool isFolderMode() const { return mode == Mode::FOLDER; }

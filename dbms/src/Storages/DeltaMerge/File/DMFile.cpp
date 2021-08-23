@@ -561,7 +561,7 @@ void DMFile::initializeIndices()
         return;
 
     Poco::File directory{path()};
-    std::vector<std::string> sub_files;
+    std::vector<std::string> sub_files{};
     directory.list(sub_files);
     for (auto & i : sub_files)
     {
