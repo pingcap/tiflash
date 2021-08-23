@@ -94,17 +94,17 @@ struct StressOptions
         namespace po = boost::program_options;
         using po::value;
         po::options_description desc("Allowed options");
-        desc.add_options()("help,h", "produce help message")                                                              //
-            ("write_concurrency,W", value<UInt32>()->default_value(4), "number of write threads")                         //
-            ("read_concurrency,R", value<UInt32>()->default_value(16), "number of read threads")                          //
-            ("clean_before_run,C", value<bool>()->default_value(false), "drop data before running")                       //
-            ("init_pages,I", value<bool>()->default_value(false), "init pages if not exist before running")               //
-            ("timeout,T", value<UInt32>()->default_value(600), "maximum run time (seconds). 0 means run infinitely")      //
-            ("writer_slots", value<UInt32>()->default_value(4), "number of PageStorage writer slots")                     //
-            ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay")                          //
-            ("avg_page_size", value<UInt32>()->default_value(1), "avg size for each page(MiB)")                           //
-            ("rand_seed", value<UInt32>()->default_value(0x123987), "random seed")                                        //
-            ("paths,P", value<std::vector<std::string>>(), "store path(s)")                                               //
+        desc.add_options()("help,h", "produce help message")                                                         //
+            ("write_concurrency,W", value<UInt32>()->default_value(4), "number of write threads")                    //
+            ("read_concurrency,R", value<UInt32>()->default_value(16), "number of read threads")                     //
+            ("clean_before_run,C", value<bool>()->default_value(false), "drop data before running")                  //
+            ("init_pages,I", value<bool>()->default_value(false), "init pages if not exist before running")          //
+            ("timeout,T", value<UInt32>()->default_value(600), "maximum run time (seconds). 0 means run infinitely") //
+            ("writer_slots", value<UInt32>()->default_value(4), "number of PageStorage writer slots")                //
+            ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay")                     //
+            ("avg_page_size", value<UInt32>()->default_value(1), "avg size for each page(MiB)")                      //
+            ("rand_seed", value<UInt32>()->default_value(0x123987), "random seed")                                   //
+            ("paths,P", value<std::vector<std::string>>(), "store path(s)")                                          //
             ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable");
         po::variables_map options;
         po::store(po::parse_command_line(argc, argv, desc), options);
