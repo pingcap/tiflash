@@ -68,17 +68,13 @@ String choose(const std::vector<T> & paths, const PathCapacityMetricsPtr & globa
     return path_generator(chosen_path);
 }
 
-template String choose<StoragePathPool::MainPathInfo>( //
-    const std::vector<StoragePathPool::MainPathInfo> & paths, const PathCapacityMetricsPtr & global_capacity,
-    std::function<String(const String & path)> && path_generator, Poco::Logger * log, const String & log_msg);
+#define INSTANTIATE_CHOOSE_FUNC(PathInfo)                                                                                 \
+    template String choose<PathInfo>(const std::vector<PathInfo> & paths, const PathCapacityMetricsPtr & global_capacity, \
+        std::function<String(const String & path)> && path_generator, Poco::Logger * log, const String & log_msg);
 
-template String choose<StoragePathPool::LatestPathInfo>( //
-    const std::vector<StoragePathPool::LatestPathInfo> & paths, const PathCapacityMetricsPtr & global_capacity,
-    std::function<String(const String & path)> && path_generator, Poco::Logger * log, const String & log_msg);
-
-template String choose<PSDiskDelegatorRaft::RaftPathInfo>( //
-    const std::vector<PSDiskDelegatorRaft::RaftPathInfo> & paths, const PathCapacityMetricsPtr & global_capacity,
-    std::function<String(const String & path)> && path_generator, Poco::Logger * log, const String & log_msg);
+INSTANTIATE_CHOOSE_FUNC(StoragePathPool::MainPathInfo);
+INSTANTIATE_CHOOSE_FUNC(StoragePathPool::LatestPathInfo);
+INSTANTIATE_CHOOSE_FUNC(StoragePathPool::RaftPathInfo);
 
 } // namespace PathSelector
 
