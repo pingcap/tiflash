@@ -632,10 +632,7 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
 
     auto & context = tmt.getContext();
     Stopwatch watch;
-    SCOPE_EXIT({
-        auto metrics = context.getTiFlashMetrics();
-        GET_METRIC(metrics, tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
 
     const auto handle_by_index_func = [&](auto i) {
         auto type = cmds.cmd_types[i];
@@ -739,14 +736,12 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
     return EngineStoreApplyRes::None;
 }
 
-void Region::handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+void Region::handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt64 term)
 {
     if (index <= appliedIndex())
         return;
 
     {
-        auto & ctx = tmt.getContext();
-
         std::unique_lock<std::shared_mutex> lock(mutex);
 
         for (UInt64 i = 0; i < snaps.len; ++i)
@@ -769,7 +764,7 @@ void Region::handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt6
             }
 
             LOG_INFO(log, __FUNCTION__ << ": " << this->toString(false) << " finish to ingest sst of kv count " << kv_size);
-            GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_process_keys, type_ingest_sst).Increment(kv_size);
+            GET_METRIC(tiflash_raft_process_keys, type_ingest_sst).Increment(kv_size);
         }
         meta.setApplied(index, term);
     }

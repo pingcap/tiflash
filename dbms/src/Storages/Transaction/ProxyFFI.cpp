@@ -6,6 +6,7 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <diagnosticspb.pb.h>
 
 namespace CurrentMetrics
 {
@@ -369,5 +370,11 @@ void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t regio
 }
 
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_) { return RawCppPtr{ptr_, static_cast<RawCppPtrType>(type_)}; }
+
+void SetSetverInfoResp(BaseBuffView view, RawVoidPtr ptr)
+{
+    using diagnosticspb::ServerInfoResponse;
+    reinterpret_cast<ServerInfoResponse *>(ptr)->ParseFromArray(view.data, view.len);
+}
 
 } // namespace DB

@@ -21,8 +21,6 @@ namespace DB
 
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
-class TiFlashMetrics;
-using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class PSDiskDelegator;
@@ -121,8 +119,7 @@ public:
     PageStorage(String                  name,
                 PSDiskDelegatorPtr      delegator, //
                 const Config &          config_,
-                const FileProviderPtr & file_provider_,
-                TiFlashMetricsPtr       metrics_ = nullptr);
+                const FileProviderPtr & file_provider_);
 
     void restore();
 
@@ -260,9 +257,6 @@ private:
     ExternalPagesRemover external_pages_remover = nullptr;
 
     StatisticsInfo last_gc_statistics;
-
-    // For reporting metrics to prometheus
-    TiFlashMetricsPtr metrics;
 
 private:
     WriterPtr checkAndRenewWriter(WritingPageFile & page_file,

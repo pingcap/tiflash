@@ -1,0 +1,15 @@
+mysql> drop table if exists test.t
+mysql> create table test.t(id int, value varchar(20) charset utf8mb4 collate utf8mb4_general_ci, value1 varchar(20) charset utf8mb4 collate utf8mb4_bin)
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values (1, 'abc', 'abc '),(2, 'Abc', 'abc'),(3,'def', 'def ');
+func> wait_table test t
+
+>> DBGInvoke __try_flush()
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ * from test.t order by concat(value,null) limit 10;
++------+-------+--------+
+| id   | value | value1 |
++------+-------+--------+
+|    1 | abc   | abc    |
+|    2 | Abc   | abc    |
+|    3 | def   | def    |
++------+-------+--------+

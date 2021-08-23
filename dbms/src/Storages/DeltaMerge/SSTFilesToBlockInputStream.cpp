@@ -1,4 +1,3 @@
-#include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Poco/File.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
@@ -9,6 +8,7 @@
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SSTReader.h>
@@ -23,32 +23,22 @@ namespace ErrorCodes
 extern const int ILLFORMAT_RAFT_ROW;
 } // namespace ErrorCodes
 
-Block GenRegionBlockDatawithSchema( //
-    const RegionPtr &,
-    const std::shared_ptr<StorageDeltaMerge> &,
-    const DM::ColumnDefinesPtr &,
-    Timestamp,
-    bool,
-    TMTContext &);
-
 namespace DM
 {
 
 SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
-    RegionPtr                                        region_,
-    const SSTViewVec &                               snaps_,
-    const TiFlashRaftProxyHelper *                   proxy_helper_,
-    SSTFilesToBlockInputStream::StorageDeltaMergePtr ingest_storage_,
-    DM::ColumnDefinesPtr                             schema_snap_,
-    Timestamp                                        gc_safepoint_,
-    bool                                             force_decode_,
-    TMTContext &                                     tmt_,
-    size_t                                           expected_size_)
+    RegionPtr                             region_,
+    const SSTViewVec &                    snaps_,
+    const TiFlashRaftProxyHelper *        proxy_helper_,
+    const DecodingStorageSchemaSnapshot & schema_snap_,
+    Timestamp                             gc_safepoint_,
+    bool                                  force_decode_,
+    TMTContext &                          tmt_,
+    size_t                                expected_size_)
     : region(std::move(region_)),
       snaps(snaps_),
       proxy_helper(proxy_helper_),
-      ingest_storage(std::move(ingest_storage_)),
-      schema_snap(std::move(schema_snap_)),
+      schema_snap(schema_snap_),
       tmt(tmt_),
       gc_safepoint(gc_safepoint_),
       expected_size(expected_size_),
@@ -237,7 +227,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
     {
         // Read block from `region`. If the schema has been updated, it will
         // throw an exception with code `ErrorCodes::REGION_DATA_SCHEMA_UPDATED`
-        return GenRegionBlockDatawithSchema(region, ingest_storage, schema_snap, gc_safepoint, force_decode, tmt);
+        return GenRegionBlockDataWithSchema(region, schema_snap, gc_safepoint, force_decode, tmt);
     }
     catch (DB::Exception & e)
     {
@@ -260,18 +250,19 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
 /// Methods for BoundedSSTFilesToBlockInputStream
 
 BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
-    SSTFilesToBlockInputStreamPtr child,
-    const ColId                   pk_column_id_,
-    const bool                    is_common_handle_)
-    : pk_column_id(pk_column_id_), is_common_handle(is_common_handle_), _raw_child(std::move(child))
+    SSTFilesToBlockInputStreamPtr         child,
+    const ColId                           pk_column_id_,
+    const DecodingStorageSchemaSnapshot & schema_snap)
+    : pk_column_id(pk_column_id_), _raw_child(std::move(child))
 {
+    const bool is_common_handle = schema_snap.is_common_handle;
     // Initlize `mvcc_compact_stream`
     // First refine the boundary of blocks. Note that the rows decoded from SSTFiles are sorted by primary key asc, timestamp desc
     // (https://github.com/tikv/tikv/blob/v5.0.1/components/txn_types/src/types.rs#L103-L108).
     // While DMVersionFilter require rows sorted by primary key asc, timestamp asc, so we need an extra sort in PKSquashing.
     auto stream = std::make_shared<PKSquashingBlockInputStream</*need_extra_sort=*/true>>(_raw_child, pk_column_id, is_common_handle);
     mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-        stream, *(_raw_child->schema_snap), _raw_child->gc_safepoint, is_common_handle);
+        stream, *(schema_snap.column_defines), _raw_child->gc_safepoint, is_common_handle);
 }
 
 void BoundedSSTFilesToBlockInputStream::readPrefix()
@@ -287,11 +278,6 @@ void BoundedSSTFilesToBlockInputStream::readSuffix()
 Block BoundedSSTFilesToBlockInputStream::read()
 {
     return mvcc_compact_stream->read();
-}
-
-std::tuple<std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> BoundedSSTFilesToBlockInputStream::ingestingInfo() const
-{
-    return std::make_tuple(_raw_child->ingest_storage, _raw_child->schema_snap);
 }
 
 SSTFilesToBlockInputStream::ProcessKeys BoundedSSTFilesToBlockInputStream::getProcessKeys() const

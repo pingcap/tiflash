@@ -403,14 +403,15 @@ inline Block getSubBlock(const Block & block, size_t offset, size_t limit)
     }
 }
 
-// Add an extra handle column if handle reused the original column data.
-Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, Block && block) const
+// Add an extra handle column if the `handle_define` is used as the primary key
+// TODO: consider merging it into `RegionBlockReader`?
+Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const ColumnDefine & handle_define, Block && block)
 {
-    if (pkIsHandle())
+    if (pkIsHandle(handle_define))
     {
-        if (!EXTRA_HANDLE_COLUMN_INT_TYPE->equals(*original_table_handle_define.type))
+        if (!EXTRA_HANDLE_COLUMN_INT_TYPE->equals(*handle_define.type))
         {
-            auto handle_pos = getPosByColumnId(block, original_table_handle_define.id);
+            auto handle_pos = getPosByColumnId(block, handle_define.id);
             addColumnToBlock(block, //
                              EXTRA_HANDLE_COLUMN_ID,
                              EXTRA_HANDLE_COLUMN_NAME,
@@ -423,7 +424,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, Block &&
         {
             // If types are identical, `FunctionToInt64` just take reference to the original column.
             // We need a deep copy for the pk column or it will make trobule for later processing.
-            auto      pk_col_with_name = getByColumnId(block, original_table_handle_define.id);
+            auto      pk_col_with_name = getByColumnId(block, handle_define.id);
             auto      pk_column        = pk_col_with_name.column;
             ColumnPtr handle_column    = pk_column->cloneResized(pk_column->size());
             addColumnToBlock(block, //
@@ -447,7 +448,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         return;
 
     auto  dm_context = newDMContext(db_context, db_settings);
-    Block block      = addExtraColumnIfNeed(db_context, std::move(to_write));
+    Block block      = addExtraColumnIfNeed(db_context, original_table_handle_define, std::move(to_write));
 
     const auto bytes = block.bytes();
 
@@ -542,8 +543,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         offset += limit;
     }
 
-    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_bytes, type_write).Increment(bytes);
-    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_rows, type_write).Increment(rows);
+    GET_METRIC(tiflash_storage_throughput_bytes, type_write).Increment(bytes);
+    GET_METRIC(tiflash_storage_throughput_rows, type_write).Increment(rows);
 
     if (db_settings.dt_flush_after_write)
     {
@@ -756,8 +757,8 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr &        dm_context,
                  __FUNCTION__ << " table: " << db_name << "." << table_name << ", clear_data: " << clear_data_in_range << ", " << ss.str());
     }
 
-    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_bytes, type_ingest).Increment(bytes);
-    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_rows, type_ingest).Increment(rows);
+    GET_METRIC(tiflash_storage_throughput_bytes, type_ingest).Increment(bytes);
+    GET_METRIC(tiflash_storage_throughput_rows, type_ingest).Increment(rows);
 
     flushCache(dm_context, range);
 
@@ -983,7 +984,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
 
-    GET_METRIC(dm_context->metrics, tiflash_storage_read_tasks_count).Increment(tasks.size());
+    GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto   read_task_pool   = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
 
@@ -1032,8 +1033,7 @@ void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const Segmen
         return;
 
     Stopwatch watch;
-    SCOPE_EXIT(
-        { GET_METRIC(dm_context->metrics, tiflash_storage_write_stall_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
 
     size_t segment_bytes = segment->getEstimatedBytes();
     // The speed of delta merge in a very bad situation we assume. It should be a very conservative value.
@@ -1218,11 +1218,9 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             Stopwatch watch;
             SCOPE_EXIT({
                 if (should_foreground_merge_delta_by_rows_or_bytes)
-                    GET_METRIC(dm_context->metrics, tiflash_storage_write_stall_duration_seconds, type_write)
-                        .Observe(watch.elapsedSeconds());
+                    GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_write).Observe(watch.elapsedSeconds());
                 if (should_foreground_merge_delta_by_deletes)
-                    GET_METRIC(dm_context->metrics, tiflash_storage_write_stall_duration_seconds, type_delete_range)
-                        .Observe(watch.elapsedSeconds());
+                    GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_delete_range).Observe(watch.elapsedSeconds());
             });
 
             return segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
@@ -1611,11 +1609,9 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     size_t duplicated_rows  = 0;
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentSplit};
-    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_split).Increment();
+    GET_METRIC(tiflash_storage_subtask_count, type_seg_split).Increment();
     Stopwatch watch_seg_split;
-    SCOPE_EXIT({
-        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds()); });
 
     WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
 
@@ -1681,15 +1677,15 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
     if (!split_info.is_logical)
     {
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_split).Increment(delta_bytes);
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_split).Increment(delta_rows);
+        GET_METRIC(tiflash_storage_throughput_bytes, type_split).Increment(delta_bytes);
+        GET_METRIC(tiflash_storage_throughput_rows, type_split).Increment(delta_rows);
     }
     else
     {
         // For logical split, delta is duplicated into two segments. And will be merged into stable twice later. So we need to decrease it here.
         // Otherwise the final total delta merge bytes is greater than bytes written into.
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_split).Decrement(duplicated_bytes);
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_split).Decrement(duplicated_rows);
+        GET_METRIC(tiflash_storage_throughput_bytes, type_split).Decrement(duplicated_bytes);
+        GET_METRIC(tiflash_storage_throughput_rows, type_split).Decrement(duplicated_rows);
     }
 
     if constexpr (DM_RUN_CHECK)
@@ -1738,11 +1734,9 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     auto delta_rows  = (Int64)left_snap->delta->getRows() + right_snap->getRows();
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentMerge};
-    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_merge).Increment();
+    GET_METRIC(tiflash_storage_subtask_count, type_seg_merge).Increment();
     Stopwatch watch_seg_merge;
-    SCOPE_EXIT({
-        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds()); });
 
     auto left_range  = left->getRowKeyRange();
     auto right_range = right->getRowKeyRange();
@@ -1791,8 +1785,8 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
     wbs.writeRemoves();
 
-    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_merge).Increment(delta_bytes);
-    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_merge).Increment(delta_rows);
+    GET_METRIC(tiflash_storage_throughput_bytes, type_merge).Increment(delta_bytes);
+    GET_METRIC(tiflash_storage_throughput_rows, type_merge).Increment(delta_rows);
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);
@@ -1839,13 +1833,13 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext &         dm_context,
     switch (run_thread)
     {
     case TaskRunThread::BackgroundThreadPool:
-        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge).Increment();
+        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge).Increment();
         break;
     case TaskRunThread::Foreground:
-        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge_fg).Increment();
+        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_fg).Increment();
         break;
     case TaskRunThread::BackgroundGCThread:
-        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge_bg_gc).Increment();
+        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_bg_gc).Increment();
         break;
     default:
         break;
@@ -1856,15 +1850,15 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext &         dm_context,
         switch (run_thread)
         {
         case TaskRunThread::BackgroundThreadPool:
-            GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge)
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge)
                 .Observe(watch_delta_merge.elapsedSeconds());
             break;
         case TaskRunThread::Foreground:
-            GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge_fg)
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_fg)
                 .Observe(watch_delta_merge.elapsedSeconds());
             break;
         case TaskRunThread::BackgroundGCThread:
-            GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge_bg_gc)
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_bg_gc)
                 .Observe(watch_delta_merge.elapsedSeconds());
             break;
         default:
@@ -1918,8 +1912,8 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext &         dm_context,
 
     wbs.writeRemoves();
 
-    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge).Increment(delta_bytes);
-    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);
+    GET_METRIC(tiflash_storage_throughput_bytes, type_delta_merge).Increment(delta_bytes);
+    GET_METRIC(tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);
@@ -1967,7 +1961,7 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
     for (const auto & [end, segment] : segments)
     {
         (void)end;
-
+  
         auto segment_id = segment->segmentId();
         auto range      = segment->getRowKeyRange();
 
