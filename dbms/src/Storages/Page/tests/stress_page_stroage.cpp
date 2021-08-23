@@ -64,7 +64,6 @@ struct StressOptions
     size_t num_writer_slots = 1;
     size_t avg_page_size_mb = 1;
     size_t rand_seed        = 0x123987;
-    size_t status_interval  = 0;
 
     std::vector<std::string> paths;
 
@@ -74,8 +73,7 @@ struct StressOptions
     {
         return fmt::format("{{ num_writers: {}, num_readers: {}, clean_before_run: {}" //
                            ", timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
-                           ", avg_page_size_mb: {}, rand_seed: {:08x} paths: [{}] failpoints: [{}] }}"
-                           ", status_interval: {}",
+                           ", avg_page_size_mb: {}, rand_seed: {:08x} paths: [{}] failpoints: [{}] }}",
                            num_writers,
                            num_readers,
                            clean_before_run,
@@ -85,8 +83,7 @@ struct StressOptions
                            avg_page_size_mb,
                            rand_seed,
                            fmt::join(paths.begin(), paths.end(), ","),
-                           fmt::join(failpoints.begin(), failpoints.end(), ","),
-                           status_interval
+                           fmt::join(failpoints.begin(), failpoints.end(), ",")
                            //
         );
     }
@@ -108,9 +105,7 @@ struct StressOptions
             ("avg_page_size", value<UInt32>()->default_value(1), "avg size for each page(MiB)")                           //
             ("rand_seed", value<UInt32>()->default_value(0x123987), "random seed")                                        //
             ("paths,P", value<std::vector<std::string>>(), "store path(s)")                                               //
-            ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable")                                 //
-            ("status_interval,S", value<UInt32>()->default_value(0), "Status statistics interval. 0 means no statistics") //
-            ;
+            ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable");
         po::variables_map options;
         po::store(po::parse_command_line(argc, argv, desc), options);
         po::notify(options);
@@ -130,7 +125,6 @@ struct StressOptions
         opt.num_writer_slots = options["writer_slots"].as<UInt32>();
         opt.avg_page_size_mb = options["avg_page_size"].as<UInt32>();
         opt.rand_seed        = options["rand_seed"].as<UInt32>();
-        opt.status_interval  = options["status_interval"].as<UInt32>();
 
         if (options.count("paths"))
             opt.paths = options["paths"].as<std::vector<std::string>>();
@@ -193,6 +187,8 @@ public:
 
     void run() override
     {
+        MemoryTracker tarcker;
+        current_memory_tracker = &tarcker;
         while (running_without_exception && running_without_timeout)
         {
             assert(ps != nullptr);
@@ -210,6 +206,8 @@ public:
             bytes_written += buff->buffer().size();
             // LOG_INFO(logger, "writer[" + DB::toString(index) + "] wrote page" + DB::toString(pageId));
         }
+        tarcker.setDescription("(Stress Test Writer)");
+        current_memory_tracker = nullptr;
         LOG_INFO(logger, fmt::format("writer[{}] exit", index));
     }
 };
@@ -233,7 +231,7 @@ public:
 
     void run() override
     {
-        MemoryTracker tarcker(4 * 1024 * 1024 * 1024);
+        MemoryTracker tarcker;
         current_memory_tracker = &tarcker;
         while (running_without_exception && running_without_timeout)
         {
@@ -283,6 +281,7 @@ public:
             }
 #endif
         }
+        tarcker.setDescription("(Stress Test Reader)");
         current_memory_tracker = nullptr;
         LOG_INFO(logger, fmt::format("reader[{}] exit", index));
     }
@@ -298,9 +297,11 @@ public:
     {
         try
         {
-            MemoryTracker tarcker(4 * 1024 * 1024 * 1024);
+            MemoryTracker tarcker;
+            tarcker.setDescription("(Stress Test GC)");
             current_memory_tracker = &tarcker;
             ps->gc();
+            current_memory_tracker = nullptr;
         }
         catch (...)
         {
@@ -310,39 +311,6 @@ public:
             throw;
         }
     }
-};
-
-class PSStatus
-{
-public:
-    PSStatus(size_t status_interval_) : status_interval(status_interval_){};
-
-    void onTime(Poco::Timer & /* t */)
-    {
-
-        lastest_memory = CurrentMetrics::get(CurrentMetrics::MemoryTracking);
-        if (likely(lastest_memory != 0))
-        {
-            loop_times++;
-            memory_summary += lastest_memory;
-            memory_biggest = memory_biggest > lastest_memory ? memory_biggest : lastest_memory;
-            LOG_INFO(logger, toString());
-        }
-    }
-
-    String toString()
-    {
-        return fmt::format(
-            "Memory lastest used : {} , avg used : {} , top used {}.", lastest_memory, (memory_summary / loop_times), memory_biggest);
-    }
-
-private:
-    UInt32 loop_times     = 0;
-    UInt32 memory_summary = 0;
-    UInt32 memory_biggest = 0;
-    UInt32 lastest_memory = 0;
-
-    size_t status_interval = 0;
 };
 
 class PSScanner
@@ -492,16 +460,6 @@ try
     timer_gc.setPeriodicInterval(30 * 1000);
     timer_gc.start(Poco::TimerCallback<PSGc>(gc, &PSGc::onTime));
 
-    // status statistics
-    Poco::Timer timer_status(0);
-    PSStatus    status(options.status_interval);
-    if (options.status_interval != 0)
-    {
-        timer_status.setStartInterval(1000);
-        timer_status.setPeriodicInterval(options.status_interval * 1000);
-        timer_status.start(Poco::TimerCallback<PSStatus>(status, &PSStatus::onTime));
-    }
-
     PSScanner   scanner(ps);
     Poco::Timer scanner_timer(0);
     scanner_timer.setStartInterval(1000);
@@ -559,11 +517,6 @@ try
                total_pages_read,
                total_bytes_read / GB,
                total_bytes_read / GB / seconds_run);
-
-    if (options.status_interval != 0)
-    {
-        fmt::print(stderr, status.toString());
-    }
 
     return -running_without_exception;
 }
