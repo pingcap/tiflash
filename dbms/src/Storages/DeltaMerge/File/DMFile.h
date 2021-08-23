@@ -278,18 +278,7 @@ private:
         return isSingleFileMode() ? getSubFileStat(file_name).size : Poco::File(subFilePath(file_name)).getSize();
     }
 
-    void initializeIndices() {
-        if (isSingleFileMode()) return;
-
-        Poco::File directory { path() };
-        std::vector<std::string> sub_files;
-        directory.list(sub_files);
-        for (auto & i : sub_files) {
-            if (endsWith(i, ".idx")) {
-                column_indices.insert(std::move(i));
-            }
-        }
-    }
+    void initializeIndices();
 
 private:
     UInt64 file_id;

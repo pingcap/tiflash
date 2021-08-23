@@ -555,6 +555,22 @@ void DMFile::remove(const FileProviderPtr & file_provider)
         }
     }
 }
+void DMFile::initializeIndices()
+{
+    if (isSingleFileMode())
+        return;
+
+    Poco::File directory{path()};
+    std::vector<std::string> sub_files;
+    directory.list(sub_files);
+    for (auto & i : sub_files)
+    {
+        if (endsWith(i, ".idx"))
+        {
+            column_indices.insert(std::move(i));
+        }
+    }
+}
 
 } // namespace DM
 } // namespace DB
