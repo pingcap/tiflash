@@ -1449,6 +1449,8 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapsh
     LOG_TRACE(log, __PRETTY_FUNCTION__ << " delete range rows [" << delete_rows << "], delete_bytes [" << delete_bytes << "] stable_rows [" << stable_rows << "] stable_bytes [" << stable_bytes << "]");
 
     bool should_compact = (delete_rows > stable_rows * ratio_threshold) || (delete_bytes > stable_bytes * ratio_threshold);
+    // just do compaction when stable is larger than delta
+    should_compact = should_compact && (stable_rows > delete_rows) && (stable_bytes > delete_bytes);
     return should_compact;
 }
 } // namespace GC
