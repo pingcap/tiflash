@@ -48,3 +48,12 @@ $ popd
 ```
 
 Now you will get TiFlash binary under `WORKSPACE/tics/build/dbms/src/Server/tiflash`.
+
+### Notice
+
+Before submitting pull request, please use [format-diff.py](format-diff.py) to format source code, otherwise ci-build may raise error.
+```
+# WORKSPACE/tics
+$ python3 format-diff.py --diff_from `git merge-base ${TARGET_REMOTE_BRANCH} HEAD`
+```
+
