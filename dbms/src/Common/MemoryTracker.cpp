@@ -145,9 +145,10 @@ thread_local MemoryTracker * current_memory_tracker = nullptr;
 namespace CurrentMemoryTracker
 {
 
-static thread_local Int64 local_delta {};
+static thread_local Int64 local_delta{};
 
-__attribute__((always_inline)) inline void checkSubmit() {
+__attribute__((always_inline)) inline void checkSubmit()
+{
     if (unlikely(local_delta > MEMORY_TRACER_SUBMIT_THRESHOLD))
     {
         if (current_memory_tracker)

@@ -1,13 +1,14 @@
 #pragma once
 
-#include <atomic>
-#include <common/types.h>
 #include <Common/CurrentMetrics.h>
+#include <common/types.h>
+
+#include <atomic>
 
 
 namespace CurrentMetrics
 {
-    extern const Metric MemoryTracking;
+extern const Metric MemoryTracking;
 }
 
 /** Tracks memory consumption.
