@@ -285,9 +285,12 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         table.regions.erase(internal_region_it);
         if (table.regions.empty())
         {
-            /// All regions of this table is removed, the storage maybe drop or pd
-            /// move it to another node, we can optimize outdated data.
-            table_to_optimize.insert(table_id);
+            if (auto & tmt = context->getTMTContext(); !tmt.isBgFlushDisabled())
+            {
+                /// All regions of this table is removed, the storage maybe drop or pd
+                /// move it to another node, we can optimize outdated data.
+                table_to_optimize.insert(table_id);
+            }
             tables.erase(table_id);
         }
         LOG_INFO(log, __FUNCTION__ << ": remove [region " << region_id << "] in RegionTable done");
