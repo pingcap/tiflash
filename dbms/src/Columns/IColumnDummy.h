@@ -64,11 +64,11 @@ public:
     {
     }
 
-    void updateHashWithValues(IColumn::HashValues &, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override
+    void updateHashWithValues(IColumn::HashValues &, const TiDB::TiDBCollatorPtr &, String &) const override
     {
     }
 
-    void updateWeakHash32(WeakHash32 &, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override
+    void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &) const override
     {
     }
 

@@ -176,12 +176,12 @@ public:
     virtual void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
 
     using HashValues = PaddedPODArray<SipHash>;
-    virtual void updateHashWithValues(HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
+    virtual void updateHashWithValues(HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
 
     /// Update hash function value. Hash is calculated for each element.
     /// It's a fast weak hash function. Mainly need to scatter data between threads.
     /// WeakHash32 must have the same size as column.
-    virtual void updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
+    virtual void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
 
     /** Removes elements that don't match the filter.
       * Is used in WHERE and HAVING operations.

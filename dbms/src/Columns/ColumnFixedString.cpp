@@ -99,7 +99,7 @@ void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, const 
     hash.update(reinterpret_cast<const char *>(&chars[n * index]), n);
 }
 
-void ColumnFixedString::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+void ColumnFixedString::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const
 {
     for (size_t i = 0, sz = chars.size() / n; i < sz; ++i)
     {
@@ -107,7 +107,7 @@ void ColumnFixedString::updateHashWithValues(IColumn::HashValues & hash_values, 
     }
 }
 
-void ColumnFixedString::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+void ColumnFixedString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     auto s = size();
 

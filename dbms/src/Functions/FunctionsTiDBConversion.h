@@ -1887,7 +1887,7 @@ protected:
     FunctionBasePtr buildImpl(
         const ColumnsWithTypeAndName & arguments,
         const DataTypePtr & return_type,
-        const std::shared_ptr<TiDB::ITiDBCollator> &) const override
+        const TiDB::TiDBCollatorPtr &) const override
     {
         DataTypes data_types(arguments.size());
 

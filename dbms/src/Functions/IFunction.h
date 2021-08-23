@@ -239,7 +239,7 @@ protected:
     virtual FunctionBasePtr buildImpl(
         const ColumnsWithTypeAndName & arguments,
         const DataTypePtr & return_type,
-        const std::shared_ptr<TiDB::ITiDBCollator> & collator) const = 0;
+        const TiDB::TiDBCollatorPtr & collator) const = 0;
 
     virtual void getLambdaArgumentTypesImpl(DataTypes & /*arguments*/) const
     {
@@ -288,7 +288,7 @@ protected:
     FunctionBasePtr buildImpl(
         const ColumnsWithTypeAndName & /*arguments*/,
         const DataTypePtr & /*return_type*/,
-        const std::shared_ptr<TiDB::ITiDBCollator> & /*collator*/) const final
+        const TiDB::TiDBCollatorPtr & /*collator*/) const final
     {
         throw Exception("buildImpl is not implemented for IFunction", ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -372,7 +372,7 @@ protected:
     FunctionBasePtr buildImpl(
         const ColumnsWithTypeAndName & arguments,
         const DataTypePtr & return_type,
-        const std::shared_ptr<TiDB::ITiDBCollator> & collator) const override
+        const TiDB::TiDBCollatorPtr & collator) const override
     {
         function->setCollator(collator);
         DataTypes data_types(arguments.size());

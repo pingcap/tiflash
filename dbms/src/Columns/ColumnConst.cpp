@@ -85,7 +85,7 @@ void ColumnConst::getPermutation(bool /*reverse*/, size_t /*limit*/, int /*nan_d
         res[i] = i;
 }
 
-void ColumnConst::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+void ColumnConst::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     if (hash.getData().size() != s)
         throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +

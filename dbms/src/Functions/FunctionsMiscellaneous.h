@@ -180,7 +180,7 @@ protected:
     FunctionBasePtr buildImpl(
         const ColumnsWithTypeAndName &,
         const DataTypePtr &,
-        const std::shared_ptr<TiDB::ITiDBCollator> &) const override
+        const TiDB::TiDBCollatorPtr &) const override
     {
         return std::const_pointer_cast<FunctionCapture>(shared_from_this());
     }

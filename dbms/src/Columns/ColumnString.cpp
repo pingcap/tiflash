@@ -347,7 +347,7 @@ void ColumnString::getPermutationWithCollationImpl(const ICollator & collator, b
     }
 }
 
-void ColumnString::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     auto s = offsets.size();
 

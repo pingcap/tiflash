@@ -206,7 +206,7 @@ void ColumnArray::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDB
         getData().updateHashWithValue(offset + i, hash, collator, sort_key_container);
 }
 
-void ColumnArray::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+void ColumnArray::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     for (size_t i = 0, sz = size(); i < sz; ++i)
     {
@@ -222,7 +222,7 @@ void ColumnArray::updateHashWithValues(IColumn::HashValues & hash_values, const 
     }
 }
 
-void ColumnArray::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+void ColumnArray::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     auto s = offsets->size();
     if (hash.getData().size() != s)

@@ -170,7 +170,7 @@ void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash, cons
     hash.update(wbuf.str().c_str(), wbuf.str().size());
 }
 
-void ColumnAggregateFunction::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+void ColumnAggregateFunction::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const
 {
     for (size_t i = 0, size = getData().size(); i < size; ++i)
     {
@@ -180,7 +180,7 @@ void ColumnAggregateFunction::updateHashWithValues(IColumn::HashValues & hash_va
     }
 }
 
-void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     auto s = data.size();
     if (hash.getData().size() != data.size())

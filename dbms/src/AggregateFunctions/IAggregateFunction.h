@@ -427,12 +427,12 @@ struct AggregationCollatorsWrapper<true>
             throw Exception("Should not here: collators for aggregation function is not set correctly");
     }
 
-    std::pair<const TiDB::TiDBCollatorPtr &, std::string *> getCollatorAndSortKeyContainer(size_t index)
+    std::pair<TiDB::TiDBCollatorPtr, std::string *> getCollatorAndSortKeyContainer(size_t index)
     {
         if (likely(index < collators.size()))
             return std::make_pair(collators[index], &sort_key_containers[index]);
         else if (collators.empty())
-            return std::make_pair(static_cast<const TiDB::TiDBCollatorPtr &>(nullptr), &TiDB::dummy_sort_key_contaner);
+            return std::make_pair(static_cast<TiDB::TiDBCollatorPtr>(nullptr), &TiDB::dummy_sort_key_contaner);
         else
             throw Exception("Should not here: collators for aggregation function is not set correctly");
     }

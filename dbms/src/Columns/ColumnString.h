@@ -239,7 +239,7 @@ public:
         }
     }
 
-    void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const override
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
     {
         if (collator != nullptr)
         {
@@ -267,7 +267,7 @@ public:
         }
     }
 
-    void updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 

@@ -148,13 +148,13 @@ void ColumnTuple::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDB
         column->updateHashWithValue(n, hash, collator, sort_key_container);
 }
 
-void ColumnTuple::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+void ColumnTuple::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     for (auto & column : columns)
         column->updateHashWithValues(hash_values, collator, sort_key_container);
 }
 
-void ColumnTuple::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+void ColumnTuple::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     auto s = size();
 
