@@ -45,56 +45,54 @@ void MemoryTracker::logPeakMemoryUsage() const
 
 void MemoryTracker::alloc(Int64 size)
 {
-    {
-        /** Using memory_order_relaxed means that if allocations are done simultaneously,
+    /** Using memory_order_relaxed means that if allocations are done simultaneously,
       *  we allow exception about memory limit exceeded to be thrown only on next allocation.
       * So, we allow over-allocations.
       */
-        Int64 will_be = size + amount.fetch_add(size, std::memory_order_relaxed);
+    Int64 will_be = size + amount.fetch_add(size, std::memory_order_relaxed);
 
-        if (!next.load(std::memory_order_relaxed))
-            CurrentMetrics::add(metric, size);
+    if (!next.load(std::memory_order_relaxed))
+        CurrentMetrics::add(metric, size);
 
-        Int64 current_limit = limit.load(std::memory_order_relaxed);
+    Int64 current_limit = limit.load(std::memory_order_relaxed);
 
-        /// Using non-thread-safe random number generator. Joint distribution in different threads would not be uniform.
-        /// In this case, it doesn't matter.
-        if (unlikely(fault_probability && drand48() < fault_probability))
-        {
-            free(size);
+    /// Using non-thread-safe random number generator. Joint distribution in different threads would not be uniform.
+    /// In this case, it doesn't matter.
+    if (unlikely(fault_probability && drand48() < fault_probability))
+    {
+        free(size);
 
-            std::stringstream message;
-            message << "Memory tracker";
-            if (description)
-                message << " " << description;
-            message << ": fault injected. Would use " << formatReadableSizeWithBinarySuffix(will_be) << " (attempt to allocate chunk of "
-                    << size << " bytes)"
-                    << ", maximum: " << formatReadableSizeWithBinarySuffix(current_limit);
+        std::stringstream message;
+        message << "Memory tracker";
+        if (description)
+            message << " " << description;
+        message << ": fault injected. Would use " << formatReadableSizeWithBinarySuffix(will_be) << " (attempt to allocate chunk of "
+                << size << " bytes)"
+                << ", maximum: " << formatReadableSizeWithBinarySuffix(current_limit);
 
-            throw DB::TiFlashException(message.str(), DB::Errors::Coprocessor::MemoryLimitExceeded);
-        }
-
-        if (unlikely(current_limit && will_be > current_limit))
-        {
-            free(size);
-
-            std::stringstream message;
-            message << "Memory limit";
-            if (description)
-                message << " " << description;
-            message << " exceeded: would use " << formatReadableSizeWithBinarySuffix(will_be) << " (attempt to allocate chunk of " << size
-                    << " bytes)"
-                    << ", maximum: " << formatReadableSizeWithBinarySuffix(current_limit);
-
-            throw DB::TiFlashException(message.str(), DB::Errors::Coprocessor::MemoryLimitExceeded);
-        }
-
-        if (will_be > peak.load(std::memory_order_relaxed)) /// Races doesn't matter. Could rewrite with CAS, but not worth.
-            peak.store(will_be, std::memory_order_relaxed);
-
-        if (auto loaded_next = next.load(std::memory_order_relaxed))
-            loaded_next->alloc(size);
+        throw DB::TiFlashException(message.str(), DB::Errors::Coprocessor::MemoryLimitExceeded);
     }
+
+    if (unlikely(current_limit && will_be > current_limit))
+    {
+        free(size);
+
+        std::stringstream message;
+        message << "Memory limit";
+        if (description)
+            message << " " << description;
+        message << " exceeded: would use " << formatReadableSizeWithBinarySuffix(will_be) << " (attempt to allocate chunk of " << size
+                << " bytes)"
+                << ", maximum: " << formatReadableSizeWithBinarySuffix(current_limit);
+
+        throw DB::TiFlashException(message.str(), DB::Errors::Coprocessor::MemoryLimitExceeded);
+    }
+
+    if (will_be > peak.load(std::memory_order_relaxed)) /// Races doesn't matter. Could rewrite with CAS, but not worth.
+        peak.store(will_be, std::memory_order_relaxed);
+
+    if (auto loaded_next = next.load(std::memory_order_relaxed))
+        loaded_next->alloc(size);
 }
 
 
