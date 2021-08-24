@@ -21,6 +21,49 @@ extern const Metric StoreSizeUsed;
 
 namespace DB
 {
+void DisksCapacity::insert(const struct statvfs & vfs, const FsStats & fs_stat, const String & path)
+{
+    const auto & entry = disks_stats.find(vfs.f_fsid);
+    if (entry == disks_stats.end())
+    {
+        disks_stats.insert(std::make_pair(vfs.f_fsid, DiskInfo{DiskCapacity{vfs, {fs_stat}}, Strings{path}}));
+    }
+    else
+    {
+        DiskInfo & disk_info = entry->second;
+        disk_info.disk.path_stats.emplace_back(fs_stat);
+        disk_info.paths.emplace_back(path);
+    }
+}
+
+std::tuple<size_t, size_t, DisksCapacity::Iterator> DisksCapacity::getBiggestAvailableDisk() const
+{
+    size_t total_avail_size = 0;
+    size_t biggest_avail_size = 0;
+    DisksCapacity::Iterator biggest_disk_iter = disks_stats.end();
+    for (auto iter = disks_stats.begin(); iter != disks_stats.end(); ++iter)
+    {
+        size_t disk_stat_avail_size = 0;
+        const auto & single_disk = iter->second;
+        const auto & vfs_info = single_disk.disk.vfs_info;
+
+        for (const auto & path_stats : single_disk.disk.path_stats)
+        {
+            disk_stat_avail_size += path_stats.avail_size;
+        }
+
+        // Calutate single disk info
+        disk_stat_avail_size = std::min(vfs_info.f_bavail * vfs_info.f_frsize, disk_stat_avail_size);
+        if (disk_stat_avail_size > biggest_avail_size)
+        {
+            biggest_avail_size = disk_stat_avail_size;
+            biggest_disk_iter = iter;
+        }
+
+        total_avail_size += disk_stat_avail_size;
+    }
+    return {total_avail_size, biggest_avail_size, biggest_disk_iter};
+}
 
 inline size_t safeGetQuota(const std::vector<size_t> & quotas, size_t idx) { return idx < quotas.size() ? quotas[idx] : 0; }
 

@@ -20,6 +20,28 @@ struct DiskCapacity
     std::vector<FsStats> path_stats;
 };
 
+class DisksCapacity
+{
+public:
+    struct DiskInfo
+    {
+        DiskCapacity disk;
+        Strings paths;
+    };
+
+    void insert(const struct statvfs & vfs, const FsStats & fs_stat, const String & path);
+
+    // Note that caller should never call `insert` after `getBiggestAvailableDisk`, or the
+    // iterator of biggest available disk will be invalid.
+    using Iterator = std::unordered_map<FSID, DiskInfo>::const_iterator;
+    std::tuple<size_t, size_t, Iterator> getBiggestAvailableDisk() const;
+
+    Iterator end() const { return disks_stats.end(); }
+
+private:
+    std::unordered_map<FSID, DiskInfo> disks_stats;
+};
+
 class PathCapacityMetrics : private boost::noncopyable
 {
 public:
@@ -37,11 +59,32 @@ public:
 
     virtual std::map<FSID, DiskCapacity> getDiskStats();
 
-    std::tuple<FsStats, struct statvfs> getFsStatsOfPath(std::string_view file_path) const;
+    template <typename T>
+    std::tuple<DisksCapacity, std::map<String, FsStats>> getDiskStatsForPaths(const std::vector<T> & paths)
+    {
+        DisksCapacity all_disks;
+        std::map<String, FsStats> path_capacity;
+        for (size_t i = 0; i < paths.size(); ++i)
+        {
+            auto [path_stat, vfs] = getFsStatsOfPath(paths[i].path);
+            if (!path_stat.ok)
+            {
+                continue;
+            }
+
+            path_capacity[paths[i].path] = path_stat;
+
+            // update all_disks
+            all_disks.insert(vfs, path_stat, paths[i].path);
+        }
+        return {std::move(all_disks), std::move(path_capacity)};
+    }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+
+    std::tuple<FsStats, struct statvfs> getFsStatsOfPath(std::string_view file_path) const;
 
     static constexpr ssize_t INVALID_INDEX = -1;
     // Return the index of the longest prefix matching path in `path_info`

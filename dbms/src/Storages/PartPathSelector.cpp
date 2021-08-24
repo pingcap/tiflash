@@ -7,6 +7,7 @@
 
 namespace DB
 {
+// TODO: Move this to MergeTree directory
 const String PartPathSelector::getPathForPart(
     MergeTreeData & data, const String & part_name, const MergeTreePartInfo & info, size_t part_size) const
 {

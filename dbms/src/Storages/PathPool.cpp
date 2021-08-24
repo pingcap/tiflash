@@ -9,6 +9,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
+#include <Storages/PathSelector.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
@@ -266,179 +267,6 @@ void StoragePathPool::renamePath(const String & old_path, const String & new_pat
 }
 
 //==========================================================================================
-// Generic functions
-//==========================================================================================
-
-template <typename T>
-String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetricsPtr & global_capacity,
-    std::function<String(const std::vector<T> & paths, size_t idx)> path_generator, Poco::Logger * log, const String & log_msg)
-{
-    if (paths.size() == 1)
-        return path_generator(paths, 0);
-
-    UInt64 total_available_size = 0;
-    std::map<FSID, DiskCapacity> disk_stats_map;
-    std::map<FSID, std::vector<String>> fs_path_map;
-    std::map<String, std::pair<FsStats, size_t>> path_capacity;
-
-    for (size_t i = 0; i < paths.size(); ++i)
-    {
-        auto [path_stat, vfs] = global_capacity->getFsStatsOfPath(paths[i].path);
-
-        if (!path_stat.ok)
-        {
-            continue;
-        }
-
-        fiu_do_on(FailPoints::force_make_disk_full, {
-            // 1. All disks is full - return first. (put paths size 2)
-            // 2. Some of disks is full, some of disks is not full. return the biggest available disk (put paths size 3 or 4)
-            // 3. Disk capacity size bigger than disk available size but its disk available size smaller than other disk available size.(put paths size > 5)
-            switch (i)
-            {
-                case 0 ... 1:
-                {
-                    path_stat.avail_size = 0;
-                    path_stat.capacity_size = 200;
-                    path_stat.used_size = 100;
-
-                    vfs.f_fsid = 100;
-                    vfs.f_bavail = 0;
-                    vfs.f_frsize = 1;
-                    break;
-                }
-                case 2:
-                {
-                    path_stat.avail_size = 500;
-                    path_stat.capacity_size = 5000;
-                    path_stat.used_size = 420;
-
-                    vfs.f_fsid = 101;
-                    vfs.f_bavail = 500;
-                    vfs.f_frsize = 1;
-                    break;
-                }
-                case 3:
-                {
-                    path_stat.avail_size = 500;
-                    path_stat.capacity_size = 2000;
-                    path_stat.used_size = 250;
-
-                    vfs.f_fsid = 101;
-                    vfs.f_bavail = 500;
-                    vfs.f_frsize = 1;
-                    break;
-                }
-                default:
-                {
-                    path_stat.avail_size = 9000;
-                    path_stat.capacity_size = 2000;
-                    path_stat.used_size = 888;
-
-                    vfs.f_fsid = 102;
-                    vfs.f_bavail = 900;
-                    vfs.f_frsize = 1;
-                    break;
-                }
-            };
-        });
-
-        path_capacity[paths[i].path] = std::pair(path_stat, i);
-
-        // update fs_path_map
-        {
-            const auto & entry = fs_path_map.find(vfs.f_fsid);
-            if (entry == fs_path_map.end())
-            {
-                fs_path_map.insert(std::pair<FSID, std::vector<String>>(vfs.f_fsid,
-                    {
-                        paths[i].path,
-                    }));
-            }
-            else
-            {
-                entry->second.emplace_back(paths[i].path);
-            }
-        }
-
-        // update disk_stats_map
-        {
-            const auto & entry = disk_stats_map.find(vfs.f_fsid);
-            if (entry == disk_stats_map.end())
-            {
-                disk_stats_map.insert(std::pair<FSID, DiskCapacity>(vfs.f_fsid, {vfs, {path_stat}}));
-            }
-            else
-            {
-                entry->second.path_stats.emplace_back(path_stat);
-            }
-        }
-    }
-
-    /// Calutate total_available_size and get a biggest fs
-    size_t biggest_avail_size = 0;
-    FSID biggest_fs = -1;
-    for (const auto & [fs_id, disk_stat_vec] : disk_stats_map)
-    {
-        UInt64 disk_stat_avail_size = 0;
-        auto & vfs_info = disk_stat_vec.vfs_info;
-
-        for (const auto & path_stats : disk_stat_vec.path_stats)
-        {
-            disk_stat_avail_size += path_stats.avail_size;
-        }
-
-        // Calutate single disk info
-        disk_stat_avail_size = std::min(vfs_info.f_bavail * vfs_info.f_frsize, disk_stat_avail_size);
-        if (disk_stat_avail_size > biggest_avail_size)
-        {
-            biggest_avail_size = disk_stat_avail_size;
-            biggest_fs = fs_id;
-        }
-
-        total_available_size += disk_stat_avail_size;
-    }
-
-    // We should choose path even if there is no available space.
-    // If the actual disk space is running out, let the later `write` to throw exception.
-    // If available space is limited by the quota, then write down a GC-ed file can make
-    // some files be deleted later.
-    if (total_available_size == 0)
-    {
-        LOG_WARNING(log, "No available space for all disks, choose randomly.");
-        // If no available space. direct return the first one.
-        // There is no need to calculate and choose.
-        return path_generator(paths, 0);
-    }
-
-    auto fs_paths = fs_path_map.find(biggest_fs);
-    if (fs_paths == fs_path_map.end())
-    {
-        LOG_WARNING(log, "Some of DISK have been removed.");
-        return path_generator(paths, 0);
-    }
-
-    auto & select_paths = fs_paths->second;
-
-    /// Find biggest available path in biggest available disk
-    size_t index = 0;
-    double ratio = 0, biggest_ratio = 0;
-    for (size_t i = 0; i < select_paths.size(); ++i)
-    {
-        auto & [single_path_stat, index_in_paths] = path_capacity.find(select_paths[i])->second;
-        ratio = 1.0 * single_path_stat.avail_size / total_available_size;
-        if (biggest_ratio < ratio)
-        {
-            biggest_ratio = ratio;
-            index = index_in_paths;
-        }
-    }
-
-    LOG_INFO(log, "Choose path [index=" << index << "] " << log_msg);
-    return path_generator(paths, index);
-}
-
-//==========================================================================================
 // Stable data
 //==========================================================================================
 
@@ -454,12 +282,9 @@ Strings StableDiskDelegator::listPaths() const
 
 String StableDiskDelegator::choosePath() const
 {
-    std::function<String(const StoragePathPool::MainPathInfos & paths, size_t idx)> path_generator
-        = [](const StoragePathPool::MainPathInfos & paths, size_t idx) -> String {
-        return paths[idx].path + "/" + StoragePathPool::STABLE_FOLDER_NAME;
-    };
+    auto path_generator = [](const String & path) -> String { return path + "/" + StoragePathPool::STABLE_FOLDER_NAME; };
     const String log_msg = "[type=stable] [database=" + pool.database + "] [table=" + pool.table + "]";
-    return genericChoosePath(pool.main_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
+    return PathSelector::choose(pool.main_path_infos, pool.global_capacity, std::move(path_generator), pool.log, log_msg);
 }
 
 String StableDiskDelegator::getDTFilePath(UInt64 file_id) const
@@ -533,18 +358,17 @@ Strings PSDiskDelegatorMulti::listPaths() const
 
 String PSDiskDelegatorMulti::choosePath(const PageFileIdAndLevel & id_lvl)
 {
-    std::function<String(const StoragePathPool::LatestPathInfos & paths, size_t idx)> path_generator =
-        [this](const StoragePathPool::LatestPathInfos & paths, size_t idx) -> String { return paths[idx].path + "/" + this->path_prefix; };
+    auto path_generator = [this](const String & path) -> String { return path + "/" + this->path_prefix; };
 
     {
         std::lock_guard<std::mutex> lock{pool.mutex};
         /// If id exists in page_path_map, just return the same path
         if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
-            return path_generator(pool.latest_path_infos, iter->second);
+            return path_generator(pool.latest_path_infos[iter->second].path);
     }
 
     const String log_msg = "[type=ps_multi] [database=" + pool.database + "] [table=" + pool.table + "]";
-    return genericChoosePath(pool.latest_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
+    return PathSelector::choose(pool.latest_path_infos, pool.global_capacity, std::move(path_generator), pool.log, log_msg);
 }
 
 size_t PSDiskDelegatorMulti::addPageFileUsedSize(
@@ -659,19 +483,18 @@ Strings PSDiskDelegatorRaft::listPaths() const { return pool.kvstore_paths; }
 
 String PSDiskDelegatorRaft::choosePath(const PageFileIdAndLevel & id_lvl)
 {
-    std::function<String(const RaftPathInfos & paths, size_t idx)> path_generator
-        = [](const RaftPathInfos & paths, size_t idx) -> String { return paths[idx].path; };
+    auto path_generator = [](const String & path) -> String { return path; };
 
     {
         std::lock_guard lock{mutex};
         /// If id exists in page_path_map, just return the same path
         if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
-            return path_generator(raft_path_infos, iter->second);
+            return path_generator(raft_path_infos[iter->second].path);
     }
 
     // Else choose path randomly
     const String log_msg = "[type=ps_raft]";
-    return genericChoosePath(raft_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
+    return PathSelector::choose(raft_path_infos, pool.global_capacity, std::move(path_generator), pool.log, log_msg);
 }
 
 size_t PSDiskDelegatorRaft::addPageFileUsedSize(
