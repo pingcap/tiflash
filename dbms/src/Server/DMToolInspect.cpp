@@ -1,6 +1,6 @@
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
-#include <Server/DMTool.h>
 #include <IO/ChecksumBuffer.h>
+#include <Server/DMTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 
 #include <boost/program_options.hpp>
@@ -59,7 +59,8 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                 std::cout << "checksum algorithm: xxh3" << std::endl;
                 break;
         }
-        for (const auto & [name, msg] : conf->getDebugInfo()) {
+        for (const auto & [name, msg] : conf->getDebugInfo())
+        {
             std::cout << name << ": " << msg << std::endl;
         }
     }

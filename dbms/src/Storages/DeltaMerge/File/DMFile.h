@@ -366,8 +366,8 @@ private:
     ColumnStats column_stats;
     std::unordered_set<ColId> column_indices;
 
-    Mode               mode;
-    Status             status;
+    Mode mode;
+    Status status;
     DMConfigurationOpt configuration; // configuration
 
     SubFileStats sub_file_stats;

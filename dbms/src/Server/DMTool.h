@@ -162,6 +162,7 @@ struct CLIService : public BaseDaemon
             .fn_gc_raw_cpp_ptr = GcRawCppPtr,
             .fn_gen_batch_read_index_res = GenBatchReadIndexRes,
             .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
+            .fn_set_server_info_resp = SetSetverInfoResp,
         };
 
         typename RaftStoreProxyRunner::RunRaftStoreProxyParms parms{&helper, proxy_conf};

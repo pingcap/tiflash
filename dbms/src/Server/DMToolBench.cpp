@@ -1,11 +1,11 @@
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/MockKeyManager.h>
+#include <IO/ChecksumBuffer.h>
 #include <Poco/Path.h>
 #include <Server/DMTool.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <IO/ChecksumBuffer.h>
 #include <Storages/DeltaMerge/File/DMConfiguration.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
