@@ -23,7 +23,6 @@ extern const char exception_before_dmfile_remove_from_disk[];
 
 namespace DM
 {
-
 namespace details
 {
 inline constexpr static const char * NGC_FILE_NAME = "NGC";
@@ -186,6 +185,10 @@ const EncryptionPath DMFile::encryptionPackPropertyPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packPropertyFileName());
 }
+
+String DMFile::colDataFileName(const FileNameBase & file_name_base) { return file_name_base + details::DATA_FILE_SUFFIX; }
+String DMFile::colIndexFileName(const FileNameBase & file_name_base) { return file_name_base + details::INDEX_FILE_SUFFIX; }
+String DMFile::colMarkFileName(const FileNameBase & file_name_base) { return file_name_base + details::MARK_FILE_SUFFIX; }
 
 DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer)
 {

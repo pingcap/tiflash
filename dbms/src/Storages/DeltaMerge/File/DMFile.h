@@ -235,9 +235,9 @@ private:
     static String packStatFileName() { return "pack"; }
     static String packPropertyFileName() { return "property"; }
 
-    static String colDataFileName(const FileNameBase & file_name_base) { return file_name_base + ".dat"; }
-    static String colIndexFileName(const FileNameBase & file_name_base) { return file_name_base + ".idx"; }
-    static String colMarkFileName(const FileNameBase & file_name_base) { return file_name_base + ".mrk"; }
+    static String colDataFileName(const FileNameBase & file_name_base);
+    static String colIndexFileName(const FileNameBase & file_name_base);
+    static String colMarkFileName(const FileNameBase & file_name_base);
 
     using OffsetAndSize = std::tuple<size_t, size_t>;
     OffsetAndSize writeMetaToBuffer(WriteBuffer & buffer);
