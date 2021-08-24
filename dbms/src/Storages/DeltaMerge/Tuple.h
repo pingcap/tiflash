@@ -9,14 +9,15 @@ namespace DB
 {
 namespace DM
 {
-
 struct ColumnAndValue
 {
     UInt16 column;
     UInt64 value;
 
     ColumnAndValue(UInt16 column_, UInt64 value_)
-        : column(column_), value(value_) {}
+        : column(column_)
+        , value(value_)
+    {}
 };
 
 using ColumnAndValues = std::vector<ColumnAndValue>;
@@ -27,7 +28,8 @@ struct RefTuple
     ColumnAndValues values;
 
     RefTuple(UInt16 column, UInt64 value)
-        : values{ColumnAndValue(column, value)} {}
+        : values{ColumnAndValue(column, value)}
+    {}
 
     RefTuple(const ColumnAndValues & values_)
         : values(values_)

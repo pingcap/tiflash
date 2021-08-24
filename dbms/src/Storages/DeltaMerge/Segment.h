@@ -16,7 +16,6 @@ namespace DB
 class WriteBatch;
 namespace DM
 {
-
 class Segment;
 struct SegmentSnapshot;
 using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
@@ -38,7 +37,9 @@ struct SegmentSnapshot : private boost::noncopyable
     StableSnapshotPtr stable;
 
     SegmentSnapshot(DeltaSnapshotPtr && delta_, StableSnapshotPtr && stable_)
-        : delta(std::move(delta_)), stable(std::move(stable_)) {}
+        : delta(std::move(delta_))
+        , stable(std::move(stable_))
+    {}
 
     SegmentSnapshotPtr clone() { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone()); }
 
@@ -71,7 +72,10 @@ public:
             DeltaIndexIterator index_begin_,
             DeltaIndexIterator index_end_,
             ColumnDefinesPtr read_columns_)
-            : delta_reader(delta_reader_), index_begin(index_begin_), index_end(index_end_), read_columns(read_columns_)
+            : delta_reader(delta_reader_)
+            , index_begin(index_begin_)
+            , index_end(index_end_)
+            , read_columns(read_columns_)
         {
         }
 

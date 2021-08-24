@@ -15,7 +15,6 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
@@ -24,7 +23,6 @@ extern const char exception_before_dmfile_remove_from_disk[];
 
 namespace DM
 {
-
 namespace details
 {
 inline constexpr static const char * NGC_FILE_NAME = "NGC";

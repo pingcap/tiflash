@@ -2,10 +2,15 @@
 BasedOnStyle:  Google
 Language:        Cpp
 AlignAfterOpenBracket: Align
-AlignEscapedNewlinesLeft: true
+AlignEscapedNewlines: Left
+AlignTrailingComments: false
 AllowAllArgumentsOnNextLine: false
 AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortBlocksOnASingleLine: Always
+#AllowShortEnumsOnASingleLine: false  # clang-format version 10.0.0 doesn't support yet
 AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: Inline
+AlwaysBreakAfterReturnType: None
 AlwaysBreakTemplateDeclarations: true
 BinPackArguments: false
 BinPackParameters: false
@@ -23,16 +28,19 @@ BraceWrapping:
     BeforeElse : true
     IndentBraces : false
     SplitEmptyFunction: false
-BreakConstructorInitializersBeforeComma: false
+BreakConstructorInitializers: BeforeComma
+BreakInheritanceList : BeforeComma
 ColumnLimit: 0
-ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
 Cpp11BracedListStyle: true
+#EmptyLineBeforeAccessModifier: LogicalBlock  # clang-format version 10.0.0 doesn't support yet
 ExperimentalAutoDetectBinPacking: true
 FixNamespaceComments: true
-IndentCaseLabels: true
+IndentCaseLabels: false
 IndentWidth: 4
-KeepEmptyLinesAtTheStartOfBlocks: true
+KeepEmptyLinesAtTheStartOfBlocks: false
 MaxEmptyLinesToKeep: 2
+#PPIndentWidth: 2  # clang-format version 10.0.0 doesn't support yet
 PointerAlignment: Middle
 ReflowComments: false
 SortIncludes: true
@@ -46,12 +54,9 @@ AccessModifierOffset: -4
 AlignConsecutiveAssignments: false
 AlignConsecutiveDeclarations: false
 AlignOperands:   false
-AlignTrailingComments: true
-AllowShortBlocksOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
-AlwaysBreakAfterDefinitionReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
 BreakBeforeBinaryOperators: All
 BreakBeforeTernaryOperators: true

@@ -17,7 +17,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
@@ -476,8 +475,9 @@ struct AggregationCollatorsWrapper<true>
 
 /// Implements several methods for manipulation with data. T - type of structure with data for aggregation.
 template <typename T, typename Derived, bool with_collator = false>
-class IAggregateFunctionDataHelper : public IAggregateFunctionHelper<Derived>,
-                                     protected _IAggregateFunctionImpl::CollatorsHolder<with_collator>
+class IAggregateFunctionDataHelper
+    : public IAggregateFunctionHelper<Derived>
+    , protected _IAggregateFunctionImpl::CollatorsHolder<with_collator>
 {
 protected:
     using Data = T;
