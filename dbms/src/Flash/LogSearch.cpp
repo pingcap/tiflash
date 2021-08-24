@@ -140,8 +140,12 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
         int timezone_hour, timezone_min;
         std::tm time{};
         int year, month, day, hour, minute, second;
-        std::sscanf(line.data(), "[%d/%d/%d %d:%d:%d.%d %d:%d] [%[^]]s]", &year, &month, &day, &hour, &minute, &second, &milli_second,
-            &timezone_hour, &timezone_min, level_buff);
+        if (std::sscanf(line.data(), "[%d/%d/%d %d:%d:%d.%d %d:%d] [%[^]]s]", &year, &month, &day, &hour, &minute, &second, &milli_second,
+                &timezone_hour, &timezone_min, level_buff)
+            != 10)
+        {
+            return Error{Error::Type::UNEXPECTED_LOG_HEAD};
+        }
         time.tm_year = year - 1900;
         time.tm_mon = month - 1;
         time.tm_mday = day;
@@ -162,8 +166,9 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
             return Error{Error::Type::EOI};
     }
 
+    size_t level_buff_len = strlen(level_buff);
     {
-        if (!strlen(level_buff))
+        if (!level_buff_len)
             return Error{Error::Type::INVALID_LOG_LEVEL, "empty level"};
         if (level_buff[0] == 'T')
             entry.level = LogEntry::Level::Trace;
@@ -179,17 +184,12 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
             return Error{Error::Type::INVALID_LOG_LEVEL, "level: " + std::string(level_buff)};
     }
 
-    std::stringstream ss;
+    size_t message_begin = kLogLevelStartFinishOffset + level_buff_len + 2;
+    if (line.size() <= message_begin)
     {
-        ss << line;
-        std::string temp;
-        // Trim timestamp and level sections
-        ss >> temp >> temp >> temp >> temp;
-        ss.seekg(1, std::ios::cur);
+        return Error{Error::Type::UNEXPECTED_LOG_HEAD};
     }
-
-    std::getline(ss, entry.message);
-
+    entry.message.assign(line.begin() + message_begin, line.end());
     return entry;
 }
 
