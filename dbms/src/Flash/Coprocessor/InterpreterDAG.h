@@ -30,7 +30,7 @@ using RegionPtr = std::shared_ptr<Region>;
 class InterpreterDAG : public IInterpreter
 {
 public:
-    InterpreterDAG(Context & context_, const DAGQuerySource & dag_, Poco::Logger * mpp_task_log_ = nullptr);
+    InterpreterDAG(Context & context_, const DAGQuerySource & dag_, std::shared_ptr<MPPTaskLog> mpp_task_log_);
 
     ~InterpreterDAG() = default;
 
@@ -53,7 +53,6 @@ private:
 
     const bool keep_session_timezone_info;
 
-    Poco::Logger * log;
-    Poco::Logger * mpp_task_log;
+    std::shared_ptr<MPPTaskLog> mpp_task_log;
 };
 } // namespace DB

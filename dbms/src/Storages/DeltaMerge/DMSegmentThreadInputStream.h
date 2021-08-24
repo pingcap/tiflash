@@ -5,6 +5,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Flash/Mpp/MPPHandler.h>
 
 namespace DB
 {
@@ -31,7 +32,7 @@ public:
                                size_t                         expected_block_size_,
                                bool                           is_raw_,
                                bool                           do_range_filter_for_raw_,
-                               Logger *                       mpp_task_log_ = nullptr)
+                               std::shared_ptr<MPPTaskLog>    mpp_task_log_ = nullptr)
         : dm_context(dm_context_),
           task_pool(task_pool_),
           after_segment_read(after_segment_read_),
@@ -143,7 +144,7 @@ private:
     SegmentPtr cur_segment;
 
     Logger * log;
-    Logger * mpp_task_log;
+    std::shared_ptr<MPPTaskLog> mpp_task_log;
 };
 
 } // namespace DM

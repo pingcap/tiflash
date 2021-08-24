@@ -7,6 +7,7 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
+#include <Flash/Mpp/MPPHandler.h>
 
 namespace TiDB
 {
@@ -131,7 +132,7 @@ public:
 
     virtual size_t getRowKeyColumnSize() const { return 1; }
 
-    virtual void addMPPTaskLog([[maybe_unused]] Logger * mpp_task_log_) {}
+    virtual void addMPPTaskLog([[maybe_unused]] std::shared_ptr<MPPTaskLog> mpp_task_log_) {}
 
 private:
     virtual DataTypePtr getPKTypeImpl() const = 0;

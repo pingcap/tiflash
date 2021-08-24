@@ -12,7 +12,7 @@ namespace DB
 class HashJoinBuildBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    HashJoinBuildBlockInputStream(const BlockInputStreamPtr & input, JoinPtr join_,size_t stream_index_, Logger * mpp_task_log_ = nullptr)
+    HashJoinBuildBlockInputStream(const BlockInputStreamPtr & input, JoinPtr join_,size_t stream_index_, std::shared_ptr<MPPTaskLog> mpp_task_log_ = nullptr)
         :stream_index(stream_index_), mpp_task_log(mpp_task_log_)
     {
         children.push_back(input);
@@ -29,7 +29,7 @@ protected:
 private:
     JoinPtr join;
     size_t stream_index;
-    Logger * mpp_task_log;
+    std::shared_ptr<MPPTaskLog> mpp_task_log;
 };
 
 } // namespace DB

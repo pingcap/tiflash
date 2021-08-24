@@ -12,6 +12,7 @@
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Flash/Mpp/MPPHandler.h>
 
 #include <queue>
 
@@ -399,7 +400,7 @@ public:
 
     RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
-    void addMPPTaskLog(Logger * mpp_task_log_) { mpp_task_log = mpp_task_log_; }
+    void addMPPTaskLog(std::shared_ptr<MPPTaskLog> mpp_task_log_) { mpp_task_log = mpp_task_log_; }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -484,7 +485,7 @@ private:
 
     UInt64 hash_salt;
     Logger * log;
-    Logger * mpp_task_log = nullptr;
+    std::shared_ptr<MPPTaskLog> mpp_task_log = nullptr;
 }; // namespace DM
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;

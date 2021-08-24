@@ -22,12 +22,11 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, Poco::Logger * mpp_task_log_)
+InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, std::shared_ptr<MPPTaskLog> mpp_task_log_)
     : context(context_),
       dag(dag_),
       keep_session_timezone_info(
           dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
-      log(&Logger::get("InterpreterDAG")),
       mpp_task_log(mpp_task_log_)
 {
     const Settings & settings = context.getSettingsRef();

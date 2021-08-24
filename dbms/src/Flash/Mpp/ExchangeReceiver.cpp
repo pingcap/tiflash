@@ -149,12 +149,23 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         err_msg = local_err_msg;
     cv.notify_all();
 
-    Logger * tmp_log = mpp_task_log != nullptr ? mpp_task_log : log;
-    LOG_DEBUG(tmp_log, "Data direction: Task " + std::to_string(src_task_id) + " -> Task " + std::to_string(dst_task_id) << 
-                        ", this read thread end!!! live connections: " << std::to_string(live_connections_copy));
+    if (mpp_task_log != nullptr)
+    {
+        LOG_DEBUG(mpp_task_log, "Data direction: Task " + std::to_string(src_task_id) + " -> Task " + std::to_string(dst_task_id) << 
+                            ", this read thread end!!! live connections: " << std::to_string(live_connections_copy));
 
-    if (live_connections_copy == 0)
-        LOG_DEBUG(tmp_log, "ExchangeReceiver: All threads exit");
+        if (live_connections_copy == 0)
+            LOG_DEBUG(mpp_task_log, "ExchangeReceiver: All threads exit");
+    }
+    else
+    {
+        LOG_DEBUG(log, "Data direction: Task " + std::to_string(src_task_id) + " -> Task " + std::to_string(dst_task_id) << 
+                            ", this read thread end!!! live connections: " << std::to_string(live_connections_copy));
+
+        if (live_connections_copy == 0)
+            LOG_DEBUG(log, "ExchangeReceiver: All threads exit");
+    }
+
 
 }
 

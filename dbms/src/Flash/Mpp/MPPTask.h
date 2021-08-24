@@ -44,6 +44,57 @@ struct MPPTaskProgress
     bool isTaskHanging(const Context & context);
 };
 
+class MPPTaskLog : private boost::noncopyable
+{
+public:
+    MPPTaskLog(Logger * log_, Int64 task_id, UInt64 query_id)
+        : log(log_), prefix("[task " + std::to_string(task_id) + " query " + std::to_string(query_id) + "] "){}
+    
+    bool trace() { return log->trace(); }
+
+    void trace(const std::string & msg)
+    {
+        auto m = prefix + msg;
+        log->trace(m);
+    }
+
+    bool debug() { return log->debug(); }
+
+    void debug(const std::string & msg)
+    {
+        auto m = prefix + msg;
+        log->debug(m);
+    }
+
+    bool information() { return log->information(); }
+
+    void information(const std::string & msg)
+    {
+        auto m = prefix + msg;
+        log->information(m);
+    }
+
+    bool warning() { return log->warning(); }
+
+    void warning(const std::string & msg)
+    {
+        auto m = prefix + msg;
+        log->warning(m);
+    }
+
+    bool error() { return log->error(); }
+
+    void error(const std::string & msg)
+    {
+        auto m = prefix + msg;
+        log->error(m);
+    }
+
+private:
+    Logger * log;
+    const String prefix;
+};
+
 class MPPTaskManager;
 class MPPTask : public std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
@@ -87,6 +138,8 @@ public:
 
     MPPTunnelPtr getTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout, String & err_msg);
 
+    std::shared_ptr<MPPTaskLog> getMPPTaskLog() const { return mpp_task_log; }
+
     ~MPPTask();
 private:
     MPPTask(const mpp::TaskMeta & meta_, const Context & context_);
@@ -116,6 +169,8 @@ private:
     MPPTaskManager * manager = nullptr;
 
     Logger * log;
+
+    std::shared_ptr<MPPTaskLog> mpp_task_log;
 
     Exception err;
 

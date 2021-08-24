@@ -115,7 +115,7 @@ public:
 
     bool initStoreIfDataDirExist() override;
 
-    void addMPPTaskLog(Logger * mpp_task_log_) { mpp_task_log = mpp_task_log_; }
+    void addMPPTaskLog(std::shared_ptr<MPPTaskLog> mpp_task_log_) { mpp_task_log = mpp_task_log_; }
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
@@ -191,7 +191,7 @@ private:
 
     Context & global_context;
     Logger * log;
-    Logger * mpp_task_log;
+    std::shared_ptr<MPPTaskLog> mpp_task_log;
 };
 
 

@@ -7,7 +7,7 @@ namespace DB
 SquashingBlockInputStream::SquashingBlockInputStream(const BlockInputStreamPtr & src,
                                                      size_t min_block_size_rows,
                                                      size_t min_block_size_bytes,
-                                                     Logger * mpp_task_log_)
+                                                     std::shared_ptr<MPPTaskLog> mpp_task_log_)
     : transform(min_block_size_rows, min_block_size_bytes), mpp_task_log(mpp_task_log_)
 {
     children.emplace_back(src);

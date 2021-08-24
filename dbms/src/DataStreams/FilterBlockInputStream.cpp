@@ -17,7 +17,7 @@ extern const int LOGICAL_ERROR;
 
 
 FilterBlockInputStream::FilterBlockInputStream(
-    const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name, Logger * mpp_task_log_)
+    const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name, std::shared_ptr<MPPTaskLog> mpp_task_log_)
     : expression(expression_), mpp_task_log(mpp_task_log_)
 {
     children.push_back(input);

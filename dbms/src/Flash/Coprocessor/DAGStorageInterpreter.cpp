@@ -108,7 +108,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     const std::vector<const tipb::Expr *> & conditions_,
     size_t max_streams_,
     Poco::Logger * log_,
-    Poco::Logger * mpp_task_log_)
+    std::shared_ptr<MPPTaskLog> mpp_task_log_)
     : context(context_),
       dag(dag_),
       query_block(query_block_),

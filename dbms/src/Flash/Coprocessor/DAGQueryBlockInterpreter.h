@@ -37,7 +37,7 @@ public:
         const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst,
         const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
         const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map,
-        Poco::Logger * mpp_task_log_ = nullptr);
+        std::shared_ptr<MPPTaskLog> mpp_task_log_);
 
     ~DAGQueryBlockInterpreter() = default;
 
@@ -94,6 +94,6 @@ private:
     BoolVec timestamp_column_flag_for_tablescan;
 
     Poco::Logger * log;
-    Poco::Logger * mpp_task_log;
+    std::shared_ptr<MPPTaskLog> mpp_task_log;
 };
 } // namespace DB

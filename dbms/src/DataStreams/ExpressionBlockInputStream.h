@@ -20,7 +20,7 @@ private:
     using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
 public:
-    ExpressionBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, Logger * mpp_task_log = nullptr);
+    ExpressionBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, std::shared_ptr<MPPTaskLog> mpp_task_log = nullptr);
 
     String getName() const override;
     Block getTotals() override;
@@ -32,7 +32,7 @@ protected:
 
 private:
     ExpressionActionsPtr expression;
-    Logger * mpp_task_log;
+    std::shared_ptr<MPPTaskLog> mpp_task_log;
 };
 
 }

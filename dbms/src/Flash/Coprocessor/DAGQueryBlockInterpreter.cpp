@@ -42,7 +42,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
     const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_,
     const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map_,
-    Poco::Logger * mpp_task_log_)
+    std::shared_ptr<MPPTaskLog> mpp_task_log_)
     : context(context_),
       input_streams_vec(input_streams_vec_),
       query_block(query_block_),
@@ -1006,10 +1006,8 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.selection_name);
     }
     
-    Logger * tmp_log = mpp_task_log != nullptr ? mpp_task_log : log;
-
     // this log measures the concurrent degree in this mpp task
-    LOG_INFO(tmp_log,
+    LOG_INFO(mpp_task_log,
         "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());        
 
     dag.getDAGContext().final_concurrency = pipeline.streams.size();

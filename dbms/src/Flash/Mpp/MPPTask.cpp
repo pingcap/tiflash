@@ -71,7 +71,8 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
 }
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
-    : context(context_), meta(meta_), log(&Logger::get(fmt::format("task {} {}", meta_.task_id(), meta_.start_ts())))
+    : context(context_), meta(meta_), log(&Logger::get(fmt::format("task {}", meta_.task_id()))),
+    mpp_task_log(std::make_shared<MPPTaskLog>(log, meta.task_id(), meta.start_ts()))
 {
     id.start_ts = meta.start_ts();
     id.task_id = meta.task_id();
@@ -224,7 +225,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     // register task.
     TMTContext & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    LOG_DEBUG(log, "begin to register the task " << id.toString());
+    LOG_DEBUG(mpp_task_log, "begin to register the task " << id.toString());
 
     if (dag_context->isRootMPPTask())
     {
@@ -240,9 +241,9 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     }
 
     DAGQuerySource dag(context, regions, retry_regions, *dag_req, true);
-    dag.addMPPTaskLog(log);
+    dag.addMPPTaskLog(mpp_task_log);
 
-    LOG_TRACE(log, dag.getExecutorNames());
+    LOG_TRACE(mpp_task_log, dag.getExecutorNames());
 
     if (dag_context->isRootMPPTask())
     {
@@ -262,7 +263,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, this->shared_from_this());
-        LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
+        LOG_DEBUG(mpp_task_log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);
         if (!dag_context->isRootMPPTask())
@@ -319,7 +320,7 @@ void MPPTask::runImpl()
     auto old_status = static_cast<Int32>(INITIALIZING);
     if (!status.compare_exchange_strong(old_status, static_cast<Int32>(RUNNING)))
     {
-        LOG_WARNING(log, "task not in initializing state, skip running");
+        LOG_WARNING(mpp_task_log, "task not in initializing state, skip running");
         return;
     }
     current_memory_tracker = memory_tracker;
@@ -330,14 +331,14 @@ void MPPTask::runImpl()
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
     });
-    LOG_INFO(log, "task starts running");
+    LOG_INFO(mpp_task_log, "task starts running");
     auto from = io.in;
     auto to = io.out;
     try
     {
         from->readPrefix();
         to->writePrefix();
-        LOG_DEBUG(log, "begin read ");
+        LOG_DEBUG(mpp_task_log, "begin read ");
 
         size_t count = 0;
 
@@ -371,27 +372,27 @@ void MPPTask::runImpl()
 
         finishWrite();
 
-        LOG_DEBUG(log, "finish write with " + std::to_string(count) + " rows");
+        LOG_DEBUG(mpp_task_log, "finish write with " + std::to_string(count) + " rows");
     }
     catch (Exception & e)
     {
-        LOG_ERROR(log, "task running meets error " << e.displayText() << " Stack Trace : " << e.getStackTrace().toString());
+        LOG_ERROR(mpp_task_log, "task running meets error " << e.displayText() << " Stack Trace : " << e.getStackTrace().toString());
         writeErrToAllTunnel(e.displayText());
     }
     catch (std::exception & e)
     {
-        LOG_ERROR(log, "task running meets error " << e.what());
+        LOG_ERROR(mpp_task_log, "task running meets error " << e.what());
         writeErrToAllTunnel(e.what());
     }
     catch (...)
     {
-        LOG_ERROR(log, "unrecovered error");
+        LOG_ERROR(mpp_task_log, "unrecovered error");
         writeErrToAllTunnel("unrecovered fatal error");
     }
     auto throughput = dag_context->getTableScanThroughput();
     if (throughput.first)
         GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
-    LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
+    LOG_INFO(mpp_task_log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     auto process_info = context.getProcessListElement()->getInfo();
     auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
     GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);

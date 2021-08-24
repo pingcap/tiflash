@@ -71,7 +71,7 @@ public:
 
     DAGContext & getDAGContext() const { return *context.getDAGContext(); }
 
-    void addMPPTaskLog(Logger * log) { mpp_task_log = log; }
+    void addMPPTaskLog(std::shared_ptr<MPPTaskLog> log) { mpp_task_log = log; }
 
     std::string getExecutorNames() const;
 
@@ -93,7 +93,7 @@ protected:
 
     const bool is_batch_cop;
 
-    Logger * mpp_task_log = nullptr;
+    std::shared_ptr<MPPTaskLog> mpp_task_log;
 };
 
 } // namespace DB

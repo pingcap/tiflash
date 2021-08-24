@@ -22,7 +22,7 @@ private:
 
 public:
     FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_,
-        const String & filter_column_name_, Logger * mpp_task_log_ = nullptr);
+        const String & filter_column_name_, std::shared_ptr<MPPTaskLog> mpp_task_log_ = nullptr);
 
     String getName() const override;
     Block getTotals() override;
@@ -39,7 +39,7 @@ private:
 
     ConstantFilterDescription constant_filter_description;
 
-    Logger * mpp_task_log;
+    std::shared_ptr<MPPTaskLog> mpp_task_log;
 };
 
 }

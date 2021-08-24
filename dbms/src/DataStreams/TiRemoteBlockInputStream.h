@@ -41,7 +41,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
 
     Logger * log;
-    Logger * mpp_task_log;
+    std::shared_ptr<MPPTaskLog> mpp_task_log;
 
     uint64_t total_rows;
 
@@ -170,7 +170,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, Logger * mpp_task_log_ = nullptr)
+    explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, std::shared_ptr<MPPTaskLog> mpp_task_log_ = nullptr)
         : remote_reader(remote_reader_),
           source_num(remote_reader->getSourceNum()),
           name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")"),

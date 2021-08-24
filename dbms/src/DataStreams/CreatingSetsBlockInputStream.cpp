@@ -25,14 +25,14 @@ extern const int SET_SIZE_LIMIT_EXCEEDED;
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
     std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
     const SizeLimits & network_transfer_limits, Int64 mpp_task_id_,
-    Poco::Logger * mpp_task_log_)
+    std::shared_ptr<MPPTaskLog> mpp_task_log_)
     : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)), network_transfer_limits(network_transfer_limits), mpp_task_id(mpp_task_id_), mpp_task_log(mpp_task_log_)
 {
     init(input);
 }
 
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
-    const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets, const SizeLimits & network_transfer_limits, Poco::Logger * mpp_task_log_)
+    const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets, const SizeLimits & network_transfer_limits, std::shared_ptr<MPPTaskLog> mpp_task_log_)
     : network_transfer_limits(network_transfer_limits), mpp_task_log(mpp_task_log_)
 {
     subqueries_for_sets_list.push_back(subqueries_for_sets);
@@ -230,9 +230,10 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             msg << "In " << watch.elapsedSeconds() << " sec. ";
             msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads ";
 
-            Poco::Logger * tmp_log = mpp_task_log != nullptr ? mpp_task_log : log;
-
-            LOG_DEBUG(tmp_log, msg.rdbuf());
+            if (mpp_task_log != nullptr)
+                LOG_DEBUG(mpp_task_log, msg.rdbuf());    
+            else
+                LOG_DEBUG(log, msg.rdbuf());
         }
         else
         {
