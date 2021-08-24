@@ -1,9 +1,9 @@
 #pragma once
 
-#include <algorithm>
-
 #include <Common/typeid_cast.h>
 #include <Core/Types.h>
+
+#include <algorithm>
 
 namespace DB
 {
