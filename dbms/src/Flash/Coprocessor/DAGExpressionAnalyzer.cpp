@@ -543,12 +543,12 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
             {
                 if (only_one_argument)
                 {
-                    aggregate.function = std::make_shared<AggregateFunctionGroupConcatTuple<true, true>>(
+                    aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, true>>(
                         aggregate.function, types, delimiter,max_len, sort_description, names_and_types, gc_collators, expr.has_distinct());
                 }
                 else
                 {
-                    aggregate.function = std::make_shared<AggregateFunctionGroupConcatTuple<true, false>>(
+                    aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, false>>(
                         aggregate.function, types, delimiter,max_len, sort_description, names_and_types, gc_collators, expr.has_distinct());
                 }
             }
@@ -556,12 +556,12 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
             {
                 if (only_one_argument)
                 {
-                    aggregate.function = std::make_shared<AggregateFunctionGroupConcatTuple<false, true>>(
+                    aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, true>>(
                         aggregate.function, types, delimiter,max_len, sort_description, names_and_types, gc_collators, expr.has_distinct());
                 }
                 else
                 {
-                    aggregate.function = std::make_shared<AggregateFunctionGroupConcatTuple<false, false>>(
+                    aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, false>>(
                         aggregate.function, types, delimiter,max_len, sort_description, names_and_types, gc_collators, expr.has_distinct());
                 }
             }

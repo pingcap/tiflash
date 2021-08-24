@@ -516,21 +516,22 @@ private:
     std::array<char, MAX_ARGS> is_nullable;    /// Plain array is better than std::vector due to one indirection less.
 };
 
+/// a warp function on the top of groupArray and groupUniqArray
 template <bool result_is_nullable, bool only_one_argument>
-class AggregateFunctionGroupConcatTuple final : public AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcatTuple<result_is_nullable, only_one_argument>>
+class AggregateFunctionGroupConcat final : public AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcat<result_is_nullable, only_one_argument>>
 {
     using State = AggregateFunctionGroupUniqArrayGenericData;
 
 /// the input argument is in following two types:
 /// 1. only one column with original data type
-/// 2. one column combined from more than one columns including order by items, it should should be like tuple(type0, type1...)
+/// 2. one column combined with more than one columns including order by items, it should should be like tuple(type0, type1...)
 public:
-    AggregateFunctionGroupConcatTuple(AggregateFunctionPtr nested_function, const DataTypes & arguments, const String sep, const UInt64& max_len_, const SortDescription & sort_desc_, const NamesAndTypes& names_and_types_, const TiDB::TiDBCollators& collators_, const bool has_distinct)
-    : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcatTuple<result_is_nullable, only_one_argument>>(nested_function),
+    AggregateFunctionGroupConcat(AggregateFunctionPtr nested_function, const DataTypes & arguments, const String sep, const UInt64& max_len_, const SortDescription & sort_desc_, const NamesAndTypes& names_and_types_, const TiDB::TiDBCollators& collators_, const bool has_distinct)
+    : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcat<result_is_nullable, only_one_argument>>(nested_function),
     seperator(sep),max_len(max_len_), sort_desc(sort_desc_),names_and_types(names_and_types_), collators(collators_)
     {
         if (arguments.size() != 1)
-            throw Exception("Logical error: not single argument is passed to AggregateFunctionGroupConcatTuple", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Logical error: not single argument is passed to AggregateFunctionGroupConcat", ErrorCodes::LOGICAL_ERROR);
         nested_type = std::make_shared<DataTypeArray>(removeNullable(arguments[0]));
 
         number_of_arguments = names_and_types.size() - sort_desc.size();
@@ -639,7 +640,6 @@ public:
         {
             col_null = &static_cast<ColumnNullable &>(to);
             col_str = &static_cast<ColumnString &>(col_null->getNestedColumn());
-
         }
         else
         {
@@ -757,6 +757,7 @@ private:
                     names_and_types[j].type->serializeText(*cols[j], i, write_buffer);
                 }
             }
+            /// TODO(FZH) output just one warning ("Some rows were cut by GROUPCONCAT()") if this happen
             if(write_buffer.count() >=max_len)
             {
                 break;
