@@ -774,7 +774,7 @@ private:
     SortDescription sort_desc;
     NamesAndTypes all_arg_names_and_types;
     TiDB::TiDBCollators collators;
-    std::vector<bool> is_nullable;    /// Plain array is better than std::vector due to one indirection less.
+    std::vector<bool> is_nullable;
 };
 
 }
