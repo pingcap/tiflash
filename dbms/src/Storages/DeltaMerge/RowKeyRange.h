@@ -249,22 +249,25 @@ struct RowKeyColumnContainer
     RowKeyColumnContainer(const ColumnPtr & column_, bool is_common_handle_)
         : column(column_), is_common_handle(is_common_handle_), is_constant_column(column->isColumnConst())
     {
-        ColumnPtr non_const_column_ptr = column;
+        const IColumn * non_const_column_ptr = column.get();
         if (unlikely(is_constant_column))
         {
-            non_const_column_ptr = checkAndGetColumn<ColumnConst>(column.get())->getDataColumnPtr();
+            non_const_column_ptr = checkAndGetColumn<ColumnConst>(column.get())->getDataColumnPtr().get();
         }
+
+
         if (is_common_handle)
         {
-            const auto & column_string = *checkAndGetColumn<ColumnString>(non_const_column_ptr.get());
+            const auto & column_string = *checkAndGetColumn<ColumnString>(non_const_column_ptr);
             string_data = &column_string.getChars();
             string_offsets = &column_string.getOffsets();
         }
         else
         {
-            int_data = &toColumnVectorData<Int64>(non_const_column_ptr);
+            int_data = &toColumnVectorData<Int64>(*non_const_column_ptr);
         }
     }
+
     RowKeyValueRef getRowKeyValue(size_t index) const
     {
         // todo check index out of bound error
@@ -431,14 +434,10 @@ struct RowKeyRange
         readStringBinary(end, buf);
         HandleValuePtr start_ptr = std::make_shared<String>(start);
         HandleValuePtr end_ptr = std::make_shared<String>(end);
-        if unlikely (isLegacyCommonMin(rowkey_column_size, start_ptr))
-        {
-            start_ptr = RowKeyValue::COMMON_HANDLE_MIN_KEY.value;
-        }
-        if unlikely (isLegacyCommonMax(rowkey_column_size, end_ptr))
-        {
-            end_ptr = RowKeyValue::COMMON_HANDLE_MAX_KEY.value;
-        }
+        if
+            unlikely(isLegacyCommonMin(rowkey_column_size, start_ptr)) { start_ptr = RowKeyValue::COMMON_HANDLE_MIN_KEY.value; }
+        if
+            unlikely(isLegacyCommonMax(rowkey_column_size, end_ptr)) { end_ptr = RowKeyValue::COMMON_HANDLE_MAX_KEY.value; }
         return RowKeyRange(
             RowKeyValue(is_common_handle, start_ptr), RowKeyValue(is_common_handle, end_ptr), is_common_handle, rowkey_column_size);
     }

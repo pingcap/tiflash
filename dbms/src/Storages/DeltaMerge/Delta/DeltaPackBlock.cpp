@@ -269,7 +269,7 @@ size_t DPBlockReader::readRows(MutableColumns & output_cols, size_t rows_offset,
 {
     pack.fillColumns(storage_snap->log_reader, *col_defs, output_cols.size(), cols_data_cache);
 
-    auto pk_col = cols_data_cache[0];
+    auto & pk_col = cols_data_cache[0];
     return copyColumnsData(cols_data_cache, pk_col, output_cols, rows_offset, rows_limit, range);
 }
 

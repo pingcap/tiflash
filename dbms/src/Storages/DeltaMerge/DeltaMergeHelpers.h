@@ -113,6 +113,13 @@ inline PaddedPODArray<T> * toMutableColumnVectorDataPtr(const MutableColumnPtr &
 }
 
 template <typename T>
+inline const PaddedPODArray<T> & toColumnVectorData(const IColumn & column)
+{
+    const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(column);
+    return c.getData();
+}
+
+template <typename T>
 inline const PaddedPODArray<T> & toColumnVectorData(const ColumnPtr & column)
 {
     const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
