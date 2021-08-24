@@ -517,47 +517,50 @@ private:
 };
 
 /// a warp function on the top of groupArray and groupUniqArray
+
+/// the input argument is in following two types:
+/// 1. only one column with original data type and without order_by items
+/// 2. one column combined with more than one columns including order by items, it should should be like tuple(type0, type1...)
 template <bool result_is_nullable, bool only_one_argument>
 class AggregateFunctionGroupConcat final : public AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcat<result_is_nullable, only_one_argument>>
 {
     using State = AggregateFunctionGroupUniqArrayGenericData;
 
-/// the input argument is in following two types:
-/// 1. only one column with original data type
-/// 2. one column combined with more than one columns including order by items, it should should be like tuple(type0, type1...)
 public:
-    AggregateFunctionGroupConcat(AggregateFunctionPtr nested_function, const DataTypes & arguments, const String sep, const UInt64& max_len_, const SortDescription & sort_desc_, const NamesAndTypes& names_and_types_, const TiDB::TiDBCollators& collators_, const bool has_distinct)
+    AggregateFunctionGroupConcat(AggregateFunctionPtr nested_function, const DataTypes & input_args, const String sep, const UInt64& max_len_, const SortDescription & sort_desc_, const NamesAndTypes& all_arg_names_and_types_, const TiDB::TiDBCollators& collators_, const bool has_distinct)
     : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcat<result_is_nullable, only_one_argument>>(nested_function),
-    seperator(sep),max_len(max_len_), sort_desc(sort_desc_),names_and_types(names_and_types_), collators(collators_)
+          separator(sep),max_len(max_len_), sort_desc(sort_desc_),
+          all_arg_names_and_types(all_arg_names_and_types_), collators(collators_)
     {
-        if (arguments.size() != 1)
+        if (input_args.size() != 1)
             throw Exception("Logical error: not single argument is passed to AggregateFunctionGroupConcat", ErrorCodes::LOGICAL_ERROR);
-        nested_type = std::make_shared<DataTypeArray>(removeNullable(arguments[0]));
+        nested_type = std::make_shared<DataTypeArray>(removeNullable(input_args[0]));
 
-        number_of_arguments = names_and_types.size() - sort_desc.size();
+        ///  all args =    concat args + order_by items
+        /// (c0 + c1) = group_concat(c0 order by c1)
+        number_of_concat_arguments = all_arg_names_and_types.size() - sort_desc.size();
 
-        if (names_and_types.size() > MAX_ARGS)
-            throw Exception("Maximum number of arguments for aggregate function with Nullable types is " + toString(size_t(MAX_ARGS)),
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
-        for (size_t i = 0; i < number_of_arguments; ++i)
+        is_nullable.resize(number_of_concat_arguments);
+        for (size_t i = 0; i < number_of_concat_arguments; ++i)
         {
-            is_nullable[i] = names_and_types[i].type->isNullable();
+            is_nullable[i] = all_arg_names_and_types[i].type->isNullable();
+            /// the inputs of a nested agg reject null, but for more than one args, tuple(args...) is already not nullable,
+            /// so here just remove null for the only_one_argument case
             if constexpr (only_one_argument)
             {
-                names_and_types[i].type = removeNullable(names_and_types[i].type);
+                all_arg_names_and_types[i].type = removeNullable(all_arg_names_and_types[i].type);
             }
         }
 
-        /// remove redundant rows excluding extra sort items or considering collation
+        /// remove redundant rows excluding extra sort items (which do not occur in the concat list) or considering collation
         if(has_distinct)
         {
             for (auto & desc : sort_desc)
             {
                 bool is_extra = true;
-                for (size_t i = 0; i < number_of_arguments; ++i)
+                for (size_t i = 0; i < number_of_concat_arguments; ++i)
                 {
-                    if (desc.column_name == names_and_types[i].name)
+                    if (desc.column_name == all_arg_names_and_types[i].name)
                     {
                         is_extra = false;
                         break;
@@ -565,16 +568,16 @@ public:
                 }
                 if (is_extra)
                 {
-                    toGetUnique = true;
+                    to_get_unique = true;
                     break;
                 }
             }
             /// because GroupUniqArray does consider collations, so if there are collations,
             /// we should additionally remove redundant rows with consideration of collations
-            if(!toGetUnique)
+            if(!to_get_unique)
             {
                 bool has_collation = false;
-                for (size_t i = 0; i < number_of_arguments; ++i)
+                for (size_t i = 0; i < number_of_concat_arguments; ++i)
                 {
                     if (collators[i] != nullptr)
                     {
@@ -582,7 +585,7 @@ public:
                         break;
                     }
                 }
-                toGetUnique = has_collation;
+                to_get_unique = has_collation;
             }
         }
     }
@@ -594,6 +597,7 @@ public:
                : ret_type;
     }
 
+    /// reject nulls before add() of nested agg
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
         if constexpr (only_one_argument)
@@ -614,7 +618,7 @@ public:
         {
             /// remove the row with null, except for sort columns
             const ColumnTuple & tuple = static_cast<const ColumnTuple &>(*columns[0]);
-            for (size_t i = 0; i < number_of_arguments; ++i)
+            for (size_t i = 0; i < number_of_concat_arguments; ++i)
             {
                 if (is_nullable[i])
                 {
@@ -674,17 +678,13 @@ public:
             if(!sort_desc.empty())
                 sortColumns(nested_cols);
 
-            /// get unique flags if with extra sort items
-            bool* unique= nullptr;
-            if (toGetUnique)
-                unique = getUnique(nested_cols);
+            /// get unique flags
+            std::vector<bool> unique;
+            if (to_get_unique)
+                getUnique(nested_cols, unique);
 
             writeToStringColumn(nested_cols,col_str, unique);
 
-            if(unique != nullptr)
-            {
-                delete unique;
-            }
         }
         else
         {
@@ -708,7 +708,7 @@ private:
         int concat_size = nested_cols.size();
         for(int i = 0 ; i < concat_size; ++i )
         {
-            res.insert(ColumnWithTypeAndName(nested_cols[i],names_and_types[i].type,names_and_types[i].name));
+            res.insert(ColumnWithTypeAndName(nested_cols[i], all_arg_names_and_types[i].type, all_arg_names_and_types[i].name));
         }
         /// sort a block with collation
         sortBlock(res, sort_desc);
@@ -716,12 +716,12 @@ private:
     }
 
     /// get unique argument columns by inserting the unique of the first N of (N + M sort) internal columns within tuple
-    bool* getUnique(const Columns & cols) const
+    void getUnique(const Columns & cols, std::vector<bool> & unique) const
     {
         std::unique_ptr<State> state = std::make_unique<State>();
         Arena arena1;
         auto size = cols[0]->size();
-        bool* unique = new bool[size];
+        unique.resize(size);
         std::vector<String> containers(collators.size());
         for (size_t i = 0; i < size; ++i)
         {
@@ -729,32 +729,31 @@ private:
             State::Set::LookupResult it;
             const char * begin = nullptr;
             size_t values_size = 0;
-            for (size_t j = 0; j< number_of_arguments; ++j)
+            for (size_t j = 0; j< number_of_concat_arguments; ++j)
                 values_size += cols[j]->serializeValueIntoArena(i, arena1, begin, collators[j],containers[j]).size;
 
             StringRef str_serialized= StringRef(begin, values_size);
             state->value.emplace(str_serialized, it, inserted);
             unique[i] = inserted;
         }
-        return unique;
     }
 
     /// write each column cell to string with separator
-    void writeToStringColumn(const Columns& cols, ColumnString * const col_str,  bool * unique) const
+    void writeToStringColumn(const Columns& cols, ColumnString * const col_str, const std::vector<bool> & unique) const
     {
         WriteBufferFromOwnString write_buffer;
         auto size = cols[0]->size();
         for (size_t i = 0; i < size; ++i)
         {
-            if(unique == nullptr || unique[i])
+            if(unique.empty() || unique[i])
             {
                 if (i != 0)
                 {
-                    writeString(seperator, write_buffer);
+                    writeString(separator, write_buffer);
                 }
-                for (size_t j = 0; j < number_of_arguments; ++j)
+                for (size_t j = 0; j < number_of_concat_arguments; ++j)
                 {
-                    names_and_types[j].type->serializeText(*cols[j], i, write_buffer);
+                    all_arg_names_and_types[j].type->serializeText(*cols[j], i, write_buffer);
                 }
             }
             /// TODO(FZH) output just one warning ("Some rows were cut by GROUPCONCAT()") if this happen
@@ -763,20 +762,19 @@ private:
                 break;
             }
         }
-        col_str->insertData(write_buffer.str().substr(0,max_len).c_str(),std::min(max_len,write_buffer.count()));
+        col_str->insertData(write_buffer.str().c_str(),std::min(max_len,write_buffer.count()));
     }
 
-    bool toGetUnique=false;
-    enum { MAX_ARGS = 16 };
+    bool to_get_unique =false;
     DataTypePtr ret_type = std::make_shared<DataTypeString>();
     DataTypePtr nested_type;
-    size_t number_of_arguments = 0;
-    String seperator=",";
+    size_t number_of_concat_arguments = 0;
+    String separator =",";
     UInt64 max_len;
     SortDescription sort_desc;
-    NamesAndTypes names_and_types;
+    NamesAndTypes all_arg_names_and_types;
     TiDB::TiDBCollators collators;
-    std::array<char, MAX_ARGS> is_nullable;    /// Plain array is better than std::vector due to one indirection less.
+    std::vector<bool> is_nullable;    /// Plain array is better than std::vector due to one indirection less.
 };
 
 }

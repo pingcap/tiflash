@@ -206,34 +206,41 @@ static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
-static String buildTupleFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, SortDescription& sort_desc, NamesAndTypes & names_and_types, TiDB::TiDBCollators & collators, ExpressionActionsPtr & actions)
+static String buildTupleFunctionForGroupConcat(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, SortDescription & sort_desc,
+    NamesAndTypes & names_and_types, TiDB::TiDBCollators & collators, ExpressionActionsPtr & actions)
 {
     const String & func_name = "tuple";
     Names argument_names;
 
     /// add the first N-1 expr into the tuple
-    int child_size = expr.children_size()-1;
-    for (auto i=0 ; i< child_size; ++i)
+    int child_size = expr.children_size() - 1;
+    for (auto i = 0; i < child_size; ++i)
     {
         auto & child = expr.children(i);
         String name = analyzer->getActions(child, actions, false);
         argument_names.push_back(name);
         auto type = actions->getSampleBlock().getByName(name).type;
-        names_and_types.emplace_back(name,type);
-        collators.push_back(getCollatorFromExpr(expr.children(i)));
+        names_and_types.emplace_back(name, type);
+        if (removeNullable(type)->isString())
+            collators.push_back(getCollatorFromExpr(expr.children(i)));
+        else
+            collators.push_back(nullptr);
     }
 
     std::vector<NameAndTypePair> order_columns;
-    for (auto i=0; i< expr.order_by_size(); ++i)
+    for (auto i = 0; i < expr.order_by_size(); ++i)
     {
         String name = analyzer->getActions(expr.order_by(i).expr(), actions);
         argument_names.push_back(name);
         auto type = actions->getSampleBlock().getByName(name).type;
-        order_columns.emplace_back(name,type);
-        names_and_types.emplace_back(name,type);
-        collators.push_back(getCollatorFromExpr(expr.order_by(i).expr()));
+        order_columns.emplace_back(name, type);
+        names_and_types.emplace_back(name, type);
+        if (removeNullable(type)->isString())
+            collators.push_back(getCollatorFromExpr(expr.children(i)));
+        else
+            collators.push_back(nullptr);
     }
-    sort_desc = getSortDescription(order_columns,expr.order_by());
+    sort_desc = getSortDescription(order_columns, expr.order_by());
 
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
@@ -424,6 +431,116 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> & sour
     settings = context.getSettings();
 }
 
+void DAGExpressionAnalyzer::buildGroupConcat(const tipb::Expr & expr, ExpressionActionsChain::Step & step, const String& agg_func_name, AggregateDescriptions & aggregate_descriptions, bool result_is_nullable)
+{
+    AggregateDescription aggregate;
+    /// the last parametric is the separator
+    auto child_size = expr.children_size()-1;
+    NamesAndTypes all_arg_names_and_types;
+    String delimiter = "";
+    SortDescription sort_description;
+    bool only_one_argument = true;
+    TiDB::TiDBCollators arg_collators;
+    String arg_name;
+
+    /// more than one args will be combined to one
+    DataTypes types(1);
+    aggregate.argument_names.resize(1);
+    if (child_size == 1 && expr.order_by_size() == 0)
+    {
+        /// only one arg
+        arg_name = getActions(expr.children(0), step.actions);
+        types[0] = step.actions->getSampleBlock().getByName(arg_name).type;
+        all_arg_names_and_types.emplace_back(arg_name, types[0]);
+        if (removeNullable(types[0])->isString())
+            arg_collators.push_back(getCollatorFromExpr(expr.children(0)));
+        else
+            arg_collators.push_back(nullptr);
+    }
+    else
+    {
+        /// args... -> tuple(args...)
+        arg_name = buildTupleFunctionForGroupConcat(this, expr, sort_description, all_arg_names_and_types, arg_collators, step.actions);
+        only_one_argument = false;
+        types[0] = step.actions->getSampleBlock().getByName(arg_name).type;
+    }
+    aggregate.argument_names[0] = arg_name;
+    step.required_output.push_back(arg_name);
+
+    /// the separator
+    arg_name = getActions(expr.children(child_size), step.actions);
+    if (expr.children(child_size).tp() == tipb::String)
+    {
+        const ColumnConst * col_delim
+            = checkAndGetColumnConstStringOrFixedString(step.actions->getSampleBlock().getByName(arg_name).column.get());
+        if (col_delim == nullptr)
+        {
+            throw Exception("the separator of group concat should not be invalid!");
+        }
+        delimiter = col_delim->getValue<String>();
+    }
+
+    /// return directly if the agg is duplicated
+    String func_string = genFuncString(agg_func_name, aggregate.argument_names);
+    for (const auto & pre_agg : aggregate_descriptions)
+    {
+        if (pre_agg.column_name == func_string)
+        {
+            aggregated_columns.emplace_back(func_string, pre_agg.function->getReturnType());
+            return;
+        }
+    }
+
+    aggregate.column_name = func_string;
+    aggregate.parameters = Array();
+    /// if there is group by clause, there is no need to consider the empty input case
+    aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, result_is_nullable);
+
+    /// group_concat_max_length
+    UInt64 max_len = decodeDAGUInt64(expr.val());
+
+    int number_of_arguments = all_arg_names_and_types.size() - sort_description.size();
+    for (int num = 0; num < number_of_arguments && !result_is_nullable; ++num)
+    {
+        if (all_arg_names_and_types[num].type->isNullable())
+        {
+            result_is_nullable = true;
+        }
+    }
+    if (result_is_nullable)
+    {
+        if (only_one_argument)
+        {
+            aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, true>>(
+                aggregate.function, types, delimiter, max_len, sort_description, all_arg_names_and_types, arg_collators, expr.has_distinct());
+        }
+        else
+        {
+            aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, false>>(
+                aggregate.function, types, delimiter, max_len, sort_description, all_arg_names_and_types, arg_collators, expr.has_distinct());
+        }
+    }
+    else
+    {
+        if (only_one_argument)
+        {
+            aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, true>>(
+                aggregate.function, types, delimiter, max_len, sort_description, all_arg_names_and_types, arg_collators, expr.has_distinct());
+        }
+        else
+        {
+            aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, false>>(
+                aggregate.function, types, delimiter, max_len, sort_description, all_arg_names_and_types, arg_collators, expr.has_distinct());
+        }
+    }
+
+    aggregate_descriptions.push_back(aggregate);
+    DataTypePtr result_type = aggregate.function->getReturnType();
+    // this is a temp result since implicit cast maybe added on these aggregated_columns
+    aggregated_columns.emplace_back(func_string, result_type);
+}
+
+
 extern const String CountSecondStage;
 
 void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregation_keys,
@@ -454,61 +571,27 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
             agg_func_name = CountSecondStage;
         }
 
+        if (expr.tp() == tipb::ExprType::GroupConcat)
+        {
+            buildGroupConcat(expr,step,agg_func_name,aggregate_descriptions, agg.group_by_size() == 0);
+            continue;
+        }
+
         AggregateDescription aggregate;
         auto child_size = expr.children_size();
         DataTypes types(child_size);
-        NamesAndTypes names_and_types;
-        String delimiter="";
-        SortDescription sort_description;
-        bool only_one_argument = true;
-        TiDB::TiDBCollators gc_collators,arg_collators;
-        if (expr.tp() == tipb::ExprType::GroupConcat)
+        TiDB::TiDBCollators arg_collators;
+        aggregate.argument_names.resize(child_size);
+        for (Int32 i = 0; i < child_size; i++)
         {
-            /// the last parametric is the separator
-            auto arg_size = 1;
-            --child_size;
-            types.resize(arg_size);
-            aggregate.argument_names.resize(arg_size);
-            String arg_name;
-            if (child_size == 1 && expr.order_by_size() == 0)
-            {
-                arg_name = getActions(expr.children(0), step.actions);
-                types[0] = step.actions->getSampleBlock().getByName(arg_name).type;
-                names_and_types.emplace_back(arg_name,types[0]);
-                gc_collators.push_back(getCollatorFromExpr(expr.children(0)));
-            }
+            String arg_name = getActions(expr.children(i), step.actions);
+            types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+            if (removeNullable(types[i])->isString())
+                arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
             else
-            {
-                /// args... -> tuple(args...)
-                arg_name = buildTupleFunction(this, expr, sort_description, names_and_types, gc_collators,step.actions);
-                only_one_argument = false;
-                types[0] = step.actions->getSampleBlock().getByName(arg_name).type;
-            }
-            aggregate.argument_names[0] = arg_name;
+                arg_collators.push_back(nullptr);
+            aggregate.argument_names[i] = arg_name;
             step.required_output.push_back(arg_name);
-
-            /// the separator
-            arg_name = getActions(expr.children(child_size), step.actions);
-            if (expr.children(child_size).tp() == tipb::String)
-            {
-                const ColumnConst * col_delim = checkAndGetColumnConstStringOrFixedString(step.actions->getSampleBlock().getByName(arg_name).column.get());
-                delimiter = col_delim->getValue<String>();
-            }
-        }
-        else
-        {
-            aggregate.argument_names.resize(child_size);
-            for (Int32 i = 0; i < child_size; i++)
-            {
-                String arg_name = getActions(expr.children(i), step.actions);
-                types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
-                if (removeNullable(types[i])->isString())
-                    arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
-                else
-                    arg_collators.push_back(nullptr);
-                aggregate.argument_names[i] = arg_name;
-                step.required_output.push_back(arg_name);
-            }
         }
         String func_string = genFuncString(agg_func_name, aggregate.argument_names);
         bool duplicate = false;
@@ -527,46 +610,6 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         aggregate.parameters = Array();
         /// if there is group by clause, there is no need to consider the empty input case
         aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, agg.group_by_size() == 0);
-        if (expr.tp() == tipb::ExprType::GroupConcat)
-        {
-            bool result_is_nullable=agg.group_by_size() == 0;  // empty input as null
-            UInt64 max_len = decodeDAGUInt64(expr.val());
-            int number_of_arguments = names_and_types.size() - sort_description.size();
-            for(int num=0; num < number_of_arguments && !result_is_nullable; ++num)
-            {
-                if(names_and_types[num].type->isNullable())
-                {
-                    result_is_nullable = true;
-                }
-            }
-            if(result_is_nullable)
-            {
-                if (only_one_argument)
-                {
-                    aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, true>>(
-                        aggregate.function, types, delimiter,max_len, sort_description, names_and_types, gc_collators, expr.has_distinct());
-                }
-                else
-                {
-                    aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, false>>(
-                        aggregate.function, types, delimiter,max_len, sort_description, names_and_types, gc_collators, expr.has_distinct());
-                }
-            }
-            else
-            {
-                if (only_one_argument)
-                {
-                    aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, true>>(
-                        aggregate.function, types, delimiter,max_len, sort_description, names_and_types, gc_collators, expr.has_distinct());
-                }
-                else
-                {
-                    aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, false>>(
-                        aggregate.function, types, delimiter,max_len, sort_description, names_and_types, gc_collators, expr.has_distinct());
-                }
-            }
-        }
-
         aggregate.function->setCollators(arg_collators);
         aggregate_descriptions.push_back(aggregate);
         DataTypePtr result_type = aggregate.function->getReturnType();

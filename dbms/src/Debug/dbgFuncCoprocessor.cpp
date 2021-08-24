@@ -1275,7 +1275,6 @@ struct Aggregation : public Executor
                 agg_func->set_tp(tipb::GroupConcat);
                 auto ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeString);
-                ft->set_flag(1);
             }
             // TODO: Other agg func.
             else
