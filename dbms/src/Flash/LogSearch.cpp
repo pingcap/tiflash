@@ -10,8 +10,8 @@ using ::diagnosticspb::LogMessage;
 
 static time_t fast_mktime(struct tm * tm)
 {
-    static struct tm cache = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    static time_t time_cache = 0;
+    thread_local struct tm cache = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    thread_local time_t time_cache = 0;
     time_t result;
     time_t hmsarg;
 
@@ -153,19 +153,20 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
     }
 
     {
-        std::string level_str(level_buff);
-        if (level_str == "TRACE")
+        if (!strlen(level_buff))
+            return Error{Error::Type::INVALID_LOG_LEVEL, "empty level"};
+        if (level_buff[0] == 'T')
             entry.level = LogEntry::Level::Trace;
-        else if (level_str == "DEBUG")
+        else if (level_buff[0] == 'D')
             entry.level = LogEntry::Level::Debug;
-        else if (level_str == "INFO")
+        else if (level_buff[0] == 'I')
             entry.level = LogEntry::Level::Info;
-        else if (level_str == "WARN")
+        else if (level_buff[0] == 'W')
             entry.level = LogEntry::Level::Warn;
-        else if (level_str == "ERROR")
+        else if (level_buff[0] == 'E')
             entry.level = LogEntry::Level::Error;
         else
-            return Error{Error::Type::INVALID_LOG_LEVEL, "level: " + level_str};
+            return Error{Error::Type::INVALID_LOG_LEVEL, "level: " + level_buff};
     }
 
     std::stringstream ss;
