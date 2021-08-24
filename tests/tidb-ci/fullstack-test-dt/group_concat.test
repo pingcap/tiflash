@@ -511,6 +511,20 @@ mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_all
 | 11***2***33                                              |
 +----------------------------------------------------------+
 
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(nname order by 1 separator '' ) from t;
++----------------------------------------------+
+| group_concat(nname order by 1 separator '' ) |
++----------------------------------------------+
+| 111122233                                    |
++----------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(distinct nname order by 1 separator '' ) from t ;
++-------------------------------------------------------+
+| group_concat(distinct nname order by 1 separator '' ) |
++-------------------------------------------------------+
+| 11233                                                 |
++-------------------------------------------------------+
+
 # group_concat_max_len
 mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;set @@group_concat_max_len=0; select group_concat(nname order by 1 separator '#' ) from t;
 +-----------------------------------------------+
