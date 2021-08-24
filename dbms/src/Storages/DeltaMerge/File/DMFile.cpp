@@ -1,12 +1,12 @@
 #include <Common/FailPoint.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/escapeForFileName.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
-#include <Common/escapeForFileName.h>
 #include <fmt/format.h>
 
 #include <boost/algorithm/string/classification.hpp>
