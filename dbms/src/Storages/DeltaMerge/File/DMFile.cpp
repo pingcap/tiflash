@@ -6,6 +6,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
+#include <Common/escapeForFileName.h>
 #include <fmt/format.h>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -560,14 +561,8 @@ void DMFile::initializeIndices()
     auto decode = [](const std::string & data) {
         try
         {
-            if (data[0] == '%') // negative number
-            {
-                return -std::stoll(data.substr(3, data.size() - 7));
-            }
-            else
-            {
-                return std::stoll(data.substr(0, data.size() - 4));
-            }
+            auto original = unescapeForFileName(data);
+            return std::stoll(original);
         }
         catch (const std::invalid_argument & err)
         {
@@ -588,7 +583,7 @@ void DMFile::initializeIndices()
     {
         if (endsWith(i, ".idx"))
         {
-            column_indices.insert(decode(i));
+            column_indices.insert(decode(i.substr(0, i.size() - 4))); // strip tailing `.idx`
         }
     }
 }
