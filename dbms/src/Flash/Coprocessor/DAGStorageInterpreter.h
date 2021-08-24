@@ -31,8 +31,7 @@ using RegionRetryList = std::list<std::reference_wrapper<const RegionInfo>>;
 class DAGStorageInterpreter
 {
 public:
-    DAGStorageInterpreter(
-        Context & context_,
+    DAGStorageInterpreter(Context & context_,
         const DAGQuerySource & dag_,
         const DAGQueryBlock & query_block_,
         const tipb::TableScan & ts,
@@ -60,6 +59,7 @@ public:
     std::optional<tipb::DAGRequest> dag_request;
     std::optional<DAGSchema> dag_schema;
     BlockInputStreamPtr null_stream_if_empty;
+
 private:
     LearnerReadSnapshot doCopLearnerRead();
 
@@ -103,4 +103,3 @@ private:
 };
 
 } // namespace DB
-

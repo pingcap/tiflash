@@ -1,7 +1,7 @@
 #pragma once
 
-#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Columns/FilterDescription.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Mpp/MPPHandler.h>
 
 
@@ -21,8 +21,8 @@ private:
     using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
 public:
-    FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_,
-        const String & filter_column_name_, std::shared_ptr<MPPTaskLog> mpp_task_log_ = nullptr);
+    FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name_,
+        std::shared_ptr<MPPTaskLog> mpp_task_log_ = nullptr);
 
     String getName() const override;
     Block getTotals() override;
@@ -42,4 +42,4 @@ private:
     std::shared_ptr<MPPTaskLog> mpp_task_log;
 };
 
-}
+} // namespace DB

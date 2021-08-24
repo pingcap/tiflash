@@ -4,10 +4,10 @@
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
+#include <Flash/Mpp/MPPHandler.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
-#include <Flash/Mpp/MPPHandler.h>
 
 #include <chrono>
 #include <mutex>
@@ -115,7 +115,8 @@ private:
     }
 
 public:
-    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_, std::shared_ptr<MPPTaskLog> log_ = nullptr)
+    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_,
+        std::shared_ptr<MPPTaskLog> log_ = nullptr)
         : cluster(context_.getTMTContext().getKVCluster()),
           pb_exchange_receiver(exc),
           source_num(pb_exchange_receiver.encoded_task_meta_size()),
@@ -190,7 +191,7 @@ public:
         if (mpp_task_log != nullptr && isLog())
             // nextResult buffer available num
             LOG_TRACE(mpp_task_log, "ExchangeReceiver::nR buf ava num:" << num);
-        
+
         cv.notify_all();
         return result;
     }

@@ -71,8 +71,10 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
 }
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
-    : context(context_), meta(meta_), log(&Logger::get(fmt::format("task {}", meta_.task_id()))),
-    mpp_task_log(std::make_shared<MPPTaskLog>(log, meta.task_id(), meta.start_ts()))
+    : context(context_),
+      meta(meta_),
+      log(&Logger::get(fmt::format("task {}", meta_.task_id()))),
+      mpp_task_log(std::make_shared<MPPTaskLog>(log, meta.task_id(), meta.start_ts()))
 {
     id.start_ts = meta.start_ts();
     id.task_id = meta.task_id();

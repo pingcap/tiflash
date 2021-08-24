@@ -16,8 +16,8 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 
-FilterBlockInputStream::FilterBlockInputStream(
-    const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name, std::shared_ptr<MPPTaskLog> mpp_task_log_)
+FilterBlockInputStream::FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_,
+    const String & filter_column_name, std::shared_ptr<MPPTaskLog> mpp_task_log_)
     : expression(expression_), mpp_task_log(mpp_task_log_)
 {
     children.push_back(input);
@@ -206,11 +206,10 @@ Block FilterBlockInputStream::readImpl()
 void FilterBlockInputStream::readSuffixImpl()
 {
     if (mpp_task_log != nullptr)
-        LOG_TRACE(mpp_task_log, "FilterBlockInputStream- total time:"
-            << std::to_string(info.execution_time / 1000000UL) + "ms"
-            << " total rows: " << info.rows
-            << " total blocks: " << info.blocks
-            << " total bytes:" << info.bytes);
+        LOG_TRACE(mpp_task_log,
+            "FilterBlockInputStream- total time:" << std::to_string(info.execution_time / 1000000UL) + "ms"
+                                                  << " total rows: " << info.rows << " total blocks: " << info.blocks
+                                                  << " total bytes:" << info.bytes);
 }
 
 } // namespace DB

@@ -104,10 +104,7 @@ public:
     void checkStatus(const Context & context) override;
     void deleteRows(const Context &, size_t rows) override;
 
-    const DM::DeltaMergeStorePtr & getStore()
-    {
-         return getAndMaybeInitStore();
-    }
+    const DM::DeltaMergeStorePtr & getStore() { return getAndMaybeInitStore(); }
 
     bool isCommonHandle() const override { return is_common_handle; }
 
@@ -145,7 +142,7 @@ private:
 
     DataTypePtr getPKTypeImpl() const override;
 
-    DM::DeltaMergeStorePtr& getAndMaybeInitStore();
+    DM::DeltaMergeStorePtr & getAndMaybeInitStore();
     bool storeInited() const { return store_inited.load(std::memory_order_acquire); }
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
@@ -157,8 +154,7 @@ private:
 
     struct TableColumnInfo
     {
-        TableColumnInfo(const String& db, const String& table, const ASTPtr& pk)
-            : db_name(db), table_name(table), pk_expr_ast(pk) {}
+        TableColumnInfo(const String & db, const String & table, const ASTPtr & pk) : db_name(db), table_name(table), pk_expr_ast(pk) {}
         String db_name;
         String table_name;
         ASTPtr pk_expr_ast;
@@ -169,7 +165,7 @@ private:
 
     mutable std::mutex store_mutex;
 
-    std::unique_ptr<TableColumnInfo> table_column_info;  // After create DeltaMergeStore object, it is deprecated.
+    std::unique_ptr<TableColumnInfo> table_column_info; // After create DeltaMergeStore object, it is deprecated.
     std::atomic<bool> store_inited;
     DM::DeltaMergeStorePtr _store;
 

@@ -5,6 +5,7 @@
 #include <Parsers/ParserQuery.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Parsers/parseQuery.h>
+
 #include <deque>
 
 namespace DB
@@ -78,7 +79,7 @@ std::string DAGQuerySource::getExecutorNames() const
     std::string names("");
     std::deque<std::shared_ptr<DAGQueryBlock>> dq;
     dq.push_back(root_query_block);
- 
+
     while (!dq.empty())
     {
         std::shared_ptr<DAGQueryBlock> dag_query_block = dq.front();
@@ -99,7 +100,7 @@ std::string DAGQuerySource::getExecutorNames() const
             names += "<" + dag_query_block->limitOrTopN_name + "> ";
         if (dag_query_block->exchangeSender != nullptr)
             names += "<" + dag_query_block->exchangeServer_name + "> ";
-        
+
         for (auto child : dag_query_block->children)
             dq.push_back(child);
     }

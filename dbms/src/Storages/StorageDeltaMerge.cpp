@@ -90,8 +90,8 @@ void StorageDeltaMerge::updateTableColumnInfo()
     const ColumnsDescription & columns = getColumns();
 
     LOG_INFO(log,
-        __FILE__ << " " << __func__ << " TableName " << table_column_info->table_name << " ordinary " << columns.ordinary.toString() << " materialized "
-                 << columns.materialized.toString());
+        __FILE__ << " " << __func__ << " TableName " << table_column_info->table_name << " ordinary " << columns.ordinary.toString()
+                 << " materialized " << columns.materialized.toString());
 
     auto & pk_expr_ast = table_column_info->pk_expr_ast;
     auto & handle_column_define = table_column_info->handle_column_define;
@@ -924,7 +924,7 @@ try
     }
 
     {
-        std::lock_guard lock(store_mutex);  // Avoid concurrent init store and DDL.
+        std::lock_guard lock(store_mutex); // Avoid concurrent init store and DDL.
         if (storeInited())
         {
             _store->applyAlters(commands, table_info, max_column_id_used, context);

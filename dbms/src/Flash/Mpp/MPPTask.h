@@ -7,13 +7,12 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/TaskStatus.h>
 #include <Interpreters/Context.h>
-
-#include <boost/noncopyable.hpp>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <kvproto/mpp.pb.h>
 
 #include <atomic>
+#include <boost/noncopyable.hpp>
 #include <chrono>
 #include <condition_variable>
 #include <memory>
@@ -27,10 +26,7 @@ struct MPPTaskId
     uint64_t start_ts;
     int64_t task_id;
 
-    bool operator<(const MPPTaskId & rhs) const
-    {
-        return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id);
-    }
+    bool operator<(const MPPTaskId & rhs) const { return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id); }
 
     String toString() const;
 };
@@ -48,8 +44,9 @@ class MPPTaskLog : private boost::noncopyable
 {
 public:
     MPPTaskLog(Logger * log_, Int64 task_id, UInt64 query_id)
-        : log(log_), prefix("[task " + std::to_string(task_id) + " query " + std::to_string(query_id) + "] "){}
-    
+        : log(log_), prefix("[task " + std::to_string(task_id) + " query " + std::to_string(query_id) + "] ")
+    {}
+
     bool trace() { return log->trace(); }
 
     void trace(const std::string & msg)
@@ -102,7 +99,7 @@ public:
     using Ptr = std::shared_ptr<MPPTask>;
 
     /// Ensure all MPPTasks are allocated as std::shared_ptr
-    template <typename ... Args>
+    template <typename... Args>
     static Ptr newTask(Args &&... args)
     {
         return Ptr(new MPPTask(std::forward<Args>(args)...));
@@ -141,6 +138,7 @@ public:
     std::shared_ptr<MPPTaskLog> getMPPTaskLog() const { return mpp_task_log; }
 
     ~MPPTask();
+
 private:
     MPPTask(const mpp::TaskMeta & meta_, const Context & context_);
 
@@ -186,4 +184,3 @@ using MPPTaskPtr = std::shared_ptr<MPPTask>;
 using MPPTaskMap = std::map<MPPTaskId, MPPTaskPtr>;
 
 } // namespace DB
-

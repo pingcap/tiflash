@@ -67,11 +67,11 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             reader->WaitForInitialMetadata();
             mpp::MPPDataPacket packet;
             String req_info = "tunnel" + std::to_string(src_task_id) + "+" + std::to_string(dst_task_id);
-            
+
             // "Task 1 -> Task 2" means Task 1 sends data to Task 2
             if (mpp_task_log != nullptr)
                 LOG_TRACE(mpp_task_log, "Data direction: Task " + std::to_string(src_task_id) + " -> Task " + std::to_string(dst_task_id));
-            
+
             bool has_data = false;
             for (;;)
             {
@@ -151,22 +151,22 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 
     if (mpp_task_log != nullptr)
     {
-        LOG_DEBUG(mpp_task_log, "Data direction: Task " + std::to_string(src_task_id) + " -> Task " + std::to_string(dst_task_id) << 
-                            ", this read thread end!!! live connections: " << std::to_string(live_connections_copy));
+        LOG_DEBUG(mpp_task_log,
+            "Data direction: Task " + std::to_string(src_task_id) + " -> Task " + std::to_string(dst_task_id)
+                << ", this read thread end!!! live connections: " << std::to_string(live_connections_copy));
 
         if (live_connections_copy == 0)
             LOG_DEBUG(mpp_task_log, "ExchangeReceiver: All threads exit");
     }
     else
     {
-        LOG_DEBUG(log, "Data direction: Task " + std::to_string(src_task_id) + " -> Task " + std::to_string(dst_task_id) << 
-                            ", this read thread end!!! live connections: " << std::to_string(live_connections_copy));
+        LOG_DEBUG(log,
+            "Data direction: Task " + std::to_string(src_task_id) + " -> Task " + std::to_string(dst_task_id)
+                << ", this read thread end!!! live connections: " << std::to_string(live_connections_copy));
 
         if (live_connections_copy == 0)
             LOG_DEBUG(log, "ExchangeReceiver: All threads exit");
     }
-
-
 }
 
 } // namespace DB

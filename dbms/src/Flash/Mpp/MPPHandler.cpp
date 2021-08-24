@@ -1,15 +1,14 @@
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
+#include <DataStreams/BlockStreamProfileInfo.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/Utils.h>
-
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
 
 #include <ext/scope_guard.h>
-#include <DataStreams/BlockStreamProfileInfo.h>
 
 
 namespace DB

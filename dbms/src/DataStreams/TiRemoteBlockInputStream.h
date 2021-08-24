@@ -156,8 +156,10 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             total_rows += block.rows();
 
             if (mpp_task_log != nullptr)
-                LOG_TRACE(mpp_task_log, "recv " + std::to_string(block.rows()) + " rows from remote " <<  + " for " + result.req_info << ", total recv row num:" << total_rows);
-                
+                LOG_TRACE(mpp_task_log,
+                    "recv " + std::to_string(block.rows()) + " rows from remote " << +" for " + result.req_info
+                                                                                  << ", total recv row num:" << total_rows);
+
             // LOG_DEBUG(log, "decode packet " << std::to_string(block.rows()) + " for " + result.req_info);
             if (unlikely(block.rows() == 0))
                 continue;

@@ -4,10 +4,8 @@
 namespace DB
 {
 
-SquashingBlockInputStream::SquashingBlockInputStream(const BlockInputStreamPtr & src,
-                                                     size_t min_block_size_rows,
-                                                     size_t min_block_size_bytes,
-                                                     std::shared_ptr<MPPTaskLog> mpp_task_log_)
+SquashingBlockInputStream::SquashingBlockInputStream(
+    const BlockInputStreamPtr & src, size_t min_block_size_rows, size_t min_block_size_bytes, std::shared_ptr<MPPTaskLog> mpp_task_log_)
     : transform(min_block_size_rows, min_block_size_bytes), mpp_task_log(mpp_task_log_)
 {
     children.emplace_back(src);
@@ -35,12 +33,11 @@ void SquashingBlockInputStream::readSuffixImpl()
 {
     if (mpp_task_log != nullptr)
     {
-        LOG_TRACE(mpp_task_log, "SquashingBlockInputStream total time:"
-            << std::to_string(info.execution_time / 1000000UL) + "ms"
-            << " total rows: " << info.rows
-            << " total blocks: " << info.blocks
-            << " total bytes:" << info.bytes);
+        LOG_TRACE(mpp_task_log,
+            "SquashingBlockInputStream total time:" << std::to_string(info.execution_time / 1000000UL) + "ms"
+                                                    << " total rows: " << info.rows << " total blocks: " << info.blocks
+                                                    << " total bytes:" << info.bytes);
     }
 }
 
-}
+} // namespace DB

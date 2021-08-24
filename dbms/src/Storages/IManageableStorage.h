@@ -2,12 +2,12 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Mpp/MPPHandler.h>
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
-#include <Flash/Mpp/MPPHandler.h>
 
 namespace TiDB
 {
@@ -58,7 +58,7 @@ public:
 
     // `limit` is the max number of segments to gc, return value is the number of segments gced
     virtual UInt64 onSyncGc(Int64 /*limit*/) { throw Exception("Unsupported"); }
-    
+
     // Return true is data dir exist
     virtual bool initStoreIfDataDirExist() { throw Exception("Unsupported"); }
 

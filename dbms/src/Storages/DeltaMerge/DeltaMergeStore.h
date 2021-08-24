@@ -3,6 +3,7 @@
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Mpp/MPPHandler.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -12,7 +13,6 @@
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
-#include <Flash/Mpp/MPPHandler.h>
 
 #include <queue>
 
