@@ -120,38 +120,26 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
 
     LogEntry entry;
 
-    int milli_second;
-    int timezone_hour;
-    int timezone_min;
-    std::tm time{};
-
     thread_local char level_buff[20];
-    thread_local char prev_time_buff[35];
-    thread_local std::tm prev_time;
-    thread_local int prev_timezone_hour = -1;
-    thread_local int prev_timezone_min;
-    thread_local int prev_milli_second;
+    thread_local char prev_time_buff[35] = {0};
+    thread_local time_t prev_time_t;
 
     constexpr size_t kTimestampFinishOffset = 32;
     constexpr size_t kLogLevelStartFinishOffset = 33;
 
-    if (prev_timezone_hour != -1 && strncmp(prev_time_buff, line.data(), kTimestampFinishOffset) == 0)
+    if (strncmp(prev_time_buff, line.data(), kTimestampFinishOffset) == 0)
     {
         // If we can reuse prev_time
-        time = prev_time;
-        timezone_hour = prev_timezone_hour;
-        timezone_min = prev_timezone_min;
-        milli_second = prev_milli_second;
+        entry.time = prev_time_t;
+
         std::sscanf(line.data() + kLogLevelStartFinishOffset, "[%[^]]s]", level_buff);
     }
     else
     {
-        int year;
-        int month;
-        int day;
-        int hour;
-        int minute;
-        int second;
+        int milli_second;
+        int timezone_hour, timezone_min;
+        std::tm time{};
+        int year, month, day, hour, minute, second;
         std::sscanf(line.data(), "[%d/%d/%d %d:%d:%d.%d %d:%d] [%[^]]s]", &year, &month, &day, &hour, &minute, &second, &milli_second,
             &timezone_hour, &timezone_min, level_buff);
         time.tm_year = year - 1900;
@@ -160,20 +148,16 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
         time.tm_hour = hour;
         time.tm_min = minute;
         time.tm_sec = second;
+        time_t ctime = fast_mktime(&time) * 1000; // milliseconds
+        ctime += milli_second;                    // truncate microseconds
+        entry.time = ctime;
 
         memset(prev_time_buff, 0, sizeof prev_time_buff);
         strncpy(prev_time_buff, line.data(), kTimestampFinishOffset);
-        prev_time = time;
-        prev_timezone_hour = timezone_hour;
-        prev_timezone_min = timezone_min;
-        prev_milli_second = milli_second;
+        prev_time_t = ctime;
     }
 
     {
-        time_t ctime = fast_mktime(&time) * 1000; // milliseconds
-        ctime += milli_second;                    // truncate microseconds
-
-        entry.time = ctime;
         if (entry.time > end_time)
             return Error{Error::Type::EOI};
     }
