@@ -288,7 +288,7 @@ private:
     PackStats pack_stats;
     PackProperties pack_properties;
     ColumnStats column_stats;
-    std::unordered_set<std::string> column_indices;
+    std::unordered_set<ColId> column_indices;
 
     Mode mode;
     Status status;

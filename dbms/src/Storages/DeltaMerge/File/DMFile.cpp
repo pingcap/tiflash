@@ -6,6 +6,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
+#include <fmt/format.h>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -145,8 +146,7 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
     }
     else
     {
-        auto file_name = DMFile::getFileNameBase(col_id) + ".idx";
-        return column_indices.count(file_name) != 0;
+        return column_indices.count(col_id) != 0;
     }
 }
 
@@ -557,17 +557,38 @@ void DMFile::remove(const FileProviderPtr & file_provider)
 }
 void DMFile::initializeIndices()
 {
+    auto decode = [](const std::string & data) {
+        try
+        {
+            if (data[0] == '%') // negative number
+            {
+                return -std::stoll(data.substr(3, data.size() - 7));
+            }
+            else
+            {
+                return std::stoll(data.substr(0, data.size() - 4));
+            }
+        }
+        catch (const std::invalid_argument & err)
+        {
+            throw DB::Exception(fmt::format("invalid ColId:", err.what()));
+        }
+        catch (const std::out_of_range & err)
+        {
+            throw DB::Exception(fmt::format("invalid ColId:", err.what()));
+        }
+    };
     if (isSingleFileMode())
         return;
 
     Poco::File directory{path()};
     std::vector<std::string> sub_files{};
     directory.list(sub_files);
-    for (auto & i : sub_files)
+    for (const auto & i : sub_files)
     {
         if (endsWith(i, ".idx"))
         {
-            column_indices.insert(std::move(i));
+            column_indices.insert(decode(i));
         }
     }
 }
