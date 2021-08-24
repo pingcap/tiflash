@@ -120,23 +120,40 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
 
     LogEntry entry;
 
-    int year;
-    int month;
-    int day;
-    int hour;
-    int minute;
-    int second;
     int milli_second;
     int timezone_hour;
     int timezone_min;
+    std::tm time{};
 
-    char level_buff[20];
+    thread_local char level_buff[20];
+    thread_local char prev_time_buff[35];
+    thread_local std::tm prev_time;
+    thread_local int prev_timezone_hour = -1;
+    thread_local int prev_timezone_min;
+    thread_local int prev_milli_second;
 
-    std::sscanf(line.data(), "[%d/%d/%d %d:%d:%d.%d %d:%d] [%[^]]s]", &year, &month, &day, &hour, &minute, &second, &milli_second,
-        &timezone_hour, &timezone_min, level_buff);
+    constexpr size_t kTimestampFinishOffset = 32;
+    constexpr size_t kLogLevelStartFinishOffset = 33;
 
+    if (prev_timezone_hour != -1 && strncmp(prev_time_buff, line.data(), kTimestampFinishOffset) == 0)
     {
-        std::tm time{};
+        // If we can reuse prev_time
+        time = prev_time;
+        timezone_hour = prev_timezone_hour;
+        timezone_min = prev_timezone_min;
+        milli_second = prev_milli_second;
+        std::sscanf(line.data() + kLogLevelStartFinishOffset, "[%[^]]s]", level_buff);
+    }
+    else
+    {
+        int year;
+        int month;
+        int day;
+        int hour;
+        int minute;
+        int second;
+        std::sscanf(line.data(), "[%d/%d/%d %d:%d:%d.%d %d:%d] [%[^]]s]", &year, &month, &day, &hour, &minute, &second, &milli_second,
+            &timezone_hour, &timezone_min, level_buff);
         time.tm_year = year - 1900;
         time.tm_mon = month - 1;
         time.tm_mday = day;
@@ -144,6 +161,15 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
         time.tm_min = minute;
         time.tm_sec = second;
 
+        memset(prev_time_buff, 0, sizeof prev_time_buff);
+        strncpy(prev_time_buff, line.data(), kTimestampFinishOffset);
+        prev_time = time;
+        prev_timezone_hour = timezone_hour;
+        prev_timezone_min = timezone_min;
+        prev_milli_second = milli_second;
+    }
+
+    {
         time_t ctime = fast_mktime(&time) * 1000; // milliseconds
         ctime += milli_second;                    // truncate microseconds
 
@@ -166,7 +192,7 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
         else if (level_buff[0] == 'E')
             entry.level = LogEntry::Level::Error;
         else
-            return Error{Error::Type::INVALID_LOG_LEVEL, "level: " + level_buff};
+            return Error{Error::Type::INVALID_LOG_LEVEL, "level: " + std::string(level_buff)};
     }
 
     std::stringstream ss;
