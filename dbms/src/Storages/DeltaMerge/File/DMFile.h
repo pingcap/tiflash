@@ -265,18 +265,15 @@ private:
 
     void addSubFileStat(const String & name, UInt64 offset, UInt64 size) { sub_file_stats.emplace(name, SubFileStat{offset, size}); }
 
-    const SubFileStat & getSubFileStat(const String & name) const { return sub_file_stats.at(name); }
-
     bool isSubFileExists(const String & name) const { return sub_file_stats.find(name) != sub_file_stats.end(); }
 
     const String subFilePath(const String & file_name) const { return isSingleFileMode() ? path() : path() + "/" + file_name; }
 
-    size_t subFileOffset(const String & file_name) const { return isSingleFileMode() ? getSubFileStat(file_name).offset : 0; }
+    size_t subFileOffset(const String & file_name) const { return isSingleFileMode() ? sub_file_stats.at(file_name).offset : 0; }
 
-    size_t subFileSize(const String & file_name) const
-    {
-        return isSingleFileMode() ? getSubFileStat(file_name).size : Poco::File(subFilePath(file_name)).getSize();
-    }
+    size_t subFileSize(const String & file_name) const { return sub_file_stats.at(file_name).size; }
+
+    void initializeSubFileStatsForFolderMode();
 
     void initializeIndices();
 
@@ -293,7 +290,6 @@ private:
     Mode mode;
     Status status;
 
-    mutable std::mutex mutex;
     SubFileStats sub_file_stats;
 
     Logger * log;

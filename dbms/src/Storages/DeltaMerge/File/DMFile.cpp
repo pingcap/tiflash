@@ -30,6 +30,9 @@ inline constexpr static const char * NGC_FILE_NAME = "NGC";
 inline constexpr static const char * FOLDER_PREFIX_WRITABLE = ".tmp.dmf_";
 inline constexpr static const char * FOLDER_PREFIX_READABLE = "dmf_";
 inline constexpr static const char * FOLDER_PREFIX_DROPPED = ".del.dmf_";
+inline constexpr static const char * DATA_FILE_SUFFIX = ".dat";
+inline constexpr static const char * INDEX_FILE_SUFFIX = ".idx";
+inline constexpr static const char * MARK_FILE_SUFFIX = ".mrk";
 
 inline String getNGCPath(const String & prefix, bool is_single_mode) { return prefix + (is_single_mode ? "." : "/") + NGC_FILE_NAME; }
 } // namespace details
@@ -156,17 +159,17 @@ const String DMFile::encryptionBasePath() const { return getPathByStatus(parent_
 
 const EncryptionPath DMFile::encryptionDataPath(const FileNameBase & file_name_base) const
 {
-    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + ".dat");
+    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::DATA_FILE_SUFFIX);
 }
 
 const EncryptionPath DMFile::encryptionIndexPath(const FileNameBase & file_name_base) const
 {
-    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + ".idx");
+    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::INDEX_FILE_SUFFIX);
 }
 
 const EncryptionPath DMFile::encryptionMarkPath(const FileNameBase & file_name_base) const
 {
-    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + ".mrk");
+    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::MARK_FILE_SUFFIX);
 }
 
 const EncryptionPath DMFile::encryptionMetaPath() const
@@ -348,6 +351,7 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
     }
     else
     {
+        initializeSubFileStatsForFolderMode();
         initializeIndices();
         if (auto file = Poco::File(packPropertyPath()); file.exists())
             footer.meta_pack_info.pack_property_size = file.getSize();
@@ -385,6 +389,7 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
         LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removed: " << deleted_path);
     }
     old_file.renameTo(new_path);
+    initializeSubFileStatsForFolderMode();
     initializeIndices();
 }
 
@@ -556,6 +561,26 @@ void DMFile::remove(const FileProviderPtr & file_provider)
         }
     }
 }
+
+void DMFile::initializeSubFileStatsForFolderMode()
+{
+    if (isSingleFileMode())
+        return;
+
+    Poco::File directory{path()};
+    std::vector<std::string> sub_files{};
+    directory.list(sub_files);
+    for (const auto & name : sub_files)
+    {
+        if (endsWith(name, details::DATA_FILE_SUFFIX) || endsWith(name, details::INDEX_FILE_SUFFIX)
+            || endsWith(name, details::MARK_FILE_SUFFIX))
+        {
+            auto size = Poco::File(path() + "/" + name).getSize();
+            sub_file_stats.emplace(name, SubFileStat{0, size});
+        }
+    }
+}
+
 void DMFile::initializeIndices()
 {
     auto decode = [](const std::string & data) {
@@ -579,11 +604,11 @@ void DMFile::initializeIndices()
     Poco::File directory{path()};
     std::vector<std::string> sub_files{};
     directory.list(sub_files);
-    for (const auto & i : sub_files)
+    for (const auto & name : sub_files)
     {
-        if (endsWith(i, ".idx"))
+        if (endsWith(name, details::INDEX_FILE_SUFFIX))
         {
-            column_indices.insert(decode(i.substr(0, i.size() - 4))); // strip tailing `.idx`
+            column_indices.insert(decode(name.substr(0, name.size() - 4))); // strip tailing `.idx`
         }
     }
 }
