@@ -14,10 +14,9 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
-
-#include <ext/scope_guard.h>
 #include <fmt/core.h>
 
+#include <ext/scope_guard.h>
 #include <map>
 
 namespace DB
@@ -36,10 +35,7 @@ extern const char exception_during_mpp_root_task_run[];
 extern const char exception_during_mpp_write_err_to_tunnel[];
 } // namespace FailPoints
 
-String MPPTaskId::toString() const
-{
-    return fmt::format("[{},{}]", start_ts, task_id);
-}
+String MPPTaskId::toString() const { return fmt::format("[{},{}]", start_ts, task_id); }
 
 bool MPPTaskProgress::isTaskHanging(const Context & context)
 {
@@ -126,7 +122,8 @@ void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
     cv.notify_all();
 }
 
-MPPTunnelPtr MPPTask::getTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout, String & err_msg)
+MPPTunnelPtr MPPTask::getTunnelWithTimeout(
+    const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout, String & err_msg)
 {
     MPPTaskId id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
     std::map<MPPTaskId, MPPTunnelPtr>::iterator it;
@@ -142,11 +139,11 @@ MPPTunnelPtr MPPTask::getTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRe
         return it != tunnel_map.end();
     });
     if (cancelled)
-        err_msg = "can't find tunnel ( " + toString(request->sender_meta().task_id()) + " + "
-            + toString(request->receiver_meta().task_id()) + " because the task is cancelled";
+        err_msg = "can't find tunnel ( " + toString(request->sender_meta().task_id()) + " + " + toString(request->receiver_meta().task_id())
+            + " because the task is cancelled";
     if (!ret)
-        err_msg = "can't find tunnel ( " + toString(request->sender_meta().task_id()) + " + "
-            + toString(request->receiver_meta().task_id()) + " ) within " + toString(timeout.count()) + " s";
+        err_msg = "can't find tunnel ( " + toString(request->sender_meta().task_id()) + " + " + toString(request->receiver_meta().task_id())
+            + " ) within " + toString(timeout.count()) + " s";
     return (ret && !cancelled) ? it->second : nullptr;
 }
 
@@ -280,13 +277,22 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     auto part_keys = exchangeSender.partition_keys();
     std::vector<Int64> partition_col_id;
     TiDB::TiDBCollators collators;
+    /// in case TiDB is an old version, it has not collation info
+    bool has_collator_info = exchangeSender.types_size() != 0;
+    if (has_collator_info && part_keys.size() != exchangeSender.types_size())
+    {
+        throw TiFlashException(std::string(__PRETTY_FUNCTION__)
+                + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is "
+                  "enabled",
+            Errors::Coprocessor::BadRequest);
+    }
     for (int i = 0; i < part_keys.size(); i++)
     {
         const auto & expr = part_keys[i];
         assert(isColumnExpr(expr));
         auto column_index = decodeDAGInt64(expr.val());
         partition_col_id.emplace_back(column_index);
-        if (getDataTypeByFieldType(expr.field_type())->isString())
+        if (has_collator_info && getDataTypeByFieldType(expr.field_type())->isString())
         {
             collators.emplace_back(getCollatorFromFieldType(exchangeSender.types(i)));
         }
@@ -322,8 +328,7 @@ void MPPTask::runImpl()
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
     SCOPE_EXIT({
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
-        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task)
-            .Observe(stopwatch.elapsedSeconds());
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
     });
     LOG_INFO(log, "task starts running");
     auto from = io.in;
@@ -440,4 +445,3 @@ void MPPTask::cancel(const String & reason)
 }
 
 } // namespace DB
-
