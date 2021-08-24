@@ -8,6 +8,33 @@ namespace DB
 using ::diagnosticspb::LogLevel;
 using ::diagnosticspb::LogMessage;
 
+static time_t fast_mktime(struct tm * tm)
+{
+    static struct tm cache = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    static time_t time_cache = 0;
+    time_t result;
+    time_t hmsarg;
+
+    hmsarg = 3600 * tm->tm_hour + 60 * tm->tm_min + tm->tm_sec;
+
+    if (cache.tm_mday == tm->tm_mday && cache.tm_mon == tm->tm_mon && cache.tm_year == tm->tm_year)
+    {
+        result = time_cache + hmsarg;
+        tm->tm_isdst = cache.tm_isdst;
+    }
+    else
+    {
+        cache.tm_mday = tm->tm_mday;
+        cache.tm_mon = tm->tm_mon;
+        cache.tm_year = tm->tm_year;
+        time_cache = mktime(&cache);
+        tm->tm_isdst = cache.tm_isdst;
+        result = (-1 == time_cache) ? -1 : time_cache + hmsarg;
+    }
+
+    return result;
+}
+
 std::optional<LogMessage> LogIterator::next()
 {
     for (;;)
@@ -109,7 +136,7 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
         &timezone_hour, &timezone_min, level_buff);
 
     {
-        std::tm time {};
+        std::tm time{};
         time.tm_year = year - 1900;
         time.tm_mon = month - 1;
         time.tm_mday = day;
@@ -117,8 +144,8 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
         time.tm_min = minute;
         time.tm_sec = second;
 
-        time_t ctime = mktime(&time) * 1000; // milliseconds
-        ctime += milli_second;               // truncate microseconds
+        time_t ctime = fast_mktime(&time) * 1000; // milliseconds
+        ctime += milli_second;                    // truncate microseconds
 
         entry.time = ctime;
         if (entry.time > end_time)
