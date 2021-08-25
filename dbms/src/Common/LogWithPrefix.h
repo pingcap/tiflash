@@ -1,9 +1,9 @@
 #pragma once
 
-#include <boost/noncopyable.hpp>
-#include <common/logger_useful.h>
 #include <common/Exception.h>
+#include <common/logger_useful.h>
 
+#include <boost/noncopyable.hpp>
 #include <string>
 
 namespace DB
@@ -12,8 +12,7 @@ namespace DB
 class LogWithPrefix : private boost::noncopyable
 {
 public:
-    LogWithPrefix(Logger * log_, const String & prefix_)
-        : log(log_), prefix(prefix_)
+    LogWithPrefix(Logger * log_, const String & prefix_) : log(log_), prefix(prefix_)
     {
         if (log == nullptr)
             throw Exception("LogWithPrefix receives nullptr");
@@ -63,14 +62,11 @@ public:
 
     using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 
-    static LogWithPrefixPtr append(const String & str)
-    {
-        return std::make_shared<LogWithPrefix>(log, prefix + str);
-    }
+    static LogWithPrefixPtr append(const String & str) { return std::make_shared<LogWithPrefix>(log, prefix + str); }
 
 private:
     Logger * log;
     const String prefix;
 };
 
-}
+} // namespace DB
