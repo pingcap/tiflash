@@ -293,7 +293,7 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                     if (len < str_len)
                         throw Exception("content len shorter than short value len", ErrorCodes::LOGICAL_ERROR);
                     // no need short value
-                    readRawString<nullptr_t>(data, len, str_len);
+                    readRawString<std::nullptr_t>(data, len, str_len);
                     break;
                 };
                 case MIN_COMMIT_TS_PREFIX:
@@ -318,7 +318,7 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                     UInt64 cnt = readVarUInt(data, len);
                     for (UInt64 i = 0; i < cnt; ++i)
                     {
-                        readVarString<nullptr_t>(data, len);
+                        readVarString<std::nullptr_t>(data, len);
                     }
                     auto end = data;
                     res.secondaries = {start, static_cast<size_t>(end - start)};
