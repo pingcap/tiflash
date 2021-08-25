@@ -104,9 +104,9 @@ PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, cons
             static size_t fail_point_called = 0;
             if (existed_path.empty() && fail_point_called % 10 == 0)
             {
-                fail_point_called++;
                 existed_path = "<mock for existed path>";
             }
+            fail_point_called++;
         });
         if (likely(existed_path.empty()))
         {
