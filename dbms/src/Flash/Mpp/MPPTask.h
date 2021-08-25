@@ -14,10 +14,7 @@
 #include <kvproto/mpp.pb.h>
 
 #include <atomic>
-#include <chrono>
-#include <condition_variable>
 #include <memory>
-#include <mutex>
 
 namespace DB
 {
@@ -119,10 +116,6 @@ private:
     Logger * log;
 
     Exception err;
-
-    std::condition_variable cv;
-
-    std::mutex tunnel_mutex;
 
     friend class MPPTaskManager;
 };

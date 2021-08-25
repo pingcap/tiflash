@@ -16,6 +16,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>
 
+#include <chrono>
 #include <ext/scope_guard.h>
 #include <map>
 
