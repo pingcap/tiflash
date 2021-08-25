@@ -4,25 +4,24 @@
 #include <Common/randomSeed.h>
 #include <Common/setThreadName.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 #include <Poco/Timespan.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
-#include <Interpreters/Context.h>
 #include <common/logger_useful.h>
-
 
 #include <pcg_random.hpp>
 #include <random>
 
 #ifdef __linux__
-#include <unistd.h>
 #include <sys/syscall.h>
+#include <unistd.h>
 #endif
 
 namespace CurrentMetrics
 {
-    extern const Metric BackgroundPoolTask;
-    extern const Metric MemoryTrackingInBackgroundProcessingPool;
-}
+extern const Metric BackgroundPoolTask;
+extern const Metric MemoryTrackingInBackgroundProcessingPool;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -128,9 +127,9 @@ void BackgroundProcessingPool::threadFunction()
         const auto name = "BkgPool" + std::to_string(tid++);
         setThreadName(name.data());
         is_background_thread = true;
-        #ifdef __linux__
+#ifdef __linux__
         addThreadId(syscall(SYS_gettid));
-        #endif
+#endif
     }
 
     MemoryTracker memory_tracker;
@@ -174,8 +173,8 @@ void BackgroundProcessingPool::threadFunction()
             {
                 std::unique_lock<std::mutex> lock(tasks_mutex);
                 wake_event.wait_for(lock,
-                    std::chrono::duration<double>(sleep_seconds
-                        + std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));
+                    std::chrono::duration<double>(
+                        sleep_seconds + std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));
                 continue;
             }
 
@@ -184,8 +183,9 @@ void BackgroundProcessingPool::threadFunction()
             if (min_time > current_time)
             {
                 std::unique_lock<std::mutex> lock(tasks_mutex);
-                wake_event.wait_for(lock, std::chrono::microseconds(
-                    min_time - current_time + std::uniform_int_distribution<uint64_t>(0, sleep_seconds_random_part * 1000000)(rng)));
+                wake_event.wait_for(lock,
+                    std::chrono::microseconds(
+                        min_time - current_time + std::uniform_int_distribution<uint64_t>(0, sleep_seconds_random_part * 1000000)(rng)));
             }
 
             std::shared_lock<std::shared_mutex> rlock(task->rwlock);
@@ -269,4 +269,4 @@ void BackgroundProcessingPool::addThreadId(pid_t tid)
     thread_ids.push_back(tid);
 }
 
-}
+} // namespace DB
