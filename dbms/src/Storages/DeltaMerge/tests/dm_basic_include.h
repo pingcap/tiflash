@@ -32,8 +32,7 @@ inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_exp
 {
     if (lhs == rhs)
         return ::testing::AssertionSuccess();
-    else
-        return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toDebugString(), rhs.toDebugString(), false);
+    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toDebugString(), rhs.toDebugString(), false);
 }
 /// helper functions for comparing HandleRange
 inline ::testing::AssertionResult RowKeyRangeCompare(const char *        lhs_expr,
@@ -43,8 +42,7 @@ inline ::testing::AssertionResult RowKeyRangeCompare(const char *        lhs_exp
 {
     if (lhs == rhs)
         return ::testing::AssertionSuccess();
-    else
-        return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toDebugString(), rhs.toDebugString(), false);
+    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toDebugString(), rhs.toDebugString(), false);
 }
 #define ASSERT_RANGE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::DM::tests::HandleRangeCompare, val1, val2)
 #define ASSERT_ROWKEY_RANGE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::DM::tests::RowKeyRangeCompare, val1, val2)
