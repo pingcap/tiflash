@@ -8,7 +8,6 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
-#include <fmt/format.h>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -620,11 +619,11 @@ void DMFile::initializeIndices()
         }
         catch (const std::invalid_argument & err)
         {
-            throw DB::Exception(fmt::format("invalid ColId: {} from file: {}", err.what(), data));
+            throw DB::Exception(std::string{"invalid ColId: "} + err.what() + " from: " + data.toString());
         }
         catch (const std::out_of_range & err)
         {
-            throw DB::Exception(fmt::format("invalid ColId: {} from file: {}", err.what(), data));
+            throw DB::Exception(std::string{"invalid ColId: "} + err.what() + " from: " + data.toString());
         }
     };
 
