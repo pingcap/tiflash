@@ -33,7 +33,6 @@ public:
     {
         init();
     }
-    ~LogIterator();
 
 public:
     static constexpr size_t MAX_MESSAGE_SIZE = 4096;
@@ -89,7 +88,7 @@ private:
     int64_t end_time;
     std::vector<::diagnosticspb::LogLevel> levels;
     std::vector<std::string> patterns;
-    std::vector<struct RE2::RE2 *> compiled_patterns;
+    std::vector<std::unique_ptr<RE2>> compiled_patterns;
     std::shared_ptr<std::istream> log_file;
 
     Poco::Logger * log;

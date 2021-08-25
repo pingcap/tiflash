@@ -96,7 +96,7 @@ bool LogIterator::match(const LogMessage & log_msg) const
 
     // Grep
     auto & content = log_msg.message();
-    for (auto & regex : compiled_patterns)
+    for (auto && regex : compiled_patterns)
     {
         if (!RE2::PartialMatch(content, *regex))
             return false;
@@ -211,15 +211,8 @@ void LogIterator::init()
     }
     for (auto && pattern : patterns)
     {
-        compiled_patterns.push_back(new RE2(pattern));
+        compiled_patterns.push_back(std::make_unique<RE2>(pattern));
     }
 }
 
-LogIterator::~LogIterator()
-{
-    for (auto pattern : compiled_patterns)
-    {
-        delete pattern;
-    }
-}
 } // namespace DB
