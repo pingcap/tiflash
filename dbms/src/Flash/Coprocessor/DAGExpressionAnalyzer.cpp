@@ -496,6 +496,9 @@ void DAGExpressionAnalyzer::buildGroupConcat(const tipb::Expr & expr, Expression
     /// if there is group by clause, there is no need to consider the empty input case
     aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, result_is_nullable);
 
+    /// TODO(FZH) deliver these arguments through aggregate.parameters of Array() type to keep the same code fashion, the special arguments
+    /// sort_description, all_arg_names_and_types can be set like the way of collators
+
     /// group_concat_max_length
     UInt64 max_len = decodeDAGUInt64(expr.val());
 
