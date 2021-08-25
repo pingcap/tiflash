@@ -1,12 +1,16 @@
 #pragma once
 
-#include <thread>
-
 #include <Common/ConcurrentBoundedQueue.h>
+<<<<<<< HEAD
 #include <common/logger_useful.h>
+=======
+#include <Common/ThreadFactory.h>
+>>>>>>> 5ecb23a58 (fix bug that SharedQueryBlockInputStream may loss block randomly (#2759))
 #include <Common/typeid_cast.h>
-
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <common/logger_useful.h>
+
+#include <thread>
 
 namespace DB
 {
@@ -37,15 +41,9 @@ public:
         }
     }
 
-    String getName() const override
-    {
-        return "SharedQuery";
-    }
+    String getName() const override { return "SharedQuery"; }
 
-    Block getHeader() const override
-    {
-        return children.back()->getHeader();
-    }
+    Block getHeader() const override { return children.back()->getHeader(); }
 
     void readPrefix() override
     {
@@ -100,7 +98,7 @@ protected:
             in->readPrefix();
             while (!isCancelled())
             {
-                Block block;
+                Block block = in->read();
                 do
                 {
                     if (isCancelled() || read_suffixed)
@@ -109,7 +107,7 @@ protected:
                         queue.tryEmplace(0);
                         break;
                     }
-                } while (!queue.tryPush(block = in->read(), try_action_millisecionds));
+                } while (!queue.tryPush(block, try_action_millisecionds));
 
                 if (!block)
                     break;
@@ -131,11 +129,11 @@ private:
     bool read_suffixed = false;
 
     std::thread thread;
-    std::mutex  mutex;
+    std::mutex mutex;
 
     std::exception_ptr exception;
 
     Logger * log;
     BlockInputStreamPtr in;
 };
-}
+} // namespace DB
