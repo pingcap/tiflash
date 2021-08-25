@@ -6,6 +6,10 @@
 # vscode clangd cache
 .cache
 
+# JSON Compilation Database Format Specification
+# https://clang.llvm.org/docs/JSONCompilationDatabase.html
+compile_commands.json
+
 # git patch reject report
 *.rej
 
