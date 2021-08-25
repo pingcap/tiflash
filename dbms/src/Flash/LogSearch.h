@@ -1,15 +1,15 @@
 #pragma once
 
-#include <fstream>
-#include <istream>
-#include <memory>
-#include <variant>
-#include <optional>
-
 #include <Poco/File.h>
 #include <common/logger_useful.h>
 #include <re2/re2.h>
+
 #include <boost/noncopyable.hpp>
+#include <fstream>
+#include <istream>
+#include <memory>
+#include <optional>
+#include <variant>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -31,12 +31,9 @@ public:
           log_file(_log_file),
           log(&Poco::Logger::get("LogIterator"))
     {
-        // Check empty, if empty then fill with ".*"
-        if (patterns.size() == 0 || (patterns.size() == 1 && patterns[0] == ""))
-        {
-            patterns = {".*"};
-        }
+        init();
     }
+    ~LogIterator();
 
 public:
     static constexpr size_t MAX_MESSAGE_SIZE = 4096;
@@ -83,6 +80,7 @@ public:
 private:
     static Result<::diagnosticspb::LogMessage> parseLog(const std::string & log_content);
     bool match(const ::diagnosticspb::LogMessage & log_msg) const;
+    void init();
 
     Result<LogEntry> readLog();
 
@@ -91,6 +89,7 @@ private:
     int64_t end_time;
     std::vector<::diagnosticspb::LogLevel> levels;
     std::vector<std::string> patterns;
+    std::vector<struct RE2::RE2 *> compiled_patterns;
     std::shared_ptr<std::istream> log_file;
 
     Poco::Logger * log;

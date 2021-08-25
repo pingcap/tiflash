@@ -96,9 +96,9 @@ bool LogIterator::match(const LogMessage & log_msg) const
 
     // Grep
     auto & content = log_msg.message();
-    for (auto & regex : patterns)
+    for (auto & regex : compiled_patterns)
     {
-        if (!RE2::PartialMatch(content, regex))
+        if (!RE2::PartialMatch(content, *regex))
             return false;
     }
 
@@ -140,7 +140,7 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
         int timezone_hour, timezone_min;
         std::tm time{};
         int year, month, day, hour, minute, second;
-        if (std::sscanf(line.data(), "[%d/%d/%d %d:%d:%d.%d %d:%d] [%[^]]s]", &year, &month, &day, &hour, &minute, &second, &milli_second,
+        if (std::sscanf(line.data(), "[%d/%d/%d %d:%d:%d.%d %d:%d] [%20[^]]s]", &year, &month, &day, &hour, &minute, &second, &milli_second,
                 &timezone_hour, &timezone_min, level_buff)
             != 10)
         {
@@ -161,28 +161,37 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
         prev_time_t = ctime;
     }
 
-    {
-        if (entry.time > end_time)
-            return Error{Error::Type::EOI};
-    }
+    if (entry.time > end_time)
+        return Error{Error::Type::EOI};
 
-    size_t level_buff_len = strlen(level_buff);
+    size_t level_buff_len = 0;
+    if (memcmp(level_buff, "TRACE", 5) == 0)
     {
-        if (!level_buff_len)
-            return Error{Error::Type::INVALID_LOG_LEVEL, "empty level"};
-        if (level_buff[0] == 'T')
-            entry.level = LogEntry::Level::Trace;
-        else if (level_buff[0] == 'D')
-            entry.level = LogEntry::Level::Debug;
-        else if (level_buff[0] == 'I')
-            entry.level = LogEntry::Level::Info;
-        else if (level_buff[0] == 'W')
-            entry.level = LogEntry::Level::Warn;
-        else if (level_buff[0] == 'E')
-            entry.level = LogEntry::Level::Error;
-        else
-            return Error{Error::Type::INVALID_LOG_LEVEL, "level: " + std::string(level_buff)};
+        entry.level = LogEntry::Level::Trace;
+        level_buff_len = 5;
     }
+    else if (memcmp(level_buff, "DEBUG", 5) == 0)
+    {
+        entry.level = LogEntry::Level::Debug;
+        level_buff_len = 5;
+    }
+    else if (memcmp(level_buff, "INFO", 4) == 0)
+    {
+        entry.level = LogEntry::Level::Info;
+        level_buff_len = 4;
+    }
+    else if (memcmp(level_buff, "WARN", 4) == 0)
+    {
+        entry.level = LogEntry::Level::Warn;
+        level_buff_len = 4;
+    }
+    else if (memcmp(level_buff, "ERROR", 5) == 0)
+    {
+        entry.level = LogEntry::Level::Error;
+        level_buff_len = 5;
+    }
+    if (level_buff_len == 0 || level_buff[level_buff_len] != '\0')
+        return Error{Error::Type::INVALID_LOG_LEVEL, "level: " + std::string(level_buff)};
 
     size_t message_begin = kLogLevelStartFinishOffset + level_buff_len + 3;
     if (line.size() <= message_begin)
@@ -193,4 +202,24 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
     return entry;
 }
 
+void LogIterator::init()
+{
+    // Check empty, if empty then fill with ".*"
+    if (patterns.size() == 0 || (patterns.size() == 1 && patterns[0] == ""))
+    {
+        patterns = {".*"};
+    }
+    for (auto && pattern : patterns)
+    {
+        compiled_patterns.push_back(new RE2(pattern));
+    }
+}
+
+LogIterator::~LogIterator()
+{
+    for (auto pattern : compiled_patterns)
+    {
+        delete pattern;
+    }
+}
 } // namespace DB
