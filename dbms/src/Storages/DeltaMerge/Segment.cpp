@@ -86,7 +86,7 @@ DMFilePtr writeIntoNewDMFile(DMContext &                    dm_context, //
                              const BlockInputStreamPtr &    input_stream,
                              UInt64                         file_id,
                              const String &                 parent_path,
-    DMFileBlockOutputStream::Flags flags)
+                             DMFileBlockOutputStream::Flags flags)
 {
     auto   dmfile        = DMFile::create(file_id, parent_path, flags.isSingleFile());
     auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, flags);
@@ -166,7 +166,7 @@ Segment::Segment(UInt64                      epoch_, //
                  PageId                      segment_id_,
                  PageId                      next_segment_id_,
                  const DeltaValueSpacePtr &  delta_,
-    const StableValueSpacePtr & stable_)
+                 const StableValueSpacePtr & stable_)
     : epoch(epoch_),
       rowkey_range(rowkey_range_),
       is_common_handle(rowkey_range.is_common_handle),
@@ -1133,7 +1133,7 @@ SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
                                const SegmentPtr &          right,
                                const SegmentSnapshotPtr &  right_snap,
                                WriteBatches &              wbs,
-    const StableValueSpacePtr & merged_stable)
+                               const StableValueSpacePtr & merged_stable)
 {
     LOG_INFO(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] apply merge");
 
@@ -1238,7 +1238,7 @@ String Segment::info() const
 
 Segment::ReadInfo Segment::getReadInfo(const DMContext &          dm_context,
                                        const ColumnDefines &      read_columns,
-    const SegmentSnapshotPtr & segment_snap,
+                                       const SegmentSnapshotPtr & segment_snap,
                                        const RowKeyRanges &       read_ranges,
                                        UInt64                     max_version) const
 {
