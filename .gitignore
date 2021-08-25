@@ -3,6 +3,19 @@
 *\#
 .tramp_history
 
+<<<<<<< HEAD
+=======
+# vscode clangd cache
+.cache
+
+# JSON Compilation Database Format Specification
+# https://clang.llvm.org/docs/JSONCompilationDatabase.html
+compile_commands.json
+
+# git patch reject report
+*.rej
+
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 # vim cache files
 *.swp
 

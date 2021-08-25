@@ -510,10 +510,216 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
+<<<<<<< HEAD
+=======
+std::tuple<String, PageId> DeltaMergeStore::preAllocateIngestFile()
+{
+    if (shutdown_called.load(std::memory_order_relaxed))
+        return {};
+
+    auto delegator = path_pool.getStableDiskDelegator();
+    auto parent_path = delegator.choosePath();
+    auto new_id = storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    return {parent_path, new_id};
+}
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range)
 {
+<<<<<<< HEAD
     LOG_INFO(log, "Write into " << db_name << "." << table_name << " delete range " << delete_range.toDebugString());
+=======
+    if (shutdown_called.load(std::memory_order_relaxed))
+        return;
+
+    auto delegator = path_pool.getStableDiskDelegator();
+    delegator.addDTFile(file_id, file_size, parent_path);
+}
+
+void DeltaMergeStore::ingestFiles(
+    const DMContextPtr & dm_context, const RowKeyRange & range, const std::vector<PageId> & file_ids, bool clear_data_in_range)
+{
+    if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
+    {
+        std::stringstream stream;
+        stream << " try to ingest files into a shutdown table: " << db_name << "." << table_name;
+        auto msg = stream.str();
+        LOG_WARNING(log, __FUNCTION__ << msg);
+        throw Exception(msg);
+    }
+
+    EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);
+
+    auto delegate = dm_context->path_pool.getStableDiskDelegator();
+    auto file_provider = dm_context->db_context.getFileProvider();
+
+    size_t rows = 0;
+    size_t bytes = 0;
+    size_t bytes_on_disk = 0;
+
+    DMFiles files;
+    for (auto file_id : file_ids)
+    {
+        auto file_parent_path = delegate.getDTFilePath(file_id);
+
+        auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path);
+        rows += file->getRows();
+        bytes += file->getBytes();
+        bytes_on_disk += file->getBytesOnDisk();
+
+        files.emplace_back(std::move(file));
+    }
+
+    LOG_INFO(log,
+        __FUNCTION__ << " table: " << db_name << "." << table_name << ", rows: " << rows << ", bytes: " << bytes << ", bytes on disk: "
+                     << bytes_on_disk << ", region range: " << range.toDebugString() << ", clear_data: " << clear_data_in_range);
+
+    Segments updated_segments;
+    RowKeyRange cur_range = range;
+
+    // Put the ingest file ids into `storage_pool` and use ref id in each segments to ensure the atomic
+    // of ingesting.
+    // Check https://github.com/pingcap/tics/issues/2040 for more details.
+    // TODO: If tiflash crash during the middle of ingesting, we may leave some DTFiles on disk and
+    // they can not be deleted. We should find a way to cleanup those files.
+    WriteBatches ingest_wbs(storage_pool, dm_context->getWriteLimiter());
+    if (files.size() > 0)
+    {
+        for (const auto & file : files)
+        {
+            ingest_wbs.data.putExternal(file->fileId(), 0);
+        }
+        ingest_wbs.writeLogAndData();
+        ingest_wbs.setRollback(); // rollback if exception thrown
+    }
+
+    while (!cur_range.none())
+    {
+        RowKeyRange segment_range;
+
+        // Keep trying until succeeded.
+        while (true)
+        {
+            SegmentPtr segment;
+            {
+                std::shared_lock lock(read_write_mutex);
+
+                auto segment_it = segments.upper_bound(cur_range.getStart());
+                if (segment_it == segments.end())
+                {
+                    throw Exception(
+                        "Failed to locate segment begin with start in range: " + cur_range.toDebugString(), ErrorCodes::LOGICAL_ERROR);
+                }
+                segment = segment_it->second;
+            }
+
+            FAIL_POINT_PAUSE(FailPoints::pause_when_ingesting_to_dt_store);
+            waitForWrite(dm_context, segment);
+            if (segment->hasAbandoned())
+                continue;
+
+            segment_range = segment->getRowKeyRange();
+
+            // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
+            DeltaPacks packs;
+            WriteBatches wbs(storage_pool, dm_context->getWriteLimiter());
+
+            for (const auto & file : files)
+            {
+                /// Generate DMFile instance with a new ref_id pointed to the file_id.
+                auto file_id = file->fileId();
+                auto & file_parent_path = file->parentPath();
+                auto ref_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+
+                auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path);
+                auto pack = std::make_shared<DeltaPackFile>(*dm_context, ref_file, segment_range);
+                if (pack->getRows() != 0)
+                {
+                    packs.emplace_back(std::move(pack));
+                    wbs.data.putRefPage(ref_id, file_id);
+                }
+            }
+
+            // We have to commit those file_ids to PageStorage, because as soon as packs are written into segments,
+            // they are visible for readers who require file_ids to be found in PageStorage.
+            wbs.writeLogAndData();
+
+            bool ingest_success = segment->ingestPacks(*dm_context, range.shrink(segment_range), packs, clear_data_in_range);
+            fiu_do_on(FailPoints::force_set_segment_ingest_packs_fail, { ingest_success = false; });
+            if (ingest_success)
+            {
+                updated_segments.push_back(segment);
+                fiu_do_on(FailPoints::segment_merge_after_ingest_packs, {
+                    segment->flushCache(*dm_context);
+                    segmentMergeDelta(*dm_context, segment, TaskRunThread::BackgroundThreadPool);
+                    storage_pool.gc(global_context.getSettingsRef(), StoragePool::Seconds(0));
+                });
+                break;
+            }
+            else
+            {
+                wbs.rollbackWrittenLogAndData();
+            }
+        }
+
+        cur_range.setStart(segment_range.end);
+        cur_range.setEnd(range.end);
+    }
+
+    // Enable gc for DTFile after all segment applied.
+    // Note that we can not enable gc for them once they have applied to any segments.
+    // Assume that one segment get compacted after file ingested, `gc_handle` gc the
+    // DTFiles before they get applied to all segments. Then we will apply some
+    // deleted DTFiles to other segments.
+    for (const auto & file : files)
+        file->enableGC();
+    // After the ingest DTFiles applied, remove the original page
+    ingest_wbs.rollbackWrittenLogAndData();
+
+    {
+        // Add some logging about the ingested file ids and updated segments
+        std::stringstream ss;
+        // Example: "ingest dmf_1001,1002,1003 into segment [1,3]"
+        //          "ingest <empty> into segment [1,3]"
+        if (file_ids.empty())
+        {
+            ss << "ingest <empty>";
+        }
+        else
+        {
+            ss << "ingest dmf_";
+            for (size_t i = 0; i < file_ids.size(); ++i)
+            {
+                if (i != 0)
+                    ss << ",";
+                ss << file_ids[i];
+            }
+        }
+        ss << " into segment [";
+        for (size_t i = 0; i < updated_segments.size(); ++i)
+        {
+            if (i != 0)
+                ss << ",";
+            ss << updated_segments[i]->segmentId();
+        }
+        ss << "]";
+        LOG_INFO(
+            log, __FUNCTION__ << " table: " << db_name << "." << table_name << ", clear_data: " << clear_data_in_range << ", " << ss.str());
+    }
+
+    GET_METRIC(tiflash_storage_throughput_bytes, type_ingest).Increment(bytes);
+    GET_METRIC(tiflash_storage_throughput_rows, type_ingest).Increment(rows);
+
+    flushCache(dm_context, range);
+
+    for (auto & segment : updated_segments)
+        checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+}
+
+void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range)
+{
+    LOG_INFO(log, __FUNCTION__ << " table: " << db_name << "." << table_name << " delete range " << delete_range.toDebugString());
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 

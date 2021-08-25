@@ -3,6 +3,7 @@
 #include <DataStreams/EmptyBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <Poco/Logger.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
@@ -18,6 +19,7 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
+#include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
 #include <numeric>
@@ -97,11 +99,30 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
         if (!block.rows())
             continue;
 
+<<<<<<< HEAD
         size_t cur_not_clean_rows = 1;
         if (mvcc_stream)
             cur_not_clean_rows = mvcc_stream->getNotCleanRows();
 
         output_stream->write(block, cur_not_clean_rows - last_not_clean_rows);
+=======
+        // When the input_stream is not mvcc, we assume the rows in this input_stream is most valid and make it not tend to be gc.
+        size_t cur_effective_num_rows = block.rows();
+        size_t cur_not_clean_rows = 1;
+        size_t gc_hint_version = UINT64_MAX;
+        if (mvcc_stream)
+        {
+            cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
+            cur_not_clean_rows = mvcc_stream->getNotCleanRows();
+            gc_hint_version = mvcc_stream->getGCHintVersion();
+        }
+
+        DMFileBlockOutputStream::BlockProperty block_property;
+        block_property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
+        block_property.not_clean_rows = cur_not_clean_rows - last_not_clean_rows;
+        block_property.gc_hint_version = gc_hint_version;
+        output_stream->write(block, block_property);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
     }
 
     input_stream->readSuffix();
@@ -116,16 +137,26 @@ StableValueSpacePtr createNewStable(DMContext &                 context,
                                     PageId                      stable_id,
                                     WriteBatches &              wbs)
 {
-    auto delegate   = context.path_pool.getStableDiskDelegator();
-    auto store_path = delegate.choosePath();
+    auto delegator = context.path_pool.getStableDiskDelegator();
+    auto store_path = delegator.choosePath();
 
+<<<<<<< HEAD
     PageId dmfile_id = context.storage_pool.newDataPageId();
     auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path);
     auto   stable    = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dmfile});
+=======
+    DMFileBlockOutputStream::Flags flags;
+    flags.setSingleFile(context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
+
+    PageId dtfile_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    auto dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path, flags);
+    auto stable = std::make_shared<StableValueSpace>(stable_id);
+    stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
     stable->saveMeta(wbs.meta);
-    wbs.data.putExternal(dmfile_id, 0);
-    delegate.addDTFile(dmfile_id, dmfile->getBytesOnDisk(), store_path);
+    wbs.data.putExternal(dtfile_id, 0);
+    delegator.addDTFile(dtfile_id, dtfile->getBytesOnDisk(), store_path);
 
     return stable;
 }
@@ -147,8 +178,7 @@ Segment::Segment(UInt64                      epoch_, //
       delta(delta_),
       stable(stable_),
       log(&Logger::get("Segment"))
-{
-}
+{}
 
 SegmentPtr Segment::newSegment(DMContext &              context,
                                const ColumnDefinesPtr & schema,
@@ -160,7 +190,7 @@ SegmentPtr Segment::newSegment(DMContext &              context,
 {
     WriteBatches wbs(context.storage_pool);
 
-    auto delta  = std::make_shared<DeltaValueSpace>(delta_id);
+    auto delta = std::make_shared<DeltaValueSpace>(delta_id);
     auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs);
 
     auto segment = std::make_shared<Segment>(INITIAL_EPOCH, range, segment_id, next_segment_id, delta, stable);
@@ -179,17 +209,35 @@ SegmentPtr Segment::newSegment(DMContext &              context,
 SegmentPtr Segment::newSegment(
     DMContext & context, const ColumnDefinesPtr & schema, const HandleRange & range, PageId segment_id, PageId next_segment_id)
 {
+<<<<<<< HEAD
     return newSegment(
         context, schema, range, segment_id, next_segment_id, context.storage_pool.newMetaPageId(), context.storage_pool.newMetaPageId());
+=======
+    return newSegment(context,
+        schema,
+        rowkey_range,
+        segment_id,
+        next_segment_id,
+        context.storage_pool.newMetaPageId(),
+        context.storage_pool.newMetaPageId());
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 }
 
 SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 {
+<<<<<<< HEAD
     Page page = context.storage_pool.meta().read(segment_id);
+=======
+    Page page = context.storage_pool.meta().read(segment_id, nullptr); // not limit restore
+
+    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+    SegmentFormat::Version version;
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     Version              version;
     readIntBinary(version, buf);
+<<<<<<< HEAD
     if (version != CURRENT_VERSION)
         throw Exception("version not match", ErrorCodes::LOGICAL_ERROR);
     UInt64      epoch;
@@ -199,14 +247,45 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
     readIntBinary(epoch, buf);
     readIntBinary(range.start, buf);
     readIntBinary(range.end, buf);
+=======
+    UInt64 epoch;
+    RowKeyRange rowkey_range;
+    PageId next_segment_id, delta_id, stable_id;
+
+    readIntBinary(epoch, buf);
+
+    switch (version)
+    {
+    case SegmentFormat::V1: {
+            HandleRange range;
+            readIntBinary(range.start, buf);
+            readIntBinary(range.end, buf);
+            rowkey_range = RowKeyRange::fromHandleRange(range);
+            break;
+        }
+    case SegmentFormat::V2: {
+            rowkey_range = RowKeyRange::deserialize(buf);
+            break;
+        }
+        default:
+            throw Exception("Illegal version" + DB::toString(version), ErrorCodes::LOGICAL_ERROR);
+    }
+
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
     readIntBinary(next_segment_id, buf);
     readIntBinary(delta_id, buf);
     readIntBinary(stable_id, buf);
 
+<<<<<<< HEAD
     auto delta = std::make_shared<DeltaValueSpace>(delta_id);
     delta->restore(context);
     auto stable  = StableValueSpace::restore(context, stable_id);
     auto segment = std::make_shared<Segment>(epoch, range, segment_id, next_segment_id, delta, stable);
+=======
+    auto delta = DeltaValueSpace::restore(context, rowkey_range, delta_id);
+    auto stable = StableValueSpace::restore(context, stable_id);
+    auto segment = std::make_shared<Segment>(epoch, rowkey_range, segment_id, next_segment_id, delta, stable);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
     return segment;
 }
@@ -275,7 +354,11 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
 {
     // If the snapshot is created for read, then the snapshot will contain all packs (cached and persisted) for read.
     // If the snapshot is created for update, then the snapshot will only contain the persisted packs.
+<<<<<<< HEAD
     auto delta_snap  = delta->createSnapshot(dm_context, for_update);
+=======
+    auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
@@ -305,10 +388,17 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
             stream = segment_snap->stable->getInputStream(
                 dm_context, read_info.read_columns, read_range, filter, max_version, expected_block_size, false);
         }
+<<<<<<< HEAD
         else if (segment_snap->delta->rows == 0 && segment_snap->delta->deletes == 0 //
                  && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID)              //
                  && !hasColumn(columns_to_read, VERSION_COLUMN_ID)                   //
                  && !hasColumn(columns_to_read, TAG_COLUMN_ID))
+=======
+        else if (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0 //
+                 && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID)                        //
+                 && !hasColumn(columns_to_read, VERSION_COLUMN_ID)                             //
+            && !hasColumn(columns_to_read, TAG_COLUMN_ID))
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
         {
             // No delta, let's try some optimizations.
             stream = segment_snap->stable->getInputStream(
@@ -317,6 +407,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
         else
         {
             stream = getPlacedStream(dm_context,
+<<<<<<< HEAD
                                      read_info.read_columns,
                                      read_range,
                                      filter,
@@ -326,6 +417,17 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
                                      read_info.index_end,
                                      expected_block_size,
                                      max_version);
+=======
+                *read_info.read_columns,
+                read_range,
+                filter,
+                segment_snap->stable,
+                read_info.getDeltaReader(),
+                read_info.index_begin,
+                read_info.index_end,
+                expected_block_size,
+                max_version);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
         }
 
         stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, read_range, 0);
@@ -338,9 +440,15 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
     if (read_ranges.size() == 1)
     {
         LOG_TRACE(log,
+<<<<<<< HEAD
                   "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", 1"
                               << " range: " << DB::DM::toDebugString(read_ranges));
         auto real_range = range.shrink(read_ranges[0]);
+=======
+            "Segment [" << segment_id << "] is read by max_version: " << max_version << ", 1"
+                        << " range: " << DB::DM::toDebugString(read_ranges));
+        RowKeyRange real_range = rowkey_range.shrink(read_ranges[0]);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
         if (real_range.none())
             stream = std::make_shared<EmptyBlockInputStream>(toEmptyBlock(read_info.read_columns));
         else
@@ -357,8 +465,13 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
         }
 
         LOG_TRACE(log,
+<<<<<<< HEAD
                   "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", "
                               << DB::toString(streams.size()) << " ranges: " << DB::DM::toDebugString(read_ranges));
+=======
+            "Segment [" << segment_id << "] is read by max_version: " << max_version << ", " << streams.size()
+                        << " ranges: " << DB::DM::toDebugString(read_ranges));
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
         if (streams.empty())
             stream = std::make_shared<EmptyBlockInputStream>(toEmptyBlock(read_info.read_columns));
@@ -381,6 +494,40 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
     return getInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
 }
 
+<<<<<<< HEAD
+=======
+BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext &          dm_context,
+                                                         const ColumnDefines &      columns_to_read,
+                                                         const SegmentSnapshotPtr & segment_snap,
+                                                         const RowKeyRange &        data_range,
+                                                         size_t                     expected_block_size,
+                                                         bool                       reorgnize_block) const
+{
+    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, {data_range});
+
+    BlockInputStreamPtr data_stream = getPlacedStream(dm_context,
+        *read_info.read_columns,
+        data_range,
+        EMPTY_FILTER,
+        segment_snap->stable,
+        read_info.getDeltaReader(),
+        read_info.index_begin,
+        read_info.index_end,
+        expected_block_size);
+
+
+    data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, data_range, 0);
+    if (reorgnize_block)
+    {
+        data_stream = std::make_shared<PKSquashingBlockInputStream<false>>(data_stream, EXTRA_HANDLE_COLUMN_ID, is_common_handle);
+    }
+    data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+        data_stream, *read_info.read_columns, dm_context.min_version, is_common_handle);
+
+    return data_stream;
+}
+
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_context,
                                                const ColumnDefines &      columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
@@ -404,7 +551,15 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_con
         }
     }
 
+<<<<<<< HEAD
     BlockInputStreamPtr delta_stream = segment_snap->delta->prepareForStream(dm_context, new_columns_to_read);
+=======
+
+    BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, //
+        segment_snap->delta,
+        new_columns_to_read,
+        this->rowkey_range);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context, new_columns_to_read, range, EMPTY_FILTER, MAX_UINT64, expected_block_size, false);
@@ -446,8 +601,13 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, con
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
+<<<<<<< HEAD
     WriteBatches wbs(dm_context.storage_pool);
     auto         segment_snap = createSnapshot(dm_context, true);
+=======
+    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    auto segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
     if (!segment_snap)
         return {};
 
@@ -456,7 +616,7 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & 
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
 
-    auto lock        = mustGetUpdateLock();
+    auto lock = mustGetUpdateLock();
     auto new_segment = applyMergeDelta(dm_context, segment_snap, wbs, new_stable);
 
     wbs.writeAll();
@@ -469,9 +629,9 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext &                dm_con
                                                WriteBatches &             wbs) const
 {
     LOG_INFO(log,
-             "Segment [" << DB::toString(segment_id)
-                         << "] prepare merge delta start. delta packs: " << DB::toString(segment_snap->delta->getPackCount())
-                         << ", delta total rows: " << DB::toString(segment_snap->delta->getRows()));
+        "Segment [" << DB::toString(segment_id)
+                    << "] prepare merge delta start. delta packs: " << DB::toString(segment_snap->delta->getPackCount())
+                    << ", delta total rows: " << DB::toString(segment_snap->delta->getRows()));
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
@@ -514,11 +674,19 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
     new_delta->saveMeta(wbs);
 
     auto new_me = std::make_shared<Segment>(epoch + 1, //
+<<<<<<< HEAD
                                             range,
                                             segment_id,
                                             next_segment_id,
                                             new_delta,
                                             new_stable);
+=======
+        rowkey_range,
+        segment_id,
+        next_segment_id,
+        new_delta,
+        new_stable);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
     // Store new meta data
     new_me->serialize(wbs.meta);
@@ -535,8 +703,13 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
 
 SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
+<<<<<<< HEAD
     WriteBatches wbs(dm_context.storage_pool);
     auto         segment_snap = createSnapshot(dm_context, true);
+=======
+    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    auto segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
     if (!segment_snap)
         return {};
 
@@ -550,7 +723,7 @@ SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & sche
     split_info.my_stable->enableDMFilesGC();
     split_info.other_stable->enableDMFilesGC();
 
-    auto lock         = mustGetUpdateLock();
+    auto lock = mustGetUpdateLock();
     auto segment_pair = applySplit(dm_context, segment_snap, wbs, split_info);
 
     wbs.writeAll();
@@ -563,7 +736,7 @@ std::optional<Handle> Segment::getSplitPointFast(DMContext & dm_context, const S
     // FIXME: this method does not consider invalid packs in stable dmfiles.
 
     EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
-    auto          stable_rows = stable_snap->getRows();
+    auto stable_rows = stable_snap->getRows();
     if (unlikely(!stable_rows))
         throw Exception("No stable rows");
 
@@ -572,14 +745,14 @@ std::optional<Handle> Segment::getSplitPointFast(DMContext & dm_context, const S
     auto & dmfiles = stable_snap->getDMFiles();
 
     DMFilePtr read_file;
-    size_t    file_index       = 0;
-    auto      read_pack        = std::make_shared<IdSet>();
-    size_t    read_row_in_pack = 0;
+    size_t file_index = 0;
+    auto read_pack = std::make_shared<IdSet>();
+    size_t read_row_in_pack = 0;
 
     size_t cur_rows = 0;
     for (size_t index = 0; index < dmfiles.size(); index++)
     {
-        auto & file         = dmfiles[index];
+        auto & file = dmfiles[index];
         size_t rows_in_file = file->getRows();
         cur_rows += rows_in_file;
         if (cur_rows > split_row_index)
@@ -593,7 +766,7 @@ std::optional<Handle> Segment::getSplitPointFast(DMContext & dm_context, const S
                 {
                     cur_rows -= pack_stats[pack_id].rows;
 
-                    read_file  = file;
+                    read_file = file;
                     file_index = index;
                     read_pack->insert(pack_id);
                     read_row_in_pack = split_row_index - cur_rows;
@@ -608,6 +781,7 @@ std::optional<Handle> Segment::getSplitPointFast(DMContext & dm_context, const S
         throw Exception("Logical error: failed to find split point");
 
     DMFileBlockInputStream stream(dm_context.db_context,
+<<<<<<< HEAD
                                   MAX_UINT64,
                                   false,
                                   read_file,
@@ -616,6 +790,17 @@ std::optional<Handle> Segment::getSplitPointFast(DMContext & dm_context, const S
                                   EMPTY_FILTER,
                                   stable_snap->getColumnCaches()[file_index],
                                   read_pack);
+=======
+        MAX_UINT64,
+        false,
+        dm_context.hash_salt,
+        read_file,
+        {getExtraHandleColumnDefine(is_common_handle)},
+        RowKeyRange::newAll(is_common_handle, rowkey_column_size),
+        EMPTY_FILTER,
+        stable_snap->getColumnCaches()[file_index],
+        read_pack);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
     stream.readPrefix();
     auto block = stream.read();
@@ -623,8 +808,18 @@ std::optional<Handle> Segment::getSplitPointFast(DMContext & dm_context, const S
         throw Exception("Unexpected empty block");
     stream.readSuffix();
 
+<<<<<<< HEAD
     Handle split_point = block.getByPosition(0).column->getInt(read_row_in_pack);
     if (!range.check(split_point) || HandleRange(range.start, split_point).none() || Range(split_point, range.end).none())
+=======
+    RowKeyColumnContainer rowkey_column(block.getByPosition(0).column, is_common_handle);
+    RowKeyValue split_point(rowkey_column.getRowKeyValue(read_row_in_pack));
+
+
+    if (!rowkey_range.check(split_point.toRowKeyValueRef())
+        || RowKeyRange(rowkey_range.start, split_point, is_common_handle, rowkey_column_size).none()
+        || RowKeyRange(split_point, rowkey_range.end, is_common_handle, rowkey_column_size).none())
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
     {
         LOG_WARNING(log,
                     __FUNCTION__ << " unexpected split_handle: " << split_point << ", should be in range " << range.toDebugString()
@@ -641,11 +836,20 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
 {
     EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
 
+<<<<<<< HEAD
     auto & handle     = getExtraHandleColumnDefine();
+=======
+    auto & pk_col = getExtraHandleColumnDefine(is_common_handle);
+    auto pk_col_defs = std::make_shared<ColumnDefines>(ColumnDefines{pk_col});
+    // We need to create a new delta_reader here, because the one in read_info is used to read columns other than PK column.
+    auto delta_reader = read_info.getDeltaReader(pk_col_defs);
+
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
     size_t exact_rows = 0;
 
     {
         BlockInputStreamPtr stream = getPlacedStream(dm_context,
+<<<<<<< HEAD
                                                      {handle},
                                                      range,
                                                      EMPTY_FILTER,
@@ -654,6 +858,16 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
                                                      read_info.index_begin,
                                                      read_info.index_end,
                                                      dm_context.stable_pack_rows);
+=======
+            *pk_col_defs,
+            rowkey_range,
+            EMPTY_FILTER,
+            segment_snap->stable,
+            delta_reader,
+            read_info.index_begin,
+            read_info.index_end,
+            dm_context.stable_pack_rows);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
         stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, range, 0);
 
@@ -671,6 +885,7 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
     }
 
     BlockInputStreamPtr stream = getPlacedStream(dm_context,
+<<<<<<< HEAD
                                                  {handle},
                                                  range,
                                                  EMPTY_FILTER,
@@ -679,6 +894,16 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
                                                  read_info.index_begin,
                                                  read_info.index_end,
                                                  dm_context.stable_pack_rows);
+=======
+        *pk_col_defs,
+        rowkey_range,
+        EMPTY_FILTER,
+        segment_snap->stable,
+        delta_reader,
+        read_info.index_begin,
+        read_info.index_end,
+        dm_context.stable_pack_rows);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
     stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, range, 0);
 
@@ -705,9 +930,15 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
     if (!range.check(split_handle) || HandleRange(range.start, split_handle).none() || HandleRange(split_handle, range.end).none())
     {
         LOG_WARNING(log,
+<<<<<<< HEAD
                     __FUNCTION__ << " unexpected split_handle: " << split_handle << ", should be in range " << split_handle
                                  << ", exact_rows: " << DB::toString(exact_rows) << ", cur count: " << DB::toString(count)
                                  << ", split_row_index: " << split_row_index);
+=======
+                    __FUNCTION__ << " unexpected split_handle: " << split_point.toRowKeyValueRef().toDebugString()
+                                 << ", should be in range " << rowkey_range.toDebugString() << ", exact_rows: " << DB::toString(exact_rows)
+                         << ", cur count: " << DB::toString(count) << ", split_row_index: " << split_row_index);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
         return {};
     }
 
@@ -761,8 +992,8 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     if (my_range.none() || other_range.none())
     {
         LOG_WARNING(log,
-                    __FUNCTION__ << ": unexpected range! my_range: " << my_range.toDebugString()
-                                 << ", other_range: " << other_range.toDebugString() << ", aborted");
+            __FUNCTION__ << ": unexpected range! my_range: " << my_range.toDebugString() << ", other_range: " << other_range.toDebugString()
+                         << ", aborted");
         return {};
     }
 
@@ -774,12 +1005,17 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     auto delegate = dm_context.path_pool.getStableDiskDelegator();
     for (auto & dmfile : segment_snap->stable->getDMFiles())
     {
+<<<<<<< HEAD
         auto ori_ref_id       = dmfile->refId();
         auto file_id          = segment_snap->delta->storage_snap->data_reader.getNormalPageId(ori_ref_id);
+=======
+        auto ori_ref_id = dmfile->refId();
+        auto file_id = dmfile->fileId();
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
         auto file_parent_path = delegate.getDTFilePath(file_id);
 
-        auto my_dmfile_id    = storage_pool.newDataPageId();
-        auto other_dmfile_id = storage_pool.newDataPageId();
+        auto my_dmfile_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto other_dmfile_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
         wbs.data.putRefPage(my_dmfile_id, file_id);
         wbs.data.putRefPage(other_dmfile_id, file_id);
@@ -795,7 +1031,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
 
     auto other_stable_id = storage_pool.newMetaPageId();
 
-    auto my_stable    = std::make_shared<StableValueSpace>(segment_snap->stable->getId());
+    auto my_stable = std::make_shared<StableValueSpace>(segment_snap->stable->getId());
     auto other_stable = std::make_shared<StableValueSpace>(other_stable_id);
 
     my_stable->setFiles(my_stable_files, &dm_context, my_range);
@@ -839,6 +1075,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
     {
         // Write my data
         BlockInputStreamPtr my_data = getPlacedStream(dm_context,
+<<<<<<< HEAD
                                                       read_info.read_columns,
                                                       my_range,
                                                       EMPTY_FILTER,
@@ -847,6 +1084,16 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
                                                       read_info.index_begin,
                                                       read_info.index_end,
                                                       dm_context.stable_pack_rows);
+=======
+            *read_info.read_columns,
+            my_range,
+            EMPTY_FILTER,
+            segment_snap->stable,
+            my_delta_reader,
+            read_info.index_begin,
+            read_info.index_end,
+            dm_context.stable_pack_rows);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
         LOG_DEBUG(log, "Created my placed stream");
 
@@ -863,6 +1110,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
     {
         // Write new segment's data
         BlockInputStreamPtr other_data = getPlacedStream(dm_context,
+<<<<<<< HEAD
                                                          read_info.read_columns,
                                                          other_range,
                                                          EMPTY_FILTER,
@@ -871,6 +1119,16 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext &     
                                                          read_info.index_begin,
                                                          read_info.index_end,
                                                          dm_context.stable_pack_rows);
+=======
+            *read_info.read_columns,
+            other_range,
+            EMPTY_FILTER,
+            segment_snap->stable,
+            other_delta_reader,
+            read_info.index_begin,
+            read_info.index_end,
+            dm_context.stable_pack_rows);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
         LOG_DEBUG(log, "Created other placed stream");
 
@@ -923,18 +1181,18 @@ SegmentPair Segment::applySplit(DMContext &                dm_context, //
     auto other_delta = std::make_shared<DeltaValueSpace>(other_delta_id, other_delta_packs);
 
     auto new_me = std::make_shared<Segment>(this->epoch + 1, //
-                                            my_range,
-                                            this->segment_id,
-                                            other_segment_id,
-                                            my_delta,
-                                            split_info.my_stable);
+        my_range,
+        this->segment_id,
+        other_segment_id,
+        my_delta,
+        split_info.my_stable);
 
     auto other = std::make_shared<Segment>(INITIAL_EPOCH, //
-                                           other_range,
-                                           other_segment_id,
-                                           this->next_segment_id,
-                                           other_delta,
-                                           split_info.other_stable);
+        other_range,
+        other_segment_id,
+        this->next_segment_id,
+        other_delta,
+        split_info.other_stable);
 
     new_me->delta->saveMeta(wbs);
     new_me->stable->saveMeta(wbs.meta);
@@ -987,6 +1245,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
 {
     LOG_INFO(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] prepare merge start");
 
+<<<<<<< HEAD
     if (unlikely(left->range.end != right->range.start || left->next_segment_id != right->segment_id))
         throw Exception("The ranges of merge segments are not consecutive: first end: " + Redact::handleToDebugString(left->range.end)
                         + ", second start: " + Redact::handleToDebugString(right->range.start));
@@ -1002,6 +1261,24 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
                                                      read_info.index_begin,
                                                      read_info.index_end,
                                                      dm_context.stable_pack_rows);
+=======
+    if (unlikely(compare(left->rowkey_range.getEnd(), right->rowkey_range.getStart()) != 0 || left->next_segment_id != right->segment_id))
+        throw Exception("The ranges of merge segments are not consecutive: first end: " + left->rowkey_range.getEnd().toDebugString()
+            + ", second start: " + right->rowkey_range.getStart().toDebugString());
+
+    auto getStream = [&](const SegmentPtr & segment, const SegmentSnapshotPtr & segment_snap) {
+        auto read_info = segment->getReadInfo(
+            dm_context, *schema_snap, segment_snap, {RowKeyRange::newAll(left->is_common_handle, left->rowkey_column_size)});
+        BlockInputStreamPtr stream = getPlacedStream(dm_context,
+            *read_info.read_columns,
+            segment->rowkey_range,
+            EMPTY_FILTER,
+            segment_snap->stable,
+            read_info.getDeltaReader(),
+            read_info.index_begin,
+            read_info.index_end,
+            dm_context.stable_pack_rows);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
         stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, segment->range, 0);
         stream = std::make_shared<ReorganizeBlockInputStream>(stream, EXTRA_HANDLE_COLUMN_NAME);
@@ -1057,11 +1334,11 @@ SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
     auto merged_delta = std::make_shared<DeltaValueSpace>(left->delta->getId(), merged_packs);
 
     auto merged = std::make_shared<Segment>(left->epoch + 1, //
-                                            merged_range,
-                                            left->segment_id,
-                                            right->next_segment_id,
-                                            merged_delta,
-                                            merged_stable);
+        merged_range,
+        left->segment_id,
+        right->next_segment_id,
+        merged_delta,
+        merged_stable);
 
     // Store new meta data
     merged->delta->saveMeta(wbs);
@@ -1113,7 +1390,14 @@ void Segment::placeDeltaIndex(DMContext & dm_context)
     auto segment_snap = createSnapshot(dm_context, /*for_update=*/true);
     if (!segment_snap)
         return;
+<<<<<<< HEAD
     getReadInfo(dm_context, /*read_columns=*/{getExtraHandleColumnDefine()}, segment_snap);
+=======
+    getReadInfo(dm_context,
+        /*read_columns=*/{getExtraHandleColumnDefine(is_common_handle)},
+        segment_snap,
+        {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 }
 
 String Segment::simpleInfo() const
@@ -1268,9 +1552,15 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext &         dm
     my_delta_index->update(my_delta_tree, my_placed_rows, my_placed_deletes);
 
     LOG_DEBUG(log,
+<<<<<<< HEAD
               __FUNCTION__ << simpleInfo() << " read_ranges:" << DB::DM::toDebugString(read_ranges) << ", blocks.size:" << blocks.size()
                            << ", shared delta index: " << delta_snap->shared_delta_index->toString()
                            << ", my delta index: " << my_delta_index->toString());
+=======
+        __FUNCTION__ << simpleInfo() << " read_ranges:" << DB::DM::toDebugString(read_ranges) << ", place item count:" << items.size()
+                     << ", shared delta index: " << delta_snap->getSharedDeltaIndex()->toString()
+                     << ", my delta index: " << my_delta_index->toString());
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
     return {my_delta_index, fully_indexed};
 }

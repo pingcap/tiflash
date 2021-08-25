@@ -1116,8 +1116,30 @@ try
     }
 
     {
+<<<<<<< HEAD
         // DDL change add col i32
         AlterCommands commands;
+=======
+        // Read all data <= tso1
+        // We can only get [0, 32) with tso1
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*db_context,
+                                            db_context->getSettingsRef(),
+                                            columns,
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ tso1,
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        Int64  expect_pk  = 0;
+        UInt64 expect_tso = tso1;
+        while (Block block = in->read())
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
         {
             AlterCommand com;
             com.type        = AlterCommand::ADD_COLUMN;
@@ -1125,8 +1147,13 @@ try
             com.column_name = col_name_to_add;
             commands.emplace_back(std::move(com));
         }
+<<<<<<< HEAD
         ColumnID _col_to_add = col_id_to_add;
         store->applyAlters(commands, std::nullopt, _col_to_add, *context);
+=======
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 32) << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
     }
 
     {
@@ -1140,6 +1167,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             /* expected_block_size= */ 1024);
+<<<<<<< HEAD
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
         {
@@ -1158,6 +1186,10 @@ try
                 ASSERT_TRUE(col.type->equals(*col_type_to_add));
             }
         }
+=======
+        ASSERT_EQ(ins.size(), 1);
+        BlockInputStreamPtr in = ins[0];
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
         size_t num_rows_read = 0;
         in->readPrefix();
@@ -1186,7 +1218,11 @@ try
             }
         }
         in->readSuffix();
+<<<<<<< HEAD
         ASSERT_EQ(num_rows_read, num_rows_write);
+=======
+        EXPECT_EQ(num_rows_read, 32) << "The rows number after ingest is not match";
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
     }
 }
 CATCH
