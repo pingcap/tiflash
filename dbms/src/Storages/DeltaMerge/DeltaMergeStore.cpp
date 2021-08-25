@@ -571,7 +571,11 @@ std::tuple<String, PageId> DeltaMergeStore::preAllocateIngestFile()
 
     auto delegator   = path_pool.getStableDiskDelegator();
     auto parent_path = delegator.choosePath();
+<<<<<<< HEAD
     auto new_id      = storage_pool.newDataPageId();
+=======
+    auto new_id = storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
     return {parent_path, new_id};
 }
 
@@ -679,7 +683,11 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr &        dm_context,
                 /// Generate DMFile instance with a new ref_id pointed to the file_id.
                 auto   file_id          = file->fileId();
                 auto & file_parent_path = file->parentPath();
+<<<<<<< HEAD
                 auto   ref_id           = storage_pool.newDataPageId();
+=======
+                auto ref_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
                 auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path);
                 auto pack     = std::make_shared<DeltaPackFile>(*dm_context, ref_file, segment_range);
