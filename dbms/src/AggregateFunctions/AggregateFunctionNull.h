@@ -519,8 +519,12 @@ private:
 /// a warp function on the top of groupArray and groupUniqArray
 
 /// the input argument is in following two types:
-/// 1. only one column with original data type and without order_by items
-/// 2. one column combined with more than one columns including order by items, it should should be like tuple(type0, type1...)
+/// 1. only one column with original data type and without order_by items, for example: group_concat(c)
+/// 2. one column combined with more than one columns including concat items and order_by items, it should be like tuple(concat0, concat1... order0, order1 ...), for example:
+///  all columns  =      concat items + order_by items
+/// (c0,c1,o0,o1) = group_concat(c0,c1 order by o0,o1)
+/// group_concat(distinct c0,c1 order by b0,b1) = groupUniqArray(tuple(c0,c1,b0,b1)) -> distinct (c0, c1) , i.e., remove duplicates once more
+
 template <bool result_is_nullable, bool only_one_column>
 class AggregateFunctionGroupConcat final : public AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcat<result_is_nullable, only_one_column>>
 {
@@ -536,8 +540,6 @@ public:
             throw Exception("Logical error: not single argument is passed to AggregateFunctionGroupConcat", ErrorCodes::LOGICAL_ERROR);
         nested_type = std::make_shared<DataTypeArray>(removeNullable(input_args[0]));
 
-        /// all columns =     concat items + order_by items
-        /// (c0 + c1)   = group_concat(c0 order by c1)
         number_of_concat_items = all_columns_names_and_types.size() - sort_desc.size();
 
         is_nullable.resize(number_of_concat_items);
