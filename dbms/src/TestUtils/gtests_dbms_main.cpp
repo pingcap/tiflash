@@ -67,12 +67,23 @@ void TiFlashTestEnv::shutdown()
 }
 } // namespace DB::tests
 
+namespace DB::FailPoints
+{
+extern const char force_set_dtfile_exist_when_acquire_id[];
+} // namespace DB::FailPoints
+
 int main(int argc, char ** argv)
 {
     DB::tests::TiFlashTestEnv::setupLogger();
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
 
     fiu_init(0); // init failpoint
+<<<<<<< HEAD
+=======
+
+    DB::FailPointHelper::enableFailPoint(DB::FailPoints::force_set_dtfile_exist_when_acquire_id);
+#endif
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
     ::testing::InitGoogleTest(&argc, argv);
     auto ret = RUN_ALL_TESTS();

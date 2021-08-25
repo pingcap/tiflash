@@ -548,10 +548,25 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
+<<<<<<< HEAD
 void DeltaMergeStore::writeRegionSnapshot(const DMContextPtr & dm_context,
                                           const RowKeyRange &  range,
                                           std::vector<PageId>  file_ids,
                                           bool                 clear_data_in_range)
+=======
+std::tuple<String, PageId> DeltaMergeStore::preAllocateIngestFile()
+{
+    if (shutdown_called.load(std::memory_order_relaxed))
+        return {};
+
+    auto delegator = path_pool.getStableDiskDelegator();
+    auto parent_path = delegator.choosePath();
+    auto new_id = storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    return {parent_path, new_id};
+}
+
+void DeltaMergeStore::preIngestFile(const String & parent_path, const PageId file_id, size_t file_size)
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 {
     LOG_INFO(log, __FUNCTION__ << " table: " << db_name << "." << table_name << ", region range:" << range.toDebugString());
 
@@ -621,7 +636,14 @@ void DeltaMergeStore::writeRegionSnapshot(const DMContextPtr & dm_context,
 
             for (size_t index = 0; index < files.size(); ++index)
             {
+<<<<<<< HEAD
                 auto & file = files[index];
+=======
+                /// Generate DMFile instance with a new ref_id pointed to the file_id.
+                auto file_id = file->fileId();
+                auto & file_parent_path = file->parentPath();
+                auto ref_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
                 auto file_id = file->fileId();
                 /// For the first segment, we use the original file_id and DMFile instance.
