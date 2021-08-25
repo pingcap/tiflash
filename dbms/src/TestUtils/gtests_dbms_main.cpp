@@ -5,6 +5,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+<<<<<<< HEAD
 namespace DB::tests
 {
 std::unique_ptr<Context> TiFlashTestEnv::global_context = nullptr;
@@ -65,6 +66,12 @@ void TiFlashTestEnv::shutdown()
     global_context.reset();
 }
 } // namespace DB::tests
+=======
+namespace DB::FailPoints
+{
+extern const char force_set_dtfile_exist_when_acquire_id[];
+} // namespace DB::FailPoints
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
 int main(int argc, char ** argv)
 {
@@ -72,6 +79,12 @@ int main(int argc, char ** argv)
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
 
     fiu_init(0); // init failpoint
+<<<<<<< HEAD
+=======
+
+    DB::FailPointHelper::enableFailPoint(DB::FailPoints::force_set_dtfile_exist_when_acquire_id);
+#endif
+>>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
     ::testing::InitGoogleTest(&argc, argv);
     auto ret = RUN_ALL_TESTS();
