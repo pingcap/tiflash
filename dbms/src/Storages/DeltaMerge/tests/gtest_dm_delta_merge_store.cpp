@@ -1323,7 +1323,7 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             /* expected_block_size= */ 1024);
-        ASSERT_EQ(ins.size(), 1UL);
+        ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
 
         size_t num_rows_read = 0;
@@ -1345,7 +1345,7 @@ try
             num_rows_read += block.rows();
         }
         in->readSuffix();
-        EXPECT_EQ(num_rows_read, 32UL) << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
+        EXPECT_EQ(num_rows_read, 32) << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
     }
 
     {
@@ -1359,7 +1359,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             /* expected_block_size= */ 1024);
-        ASSERT_EQ(ins.size(), 1UL);
+        ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
 
         size_t num_rows_read = 0;
@@ -1367,7 +1367,7 @@ try
         while (Block block = in->read())
             num_rows_read += block.rows();
         in->readSuffix();
-        EXPECT_EQ(num_rows_read, 32UL) << "The rows number after ingest is not match";
+        EXPECT_EQ(num_rows_read, 32) << "The rows number after ingest is not match";
     }
 }
 CATCH
