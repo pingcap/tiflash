@@ -11,6 +11,7 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
+#include <fmt/format.h>
 
 #include <random>
 #include <set>
@@ -352,12 +353,14 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
 {
     path.remove_suffix(1 + strlen(StoragePathPool::STABLE_FOLDER_NAME)); // remove '/stable' added in listPathsForStable/getDTFilePath
     std::lock_guard<std::mutex> lock{pool.mutex};
-    if (auto iter = pool.dt_file_path_map.find(file_id); iter != pool.dt_file_path_map.end())
+    if (auto iter = pool.dt_file_path_map.find(file_id); unlikely(iter != pool.dt_file_path_map.end()))
     {
-        auto & path_info = pool.main_path_infos[iter->second];
-        pool.dt_file_path_map.erase(iter);
-        path_info.file_size_map.erase(file_id);
+        const auto & path_info = pool.main_path_infos[iter->second];
+        throw DB::TiFlashException(
+            fmt::format("Try to add a DTFile with duplicated id. [id={}] [path={}] [existed_path={}]", file_id, path, path_info.path),
+            Errors::DeltaTree::Internal);
     }
+
     UInt32 index = UINT32_MAX;
     for (size_t i = 0; i < pool.main_path_infos.size(); i++)
     {
@@ -368,7 +371,8 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
         }
     }
     if (unlikely(index == UINT32_MAX))
-        throw Exception("Unrecognized path " + String(path));
+        throw DB::TiFlashException(
+            fmt::format("Try to add a DTFile to an unrecognized path. [id={}] [path={}]", file_id, path), Errors::DeltaTree::Internal);
     pool.dt_file_path_map.emplace(file_id, index);
     pool.main_path_infos[index].file_size_map.emplace(file_id, file_size);
     // update global used size
