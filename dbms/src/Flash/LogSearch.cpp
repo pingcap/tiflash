@@ -184,7 +184,7 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
             return Error{Error::Type::INVALID_LOG_LEVEL, "level: " + std::string(level_buff)};
     }
 
-    size_t message_begin = kLogLevelStartFinishOffset + level_buff_len + 2;
+    size_t message_begin = kLogLevelStartFinishOffset + level_buff_len + 3;
     if (line.size() <= message_begin)
     {
         return Error{Error::Type::UNEXPECTED_LOG_HEAD};
