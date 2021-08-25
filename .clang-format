@@ -7,7 +7,7 @@ AlignTrailingComments: false
 AllowAllArgumentsOnNextLine: false
 AllowAllParametersOfDeclarationOnNextLine: false
 AllowShortBlocksOnASingleLine: Always
-#AllowShortEnumsOnASingleLine: false  # clang-format version 10.0.0 doesn't support yet
+AllowShortEnumsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Inline
 AllowShortLambdasOnASingleLine: Inline
 AlwaysBreakAfterReturnType: None
@@ -33,14 +33,14 @@ BreakInheritanceList : BeforeComma
 ColumnLimit: 0
 ConstructorInitializerAllOnOneLineOrOnePerLine: false
 Cpp11BracedListStyle: true
-#EmptyLineBeforeAccessModifier: LogicalBlock  # clang-format version 10.0.0 doesn't support yet
+EmptyLineBeforeAccessModifier: LogicalBlock
 ExperimentalAutoDetectBinPacking: true
 FixNamespaceComments: true
 IndentCaseLabels: false
 IndentWidth: 4
 KeepEmptyLinesAtTheStartOfBlocks: false
 MaxEmptyLinesToKeep: 2
-#PPIndentWidth: 2  # clang-format version 10.0.0 doesn't support yet
+#PPIndentWidth: 2  # clang-format version 12.0.0 doesn't support yet
 PointerAlignment: Middle
 ReflowComments: false
 SortIncludes: true

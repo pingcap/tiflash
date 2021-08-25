@@ -46,16 +46,16 @@ String DMFile::getPathByStatus(const String & parent_path, UInt64 file_id, DMFil
     String s = parent_path + "/";
     switch (status)
     {
-        case DMFile::Status::READABLE:
-            s += details::FOLDER_PREFIX_READABLE;
-            break;
-        case DMFile::Status::WRITABLE:
-        case DMFile::Status::WRITING:
-            s += details::FOLDER_PREFIX_WRITABLE;
-            break;
-        case DMFile::Status::DROPPED:
-            s += details::FOLDER_PREFIX_DROPPED;
-            break;
+    case DMFile::Status::READABLE:
+        s += details::FOLDER_PREFIX_READABLE;
+        break;
+    case DMFile::Status::WRITABLE:
+    case DMFile::Status::WRITING:
+        s += details::FOLDER_PREFIX_WRITABLE;
+        break;
+    case DMFile::Status::DROPPED:
+        s += details::FOLDER_PREFIX_DROPPED;
+        break;
     }
     s += DB::toString(file_id);
     return s;
@@ -203,9 +203,18 @@ const EncryptionPath DMFile::encryptionPackPropertyPath() const
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packPropertyFileName());
 }
 
-String DMFile::colDataFileName(const FileNameBase & file_name_base) { return file_name_base + details::DATA_FILE_SUFFIX; }
-String DMFile::colIndexFileName(const FileNameBase & file_name_base) { return file_name_base + details::INDEX_FILE_SUFFIX; }
-String DMFile::colMarkFileName(const FileNameBase & file_name_base) { return file_name_base + details::MARK_FILE_SUFFIX; }
+String DMFile::colDataFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::DATA_FILE_SUFFIX;
+}
+String DMFile::colIndexFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::INDEX_FILE_SUFFIX;
+}
+String DMFile::colMarkFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::MARK_FILE_SUFFIX;
+}
 
 DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer)
 {
