@@ -37,39 +37,6 @@ extern const char exception_during_mpp_write_err_to_tunnel[];
 
 String MPPTaskId::toString() const { return fmt::format("[{},{}]", start_ts, task_id); }
 
-bool MPPTaskProgress::isTaskHanging(const Context & context)
-{
-    bool ret = false;
-    auto current_progress_value = current_progress.load();
-    if (current_progress_value != progress_on_last_check)
-    {
-        /// make some progress
-        found_no_progress = false;
-    }
-    else
-    {
-        /// no progress
-        if (!found_no_progress)
-        {
-            /// first time on no progress
-            found_no_progress = true;
-            epoch_when_found_no_progress = std::chrono::duration_cast<std::chrono::seconds>(Clock::now().time_since_epoch()).count();
-        }
-        else
-        {
-            /// no progress for a while, check timeout
-            auto no_progress_duration
-                = std::chrono::duration_cast<std::chrono::seconds>(Clock::now().time_since_epoch()).count() - epoch_when_found_no_progress;
-            auto timeout_threshold = current_progress_value == 0 ? context.getSettingsRef().mpp_task_waiting_timeout
-                                                                 : context.getSettingsRef().mpp_task_running_timeout;
-            if (no_progress_duration > timeout_threshold)
-                ret = true;
-        }
-    }
-    progress_on_last_check = current_progress_value;
-    return ret;
-}
-
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_), meta(meta_), log(&Logger::get(fmt::format("task {}", meta_.task_id())))
 {
@@ -411,13 +378,6 @@ void MPPTask::writeErrToAllTunnel(const String & e)
             tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->id());
         }
     }
-}
-
-bool MPPTask::isTaskHanging()
-{
-    if (status.load() == RUNNING)
-        return task_progress.isTaskHanging(context);
-    return false;
 }
 
 void MPPTask::cancel(const String & reason)

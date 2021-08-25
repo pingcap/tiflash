@@ -35,15 +35,6 @@ struct MPPTaskId
     String toString() const;
 };
 
-struct MPPTaskProgress
-{
-    std::atomic<UInt64> current_progress{0};
-    UInt64 progress_on_last_check = 0;
-    UInt64 epoch_when_found_no_progress = 0;
-    bool found_no_progress = false;
-    bool isTaskHanging(const Context & context);
-};
-
 class MPPTaskManager;
 class MPPTask : public std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
@@ -65,8 +56,6 @@ public:
 
     void unregisterTask();
 
-    bool isTaskHanging();
-
     void cancel(const String & reason);
 
     /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
@@ -78,8 +67,6 @@ public:
     void writeErrToAllTunnel(const String & e);
 
     std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
-
-    void updateProgress(const Progress &) { task_progress.current_progress++; }
 
     void run();
 
@@ -105,7 +92,6 @@ private:
 
     MPPTaskId id;
 
-    MPPTaskProgress task_progress;
     std::atomic<Int32> status{INITIALIZING};
 
     mpp::TaskMeta meta;
