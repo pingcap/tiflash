@@ -16,6 +16,7 @@ if [[ $? != 0 ]]; then
 else
   echo "clang-format has been installed"
 fi
+clang-format --version
 
 set -ueox pipefail
 
