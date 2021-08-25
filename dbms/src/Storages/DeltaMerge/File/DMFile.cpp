@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/escapeForFileName.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -154,9 +155,7 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
     }
     else
     {
-        auto       index_path = colIndexPath(DMFile::getFileNameBase(col_id));
-        Poco::File index_file(index_path);
-        return index_file.exists();
+        return column_indices.count(col_id) != 0;
     }
 }
 
@@ -360,6 +359,7 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
     }
     else
     {
+        initializeIndices();
         if (auto file = Poco::File(packPropertyPath()); file.exists())
             footer.meta_pack_info.pack_property_size = file.getSize();
 
@@ -396,6 +396,7 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
         LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removed: " << deleted_path);
     }
     old_file.renameTo(new_path);
+    initializeIndices();
 }
 
 void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
@@ -566,6 +567,40 @@ void DMFile::remove(const FileProviderPtr & file_provider)
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_dmfile_remove_from_disk);
             // Then clean the files on disk
             dir_file.remove(true);
+        }
+    }
+}
+
+void DMFile::initializeIndices()
+{
+    auto decode = [](const std::string & data) {
+        try
+        {
+            auto original = unescapeForFileName(data);
+            return std::stoll(original);
+        }
+        catch (const std::invalid_argument & err)
+        {
+            throw DB::Exception(std::string{"invalid ColId: "} + err.what() + " from: " + data);
+        }
+        catch (const std::out_of_range & err)
+        {
+            throw DB::Exception(std::string{"invalid ColId: "} + err.what() + " from: " + data);
+        }
+    };
+
+    if (isSingleFileMode())
+        return;
+
+    Poco::File               directory{path()};
+    std::vector<std::string> sub_files{};
+
+    directory.list(sub_files);
+    for (const auto & i : sub_files)
+    {
+        if (endsWith(i, ".idx"))
+        {
+            column_indices.insert(decode(i.substr(0, i.size() - 4))); // strip tailing `.idx`
         }
     }
 }

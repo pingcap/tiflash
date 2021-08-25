@@ -193,7 +193,7 @@ public:
 
 private:
     DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Mode mode_, Status status_, Logger * log_)
-        : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), mode(mode_), status(status_), log(log_)
+        : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), column_indices(), mode(mode_), status(status_), log(log_)
     {
     }
 
@@ -281,14 +281,17 @@ private:
         return isSingleFileMode() ? getSubFileStat(file_name).size : Poco::File(subFilePath(file_name)).getSize();
     }
 
+    void initializeIndices();
+
 private:
     UInt64 file_id;
     UInt64 ref_id; // It is a reference to file_id, could be the same.
     String parent_path;
 
-    PackStats      pack_stats;
-    PackProperties pack_properties;
-    ColumnStats    column_stats;
+    PackStats                 pack_stats;
+    PackProperties            pack_properties;
+    ColumnStats               column_stats;
+    std::unordered_set<ColId> column_indices;
 
     Mode   mode;
     Status status;
