@@ -30,10 +30,10 @@ namespace details
 inline constexpr static const char * NGC_FILE_NAME          = "NGC";
 inline constexpr static const char * FOLDER_PREFIX_WRITABLE = ".tmp.dmf_";
 inline constexpr static const char * FOLDER_PREFIX_READABLE = "dmf_";
-inline constexpr static const char * FOLDER_PREFIX_DROPPED = ".del.dmf_";
-inline constexpr static const char * DATA_FILE_SUFFIX = ".dat";
-inline constexpr static const char * INDEX_FILE_SUFFIX = ".idx";
-inline constexpr static const char * MARK_FILE_SUFFIX = ".mrk";
+inline constexpr static const char * FOLDER_PREFIX_DROPPED  = ".del.dmf_";
+inline constexpr static const char * DATA_FILE_SUFFIX       = ".dat";
+inline constexpr static const char * INDEX_FILE_SUFFIX      = ".idx";
+inline constexpr static const char * MARK_FILE_SUFFIX       = ".mrk";
 
 inline String getNGCPath(const String & prefix, bool is_single_mode)
 {
@@ -200,9 +200,18 @@ const EncryptionPath DMFile::encryptionPackPropertyPath() const
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packPropertyFileName());
 }
 
-String DMFile::colDataFileName(const FileNameBase & file_name_base) { return file_name_base + details::DATA_FILE_SUFFIX; }
-String DMFile::colIndexFileName(const FileNameBase & file_name_base) { return file_name_base + details::INDEX_FILE_SUFFIX; }
-String DMFile::colMarkFileName(const FileNameBase & file_name_base) { return file_name_base + details::MARK_FILE_SUFFIX; }
+String DMFile::colDataFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::DATA_FILE_SUFFIX;
+}
+String DMFile::colIndexFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::INDEX_FILE_SUFFIX;
+}
+String DMFile::colMarkFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::MARK_FILE_SUFFIX;
+}
 
 DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer)
 {
@@ -587,7 +596,7 @@ void DMFile::initializeSubFileStatsForFolderMode()
     if (isSingleFileMode())
         return;
 
-    Poco::File directory{path()};
+    Poco::File               directory{path()};
     std::vector<std::string> sub_files{};
     directory.list(sub_files);
     for (const auto & name : sub_files)
