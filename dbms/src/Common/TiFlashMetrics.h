@@ -10,7 +10,6 @@
 
 namespace DB
 {
-
 /// Central place to define metrics across all subsystems.
 /// Refer to gtest_tiflash_metrics.cpp for more sample defines.
 /// Usage:
@@ -21,6 +20,7 @@ namespace DB
 /// 2. Keep metrics with same prefix next to each other.
 /// 3. Add metrics of new subsystems at tail.
 /// 4. Keep it proper formatted using clang-format.
+// clang-format off
 #define APPLY_FOR_METRICS(M, F)                                                                                                           \
     M(tiflash_coprocessor_request_count, "Total number of request", Counter, F(type_batch, {"type", "batch"}),                            \
         F(type_batch_cop, {"type", "batch_cop"}), F(type_cop, {"type", "cop"}), F(type_cop_dag, {"type", "cop_dag"}),                     \
@@ -134,7 +134,7 @@ namespace DB
     M(tiflash_raft_process_keys, "Total number of keys processed in some types of Raft commands", Counter,                                \
         F(type_apply_snapshot, {"type", "apply_snapshot"}), F(type_ingest_sst, {"type", "ingest_sst"}))                                   \
     M(tiflash_raft_apply_write_command_duration_seconds, "Bucketed histogram of applying write command Raft logs", Histogram,             \
-        F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))                                                                    \
+        F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}), F(type_admin, {{"type", "admin"}}, ExpBuckets{0.0005, 2, 20}))     \
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
@@ -143,8 +143,10 @@ namespace DB
         F(type_fg_read_alloc_bytes, {"type", "fg_read_alloc_bytes"}), F(type_bg_read_req_bytes, {"type", "bg_read_req_bytes"}),           \
         F(type_bg_read_alloc_bytes, {"type", "bg_read_alloc_bytes"}), F(type_fg_write_req_bytes, {"type", "fg_write_req_bytes"}),         \
         F(type_fg_write_alloc_bytes, {"type", "fg_write_alloc_bytes"}), F(type_bg_write_req_bytes, {"type", "bg_write_req_bytes"}),       \
-        F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}))
-
+        F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}))                                                                   \
+    M(tiflash_raft_upstream_latency, "The latency that tikv sends raft log to tiflash.", Histogram,                                       \
+        F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 30}))
+// clang-format on
 
 struct ExpBuckets
 {
@@ -220,7 +222,10 @@ struct MetricFamily
     using MetricArgType = typename MetricTrait::ArgType;
 
     MetricFamily(
-        prometheus::Registry & registry, const std::string & name, const std::string & help, std::initializer_list<MetricArgType> args)
+        prometheus::Registry & registry,
+        const std::string & name,
+        const std::string & help,
+        std::initializer_list<MetricArgType> args)
     {
         auto & family = MetricTrait::build().Name(name).Help(help).Register(registry);
         metrics.reserve(args.size() ? args.size() : 1);
@@ -303,6 +308,8 @@ APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 #define __GET_METRIC_0(family) TestMetrics::instance().family.get()
 #define __GET_METRIC_1(family, metric) TestMetrics::instance().family.get(family##_metrics::metric)
 #endif
-#define GET_METRIC(...) __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0)(__VA_ARGS__)
+#define GET_METRIC(...)                                             \
+    __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0) \
+    (__VA_ARGS__)
 
 } // namespace DB
