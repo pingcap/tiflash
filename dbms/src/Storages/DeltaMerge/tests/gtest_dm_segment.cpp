@@ -1080,7 +1080,6 @@ try
                 auto file_parent_path  = delegate.getDTFilePath(file_id);
                 auto file              = DMFile::restore(file_provider, file_id, file_id, file_parent_path);
                 auto pack              = std::make_shared<DeltaPackFile>(dmContext(), file, range);
-                delegate.addDTFile(file_id, file->getBytesOnDisk(), file_parent_path);
                 WriteBatches wbs(*storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
