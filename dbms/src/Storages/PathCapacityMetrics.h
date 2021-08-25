@@ -1,5 +1,6 @@
 #pragma once
 #include <Core/Types.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <common/logger_useful.h>
 #include <sys/statvfs.h>
 
@@ -12,7 +13,6 @@ namespace DB
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 using FSID = UInt32;
-struct FsStats;
 
 struct DiskCapacity
 {
@@ -60,10 +60,9 @@ public:
     virtual std::map<FSID, DiskCapacity> getDiskStats();
 
     template <typename T>
-    std::tuple<DisksCapacity, std::map<String, FsStats>> getDiskStatsForPaths(const std::vector<T> & paths)
+    DisksCapacity getDiskStatsForPaths(const std::vector<T> & paths)
     {
         DisksCapacity all_disks;
-        std::map<String, FsStats> path_capacity;
         for (size_t i = 0; i < paths.size(); ++i)
         {
             auto [path_stat, vfs] = getFsStatsOfPath(paths[i].path);
@@ -72,12 +71,10 @@ public:
                 continue;
             }
 
-            path_capacity[paths[i].path] = path_stat;
-
             // update all_disks
             all_disks.insert(vfs, path_stat, paths[i].path);
         }
-        return {std::move(all_disks), std::move(path_capacity)};
+        return all_disks;
     }
 
 #ifndef DBMS_PUBLIC_GTEST

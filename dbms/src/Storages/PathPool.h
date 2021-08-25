@@ -12,12 +12,6 @@ class Logger;
 
 namespace DB
 {
-
-namespace FailPoints
-{
-extern const char force_make_disk_full[];
-} // namespace FailPoints
-
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class FileProvider;
