@@ -340,13 +340,15 @@ String StableDiskDelegator::choosePath() const
     return genericChoosePath(pool.main_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
 }
 
-String StableDiskDelegator::getDTFilePath(UInt64 file_id) const
+String StableDiskDelegator::getDTFilePath(UInt64 file_id, bool throw_on_not_exist) const
 {
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = pool.dt_file_path_map.find(file_id);
     if (likely(iter != pool.dt_file_path_map.end()))
         return pool.main_path_infos[iter->second].path + "/" + StoragePathPool::STABLE_FOLDER_NAME;
-    throw Exception("Can not find path for DMFile [id=" + toString(file_id) + "]");
+    if (likely(throw_on_not_exist))
+        throw Exception("Can not find path for DMFile [id=" + toString(file_id) + "]");
+    return "";
 }
 
 void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::string_view path)
