@@ -16,6 +16,10 @@
 
 #include <ext/scope_guard.h>
 
+// According to POSIX.1, if count is greater than SSIZE_MAX, the result is implementation-defined;
+// SSIZE_MAX usually is (2^31 -1), Just use 1G to split.
+#define MAX_WRITE_SIZE 1 * 1024 * 1024 * 1024
+
 namespace ProfileEvents
 {
 extern const Event Seek;
@@ -65,42 +69,55 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
 
     if (write_limiter)
         write_limiter->request(to_write);
+
     size_t bytes_written = 0;
+    size_t split_bytes   = 0;
+
+    if (to_write > MAX_WRITE_SIZE)
+    {
+        split_bytes = MAX_WRITE_SIZE;
+    }
+
     while (bytes_written != to_write)
     {
         ProfileEvents::increment(ProfileEvents::PSMWriteIOCalls);
         ssize_t res = 0;
         {
             CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
-            res = file->pwrite(data + bytes_written, to_write - bytes_written, offset + bytes_written);
-        }
 
-#ifndef NDEBUG
-#ifdef FIU_ENABLE
-        // Can inject failpoint under debug mode
-        fiu_do_on(FailPoints::force_set_page_file_write_errno, {
-            if (enable_failpoint)
+            size_t bytes_need_be_write = split_bytes == 0
+                ? (to_write - bytes_written)
+                : ((to_write - bytes_written) < split_bytes ? (to_write - bytes_written) : split_bytes);
+            res                        = file->pwrite(data + bytes_written, bytes_need_be_write, offset + bytes_written);
+
+            fiu_do_on(FailPoints::force_set_page_file_write_errno, {
+                if (enable_failpoint)
+                {
+                    res   = -1;
+                    errno = ENOSPC;
+                }
+            });
+
+            if ((-1 == res || 0 == res) && errno != EINTR)
             {
-                res   = -1;
-                errno = ENOSPC;
+                ProfileEvents::increment(ProfileEvents::PSMWriteFailed);
+                auto saved_errno = errno; // save errno before `ftruncate`
+                // If error occurs, apply `ftruncate` try to truncate the broken bytes we have written.
+                // Note that the result of this ftruncate is ignored, there is nothing we can do to
+                // handle ftruncate error. The errno may change after ftruncate called.
+                int truncate_res = ::ftruncate(file->getFd(), offset);
+
+                DB::throwFromErrno(fmt::format("Cannot write to file {},[truncate_res = {}],[errno_after_truncate = {}],"
+                                               "[bytes_written={},to_write={},offset = {}]",
+                                               file->getFileName(),
+                                               DB::toString(truncate_res),
+                                               strerror(errno),
+                                               bytes_written,
+                                               to_write,
+                                               offset),
+                                   ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR,
+                                   saved_errno);
             }
-        });
-#else
-        (void)(enable_failpoint); // unused parameter
-#endif
-#endif
-        if ((-1 == res || 0 == res) && errno != EINTR)
-        {
-            ProfileEvents::increment(ProfileEvents::PSMWriteFailed);
-            auto saved_errno = errno; // save errno before `ftruncate`
-            // If error occurs, apply `ftruncate` try to truncate the broken bytes we have written.
-            // Note that the result of this ftruncate is ignored, there is nothing we can do to
-            // handle ftruncate error. The errno may change after ftruncate called.
-            int truncate_res = ::ftruncate(file->getFd(), offset);
-            DB::throwFromErrno("Cannot write to file " + file->getFileName() + " [truncate_res=" + DB::toString(truncate_res)
-                                   + "] [errno_after_truncate=" + strerror(errno) + "]",
-                               ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR,
-                               saved_errno);
         }
 
         if (res > 0)
