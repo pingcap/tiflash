@@ -536,12 +536,12 @@ public:
             throw Exception("Logical error: not single argument is passed to AggregateFunctionGroupConcat", ErrorCodes::LOGICAL_ERROR);
         nested_type = std::make_shared<DataTypeArray>(removeNullable(input_args[0]));
 
-        /// all columns =     concat args + order_by items
+        /// all columns =     concat items + order_by items
         /// (c0 + c1)   = group_concat(c0 order by c1)
-        number_of_concat_arguments = all_columns_names_and_types.size() - sort_desc.size();
+        number_of_concat_items = all_columns_names_and_types.size() - sort_desc.size();
 
-        is_nullable.resize(number_of_concat_arguments);
-        for (size_t i = 0; i < number_of_concat_arguments; ++i)
+        is_nullable.resize(number_of_concat_items);
+        for (size_t i = 0; i < number_of_concat_items; ++i)
         {
             is_nullable[i] = all_columns_names_and_types[i].type->isNullable();
             /// the inputs of a nested agg reject null, but for more than one args, tuple(args...) is already not nullable,
@@ -558,7 +558,7 @@ public:
             for (auto & desc : sort_desc)
             {
                 bool is_extra = true;
-                for (size_t i = 0; i < number_of_concat_arguments; ++i)
+                for (size_t i = 0; i < number_of_concat_items; ++i)
                 {
                     if (desc.column_name == all_columns_names_and_types[i].name)
                     {
@@ -577,7 +577,7 @@ public:
             if(!to_get_unique)
             {
                 bool has_collation = false;
-                for (size_t i = 0; i < number_of_concat_arguments; ++i)
+                for (size_t i = 0; i < number_of_concat_items; ++i)
                 {
                     if (collators[i] != nullptr)
                     {
@@ -618,7 +618,7 @@ public:
         {
             /// remove the row with null, except for sort columns
             const ColumnTuple & tuple = static_cast<const ColumnTuple &>(*columns[0]);
-            for (size_t i = 0; i < number_of_concat_arguments; ++i)
+            for (size_t i = 0; i < number_of_concat_items; ++i)
             {
                 if (is_nullable[i])
                 {
@@ -729,7 +729,7 @@ private:
             State::Set::LookupResult it;
             const char * begin = nullptr;
             size_t values_size = 0;
-            for (size_t j = 0; j< number_of_concat_arguments; ++j)
+            for (size_t j = 0; j< number_of_concat_items; ++j)
                 values_size += cols[j]->serializeValueIntoArena(i, arena1, begin, collators[j],containers[j]).size;
 
             StringRef str_serialized= StringRef(begin, values_size);
@@ -751,7 +751,7 @@ private:
                 {
                     writeString(separator, write_buffer);
                 }
-                for (size_t j = 0; j < number_of_concat_arguments; ++j)
+                for (size_t j = 0; j < number_of_concat_items; ++j)
                 {
                     all_columns_names_and_types[j].type->serializeText(*cols[j], i, write_buffer);
                 }
@@ -768,7 +768,7 @@ private:
     bool to_get_unique =false;
     DataTypePtr ret_type = std::make_shared<DataTypeString>();
     DataTypePtr nested_type;
-    size_t number_of_concat_arguments = 0;
+    size_t number_of_concat_items = 0;
     String separator =",";
     UInt64 max_len;
     SortDescription sort_desc;
