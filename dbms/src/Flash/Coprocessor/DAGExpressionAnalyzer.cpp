@@ -436,10 +436,10 @@ void DAGExpressionAnalyzer::buildGroupConcat(const tipb::Expr & expr, Expression
     AggregateDescription aggregate;
     /// the last parametric is the separator
     auto child_size = expr.children_size()-1;
-    NamesAndTypes all_arg_names_and_types;
+    NamesAndTypes all_columns_names_and_types;
     String delimiter = "";
     SortDescription sort_description;
-    bool only_one_argument = true;
+    bool only_one_column = true;
     TiDB::TiDBCollators arg_collators;
     String arg_name;
 
@@ -451,7 +451,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(const tipb::Expr & expr, Expression
         /// only one arg
         arg_name = getActions(expr.children(0), step.actions);
         types[0] = step.actions->getSampleBlock().getByName(arg_name).type;
-        all_arg_names_and_types.emplace_back(arg_name, types[0]);
+        all_columns_names_and_types.emplace_back(arg_name, types[0]);
         if (removeNullable(types[0])->isString())
             arg_collators.push_back(getCollatorFromExpr(expr.children(0)));
         else
@@ -460,8 +460,8 @@ void DAGExpressionAnalyzer::buildGroupConcat(const tipb::Expr & expr, Expression
     else
     {
         /// args... -> tuple(args...)
-        arg_name = buildTupleFunctionForGroupConcat(this, expr, sort_description, all_arg_names_and_types, arg_collators, step.actions);
-        only_one_argument = false;
+        arg_name = buildTupleFunctionForGroupConcat(this, expr, sort_description, all_columns_names_and_types, arg_collators, step.actions);
+        only_one_column = false;
         types[0] = step.actions->getSampleBlock().getByName(arg_name).type;
     }
     aggregate.argument_names[0] = arg_name;
@@ -497,43 +497,43 @@ void DAGExpressionAnalyzer::buildGroupConcat(const tipb::Expr & expr, Expression
     aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, result_is_nullable);
 
     /// TODO(FZH) deliver these arguments through aggregate.parameters of Array() type to keep the same code fashion, the special arguments
-    /// sort_description, all_arg_names_and_types can be set like the way of collators
+    /// sort_description, all_columns_names_and_types can be set like the way of collators
 
     /// group_concat_max_length
     UInt64 max_len = decodeDAGUInt64(expr.val());
 
-    int number_of_arguments = all_arg_names_and_types.size() - sort_description.size();
+    int number_of_arguments = all_columns_names_and_types.size() - sort_description.size();
     for (int num = 0; num < number_of_arguments && !result_is_nullable; ++num)
     {
-        if (all_arg_names_and_types[num].type->isNullable())
+        if (all_columns_names_and_types[num].type->isNullable())
         {
             result_is_nullable = true;
         }
     }
     if (result_is_nullable)
     {
-        if (only_one_argument)
+        if (only_one_column)
         {
             aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, true>>(
-                aggregate.function, types, delimiter, max_len, sort_description, all_arg_names_and_types, arg_collators, expr.has_distinct());
+                aggregate.function, types, delimiter, max_len, sort_description, all_columns_names_and_types, arg_collators, expr.has_distinct());
         }
         else
         {
             aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, false>>(
-                aggregate.function, types, delimiter, max_len, sort_description, all_arg_names_and_types, arg_collators, expr.has_distinct());
+                aggregate.function, types, delimiter, max_len, sort_description, all_columns_names_and_types, arg_collators, expr.has_distinct());
         }
     }
     else
     {
-        if (only_one_argument)
+        if (only_one_column)
         {
             aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, true>>(
-                aggregate.function, types, delimiter, max_len, sort_description, all_arg_names_and_types, arg_collators, expr.has_distinct());
+                aggregate.function, types, delimiter, max_len, sort_description, all_columns_names_and_types, arg_collators, expr.has_distinct());
         }
         else
         {
             aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, false>>(
-                aggregate.function, types, delimiter, max_len, sort_description, all_arg_names_and_types, arg_collators, expr.has_distinct());
+                aggregate.function, types, delimiter, max_len, sort_description, all_columns_names_and_types, arg_collators, expr.has_distinct());
         }
     }
 

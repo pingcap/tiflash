@@ -521,34 +521,34 @@ private:
 /// the input argument is in following two types:
 /// 1. only one column with original data type and without order_by items
 /// 2. one column combined with more than one columns including order by items, it should should be like tuple(type0, type1...)
-template <bool result_is_nullable, bool only_one_argument>
-class AggregateFunctionGroupConcat final : public AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcat<result_is_nullable, only_one_argument>>
+template <bool result_is_nullable, bool only_one_column>
+class AggregateFunctionGroupConcat final : public AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcat<result_is_nullable, only_one_column>>
 {
     using State = AggregateFunctionGroupUniqArrayGenericData;
 
 public:
-    AggregateFunctionGroupConcat(AggregateFunctionPtr nested_function, const DataTypes & input_args, const String sep, const UInt64& max_len_, const SortDescription & sort_desc_, const NamesAndTypes& all_arg_names_and_types_, const TiDB::TiDBCollators& collators_, const bool has_distinct)
-    : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcat<result_is_nullable, only_one_argument>>(nested_function),
+    AggregateFunctionGroupConcat(AggregateFunctionPtr nested_function, const DataTypes & input_args, const String sep, const UInt64& max_len_, const SortDescription & sort_desc_, const NamesAndTypes& all_columns_names_and_types_, const TiDB::TiDBCollators& collators_, const bool has_distinct)
+    : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionGroupConcat<result_is_nullable, only_one_column>>(nested_function),
           separator(sep),max_len(max_len_), sort_desc(sort_desc_),
-          all_arg_names_and_types(all_arg_names_and_types_), collators(collators_)
+          all_columns_names_and_types(all_columns_names_and_types_), collators(collators_)
     {
         if (input_args.size() != 1)
             throw Exception("Logical error: not single argument is passed to AggregateFunctionGroupConcat", ErrorCodes::LOGICAL_ERROR);
         nested_type = std::make_shared<DataTypeArray>(removeNullable(input_args[0]));
 
-        ///  all args =    concat args + order_by items
-        /// (c0 + c1) = group_concat(c0 order by c1)
-        number_of_concat_arguments = all_arg_names_and_types.size() - sort_desc.size();
+        /// all columns =     concat args + order_by items
+        /// (c0 + c1)   = group_concat(c0 order by c1)
+        number_of_concat_arguments = all_columns_names_and_types.size() - sort_desc.size();
 
         is_nullable.resize(number_of_concat_arguments);
         for (size_t i = 0; i < number_of_concat_arguments; ++i)
         {
-            is_nullable[i] = all_arg_names_and_types[i].type->isNullable();
+            is_nullable[i] = all_columns_names_and_types[i].type->isNullable();
             /// the inputs of a nested agg reject null, but for more than one args, tuple(args...) is already not nullable,
-            /// so here just remove null for the only_one_argument case
-            if constexpr (only_one_argument)
+            /// so here just remove null for the only_one_column case
+            if constexpr (only_one_column)
             {
-                all_arg_names_and_types[i].type = removeNullable(all_arg_names_and_types[i].type);
+                all_columns_names_and_types[i].type = removeNullable(all_columns_names_and_types[i].type);
             }
         }
 
@@ -560,7 +560,7 @@ public:
                 bool is_extra = true;
                 for (size_t i = 0; i < number_of_concat_arguments; ++i)
                 {
-                    if (desc.column_name == all_arg_names_and_types[i].name)
+                    if (desc.column_name == all_columns_names_and_types[i].name)
                     {
                         is_extra = false;
                         break;
@@ -600,7 +600,7 @@ public:
     /// reject nulls before add() of nested agg
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        if constexpr (only_one_argument)
+        if constexpr (only_one_column)
         {
             if(is_nullable[0])
             {
@@ -664,7 +664,7 @@ public:
 
             /// nested_columns are not nullable, because the nullable rows are removed in add()
             Columns nested_cols;
-            if constexpr (only_one_argument)
+            if constexpr (only_one_column)
             {
                 nested_cols.push_back(column_array->getDataPtr());
             }
@@ -708,7 +708,7 @@ private:
         int concat_size = nested_cols.size();
         for(int i = 0 ; i < concat_size; ++i )
         {
-            res.insert(ColumnWithTypeAndName(nested_cols[i], all_arg_names_and_types[i].type, all_arg_names_and_types[i].name));
+            res.insert(ColumnWithTypeAndName(nested_cols[i], all_columns_names_and_types[i].type, all_columns_names_and_types[i].name));
         }
         /// sort a block with collation
         sortBlock(res, sort_desc);
@@ -753,7 +753,7 @@ private:
                 }
                 for (size_t j = 0; j < number_of_concat_arguments; ++j)
                 {
-                    all_arg_names_and_types[j].type->serializeText(*cols[j], i, write_buffer);
+                    all_columns_names_and_types[j].type->serializeText(*cols[j], i, write_buffer);
                 }
             }
             /// TODO(FZH) output just one warning ("Some rows were cut by GROUPCONCAT()") if this happen
@@ -772,7 +772,7 @@ private:
     String separator =",";
     UInt64 max_len;
     SortDescription sort_desc;
-    NamesAndTypes all_arg_names_and_types;
+    NamesAndTypes all_columns_names_and_types;
     TiDB::TiDBCollators collators;
     std::vector<bool> is_nullable;
 };
