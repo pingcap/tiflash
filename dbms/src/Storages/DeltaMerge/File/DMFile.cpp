@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+#include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
@@ -587,7 +588,7 @@ void DMFile::initializeSubFileStatsForFolderMode()
 
 void DMFile::initializeIndices()
 {
-    auto decode = [](const std::string & data) {
+    auto decode = [](const StringRef & data) {
         try
         {
             auto original = unescapeForFileName(data);
@@ -595,11 +596,11 @@ void DMFile::initializeIndices()
         }
         catch (const std::invalid_argument & err)
         {
-            throw DB::Exception(fmt::format("invalid ColId:", err.what()));
+            throw DB::Exception(fmt::format("invalid ColId: {} from file: {}", err.what(), data));
         }
         catch (const std::out_of_range & err)
         {
-            throw DB::Exception(fmt::format("invalid ColId:", err.what()));
+            throw DB::Exception(fmt::format("invalid ColId: {} from file: {}", err.what(), data));
         }
     };
     if (isSingleFileMode())
@@ -612,7 +613,7 @@ void DMFile::initializeIndices()
     {
         if (endsWith(name, details::INDEX_FILE_SUFFIX))
         {
-            column_indices.insert(decode(name.substr(0, name.size() - 4))); // strip tailing `.idx`
+            column_indices.insert(decode(removeSuffix(name, strlen(details::INDEX_FILE_SUFFIX)))); // strip tailing `.idx`
         }
     }
 }
