@@ -8,6 +8,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_set_dtfile_exist_when_acquire_id[];
+} // namespace FailPoints
 namespace DM
 {
 enum class StorageType
@@ -96,6 +100,14 @@ PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, cons
         dtfile_id = ++max_data_page_id;
 
         auto existed_path = delegator.getDTFilePath(dtfile_id, /*throw_on_not_exist=*/false);
+        fiu_do_on(FailPoints::force_set_dtfile_exist_when_acquire_id, {
+            static size_t fail_point_called = 0;
+            if (existed_path.empty() && fail_point_called % 10 == 0)
+            {
+                fail_point_called++;
+                existed_path = "<mock for existed path>";
+            }
+        });
         if (likely(existed_path.empty()))
         {
             break;
