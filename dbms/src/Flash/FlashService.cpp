@@ -196,7 +196,7 @@ grpc::Status FlashService::Coprocessor(
         MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
         if (sender_task != nullptr)
         {
-            tunnel = sender_task->getTunnelWithTimeout(request, timeout, err_msg);
+            std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
         }
         if (tunnel == nullptr)
         {

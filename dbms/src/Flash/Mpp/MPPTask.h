@@ -72,7 +72,8 @@ public:
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel);
 
-    MPPTunnelPtr getTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout, String & err_msg);
+    // tunnel and error_message
+    std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
 
     ~MPPTask();
 private:
