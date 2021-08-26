@@ -135,7 +135,7 @@ void loadMiConfig(Logger * log)
 
 namespace
 {
-[[maybe_unused]] void loadBooleanConfig(Logger * log, bool & target, const char * name)
+[[maybe_unused]] void loadBooleanConfig(Poco::Logger * log, bool & target, const char * name)
 {
     auto config = getenv(name);
     if (config)
@@ -269,7 +269,7 @@ pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_c
     return config;
 }
 
-Logger * grpc_log = nullptr;
+Poco::Logger * grpc_log = nullptr;
 
 void printGRPCLog(gpr_log_func_args * args)
 {

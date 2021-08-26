@@ -247,7 +247,7 @@ private:
     class LoggerWrapper
     {
     public:
-        Poco::LoggerWrapper(Connection & parent_)
+        LoggerWrapper(Connection & parent_)
             : log(nullptr), parent(parent_)
         {
         }
@@ -261,11 +261,11 @@ private:
         }
 
     private:
-        std::atomic<Logger *> log;
+        std::atomic<Poco::Logger *> log;
         Connection & parent;
     };
 
-    Poco::LoggerWrapper log_wrapper;
+    LoggerWrapper log_wrapper;
 
     void connect();
     void sendHello();
