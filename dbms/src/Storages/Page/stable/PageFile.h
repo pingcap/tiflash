@@ -13,7 +13,7 @@
 
 namespace Poco
 {
-class Poco::Logger;
+class Logger;
 } // namespace Poco
 namespace CurrentMetrics
 {

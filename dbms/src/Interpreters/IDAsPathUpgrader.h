@@ -7,7 +7,7 @@
 
 namespace Poco
 {
-class Poco::Logger;
+class Logger;
 }
 
 namespace TiDB

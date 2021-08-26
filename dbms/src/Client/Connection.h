@@ -244,7 +244,7 @@ private:
     BlockOutputStreamPtr block_out;
 
     /// Poco::Logger is created lazily, for avoid to run DNS request in constructor.
-    class Poco::LoggerWrapper
+    class LoggerWrapper
     {
     public:
         Poco::LoggerWrapper(Connection & parent_)

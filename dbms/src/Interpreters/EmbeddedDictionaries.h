@@ -6,7 +6,7 @@
 #include <Poco/Event.h>
 
 
-namespace Poco { class Poco::Logger; namespace Util { class AbstractConfiguration; } }
+namespace Poco { class Logger; namespace Util { class AbstractConfiguration; } }
 
 class RegionsHierarchies;
 class TechDataHierarchy;

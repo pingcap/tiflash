@@ -9,7 +9,7 @@
 #include <Storages/Transaction/Types.h>
 
 
-namespace Poco { class Poco::Logger; }
+namespace Poco { class Logger; }
 
 namespace DB
 {

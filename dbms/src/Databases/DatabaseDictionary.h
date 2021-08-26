@@ -9,7 +9,7 @@
 
 namespace Poco
 {
-    class Poco::Logger;
+    class Logger;
 }
 
 

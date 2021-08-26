@@ -3,7 +3,7 @@
 #include <Databases/DatabasesCommon.h>
 
 
-namespace Poco { class Poco::Logger; }
+namespace Poco { class Logger; }
 
 
 namespace DB

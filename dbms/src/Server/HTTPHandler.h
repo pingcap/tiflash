@@ -13,7 +13,7 @@ namespace CurrentMetrics
     extern const Metric HTTPConnection;
 }
 
-namespace Poco { class Poco::Logger; }
+namespace Poco { class Logger; }
 
 namespace DB
 {

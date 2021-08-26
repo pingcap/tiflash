@@ -4,7 +4,7 @@
 #include <Common/PODArray.h>
 
 
-namespace Poco { class Poco::Logger; }
+namespace Poco { class Logger; }
 
 
 namespace DB
