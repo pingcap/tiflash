@@ -1,14 +1,9 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
-<<<<<<< HEAD
 #include <common/logger_useful.h>
-=======
-#include <Common/ThreadFactory.h>
->>>>>>> 5ecb23a58 (fix bug that SharedQueryBlockInputStream may loss block randomly (#2759))
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <common/logger_useful.h>
 
 #include <thread>
 
