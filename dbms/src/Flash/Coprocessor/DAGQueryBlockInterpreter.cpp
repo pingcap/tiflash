@@ -596,15 +596,7 @@ void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const 
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
       */
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
-    bool has_collator = false;
-    for (auto & p : collators)
-    {
-        if (p != nullptr)
-        {
-            has_collator = true;
-            break;
-        }
-    }
+    bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
 
     Aggregator::Params params(header, keys, aggregates, false, settings.max_rows_to_group_by, settings.group_by_overflow_mode,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),

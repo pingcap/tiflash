@@ -84,24 +84,24 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             return false;
         }
         Stopwatch watch;
-        SCOPE_EXIT({ GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
+        SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
         LOG_INFO(log,
             "start to sync schemas. current version is: " + std::to_string(cur_version)
                 + " and try to sync schema version to: " + std::to_string(version));
 
         // Show whether the schema mutex is held for a long time or not.
-        GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_applying).Set(1.0);
-        SCOPE_EXIT({ GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_applying).Set(0.0); });
+        GET_METRIC(tiflash_schema_applying).Set(1.0);
+        SCOPE_EXIT({ GET_METRIC(tiflash_schema_applying).Set(0.0); });
 
-        GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_count, type_diff).Increment();
+        GET_METRIC(tiflash_schema_apply_count, type_diff).Increment();
         if (!tryLoadSchemaDiffs(getter, version, context))
         {
-            GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_count, type_full).Increment();
+            GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
             loadAllSchema(getter, version, context);
         }
         cur_version = version;
-        GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_version).Set(cur_version);
+        GET_METRIC(tiflash_schema_version).Set(cur_version);
         LOG_INFO(log, "end sync schema, version has been updated to " + std::to_string(cur_version));
         return true;
     }
@@ -153,21 +153,30 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 builder.applyDiff(diff);
             }
         }
+        catch (TiFlashException & e)
+        {
+            if (!e.getError().is(Errors::DDL::StaleSchema))
+            {
+                GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
+            }
+            LOG_WARNING(log, "apply diff meets exception : " << e.displayText() << " \n stack is " << e.getStackTrace().toString());
+            return false;
+        }
         catch (Exception & e)
         {
-            GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_count, type_failed).Increment();
+            GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
             LOG_WARNING(log, "apply diff meets exception : " << e.displayText() << " \n stack is " << e.getStackTrace().toString());
             return false;
         }
         catch (Poco::Exception & e)
         {
-            GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_count, type_failed).Increment();
+            GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
             LOG_WARNING(log, "apply diff meets exception : " << e.displayText() << " \n");
             return false;
         }
         catch (std::exception & e)
         {
-            GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_count, type_failed).Increment();
+            GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
             LOG_WARNING(log, "apply diff meets exception : " << e.what() << " \n");
             return false;
         }

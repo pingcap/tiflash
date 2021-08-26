@@ -15,8 +15,6 @@ namespace DB
 {
 
 class Context;
-class TiFlashMetrics;
-using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
 /// DAGQueryBlock is a dag query from single source,
 /// which means the query block contains a source node(tableScan/join/projection/exchangeReceiver)
@@ -24,8 +22,8 @@ using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 class DAGQueryBlock
 {
 public:
-    DAGQueryBlock(UInt32 id, const tipb::Executor & root, TiFlashMetricsPtr metrics);
-    DAGQueryBlock(UInt32 id, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors, TiFlashMetricsPtr metrics);
+    DAGQueryBlock(UInt32 id, const tipb::Executor & root);
+    DAGQueryBlock(UInt32 id, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors);
     /// the xxx_name is added for compatibility issues: before join is supported, executor does not
     /// has executor name, after join is supported in dag request, every executor has an unique
     /// name(executor->executor_id()). Since We can not always get the executor name from executor

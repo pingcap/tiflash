@@ -279,7 +279,7 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
     std::vector<FsStats> stats;
     for (size_t i = 0; i < paths.size(); ++i)
     {
-        stats.emplace_back(global_capacity->getFsStatsOfPath(paths[i].path));
+        stats.emplace_back(std::get<0>(global_capacity->getFsStatsOfPath(paths[i].path)));
         total_available_size += stats.back().avail_size;
     }
 

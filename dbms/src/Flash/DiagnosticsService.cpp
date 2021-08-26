@@ -3,6 +3,9 @@
 #include <Flash/LogSearch.h>
 #include <Poco/Path.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>
 #include <re2/re2.h>
 
@@ -356,6 +359,45 @@ static void getCacheSize(const uint & level [[maybe_unused]], size_t & size, siz
 #endif
     return;
 }
+
+struct CPUArchHelper
+{
+    CPUArchHelper() { arch_ = execOrElse("uname -m", "Unknown"); }
+    const std::string & get() const { return arch_; }
+
+protected:
+    std::string execOrElse(const char * cmd [[maybe_unused]], const char * otherwise)
+    {
+#if defined(__unix__)
+        std::array<char, 128> buffer;
+        std::string result;
+        auto pipe = popen(cmd, "r");
+        if (!pipe)
+            throw Exception("Can not execute command " + std::string(cmd) + "!", ErrorCodes::LOGICAL_ERROR);
+        while (!feof(pipe))
+        {
+            if (fgets(buffer.data(), 128, pipe) != nullptr)
+                result += buffer.data();
+        }
+        auto rc = pclose(pipe);
+        if (rc == EXIT_FAILURE)
+        {
+            return otherwise;
+        }
+        return result;
+#else
+        return otherwise;
+#endif
+    }
+    std::string arch_;
+};
+
+static std::string getCPUArch()
+{
+    static CPUArchHelper helper;
+    return helper.get();
+}
+
 
 #ifdef __linux__
 static DiagnosticsService::Disk::DiskType getDiskTypeByNameLinux(const std::string & name)
@@ -779,7 +821,7 @@ void DiagnosticsService::cpuHardwareInfo(std::vector<diagnosticspb::ServerInfoIt
         {"cpu-logical-cores",
             std::to_string(std::thread::hardware_concurrency())}, /// TODO: we should check both machine's core number and cgroup quota
         {"cpu-physical-cores", std::to_string(getPhysicalCoreNumber())}, //
-        {"cpu-frequency", std::to_string(getCPUFrequency()) + "MHz"}};
+        {"cpu-frequency", std::to_string(getCPUFrequency()) + "MHz"}, {"cpu-arch", getCPUArch()}};
 
     // L1 to L3 cache
     for (uint8_t level = 1; level <= 3; level++)
@@ -903,6 +945,19 @@ try
 {
     (void)context;
 
+#if true 
+    //defined(__APPLE__)
+    const TiFlashRaftProxyHelper * helper = server.context().getTMTContext().getKVStore()->getProxyHelper();
+    if (helper)
+    {
+        std::string req = request->SerializeAsString();
+        helper->fn_server_info(helper->proxy_ptr, strIntoView(req), response);
+    }
+    else
+    {
+        LOG_ERROR(log, "TiFlashRaftProxyHelper is nullptr");
+    }
+#else
     auto tp = request->tp();
     std::vector<ServerInfoItem> items;
 
@@ -967,12 +1022,17 @@ try
             added_pair->set_value(pair.value());
         }
     }
-
+#endif
     return ::grpc::Status::OK;
 }
 catch (const Exception & e)
 {
     LOG_ERROR(log, e.displayText());
+    return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
+}
+catch (const std::exception & e)
+{
+    LOG_ERROR(log, e.what());
     return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
 }
 

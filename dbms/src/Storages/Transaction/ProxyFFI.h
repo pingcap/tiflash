@@ -75,5 +75,7 @@ uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(EngineStoreServerWrap *, void * ptr, RawCppPtrType type);
 RawVoidPtr GenBatchReadIndexRes(uint64_t cap);
 void InsertBatchReadIndexResp(RawVoidPtr, BaseBuffView, uint64_t);
+void SetSetverInfoResp(BaseBuffView, RawVoidPtr);
+BaseBuffView strIntoView(const std::string & view);
 }
 } // namespace DB
