@@ -1,8 +1,8 @@
 #pragma once
 
+#include <Common/Exception.h>
 #include <Poco/ErrorHandler.h>
 #include <common/logger_useful.h>
-#include <Common/Exception.h>
 
 
 /** ErrorHandler for Poco::Thread,
@@ -13,8 +13,8 @@ class KillingErrorHandler : public Poco::ErrorHandler
 {
 public:
     void exception(const Poco::Exception &) { std::terminate(); }
-    void exception(const std::exception &)  { std::terminate(); }
-    void exception()                        { std::terminate(); }
+    void exception(const std::exception &) { std::terminate(); }
+    void exception() { std::terminate(); }
 };
 
 
@@ -24,8 +24,8 @@ class ServerErrorHandler : public Poco::ErrorHandler
 {
 public:
     void exception(const Poco::Exception &) { logException(); }
-    void exception(const std::exception &)  { logException(); }
-    void exception()                        { logException(); }
+    void exception(const std::exception &) { logException(); }
+    void exception() { logException(); }
 
 private:
     Poco::Logger * log = &Poco::Logger::get("ServerErrorHandler");
