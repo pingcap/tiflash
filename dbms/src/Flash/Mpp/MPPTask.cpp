@@ -16,6 +16,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>
 
+#include <chrono>
 #include <ext/scope_guard.h>
 #include <map>
 
@@ -84,40 +85,35 @@ void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
 {
     if (status == CANCELLED)
         throw Exception("the tunnel " + tunnel->id() + " can not been registered, because the task is cancelled");
-    std::unique_lock<std::mutex> lk(tunnel_mutex);
+
     if (tunnel_map.find(id) != tunnel_map.end())
-    {
         throw Exception("the tunnel " + tunnel->id() + " has been registered");
-    }
+
     tunnel_map[id] = tunnel;
-    cv.notify_all();
 }
 
-MPPTunnelPtr MPPTask::getTunnelWithTimeout(
-    const ::mpp::EstablishMPPConnectionRequest * request,
-    std::chrono::seconds timeout,
-    String & err_msg)
+std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConnectionRequest * request)
 {
+    if (status == CANCELLED)
+    {
+        auto err_msg = fmt::format(
+            "can't find tunnel ({} + {}) because the task is cancelled",
+            request->sender_meta().task_id(),
+            request->receiver_meta().task_id());
+        return {nullptr, err_msg};
+    }
+
     MPPTaskId id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
-    std::map<MPPTaskId, MPPTunnelPtr>::iterator it;
-    bool cancelled = false;
-    std::unique_lock<std::mutex> lk(tunnel_mutex);
-    auto ret = cv.wait_for(lk, timeout, [&] {
-        it = tunnel_map.find(id);
-        if (status == CANCELLED)
-        {
-            cancelled = true;
-            return true;
-        }
-        return it != tunnel_map.end();
-    });
-    if (cancelled)
-        err_msg = "can't find tunnel ( " + toString(request->sender_meta().task_id()) + " + " + toString(request->receiver_meta().task_id())
-            + " because the task is cancelled";
-    if (!ret)
-        err_msg = "can't find tunnel ( " + toString(request->sender_meta().task_id()) + " + " + toString(request->receiver_meta().task_id())
-            + " ) within " + toString(timeout.count()) + " s";
-    return (ret && !cancelled) ? it->second : nullptr;
+    std::map<MPPTaskId, MPPTunnelPtr>::iterator it = tunnel_map.find(id);
+    if (it == tunnel_map.end())
+    {
+        auto err_msg = fmt::format(
+            "can't find tunnel ({} + {})",
+            request->sender_meta().task_id(),
+            request->receiver_meta().task_id());
+        return {nullptr, err_msg};
+    }
+    return {it->second, ""};
 }
 
 void MPPTask::unregisterTask()
@@ -193,6 +189,34 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
     context.setDAGContext(dag_context.get());
 
+    if (dag_context->isRootMPPTask())
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_root_mpp_task);
+    }
+    else
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_non_root_mpp_task);
+    }
+
+    // register tunnels
+    MPPTunnelSetPtr tunnel_set = std::make_shared<MPPTunnelSet>();
+    const auto & exchangeSender = dag_req->root_executor().exchange_sender();
+    std::chrono::seconds timeout(task_request.timeout());
+    for (int i = 0; i < exchangeSender.encoded_task_meta_size(); i++)
+    {
+        // exchange sender will register the tunnels and wait receiver to found a connection.
+        mpp::TaskMeta task_meta;
+        task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, this->shared_from_this());
+        LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
+        registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
+        tunnel_set->addTunnel(tunnel);
+        if (!dag_context->isRootMPPTask())
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
+        }
+    }
+
     // register task.
     TMTContext & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
@@ -213,32 +237,6 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
 
     DAGQuerySource dag(context, regions, retry_regions, *dag_req, true);
 
-    if (dag_context->isRootMPPTask())
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_root_mpp_task);
-    }
-    else
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_non_root_mpp_task);
-    }
-    // register tunnels
-    MPPTunnelSetPtr tunnel_set = std::make_shared<MPPTunnelSet>();
-    const auto & exchangeSender = dag_req->root_executor().exchange_sender();
-    std::chrono::seconds timeout(task_request.timeout());
-    for (int i = 0; i < exchangeSender.encoded_task_meta_size(); i++)
-    {
-        // exchange sender will register the tunnels and wait receiver to found a connection.
-        mpp::TaskMeta task_meta;
-        task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, this->shared_from_this());
-        LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
-        registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
-        tunnel_set->addTunnel(tunnel);
-        if (!dag_context->isRootMPPTask())
-        {
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
-        }
-    }
     // read index , this may take a long time.
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
 
