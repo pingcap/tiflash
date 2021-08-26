@@ -20,7 +20,7 @@ namespace DB
 class LogWithPrefix : private boost::noncopyable
 {
 public:
-    LogWithPrefix(Logger * log_, const String & prefix_)
+    LogWithPrefix(Poco::Logger * log_, const String & prefix_)
         : log(log_)
         , prefix(prefix_)
     {
