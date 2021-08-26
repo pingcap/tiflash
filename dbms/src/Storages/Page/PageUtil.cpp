@@ -46,7 +46,6 @@ extern const char force_set_page_file_write_errno[];
 
 namespace PageUtil
 {
-
 void syncFile(WritableFilePtr & file)
 {
     if (-1 == file->fsync())
@@ -55,7 +54,12 @@ void syncFile(WritableFilePtr & file)
 
 #ifndef NDEBUG
 void writeFile(
-    WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter, bool enable_failpoint)
+    WritableFilePtr & file,
+    UInt64 offset,
+    char * data,
+    size_t to_write,
+    const WriteLimiterPtr & write_limiter,
+    bool enable_failpoint)
 #else
 void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter)
 #endif
@@ -81,7 +85,7 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
         fiu_do_on(FailPoints::force_set_page_file_write_errno, {
             if (enable_failpoint)
             {
-                res   = -1;
+                res = -1;
                 errno = ENOSPC;
             }
         });

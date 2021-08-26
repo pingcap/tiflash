@@ -34,17 +34,17 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
 
     switch (subtype)
     {
-        case StorageType::Log:
-            SET_CONFIG(log);
-            break;
-        case StorageType::Data:
-            SET_CONFIG(data);
-            break;
-        case StorageType::Meta:
-            SET_CONFIG(meta);
-            break;
-        default:
-            throw Exception("Unknown subtype in extractConfig: " + DB::toString(static_cast<Int32>(subtype)));
+    case StorageType::Log:
+        SET_CONFIG(log);
+        break;
+    case StorageType::Data:
+        SET_CONFIG(data);
+        break;
+    case StorageType::Meta:
+        SET_CONFIG(meta);
+        break;
+    default:
+        throw Exception("Unknown subtype in extractConfig: " + DB::toString(static_cast<Int32>(subtype)));
     }
 #undef SET_CONFIG
 
@@ -53,22 +53,27 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
 
 StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
     : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
-      log_storage(
-          name + ".log", path_pool.getPSDiskDelegatorMulti("log"), extractConfig(settings, StorageType::Log), global_ctx.getFileProvider()),
-      // The iops in data_storage is low, only use the first disk for storing data
-      data_storage(name + ".data",
-          path_pool.getPSDiskDelegatorSingle("data"),
-          extractConfig(settings, StorageType::Data),
-          global_ctx.getFileProvider()),
-      // The iops in meta_storage is relatively high, use multi-disks if possible
-      meta_storage(name + ".meta",
-          path_pool.getPSDiskDelegatorMulti("meta"),
-          extractConfig(settings, StorageType::Meta),
-          global_ctx.getFileProvider()),
-      max_log_page_id(0),
-      max_data_page_id(0),
-      max_meta_page_id(0),
-      global_context(global_ctx)
+    log_storage(
+        name + ".log",
+        path_pool.getPSDiskDelegatorMulti("log"),
+        extractConfig(settings, StorageType::Log),
+        global_ctx.getFileProvider())
+    ,
+    // The iops in data_storage is low, only use the first disk for storing data
+    data_storage(name + ".data",
+                 path_pool.getPSDiskDelegatorSingle("data"),
+                 extractConfig(settings, StorageType::Data),
+                 global_ctx.getFileProvider())
+    ,
+    // The iops in meta_storage is relatively high, use multi-disks if possible
+    meta_storage(name + ".meta",
+                 path_pool.getPSDiskDelegatorMulti("meta"),
+                 extractConfig(settings, StorageType::Meta),
+                 global_ctx.getFileProvider())
+    , max_log_page_id(0)
+    , max_data_page_id(0)
+    , max_meta_page_id(0)
+    , global_context(global_ctx)
 {}
 
 void StoragePool::restore()
@@ -114,7 +119,7 @@ PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, cons
         }
         // else there is a DTFile with that id, continue to acquire a new ID.
         LOG_WARNING(&Poco::Logger::get(who),
-            fmt::format("The DTFile is already exists, continute to acquire another ID. [path={}] [id={}]", existed_path, dtfile_id));
+                    fmt::format("The DTFile is already exists, continute to acquire another ID. [path={}] [id={}]", existed_path, dtfile_id));
     } while (true);
     return dtfile_id;
 }

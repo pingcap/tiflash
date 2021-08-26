@@ -11,7 +11,6 @@
 
 namespace DB
 {
-
 class DeltaVersionEditAcceptor;
 
 class PageEntriesVersionSetWithDelta : public ::DB::MVCC::VersionSetWithDelta< //
@@ -21,10 +20,10 @@ class PageEntriesVersionSetWithDelta : public ::DB::MVCC::VersionSetWithDelta< /
                                            DeltaVersionEditAcceptor>
 {
 public:
-    using BaseType     = ::DB::MVCC::VersionSetWithDelta<PageEntriesForDelta, PageEntriesView, PageEntriesEdit, DeltaVersionEditAcceptor>;
+    using BaseType = ::DB::MVCC::VersionSetWithDelta<PageEntriesForDelta, PageEntriesView, PageEntriesEdit, DeltaVersionEditAcceptor>;
     using EditAcceptor = BaseType::EditAcceptor;
-    using VersionType  = BaseType::VersionType;
-    using VersionPtr   = BaseType::VersionPtr;
+    using VersionType = BaseType::VersionType;
+    using VersionPtr = BaseType::VersionPtr;
 
 public:
     explicit PageEntriesVersionSetWithDelta(String name_, const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log_)
@@ -41,10 +40,10 @@ public:
 
 private:
     void collectLiveFilesFromVersionList( //
-        const PageEntriesView &        view,
+        const PageEntriesView & view,
         std::set<PageFileIdAndLevel> & live_files,
-        std::set<PageId> &             live_normal_pages,
-        bool                           need_scan_page_ids) const;
+        std::set<PageId> & live_normal_pages,
+        bool need_scan_page_ids) const;
 };
 
 /// Read old entries state from `view_` and apply new edit to `view_->tail`
@@ -52,24 +51,24 @@ class DeltaVersionEditAcceptor
 {
 public:
     explicit DeltaVersionEditAcceptor(const PageEntriesView * view_, //
-                                      const String &          name_,
-                                      bool                    ignore_invalid_ref_ = false,
-                                      Poco::Logger *          log_                = nullptr);
+                                      const String & name_,
+                                      bool ignore_invalid_ref_ = false,
+                                      Poco::Logger * log_ = nullptr);
 
     ~DeltaVersionEditAcceptor();
 
     void apply(PageEntriesEdit & edit);
 
-    static void applyInplace(const String &                                     name,
+    static void applyInplace(const String & name,
                              const PageEntriesVersionSetWithDelta::VersionPtr & current,
-                             const PageEntriesEdit &                            edit,
-                             Poco::Logger *                                     log);
+                             const PageEntriesEdit & edit,
+                             Poco::Logger * log);
 
     void gcApply(PageEntriesEdit & edit) { PageEntriesBuilder::gcApplyTemplate(view, edit, current_version); }
 
     static void gcApplyInplace( //
         const PageEntriesVersionSetWithDelta::VersionPtr & current,
-        PageEntriesEdit &                                  edit)
+        PageEntriesEdit & edit)
     {
         assert(current->isBase());
         assert(current.use_count() == 1);
@@ -85,9 +84,9 @@ private:
     void decreasePageRef(PageId page_id);
 
 private:
-    PageEntriesView *                          view;
+    PageEntriesView * view;
     PageEntriesVersionSetWithDelta::VersionPtr current_version;
-    bool                                       ignore_invalid_ref;
+    bool ignore_invalid_ref;
 
     const String & name;
     Poco::Logger * log;

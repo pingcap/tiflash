@@ -1,16 +1,14 @@
 #pragma once
 
-#include <unordered_map>
-
-
 #include <Columns/IColumn.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+
+#include <unordered_map>
 
 namespace DB
 {
 namespace DM
 {
-
 class OrderColumnCache
 {
 private:
@@ -24,7 +22,7 @@ public:
         hash.update(pack_id);
         hash.update(col_id);
         UInt64 key = hash.get64();
-        auto   it  = column_map.find(key);
+        auto it = column_map.find(key);
         if (it == column_map.end())
             return {};
         else

@@ -43,7 +43,6 @@ extern const Metric PSMVCCSnapshotsList;
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char random_slow_page_storage_remove_expired_snapshots[];
@@ -59,7 +58,9 @@ public:
     std::shared_ptr<T> prev;
 
 public:
-    explicit MultiVersionCountableForDelta() : prev(nullptr) {}
+    explicit MultiVersionCountableForDelta()
+        : prev(nullptr)
+    {}
 
     virtual ~MultiVersionCountableForDelta() = default;
 };
@@ -80,16 +81,18 @@ class VersionSetWithDelta
 {
 public:
     using EditAcceptor = TEditAcceptor;
-    using VersionType  = TVersion;
-    using VersionPtr   = std::shared_ptr<VersionType>;
+    using VersionType = TVersion;
+    using VersionPtr = std::shared_ptr<VersionType>;
 
 public:
     explicit VersionSetWithDelta(String name_, const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log_)
-        : current(std::move(VersionType::createBase())), //
-          snapshots(),                                   //
-          config(config_),
-          name(std::move(name_)),
-          log(log_)
+        : current(std::move(VersionType::createBase()))
+        , //
+        snapshots()
+        , //
+        config(config_)
+        , name(std::move(name_))
+        , log(log_)
     {
     }
 
@@ -127,7 +130,7 @@ public:
             ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnCurrentDelta);
         }
         // Make a view from head to new version, then apply edits on `current`.
-        auto         view = std::make_shared<TVersionView>(current);
+        auto view = std::make_shared<TVersionView>(current);
         EditAcceptor builder(view.get(), name, /* ignore_invalid_ref_= */ true, log);
         builder.apply(edit);
     }
@@ -140,7 +143,7 @@ public:
     {
     public:
         VersionSetWithDelta * vset;
-        TVersionView          view;
+        TVersionView view;
 
         using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
         const unsigned t_id;
@@ -150,7 +153,10 @@ public:
 
     public:
         Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_)
-            : vset(vset_), view(std::move(tail_)), t_id(Poco::ThreadNumber::get()), create_time(std::chrono::steady_clock::now())
+            : vset(vset_)
+            , view(std::move(tail_))
+            , t_id(Poco::ThreadNumber::get())
+            , create_time(std::chrono::steady_clock::now())
         {
             CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
         }
@@ -171,7 +177,7 @@ public:
         // The time this snapshot living for
         double elapsedSeconds() const
         {
-            auto                          end  = std::chrono::steady_clock::now();
+            auto end = std::chrono::steady_clock::now();
             std::chrono::duration<double> diff = end - create_time;
             return diff.count();
         }
@@ -180,7 +186,7 @@ public:
         friend class VersionSetWithDelta;
     };
 
-    using SnapshotPtr     = std::shared_ptr<Snapshot>;
+    using SnapshotPtr = std::shared_ptr<Snapshot>;
     using SnapshotWeakPtr = std::weak_ptr<Snapshot>;
 
     /// Create a snapshot for current version.
@@ -333,9 +339,9 @@ private:
         // Notice: we should free those valid snapshots without locking, or it may cause
         // incursive deadlock on `vset->read_write_mutex`.
         std::vector<SnapshotPtr> valid_snapshots;
-        double                   longest_living_seconds        = 0.0;
-        unsigned                 longest_living_from_thread_id = 0;
-        DB::Int64                num_snapshots_removed         = 0;
+        double longest_living_seconds = 0.0;
+        unsigned longest_living_from_thread_id = 0;
+        DB::Int64 num_snapshots_removed = 0;
         {
             std::unique_lock lock(read_write_mutex);
             for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
@@ -350,14 +356,14 @@ private:
                 else
                 {
                     fiu_do_on(FailPoints::random_slow_page_storage_remove_expired_snapshots, {
-                        pcg64                     rng(randomSeed());
+                        pcg64 rng(randomSeed());
                         std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
                         std::this_thread::sleep_for(ms);
                     });
                     const auto snapshot_lifetime = snapshot_or_invalid->elapsedSeconds();
                     if (snapshot_lifetime > longest_living_seconds)
                     {
-                        longest_living_seconds        = snapshot_lifetime;
+                        longest_living_seconds = snapshot_lifetime;
                         longest_living_from_thread_id = snapshot_or_invalid->t_id;
                     }
                     valid_snapshots.emplace_back(snapshot_or_invalid); // Save valid snapshot and release them without lock later
@@ -407,8 +413,8 @@ public:
 
     static std::string versionToDebugString(VersionPtr tail)
     {
-        std::string            s;
-        bool                   is_first = true;
+        std::string s;
+        bool is_first = true;
         std::stack<VersionPtr> deltas;
         for (auto v = tail; v != nullptr; v = std::atomic_load(&v->prev))
         {
@@ -429,12 +435,12 @@ public:
     }
 
 protected:
-    mutable std::shared_mutex          read_write_mutex;
-    VersionPtr                         current;
+    mutable std::shared_mutex read_write_mutex;
+    VersionPtr current;
     mutable std::list<SnapshotWeakPtr> snapshots;
     const ::DB::MVCC::VersionSetConfig config;
-    const String                       name;
-    Poco::Logger *                     log;
+    const String name;
+    Poco::Logger * log;
 };
 
 } // namespace MVCC

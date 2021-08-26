@@ -14,12 +14,11 @@ namespace DM
 {
 namespace tests
 {
-
-
 class DMRegion_test : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    DMRegion_test() : log(&Poco::Logger::get("DMRegion_test"))
+    DMRegion_test()
+        : log(&Poco::Logger::get("DMRegion_test"))
     {
         settings.set("dt_segment_limit_rows", (UInt64)10000);
         settings.set("dt_segment_delta_limit_rows", (UInt64)1000);
@@ -40,13 +39,20 @@ protected:
         TiFlashStorageTestBasic::SetUp();
         reload(std::move(settings));
         store = std::make_shared<DeltaMergeStore>(
-            *db_context, false, "test_database", "test_table", table_columns, getExtraHandleColumnDefine(false), false, 1);
+            *db_context,
+            false,
+            "test_database",
+            "test_table",
+            table_columns,
+            getExtraHandleColumnDefine(false),
+            false,
+            1);
     }
 
 protected:
     // a ptr to context, we can reload context with different settings if need.
-    ColumnDefines      table_columns;
-    DB::Settings       settings;
+    ColumnDefines table_columns;
+    DB::Settings settings;
     DeltaMergeStorePtr store;
 
     Poco::Logger * log;
@@ -61,9 +67,9 @@ try
     srand(time(NULL));
     auto random_range = [&](size_t max_rows) {
         size_t rand_start = rand() % max_rows;
-        size_t rand_end   = rand() % max_rows;
-        rand_start        = std::min(rand_start, rand_end);
-        rand_end          = std::max(rand_start, rand_end);
+        size_t rand_end = rand() % max_rows;
+        rand_start = std::min(rand_start, rand_end);
+        rand_end = std::max(rand_start, rand_end);
 
         return HandleRange((Int64)rand_start, (Int64)rand_end);
     };
@@ -90,7 +96,7 @@ try
     LOG_DEBUG(log, "Exact check");
 
     size_t insert_rows = 100000;
-    size_t cur_rows    = 0;
+    size_t cur_rows = 0;
     while (cur_rows < insert_rows)
     {
         size_t step = rand() % 1000;
@@ -121,9 +127,9 @@ try
     for (int i = 0; i < 100; ++i)
     {
         size_t rand_start = rand() % cur_rows;
-        size_t rand_end   = rand() % cur_rows;
-        rand_start        = std::min(rand_start, rand_end);
-        rand_end          = std::max(rand_start, rand_end);
+        size_t rand_end = rand() % cur_rows;
+        rand_start = std::min(rand_start, rand_end);
+        rand_end = std::max(rand_start, rand_end);
 
         store->deleteRange(*db_context, settings, RowKeyRange::fromHandleRange({(Int64)rand_start, (Int64)rand_end}));
 
@@ -138,9 +144,9 @@ try
     srand(time(NULL));
     auto random_range = [&](size_t max_rows) {
         size_t rand_start = rand() % max_rows;
-        size_t rand_end   = rand() % max_rows;
-        rand_start        = std::min(rand_start, rand_end);
-        rand_end          = std::max(rand_start, rand_end);
+        size_t rand_end = rand() % max_rows;
+        rand_start = std::min(rand_start, rand_end);
+        rand_end = std::max(rand_start, rand_end);
 
         return RowKeyRange::fromHandleRange({(Int64)rand_start, (Int64)rand_end});
     };
@@ -165,7 +171,7 @@ try
     LOG_DEBUG(log, "Check split point");
 
     size_t insert_rows = 100000;
-    size_t cur_rows    = 0;
+    size_t cur_rows = 0;
     while (cur_rows < insert_rows)
     {
         size_t step = rand() % 1000;
@@ -182,9 +188,9 @@ try
     for (int i = 0; i < 100; ++i)
     {
         size_t rand_start = rand() % cur_rows;
-        size_t rand_end   = rand() % cur_rows;
-        rand_start        = std::min(rand_start, rand_end);
-        rand_end          = std::max(rand_start, rand_end);
+        size_t rand_end = rand() % cur_rows;
+        rand_start = std::min(rand_start, rand_end);
+        rand_end = std::max(rand_start, rand_end);
 
         store->deleteRange(*db_context, settings, RowKeyRange::fromHandleRange({(Int64)rand_start, (Int64)rand_end}));
 
