@@ -28,9 +28,9 @@ extern const int NOT_IMPLEMENTED;
 constexpr char tls_err_msg[] = "common name check is failed";
 
 FlashService::FlashService(IServer & server_)
-    : server(server_),
-      security_config(server_.securityConfig()),
-      log(&Logger::get("FlashService"))
+    : server(server_)
+    , security_config(server_.securityConfig())
+    , log(&Logger::get("FlashService"))
 {
     auto settings = server_.context().getSettingsRef();
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
@@ -47,7 +47,9 @@ FlashService::FlashService(IServer & server_)
 }
 
 grpc::Status FlashService::Coprocessor(
-    grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
+    grpc::ServerContext * grpc_context,
+    const coprocessor::Request * request,
+    coprocessor::Response * response)
 {
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
 
@@ -80,8 +82,7 @@ grpc::Status FlashService::Coprocessor(
     return ret;
 }
 
-::grpc::Status FlashService::BatchCoprocessor(::grpc::ServerContext * grpc_context, const ::coprocessor::BatchRequest * request,
-    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer)
+::grpc::Status FlashService::BatchCoprocessor(::grpc::ServerContext * grpc_context, const ::coprocessor::BatchRequest * request, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer)
 {
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
 
@@ -115,7 +116,9 @@ grpc::Status FlashService::Coprocessor(
 }
 
 ::grpc::Status FlashService::DispatchMPPTask(
-    ::grpc::ServerContext * grpc_context, const ::mpp::DispatchTaskRequest * request, ::mpp::DispatchTaskResponse * response)
+    ::grpc::ServerContext * grpc_context,
+    const ::mpp::DispatchTaskRequest * request,
+    ::mpp::DispatchTaskResponse * response)
 {
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling mpp dispatch request: " << request->DebugString());
 
@@ -143,7 +146,8 @@ grpc::Status FlashService::Coprocessor(
 }
 
 ::grpc::Status FlashService::IsAlive(::grpc::ServerContext * grpc_context [[maybe_unused]],
-    const ::mpp::IsAliveRequest * request [[maybe_unused]], ::mpp::IsAliveResponse * response [[maybe_unused]])
+                                     const ::mpp::IsAliveRequest * request [[maybe_unused]],
+                                     ::mpp::IsAliveResponse * response [[maybe_unused]])
 {
     if (!security_config.checkGrpcContext(grpc_context))
     {
@@ -162,7 +166,8 @@ grpc::Status FlashService::Coprocessor(
 }
 
 ::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
-    const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
+                                                    const ::mpp::EstablishMPPConnectionRequest * request,
+                                                    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
 {
     // Establish a pipe for data transferring. The pipes has registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
@@ -223,7 +228,9 @@ grpc::Status FlashService::Coprocessor(
 }
 
 ::grpc::Status FlashService::CancelMPPTask(
-    ::grpc::ServerContext * grpc_context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response)
+    ::grpc::ServerContext * grpc_context,
+    const ::mpp::CancelTaskRequest * request,
+    ::mpp::CancelTaskResponse * response)
 {
     // CancelMPPTask cancels the query of the task.
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": cancel mpp task request: " << request->DebugString());
@@ -257,7 +264,8 @@ grpc::Status FlashService::Coprocessor(
 
 // This function is deprecated.
 grpc::Status FlashService::BatchCommands(
-    grpc::ServerContext * grpc_context, grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
+    grpc::ServerContext * grpc_context,
+    grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
 {
     if (!security_config.checkGrpcContext(grpc_context))
     {
@@ -287,14 +295,16 @@ grpc::Status FlashService::BatchCommands(
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling batch commands: " << request.DebugString());
 
         BatchCommandsContext batch_commands_context(
-            context, [this](const grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); },
+            context,
+            [this](const grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); },
             *grpc_context);
         BatchCommandsHandler batch_commands_handler(batch_commands_context, request, response);
         auto ret = batch_commands_handler.execute();
         if (!ret.ok())
         {
             LOG_DEBUG(
-                log, __PRETTY_FUNCTION__ << ": Handle batch commands request done: " << ret.error_code() << ", " << ret.error_message());
+                log,
+                __PRETTY_FUNCTION__ << ": Handle batch commands request done: " << ret.error_code() << ", " << ret.error_message());
             return ret;
         }
 

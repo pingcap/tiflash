@@ -7,13 +7,12 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/TaskStatus.h>
 #include <Interpreters/Context.h>
-
-#include <boost/noncopyable.hpp>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <kvproto/mpp.pb.h>
 
 #include <atomic>
+#include <boost/noncopyable.hpp>
 #include <memory>
 
 namespace DB
@@ -42,13 +41,14 @@ struct MPPTaskProgress
 };
 
 class MPPTaskManager;
-class MPPTask : public std::enable_shared_from_this<MPPTask>, private boost::noncopyable
+class MPPTask : public std::enable_shared_from_this<MPPTask>
+    , private boost::noncopyable
 {
 public:
     using Ptr = std::shared_ptr<MPPTask>;
 
     /// Ensure all MPPTasks are allocated as std::shared_ptr
-    template <typename ... Args>
+    template <typename... Args>
     static Ptr newTask(Args &&... args)
     {
         return Ptr(new MPPTask(std::forward<Args>(args)...));
@@ -86,6 +86,7 @@ public:
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
 
     ~MPPTask();
+
 private:
     MPPTask(const mpp::TaskMeta & meta_, const Context & context_);
 
@@ -125,4 +126,3 @@ using MPPTaskPtr = std::shared_ptr<MPPTask>;
 using MPPTaskMap = std::map<MPPTaskId, MPPTaskPtr>;
 
 } // namespace DB
-
