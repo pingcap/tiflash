@@ -24,7 +24,13 @@ template <typename T>
 class PageEntriesMixin
 {
 public:
-    explicit PageEntriesMixin(bool is_base_) : normal_pages(), page_ref(), ref_deletions(), max_page_id(0), is_base(is_base_) {}
+    explicit PageEntriesMixin(bool is_base_)
+        : normal_pages()
+        , page_ref()
+        , ref_deletions()
+        , max_page_id(0)
+        , is_base(is_base_)
+    {}
 
 public:
     static std::shared_ptr<T> createBase() { return std::make_shared<T>(true); }
@@ -90,7 +96,7 @@ public:
     inline PageEntry & at(const PageId page_id)
     {
         PageId normal_page_id = resolveRefId(page_id);
-        auto   iter           = normal_pages.find(normal_page_id);
+        auto iter = normal_pages.find(normal_page_id);
         if (likely(iter != normal_pages.end()))
         {
             return iter->second;
@@ -131,12 +137,12 @@ public:
 
 protected:
     std::unordered_map<PageId, PageEntry> normal_pages;
-    std::unordered_map<PageId, PageId>    page_ref; // RefPageId -> PageId
+    std::unordered_map<PageId, PageId> page_ref; // RefPageId -> PageId
     // RefPageId deletions
     std::unordered_set<PageId> ref_deletions;
 
     PageId max_page_id;
-    bool   is_base;
+    bool is_base;
 
 protected:
     size_t numDeletions() const
@@ -157,9 +163,9 @@ protected:
 
     void copyEntries(const PageEntriesMixin & rhs)
     {
-        page_ref      = rhs.page_ref;
-        normal_pages  = rhs.normal_pages;
-        max_page_id   = rhs.max_page_id;
+        page_ref = rhs.page_ref;
+        normal_pages = rhs.normal_pages;
+        max_page_id = rhs.max_page_id;
         ref_deletions = rhs.ref_deletions;
     }
 
@@ -179,7 +185,11 @@ public:
     PageEntriesMixin(const PageEntriesMixin &) = delete;
     PageEntriesMixin & operator=(const PageEntriesMixin &) = delete;
     // only move allowed
-    PageEntriesMixin(PageEntriesMixin && rhs) noexcept : PageEntriesMixin(true) { *this = std::move(rhs); }
+    PageEntriesMixin(PageEntriesMixin && rhs) noexcept
+        : PageEntriesMixin(true)
+    {
+        *this = std::move(rhs);
+    }
     PageEntriesMixin & operator=(PageEntriesMixin && rhs) noexcept
     {
         if (this != &rhs)
@@ -187,7 +197,7 @@ public:
             normal_pages.swap(rhs.normal_pages);
             page_ref.swap(rhs.page_ref);
             max_page_id = rhs.max_page_id;
-            is_base     = rhs.is_base;
+            is_base = rhs.is_base;
             ref_deletions.swap(rhs.ref_deletions);
         }
         return *this;
@@ -208,7 +218,7 @@ void PageEntriesMixin<T>::put(PageId page_id, const PageEntry & entry)
     bool is_new_ref_pair_inserted = false;
     {
         // add a RefPage to Page
-        auto res                 = page_ref.emplace(page_id, normal_page_id);
+        auto res = page_ref.emplace(page_id, normal_page_id);
         is_new_ref_pair_inserted = res.second;
     }
 
@@ -217,14 +227,14 @@ void PageEntriesMixin<T>::put(PageId page_id, const PageEntry & entry)
     if (ori_iter == normal_pages.end())
     {
         // Page{normal_page_id} not exist
-        normal_pages[normal_page_id]     = entry;
+        normal_pages[normal_page_id] = entry;
         normal_pages[normal_page_id].ref = 1;
     }
     else
     {
         // replace ori Page{normal_page_id}'s entry but inherit ref-counting
-        const UInt32 page_ref_count      = ori_iter->second.ref;
-        normal_pages[normal_page_id]     = entry;
+        const UInt32 page_ref_count = ori_iter->second.ref;
+        normal_pages[normal_page_id] = entry;
         normal_pages[normal_page_id].ref = page_ref_count + is_new_ref_pair_inserted;
     }
 
@@ -242,14 +252,14 @@ void PageEntriesMixin<T>::upsertPage(PageId normal_page_id, PageEntry entry)
     if (likely(ori_iter != normal_pages.end()))
     {
         // replace ori Page{normal_page_id}'s entry but inherit ref-counting
-        const UInt32 page_ref_count  = ori_iter->second.ref;
-        entry.ref                    = page_ref_count;
+        const UInt32 page_ref_count = ori_iter->second.ref;
+        entry.ref = page_ref_count;
         normal_pages[normal_page_id] = entry;
     }
     else
     {
         // Page{normal_page_id} not exist
-        entry.ref                    = 0;
+        entry.ref = 0;
         normal_pages[normal_page_id] = entry;
     }
 
@@ -280,7 +290,7 @@ void PageEntriesMixin<T>::ref(const PageId ref_id, const PageId page_id)
     // if `page_id` is a ref-id, collapse the ref-path to actual PageId
     // eg. exist RefPage2 -> Page1, add RefPage3 -> RefPage2, collapse to RefPage3 -> Page1
     const PageId normal_page_id = resolveRefId(page_id);
-    auto         iter           = normal_pages.find(normal_page_id);
+    auto iter = normal_pages.find(normal_page_id);
     if (likely(iter != normal_pages.end()))
     {
         // if RefPage{ref_id} already exist, release that ref first
@@ -328,10 +338,13 @@ void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
 }
 
 /// For PageEntriesVersionSet
-class PageEntries : public PageEntriesMixin<PageEntries>, public ::DB::MVCC::MultiVersionCountable<PageEntries>
+class PageEntries : public PageEntriesMixin<PageEntries>
+    , public ::DB::MVCC::MultiVersionCountable<PageEntries>
 {
 public:
-    explicit PageEntries(bool is_base_ = true) : PageEntriesMixin(true), ::DB::MVCC::MultiVersionCountable<PageEntries>(this)
+    explicit PageEntries(bool is_base_ = true)
+        : PageEntriesMixin(true)
+        , ::DB::MVCC::MultiVersionCountable<PageEntries>(this)
     {
         (void)is_base_;
     }
@@ -343,7 +356,8 @@ public:
     {
     public:
         iterator(const std::unordered_map<PageId, PageId>::iterator & iter, std::unordered_map<PageId, PageEntry> & normal_pages)
-            : _iter(iter), _normal_pages(normal_pages)
+            : _iter(iter)
+            , _normal_pages(normal_pages)
         {
         }
         bool operator==(const iterator & rhs) const { return _iter == rhs._iter; }
@@ -361,7 +375,7 @@ public:
             _iter++;
             return tmp;
         }
-        inline PageId      pageId() const { return _iter->first; }
+        inline PageId pageId() const { return _iter->first; }
         inline PageEntry & pageEntry()
         {
             auto iter = _normal_pages.find(_iter->second);
@@ -378,7 +392,7 @@ public:
 
     private:
         std::unordered_map<PageId, PageId>::iterator _iter;
-        std::unordered_map<PageId, PageEntry> &      _normal_pages;
+        std::unordered_map<PageId, PageEntry> & _normal_pages;
         friend class PageEntriesView;
     };
 
@@ -386,8 +400,9 @@ public:
     {
     public:
         const_iterator(const std::unordered_map<PageId, PageId>::const_iterator & iter,
-                       const std::unordered_map<PageId, PageEntry> &              normal_pages)
-            : _iter(iter), _normal_pages(const_cast<std::unordered_map<PageId, PageEntry> &>(normal_pages))
+                       const std::unordered_map<PageId, PageEntry> & normal_pages)
+            : _iter(iter)
+            , _normal_pages(const_cast<std::unordered_map<PageId, PageEntry> &>(normal_pages))
         {
         }
         bool operator==(const const_iterator & rhs) const { return _iter == rhs._iter; }
@@ -405,7 +420,7 @@ public:
             _iter++;
             return tmp;
         }
-        inline PageId            pageId() const { return _iter->first; }
+        inline PageId pageId() const { return _iter->first; }
         inline const PageEntry & pageEntry() const
         {
             auto iter = _normal_pages.find(_iter->second);
@@ -422,7 +437,7 @@ public:
 
     private:
         std::unordered_map<PageId, PageId>::const_iterator _iter;
-        std::unordered_map<PageId, PageEntry> &            _normal_pages;
+        std::unordered_map<PageId, PageEntry> & _normal_pages;
         friend class PageEntriesView;
     };
 
@@ -435,12 +450,13 @@ public:
 /// For PageEntriesVersionSetWithDelta
 class PageEntriesForDelta;
 using PageEntriesForDeltaPtr = std::shared_ptr<PageEntriesForDelta>;
-class PageEntriesForDelta : public PageEntriesMixin<PageEntriesForDelta>,
-                            public ::DB::MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>
+class PageEntriesForDelta : public PageEntriesMixin<PageEntriesForDelta>
+    , public ::DB::MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>
 {
 public:
     explicit PageEntriesForDelta(bool is_base_)
-        : PageEntriesMixin(is_base_), ::DB::MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>()
+        : PageEntriesMixin(is_base_)
+        , ::DB::MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>()
     {
     }
 

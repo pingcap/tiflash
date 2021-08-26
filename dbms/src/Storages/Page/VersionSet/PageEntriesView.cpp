@@ -2,13 +2,12 @@
 
 namespace DB
 {
-
 ////  PageEntryMapView
 
 std::optional<PageEntry> PageEntriesView::find(PageId page_id) const
 {
     // First we find ref-pairs to get the normal page id
-    bool   found          = false;
+    bool found = false;
     PageId normal_page_id = 0;
     for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = std::atomic_load(&node->prev))
     {
@@ -20,7 +19,7 @@ std::optional<PageEntry> PageEntriesView::find(PageId page_id) const
         auto iter = node->page_ref.find(page_id);
         if (iter != node->page_ref.end())
         {
-            found          = true;
+            found = true;
             normal_page_id = iter->second;
             break;
         }
@@ -155,7 +154,7 @@ PageId PageEntriesView::maxId() const
 
 size_t PageEntriesView::numPages() const
 {
-    std::unordered_set<PageId>                        page_ids;
+    std::unordered_set<PageId> page_ids;
     std::vector<PageEntriesForDeltaPtr> nodes;
     for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = std::atomic_load(&node->prev))
         nodes.emplace_back(node);

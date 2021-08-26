@@ -15,15 +15,14 @@ namespace DB
 {
 namespace DM
 {
-
 inline int compareTuple(const Columns & left, size_t l_pos, const Columns & right, size_t r_pos, const SortDescription & sort_desc)
 {
     auto num_sort_columns = sort_desc.size();
     for (size_t i = 0; i < num_sort_columns; ++i)
     {
-        int direction       = sort_desc[i].direction;
+        int direction = sort_desc[i].direction;
         int nulls_direction = sort_desc[i].nulls_direction;
-        int res             = direction * left[i]->compareAt(l_pos, r_pos, *(right[i]), nulls_direction);
+        int res = direction * left[i]->compareAt(l_pos, r_pos, *(right[i]), nulls_direction);
         if (res != 0)
             return res;
     }
@@ -33,35 +32,35 @@ inline int compareTuple(const Columns & left, size_t l_pos, const Columns & righ
 struct RidGenerator
 {
     SkippableBlockInputStreamPtr stable_stream;
-    const SortDescription &      sort_desc;
-    const size_t                 num_sort_columns;
+    const SortDescription & sort_desc;
+    const size_t num_sort_columns;
 
     Columns delta_block_columns;
-    size_t  delta_block_offset;
-    size_t  delta_block_pos;
+    size_t delta_block_offset;
+    size_t delta_block_pos;
     // Whether this row's pk duplicates with the next one, if so, they share the same rid.
     std::vector<UInt8> delta_block_dup_next;
     // Whether current row's pk duplicates with the previous one. Used by Upsert.
     bool dup_prev = false;
 
     Columns stable_block_columns;
-    size_t  stable_block_rows = 0;
-    size_t  stable_block_pos  = 0;
-    bool    stable_finished   = false;
+    size_t stable_block_rows = 0;
+    size_t stable_block_pos = 0;
+    bool stable_finished = false;
 
     UInt64 rid = 0;
 
     RidGenerator(const SkippableBlockInputStreamPtr & stable_stream_,
-                 const SortDescription &              sort_desc_,
-                 const Block &                        delta_block,
-                 size_t                               offset,
-                 size_t                               limit)
-        : stable_stream(stable_stream_),
-          sort_desc(sort_desc_),
-          num_sort_columns(sort_desc.size()),
-          delta_block_offset(offset),
-          delta_block_pos(0),
-          delta_block_dup_next(limit, 0)
+                 const SortDescription & sort_desc_,
+                 const Block & delta_block,
+                 size_t offset,
+                 size_t limit)
+        : stable_stream(stable_stream_)
+        , sort_desc(sort_desc_)
+        , num_sort_columns(sort_desc.size())
+        , delta_block_offset(offset)
+        , delta_block_pos(0)
+        , delta_block_dup_next(limit, 0)
     {
         stable_stream->readPrefix();
 
@@ -97,8 +96,8 @@ struct RidGenerator
             return true;
         stable_block_columns.clear();
         stable_block_rows = 0;
-        stable_block_pos  = 0;
-        auto block        = stable_stream->read();
+        stable_block_pos = 0;
+        auto block = stable_stream->read();
         if (!block)
         {
             stable_finished = true;
@@ -133,7 +132,7 @@ struct RidGenerator
             }
 
             auto cur_dup_prev = dup_prev;
-            dup_prev          = delta_block_dup_next[delta_block_pos++];
+            dup_prev = delta_block_dup_next[delta_block_pos++];
             if (res == 0)
             {
                 if (dup_prev)
@@ -154,7 +153,7 @@ struct RidGenerator
         }
 
         auto cur_dup_prev = dup_prev;
-        dup_prev          = delta_block_dup_next[delta_block_pos];
+        dup_prev = delta_block_dup_next[delta_block_pos];
         ++delta_block_pos;
         if (dup_prev)
             return {rid, cur_dup_prev};
@@ -197,14 +196,14 @@ struct RidGenerator
  */
 template <bool use_row_id_ref, class DeltaTree>
 bool placeInsert(const SkippableBlockInputStreamPtr & stable, //
-                 const Block &                        delta_block,
-                 const RowKeyRange &                  range,
-                 DeltaTree &                          delta_tree,
-                 size_t                               delta_value_space_offset,
-                 const IColumn::Permutation &         row_id_ref,
-                 const SortDescription &              sort)
+                 const Block & delta_block,
+                 const RowKeyRange & range,
+                 DeltaTree & delta_tree,
+                 size_t delta_value_space_offset,
+                 const IColumn::Permutation & row_id_ref,
+                 const SortDescription & sort)
 {
-    auto rows            = delta_block.rows();
+    auto rows = delta_block.rows();
     auto [offset, limit] = RowKeyFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
     if (!limit)
         return rows == limit;
@@ -236,12 +235,12 @@ bool placeInsert(const SkippableBlockInputStreamPtr & stable, //
 /// Returns fully index or not (Some rows not match range won't be indexed).
 template <class DeltaTree>
 bool placeDelete(const SkippableBlockInputStreamPtr & stable, //
-                 const Block &                        delta_block,
-                 const RowKeyRange &                  range,
-                 DeltaTree &                          delta_tree,
-                 const SortDescription &              sort)
+                 const Block & delta_block,
+                 const RowKeyRange & range,
+                 DeltaTree & delta_tree,
+                 const SortDescription & sort)
 {
-    auto rows            = delta_block.rows();
+    auto rows = delta_block.rows();
     auto [offset, limit] = RowKeyFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
     if (!limit)
         return rows == limit;

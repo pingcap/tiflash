@@ -31,11 +31,11 @@ void DeltaValueSpace::checkPacks(const DeltaPacks & new_packs)
 {
     if constexpr (!DM_RUN_CHECK)
         return;
-    size_t new_rows    = 0;
+    size_t new_rows = 0;
     size_t new_deletes = 0;
 
     bool seen_unsaved = false;
-    bool ok           = true;
+    bool ok = true;
     for (auto & pack : new_packs)
     {
         if (pack->isSaved() && seen_unsaved)
@@ -61,7 +61,10 @@ void DeltaValueSpace::checkPacks(const DeltaPacks & new_packs)
 // ================================================
 
 DeltaValueSpace::DeltaValueSpace(PageId id_, const DeltaPacks & packs_)
-    : id(id_), packs(packs_), delta_index(std::make_shared<DeltaIndex>()), log(&Poco::Logger::get("DeltaValueSpace"))
+    : id(id_)
+    , packs(packs_)
+    , delta_index(std::make_shared<DeltaIndex>())
+    , log(&Poco::Logger::get("DeltaValueSpace"))
 {
     for (auto & pack : packs)
     {
@@ -89,9 +92,9 @@ void DeltaValueSpace::abandon(DMContext & context)
 
 DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
 {
-    Page                 page = context.storage_pool.meta().read(id, nullptr);
+    Page page = context.storage_pool.meta().read(id, nullptr);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-    auto                 packs = deserializePacks(context, segment_range, buf);
+    auto packs = deserializePacks(context, segment_range, buf);
     return std::make_shared<DeltaValueSpace>(id, packs);
 }
 
@@ -104,10 +107,10 @@ void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
     wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-DeltaPacks DeltaValueSpace::checkHeadAndCloneTail(DMContext &         context,
+DeltaPacks DeltaValueSpace::checkHeadAndCloneTail(DMContext & context,
                                                   const RowKeyRange & target_range,
-                                                  const DeltaPacks &  head_packs,
-                                                  WriteBatches &      wbs) const
+                                                  const DeltaPacks & head_packs,
+                                                  WriteBatches & wbs) const
 {
     if (head_packs.size() > packs.size())
     {
@@ -181,7 +184,7 @@ DeltaPacks DeltaValueSpace::checkHeadAndCloneTail(DMContext &         context,
 size_t DeltaValueSpace::getTotalCacheRows() const
 {
     std::scoped_lock lock(mutex);
-    size_t           cache_rows = 0;
+    size_t cache_rows = 0;
     for (auto & pack : packs)
     {
         if (auto p = pack->tryToBlock(); p)
@@ -196,7 +199,7 @@ size_t DeltaValueSpace::getTotalCacheRows() const
 size_t DeltaValueSpace::getTotalCacheBytes() const
 {
     std::scoped_lock lock(mutex);
-    size_t           cache_bytes = 0;
+    size_t cache_bytes = 0;
     for (auto & pack : packs)
     {
         if (auto p = pack->tryToBlock(); p)
@@ -211,7 +214,7 @@ size_t DeltaValueSpace::getTotalCacheBytes() const
 size_t DeltaValueSpace::getValidCacheRows() const
 {
     std::scoped_lock lock(mutex);
-    size_t           cache_rows = 0;
+    size_t cache_rows = 0;
     for (auto & pack : packs)
     {
         if (auto p = pack->tryToBlock(); p)
@@ -295,7 +298,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
                 }
 
                 auto & cache_block = p->getCache()->block;
-                bool   is_overflow
+                bool is_overflow
                     = cache_block.rows() >= context.delta_cache_limit_rows || cache_block.bytes() >= context.delta_cache_limit_bytes;
                 bool is_same_schema = isSameSchema(block, cache_block);
                 if (!is_overflow && is_same_schema)
@@ -313,7 +316,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     {
         // Create a new pack.
         auto last_schema = lastSchema();
-        auto my_schema   = (last_schema && isSameSchema(block, *last_schema)) ? last_schema : std::make_shared<Block>(block.cloneEmpty());
+        auto my_schema = (last_schema && isSameSchema(block, *last_schema)) ? last_schema : std::make_shared<Block>(block.cloneEmpty());
 
         auto new_pack = DeltaPackBlock::createCachePack(my_schema);
         appendPackInner(new_pack);

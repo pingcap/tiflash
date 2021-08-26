@@ -13,7 +13,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int COP_BAD_DAG_REQUEST;
@@ -21,10 +20,8 @@ extern const int COP_BAD_DAG_REQUEST;
 
 namespace DM
 {
-
 namespace cop
 {
-
 // This is a pre-check for rough set filter support type.
 inline bool isRoughSetFilterSupportType(const Int32 field_type)
 {
@@ -90,11 +87,11 @@ enum class OperandType
 };
 
 inline RSOperatorPtr parseTiCompareExpr( //
-    const tipb::Expr &                          expr,
-    const FilterParser::RSFilterType            filter_type,
-    const ColumnDefines &                       columns_to_read,
+    const tipb::Expr & expr,
+    const FilterParser::RSFilterType filter_type,
+    const ColumnDefines & columns_to_read,
     const FilterParser::AttrCreatorByColumnID & creator,
-    const TimezoneInfo &                        timezone_info,
+    const TimezoneInfo & timezone_info,
     Poco::Logger * /* log */)
 {
     if (unlikely(expr.children_size() != 2))
@@ -118,11 +115,11 @@ inline RSOperatorPtr parseTiCompareExpr( //
     // 1 = 1
     // c1 = c2
 
-    Attr        attr;
-    Field       value;
-    OperandType left                = OperandType::Unknown;
-    OperandType right               = OperandType::Unknown;
-    bool        is_timestamp_column = false;
+    Attr attr;
+    Field value;
+    OperandType left = OperandType::Unknown;
+    OperandType right = OperandType::Unknown;
+    bool is_timestamp_column = false;
     for (const auto & child : expr.children())
     {
         if (isColumnExpr(child))
@@ -139,10 +136,12 @@ inline RSOperatorPtr parseTiCompareExpr( //
             auto field_type = child.field_type().tp();
             if (!isRoughSetFilterSupportType(field_type))
                 return createUnsupported(
-                    expr.ShortDebugString(), "ColumnRef with field type(" + DB::toString(field_type) + ") is not supported", false);
+                    expr.ShortDebugString(),
+                    "ColumnRef with field type(" + DB::toString(field_type) + ") is not supported",
+                    false);
 
             ColumnID id = getColumnIDForColumnExpr(child, columns_to_read);
-            attr        = creator(id);
+            attr = creator(id);
             if (child_idx == 0)
                 left = OperandType::Column;
             else if (child_idx == 1)
@@ -168,8 +167,8 @@ inline RSOperatorPtr parseTiCompareExpr( //
                 if (literal_type == TiDB::TypeDatetime && !timezone_info.is_utc_timezone)
                 {
                     static const auto & time_zone_utc = DateLUT::instance("UTC");
-                    UInt64              from_time     = value.get<UInt64>();
-                    UInt64              result_time   = from_time;
+                    UInt64 from_time = value.get<UInt64>();
+                    UInt64 result_time = from_time;
                     if (timezone_info.is_name_based)
                         convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
                     else if (timezone_info.timezone_offset != 0)
@@ -180,7 +179,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
         }
     }
 
-    bool normal_cmp  = (left == OperandType::Column && right == OperandType::Literal);
+    bool normal_cmp = (left == OperandType::Column && right == OperandType::Literal);
     bool inverse_cmp = (left == OperandType::Literal && right == OperandType::Column);
     if (!(normal_cmp || inverse_cmp))
         return createUnsupported(expr.ShortDebugString(),
@@ -243,11 +242,11 @@ inline RSOperatorPtr parseTiCompareExpr( //
     return op;
 }
 
-RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
-                          const ColumnDefines &                       columns_to_read,
+RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
+                          const ColumnDefines & columns_to_read,
                           const FilterParser::AttrCreatorByColumnID & creator,
-                          const TimezoneInfo &                        timezone_info,
-                          Poco::Logger *                              log)
+                          const TimezoneInfo & timezone_info,
+                          Poco::Logger * log)
 {
     assert(isFunctionExpr(expr));
 
@@ -264,10 +263,13 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
         FilterParser::RSFilterType filter_type = iter->second;
         switch (filter_type)
         {
-        case FilterParser::RSFilterType::Not: {
+        case FilterParser::RSFilterType::Not:
+        {
             if (unlikely(expr.children_size() != 1))
                 op = createUnsupported(
-                    expr.ShortDebugString(), "logical not with " + DB::toString(expr.children_size()) + " children", false);
+                    expr.ShortDebugString(),
+                    "logical not with " + DB::toString(expr.children_size()) + " children",
+                    false);
             else
             {
                 const auto & child = expr.children(0);
@@ -280,7 +282,8 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
         break;
 
         case FilterParser::RSFilterType::And:
-        case FilterParser::RSFilterType::Or: {
+        case FilterParser::RSFilterType::Or:
+        {
             RSOperators children;
             for (Int32 i = 0; i < expr.children_size(); ++i)
             {
@@ -323,11 +326,11 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
     return op;
 }
 
-inline RSOperatorPtr tryParse(const tipb::Expr &                          filter,
-                              const ColumnDefines &                       columns_to_read,
+inline RSOperatorPtr tryParse(const tipb::Expr & filter,
+                              const ColumnDefines & columns_to_read,
                               const FilterParser::AttrCreatorByColumnID & creator,
-                              const TimezoneInfo &                        timezone_info,
-                              Poco::Logger *                              log)
+                              const TimezoneInfo & timezone_info,
+                              Poco::Logger * log)
 {
     if (isFunctionExpr(filter))
         return cop::parseTiExpr(filter, columns_to_read, creator, timezone_info, log);
@@ -338,10 +341,10 @@ inline RSOperatorPtr tryParse(const tipb::Expr &                          filter
 } // namespace cop
 
 
-RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo &                   dag_info,
-                                          const ColumnDefines &                  columns_to_read,
+RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
+                                          const ColumnDefines & columns_to_read,
                                           FilterParser::AttrCreatorByColumnID && creator,
-                                          Poco::Logger *                         log)
+                                          Poco::Logger * log)
 {
     RSOperatorPtr op = EMPTY_FILTER;
     if (dag_info.filters.empty())

@@ -12,13 +12,17 @@ namespace DB
 {
 namespace DM
 {
-
 /// ======================================================
 /// Helper methods.
 /// ======================================================
 
 size_t copyColumnsData(
-    const Columns & from, const ColumnPtr & pk_col, MutableColumns & to, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+    const Columns & from,
+    const ColumnPtr & pk_col,
+    MutableColumns & to,
+    size_t rows_offset,
+    size_t rows_limit,
+    const RowKeyRange * range)
 {
     if (range)
     {
@@ -87,7 +91,7 @@ BlockPtr deserializeSchema(ReadBuffer & buf)
     auto schema = std::make_shared<Block>();
     for (size_t i = 0; i < cols; ++i)
     {
-        Int64  column_id;
+        Int64 column_id;
         String name;
         String type_name;
         readIntBinary(column_id, buf);

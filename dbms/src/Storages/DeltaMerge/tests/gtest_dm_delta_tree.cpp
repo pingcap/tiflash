@@ -9,7 +9,6 @@ namespace DM
 {
 namespace tests
 {
-
 #define print(M) std::cout << "" #M ": " << M << std::endl
 
 class FakeValueSpace;
