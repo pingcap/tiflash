@@ -114,7 +114,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     return new_dmfile;
 }
 
-DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta)
+DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, const ReadMetaMode & read_meta_mode)
 {
     String path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
     bool single_file_mode = Poco::File(path).isFile();
@@ -125,8 +125,8 @@ DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id,
         single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER,
         Status::READABLE,
         &Poco::Logger::get("DMFile")));
-    if (read_meta)
-        dmfile->readMetadata(file_provider);
+    if (!read_meta_mode.isNone())
+        dmfile->readMetadata(file_provider, read_meta_mode);
     return dmfile;
 }
 
@@ -312,10 +312,10 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileForm
     }
 }
 
-void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
+void DMFile::readColumnStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
-    auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.meta_size);
-    buf.seek(meta_pack_info.meta_offset);
+    auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.column_stat_size);
+    buf.seek(meta_pack_info.column_stat_offset);
 
     DMFileFormat::Version ver; // Binary version
     assertString("DTFile format: ", buf);
@@ -347,7 +347,7 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
     pack_properties.ParseFromString(tmp_buf);
 }
 
-void DMFile::readMetadata(const FileProviderPtr & file_provider)
+void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaMode & read_meta_mode)
 {
     Footer footer;
     if (isSingleFileMode())
@@ -360,8 +360,8 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
         buf.seek(file.getSize() - sizeof(Footer), SEEK_SET);
         DB::readIntBinary(footer.meta_pack_info.pack_property_offset, buf);
         DB::readIntBinary(footer.meta_pack_info.pack_property_size, buf);
-        DB::readIntBinary(footer.meta_pack_info.meta_offset, buf);
-        DB::readIntBinary(footer.meta_pack_info.meta_size, buf);
+        DB::readIntBinary(footer.meta_pack_info.column_stat_offset, buf);
+        DB::readIntBinary(footer.meta_pack_info.column_stat_size, buf);
         DB::readIntBinary(footer.meta_pack_info.pack_stat_offset, buf);
         DB::readIntBinary(footer.meta_pack_info.pack_stat_size, buf);
         DB::readIntBinary(footer.sub_file_stat_offset, buf);
@@ -380,20 +380,26 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
     }
     else
     {
-        initializeSubFileStatsForFolderMode();
-        initializeIndices();
+        if (read_meta_mode.isAll())
+        {
+            initializeSubFileStatsForFolderMode();
+            initializeIndices();
+        }
         if (auto file = Poco::File(packPropertyPath()); file.exists())
             footer.meta_pack_info.pack_property_size = file.getSize();
 
-        footer.meta_pack_info.meta_size = Poco::File(metaPath()).getSize();
+        footer.meta_pack_info.column_stat_size = Poco::File(metaPath()).getSize();
         footer.meta_pack_info.pack_stat_size = Poco::File(packStatPath()).getSize();
     }
 
-    if (footer.meta_pack_info.pack_property_size != 0)
+    if (read_meta_mode.needPackProperty() && footer.meta_pack_info.pack_property_size != 0)
         readPackProperty(file_provider, footer.meta_pack_info);
 
-    readMeta(file_provider, footer.meta_pack_info);
-    readPackStat(file_provider, footer.meta_pack_info);
+    if (read_meta_mode.needColumnStat())
+        readColumnStat(file_provider, footer.meta_pack_info);
+
+    if (read_meta_mode.needPackStat())
+        readPackStat(file_provider, footer.meta_pack_info);
 }
 
 void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
@@ -426,7 +432,7 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
 {
     Footer footer;
     std::tie(footer.meta_pack_info.pack_property_offset, footer.meta_pack_info.pack_property_size) = writePackPropertyToBuffer(buffer);
-    std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size) = writeMetaToBuffer(buffer);
+    std::tie(footer.meta_pack_info.column_stat_offset, footer.meta_pack_info.column_stat_size) = writeMetaToBuffer(buffer);
     std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size) = writePackStatToBuffer(buffer);
 
     footer.sub_file_stat_offset = buffer.count();
@@ -439,8 +445,8 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
     }
     writeIntBinary(footer.meta_pack_info.pack_property_offset, buffer);
     writeIntBinary(footer.meta_pack_info.pack_property_size, buffer);
-    writeIntBinary(footer.meta_pack_info.meta_offset, buffer);
-    writeIntBinary(footer.meta_pack_info.meta_size, buffer);
+    writeIntBinary(footer.meta_pack_info.column_stat_offset, buffer);
+    writeIntBinary(footer.meta_pack_info.column_stat_size, buffer);
     writeIntBinary(footer.meta_pack_info.pack_stat_offset, buffer);
     writeIntBinary(footer.meta_pack_info.pack_stat_size, buffer);
     writeIntBinary(footer.sub_file_stat_offset, buffer);

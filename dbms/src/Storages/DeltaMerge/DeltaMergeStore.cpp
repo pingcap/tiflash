@@ -267,7 +267,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                     continue;
 
                 // Note that ref_id is useless here.
-                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path, false);
+                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path, DMFile::ReadMetaMode::none());
                 if (dmfile->canGC())
                 {
                     delegate.removeDTFile(dmfile->fileId());
@@ -611,7 +611,7 @@ void DeltaMergeStore::ingestFiles(
     {
         auto file_parent_path = delegate.getDTFilePath(file_id);
 
-        auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path);
+        auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::memoryAndDiskSize());
         rows += file->getRows();
         bytes += file->getBytes();
         bytes_on_disk += file->getBytesOnDisk();
@@ -681,7 +681,7 @@ void DeltaMergeStore::ingestFiles(
                 auto & file_parent_path = file->parentPath();
                 auto ref_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
-                auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path);
+                auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
                 auto pack = std::make_shared<DeltaPackFile>(*dm_context, ref_file, segment_range);
                 if (pack->getRows() != 0)
                 {
@@ -2075,7 +2075,7 @@ void DeltaMergeStore::restoreStableFiles()
     {
         for (auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
         {
-            auto dmfile = DMFile::restore(file_provider, file_id, /* ref_id= */ 0, root_path, true);
+            auto dmfile = DMFile::restore(file_provider, file_id, /* ref_id= */ 0, root_path, DMFile::ReadMetaMode::diskSizeOnly());
             path_delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), root_path);
         }
     }
