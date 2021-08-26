@@ -15,7 +15,6 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
@@ -24,7 +23,6 @@ extern const char exception_before_dmfile_remove_from_disk[];
 
 namespace DM
 {
-
 namespace details
 {
 inline constexpr static const char * NGC_FILE_NAME = "NGC";
@@ -35,7 +33,10 @@ inline constexpr static const char * DATA_FILE_SUFFIX = ".dat";
 inline constexpr static const char * INDEX_FILE_SUFFIX = ".idx";
 inline constexpr static const char * MARK_FILE_SUFFIX = ".mrk";
 
-inline String getNGCPath(const String & prefix, bool is_single_mode) { return prefix + (is_single_mode ? "." : "/") + NGC_FILE_NAME; }
+inline String getNGCPath(const String & prefix, bool is_single_mode)
+{
+    return prefix + (is_single_mode ? "." : "/") + NGC_FILE_NAME;
+}
 } // namespace details
 
 // Some static helper functions
@@ -45,16 +46,16 @@ String DMFile::getPathByStatus(const String & parent_path, UInt64 file_id, DMFil
     String s = parent_path + "/";
     switch (status)
     {
-        case DMFile::Status::READABLE:
-            s += details::FOLDER_PREFIX_READABLE;
-            break;
-        case DMFile::Status::WRITABLE:
-        case DMFile::Status::WRITING:
-            s += details::FOLDER_PREFIX_WRITABLE;
-            break;
-        case DMFile::Status::DROPPED:
-            s += details::FOLDER_PREFIX_DROPPED;
-            break;
+    case DMFile::Status::READABLE:
+        s += details::FOLDER_PREFIX_READABLE;
+        break;
+    case DMFile::Status::WRITABLE:
+    case DMFile::Status::WRITING:
+        s += details::FOLDER_PREFIX_WRITABLE;
+        break;
+    case DMFile::Status::DROPPED:
+        s += details::FOLDER_PREFIX_DROPPED;
+        break;
     }
     s += DB::toString(file_id);
     return s;
@@ -67,13 +68,19 @@ String DMFile::getNGCPath(const String & parent_path, UInt64 file_id, DMFile::St
 
 //
 
-String DMFile::path() const { return getPathByStatus(parent_path, file_id, status); }
+String DMFile::path() const
+{
+    return getPathByStatus(parent_path, file_id, status);
+}
 
-String DMFile::ngcPath() const { return getNGCPath(parent_path, file_id, status, isSingleFileMode()); }
+String DMFile::ngcPath() const
+{
+    return getNGCPath(parent_path, file_id, status, isSingleFileMode());
+}
 
 DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single_file_mode)
 {
-    Logger * log = &Logger::get("DMFile");
+    Poco::Logger * log = &Logger::get("DMFile");
     // On create, ref_id is the same as file_id.
     DMFilePtr new_dmfile(
         new DMFile(file_id, file_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::WRITABLE, log));
@@ -112,7 +119,12 @@ DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id,
     String path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
     bool single_file_mode = Poco::File(path).isFile();
     DMFilePtr dmfile(new DMFile(
-        file_id, ref_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::READABLE, &Logger::get("DMFile")));
+        file_id,
+        ref_id,
+        parent_path,
+        single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER,
+        Status::READABLE,
+        &Logger::get("DMFile")));
     if (read_meta)
         dmfile->readMetadata(file_provider);
     return dmfile;
@@ -155,7 +167,10 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
     }
 }
 
-const String DMFile::encryptionBasePath() const { return getPathByStatus(parent_path, file_id, DMFile::Status::READABLE); }
+const String DMFile::encryptionBasePath() const
+{
+    return getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
+}
 
 
 const EncryptionPath DMFile::encryptionDataPath(const FileNameBase & file_name_base) const
@@ -188,9 +203,18 @@ const EncryptionPath DMFile::encryptionPackPropertyPath() const
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packPropertyFileName());
 }
 
-String DMFile::colDataFileName(const FileNameBase & file_name_base) { return file_name_base + details::DATA_FILE_SUFFIX; }
-String DMFile::colIndexFileName(const FileNameBase & file_name_base) { return file_name_base + details::INDEX_FILE_SUFFIX; }
-String DMFile::colMarkFileName(const FileNameBase & file_name_base) { return file_name_base + details::MARK_FILE_SUFFIX; }
+String DMFile::colDataFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::DATA_FILE_SUFFIX;
+}
+String DMFile::colIndexFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::INDEX_FILE_SUFFIX;
+}
+String DMFile::colMarkFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::MARK_FILE_SUFFIX;
+}
 
 DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer)
 {
@@ -441,7 +465,9 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
 }
 
 std::set<UInt64> DMFile::listAllInPath(
-    const FileProviderPtr & file_provider, const String & parent_path, const DMFile::ListOptions & options)
+    const FileProviderPtr & file_provider,
+    const String & parent_path,
+    const DMFile::ListOptions & options)
 {
     Poco::File folder(parent_path);
     if (!folder.exists())
@@ -531,7 +557,10 @@ std::set<UInt64> DMFile::listAllInPath(
     return file_ids;
 }
 
-bool DMFile::canGC() { return !Poco::File(ngcPath()).exists(); }
+bool DMFile::canGC()
+{
+    return !Poco::File(ngcPath()).exists();
+}
 
 void DMFile::enableGC()
 {
