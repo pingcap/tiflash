@@ -104,7 +104,6 @@ TEST(WriteLimiter_test, LimiterStat)
 
     auto stat = write_limiter.getStat();
     ASSERT_EQ(stat.alloc_bytes, 0ul);
-    ASSERT_GE(stat.elapsed_ms, 100ul);
     ASSERT_EQ(stat.refill_period_ms, 100ul);
     ASSERT_EQ(stat.refill_bytes_per_period, 100);
     ASSERT_EQ(stat.maxBytesPerSec(), 1000);
@@ -127,12 +126,24 @@ TEST(WriteLimiter_test, LimiterStat)
 
     stat = write_limiter.getStat();
     ASSERT_EQ(stat.alloc_bytes, 100ul);
-    ASSERT_GE(stat.elapsed_ms, 100ul);
     ASSERT_EQ(stat.refill_period_ms, 100ul);
     ASSERT_EQ(stat.refill_bytes_per_period, 100);
     ASSERT_EQ(stat.maxBytesPerSec(), 1000);
-    ASSERT_EQ(stat.avgBytesPerSec(), 1000) << stat.toString();
-    ASSERT_EQ(stat.pct(), 100) << stat.toString();
+    if (stat.elapsed_ms == 100)
+    {
+        ASSERT_EQ(stat.avgBytesPerSec(), 1000) << stat.toString();
+        ASSERT_EQ(stat.pct(), 100) << stat.toString();
+    }
+    else if (stat.elapsed_ms > 100)
+    {
+        ASSERT_LT(stat.avgBytesPerSec(), 1000) << stat.toString();
+        ASSERT_LT(stat.pct(), 100) << stat.toString();
+    }
+    else if (stat.elapsed_ms < 100)
+    {
+        ASSERT_GT(stat.avgBytesPerSec(), 1000) << stat.toString();
+        ASSERT_GT(stat.pct(), 100) << stat.toString();
+    }
 
     static constexpr UInt64 alloc_bytes = 2047;
     for (int i = 0; i < 11; i++)
@@ -195,52 +206,38 @@ TEST(ReadLimiter_test, GetIOStatPeroid_2000us)
     ASSERT_GE(elasped, 2 * refill_period_ms);
 }
 
-void testSetStop(bool stop, int blocked_thread_cnt)
+void testSetStop(int blocked_thread_cnt)
 {
     auto write_limiter = std::make_shared<WriteLimiter>(1000, LimiterType::UNKNOW, 100);
     // All the bytes are consumed in this request, and next refill time is about 100ms later.
     write_limiter->request(100);
 
-    std::atomic<UInt32> counter{0};
+    std::atomic<UInt32> finished_count{0};
     auto worker = [&]() {
-        counter.fetch_add(1, std::memory_order_relaxed);
         write_limiter->request(1); 
+        finished_count.fetch_add(1, std::memory_order_relaxed);
     };
     std::vector<std::thread> threads;
-    auto start = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     for (int i = 0; i < blocked_thread_cnt; i++)
     {
         // All threads are blocked inside limiter.
         threads.push_back(std::thread(worker));
     }
     
-    if (stop)
+    // Wait threads to be scheduled.
+    while (write_limiter->pendingCount() + finished_count.load(std::memory_order_relaxed) < threads.size())
     {
-        // Wait threads to be scheduled.
-        while (counter.load(std::memory_order_relaxed) < threads.size())
-        {
-            std::this_thread::sleep_for(1ms);
-        }
-        std::this_thread::sleep_for(10ms);  // Roughly wait for threads to request limiter.
-        auto sz = write_limiter->setStop(); // Stop the limiter and notify threads that blocked inside limiter.
-        ASSERT_EQ(sz, threads.size()) << sz;
+        std::this_thread::sleep_for(1ms);
     }
+    ASSERT_LE(finished_count.load(std::memory_order_relaxed), threads.size());
+    auto pending_cnt = write_limiter->pendingCount();
+    ASSERT_LE(pending_cnt, threads.size());
+    auto sz = write_limiter->setStop(); // Stop the limiter and notify threads that blocked inside limiter.
+    ASSERT_LE(sz, pending_cnt);
 
     for (auto & t : threads)
     {
         t.join();
-    }
-    auto end = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
-    auto elasped = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    if (stop)
-    {
-        // After setStop, threads that blocked inside limiter will be notified immediately.
-        ASSERT_LT(elasped, 100) << elasped;
-    }
-    else
-    {
-        // If not setStop, threads that blocked inside limiter will be notified until timeout (about 100ms).
-        ASSERT_GE(elasped, 100) << elasped;
     }
 }
 
@@ -248,8 +245,7 @@ TEST(WriteLimiter_test, setStop)
 {
     for (int i = 1; i < 128; i++)
     {
-        testSetStop(false, i);
-        testSetStop(true, i);
+        testSetStop(i);
     }
 }
 
@@ -301,12 +297,24 @@ TEST(ReadLimiter_test, LimiterStat)
 
     stat = read_limiter.getStat();
     ASSERT_EQ(stat.alloc_bytes, 100ul);
-    ASSERT_GE(stat.elapsed_ms, 100ul);
     ASSERT_EQ(stat.refill_period_ms, 100ul);
     ASSERT_EQ(stat.refill_bytes_per_period, 100);
     ASSERT_EQ(stat.maxBytesPerSec(), 1000);
-    ASSERT_EQ(stat.avgBytesPerSec(), 1000) << stat.toString();
-    ASSERT_EQ(stat.pct(), 100) << stat.toString();
+    if (stat.elapsed_ms == 100)
+    {
+        ASSERT_EQ(stat.avgBytesPerSec(), 1000) << stat.toString();
+        ASSERT_EQ(stat.pct(), 100) << stat.toString();
+    }
+    else if (stat.elapsed_ms > 100)
+    {
+        ASSERT_LT(stat.avgBytesPerSec(), 1000) << stat.toString();
+        ASSERT_LT(stat.pct(), 100) << stat.toString();
+    }
+    else if (stat.elapsed_ms < 100)
+    {
+        ASSERT_GT(stat.avgBytesPerSec(), 1000) << stat.toString();
+        ASSERT_GT(stat.pct(), 100) << stat.toString();
+    }
 
     static constexpr UInt64 alloc_bytes = 2047;
     for (int i = 0; i < 11; i++)

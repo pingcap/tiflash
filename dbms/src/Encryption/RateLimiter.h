@@ -67,7 +67,9 @@ public:
     void updateMaxBytesPerSec(Int64 max_bytes_per_sec);
 
     size_t setStop();
+#ifndef DBMS_PUBLIC_GTEST
 protected:
+#endif
     virtual bool canGrant(Int64 bytes);
     virtual void consumeBytes(Int64 bytes);
     virtual void refillAndAlloc();
@@ -76,6 +78,13 @@ protected:
     {
         auto refill_period_per_second = std::max(1, 1000 / refill_period_ms);
         return rate_limit_per_sec_ / refill_period_per_second;
+    }
+
+    // Just for test
+    size_t pendingCount() 
+    {
+        std::lock_guard lock(request_mutex);
+        return req_queue.size();
     }
 
     // used to represent pending request
