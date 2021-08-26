@@ -138,9 +138,9 @@ TEST(ConvertColumnType_test, CastNumeric)
     }
 
     {
-        const Strings to_types = {"Float64"};
-        DataTypePtr disk_data_type = typeFromString("Float32");
-        auto disk_col = ColumnFloat32::create();    
+        const Strings to_types       = {"Float64"};
+        DataTypePtr   disk_data_type = typeFromString("Float32");
+        auto          disk_col       = ColumnFloat32::create();
         disk_col->insert(Float32(3.0));
         disk_col->insert(Float32(3.1));
         disk_col->insert(Float32(3.14));
@@ -156,12 +156,12 @@ TEST(ConvertColumnType_test, CastNumeric)
         for (const String & to_type : to_types)
         {
             ColumnDefine read_define(0, "c", typeFromString(to_type));
-            auto mem_col = convertColumnByColumnDefineIfNeed(disk_data_type, disk_col->getPtr(), read_define);
-            
+            auto         mem_col = convertColumnByColumnDefineIfNeed(disk_data_type, disk_col->getPtr(), read_define);
+
             for (size_t i = 0; i < disk_col->size(); i++)
             {
-              Field f64 = (*mem_col)[i];
-              EXPECT_FLOAT_EQ(disk_col->getElement(i), static_cast<Float32>(f64.get<Float64>()));
+                Field f64 = (*mem_col)[i];
+                EXPECT_FLOAT_EQ(disk_col->getElement(i), static_cast<Float32>(f64.get<Float64>()));
             }
         }
     }

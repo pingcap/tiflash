@@ -20,8 +20,10 @@ extern const int LOGICAL_ERROR;
 namespace stable
 {
 
-std::set<PageFile, PageFile::Comparator>
-PageStorage::listAllPageFiles(const String & storage_path, const FileProviderPtr & file_provider, Poco::Logger * page_file_log, ListPageFilesOption option)
+std::set<PageFile, PageFile::Comparator> PageStorage::listAllPageFiles(const String &          storage_path,
+                                                                       const FileProviderPtr & file_provider,
+                                                                       Poco::Logger *          page_file_log,
+                                                                       ListPageFilesOption     option)
 {
     // collect all pages from `storage_path` and recover to `PageFile` objects
     Poco::File folder(storage_path);
@@ -75,7 +77,10 @@ PageStorage::listAllPageFiles(const String & storage_path, const FileProviderPtr
     return page_files;
 }
 
-std::optional<PageFile> PageStorage::tryGetCheckpoint(const String & storage_path, const FileProviderPtr & file_provider, Poco::Logger * page_file_logger, bool remove_old)
+std::optional<PageFile> PageStorage::tryGetCheckpoint(const String &          storage_path,
+                                                      const FileProviderPtr & file_provider,
+                                                      Poco::Logger *          page_file_logger,
+                                                      bool                    remove_old)
 {
     Poco::File folder(storage_path);
     if (!folder.exists())
@@ -152,8 +157,8 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
         page_files.insert(*checkpoint_file);
     }
 
-    bool has_reusable_pageFile = false;
-    PageFileId max_file_id = 0;
+    bool       has_reusable_pageFile = false;
+    PageFileId max_file_id           = 0;
     for (auto & page_file : page_files)
     {
         try
@@ -162,11 +167,10 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
             const_cast<PageFile &>(page_file).readAndSetPageMetas(edit);
 
             // Only level 0 is writable.
-            if (page_file.getLevel() == 0 && page_file.getType() == PageFile::Type::Formal
-                && page_file.reusableForWrite())
+            if (page_file.getLevel() == 0 && page_file.getType() == PageFile::Type::Formal && page_file.reusableForWrite())
             {
                 has_reusable_pageFile = true;
-                write_file = page_file;
+                write_file            = page_file;
             }
             if (page_file.getFileId() > max_file_id)
             {
@@ -185,12 +189,12 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
     }
     if (!has_reusable_pageFile)
     {
-        auto page_file
-            = PageFile::newPageFile(max_file_id + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
+        auto page_file = PageFile::newPageFile(max_file_id + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         page_file.createEncryptionInfo();
         LOG_DEBUG(log,
-                storage_name << " No PageFile can be reused for write, create new PageFile_" + DB::toString(max_file_id + 1) + "_0 for write");
-        write_file = page_file;
+                  storage_name << " No PageFile can be reused for write, create new PageFile_" + DB::toString(max_file_id + 1)
+                          + "_0 for write");
+        write_file        = page_file;
         write_file_writer = write_file.createWriter(config.sync_on_write, true);
     }
 #else
@@ -259,7 +263,8 @@ PageFile::Writer & PageStorage::getWriter()
     if (!is_writable)
     {
         // create a new PageFile if old file is full
-        write_file        = PageFile::newPageFile(write_file.getFileId() + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
+        write_file
+            = PageFile::newPageFile(write_file.getFileId() + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         write_file_writer = write_file.createWriter(config.sync_on_write, true);
     }
     else if (write_file_writer == nullptr)
@@ -277,8 +282,8 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
     auto & pages_reader = open_read_files[file_id_level];
     if (pages_reader == nullptr)
     {
-        auto page_file
-            = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
+        auto page_file = PageFile::openPageFileForRead(
+            file_id_level.first, file_id_level.second, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         pages_reader = page_file.createReader();
     }
     return pages_reader;
@@ -725,7 +730,8 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
                               << " to PageFile_" << largest_id_level.first << "_" << largest_id_level.second //
                               << " into checkpoint PageFile_" << largest_id_level.first << "_" << largest_id_level.second);
     }
-    auto checkpoint_file = PageFile::newPageFile(largest_id_level.first, largest_id_level.second, storage_path, file_provider, PageFile::Type::Temp, log);
+    auto checkpoint_file
+        = PageFile::newPageFile(largest_id_level.first, largest_id_level.second, storage_path, file_provider, PageFile::Type::Temp, log);
     {
         auto checkpoint_writer = checkpoint_file.createWriter(false, true);
 
@@ -819,7 +825,8 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
 
     {
         // In case that those files are hold by snapshot and do gcMigrate to same PageFile again, we need to check if gc_file is already exist.
-        PageFile gc_file = PageFile::openPageFileForRead(largest_file_id, level + 1, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
+        PageFile gc_file
+            = PageFile::openPageFileForRead(largest_file_id, level + 1, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         if (gc_file.isExist())
         {
             LOG_INFO(log, storage_name << " GC migration to PageFile_" << largest_file_id << "_" << level + 1 << " is done before.");

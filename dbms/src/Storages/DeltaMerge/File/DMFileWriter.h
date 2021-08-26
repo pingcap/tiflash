@@ -139,8 +139,8 @@ public:
     struct Flags
     {
     private:
-        static constexpr size_t IS_SINGLE_FILE         = 0x01;
-        static constexpr size_t NEED_RATE_LIMIT        = 0x02;
+        static constexpr size_t IS_SINGLE_FILE  = 0x01;
+        static constexpr size_t NEED_RATE_LIMIT = 0x02;
 
         size_t value;
 

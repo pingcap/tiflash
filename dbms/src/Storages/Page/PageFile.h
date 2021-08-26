@@ -163,7 +163,6 @@ public:
         }
 
     private:
-
         void initialize(std::optional<size_t> max_meta_offset);
 
     private:

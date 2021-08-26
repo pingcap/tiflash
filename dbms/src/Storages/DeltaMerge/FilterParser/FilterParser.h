@@ -1,8 +1,9 @@
 #pragma once
 
+#include <tipb/expression.pb.h>
+
 #include <cassert>
 #include <sstream>
-#include <tipb/expression.pb.h>
 
 namespace DB
 {

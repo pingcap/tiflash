@@ -6,11 +6,10 @@ namespace DM
 {
 
 
-class RSIndexNumber {
-
+class RSIndexNumber
+{
 };
 
 
-
-}
+} // namespace DM
 } // namespace DB

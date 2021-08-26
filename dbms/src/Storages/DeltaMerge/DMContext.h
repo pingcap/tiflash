@@ -110,7 +110,6 @@ public:
           query_id(query_id_)
     {
     }
-
 };
 
 } // namespace DM

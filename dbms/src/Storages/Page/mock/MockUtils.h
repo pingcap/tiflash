@@ -2,6 +2,7 @@
 #ifndef NDEBUG
 
 #include <Storages/Page/Page.h>
+
 #include <vector>
 
 namespace DB::tests
@@ -45,7 +46,7 @@ public:
     static MockSnapshotPtr createFrom(std::vector<std::pair<PageId, PageEntry>> && entries)
     {
         auto snap = std::make_shared<MockSnapshot>();
-        for (const auto & [pid, entry]:entries)
+        for (const auto & [pid, entry] : entries)
         {
             snap->entries->put(pid, entry);
         }

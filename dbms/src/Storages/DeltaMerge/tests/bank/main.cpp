@@ -2,14 +2,14 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <TestUtils/TiFlashTestBasic.h>
-
 #include <Storages/DeltaMerge/tests/bank/DeltaMergeStoreProxy.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <iostream>
 #include <memory>
 #include <thread>
+
 #include "SimpleLockManager.h"
 
 

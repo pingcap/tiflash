@@ -123,9 +123,9 @@ try
     // get read stream from DeltaMergeStorage
     QueryProcessingStage::Enum stage2;
     SelectQueryInfo            query_info;
-    query_info.query                          = std::make_shared<ASTSelectQuery>();
-    query_info.mvcc_query_info                = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max());
-    BlockInputStreams ins                     = storage->read(column_names, query_info, ctx, stage2, 8192, 1);
+    query_info.query           = std::make_shared<ASTSelectQuery>();
+    query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max());
+    BlockInputStreams ins      = storage->read(column_names, query_info, ctx, stage2, 8192, 1);
     ASSERT_EQ(ins.size(), 1UL);
     BlockInputStreamPtr in = ins[0];
     in->readPrefix();
@@ -161,16 +161,16 @@ CATCH
 TEST(StorageDeltaMerge_test, Rename)
 try
 {
-    Context    ctx = DMTestEnv::getContext();
+    Context                            ctx = DMTestEnv::getContext();
     std::shared_ptr<StorageDeltaMerge> storage;
-    DataTypes  data_types;
-    Names      column_names;
-    const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
-    const String table_name = "tmp_table";
-    const String db_name = "default";
+    DataTypes                          data_types;
+    Names                              column_names;
+    const String                       path_name  = DB::tests::TiFlashTestEnv::getTemporaryPath();
+    const String                       table_name = "tmp_table";
+    const String                       db_name    = "default";
     // create table
     {
-        NamesAndTypesList names_and_types_list {
+        NamesAndTypesList names_and_types_list{
             //{"col1", std::make_shared<DataTypeUInt64>()},
             {"col1", std::make_shared<DataTypeInt64>()},
             {"col2", std::make_shared<DataTypeString>()},
@@ -181,24 +181,18 @@ try
             column_names.push_back(name_type.name);
         }
 
-        Poco::File   path(path_name);
+        Poco::File path(path_name);
         if (path.exists())
         {
             path.remove(true);
         }
 
         // primary_expr_ast
-        ASTPtr       astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
+        ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
-        storage = StorageDeltaMerge::create("TiFlash",
-                                            db_name,
-                                            table_name,
-                                            std::nullopt,
-                                            ColumnsDescription{names_and_types_list},
-                                            astptr,
-                                            0,
-                                            ctx);
+        storage = StorageDeltaMerge::create(
+            "TiFlash", db_name, table_name, std::nullopt, ColumnsDescription{names_and_types_list}, astptr, 0, ctx);
         storage->startup();
     }
 
@@ -256,29 +250,28 @@ try
         output->writeSuffix();
         ASSERT_TRUE(storage->storeInited());
     }
-    
+
     // Rename table name
     String new_table_name = "new_" + storage->getTableName();
     storage->rename(path_name, new_db_name, new_table_name, new_table_name);
     ASSERT_EQ(storage->getTableName(), new_table_name);
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
-
 }
 CATCH
 
 TEST(StorageDeltaMerge_test, HandleCol)
 try
 {
-    Context    ctx = DMTestEnv::getContext();
+    Context                            ctx = DMTestEnv::getContext();
     std::shared_ptr<StorageDeltaMerge> storage;
-    DataTypes  data_types;
-    Names      column_names;
-    const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
-    const String table_name = "tmp_table";
-    const String db_name = "default";
+    DataTypes                          data_types;
+    Names                              column_names;
+    const String                       path_name  = DB::tests::TiFlashTestEnv::getTemporaryPath();
+    const String                       table_name = "tmp_table";
+    const String                       db_name    = "default";
     // create table
     {
-        NamesAndTypesList names_and_types_list {
+        NamesAndTypesList names_and_types_list{
             //{"col1", std::make_shared<DataTypeUInt64>()},
             {"col1", std::make_shared<DataTypeInt64>()},
             {"col2", std::make_shared<DataTypeString>()},
@@ -296,28 +289,22 @@ try
         }
 
         // primary_expr_ast
-        ASTPtr       astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
+        ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
-        storage = StorageDeltaMerge::create("TiFlash",
-                                            db_name,
-                                            table_name,
-                                            std::nullopt,
-                                            ColumnsDescription{names_and_types_list},
-                                            astptr,
-                                            0,
-                                            ctx);
+        storage = StorageDeltaMerge::create(
+            "TiFlash", db_name, table_name, std::nullopt, ColumnsDescription{names_and_types_list}, astptr, 0, ctx);
         storage->startup();
     }
 
     ASSERT_FALSE(storage->storeInited());
-    auto pk_type = storage->getPKTypeImpl();
+    auto pk_type   = storage->getPKTypeImpl();
     auto sort_desc = storage->getPrimarySortDescription();
     ASSERT_FALSE(storage->storeInited());
 
-    auto& store = storage->getStore();
+    auto & store = storage->getStore();
     ASSERT_TRUE(storage->storeInited());
-    auto pk_type2 = store->getPKDataType();
+    auto pk_type2   = store->getPKDataType();
     auto sort_desc2 = store->getPrimarySortDescription();
 
     ASSERT_EQ(pk_type->getTypeId(), pk_type2->getTypeId());

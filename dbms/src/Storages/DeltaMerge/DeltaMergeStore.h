@@ -393,8 +393,7 @@ public:
     RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
 private:
-
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id="");
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id = "");
 
     static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 

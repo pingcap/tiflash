@@ -1495,7 +1495,7 @@ bool Segment::placeDelete(const DMContext &           dm_context,
     {
         RowKeyValueRef first_rowkey       = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle).getRowKeyValue(0);
         auto           place_handle_range = skippable_place ? RowKeyRange::startFrom(first_rowkey, is_common_handle, rowkey_column_size)
-                                                  : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
+                                                            : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
         auto compacted_index = update_delta_tree.getCompactedEntries();
 

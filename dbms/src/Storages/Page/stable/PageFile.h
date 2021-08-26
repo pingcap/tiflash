@@ -117,11 +117,14 @@ public:
     /// Create an empty page file.
     PageFile() = default;
     /// Recover a page file from disk.
-    static std::pair<PageFile, Type> recover(const String & parent_path, const FileProviderPtr & file_provider, const String & page_file_name, Poco::Logger * log);
+    static std::pair<PageFile, Type>
+    recover(const String & parent_path, const FileProviderPtr & file_provider, const String & page_file_name, Poco::Logger * log);
     /// Create a new page file.
-    static PageFile newPageFile(PageFileId file_id, UInt32 level, const String & parent_path, const FileProviderPtr & file_provider, Type type, Poco::Logger * log);
+    static PageFile newPageFile(
+        PageFileId file_id, UInt32 level, const String & parent_path, const FileProviderPtr & file_provider, Type type, Poco::Logger * log);
     /// Open an existing page file for read.
-    static PageFile openPageFileForRead(PageFileId file_id, UInt32 level, const String & parent_path, const FileProviderPtr & file_provider, Type type, Poco::Logger * log);
+    static PageFile openPageFileForRead(
+        PageFileId file_id, UInt32 level, const String & parent_path, const FileProviderPtr & file_provider, Type type, Poco::Logger * log);
 
     /// Get pages' metadata by this method. Will also update file pos.
     /// Call this method after a page file recovered.
@@ -139,7 +142,10 @@ public:
 
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
-    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool create_new_file) { return std::make_unique<Writer>(*this, sync_on_write, create_new_file); }
+    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool create_new_file)
+    {
+        return std::make_unique<Writer>(*this, sync_on_write, create_new_file);
+    }
     /// Return a reader for this file.
     /// The PageFile object can be released any time.
     std::shared_ptr<Reader> createReader()
@@ -179,26 +185,26 @@ public:
     // Encryption can be turned on / turned off for existing cluster, we should take care of it when trying to reuse PageFile.
     bool reusableForWrite() const
     {
-        auto file_encrypted = file_provider->isFileEncrypted(dataEncryptionPath());
+        auto file_encrypted     = file_provider->isFileEncrypted(dataEncryptionPath());
         auto encryption_enabled = file_provider->isEncryptionEnabled();
         return (file_encrypted && encryption_enabled) || (!file_encrypted && !encryption_enabled);
     }
 
 private:
     /// Create a new page file.
-    PageFile(PageFileId file_id_, UInt32 level_, const String & parent_path, const FileProviderPtr & file_provider_, Type type_, bool is_create, Poco::Logger * log);
+    PageFile(PageFileId              file_id_,
+             UInt32                  level_,
+             const String &          parent_path,
+             const FileProviderPtr & file_provider_,
+             Type                    type_,
+             bool                    is_create,
+             Poco::Logger *          log);
 
     String dataPath() const { return folderPath() + "/page"; }
     String metaPath() const { return folderPath() + "/meta"; }
 
-    EncryptionPath dataEncryptionPath() const
-    {
-        return EncryptionPath(dataPath(), "");
-    }
-    EncryptionPath metaEncryptionPath() const
-    {
-        return EncryptionPath(metaPath(), "");
-    }
+    EncryptionPath dataEncryptionPath() const { return EncryptionPath(dataPath(), ""); }
+    EncryptionPath metaEncryptionPath() const { return EncryptionPath(metaPath(), ""); }
 
     constexpr static const char * folder_prefix_formal     = "page";
     constexpr static const char * folder_prefix_temp       = ".temp.page";

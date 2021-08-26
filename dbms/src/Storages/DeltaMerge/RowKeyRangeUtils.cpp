@@ -64,7 +64,7 @@ public:
                     ++count;
                 else
                     throw TiFlashException("Found overlap ranges: " + prev.toDebugString() + ", " + current.toDebugString(),
-                                        Errors::Coprocessor::BadRequest);
+                                           Errors::Coprocessor::BadRequest);
             }
         }
         merged_stats.emplace_back(offset, count);

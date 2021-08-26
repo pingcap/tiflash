@@ -4,8 +4,6 @@
 #include <Core/DecimalComparison.h>
 #include <Core/Field.h>
 #include <Core/Types.h>
-#include <Functions/FunctionHelpers.h>
-
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
@@ -14,6 +12,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionHelpers.h>
 
 
 namespace DB

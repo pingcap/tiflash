@@ -7,9 +7,9 @@
 #include <Core/Types.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/DeltaMerge/Range.h>
+#include <Storages/FormatVersion.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
-#include <Storages/FormatVersion.h>
 
 #include <limits>
 #include <memory>

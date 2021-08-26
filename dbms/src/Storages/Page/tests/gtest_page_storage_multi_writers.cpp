@@ -13,8 +13,8 @@
 #include <Storages/Page/PageFile.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
-#include <common/logger_useful.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
 
 #include <atomic>
 #include <chrono>

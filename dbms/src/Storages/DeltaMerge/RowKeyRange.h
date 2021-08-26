@@ -1,4 +1,5 @@
 #pragma once
+#include <Columns/ColumnString.h>
 #include <Core/Types.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -10,7 +11,6 @@
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/Types.h>
-#include <Columns/ColumnString.h>
 
 namespace DB::DM
 {
@@ -116,7 +116,7 @@ struct RowKeyValue
     RowKeyValue toPrefixNext()
     {
         std::vector<UInt8> keys(value->begin(), value->end());
-        int index = keys.size() - 1;
+        int                index = keys.size() - 1;
         for (; index >= 0; index--)
         {
             if (keys[index] == std::numeric_limits<UInt8>::max())
@@ -133,8 +133,8 @@ struct RowKeyValue
             keys.insert(keys.end(), value->begin(), value->end());
             keys.push_back(0);
         }
-        HandleValuePtr prefix_value = std::make_shared<String>(keys.begin(), keys.end());
-        Int64 prefix_int_value = int_value;
+        HandleValuePtr prefix_value     = std::make_shared<String>(keys.begin(), keys.end());
+        Int64          prefix_int_value = int_value;
         if (!is_common_handle && prefix_int_value != std::numeric_limits<Int64>::max())
         {
             prefix_int_value++;

@@ -247,9 +247,12 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
 PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create_new_file)
     : page_file(page_file_),
       sync_on_write(sync_on_write_),
-      data_file(page_file.file_provider->newWritableFile(page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_file)),
-      meta_file(page_file.file_provider->newWritableFile(page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_file))
-{}
+      data_file(
+          page_file.file_provider->newWritableFile(page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_file)),
+      meta_file(
+          page_file.file_provider->newWritableFile(page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_file))
+{
+}
 
 PageFile::Writer::~Writer()
 {
@@ -413,8 +416,21 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
 
 const PageFile::Version PageFile::CURRENT_VERSION = 1;
 
-PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, const FileProviderPtr & file_provider_, PageFile::Type type_, bool is_create, Logger * log_)
-    : file_id(file_id_), level(level_), type(type_), parent_path(parent_path), file_provider(file_provider_), data_file_pos(0), meta_file_pos(0), log(log_)
+PageFile::PageFile(PageFileId              file_id_,
+                   UInt32                  level_,
+                   const std::string &     parent_path,
+                   const FileProviderPtr & file_provider_,
+                   PageFile::Type          type_,
+                   bool                    is_create,
+                   Logger *                log_)
+    : file_id(file_id_),
+      level(level_),
+      type(type_),
+      parent_path(parent_path),
+      file_provider(file_provider_),
+      data_file_pos(0),
+      meta_file_pos(0),
+      log(log_)
 {
     if (is_create)
     {
@@ -428,7 +444,8 @@ PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & paren
     }
 }
 
-std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider, const String & page_file_name, Logger * log)
+std::pair<PageFile, PageFile::Type>
+PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider, const String & page_file_name, Logger * log)
 {
 
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
@@ -499,12 +516,22 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
     return {{}, Type::Invalid};
 }
 
-PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider, PageFile::Type type, Logger * log)
+PageFile PageFile::newPageFile(PageFileId              file_id,
+                               UInt32                  level,
+                               const std::string &     parent_path,
+                               const FileProviderPtr & file_provider,
+                               PageFile::Type          type,
+                               Logger *                log)
 {
     return PageFile(file_id, level, parent_path, file_provider, type, true, log);
 }
 
-PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider, PageFile::Type type, Logger * log)
+PageFile PageFile::openPageFileForRead(PageFileId              file_id,
+                                       UInt32                  level,
+                                       const std::string &     parent_path,
+                                       const FileProviderPtr & file_provider,
+                                       PageFile::Type          type,
+                                       Logger *                log)
 {
     return PageFile(file_id, level, parent_path, file_provider, type, false, log);
 }
@@ -519,7 +546,7 @@ void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
                         ErrorCodes::LOGICAL_ERROR);
 
     const size_t file_size = file.getSize();
-    auto meta_file = file_provider->newRandomAccessFile(path, EncryptionPath(path, ""));
+    auto         meta_file = file_provider->newRandomAccessFile(path, EncryptionPath(path, ""));
 
     char * meta_data = (char *)alloc(file_size);
     SCOPE_EXIT({ free(meta_data, file_size); });
@@ -534,8 +561,8 @@ void PageFile::setFormal()
 {
     if (type != Type::Temp)
         return;
-    auto old_meta_encryption_path = metaEncryptionPath();
-    auto old_data_encryption_path = dataEncryptionPath();
+    auto       old_meta_encryption_path = metaEncryptionPath();
+    auto       old_data_encryption_path = dataEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Formal;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
@@ -551,8 +578,8 @@ void PageFile::setLegacy()
         return;
     // Rename to legacy dir. Note that we can NOT remove the data part before
     // successfully rename to legacy status.
-    auto old_meta_encryption_path = metaEncryptionPath();
-    auto old_data_encryption_path = dataEncryptionPath();
+    auto       old_meta_encryption_path = metaEncryptionPath();
+    auto       old_data_encryption_path = dataEncryptionPath();
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
@@ -570,7 +597,7 @@ void PageFile::setCheckpoint()
 {
     if (type != Type::Temp)
         return;
-    auto old_meta_encryption_path = metaEncryptionPath();
+    auto       old_meta_encryption_path = metaEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Checkpoint;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());

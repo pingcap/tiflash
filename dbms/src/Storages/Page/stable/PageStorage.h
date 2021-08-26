@@ -103,10 +103,15 @@ public:
     // `remover` will be called with living normal page ids after gc run a round.
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover);
 
-    static std::set<PageFile, PageFile::Comparator>
-    listAllPageFiles(const String & storage_path, const FileProviderPtr & file_provider, Poco::Logger * page_file_log, ListPageFilesOption option = ListPageFilesOption());
+    static std::set<PageFile, PageFile::Comparator> listAllPageFiles(const String &          storage_path,
+                                                                     const FileProviderPtr & file_provider,
+                                                                     Poco::Logger *          page_file_log,
+                                                                     ListPageFilesOption     option = ListPageFilesOption());
 
-    static std::optional<PageFile> tryGetCheckpoint(const String & storage_path, const FileProviderPtr & file_provider, Poco::Logger * page_file_log, bool remove_old = false);
+    static std::optional<PageFile> tryGetCheckpoint(const String &          storage_path,
+                                                    const FileProviderPtr & file_provider,
+                                                    Poco::Logger *          page_file_log,
+                                                    bool                    remove_old = false);
 
 private:
     PageFile::Writer & getWriter();

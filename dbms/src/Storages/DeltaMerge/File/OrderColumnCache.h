@@ -1,10 +1,9 @@
 #pragma once
 
-#include <unordered_map>
-
-
 #include <Columns/IColumn.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+
+#include <unordered_map>
 
 namespace DB
 {

@@ -39,7 +39,7 @@ try
     const Strings test_paths = TiFlashTestEnv::findTestDataPath("page_storage_compactor_migrate");
     ASSERT_EQ(test_paths.size(), 2);
 #else
-    const String  test_path  = TiFlashTestEnv::getTemporaryPath() + "page_storage_compactor_migrate";
+    const String test_path = TiFlashTestEnv::getTemporaryPath() + "page_storage_compactor_migrate";
     if (Poco::File f(test_path); f.exists())
         f.remove(true);
     const Strings test_paths = Strings{

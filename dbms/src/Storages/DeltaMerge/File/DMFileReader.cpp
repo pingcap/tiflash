@@ -62,8 +62,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
             return res;
         };
         if (reader.mark_cache)
-            marks
-                = reader.mark_cache->getOrSet(reader.dmfile->colMarkCacheKey(file_name_base), mark_load);
+            marks = reader.mark_cache->getOrSet(reader.dmfile->colMarkCacheKey(file_name_base), mark_load);
         else
             marks = mark_load();
     }

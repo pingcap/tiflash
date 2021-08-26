@@ -20,9 +20,7 @@ class PKSquashingBlockInputStream final : public IBlockInputStream
 {
 public:
     PKSquashingBlockInputStream(BlockInputStreamPtr child, ColId pk_column_id_, bool is_common_handle_)
-        : sorted_input_stream(child),
-          pk_column_id(pk_column_id_),
-          is_common_handle(is_common_handle_)
+        : sorted_input_stream(child), pk_column_id(pk_column_id_), is_common_handle(is_common_handle_)
     {
         assert(sorted_input_stream != nullptr);
         cur_block = {};

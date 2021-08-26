@@ -90,8 +90,14 @@ void registerStorageDeltaMerge(StorageFactory & factory)
             else
                 throw Exception("Engine DeltaMerge tombstone must be a UInt64" + getDeltaMergeVerboseHelp(), ErrorCodes::BAD_ARGUMENTS);
         }
-        return StorageDeltaMerge::create(
-            args.database_engine, args.database_name, args.table_name, table_info, args.columns, primary_expr_list, tombstone, args.context);
+        return StorageDeltaMerge::create(args.database_engine,
+                                         args.database_name,
+                                         args.table_name,
+                                         table_info,
+                                         args.columns,
+                                         primary_expr_list,
+                                         tombstone,
+                                         args.context);
     });
 }
 

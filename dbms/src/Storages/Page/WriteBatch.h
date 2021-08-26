@@ -78,7 +78,7 @@ public:
         writes.emplace_back(std::move(w));
     }
 
-    // Upsert a page{page_id} and writer page's data to a new PageFile{file_id}. 
+    // Upsert a page{page_id} and writer page's data to a new PageFile{file_id}.
     // Now it's used in DataCompactor to move page's data to new file.
     void upsertPage(PageId                           page_id,
                     UInt64                           tag,

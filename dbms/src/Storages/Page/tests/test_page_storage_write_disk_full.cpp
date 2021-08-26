@@ -1,8 +1,3 @@
-#include <atomic>
-#include <iostream>
-#include <memory>
-#include <random>
-
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
@@ -11,9 +6,13 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+#include <Storages/Page/PageStorage.h>
 #include <common/logger_useful.h>
 
-#include <Storages/Page/PageStorage.h>
+#include <atomic>
+#include <iostream>
+#include <memory>
+#include <random>
 
 void Usage(const char * prog)
 {

@@ -21,13 +21,16 @@ class PageEntriesVersionSetWithDelta : public DB::stable::MVCC::VersionSetWithDe
                                            DeltaVersionEditAcceptor>
 {
 public:
-    using BaseType     = DB::stable::MVCC::VersionSetWithDelta<PageEntriesForDelta, PageEntriesView, PageEntriesEdit, DeltaVersionEditAcceptor>;
+    using BaseType = DB::stable::MVCC::VersionSetWithDelta<PageEntriesForDelta, PageEntriesView, PageEntriesEdit, DeltaVersionEditAcceptor>;
     using EditAcceptor = BaseType::EditAcceptor;
     using VersionType  = BaseType::VersionType;
     using VersionPtr   = BaseType::VersionPtr;
 
 public:
-    explicit PageEntriesVersionSetWithDelta(const DB::stable::MVCC::VersionSetConfig & config_, Poco::Logger * log_) : BaseType(config_, log_) {}
+    explicit PageEntriesVersionSetWithDelta(const DB::stable::MVCC::VersionSetConfig & config_, Poco::Logger * log_)
+        : BaseType(config_, log_)
+    {
+    }
 
 public:
     std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> gcApply(PageEntriesEdit & edit, bool need_scan_page_ids = true);
