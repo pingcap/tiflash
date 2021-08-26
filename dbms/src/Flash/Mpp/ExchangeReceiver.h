@@ -24,7 +24,6 @@
 
 namespace DB
 {
-
 struct ExchangeReceiverResult
 {
     std::shared_ptr<tipb::SelectResponse> resp;
@@ -33,11 +32,17 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
-    ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_ = "",
-        bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
-        : resp(resp_), call_index(call_index_), req_info(req_info_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_)
+    ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_ = "", bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
+        : resp(resp_)
+        , call_index(call_index_)
+        , req_info(req_info_)
+        , meet_error(meet_error_)
+        , error_msg(error_msg_)
+        , eof(eof_)
     {}
-    ExchangeReceiverResult() : ExchangeReceiverResult(nullptr, 0) {}
+    ExchangeReceiverResult()
+        : ExchangeReceiverResult(nullptr, 0)
+    {}
 };
 
 enum State
@@ -70,7 +75,7 @@ private:
     Int32 live_connections;
     State state;
     String err_msg;
-    Logger * log;
+    Poco::Logger * log;
 
     void setUpConnection();
 
@@ -104,14 +109,14 @@ private:
 
 public:
     ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_)
-        : cluster(context_.getTMTContext().getKVCluster()),
-          pb_exchange_receiver(exc),
-          source_num(pb_exchange_receiver.encoded_task_meta_size()),
-          task_meta(meta),
-          max_buffer_size(max_buffer_size_),
-          live_connections(pb_exchange_receiver.encoded_task_meta_size()),
-          state(NORMAL),
-          log(&Logger::get("exchange_receiver"))
+        : cluster(context_.getTMTContext().getKVCluster())
+        , pb_exchange_receiver(exc)
+        , source_num(pb_exchange_receiver.encoded_task_meta_size())
+        , task_meta(meta)
+        , max_buffer_size(max_buffer_size_)
+        , live_connections(pb_exchange_receiver.encoded_task_meta_size())
+        , state(NORMAL)
+        , log(&Poco::Logger::get("exchange_receiver"))
     {
         for (int i = 0; i < exc.field_types_size(); i++)
         {

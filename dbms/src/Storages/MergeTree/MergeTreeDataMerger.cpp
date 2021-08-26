@@ -119,7 +119,7 @@ void MergeTreeDataMerger::FuturePart::assign(MergeTreeData::DataPartsVector part
 }
 
 MergeTreeDataMerger::MergeTreeDataMerger(MergeTreeData & data_, const BackgroundProcessingPool & pool_)
-    : data(data_), pool(pool_), log(&Logger::get(data.getLogName() + " (Merger)"))
+    : data(data_), pool(pool_), log(&Poco::Logger::get(data.getLogName() + " (Merger)"))
 {
 }
 

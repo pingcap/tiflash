@@ -73,7 +73,7 @@ private:
     String path;
     bool is_first_task = true;
 
-    Logger * log = &Logger::get("MergeTreeBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("MergeTreeBlockInputStream");
 };
 
 }

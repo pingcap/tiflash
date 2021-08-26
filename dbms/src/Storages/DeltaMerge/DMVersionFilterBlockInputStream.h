@@ -33,7 +33,7 @@ public:
           is_common_handle(is_common_handle_),
           header(toEmptyBlock(read_columns)),
           query_id(query_id_),
-          log(&Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">"))
+          log(&Poco::Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">"))
     {
         children.push_back(input);
 

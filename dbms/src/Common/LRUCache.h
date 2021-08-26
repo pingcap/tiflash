@@ -12,7 +12,6 @@
 
 namespace DB
 {
-
 template <typename T>
 struct TrivialWeightFunction
 {
@@ -27,9 +26,9 @@ struct TrivialWeightFunction
 /// entries is due.
 /// Value weight should not change after insertion.
 template <typename TKey,
-    typename TMapped,
-    typename HashFunction = std::hash<TKey>,
-    typename WeightFunction = TrivialWeightFunction<TMapped>>
+          typename TMapped,
+          typename HashFunction = std::hash<TKey>,
+          typename WeightFunction = TrivialWeightFunction<TMapped>>
 class LRUCache
 {
 public:
@@ -44,7 +43,8 @@ private:
 
 public:
     LRUCache(size_t max_size_, const Delay & expiration_delay_ = Delay::zero())
-        : max_size(std::max(static_cast<size_t>(1), max_size_)), expiration_delay(expiration_delay_)
+        : max_size(std::max(static_cast<size_t>(1), max_size_))
+        , expiration_delay(expiration_delay_)
     {}
 
     MappedPtr get(const Key & key)
@@ -162,11 +162,13 @@ private:
     /// Represents pending insertion attempt.
     struct InsertToken
     {
-        explicit InsertToken(LRUCache & cache_) : cache(cache_) {}
+        explicit InsertToken(LRUCache & cache_)
+            : cache(cache_)
+        {}
 
         std::mutex mutex;
         bool cleaned_up = false; /// Protected by the token mutex
-        MappedPtr value;         /// Protected by the token mutex
+        MappedPtr value; /// Protected by the token mutex
 
         LRUCache & cache;
         size_t refcount = 0; /// Protected by the cache mutex
@@ -186,7 +188,9 @@ private:
         InsertTokenHolder() = default;
 
         void acquire(
-            const Key * key_, const std::shared_ptr<InsertToken> & token_, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
+            const Key * key_,
+            const std::shared_ptr<InsertToken> & token_,
+            [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
         {
             key = key_;
             token = token_;
@@ -292,13 +296,13 @@ private:
             {
                 // If queue.insert() throws exception, cells and queue will be in inconsistent.
                 cells.erase(res.first);
-                LOG_ERROR(&Logger::get("LRUCache"), "queue.insert throw std::exception: " << e.what());
+                LOG_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw std::exception: " << e.what());
                 throw;
             }
             catch (...)
             {
                 cells.erase(res.first);
-                LOG_ERROR(&Logger::get("LRUCache"), "queue.insert throw unknow exception");
+                LOG_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw unknow exception");
                 throw;
             }
         }
@@ -333,7 +337,7 @@ private:
             auto it = cells.find(key);
             if (it == cells.end())
             {
-                LOG_ERROR(&Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
+                LOG_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
                 abort();
             }
 
@@ -353,7 +357,7 @@ private:
 
         if (current_size > (1ull << 63))
         {
-            LOG_ERROR(&Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
+            LOG_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
             abort();
         }
     }

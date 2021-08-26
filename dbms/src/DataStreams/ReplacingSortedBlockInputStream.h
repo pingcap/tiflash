@@ -33,7 +33,7 @@ protected:
 private:
     ssize_t version_column_number = -1;
 
-    Logger * log = &Logger::get("ReplacingSortedBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("ReplacingSortedBlockInputStream");
 
     /// All data has been read.
     bool finished = false;

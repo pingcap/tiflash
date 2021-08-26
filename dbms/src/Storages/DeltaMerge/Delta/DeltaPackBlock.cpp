@@ -138,7 +138,7 @@ Columns DeltaPackBlock::readFromCache(const ColumnDefines & column_defines, size
     if (unlikely(!(cache)))
     {
         String msg = " Not a cache pack: " + toString();
-        LOG_ERROR(&Logger::get(__FUNCTION__), msg);
+        LOG_ERROR(&Poco::Logger::get(__FUNCTION__), msg);
         throw Exception(msg);
     }
 

@@ -1,66 +1,57 @@
+#include <Columns/ColumnArray.h>
+#include <Common/Exception.h>
+#include <Common/escapeForFileName.h>
+#include <DataStreams/IBlockOutputStream.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/NativeBlockInputStream.h>
+#include <DataStreams/NativeBlockOutputStream.h>
+#include <DataStreams/NullBlockInputStream.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <IO/CompressedReadBufferFromFile.h>
+#include <IO/CompressedWriteBuffer.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
+#include <Storages/StorageFactory.h>
+#include <Storages/StorageStripeLog.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
 #include <map>
 #include <optional>
 
-#include <Common/escapeForFileName.h>
-
-#include <Common/Exception.h>
-
-#include <IO/ReadBufferFromFile.h>
-#include <IO/WriteBufferFromFile.h>
-#include <IO/CompressedReadBufferFromFile.h>
-#include <IO/CompressedWriteBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/IBlockOutputStream.h>
-#include <DataStreams/NativeBlockInputStream.h>
-#include <DataStreams/NativeBlockOutputStream.h>
-#include <DataStreams/NullBlockInputStream.h>
-
-#include <DataTypes/DataTypeFactory.h>
-
-#include <Columns/ColumnArray.h>
-
-#include <Interpreters/Context.h>
-
-#include <Storages/StorageStripeLog.h>
-#include <Storages/StorageFactory.h>
-
 
 namespace DB
 {
-
 #define INDEX_BUFFER_SIZE 4096
 
 namespace ErrorCodes
 {
-    extern const int EMPTY_LIST_OF_COLUMNS_PASSED;
-    extern const int CANNOT_CREATE_DIRECTORY;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int INCORRECT_FILE_NAME;
-}
+extern const int EMPTY_LIST_OF_COLUMNS_PASSED;
+extern const int CANNOT_CREATE_DIRECTORY;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int INCORRECT_FILE_NAME;
+} // namespace ErrorCodes
 
 
 class StripeLogBlockInputStream final : public IProfilingBlockInputStream
 {
 public:
-    StripeLogBlockInputStream(StorageStripeLog & storage_, size_t max_read_buffer_size_,
-        std::shared_ptr<const IndexForNativeFormat> & index_,
-        IndexForNativeFormat::Blocks::const_iterator index_begin_,
-        IndexForNativeFormat::Blocks::const_iterator index_end_)
-        : storage(storage_), max_read_buffer_size(max_read_buffer_size_),
-        index(index_), index_begin(index_begin_), index_end(index_end_)
+    StripeLogBlockInputStream(StorageStripeLog & storage_, size_t max_read_buffer_size_, std::shared_ptr<const IndexForNativeFormat> & index_, IndexForNativeFormat::Blocks::const_iterator index_begin_, IndexForNativeFormat::Blocks::const_iterator index_end_)
+        : storage(storage_)
+        , max_read_buffer_size(max_read_buffer_size_)
+        , index(index_)
+        , index_begin(index_begin_)
+        , index_end(index_end_)
     {
         if (index_begin != index_end)
         {
             for (const auto & column : index_begin->columns)
             {
                 auto type = DataTypeFactory::instance().get(column.type);
-                header.insert(ColumnWithTypeAndName{ type, column.name });
+                header.insert(ColumnWithTypeAndName{type, column.name});
             }
         }
     }
@@ -118,7 +109,9 @@ private:
             started = true;
 
             data_in.emplace(
-                storage.full_path() + "data.bin", 0, 0,
+                storage.full_path() + "data.bin",
+                0,
+                0,
                 std::min(static_cast<Poco::File::FileSize>(max_read_buffer_size), Poco::File(storage.full_path() + "data.bin").getSize()));
 
             block_in.emplace(*data_in, 0, index_begin, index_end);
@@ -131,12 +124,13 @@ class StripeLogBlockOutputStream final : public IBlockOutputStream
 {
 public:
     explicit StripeLogBlockOutputStream(StorageStripeLog & storage_)
-        : storage(storage_), lock(storage.rwlock),
-        data_out_compressed(storage.full_path() + "data.bin", DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_APPEND | O_CREAT),
-        data_out(data_out_compressed, CompressionSettings(CompressionMethod::LZ4), storage.max_compress_block_size),
-        index_out_compressed(storage.full_path() + "index.mrk", INDEX_BUFFER_SIZE, O_WRONLY | O_APPEND | O_CREAT),
-        index_out(index_out_compressed),
-        block_out(data_out, 0, storage.getSampleBlock(), &index_out, Poco::File(storage.full_path() + "data.bin").getSize())
+        : storage(storage_)
+        , lock(storage.rwlock)
+        , data_out_compressed(storage.full_path() + "data.bin", DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_APPEND | O_CREAT)
+        , data_out(data_out_compressed, CompressionSettings(CompressionMethod::LZ4), storage.max_compress_block_size)
+        , index_out_compressed(storage.full_path() + "index.mrk", INDEX_BUFFER_SIZE, O_WRONLY | O_APPEND | O_CREAT)
+        , index_out(index_out_compressed)
+        , block_out(data_out, 0, storage.getSampleBlock(), &index_out, Poco::File(storage.full_path() + "data.bin").getSize())
     {
     }
 
@@ -170,7 +164,7 @@ public:
         index_out.next();
         index_out_compressed.next();
 
-        FileChecker::Files files{ data_out_compressed.getFileName(), index_out_compressed.getFileName() };
+        FileChecker::Files files{data_out_compressed.getFileName(), index_out_compressed.getFileName()};
         storage.file_checker.update(files.begin(), files.end());
 
         done = true;
@@ -196,11 +190,12 @@ StorageStripeLog::StorageStripeLog(
     const ColumnsDescription & columns_,
     bool attach,
     size_t max_compress_block_size_)
-    : IStorage{columns_},
-    path(path_), name(name_),
-    max_compress_block_size(max_compress_block_size_),
-    file_checker(path + escapeForFileName(name) + '/' + "sizes.json"),
-    log(&Logger::get("StorageStripeLog"))
+    : IStorage{columns_}
+    , path(path_)
+    , name(name_)
+    , max_compress_block_size(max_compress_block_size_)
+    , file_checker(path + escapeForFileName(name) + '/' + "sizes.json")
+    , log(&Poco::Logger::get("StorageStripeLog"))
 {
     if (path.empty())
         throw Exception("Storage " + getName() + " requires data path", ErrorCodes::INCORRECT_FILE_NAME);
@@ -244,7 +239,7 @@ BlockInputStreams StorageStripeLog::read(
     NameSet column_names_set(column_names.begin(), column_names.end());
 
     if (!Poco::File(full_path() + "index.mrk").exists())
-        return { std::make_shared<NullBlockInputStream>(getSampleBlockForColumns(column_names)) };
+        return {std::make_shared<NullBlockInputStream>(getSampleBlockForColumns(column_names))};
 
     CompressedReadBufferFromFile index_in(full_path() + "index.mrk", 0, 0, INDEX_BUFFER_SIZE);
     std::shared_ptr<const IndexForNativeFormat> index{std::make_shared<IndexForNativeFormat>(index_in, column_names_set)};
@@ -264,7 +259,11 @@ BlockInputStreams StorageStripeLog::read(
         std::advance(end, (stream + 1) * size / num_streams);
 
         res.emplace_back(std::make_shared<StripeLogBlockInputStream>(
-            *this, context.getSettingsRef().max_read_buffer_size, index, begin, end));
+            *this,
+            context.getSettingsRef().max_read_buffer_size,
+            index,
+            begin,
+            end));
     }
 
     /// We do not keep read lock directly at the time of reading, because we read ranges of data that do not change.
@@ -274,7 +273,8 @@ BlockInputStreams StorageStripeLog::read(
 
 
 BlockOutputStreamPtr StorageStripeLog::write(
-    const ASTPtr & /*query*/, const Settings & /*settings*/)
+    const ASTPtr & /*query*/,
+    const Settings & /*settings*/)
 {
     return std::make_shared<StripeLogBlockOutputStream>(*this);
 }
@@ -289,17 +289,19 @@ bool StorageStripeLog::checkData() const
 
 void registerStorageStripeLog(StorageFactory & factory)
 {
-    factory.registerStorage("StripeLog", [](const StorageFactory::Arguments & args)
-    {
+    factory.registerStorage("StripeLog", [](const StorageFactory::Arguments & args) {
         if (!args.engine_args.empty())
             throw Exception(
                 "Engine " + args.engine_name + " doesn't support any arguments (" + toString(args.engine_args.size()) + " given)",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         return StorageStripeLog::create(
-            args.data_path, args.table_name, args.columns,
-            args.attach, args.context.getSettings().max_compress_block_size);
+            args.data_path,
+            args.table_name,
+            args.columns,
+            args.attach,
+            args.context.getSettings().max_compress_block_size);
     });
 }
 
-}
+} // namespace DB

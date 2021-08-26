@@ -1,12 +1,12 @@
 #pragma once
 
-#include <boost/noncopyable.hpp>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
 #include <kvproto/mpp.pb.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 
+#include <boost/noncopyable.hpp>
 #include <chrono>
 #include <condition_variable>
 #include <memory>
@@ -14,7 +14,6 @@
 
 namespace DB
 {
-
 class MPPTask;
 class MPPTunnel : private boost::noncopyable
 {
@@ -46,6 +45,7 @@ public:
 
     // wait until all the data has been transferred.
     void waitForFinish();
+
 private:
     void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
 
@@ -69,10 +69,9 @@ private:
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;
 
 } // namespace DB
-

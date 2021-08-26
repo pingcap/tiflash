@@ -38,7 +38,7 @@ MergeTreeWhereOptimizer::MergeTreeWhereOptimizer(
     const Context & context,
     const MergeTreeData & data,
     const Names & column_names,
-    Logger * log)
+    Poco::Logger * log)
         : primary_key_columns{ext::map<std::unordered_set>(data.getPrimarySortDescription(),
             [] (const SortColumnDescription & col) { return col.column_name; })},
         table_columns{ext::map<std::unordered_set>(data.getColumns().getAllPhysical(),

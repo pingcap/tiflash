@@ -100,7 +100,7 @@ private:
           file_provider(file_provider_),
           handle_res(dmfile->getPacks(), RSResult::All),
           use_packs(dmfile->getPacks()),
-          log(&Logger::get("DMFilePackFilter")),
+          log(&Poco::Logger::get("DMFilePackFilter")),
           read_limiter(read_limiter_)
     {
     }
@@ -235,7 +235,7 @@ private:
     std::vector<RSResult> handle_res;
     std::vector<UInt8>    use_packs;
 
-    Logger * log;
+    Poco::Logger * log;
     ReadLimiterPtr read_limiter;
 };
 
