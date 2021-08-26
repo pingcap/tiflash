@@ -1,21 +1,21 @@
 #pragma once
 
-#include <Core/SortDescription.h>
 #include <Common/SimpleIncrement.h>
 #include <Common/escapeForFileName.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Storages/ITableDeclaration.h>
-#include <Storages/AlterCommands.h>
-#include <Storages/MergeTree/MergeTreePartInfo.h>
-#include <Storages/MergeTree/MergeTreeSettings.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/WriteBufferFromFile.h>
-#include <IO/ReadBufferFromFile.h>
+#include <Core/SortDescription.h>
+#include <DataStreams/GraphiteRollupSortedBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataStreams/GraphiteRollupSortedBlockInputStream.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/WriteBufferFromFile.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Storages/AlterCommands.h>
+#include <Storages/ITableDeclaration.h>
 #include <Storages/MergeTree/MergeTreeDataPart.h>
+#include <Storages/MergeTree/MergeTreePartInfo.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
@@ -23,9 +23,9 @@
 #pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #pragma GCC diagnostic ignored "-Wdeprecated-copy"
 #endif
-#include <boost/multi_index_container.hpp>
-#include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/global_fun.hpp>
+#include <boost/multi_index/ordered_index.hpp>
+#include <boost/multi_index_container.hpp>
 #include <boost/range/iterator_range_core.hpp>
 #pragma GCC diagnostic pop
 
@@ -36,18 +36,17 @@ struct TableInfo;
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int INVALID_PARTITION_NAME;
-    extern const int NO_SUCH_DATA_PART;
-    extern const int DUPLICATE_DATA_PART;
-    extern const int DIRECTORY_ALREADY_EXISTS;
-    extern const int TOO_MANY_UNEXPECTED_DATA_PARTS;
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
-    extern const int TABLE_DIFFERS_TOO_MUCH;
-}
+extern const int LOGICAL_ERROR;
+extern const int INVALID_PARTITION_NAME;
+extern const int NO_SUCH_DATA_PART;
+extern const int DUPLICATE_DATA_PART;
+extern const int DIRECTORY_ALREADY_EXISTS;
+extern const int TOO_MANY_UNEXPECTED_DATA_PARTS;
+extern const int NO_SUCH_COLUMN_IN_TABLE;
+extern const int TABLE_DIFFERS_TOO_MUCH;
+} // namespace ErrorCodes
 
 
 /// Data structure for *MergeTree engines.
@@ -103,7 +102,7 @@ class MergeTreeData : public ITableDeclaration
 {
 public:
     /// Function to call if the part is suspected to contain corrupt data.
-    using BrokenPartCallback = std::function<void (const String &)>;
+    using BrokenPartCallback = std::function<void(const String &)>;
     using DataPart = MergeTreeDataPart;
 
     using MutableDataPartPtr = std::shared_ptr<DataPart>;
@@ -120,7 +119,10 @@ public:
         DataPartState state;
         const MergeTreePartInfo & info;
 
-        DataPartStateAndInfo(DataPartState state, const MergeTreePartInfo & info) : state(state), info(info) {}
+        DataPartStateAndInfo(DataPartState state, const MergeTreePartInfo & info)
+            : state(state)
+            , info(info)
+        {}
     };
 
     struct LessDataPart
@@ -136,18 +138,18 @@ public:
     {
         using is_transparent = void;
 
-        bool operator() (const DataPartStateAndInfo & lhs, const DataPartStateAndInfo & rhs) const
+        bool operator()(const DataPartStateAndInfo & lhs, const DataPartStateAndInfo & rhs) const
         {
             return std::forward_as_tuple(static_cast<UInt8>(lhs.state), lhs.info)
-                   < std::forward_as_tuple(static_cast<UInt8>(rhs.state), rhs.info);
+                < std::forward_as_tuple(static_cast<UInt8>(rhs.state), rhs.info);
         }
 
-        bool operator() (DataPartStateAndInfo info, const DataPartState & state) const
+        bool operator()(DataPartStateAndInfo info, const DataPartState & state) const
         {
             return static_cast<size_t>(info.state) < static_cast<size_t>(state);
         }
 
-        bool operator() (const DataPartState & state, DataPartStateAndInfo info) const
+        bool operator()(const DataPartState & state, DataPartStateAndInfo info) const
         {
             return static_cast<size_t>(state) < static_cast<size_t>(info.state);
         }
@@ -182,7 +184,7 @@ public:
             {
                 rollback();
             }
-            catch(...)
+            catch (...)
             {
                 tryLogCurrentException("~MergeTreeData::Transaction");
             }
@@ -219,7 +221,10 @@ public:
     private:
         friend class MergeTreeData;
 
-        AlterDataPartTransaction(DataPartPtr data_part_) : data_part(data_part_), alter_lock(data_part->alter_mutex) {}
+        AlterDataPartTransaction(DataPartPtr data_part_)
+            : data_part(data_part_)
+            , alter_lock(data_part->alter_mutex)
+        {}
 
         void clear()
         {
@@ -245,15 +250,15 @@ public:
         /// Merging mode. See above.
         enum Mode
         {
-            Ordinary            = 0,    /// Enum values are saved. Do not change them.
-            Collapsing          = 1,
-            Summing             = 2,
-            Aggregating         = 3,
-            Replacing           = 5,
-            Graphite            = 6,
+            Ordinary = 0, /// Enum values are saved. Do not change them.
+            Collapsing = 1,
+            Summing = 2,
+            Aggregating = 3,
+            Replacing = 5,
+            Graphite = 6,
             VersionedCollapsing = 7,
-            Mutable             = 100,
-            Txn                 = 101,
+            Mutable = 100,
+            Txn = 101,
         };
 
         Mode mode;
@@ -285,21 +290,23 @@ public:
     ///     Otherwise, partition_expr_ast is used for partitioning.
     /// require_part_metadata - should checksums.txt and columns.txt exist in the part directory.
     /// attach - whether the existing table is attached or the new table is created.
-    MergeTreeData(const String & database_, const String & table_,
-                  const String & full_path_,
-                  bool data_path_contains_database_name_,
-                  const ColumnsDescription & columns_,
-                  Context & context_,
-                  const ASTPtr & primary_expr_ast_,
-                  const ASTPtr & secondary_sort_expr_ast_,
-                  const String & date_column_name,
-                  const ASTPtr & partition_expr_ast_,
-                  const ASTPtr & sampling_expression_, /// nullptr, if sampling is not supported.
-                  const MergingParams & merging_params_,
-                  const MergeTreeSettings & settings_,
-                  bool require_part_metadata_,
-                  bool attach,
-                  BrokenPartCallback broken_part_callback_ = [](const String &){});
+    MergeTreeData(
+        const String & database_,
+        const String & table_,
+        const String & full_path_,
+        bool data_path_contains_database_name_,
+        const ColumnsDescription & columns_,
+        Context & context_,
+        const ASTPtr & primary_expr_ast_,
+        const ASTPtr & secondary_sort_expr_ast_,
+        const String & date_column_name,
+        const ASTPtr & partition_expr_ast_,
+        const ASTPtr & sampling_expression_, /// nullptr, if sampling is not supported.
+        const MergingParams & merging_params_,
+        const MergeTreeSettings & settings_,
+        bool require_part_metadata_,
+        bool attach,
+        BrokenPartCallback broken_part_callback_ = [](const String &) {});
 
     /// Load the set of data parts from disk. Call once - immediately after the object is created.
     void loadDataParts(bool skip_sanity_checks);
@@ -308,8 +315,7 @@ public:
 
     bool supportsPrewhere() const
     {
-        return merging_params.mode != MergingParams::Mutable &&
-            merging_params.mode != MergingParams::Txn;
+        return merging_params.mode != MergingParams::Mutable && merging_params.mode != MergingParams::Txn;
     }
 
     bool supportsFinal() const
@@ -404,7 +410,9 @@ public:
     /// Returns all parts covered by the added part (in ascending order).
     /// If out_transaction == nullptr, marks covered parts as Outdated.
     DataPartsVector renameTempPartAndReplace(
-        MutableDataPartPtr & part, SimpleIncrement * increment = nullptr, Transaction * out_transaction = nullptr);
+        MutableDataPartPtr & part,
+        SimpleIncrement * increment = nullptr,
+        Transaction * out_transaction = nullptr);
 
     /// Removes parts from the working set parts.
     /// Parts in add must already be in data_parts with PreCommitted, Committed, or Outdated states.
@@ -545,7 +553,7 @@ public:
     SortDescription minmax_idx_sort_descr; /// For use with KeyCondition.
 
     /// Limiting parallel sends per one table, used in DataPartsExchange
-    std::atomic_uint current_table_sends {0};
+    std::atomic_uint current_table_sends{0};
 
     /// For generating names of temporary parts during insertion.
     SimpleIncrement insert_increment;
@@ -585,8 +593,12 @@ private:
 
     /// Work with data parts
 
-    struct TagByInfo{};
-    struct TagByStateAndInfo{};
+    struct TagByInfo
+    {
+    };
+    struct TagByStateAndInfo
+    {
+    };
 
     static const MergeTreePartInfo & dataPartPtrToInfo(const DataPartPtr & part)
     {
@@ -599,20 +611,16 @@ private:
     };
 
     using DataPartsIndexes = boost::multi_index_container<DataPartPtr,
-        boost::multi_index::indexed_by<
-            /// Index by Info
-            boost::multi_index::ordered_unique<
-                boost::multi_index::tag<TagByInfo>,
-                boost::multi_index::global_fun<const DataPartPtr &, const MergeTreePartInfo &, dataPartPtrToInfo>
-            >,
-            /// Index by (State, Info), is used to obtain ordered slices of parts with the same state
-            boost::multi_index::ordered_unique<
-                boost::multi_index::tag<TagByStateAndInfo>,
-                boost::multi_index::global_fun<const DataPartPtr &, DataPartStateAndInfo, dataPartPtrToStateAndInfo>,
-                LessStateDataPart
-            >
-        >
-    >;
+                                                          boost::multi_index::indexed_by<
+                                                              /// Index by Info
+                                                              boost::multi_index::ordered_unique<
+                                                                  boost::multi_index::tag<TagByInfo>,
+                                                                  boost::multi_index::global_fun<const DataPartPtr &, const MergeTreePartInfo &, dataPartPtrToInfo>>,
+                                                              /// Index by (State, Info), is used to obtain ordered slices of parts with the same state
+                                                              boost::multi_index::ordered_unique<
+                                                                  boost::multi_index::tag<TagByStateAndInfo>,
+                                                                  boost::multi_index::global_fun<const DataPartPtr &, DataPartStateAndInfo, dataPartPtrToStateAndInfo>,
+                                                                  LessStateDataPart>>>;
 
     /// Current set of data parts.
     mutable std::mutex data_parts_mutex;
@@ -632,7 +640,9 @@ private:
 
     static decltype(auto) getStateModifier(DataPartState state)
     {
-        return [state] (const DataPartPtr & part) { part->state = state; };
+        return [state](const DataPartPtr & part) {
+            part->state = state;
+        };
     }
 
     void modifyPartState(DataPartIteratorByStateAndInfo it, DataPartState state)
@@ -674,8 +684,7 @@ private:
     /// for transformation-free changing of Enum values list).
     /// Files to be deleted are mapped to an empty string in out_rename_map.
     /// If part == nullptr, just checks that all type conversions are possible.
-    void createConvertExpression(const DataPartPtr & part, DataPart::Checksums &, const NamesAndTypesList & old_columns, const NamesAndTypesList & new_columns,
-        ExpressionActionsPtr & out_expression, NameToNameMap & out_rename_map, bool & out_force_update_metadata);
+    void createConvertExpression(const DataPartPtr & part, DataPart::Checksums &, const NamesAndTypesList & old_columns, const NamesAndTypesList & new_columns, ExpressionActionsPtr & out_expression, NameToNameMap & out_rename_map, bool & out_force_update_metadata);
 
     /// Calculates column sizes in compressed form for the current state of data_parts. Call with data_parts mutex locked.
     void calculateColumnSizesImpl();
@@ -698,4 +707,4 @@ private:
     bool isPrimaryOrMinMaxKeyColumnPossiblyWrappedInFunctions(const ASTPtr & node) const;
 };
 
-}
+} // namespace DB

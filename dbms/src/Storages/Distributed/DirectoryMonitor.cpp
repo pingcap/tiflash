@@ -1,99 +1,99 @@
-#include <DataStreams/RemoteBlockOutputStream.h>
-#include <DataStreams/NativeBlockInputStream.h>
+#include <Common/ClickHouseRevision.h>
+#include <Common/CurrentMetrics.h>
+#include <Common/SipHash.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
 #include <Common/setThreadName.h>
-#include <Common/CurrentMetrics.h>
-#include <Common/StringUtils/StringUtils.h>
-#include <Common/ClickHouseRevision.h>
-#include <Common/SipHash.h>
-#include <Interpreters/Context.h>
-#include <Storages/Distributed/DirectoryMonitor.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/WriteBufferFromFile.h>
+#include <DataStreams/NativeBlockInputStream.h>
+#include <DataStreams/RemoteBlockOutputStream.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/Operators.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/WriteBufferFromFile.h>
+#include <Interpreters/Context.h>
+#include <Poco/DirectoryIterator.h>
+#include <Storages/Distributed/DirectoryMonitor.h>
 
 #include <boost/algorithm/string/find_iterator.hpp>
 #include <boost/algorithm/string/finder.hpp>
 
-#include <Poco/DirectoryIterator.h>
-
 
 namespace CurrentMetrics
 {
-    extern const Metric DistributedSend;
+extern const Metric DistributedSend;
 }
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int INCORRECT_FILE_NAME;
-    extern const int CHECKSUM_DOESNT_MATCH;
-    extern const int TOO_LARGE_SIZE_COMPRESSED;
-    extern const int ATTEMPT_TO_READ_AFTER_EOF;
-}
+extern const int INCORRECT_FILE_NAME;
+extern const int CHECKSUM_DOESNT_MATCH;
+extern const int TOO_LARGE_SIZE_COMPRESSED;
+extern const int ATTEMPT_TO_READ_AFTER_EOF;
+} // namespace ErrorCodes
 
 
 namespace
 {
-    static constexpr const std::chrono::seconds max_sleep_time{30};
-    static constexpr const std::chrono::minutes decrease_error_count_period{5};
+static constexpr const std::chrono::seconds max_sleep_time{30};
+static constexpr const std::chrono::minutes decrease_error_count_period{5};
 
-    template <typename PoolFactory>
-    ConnectionPoolPtrs createPoolsForAddresses(const std::string & name, PoolFactory && factory)
+template <typename PoolFactory>
+ConnectionPoolPtrs createPoolsForAddresses(const std::string & name, PoolFactory && factory)
+{
+    ConnectionPoolPtrs pools;
+
+    for (auto it = boost::make_split_iterator(name, boost::first_finder(",")); it != decltype(it){}; ++it)
     {
-        ConnectionPoolPtrs pools;
+        const auto address = boost::copy_range<std::string>(*it);
+        const char * address_begin = static_cast<const char *>(address.data());
+        const char * address_end = address_begin + address.size();
 
-        for (auto it = boost::make_split_iterator(name, boost::first_finder(",")); it != decltype(it){}; ++it)
+        Protocol::Secure secure = Protocol::Secure::Disable;
+        const char * secure_tag = "+secure";
+        if (endsWith(address, secure_tag))
         {
-            const auto address = boost::copy_range<std::string>(*it);
-            const char * address_begin = static_cast<const char*>(address.data());
-            const char * address_end = address_begin + address.size();
-
-            Protocol::Secure secure = Protocol::Secure::Disable;
-            const char * secure_tag = "+secure";
-            if (endsWith(address, secure_tag))
-            {
-                address_end -= strlen(secure_tag);
-                secure = Protocol::Secure::Enable;
-            }
-
-            const char * user_pw_end = strchr(address.data(), '@');
-            const char * colon = strchr(address.data(), ':');
-            if (!user_pw_end || !colon)
-                throw Exception{
-                    "Shard address '" + address + "' does not match to 'user[:password]@host:port#default_database' pattern",
-                    ErrorCodes::INCORRECT_FILE_NAME};
-
-            const bool has_pw = colon < user_pw_end;
-            const char * host_end = has_pw ? strchr(user_pw_end + 1, ':') : colon;
-            if (!host_end)
-                throw Exception{
-                    "Shard address '" + address + "' does not contain port",
-                    ErrorCodes::INCORRECT_FILE_NAME};
-
-            const char * has_db = strchr(address.data(), '#');
-            const char * port_end = has_db ? has_db : address_end;
-
-            const auto user = unescapeForFileName(std::string(address_begin, has_pw ? colon : user_pw_end));
-            const auto password = has_pw ? unescapeForFileName(std::string(colon + 1, user_pw_end)) : std::string();
-            const auto host = unescapeForFileName(std::string(user_pw_end + 1, host_end));
-            const auto port = parse<UInt16>(host_end + 1, port_end - (host_end + 1));
-            const auto database = has_db ? unescapeForFileName(std::string(has_db + 1, address_end))
-                                         : std::string();
-
-            pools.emplace_back(factory(host, port, secure, user, password, database));
+            address_end -= strlen(secure_tag);
+            secure = Protocol::Secure::Enable;
         }
 
-        return pools;
+        const char * user_pw_end = strchr(address.data(), '@');
+        const char * colon = strchr(address.data(), ':');
+        if (!user_pw_end || !colon)
+            throw Exception{
+                "Shard address '" + address + "' does not match to 'user[:password]@host:port#default_database' pattern",
+                ErrorCodes::INCORRECT_FILE_NAME};
+
+        const bool has_pw = colon < user_pw_end;
+        const char * host_end = has_pw ? strchr(user_pw_end + 1, ':') : colon;
+        if (!host_end)
+            throw Exception{
+                "Shard address '" + address + "' does not contain port",
+                ErrorCodes::INCORRECT_FILE_NAME};
+
+        const char * has_db = strchr(address.data(), '#');
+        const char * port_end = has_db ? has_db : address_end;
+
+        const auto user = unescapeForFileName(std::string(address_begin, has_pw ? colon : user_pw_end));
+        const auto password = has_pw ? unescapeForFileName(std::string(colon + 1, user_pw_end)) : std::string();
+        const auto host = unescapeForFileName(std::string(user_pw_end + 1, host_end));
+        const auto port = parse<UInt16>(host_end + 1, port_end - (host_end + 1));
+        const auto database = has_db ? unescapeForFileName(std::string(has_db + 1, address_end))
+                                     : std::string();
+
+        pools.emplace_back(factory(host, port, secure, user, password, database));
     }
+
+    return pools;
 }
+} // namespace
 
 
 StorageDistributedDirectoryMonitor::StorageDistributedDirectoryMonitor(StorageDistributed & storage, const std::string & name, const ConnectionPoolPtr & pool)
-    : storage(storage), pool{pool}, path{storage.path + name + '/'}
+    : storage(storage)
+    , pool{pool}
+    , path{storage.path + name + '/'}
     , current_batch_file_path{path + "current_batch.txt"}
     , default_sleep_time{storage.context.getSettingsRef().distributed_directory_monitor_sleep_time_ms.totalMilliseconds()}
     , sleep_time{default_sleep_time}
@@ -123,7 +123,9 @@ void StorageDistributedDirectoryMonitor::run()
 
     std::unique_lock<std::mutex> lock{mutex};
 
-    const auto quit_requested = [this] { return quit.load(std::memory_order_relaxed); };
+    const auto quit_requested = [this] {
+        return quit.load(std::memory_order_relaxed);
+    };
 
     while (!quit_requested())
     {
@@ -159,14 +161,15 @@ void StorageDistributedDirectoryMonitor::run()
 ConnectionPoolPtr StorageDistributedDirectoryMonitor::createPool(const std::string & name, const StorageDistributed & storage)
 {
     auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(storage.context.getSettingsRef());
-    const auto pool_factory = [&storage, &name, &timeouts] (const std::string & host, const UInt16 port,
-                                                 const Protocol::Secure secure,
-                                                 const std::string & user, const std::string & password,
-                                                 const std::string & default_database)
-    {
+    const auto pool_factory = [&storage, &name, &timeouts](const std::string & host, const UInt16 port, const Protocol::Secure secure, const std::string & user, const std::string & password, const std::string & default_database) {
         return std::make_shared<ConnectionPool>(
-            1, host, port, default_database,
-            user, password, timeouts,
+            1,
+            host,
+            port,
+            default_database,
+            user,
+            password,
+            timeouts,
             storage.getName() + '_' + name,
             Protocol::Compression::Enable,
             secure);
@@ -293,7 +296,8 @@ struct StorageDistributedDirectoryMonitor::Batch
     Batch(
         StorageDistributedDirectoryMonitor & parent_,
         const std::map<UInt64, String> & file_index_to_path_)
-        : parent(parent_), file_index_to_path(file_index_to_path_)
+        : parent(parent_)
+        , file_index_to_path(file_index_to_path_)
     {}
 
     bool isEnoughSize() const
@@ -533,4 +537,4 @@ std::string StorageDistributedDirectoryMonitor::getLoggerName() const
     return storage.table_name + '.' + storage.getName() + ".DirectoryMonitor";
 }
 
-}
+} // namespace DB

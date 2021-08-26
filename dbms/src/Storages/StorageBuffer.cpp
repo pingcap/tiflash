@@ -1,64 +1,65 @@
-#include <Interpreters/InterpreterSelectQuery.h>
-#include <Interpreters/InterpreterInsertQuery.h>
-#include <Interpreters/InterpreterAlterQuery.h>
-#include <Interpreters/evaluateConstantExpression.h>
+#include <Common/CurrentMetrics.h>
+#include <Common/FieldVisitors.h>
+#include <Common/MemoryTracker.h>
+#include <Common/setThreadName.h>
+#include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Databases/IDatabase.h>
+#include <Interpreters/InterpreterAlterQuery.h>
+#include <Interpreters/InterpreterInsertQuery.h>
+#include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/evaluateConstantExpression.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTLiteral.h>
+#include <Poco/Ext/ThreadNumber.h>
 #include <Storages/StorageBuffer.h>
 #include <Storages/StorageFactory.h>
-#include <Parsers/ASTInsertQuery.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTExpressionList.h>
-#include <Common/setThreadName.h>
-#include <Common/CurrentMetrics.h>
-#include <Common/MemoryTracker.h>
-#include <Common/FieldVisitors.h>
-#include <Common/typeid_cast.h>
 #include <common/logger_useful.h>
-#include <Poco/Ext/ThreadNumber.h>
 
 #include <ext/range.h>
 
 
 namespace ProfileEvents
 {
-    extern const Event StorageBufferFlush;
-    extern const Event StorageBufferErrorOnFlush;
-    extern const Event StorageBufferPassedAllMinThresholds;
-    extern const Event StorageBufferPassedTimeMaxThreshold;
-    extern const Event StorageBufferPassedRowsMaxThreshold;
-    extern const Event StorageBufferPassedBytesMaxThreshold;
-}
+extern const Event StorageBufferFlush;
+extern const Event StorageBufferErrorOnFlush;
+extern const Event StorageBufferPassedAllMinThresholds;
+extern const Event StorageBufferPassedTimeMaxThreshold;
+extern const Event StorageBufferPassedRowsMaxThreshold;
+extern const Event StorageBufferPassedBytesMaxThreshold;
+} // namespace ProfileEvents
 
 namespace CurrentMetrics
 {
-    extern const Metric StorageBufferRows;
-    extern const Metric StorageBufferBytes;
-}
+extern const Metric StorageBufferRows;
+extern const Metric StorageBufferBytes;
+} // namespace CurrentMetrics
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int INFINITE_LOOP;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
+extern const int INFINITE_LOOP;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
-StorageBuffer::StorageBuffer(const std::string & name_, const ColumnsDescription & columns_,
-    Context & context_,
-    size_t num_shards_, const Thresholds & min_thresholds_, const Thresholds & max_thresholds_,
-    const String & destination_database_, const String & destination_table_, bool allow_materialized_)
-    : IStorage{columns_},
-    name(name_), context(context_),
-    num_shards(num_shards_), buffers(num_shards_),
-    min_thresholds(min_thresholds_), max_thresholds(max_thresholds_),
-    destination_database(destination_database_), destination_table(destination_table_),
-    no_destination(destination_database.empty() && destination_table.empty()),
-    allow_materialized(allow_materialized_), log(&Poco::Logger::get("StorageBuffer (" + name + ")"))
+StorageBuffer::StorageBuffer(const std::string & name_, const ColumnsDescription & columns_, Context & context_, size_t num_shards_, const Thresholds & min_thresholds_, const Thresholds & max_thresholds_, const String & destination_database_, const String & destination_table_, bool allow_materialized_)
+    : IStorage{columns_}
+    , name(name_)
+    , context(context_)
+    , num_shards(num_shards_)
+    , buffers(num_shards_)
+    , min_thresholds(min_thresholds_)
+    , max_thresholds(max_thresholds_)
+    , destination_database(destination_database_)
+    , destination_table(destination_table_)
+    , no_destination(destination_database.empty() && destination_table.empty())
+    , allow_materialized(allow_materialized_)
+    , log(&Poco::Logger::get("StorageBuffer (" + name + ")"))
 {
 }
 
@@ -68,7 +69,10 @@ class BufferBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     BufferBlockInputStream(const Names & column_names_, StorageBuffer::Buffer & buffer_, const StorageBuffer & storage_)
-        : column_names(column_names_.begin(), column_names_.end()), buffer(buffer_), storage(storage_) {}
+        : column_names(column_names_.begin(), column_names_.end())
+        , buffer(buffer_)
+        , storage(storage_)
+    {}
 
     String getName() const override { return "Buffer"; }
 
@@ -200,7 +204,9 @@ static void appendBlock(const Block & from, Block & to)
 class BufferBlockOutputStream : public IBlockOutputStream
 {
 public:
-    explicit BufferBlockOutputStream(StorageBuffer & storage_) : storage(storage_) {}
+    explicit BufferBlockOutputStream(StorageBuffer & storage_)
+        : storage(storage_)
+    {}
 
     Block getHeader() const override { return storage.getSampleBlock(); }
 
@@ -245,7 +251,7 @@ public:
             {
                 LOG_TRACE(storage.log, "Writing block with " << rows << " rows, " << bytes << " bytes directly.");
                 storage.writeBlockToDestination(block, destination);
-             }
+            }
             return;
         }
 
@@ -283,6 +289,7 @@ public:
         else
             insertIntoBuffer(block, *least_busy_buffer, std::move(least_busy_lock));
     }
+
 private:
     StorageBuffer & storage;
 
@@ -342,7 +349,7 @@ void StorageBuffer::startup()
     if (context.getSettingsRef().readonly)
     {
         LOG_WARNING(log, "Storage " << getName() << " is run with readonly settings, it will not be able to insert data."
-            << " Set apropriate system_profile to fix this.");
+                                    << " Set apropriate system_profile to fix this.");
     }
 
     flush_thread = std::thread(&StorageBuffer::flushThread, this);
@@ -544,10 +551,7 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
         {
             if (!block.getByName(dst_col.name).type->equals(*dst_col.type))
             {
-                LOG_ERROR(log, "Destination table " << destination_database << "." << destination_table
-                    << " have different type of column " << dst_col.name << " ("
-                    << block.getByName(dst_col.name).type->getName() << " != " << dst_col.type->getName()
-                    << "). Block of data is discarded.");
+                LOG_ERROR(log, "Destination table " << destination_database << "." << destination_table << " have different type of column " << dst_col.name << " (" << block.getByName(dst_col.name).type->getName() << " != " << dst_col.type->getName() << "). Block of data is discarded.");
                 return;
             }
 
@@ -562,8 +566,7 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
     }
 
     if (columns_intersection.size() != block.columns())
-        LOG_WARNING(log, "Not all columns from block in buffer exist in destination table "
-            << destination_database << "." << destination_table << ". Some columns are discarded.");
+        LOG_WARNING(log, "Not all columns from block in buffer exist in destination table " << destination_database << "." << destination_table << ". Some columns are discarded.");
 
     auto list_of_columns = std::make_shared<ASTExpressionList>();
     insert->columns = list_of_columns;
@@ -623,14 +626,13 @@ void registerStorageBuffer(StorageFactory & factory)
       * min_time, max_time, min_rows, max_rows, min_bytes, max_bytes - conditions for flushing the buffer.
       */
 
-    factory.registerStorage("Buffer", [](const StorageFactory::Arguments & args)
-    {
+    factory.registerStorage("Buffer", [](const StorageFactory::Arguments & args) {
         ASTs & engine_args = args.engine_args;
 
         if (engine_args.size() != 9)
             throw Exception("Storage Buffer requires 9 parameters: "
-                " destination_database, destination_table, num_buckets, min_time, max_time, min_rows, max_rows, min_bytes, max_bytes.",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                            " destination_database, destination_table, num_buckets, min_time, max_time, min_rows, max_rows, min_bytes, max_bytes.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         engine_args[0] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[0], args.local_context);
         engine_args[1] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[1], args.local_context);
@@ -648,14 +650,16 @@ void registerStorageBuffer(StorageFactory & factory)
         UInt64 max_bytes = applyVisitor(FieldVisitorConvertToNumber<UInt64>(), typeid_cast<ASTLiteral &>(*engine_args[8]).value);
 
         return StorageBuffer::create(
-            args.table_name, args.columns,
+            args.table_name,
+            args.columns,
             args.context,
             num_buckets,
             StorageBuffer::Thresholds{min_time, min_rows, min_bytes},
             StorageBuffer::Thresholds{max_time, max_rows, max_bytes},
-            destination_database, destination_table,
+            destination_database,
+            destination_table,
             static_cast<bool>(args.local_context.getSettingsRef().insert_allow_materialized_columns));
     });
 }
 
-}
+} // namespace DB

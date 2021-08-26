@@ -20,10 +20,10 @@ struct TableInfo;
 
 namespace DB
 {
-
 /** See the description of the data structure in MergeTreeData.
   */
-class StorageMergeTree : public ext::shared_ptr_helper<StorageMergeTree>, public IManageableStorage
+class StorageMergeTree : public ext::shared_ptr_helper<StorageMergeTree>
+    , public IManageableStorage
 {
     friend class MergeTreeBlockOutputStream;
     friend class TxnMergeTreeBlockOutputStream;
@@ -60,11 +60,11 @@ public:
     bool hasColumn(const String & column_name) const override { return data.hasColumn(column_name); }
 
     BlockInputStreams read(const Names & column_names,
-        const SelectQueryInfo & query_info,
-        const Context & context,
-        QueryProcessingStage::Enum & processed_stage,
-        size_t max_block_size,
-        unsigned num_streams) override;
+                           const SelectQueryInfo & query_info,
+                           const Context & context,
+                           QueryProcessingStage::Enum & processed_stage,
+                           size_t max_block_size,
+                           unsigned num_streams) override;
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
@@ -84,17 +84,15 @@ public:
     void truncate(const ASTPtr & /*query*/, const Context & /*context*/) override;
 
     void rename(const String & new_path_to_db,
-        const String & new_database_name,
-        const String & new_table_name,
-        const String & new_display_table_name) override;
+                const String & new_database_name,
+                const String & new_table_name,
+                const String & new_display_table_name) override;
 
     void modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info) override;
 
-    void alter(const TableLockHolder &, const AlterCommands & params, const String & database_name, const String & table_name,
-        const Context & context) override;
+    void alter(const TableLockHolder &, const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
 
-    void alterFromTiDB(const TableLockHolder &, const AlterCommands & params, const String & database_name,
-        const TiDB::TableInfo & table_info, const SchemaNameMapper & name_mapper, const Context & context) override;
+    void alterFromTiDB(const TableLockHolder &, const AlterCommands & params, const String & database_name, const TiDB::TableInfo & table_info, const SchemaNameMapper & name_mapper, const Context & context) override;
 
     ::TiDB::StorageEngine engineType() const override
     {
@@ -154,13 +152,11 @@ private:
       * If aggressive - when selects parts don't takes into account their ratio size and novelty (used for OPTIMIZE query).
       * Returns true if merge is finished successfully.
       */
-    bool merge(size_t aio_threshold, bool aggressive, const String & partition_id, bool final, bool deduplicate,
-        String * out_disable_reason = nullptr);
+    bool merge(size_t aio_threshold, bool aggressive, const String & partition_id, bool final, bool deduplicate, String * out_disable_reason = nullptr);
 
     bool mergeTask();
 
-    void alterInternal(const AlterCommands & params, const String & database_name, const String & table_name,
-        const std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info, const Context & context);
+    void alterInternal(const AlterCommands & params, const String & database_name, const String & table_name, const std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info, const Context & context);
 
     DataTypePtr getPKTypeImpl() const override;
 
@@ -174,22 +170,22 @@ protected:
           otherwise, partition_expr_ast is used as the partitioning expression;
       */
     StorageMergeTree(const String & path_,
-        const String & db_engine,
-        const String & database_name_,
-        const String & table_name_,
-        const ColumnsDescription & columns_,
-        bool attach,
-        Context & context_,
-        const TableInfo & table_info_,
-        const ASTPtr & primary_expr_ast_,
-        const ASTPtr & secondary_sorting_expr_list_,
-        const String & date_column_name,
-        const ASTPtr & partition_expr_ast_,
-        const ASTPtr & sampling_expression_, /// nullptr, if sampling is not supported.
-        const MergeTreeData::MergingParams & merging_params_,
-        const MergeTreeSettings & settings_,
-        bool has_force_restore_data_flag,
-        Timestamp tombstone);
+                     const String & db_engine,
+                     const String & database_name_,
+                     const String & table_name_,
+                     const ColumnsDescription & columns_,
+                     bool attach,
+                     Context & context_,
+                     const TableInfo & table_info_,
+                     const ASTPtr & primary_expr_ast_,
+                     const ASTPtr & secondary_sorting_expr_list_,
+                     const String & date_column_name,
+                     const ASTPtr & partition_expr_ast_,
+                     const ASTPtr & sampling_expression_, /// nullptr, if sampling is not supported.
+                     const MergeTreeData::MergingParams & merging_params_,
+                     const MergeTreeSettings & settings_,
+                     bool has_force_restore_data_flag,
+                     Timestamp tombstone);
 };
 
 } // namespace DB

@@ -27,16 +27,15 @@ extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
 template <>
-DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const RegionInfoMap & regions_,
-    const RegionInfoList & retry_regions_, UInt64 start_ts, UInt64 schema_ver, tipb::SelectResponse * dag_response_, bool internal_)
-    : context(context_),
-      dag_request(dag_request_),
-      regions(regions_),
-      retry_regions(retry_regions_),
-      dag_response(dag_response_),
-      writer(nullptr),
-      internal(internal_),
-      log(&Poco::Logger::get("DAGDriver"))
+DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_, UInt64 start_ts, UInt64 schema_ver, tipb::SelectResponse * dag_response_, bool internal_)
+    : context(context_)
+    , dag_request(dag_request_)
+    , regions(regions_)
+    , retry_regions(retry_regions_)
+    , dag_response(dag_response_)
+    , writer(nullptr)
+    , internal(internal_)
+    , log(&Poco::Logger::get("DAGDriver"))
 {
     context.setSetting("read_tso", start_ts);
     if (schema_ver)
@@ -46,16 +45,14 @@ DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_req
 }
 
 template <>
-DAGDriver<true>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const RegionInfoMap & regions_,
-    const RegionInfoList & retry_regions_, UInt64 start_ts, UInt64 schema_ver, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_,
-    bool internal_)
-    : context(context_),
-      dag_request(dag_request_),
-      regions(regions_),
-      retry_regions(retry_regions_),
-      writer(writer_),
-      internal(internal_),
-      log(&Poco::Logger::get("DAGDriver"))
+DAGDriver<true>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_, UInt64 start_ts, UInt64 schema_ver, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_, bool internal_)
+    : context(context_)
+    , dag_request(dag_request_)
+    , regions(regions_)
+    , retry_regions(retry_regions_)
+    , writer(writer_)
+    , internal(internal_)
+    , log(&Poco::Logger::get("DAGDriver"))
 {
     context.setSetting("read_tso", start_ts);
     if (schema_ver)
@@ -87,7 +84,11 @@ try
     if constexpr (!batch)
     {
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<UnaryDAGResponseWriter>(
-            dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), dag_context);
+            dag_response,
+            context.getSettings().dag_records_per_chunk,
+            dag.getEncodeType(),
+            dag.getResultFieldTypes(),
+            dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
     }
@@ -108,8 +109,13 @@ try
         auto streaming_writer = std::make_shared<StreamWriter>(writer);
         TiDB::TiDBCollators collators;
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(streaming_writer,
-            std::vector<Int64>(), collators, tipb::ExchangeType::PassThrough, context.getSettings().dag_records_per_chunk,
-            dag.getEncodeType(), dag.getResultFieldTypes(), dag_context);
+                                                                                                                           std::vector<Int64>(),
+                                                                                                                           collators,
+                                                                                                                           tipb::ExchangeType::PassThrough,
+                                                                                                                           context.getSettings().dag_records_per_chunk,
+                                                                                                                           dag.getEncodeType(),
+                                                                                                                           dag.getResultFieldTypes(),
+                                                                                                                           dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
     }
@@ -132,9 +138,9 @@ try
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {
         LOG_DEBUG(log,
-            __PRETTY_FUNCTION__ << ": dag request without encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
-                                << " seconds, produce " << p_stream->getProfileInfo().rows << " rows, " << p_stream->getProfileInfo().bytes
-                                << " bytes.");
+                  __PRETTY_FUNCTION__ << ": dag request without encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
+                                      << " seconds, produce " << p_stream->getProfileInfo().rows << " rows, " << p_stream->getProfileInfo().bytes
+                                      << " bytes.");
 
         if constexpr (!batch)
         {
@@ -142,7 +148,7 @@ try
             // Throw exception to prevent receiver from getting wrong response.
             if (p_stream->getProfileInfo().bytes > std::numeric_limits<int>::max())
                 throw TiFlashException("DAG response is too big, please check config about region size or region merge scheduler",
-                    Errors::Coprocessor::Internal);
+                                       Errors::Coprocessor::Internal);
         }
     }
 }
@@ -156,12 +162,14 @@ catch (const LockException & e)
 }
 catch (const TiFlashException & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": " << e.standardText() << "\n" << e.getStackTrace().toString());
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": " << e.standardText() << "\n"
+                                       << e.getStackTrace().toString());
     recordError(grpc::StatusCode::INTERNAL, e.standardText());
 }
 catch (const Exception & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n" << e.getStackTrace().toString());
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n"
+                                       << e.getStackTrace().toString());
     recordError(e.code(), e.message());
 }
 catch (const pingcap::Exception & e)

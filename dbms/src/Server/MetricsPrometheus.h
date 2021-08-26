@@ -9,7 +9,6 @@
 
 namespace DB
 {
-
 class AsynchronousMetrics;
 class Context;
 

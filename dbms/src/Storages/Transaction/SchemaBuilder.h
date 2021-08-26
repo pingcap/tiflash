@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 template <typename Getter, typename NameMapper>
 struct SchemaBuilder
 {
@@ -23,7 +22,11 @@ struct SchemaBuilder
     Poco::Logger * log;
 
     SchemaBuilder(Getter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & dbs_, Int64 version)
-        : getter(getter_), context(context_), databases(dbs_), target_version(version), log(&Poco::Logger::get("SchemaBuilder"))
+        : getter(getter_)
+        , context(context_)
+        , databases(dbs_)
+        , target_version(version)
+        , log(&Poco::Logger::get("SchemaBuilder"))
     {}
 
     void applyDiff(const SchemaDiff & diff);

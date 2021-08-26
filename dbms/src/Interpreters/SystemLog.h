@@ -1,30 +1,28 @@
 #pragma once
 
-#include <thread>
-#include <boost/noncopyable.hpp>
-#include <common/logger_useful.h>
-#include <Core/Types.h>
 #include <Common/ConcurrentBoundedQueue.h>
-#include <Storages/IStorage.h>
-#include <Interpreters/Context.h>
 #include <Common/Stopwatch.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/parseQuery.h>
-#include <Parsers/ParserCreateQuery.h>
-#include <Parsers/ASTRenameQuery.h>
-#include <Parsers/formatAST.h>
-#include <Parsers/ASTInsertQuery.h>
-#include <Interpreters/InterpreterCreateQuery.h>
-#include <Interpreters/InterpreterRenameQuery.h>
-#include <Interpreters/InterpreterInsertQuery.h>
 #include <Common/setThreadName.h>
+#include <Core/Types.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/InterpreterCreateQuery.h>
+#include <Interpreters/InterpreterInsertQuery.h>
+#include <Interpreters/InterpreterRenameQuery.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTRenameQuery.h>
+#include <Parsers/ParserCreateQuery.h>
+#include <Parsers/formatAST.h>
+#include <Parsers/parseQuery.h>
+#include <Storages/IStorage.h>
 #include <common/logger_useful.h>
+
+#include <boost/noncopyable.hpp>
+#include <thread>
 
 
 namespace DB
 {
-
-
 /** Allow to store structured log in system table.
   *
   * Logging is asynchronous. Data is put into queue from where it will be read by separate thread.
@@ -62,8 +60,8 @@ struct SystemLogs
 {
     ~SystemLogs();
 
-    std::unique_ptr<QueryLog> query_log;    /// Used to log queries.
-    std::unique_ptr<PartLog> part_log;      /// Used to log operations with parts
+    std::unique_ptr<QueryLog> query_log; /// Used to log queries.
+    std::unique_ptr<PartLog> part_log; /// Used to log operations with parts
 };
 
 
@@ -71,7 +69,6 @@ template <typename LogElement>
 class SystemLog : private boost::noncopyable
 {
 public:
-
     /** Parameter: table name where to write log.
       * If table is not exists, then it get created with specified engine.
       * If it already exists, then its structure is checked to be compatible with structure of log record.
@@ -107,10 +104,10 @@ protected:
     StoragePtr table;
     const size_t flush_interval_milliseconds;
 
-    using QueueItem = std::pair<bool, LogElement>;        /// First element is shutdown flag for thread.
+    using QueueItem = std::pair<bool, LogElement>; /// First element is shutdown flag for thread.
 
     /// Queue is bounded. But its size is quite large to not block in all normal cases.
-    ConcurrentBoundedQueue<QueueItem> queue {DBMS_SYSTEM_LOG_QUEUE_SIZE};
+    ConcurrentBoundedQueue<QueueItem> queue{DBMS_SYSTEM_LOG_QUEUE_SIZE};
 
     /** Data that was pulled from queue. Data is accumulated here before enough time passed.
       * It's possible to implement double-buffering, but we assume that insertion into table is faster
@@ -138,13 +135,15 @@ protected:
 
 template <typename LogElement>
 SystemLog<LogElement>::SystemLog(Context & context_,
-    const String & database_name_,
-    const String & table_name_,
-    const String & storage_def_,
-    size_t flush_interval_milliseconds_)
-    : context(context_),
-    database_name(database_name_), table_name(table_name_), storage_def(storage_def_),
-    flush_interval_milliseconds(flush_interval_milliseconds_)
+                                 const String & database_name_,
+                                 const String & table_name_,
+                                 const String & storage_def_,
+                                 size_t flush_interval_milliseconds_)
+    : context(context_)
+    , database_name(database_name_)
+    , table_name(table_name_)
+    , storage_def(storage_def_)
+    , flush_interval_milliseconds(flush_interval_milliseconds_)
 {
     log = &Poco::Logger::get("SystemLog (" + database_name + "." + table_name + ")");
 
@@ -306,7 +305,8 @@ void SystemLog<LogElement>::prepareTable()
             rename->elements.emplace_back(elem);
 
             LOG_DEBUG(log, "Existing table " << description << " for system log has obsolete or different structure."
-            " Renaming it to " << backQuoteIfNeed(to.table));
+                                                               " Renaming it to "
+                                             << backQuoteIfNeed(to.table));
 
             InterpreterRenameQuery(rename, context, context.getCurrentQueryId()).execute();
 
@@ -332,8 +332,11 @@ void SystemLog<LogElement>::prepareTable()
 
         ParserStorage storage_parser;
         ASTPtr storage_ast = parseQuery(
-            storage_parser, storage_def.data(), storage_def.data() + storage_def.size(),
-            "Storage to create table for " + LogElement::name(), 0);
+            storage_parser,
+            storage_def.data(),
+            storage_def.data() + storage_def.size(),
+            "Storage to create table for " + LogElement::name(),
+            0);
         create->set(create->storage, storage_ast);
 
         InterpreterCreateQuery interpreter(create, context);
@@ -347,4 +350,4 @@ void SystemLog<LogElement>::prepareTable()
 }
 
 
-}
+} // namespace DB

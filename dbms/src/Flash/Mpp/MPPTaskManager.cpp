@@ -1,12 +1,13 @@
 #include <Flash/Mpp/MPPTaskManager.h>
-
 #include <fmt/core.h>
 
 #include <thread>
 
 namespace DB
 {
-MPPTaskManager::MPPTaskManager() : log(&Poco::Logger::get("TaskManager")) {}
+MPPTaskManager::MPPTaskManager()
+    : log(&Poco::Logger::get("TaskManager"))
+{}
 
 MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg)
 {
@@ -170,4 +171,3 @@ String MPPTaskManager::toString()
 }
 
 } // namespace DB
-

@@ -11,7 +11,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -48,14 +47,20 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     if (unlikely(region_size > static_cast<size_t>(std::numeric_limits<UInt32>::max())))
     {
         LOG_WARNING(&Poco::Logger::get("RegionPersister"),
-            "Persisting big region: " << region.toString() << " with data info: " << region.dataInfo() << ", serialized size "
-                                      << region_size);
+                    "Persisting big region: " << region.toString() << " with data info: " << region.dataInfo() << ", serialized size "
+                                              << region_size);
     }
 }
 
-void RegionPersister::persist(const Region & region, const RegionTaskLock & lock) { doPersist(region, &lock); }
+void RegionPersister::persist(const Region & region, const RegionTaskLock & lock)
+{
+    doPersist(region, &lock);
+}
 
-void RegionPersister::persist(const Region & region) { doPersist(region, nullptr); }
+void RegionPersister::persist(const Region & region)
+{
+    doPersist(region, nullptr);
+}
 
 void RegionPersister::doPersist(const Region & region, const RegionTaskLock * lock)
 {
@@ -110,7 +115,9 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 }
 
 RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)
-    : global_context(global_context_), region_manager(region_manager_), log(&Poco::Logger::get("RegionPersister"))
+    : global_context(global_context_)
+    , region_manager(region_manager_)
+    , log(&Poco::Logger::get("RegionPersister"))
 {}
 
 namespace
@@ -164,7 +171,10 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             LOG_INFO(log, "RegionPersister running in compatible mode");
             auto c = getStablePSConfig(config);
             stable_page_storage = std::make_unique<DB::stable::PageStorage>( //
-                "RegionPersister", delegator->defaultPath(), c, global_context.getFileProvider());
+                "RegionPersister",
+                delegator->defaultPath(),
+                c,
+                global_context.getFileProvider());
         }
     }
 

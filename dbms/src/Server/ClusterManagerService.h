@@ -1,13 +1,13 @@
 #pragma once
 
-#include <boost/noncopyable.hpp>
 #include <Common/Timer.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
 
+#include <boost/noncopyable.hpp>
+
 namespace DB
 {
-
 class Context;
 class BackgroundProcessingPool;
 

@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 class Context;
 class PageStorage;
 namespace stable

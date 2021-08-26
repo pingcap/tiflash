@@ -1,21 +1,21 @@
 #pragma once
 
-#include <mutex>
-#include <condition_variable>
-#include <Poco/Timespan.h>
-#include <boost/noncopyable.hpp>
-
-#include <common/logger_useful.h>
 #include <Common/Exception.h>
+#include <Poco/Timespan.h>
+#include <common/logger_useful.h>
+
+#include <boost/noncopyable.hpp>
+#include <condition_variable>
+#include <mutex>
 
 
 namespace DB
 {
-    namespace ErrorCodes
-    {
-        extern const int LOGICAL_ERROR;
-    }
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
 }
+} // namespace DB
 
 /** A class from which you can inherit and get a pool of something. Used for database connection pools.
   * Descendant class must provide a method for creating a new object to place in the pool.
@@ -30,12 +30,12 @@ public:
     using Ptr = std::shared_ptr<PoolBase<TObject>>;
 
 private:
-
     /** The object with the flag, whether it is currently used. */
     struct PooledObject
     {
         PooledObject(ObjectPtr object_, PoolBase & pool_)
-            : object(object_), pool(pool_)
+            : object(object_)
+            , pool(pool_)
         {
         }
 
@@ -51,7 +51,11 @@ private:
       */
     struct PoolEntryHelper
     {
-        PoolEntryHelper(PooledObject & data_) : data(data_) { data.in_use = true; }
+        PoolEntryHelper(PooledObject & data_)
+            : data(data_)
+        {
+            data.in_use = true;
+        }
         ~PoolEntryHelper()
         {
             std::unique_lock<std::mutex> lock(data.pool.mutex);
@@ -69,7 +73,7 @@ public:
     public:
         friend class PoolBase<Object>;
 
-        Entry() {}    /// For deferred initialization.
+        Entry() {} /// For deferred initialization.
 
         /** The `Entry` object protects the resource from being used by another thread.
           * The following methods are forbidden for `rvalue`, so you can not write a similar to
@@ -82,10 +86,10 @@ public:
         Object & operator*() && = delete;
         const Object & operator*() const && = delete;
 
-        Object * operator->() &             { return &*data->data.object; }
+        Object * operator->() & { return &*data->data.object; }
         const Object * operator->() const & { return &*data->data.object; }
-        Object & operator*() &              { return *data->data.object; }
-        const Object & operator*() const &  { return *data->data.object; }
+        Object & operator*() & { return *data->data.object; }
+        const Object & operator*() const & { return *data->data.object; }
 
         bool isNull() const { return data == nullptr; }
 
@@ -99,7 +103,9 @@ public:
     private:
         std::shared_ptr<PoolEntryHelper> data;
 
-        Entry(PooledObject & object) : data(std::make_shared<PoolEntryHelper>(object)) {}
+        Entry(PooledObject & object)
+            : data(std::make_shared<PoolEntryHelper>(object))
+        {}
     };
 
     virtual ~PoolBase() {}
@@ -151,11 +157,11 @@ private:
     std::condition_variable available;
 
 protected:
-
     Poco::Logger * log;
 
     PoolBase(unsigned max_items_, Poco::Logger * log_)
-       : max_items(max_items_), log(log_)
+        : max_items(max_items_)
+        , log(log_)
     {
         items.reserve(max_items);
     }
@@ -163,4 +169,3 @@ protected:
     /** Creates a new object to put into the pool. */
     virtual ObjectPtr allocObject() = 0;
 };
-

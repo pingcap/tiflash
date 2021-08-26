@@ -1,12 +1,9 @@
-#include <Dictionaries/Embedded/RegionsNames.h>
 #include <Dictionaries/Embedded/GeodataProviders/INamesProvider.h>
-
-#include <Poco/Util/Application.h>
-#include <Poco/Exception.h>
-
-#include <common/logger_useful.h>
-
+#include <Dictionaries/Embedded/RegionsNames.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/Exception.h>
+#include <Poco/Util/Application.h>
+#include <common/logger_useful.h>
 
 
 RegionsNames::RegionsNames(IRegionsNamesDataProviderPtr data_provider)

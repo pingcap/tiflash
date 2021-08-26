@@ -5,22 +5,21 @@
 #include <tipb/expression.pb.h>
 #pragma GCC diagnostic pop
 
-#include <shared_mutex>
 #include <Core/Block.h>
 #include <DataStreams/SizeLimits.h>
 #include <DataTypes/IDataType.h>
-#include <Interpreters/SetVariants.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SetVariants.h>
 #include <Parsers/IAST.h>
 #include <Storages/MergeTree/BoolMask.h>
 #include <Storages/Transaction/Collator.h>
-
 #include <common/logger_useful.h>
+
+#include <shared_mutex>
 
 
 namespace DB
 {
-
 struct Range;
 class FieldWithInfinity;
 
@@ -35,10 +34,10 @@ using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
 class Set
 {
 public:
-    Set(const SizeLimits & limits) :
-        log(&Poco::Logger::get("Set")),
-        limits(limits),
-        set_elements(std::make_unique<SetElements>())
+    Set(const SizeLimits & limits)
+        : log(&Poco::Logger::get("Set"))
+        , limits(limits)
+        , set_elements(std::make_unique<SetElements>())
     {
     }
 
@@ -207,4 +206,4 @@ private:
     std::vector<KeyTuplePositionMapping> indexes_mapping;
 };
 
- }
+} // namespace DB

@@ -148,7 +148,6 @@ thread_local MemoryTracker * current_memory_tracker = nullptr;
 
 namespace CurrentMemoryTracker
 {
-
 static thread_local Int64 local_delta{};
 
 __attribute__((always_inline)) inline void checkSubmit()

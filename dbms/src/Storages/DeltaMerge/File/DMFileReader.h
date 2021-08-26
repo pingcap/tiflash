@@ -25,16 +25,16 @@ public:
     struct Stream
     {
         Stream(DMFileReader & reader, //
-               ColId          col_id,
+               ColId col_id,
                const String & file_name_base,
-               size_t         aio_threshold,
-               size_t         max_read_buffer_size,
-               Poco::Logger *       log,
+               size_t aio_threshold,
+               size_t max_read_buffer_size,
+               Poco::Logger * log,
                const ReadLimiterPtr & read_limiter);
 
-        const bool                       single_file_mode;
-        double                           avg_size_hint;
-        MarksInCompressedFilePtr         marks;
+        const bool single_file_mode;
+        double avg_size_hint;
+        MarksInCompressedFilePtr marks;
         MarkWithSizesInCompressedFilePtr mark_with_sizes;
 
         size_t getOffsetInFile(size_t i) const
@@ -49,10 +49,10 @@ public:
 
         std::unique_ptr<CompressedReadBufferFromFileProvider> buf;
     };
-    using StreamPtr     = std::unique_ptr<Stream>;
+    using StreamPtr = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
 
-    DMFileReader(const DMFilePtr &     dmfile_,
+    DMFileReader(const DMFilePtr & dmfile_,
                  const ColumnDefines & read_columns_,
                  // Only set this param to true when
                  // 1. There is no delta.
@@ -62,62 +62,62 @@ public:
                  // The the MVCC filter version. Used by clean read check.
                  UInt64 max_data_version_,
                  // filters
-                 const RowKeyRange &   rowkey_range_,
+                 const RowKeyRange & rowkey_range_,
                  const RSOperatorPtr & filter_,
-                 const IdSetPtr &      read_packs_, // filter by pack index
+                 const IdSetPtr & read_packs_, // filter by pack index
                  // caches
-                 UInt64                      hash_salt_,
-                 const MarkCachePtr &        mark_cache_,
+                 UInt64 hash_salt_,
+                 const MarkCachePtr & mark_cache_,
                  const MinMaxIndexCachePtr & index_cache_,
-                 bool                        enable_column_cache_,
-                 const ColumnCachePtr &      column_cache_,
-                 size_t                      aio_threshold,
-                 size_t                      max_read_buffer_size,
-                 const FileProviderPtr &     file_provider_,
-                 const ReadLimiterPtr &      read_limiter,
-                 size_t                      rows_threshold_per_read_  = DMFILE_READ_ROWS_THRESHOLD,
-                 bool                        read_one_pack_every_time_ = false);
+                 bool enable_column_cache_,
+                 const ColumnCachePtr & column_cache_,
+                 size_t aio_threshold,
+                 size_t max_read_buffer_size,
+                 const FileProviderPtr & file_provider_,
+                 const ReadLimiterPtr & read_limiter,
+                 size_t rows_threshold_per_read_ = DMFILE_READ_ROWS_THRESHOLD,
+                 bool read_one_pack_every_time_ = false);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
     /// Skipped rows before next call of #read().
     /// Return false if it is the end of stream.
-    bool  getSkippedRows(size_t & skip_rows);
+    bool getSkippedRows(size_t & skip_rows);
     Block read();
 
 private:
     bool shouldSeek(size_t pack_id);
 
-    void readFromDisk(ColumnDefine &     column_define,
+    void readFromDisk(ColumnDefine & column_define,
                       MutableColumnPtr & column,
-                      size_t             start_pack_id,
-                      size_t             read_rows,
-                      size_t             skip_packs,
-                      bool               force_seek);
+                      size_t start_pack_id,
+                      size_t read_rows,
+                      size_t skip_packs,
+                      bool force_seek);
 
 private:
-    DMFilePtr     dmfile;
+    DMFilePtr dmfile;
     ColumnDefines read_columns;
     ColumnStreams column_streams;
 
     /// Clean read optimize
     // If there is no delta for some packs in stable, we can try to do clean read.
-    const bool   enable_clean_read;
+    const bool enable_clean_read;
     const UInt64 max_read_version;
 
     /// Filters
-    DMFilePackFilter              pack_filter;
+    DMFilePackFilter pack_filter;
     const std::vector<RSResult> & handle_res; // alias of handle_res in pack_filter
-    const std::vector<UInt8> &    use_packs;  // alias of use_packs in pack_filter
+    const std::vector<UInt8> & use_packs; // alias of use_packs in pack_filter
 
     bool is_common_handle;
 
     std::vector<size_t> skip_packs_by_column;
 
     /// Caches
-    const UInt64   hash_salt;
-    MarkCachePtr   mark_cache;
-    const bool     enable_column_cache;
+    const UInt64 hash_salt;
+    MarkCachePtr mark_cache;
+    const bool enable_column_cache;
     ColumnCachePtr column_cache;
 
     const size_t rows_threshold_per_read;

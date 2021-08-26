@@ -1,42 +1,42 @@
 #include "LocalServer.h"
 
-#include <Poco/Util/XMLConfiguration.h>
-#include <Poco/Util/HelpFormatter.h>
-#include <Poco/Util/OptionCallback.h>
-#include <Poco/String.h>
-#include <Poco/Logger.h>
-#include <Poco/NullChannel.h>
+#include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Common/Config/ConfigProcessor.h>
+#include <Common/Exception.h>
+#include <Common/Macros.h>
+#include <Common/escapeForFileName.h>
 #include <Databases/DatabaseMemory.h>
-#include <Storages/System/attachSystemTables.h>
+#include <Functions/registerFunctions.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/loadMetadata.h>
-#include <Common/Exception.h>
-#include <Common/Macros.h>
-#include <Common/Config/ConfigProcessor.h>
-#include <Common/escapeForFileName.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
-#include <Parsers/parseQuery.h>
 #include <Parsers/IAST.h>
-#include <common/ErrorHandlers.h>
-#include "StatusFile.h"
-#include <Functions/registerFunctions.h>
-#include <AggregateFunctions/registerAggregateFunctions.h>
-#include <TableFunctions/registerTableFunctions.h>
+#include <Parsers/parseQuery.h>
+#include <Poco/Logger.h>
+#include <Poco/NullChannel.h>
+#include <Poco/String.h>
+#include <Poco/Util/HelpFormatter.h>
+#include <Poco/Util/OptionCallback.h>
+#include <Poco/Util/XMLConfiguration.h>
+#include <Storages/System/attachSystemTables.h>
 #include <Storages/registerStorages.h>
+#include <TableFunctions/registerTableFunctions.h>
+#include <common/ErrorHandlers.h>
+
+#include "StatusFile.h"
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int SYNTAX_ERROR;
-    extern const int CANNOT_LOAD_CONFIG;
-}
+extern const int SYNTAX_ERROR;
+extern const int CANNOT_LOAD_CONFIG;
+} // namespace ErrorCodes
 
 
 LocalServer::LocalServer() = default;
@@ -61,9 +61,9 @@ void LocalServer::initialize(Poco::Util::Application & self)
 }
 
 
-void LocalServer::defineOptions(Poco::Util::OptionSet& _options)
+void LocalServer::defineOptions(Poco::Util::OptionSet & _options)
 {
-    Poco::Util::Application::defineOptions (_options);
+    Poco::Util::Application::defineOptions(_options);
 
     _options.addOption(
         Poco::Util::Option("config-file", "", "Load configuration from a given file")
@@ -148,22 +148,21 @@ void LocalServer::defineOptions(Poco::Util::OptionSet& _options)
 
     _options.addOption(
         Poco::Util::Option("help", "", "Display help information")
-        .required(false)
-        .repeatable(false)
-        .noArgument()
-        .binding("help")
-        .callback(Poco::Util::OptionCallback<LocalServer>(this, &LocalServer::handleHelp)));
+            .required(false)
+            .repeatable(false)
+            .noArgument()
+            .binding("help")
+            .callback(Poco::Util::OptionCallback<LocalServer>(this, &LocalServer::handleHelp)));
 
     /// These arrays prevent "variable tracking size limit exceeded" compiler notice.
     static const char * settings_names[] = {
 #define DECLARE_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION) #NAME,
-    APPLY_FOR_SETTINGS(DECLARE_SETTING)
+        APPLY_FOR_SETTINGS(DECLARE_SETTING)
 #undef DECLARE_SETTING
-    nullptr};
+            nullptr};
 
     for (const char ** name = settings_names; *name; ++name)
-        _options.addOption(Poco::Util::Option(*name, "", "Settings.h").required(false).argument("<value>")
-        .repeatable(false).binding(*name));
+        _options.addOption(Poco::Util::Option(*name, "", "Settings.h").required(false).argument("<value>").repeatable(false).binding(*name));
 }
 
 
@@ -172,10 +171,10 @@ void LocalServer::applyOptions()
     context->setDefaultFormat(config().getString("output-format", config().getString("format", "TSV")));
 
     /// settings and limits could be specified in config file, but passed settings has higher priority
-#define EXTRACT_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION) \
-        if (config().has(#NAME) && !context->getSettingsRef().NAME.changed) \
-            context->setSetting(#NAME, config().getString(#NAME));
-        APPLY_FOR_SETTINGS(EXTRACT_SETTING)
+#define EXTRACT_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION)               \
+    if (config().has(#NAME) && !context->getSettingsRef().NAME.changed) \
+        context->setSetting(#NAME, config().getString(#NAME));
+    APPLY_FOR_SETTINGS(EXTRACT_SETTING)
 #undef EXTRACT_SETTING
 }
 
@@ -186,20 +185,19 @@ void LocalServer::displayHelp()
     helpFormatter.setCommand(commandName());
     helpFormatter.setUsage("[initial table definition] [--query <query>]");
     helpFormatter.setHeader("\n"
-        "clickhouse-local allows to execute SQL queries on your data files via single command line call.\n"
-        "To do so, intially you need to define your data source and its format.\n"
-        "After you can execute your SQL queries in the usual manner.\n"
-        "There are two ways to define initial table keeping your data:\n"
-        "either just in first query like this:\n"
-        "    CREATE TABLE <table> (<structure>) ENGINE = File(<input-format>, <file>);\n"
-        "either through corresponding command line parameters."
-    );
+                            "clickhouse-local allows to execute SQL queries on your data files via single command line call.\n"
+                            "To do so, intially you need to define your data source and its format.\n"
+                            "After you can execute your SQL queries in the usual manner.\n"
+                            "There are two ways to define initial table keeping your data:\n"
+                            "either just in first query like this:\n"
+                            "    CREATE TABLE <table> (<structure>) ENGINE = File(<input-format>, <file>);\n"
+                            "either through corresponding command line parameters.");
     helpFormatter.setWidth(132); /// 80 is ugly due to wide settings params
 
     helpFormatter.format(std::cerr);
     std::cerr << "Example printing memory used by each Unix user:\n"
-    "ps aux | tail -n +2 | awk '{ printf(\"%s\\t%s\\n\", $1, $4) }' | "
-    "clickhouse-local -S \"user String, mem Float64\" -q \"SELECT user, round(sum(mem), 2) as memTotal FROM table GROUP BY user ORDER BY memTotal DESC FORMAT Pretty\"\n";
+                 "ps aux | tail -n +2 | awk '{ printf(\"%s\\t%s\\n\", $1, $4) }' | "
+                 "clickhouse-local -S \"user String, mem Float64\" -q \"SELECT user, round(sum(mem), 2) as memTotal FROM table GROUP BY user ORDER BY memTotal DESC FORMAT Pretty\"\n";
 }
 
 
@@ -353,11 +351,13 @@ catch (const Exception & e)
     if (std::string::npos != embedded_stack_trace_pos && !print_stack_trace)
         text.resize(embedded_stack_trace_pos);
 
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl
+              << std::endl;
 
     if (print_stack_trace && std::string::npos == embedded_stack_trace_pos)
     {
-        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString();
+        std::cerr << "Stack trace:" << std::endl
+                  << e.getStackTrace().toString();
     }
 
     /// If exception code isn't zero, we should return non-zero return code anyway.
@@ -387,12 +387,10 @@ std::string LocalServer::getInitialCreateTableQuery()
     else /// Use regular file
         table_file = getQuotedString(config().getString("table-file"));
 
-    return
-    "CREATE TABLE " + table_name +
-        " (" + table_structure + ") " +
-    "ENGINE = "
-        "File(" + data_format + ", " + table_file + ")"
-    "; ";
+    return "CREATE TABLE " + table_name + " (" + table_structure + ") " + "ENGINE = "
+                                                                          "File("
+        + data_format + ", " + table_file + ")"
+                                            "; ";
 }
 
 
@@ -440,25 +438,24 @@ void LocalServer::processQueries()
     }
 }
 
-static const char * minimal_default_user_xml =
-"<yandex>"
-"    <profiles>"
-"        <default></default>"
-"    </profiles>"
-"    <users>"
-"        <default>"
-"            <password></password>"
-"            <networks>"
-"                <ip>::/0</ip>"
-"            </networks>"
-"            <profile>default</profile>"
-"            <quota>default</quota>"
-"        </default>"
-"    </users>"
-"    <quotas>"
-"        <default></default>"
-"    </quotas>"
-"</yandex>";
+static const char * minimal_default_user_xml = "<yandex>"
+                                               "    <profiles>"
+                                               "        <default></default>"
+                                               "    </profiles>"
+                                               "    <users>"
+                                               "        <default>"
+                                               "            <password></password>"
+                                               "            <networks>"
+                                               "                <ip>::/0</ip>"
+                                               "            </networks>"
+                                               "            <profile>default</profile>"
+                                               "            <quota>default</quota>"
+                                               "        </default>"
+                                               "    </users>"
+                                               "    <quotas>"
+                                               "        <default></default>"
+                                               "    </quotas>"
+                                               "</yandex>";
 
 
 static ConfigurationPtr getConfigurationFromXMLString(const char * xml_data)
@@ -492,7 +489,7 @@ void LocalServer::setupUsers()
         throw Exception("Can't load config for users", ErrorCodes::CANNOT_LOAD_CONFIG);
 }
 
-}
+} // namespace DB
 
 int mainEntryClickHouseLocal(int argc, char ** argv)
 {

@@ -37,28 +37,29 @@ namespace DB
 {
 namespace tests
 {
-
-#define CATCH                                                                                      \
-    catch (const DB::tests::TiFlashTestException & e)                                              \
-    {                                                                                              \
-        std::string text = e.displayText();                                                        \
-                                                                                                   \
-        text += "\n\n";                                                                            \
-        if (text.find("Stack trace") == std::string::npos)                                         \
-            text += fmt::format("Stack trace:\n{}\n", e.getStackTrace().toString());               \
-                                                                                                   \
-        FAIL() << text;                                                                            \
-    }                                                                                              \
-    catch (const DB::Exception & e)                                                                \
-    {                                                                                              \
-        std::string text = e.displayText();                                                        \
-                                                                                                   \
-        auto embedded_stack_trace_pos = text.find("Stack trace");                                  \
-        std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;               \
-        if (std::string::npos == embedded_stack_trace_pos)                                         \
-            std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl; \
-                                                                                                   \
-        throw;                                                                                     \
+#define CATCH                                                                        \
+    catch (const DB::tests::TiFlashTestException & e)                                \
+    {                                                                                \
+        std::string text = e.displayText();                                          \
+                                                                                     \
+        text += "\n\n";                                                              \
+        if (text.find("Stack trace") == std::string::npos)                           \
+            text += fmt::format("Stack trace:\n{}\n", e.getStackTrace().toString()); \
+                                                                                     \
+        FAIL() << text;                                                              \
+    }                                                                                \
+    catch (const DB::Exception & e)                                                  \
+    {                                                                                \
+        std::string text = e.displayText();                                          \
+                                                                                     \
+        auto embedded_stack_trace_pos = text.find("Stack trace");                    \
+        std::cerr << "Code: " << e.code() << ". " << text << std::endl               \
+                  << std::endl;                                                      \
+        if (std::string::npos == embedded_stack_trace_pos)                           \
+            std::cerr << "Stack trace:" << std::endl                                 \
+                      << e.getStackTrace().toString() << std::endl;                  \
+                                                                                     \
+        throw;                                                                       \
     }
 
 /// helper functions for comparing DataType
@@ -158,13 +159,13 @@ private:
     TiFlashTestEnv() = delete;
 };
 
-#define CHECK_TESTS_WITH_DATA_ENABLED                                                                        \
-    if (!TiFlashTestEnv::isTestsWithDataEnabled())                                                           \
-    {                                                                                                        \
-        LOG_INFO(&Poco::Logger::get("GTEST"),                                                                      \
-            "Test: " << ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() << "."     \
-                     << ::testing::UnitTest::GetInstance()->current_test_info()->name() << " is disabled."); \
-        return;                                                                                              \
+#define CHECK_TESTS_WITH_DATA_ENABLED                                                                             \
+    if (!TiFlashTestEnv::isTestsWithDataEnabled())                                                                \
+    {                                                                                                             \
+        LOG_INFO(&Poco::Logger::get("GTEST"),                                                                     \
+                 "Test: " << ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() << "."     \
+                          << ::testing::UnitTest::GetInstance()->current_test_info()->name() << " is disabled."); \
+        return;                                                                                                   \
     }
 
 } // namespace tests

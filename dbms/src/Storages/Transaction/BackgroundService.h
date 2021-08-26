@@ -11,7 +11,6 @@
 
 namespace DB
 {
-
 class TMTContext;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;

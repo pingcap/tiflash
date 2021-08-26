@@ -1,29 +1,29 @@
 #include <Databases/DatabaseDictionary.h>
+#include <IO/Operators.h>
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExternalDictionaries.h>
-#include <Storages/StorageDictionary.h>
-#include <common/logger_useful.h>
 #include <Parsers/IAST.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/Operators.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Storages/StorageDictionary.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int TABLE_ALREADY_EXISTS;
-    extern const int UNKNOWN_TABLE;
-    extern const int LOGICAL_ERROR;
-    extern const int CANNOT_GET_CREATE_TABLE_QUERY;
-    extern const int SYNTAX_ERROR;
-}
+extern const int TABLE_ALREADY_EXISTS;
+extern const int UNKNOWN_TABLE;
+extern const int LOGICAL_ERROR;
+extern const int CANNOT_GET_CREATE_TABLE_QUERY;
+extern const int SYNTAX_ERROR;
+} // namespace ErrorCodes
 
 DatabaseDictionary::DatabaseDictionary(const String & name_, const Context & context)
-    : name(name_),
-      external_dictionaries(context.getExternalDictionaries()),
-      log(&Poco::Logger::get("DatabaseDictionary(" + name + ")"))
+    : name(name_)
+    , external_dictionaries(context.getExternalDictionaries())
+    , log(&Poco::Logger::get("DatabaseDictionary(" + name + ")"))
 {
 }
 
@@ -160,7 +160,8 @@ time_t DatabaseDictionary::getTableMetadataModificationTime(
 }
 
 ASTPtr DatabaseDictionary::getCreateTableQueryImpl(const Context & context,
-                                                   const String & table_name, bool throw_on_error) const
+                                                   const String & table_name,
+                                                   bool throw_on_error) const
 {
     String query;
     {
@@ -180,7 +181,10 @@ ASTPtr DatabaseDictionary::getCreateTableQueryImpl(const Context & context,
     const char * pos = query.data();
     std::string error_message;
     auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message,
-            /* hilite = */ false, "", /* allow_multi_statements = */ false, 0);
+                             /* hilite = */ false,
+                             "",
+                             /* allow_multi_statements = */ false,
+                             0);
 
     if (!ast && throw_on_error)
         throw Exception(error_message, ErrorCodes::SYNTAX_ERROR);
@@ -218,4 +222,4 @@ void DatabaseDictionary::drop(const Context & /*context*/)
     /// Additional actions to delete database are not required.
 }
 
-}
+} // namespace DB

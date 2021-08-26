@@ -12,7 +12,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int UNKNOWN_TABLE;
@@ -23,11 +22,11 @@ extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
-    : context(context_),
-      dag(dag_),
-      keep_session_timezone_info(
-          dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
-      log(&Poco::Logger::get("InterpreterDAG"))
+    : context(context_)
+    , dag(dag_)
+    , keep_session_timezone_info(
+          dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock)
+    , log(&Poco::Logger::get("InterpreterDAG"))
 {
     const Settings & settings = context.getSettingsRef();
     if (dag.isBatchCop())
@@ -48,8 +47,7 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
         BlockInputStreams child_streams = executeQueryBlock(*child, subqueriesForSets);
         input_streams_vec.push_back(child_streams);
     }
-    DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, keep_session_timezone_info,
-        dag.getDAGRequest(), dag, subqueriesForSets, mpp_exchange_receiver_maps);
+    DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, keep_session_timezone_info, dag.getDAGRequest(), dag, subqueriesForSets, mpp_exchange_receiver_maps);
     return query_block_interpreter.execute();
 }
 
@@ -63,7 +61,10 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
     {
         /// use max_streams * 5 as the default receiver buffer size, maybe make it more configurable
         mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
-            context, dag_query_block.source->exchange_receiver(), dag.getDAGContext().getMPPTaskMeta(), max_streams * 5);
+            context,
+            dag_query_block.source->exchange_receiver(),
+            dag.getDAGContext().getMPPTaskMeta(),
+            max_streams * 5);
     }
 }
 
@@ -86,9 +87,7 @@ BlockIO InterpreterDAG::execute()
     if (!subqueriesForSets.empty())
     {
         const Settings & settings = context.getSettingsRef();
-        pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(pipeline.firstStream(), std::move(subqueriesForSets),
-            SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
-            dag.getDAGContext().getMPPTaskId());
+        pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(pipeline.firstStream(), std::move(subqueriesForSets), SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode), dag.getDAGContext().getMPPTaskId());
     }
 
     BlockIO res;

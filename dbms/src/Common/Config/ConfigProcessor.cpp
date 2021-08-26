@@ -31,11 +31,16 @@ static std::string preprocessedConfigPath(const std::string & path)
     return preprocessed_path.toString();
 }
 
-bool ConfigProcessor::isPreprocessedFile(const std::string & path) { return endsWith(Poco::Path(path).getBaseName(), PREPROCESSED_SUFFIX); }
+bool ConfigProcessor::isPreprocessedFile(const std::string & path)
+{
+    return endsWith(Poco::Path(path).getBaseName(), PREPROCESSED_SUFFIX);
+}
 
 
 ConfigProcessor::ConfigProcessor(const std::string & path_, bool log_to_console, const Substitutions & substitutions_)
-    : path(path_), preprocessed_path(preprocessedConfigPath(path)), substitutions(substitutions_)
+    : path(path_)
+    , preprocessed_path(preprocessedConfigPath(path))
+    , substitutions(substitutions_)
 {
     if (log_to_console && Poco::Logger::has("ConfigProcessor") == nullptr)
     {
@@ -54,7 +59,10 @@ ConfigProcessor::~ConfigProcessor()
         Poco::Logger::destroy("ConfigProcessor");
 }
 
-TOMLTablePtr ConfigProcessor::processConfig() { return cpptoml::parse_file(path); }
+TOMLTablePtr ConfigProcessor::processConfig()
+{
+    return cpptoml::parse_file(path);
+}
 
 ConfigProcessor::LoadedConfig ConfigProcessor::loadConfig()
 {

@@ -11,7 +11,6 @@
 
 namespace DB
 {
-
 struct BatchCommandsContext
 {
     /// Context for this batch commands.
@@ -25,14 +24,15 @@ struct BatchCommandsContext
     const grpc::ServerContext & grpc_server_context;
 
     BatchCommandsContext(
-        Context & db_context_, DBContextCreationFunc && db_context_creation_func_, grpc::ServerContext & grpc_server_context_);
+        Context & db_context_,
+        DBContextCreationFunc && db_context_creation_func_,
+        grpc::ServerContext & grpc_server_context_);
 };
 
 class BatchCommandsHandler
 {
 public:
-    BatchCommandsHandler(BatchCommandsContext & batch_commands_context_, const tikvpb::BatchCommandsRequest & request_,
-        tikvpb::BatchCommandsResponse & response_);
+    BatchCommandsHandler(BatchCommandsContext & batch_commands_context_, const tikvpb::BatchCommandsRequest & request_, tikvpb::BatchCommandsResponse & response_);
 
     ~BatchCommandsHandler() = default;
 
@@ -40,7 +40,9 @@ public:
 
 protected:
     ThreadPool::Job handleCommandJob(
-        const tikvpb::BatchCommandsRequest::Request & req, tikvpb::BatchCommandsResponse::Response & resp, grpc::Status & ret) const;
+        const tikvpb::BatchCommandsRequest::Request & req,
+        tikvpb::BatchCommandsResponse::Response & resp,
+        grpc::Status & ret) const;
 
 protected:
     const BatchCommandsContext & batch_commands_context;

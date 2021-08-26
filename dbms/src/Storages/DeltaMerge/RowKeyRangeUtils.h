@@ -7,7 +7,6 @@ namespace DB
 {
 namespace DM
 {
-
 void sortRangesByStartEdge(RowKeyRanges & ranges);
 
 RowKeyRanges tryMergeRanges(RowKeyRanges && ranges, size_t expected_ranges_count, Poco::Logger * log = nullptr);

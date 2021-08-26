@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class PlaygroundBlockInputStream : public IProfilingBlockInputStream
 {
 private:
@@ -23,8 +22,9 @@ private:
     }
 
 public:
-    PlaygroundBlockInputStream(BlockInputStreamPtr & input_, const SortDescription & description_) :
-        input(input_), description(description_)
+    PlaygroundBlockInputStream(BlockInputStreamPtr & input_, const SortDescription & description_)
+        : input(input_)
+        , description(description_)
     {
         log = &Poco::Logger::get("PlaygroundInput");
         children.emplace_back(input_);
@@ -56,4 +56,4 @@ private:
     const SortDescription description;
 };
 
-}
+} // namespace DB

@@ -1,87 +1,85 @@
-#include <Storages/MergeTree/MergeTreeData.h>
-#include <Interpreters/ExpressionAnalyzer.h>
-#include <Storages/MergeTree/MergeTreeBlockInputStream.h>
-#include <Storages/MergeTree/MergedBlockOutputStream.h>
-#include <Storages/MergeTree/checkDataPart.h>
-#include <Storages/AlterCommands.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTNameTypePair.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTPartition.h>
-#include <Parsers/ExpressionListParsers.h>
-#include <Parsers/parseQuery.h>
+#include <Common/Increment.h>
+#include <Common/SimpleIncrement.h>
+#include <Common/Stopwatch.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <Common/escapeForFileName.h>
+#include <Common/localBackup.h>
+#include <Common/typeid_cast.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/ValuesRowInputStream.h>
 #include <DataStreams/copyData.h>
-#include <IO/WriteBufferFromFile.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/CompressedReadBuffer.h>
-#include <IO/ReadBufferFromMemory.h>
-#include <IO/ConcatReadBuffer.h>
-#include <IO/HexWriteBuffer.h>
-#include <IO/Operators.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
-#include <DataTypes/NestedUtils.h>
-#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/NestedUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
-#include <Common/Increment.h>
-#include <Common/SimpleIncrement.h>
-#include <Common/escapeForFileName.h>
-#include <Common/StringUtils/StringUtils.h>
-#include <Common/Stopwatch.h>
-#include <Common/typeid_cast.h>
-#include <Common/localBackup.h>
-
+#include <IO/CompressedReadBuffer.h>
+#include <IO/ConcatReadBuffer.h>
+#include <IO/HexWriteBuffer.h>
+#include <IO/Operators.h>
+#include <IO/ReadBufferFromMemory.h>
+#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromString.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/PartLog.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTNameTypePair.h>
+#include <Parsers/ASTPartition.h>
+#include <Parsers/ExpressionListParsers.h>
+#include <Parsers/parseQuery.h>
 #include <Poco/DirectoryIterator.h>
-
-#include <boost/range/adaptor/filtered.hpp>
+#include <Storages/AlterCommands.h>
+#include <Storages/MergeTree/MergeTreeBlockInputStream.h>
+#include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergedBlockOutputStream.h>
+#include <Storages/MergeTree/checkDataPart.h>
+#include <Storages/Transaction/TiDB.h>
 
 #include <algorithm>
+#include <boost/range/adaptor/filtered.hpp>
 #include <iomanip>
-#include <thread>
-#include <typeinfo>
-#include <typeindex>
 #include <optional>
-#include <Interpreters/PartLog.h>
-#include <Storages/Transaction/TiDB.h>
+#include <thread>
+#include <typeindex>
+#include <typeinfo>
 
 
 namespace ProfileEvents
 {
-    extern const Event RejectedInserts;
-    extern const Event DelayedInserts;
-    extern const Event DelayedInsertsMilliseconds;
-}
+extern const Event RejectedInserts;
+extern const Event DelayedInserts;
+extern const Event DelayedInsertsMilliseconds;
+} // namespace ProfileEvents
 
 namespace CurrentMetrics
 {
-    extern const Metric DelayedInserts;
+extern const Metric DelayedInserts;
 }
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int MEMORY_LIMIT_EXCEEDED;
-    extern const int SYNTAX_ERROR;
-    extern const int CORRUPTED_DATA;
-    extern const int INVALID_PARTITION_VALUE;
-    extern const int METADATA_MISMATCH;
-    extern const int PART_IS_TEMPORARILY_LOCKED;
-    extern const int TOO_MANY_PARTS;
-}
+extern const int MEMORY_LIMIT_EXCEEDED;
+extern const int SYNTAX_ERROR;
+extern const int CORRUPTED_DATA;
+extern const int INVALID_PARTITION_VALUE;
+extern const int METADATA_MISMATCH;
+extern const int PART_IS_TEMPORARILY_LOCKED;
+extern const int TOO_MANY_PARTS;
+} // namespace ErrorCodes
 
 
 MergeTreeData::MergeTreeData(
-    const String & database_, const String & table_,
-    const String & full_path_, 
+    const String & database_,
+    const String & table_,
+    const String & full_path_,
     bool data_path_contains_database_name_,
     const ColumnsDescription & columns_,
     Context & context_,
@@ -95,24 +93,26 @@ MergeTreeData::MergeTreeData(
     bool require_part_metadata_,
     bool attach,
     BrokenPartCallback broken_part_callback_)
-    : ITableDeclaration{columns_},
-    context(context_),
-    sampling_expression(sampling_expression_),
-    index_granularity(settings_.index_granularity),
-    merging_params(merging_params_),
-    settings(settings_),
-    primary_expr_ast(primary_expr_ast_),
-    secondary_sort_expr_ast(secondary_sort_expr_ast_),
-    partition_expr_ast(partition_expr_ast_),
-    table_info(std::make_unique<TiDB::TableInfo>()),
-    require_part_metadata(require_part_metadata_),
-    database_name(database_), table_name(table_),
-    full_path(full_path_),
-    data_path_contains_database_name(data_path_contains_database_name_),
-    broken_part_callback(broken_part_callback_),
-    log_name(database_name + "." + table_name), log(&Poco::Logger::get(log_name + " (Data)")),
-    data_parts_by_info(data_parts_indexes.get<TagByInfo>()),
-    data_parts_by_state_and_info(data_parts_indexes.get<TagByStateAndInfo>())
+    : ITableDeclaration{columns_}
+    , context(context_)
+    , sampling_expression(sampling_expression_)
+    , index_granularity(settings_.index_granularity)
+    , merging_params(merging_params_)
+    , settings(settings_)
+    , primary_expr_ast(primary_expr_ast_)
+    , secondary_sort_expr_ast(secondary_sort_expr_ast_)
+    , partition_expr_ast(partition_expr_ast_)
+    , table_info(std::make_unique<TiDB::TableInfo>())
+    , require_part_metadata(require_part_metadata_)
+    , database_name(database_)
+    , table_name(table_)
+    , full_path(full_path_)
+    , data_path_contains_database_name(data_path_contains_database_name_)
+    , broken_part_callback(broken_part_callback_)
+    , log_name(database_name + "." + table_name)
+    , log(&Poco::Logger::get(log_name + " (Data)"))
+    , data_parts_by_info(data_parts_indexes.get<TagByInfo>())
+    , data_parts_by_state_and_info(data_parts_indexes.get<TagByStateAndInfo>())
 {
     /// NOTE: using the same columns list as is read when performing actual merges.
     merging_params.check(getColumns().getAllPhysical());
@@ -134,7 +134,11 @@ MergeTreeData::MergeTreeData(
             String partition_expr_str = "toYYYYMM(" + backQuoteIfNeed(date_column_name) + ")";
             ParserNotEmptyExpressionList parser(/* allow_alias_without_as_keyword = */ false);
             partition_expr_ast = parseQuery(
-                parser, partition_expr_str.data(), partition_expr_str.data() + partition_expr_str.length(), "partition expression", 0);
+                parser,
+                partition_expr_str.data(),
+                partition_expr_str.data() + partition_expr_str.length(),
+                "partition expression",
+                0);
 
             initPartitionKey();
 
@@ -200,8 +204,9 @@ static void checkKeyExpression(const ExpressionActions & expr, const Block & sam
             IFunctionBase & func = *action.function;
             if (!func.isDeterministic())
                 throw Exception(key_name + " key cannot contain non-deterministic functions, "
-                    "but contains function " + func.getName(),
-                    ErrorCodes::BAD_ARGUMENTS);
+                                           "but contains function "
+                                    + func.getName(),
+                                ErrorCodes::BAD_ARGUMENTS);
         }
     }
 
@@ -219,8 +224,7 @@ static void checkKeyExpression(const ExpressionActions & expr, const Block & sam
 
 void MergeTreeData::initPrimaryKey()
 {
-    auto addSortDescription = [](SortDescription & descr, const ASTPtr & expr_ast)
-    {
+    auto addSortDescription = [](SortDescription & descr, const ASTPtr & expr_ast) {
         descr.reserve(descr.size() + expr_ast->children.size());
         for (const ASTPtr & ast : expr_ast->children)
         {
@@ -236,8 +240,7 @@ void MergeTreeData::initPrimaryKey()
     primary_expr = ExpressionAnalyzer(primary_expr_ast, context, nullptr, getColumns().getAllPhysical()).getActions(false);
 
     {
-        ExpressionActionsPtr projected_expr =
-            ExpressionAnalyzer(primary_expr_ast, context, nullptr, getColumns().getAllPhysical()).getActions(true);
+        ExpressionActionsPtr projected_expr = ExpressionAnalyzer(primary_expr_ast, context, nullptr, getColumns().getAllPhysical()).getActions(true);
         primary_key_sample = projected_expr->getSampleBlock();
     }
 
@@ -254,8 +257,7 @@ void MergeTreeData::initPrimaryKey()
         addSortDescription(sort_descr, secondary_sort_expr_ast);
         secondary_sort_expr = ExpressionAnalyzer(secondary_sort_expr_ast, context, nullptr, getColumns().getAllPhysical()).getActions(false);
 
-        ExpressionActionsPtr projected_expr =
-            ExpressionAnalyzer(secondary_sort_expr_ast, context, nullptr, getColumns().getAllPhysical()).getActions(true);
+        ExpressionActionsPtr projected_expr = ExpressionAnalyzer(secondary_sort_expr_ast, context, nullptr, getColumns().getAllPhysical()).getActions(true);
         auto secondary_key_sample = projected_expr->getSampleBlock();
 
         checkKeyExpression(*secondary_sort_expr, secondary_key_sample, "Secondary");
@@ -323,8 +325,7 @@ void MergeTreeData::MergingParams::check(const NamesAndTypesList & columns) cons
                         ErrorCodes::LOGICAL_ERROR);
 
     /// Check that if the sign column is needed, it exists and is of type Int8.
-    auto check_sign_column = [this, & columns](bool is_optional, const std::string & storage)
-    {
+    auto check_sign_column = [this, &columns](bool is_optional, const std::string & storage) {
         if (sign_column.empty())
         {
             if (is_optional)
@@ -340,7 +341,9 @@ void MergeTreeData::MergingParams::check(const NamesAndTypesList & columns) cons
             {
                 if (!typeid_cast<const DataTypeInt8 *>(column.type.get()))
                     throw Exception("Sign column (" + sign_column + ") for storage " + storage + " must have type Int8."
-                            " Provided column of type " + column.type->getName() + ".", ErrorCodes::BAD_TYPE_OF_FIELD);
+                                                                                                 " Provided column of type "
+                                        + column.type->getName() + ".",
+                                    ErrorCodes::BAD_TYPE_OF_FIELD);
                 miss_column = false;
                 break;
             }
@@ -350,8 +353,7 @@ void MergeTreeData::MergingParams::check(const NamesAndTypesList & columns) cons
     };
 
     /// that if the version_column column is needed, it exists and is of unsigned integer type.
-    auto check_version_column = [this, & columns](bool is_optional, const std::string & storage)
-    {
+    auto check_version_column = [this, &columns](bool is_optional, const std::string & storage) {
         if (version_column.empty())
         {
             if (is_optional)
@@ -366,10 +368,7 @@ void MergeTreeData::MergingParams::check(const NamesAndTypesList & columns) cons
             if (column.name == version_column)
             {
                 if (!column.type->canBeUsedAsVersion())
-                    throw Exception("The column " + version_column +
-                        " cannot be used as a version column for storage " + storage +
-                        " because it is of type " + column.type->getName() +
-                        " (must be of an integer type or of type Date or DateTime)", ErrorCodes::BAD_TYPE_OF_FIELD);
+                    throw Exception("The column " + version_column + " cannot be used as a version column for storage " + storage + " because it is of type " + column.type->getName() + " (must be of an integer type or of type Date or DateTime)", ErrorCodes::BAD_TYPE_OF_FIELD);
                 miss_column = false;
                 break;
             }
@@ -386,13 +385,12 @@ void MergeTreeData::MergingParams::check(const NamesAndTypesList & columns) cons
         /// If columns_to_sum are set, then check that such columns exist.
         for (const auto & column_to_sum : columns_to_sum)
         {
-            auto check_column_to_sum_exists = [& column_to_sum](const NameAndTypePair & name_and_type)
-            {
+            auto check_column_to_sum_exists = [&column_to_sum](const NameAndTypePair & name_and_type) {
                 return column_to_sum == Nested::extractTableName(name_and_type.name);
             };
             if (columns.end() == std::find_if(columns.begin(), columns.end(), check_column_to_sum_exists))
                 throw Exception(
-                        "Column " + column_to_sum + " listed in columns to sum does not exist in table declaration.");
+                    "Column " + column_to_sum + " listed in columns to sum does not exist in table declaration.");
         }
     }
 
@@ -413,18 +411,27 @@ String MergeTreeData::MergingParams::getModeName() const
 {
     switch (mode)
     {
-        case Ordinary:      return "";
-        case Collapsing:    return "Collapsing";
-        case Summing:       return "Summing";
-        case Aggregating:   return "Aggregating";
-        case Replacing:     return "Replacing";
-        case Mutable:       return "Mutable";
-        case Txn:           return "Txn";
-        case Graphite:      return "Graphite";
-        case VersionedCollapsing:  return "VersionedCollapsing";
+    case Ordinary:
+        return "";
+    case Collapsing:
+        return "Collapsing";
+    case Summing:
+        return "Summing";
+    case Aggregating:
+        return "Aggregating";
+    case Replacing:
+        return "Replacing";
+    case Mutable:
+        return "Mutable";
+    case Txn:
+        return "Txn";
+    case Graphite:
+        return "Graphite";
+    case VersionedCollapsing:
+        return "VersionedCollapsing";
 
-        default:
-            throw Exception("Unknown mode of operation for MergeTreeData: " + toString<int>(mode), ErrorCodes::LOGICAL_ERROR);
+    default:
+        throw Exception("Unknown mode of operation for MergeTreeData: " + toString<int>(mode), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -545,8 +552,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
                 }
                 else
                 {
-                    LOG_ERROR(log, "Detaching broken part " << part->getFullPath()
-                        << " because it covers less than 2 parts. You need to resolve this manually");
+                    LOG_ERROR(log, "Detaching broken part " << part->getFullPath() << " because it covers less than 2 parts. You need to resolve this manually");
                     broken_parts_to_detach.push_back(part);
                     ++suspicious_broken_parts;
                 }
@@ -565,7 +571,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
 
     if (suspicious_broken_parts > settings.max_suspicious_broken_parts && !skip_sanity_checks)
         throw Exception("Suspiciously many (" + toString(suspicious_broken_parts) + ") broken parts to remove.",
-            ErrorCodes::TOO_MANY_UNEXPECTED_DATA_PARTS);
+                        ErrorCodes::TOO_MANY_UNEXPECTED_DATA_PARTS);
 
     for (auto & part : broken_parts_to_remove)
         part->remove();
@@ -582,8 +588,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
         auto prev_jt = data_parts_by_state_and_info.begin();
         auto curr_jt = std::next(prev_jt);
 
-        auto deactivate_part = [&] (DataPartIteratorByStateAndInfo it)
-        {
+        auto deactivate_part = [&](DataPartIteratorByStateAndInfo it) {
             (*it)->remove_time.store((*it)->modification_time, std::memory_order_relaxed);
             modifyPartState(it, DataPartState::Outdated);
         };
@@ -707,8 +712,7 @@ MergeTreeData::DataPartsVector MergeTreeData::grabOldParts()
             auto part_remove_time = part->remove_time.load(std::memory_order_relaxed);
 
             if (part.unique() && /// Grab only parts that are not used by anyone (SELECTs for example).
-                part_remove_time < now &&
-                now - part_remove_time > settings.old_parts_lifetime.totalSeconds())
+                part_remove_time < now && now - part_remove_time > settings.old_parts_lifetime.totalSeconds())
             {
                 parts_to_delete.emplace_back(it);
             }
@@ -828,7 +832,6 @@ void MergeTreeData::dropAllData()
 
 namespace
 {
-
 /// If true, then in order to ALTER the type of the column from the type from to the type to
 /// we don't need to rewrite the data, we only need to update metadata and columns.txt in part directories.
 /// The function works for Arrays and Nullables of the same structure.
@@ -837,17 +840,16 @@ bool isMetadataOnlyConversion(const IDataType * from, const IDataType * to)
     if (from->getName() == to->getName())
         return true;
 
-    static const std::unordered_multimap<std::type_index, const std::type_info &> ALLOWED_CONVERSIONS =
-        {
-            { typeid(DataTypeEnum8),    typeid(DataTypeEnum8)    },
-            { typeid(DataTypeEnum8),    typeid(DataTypeInt8)     },
-            { typeid(DataTypeEnum16),   typeid(DataTypeEnum16)   },
-            { typeid(DataTypeEnum16),   typeid(DataTypeInt16)    },
-            { typeid(DataTypeDateTime), typeid(DataTypeUInt32)   },
-            { typeid(DataTypeUInt32),   typeid(DataTypeDateTime) },
-            { typeid(DataTypeDate),     typeid(DataTypeUInt16)   },
-            { typeid(DataTypeUInt16),   typeid(DataTypeDate)     },
-        };
+    static const std::unordered_multimap<std::type_index, const std::type_info &> ALLOWED_CONVERSIONS = {
+        {typeid(DataTypeEnum8), typeid(DataTypeEnum8)},
+        {typeid(DataTypeEnum8), typeid(DataTypeInt8)},
+        {typeid(DataTypeEnum16), typeid(DataTypeEnum16)},
+        {typeid(DataTypeEnum16), typeid(DataTypeInt16)},
+        {typeid(DataTypeDateTime), typeid(DataTypeUInt32)},
+        {typeid(DataTypeUInt32), typeid(DataTypeDateTime)},
+        {typeid(DataTypeDate), typeid(DataTypeUInt16)},
+        {typeid(DataTypeUInt16), typeid(DataTypeDate)},
+    };
 
     while (true)
     {
@@ -880,7 +882,7 @@ bool isMetadataOnlyConversion(const IDataType * from, const IDataType * to)
     }
 }
 
-}
+} // namespace
 
 void MergeTreeData::checkAlter(const AlterCommands & commands)
 {
@@ -905,16 +907,15 @@ void MergeTreeData::checkAlter(const AlterCommands & commands)
     }
 
     auto processSortingColumns =
-            [&columns_alter_forbidden, &columns_alter_metadata_only] (const ExpressionActionsPtr & expression)
-    {
-        for (const ExpressionAction & action : expression->getActions())
-        {
-            auto action_columns = action.getNeededColumns();
-            columns_alter_forbidden.insert(action_columns.begin(), action_columns.end());
-        }
-        for (const String & col : expression->getRequiredColumns())
-            columns_alter_metadata_only.insert(col);
-    };
+        [&columns_alter_forbidden, &columns_alter_metadata_only](const ExpressionActionsPtr & expression) {
+            for (const ExpressionAction & action : expression->getActions())
+            {
+                auto action_columns = action.getNeededColumns();
+                columns_alter_forbidden.insert(action_columns.begin(), action_columns.end());
+            }
+            for (const String & col : expression->getRequiredColumns())
+                columns_alter_metadata_only.insert(col);
+        };
 
     if (primary_expr)
         processSortingColumns(primary_expr);
@@ -945,11 +946,11 @@ void MergeTreeData::checkAlter(const AlterCommands & commands)
             }
 
             if (command.type == AlterCommand::RENAME_COLUMN || command.type == AlterCommand::MODIFY_COLUMN)
-                    continue;
+                continue;
 
             throw Exception(
-                    "ALTER of key column " + command.column_name + " must be metadata-only, and command tyoe is " + std::to_string(command.type),
-                    ErrorCodes::ILLEGAL_COLUMN);
+                "ALTER of key column " + command.column_name + " must be metadata-only, and command tyoe is " + std::to_string(command.type),
+                ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 
@@ -961,8 +962,7 @@ void MergeTreeData::checkAlter(const AlterCommands & commands)
     createConvertExpression(nullptr, checksums, getColumns().getAllPhysical(), new_columns.getAllPhysical(), unused_expression, unused_map, unused_bool);
 }
 
-void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::Checksums & checksums, const NamesAndTypesList & old_columns, const NamesAndTypesList & new_columns,
-    ExpressionActionsPtr & out_expression, NameToNameMap & out_rename_map, bool & out_force_update_metadata)
+void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::Checksums & checksums, const NamesAndTypesList & old_columns, const NamesAndTypesList & new_columns, ExpressionActionsPtr & out_expression, NameToNameMap & out_rename_map, bool & out_force_update_metadata)
 {
     out_expression = nullptr;
     out_rename_map = {};
@@ -980,10 +980,10 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::
     std::map<String, size_t> stream_counts;
     for (const NameAndTypePair & column : old_columns)
     {
-        column.type->enumerateStreams([&](const IDataType::SubstreamPath & substream_path)
-        {
+        column.type->enumerateStreams([&](const IDataType::SubstreamPath & substream_path) {
             ++stream_counts[IDataType::getFileNameForStream(column.name, substream_path)];
-        }, {});
+        },
+                                      {});
     }
 
     for (const NameAndTypePair & column : old_columns)
@@ -993,8 +993,7 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::
             /// The column was deleted.
             if (!part || part->hasColumnFiles(column.name))
             {
-                column.type->enumerateStreams([&](const IDataType::SubstreamPath & substream_path)
-                {
+                column.type->enumerateStreams([&](const IDataType::SubstreamPath & substream_path) {
                     String file_name = IDataType::getFileNameForStream(column.name, substream_path);
 
                     /// Delete files if they are no longer shared with another column.
@@ -1003,7 +1002,8 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::
                         out_rename_map[file_name + ".bin"] = "";
                         out_rename_map[file_name + ".mrk"] = "";
                     }
-                }, {});
+                },
+                                              {});
             }
         }
         else
@@ -1024,7 +1024,7 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::
                         auto null_map_name = column.name + "_null";
                         auto null_map_type = std::make_shared<DataTypeUInt8>();
                         Block b;
-                        b.insert({ null_map_type->createColumnConstWithDefaultValue(part->rows_count)->convertToFullColumnIfConst(), null_map_type, null_map_name});
+                        b.insert({null_map_type->createColumnConstWithDefaultValue(part->rows_count)->convertToFullColumnIfConst(), null_map_type, null_map_name});
                         auto compression_settings = this->context.chooseCompressionSettings(
                             part->bytes_on_disk,
                             static_cast<double>(part->bytes_on_disk) / this->getTotalActiveSizeInBytes());
@@ -1057,17 +1057,18 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::
                 /// This is temporary name for expression. TODO Invent the name more safely.
                 const String new_type_name_column = '#' + new_type_name + "_column";
                 out_expression->add(ExpressionAction::addColumn(
-                    { DataTypeString().createColumnConst(1, new_type_name), std::make_shared<DataTypeString>(), new_type_name_column }));
+                    {DataTypeString().createColumnConst(1, new_type_name), std::make_shared<DataTypeString>(), new_type_name_column}));
 
                 const auto & function = FunctionFactory::instance().get("CAST", context);
                 out_expression->add(ExpressionAction::applyFunction(
-                    function, Names{column.name, new_type_name_column}), out_names);
+                                        function,
+                                        Names{column.name, new_type_name_column}),
+                                    out_names);
 
                 out_expression->add(ExpressionAction::removeColumn(new_type_name_column));
                 out_expression->add(ExpressionAction::removeColumn(column.name));
 
                 conversions.emplace_back(column.name, out_names.at(0));
-
             }
         }
     }
@@ -1091,8 +1092,7 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::
             /// After conversion, we need to rename temporary files into original.
 
             new_types[source_and_expression.first]->enumerateStreams(
-                [&](const IDataType::SubstreamPath & substream_path)
-                {
+                [&](const IDataType::SubstreamPath & substream_path) {
                     /// Skip array sizes, because they cannot be modified in ALTER.
                     if (!substream_path.empty() && substream_path.back().type == IDataType::Substream::ArraySizes)
                         return;
@@ -1102,7 +1102,8 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::
 
                     out_rename_map[temporary_file_name + ".bin"] = original_file_name + ".bin";
                     out_rename_map[temporary_file_name + ".mrk"] = original_file_name + ".mrk";
-                }, {});
+                },
+                {});
         }
 
         out_expression->add(ExpressionAction::project(projection));
@@ -1141,8 +1142,7 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::renameColumnPart(
 
     // Check if this part has column that needs to be renamed.
     // There is one case that column cannot be found : the column is added after the table is created.
-    auto it = std::find_if(part->columns.begin(), part->columns.end(), [&](const NameAndTypePair & pair)
-    {
+    auto it = std::find_if(part->columns.begin(), part->columns.end(), [&](const NameAndTypePair & pair) {
         return pair.name == command.column_name;
     });
 
@@ -1171,8 +1171,7 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::renameColumnPart(
     }
 
     data_type->enumerateStreams(
-        [&](const IDataType::SubstreamPath & substream_path)
-        {
+        [&](const IDataType::SubstreamPath & substream_path) {
             /// Skip array sizes, because they cannot be modified in ALTER.
             if (!substream_path.empty() && substream_path.back().type == IDataType::Substream::ArraySizes)
                 return;
@@ -1199,7 +1198,8 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::renameColumnPart(
             }
             new_checksums.files.erase(it);
             new_checksums.files.emplace(new_file_name + ".mrk", it->second);
-        }, {});
+        },
+        {});
 
     /// Write the checksums to the temporary file.
     if (!part->checksums.empty())
@@ -1362,8 +1362,21 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
     {
         MarkRanges ranges{MarkRange(0, part->marks_count)};
         BlockInputStreamPtr part_in = std::make_shared<MergeTreeBlockInputStream>(
-            *this, part, DEFAULT_MERGE_BLOCK_SIZE, 0, 0, expression->getRequiredColumns(), ranges,
-            false, nullptr, "", false, 0, DBMS_DEFAULT_BUFFER_SIZE, false, false);
+            *this,
+            part,
+            DEFAULT_MERGE_BLOCK_SIZE,
+            0,
+            0,
+            expression->getRequiredColumns(),
+            ranges,
+            false,
+            nullptr,
+            "",
+            false,
+            0,
+            DBMS_DEFAULT_BUFFER_SIZE,
+            false,
+            false);
 
         auto compression_settings = this->context.chooseCompressionSettings(
             part->bytes_on_disk,
@@ -1542,8 +1555,7 @@ MergeTreeData::DataPartsVector MergeTreeData::getActivePartsToReplace(
             }
 
             if (!new_part_info.isDisjoint((*prev)->info))
-                throw Exception("Part " + new_part_name + " intersects previous part " + (*prev)->getNameWithState() +
-                    ". It is a bug.", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Part " + new_part_name + " intersects previous part " + (*prev)->getNameWithState() + ". It is a bug.", ErrorCodes::LOGICAL_ERROR);
 
             break;
         }
@@ -1567,8 +1579,7 @@ MergeTreeData::DataPartsVector MergeTreeData::getActivePartsToReplace(
             }
 
             if (!new_part_info.isDisjoint((*end)->info))
-                throw Exception("Part " + new_part_name + " intersects next part " + (*end)->getNameWithState() +
-                    ". It is a bug.", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Part " + new_part_name + " intersects next part " + (*end)->getNameWithState() + ". It is a bug.", ErrorCodes::LOGICAL_ERROR);
 
             break;
         }
@@ -1585,17 +1596,19 @@ void MergeTreeData::renameTempPartAndAdd(MutableDataPartPtr & part, SimpleIncrem
     auto removed = renameTempPartAndReplace(part, increment, out_transaction);
     if (!removed.empty())
         throw Exception("Added part " + part->name + " covers " + toString(removed.size())
-            + " existing part(s) (including " + removed[0]->name + ")", ErrorCodes::LOGICAL_ERROR);
+                            + " existing part(s) (including " + removed[0]->name + ")",
+                        ErrorCodes::LOGICAL_ERROR);
 }
 
 
-
 MergeTreeData::DataPartsVector MergeTreeData::renameTempPartAndReplace(
-    MutableDataPartPtr & part, SimpleIncrement * increment, Transaction * out_transaction)
+    MutableDataPartPtr & part,
+    SimpleIncrement * increment,
+    Transaction * out_transaction)
 {
     if (out_transaction && out_transaction->data && out_transaction->data != this)
         throw Exception("The same MergeTreeData::Transaction cannot be used for different tables",
-            ErrorCodes::LOGICAL_ERROR);
+                        ErrorCodes::LOGICAL_ERROR);
 
     std::lock_guard<std::mutex> lock(data_parts_mutex);
 
@@ -1609,7 +1622,7 @@ MergeTreeData::DataPartsVector MergeTreeData::renameTempPartAndReplace(
         if (part->partition.value != existing_part_in_partition->partition.value)
             throw Exception(
                 "Partition value mismatch between two parts with the same partition ID. Existing part: "
-                + existing_part_in_partition->name + ", newly added part: " + part->name,
+                    + existing_part_in_partition->name + ", newly added part: " + part->name,
                 ErrorCodes::CORRUPTED_DATA);
     }
 
@@ -1704,8 +1717,7 @@ void MergeTreeData::removePartsFromWorkingSet(const DataPartsVector & remove, bo
 }
 
 
-void MergeTreeData::renameAndDetachPart(const DataPartPtr & part_to_detach, const String & prefix, bool restore_covered,
-                                        bool move_to_detached)
+void MergeTreeData::renameAndDetachPart(const DataPartPtr & part_to_detach, const String & prefix, bool restore_covered, bool move_to_detached)
 {
     LOG_INFO(log, "Renaming " << part_to_detach->relative_path << " to " << prefix << part_to_detach->name << " and detaching it.");
 
@@ -1739,13 +1751,11 @@ void MergeTreeData::renameAndDetachPart(const DataPartPtr & part_to_detach, cons
 
         Int64 pos = part->info.min_block;
 
-        auto is_appropriate_state = [] (DataPartState state)
-        {
+        auto is_appropriate_state = [](DataPartState state) {
             return state == DataPartState::Committed || state == DataPartState::Outdated;
         };
 
-        auto update_error = [&] (DataPartIteratorByInfo it)
-        {
+        auto update_error = [&](DataPartIteratorByInfo it) {
             error = true;
             error_parts += (*it)->getNameWithState() + " ";
         };
@@ -1814,8 +1824,7 @@ void MergeTreeData::renameAndDetachPart(const DataPartPtr & part_to_detach, cons
         if (error)
         {
             LOG_ERROR(log, "The set of parts restored in place of " << part->name << " looks incomplete."
-                           << " There might or might not be a data loss."
-                           << (error_parts.empty() ? "" : " Suspicious parts: " + error_parts));
+                                                                    << " There might or might not be a data loss." << (error_parts.empty() ? "" : " Suspicious parts: " + error_parts));
         }
     }
 }
@@ -1883,8 +1892,7 @@ void MergeTreeData::delayInsertIfNeeded(Poco::Event * until)
 
     CurrentMetrics::Increment metric_increment(CurrentMetrics::DelayedInserts);
 
-    LOG_INFO(log, "Delaying inserting block by "
-        << std::fixed << std::setprecision(4) << delay_milliseconds << " ms. because there are " << parts_count << " parts");
+    LOG_INFO(log, "Delaying inserting block by " << std::fixed << std::setprecision(4) << delay_milliseconds << " ms. because there are " << parts_count << " parts");
 
     if (until)
         until->tryWait(delay_milliseconds);
@@ -2004,12 +2012,9 @@ void MergeTreeData::removePartContributionToColumnSizes(const DataPartPtr & part
         DataPart::ColumnSize & total_column_size = column_sizes[column.name];
         DataPart::ColumnSize part_column_size = part->getColumnSize(column.name, *column.type);
 
-        auto log_subtract = [&](size_t & from, size_t value, const char * field)
-        {
+        auto log_subtract = [&](size_t & from, size_t value, const char * field) {
             if (value > from)
-                LOG_ERROR(log, "Possibly incorrect column size subtraction: "
-                    << from << " - " << value << " = " << from - value
-                    << ", column: " << column.name << ", field: " << field);
+                LOG_ERROR(log, "Possibly incorrect column size subtraction: " << from << " - " << value << " = " << from - value << ", column: " << column.name << ", field: " << field);
 
             from -= value;
         };
@@ -2050,8 +2055,8 @@ void MergeTreeData::freezePartition(const ASTPtr & partition_ast, const String &
     Poco::File(shadow_path).createDirectories();
     String backup_path = shadow_path
         + (!with_name.empty()
-            ? escapeForFileName(with_name)
-            : toString(Increment(shadow_path + "increment.txt").get(true)))
+               ? escapeForFileName(with_name)
+               : toString(Increment(shadow_path + "increment.txt").get(true)))
         + "/";
 
     LOG_DEBUG(log, "Snapshot will be placed at " + backup_path);
@@ -2141,8 +2146,7 @@ String MergeTreeData::getPartitionIDFromQuery(const ASTPtr & ast, const Context 
     size_t fields_count = partition_key_sample.columns();
     if (partition_ast.fields_count != fields_count)
         throw Exception(
-            "Wrong number of fields in the partition expression: " + toString(partition_ast.fields_count) +
-            ", must be: " + toString(fields_count),
+            "Wrong number of fields in the partition expression: " + toString(partition_ast.fields_count) + ", must be: " + toString(fields_count),
             ErrorCodes::INVALID_PARTITION_VALUE);
 
     Row partition_row(fields_count);
@@ -2154,7 +2158,7 @@ String MergeTreeData::getPartitionIDFromQuery(const ASTPtr & ast, const Context 
         ReadBufferFromMemory right_paren_buf(")", 1);
         ConcatReadBuffer buf({&left_paren_buf, &fields_buf, &right_paren_buf});
 
-        ValuesRowInputStream input_stream(buf, partition_key_sample, context, /* interpret_expressions = */true);
+        ValuesRowInputStream input_stream(buf, partition_key_sample, context, /* interpret_expressions = */ true);
         MutableColumns columns = partition_key_sample.cloneEmptyColumns();
 
         if (!input_stream.read(columns))
@@ -2186,7 +2190,7 @@ String MergeTreeData::getPartitionIDFromQuery(const ASTPtr & ast, const Context 
     return partition_id;
 }
 
-NameSet MergeTreeData::getPartitionIDsInLiteral(const ASTPtr &ast, const Context &)
+NameSet MergeTreeData::getPartitionIDsInLiteral(const ASTPtr & ast, const Context &)
 {
     const auto & partition_ast = typeid_cast<const ASTPartition &>(*ast);
 
@@ -2294,7 +2298,8 @@ MergeTreeData::DataPartsVector MergeTreeData::getDataPartsVector() const
 }
 
 MergeTreeData::DataPartPtr MergeTreeData::getAnyPartInPartition(
-    const String & partition_id, std::lock_guard<std::mutex> & /*data_parts_lock*/)
+    const String & partition_id,
+    std::lock_guard<std::mutex> & /*data_parts_lock*/)
 {
     auto min_block = std::numeric_limits<Int64>::min();
     MergeTreePartInfo dummy_part_info(partition_id, min_block, min_block, 0);
@@ -2341,8 +2346,7 @@ MergeTreeData::DataPartsVector MergeTreeData::Transaction::commit()
             DataPartsVector covered_parts = data->getActivePartsToReplace(part->info, part->name, covering_part, data_parts_lock);
             if (covering_part)
             {
-                LOG_WARNING(data->log, "Tried to commit obsolete part " << part->name
-                    << " covered by " << covering_part->getNameWithState());
+                LOG_WARNING(data->log, "Tried to commit obsolete part " << part->name << " covered by " << covering_part->getNameWithState());
 
                 part->remove_time.store(0, std::memory_order_relaxed); /// The part will be removed without waiting for old_parts_lifetime seconds.
                 data->modifyPartState(part, DataPartState::Outdated);
@@ -2408,4 +2412,4 @@ bool MergeTreeData::mayBenefitFromIndexForIn(const ASTPtr & left_in_operand) con
     }
 }
 
-}
+} // namespace DB

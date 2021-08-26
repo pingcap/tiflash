@@ -1,26 +1,27 @@
 #pragma once
 
-#include <Interpreters/InterserverIOHandler.h>
-#include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/IStorage.h>
+#include <IO/ConnectionTimeouts.h>
 #include <IO/HashingWriteBuffer.h>
 #include <IO/copyData.h>
-#include <IO/ConnectionTimeouts.h>
+#include <Interpreters/InterserverIOHandler.h>
+#include <Storages/IStorage.h>
+#include <Storages/MergeTree/MergeTreeData.h>
 
 
 namespace DB
 {
-
 namespace DataPartsExchange
 {
-
 /** Service for sending parts from the table *MergeTree.
   */
 class Service final : public InterserverIOEndpoint
 {
 public:
-    Service(MergeTreeData & data_, StoragePtr & storage_) : data(data_),
-        storage(storage_), log(&Poco::Logger::get(data.getLogName() + " (Replicated PartsService)")) {}
+    Service(MergeTreeData & data_, StoragePtr & storage_)
+        : data(data_)
+        , storage(storage_)
+        , log(&Poco::Logger::get(data.getLogName() + " (Replicated PartsService)"))
+    {}
 
     Service(const Service &) = delete;
     Service & operator=(const Service &) = delete;
@@ -42,7 +43,10 @@ private:
 class Fetcher final
 {
 public:
-    Fetcher(MergeTreeData & data_) : data(data_), log(&Poco::Logger::get("Fetcher")) {}
+    Fetcher(MergeTreeData & data_)
+        : data(data_)
+        , log(&Poco::Logger::get("Fetcher"))
+    {}
 
     Fetcher(const Fetcher &) = delete;
     Fetcher & operator=(const Fetcher &) = delete;
@@ -64,6 +68,6 @@ private:
     Poco::Logger * log;
 };
 
-}
+} // namespace DataPartsExchange
 
-}
+} // namespace DB

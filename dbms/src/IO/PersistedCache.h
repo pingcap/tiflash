@@ -1,22 +1,21 @@
 #pragma once
 
-#include <chrono>
-#include <thread>
-#include <common/logger_useful.h>
 #include <DataStreams/MarkInCompressedFile.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include <common/logger_useful.h>
+
+#include <chrono>
+#include <thread>
 
 
 namespace DB
 {
-
 /** Cache of uncompressed blocks in fast(er) disk device. thread-safe.
   */
 class PersistedCache
 {
 public:
-    PersistedCache(size_t max_size_in_bytes, const std::string & base_path,
-        const std::string & persisted_path_setting, size_t min_seconds_to_evit = 120);
+    PersistedCache(size_t max_size_in_bytes, const std::string & base_path, const std::string & persisted_path_setting, size_t min_seconds_to_evit = 120);
 
     ~PersistedCache();
 
@@ -27,12 +26,10 @@ public:
     bool cacheMarksFile(const std::string & origin_path, size_t file_marks_count);
 
     // If not all marks are cached, return false and not redirect
-    bool redirectDataFile(std::string & origin_path, const MarkRanges & mark_ranges,
-        const MarksInCompressedFile & marks, size_t file_marks_count, bool expected_exists);
+    bool redirectDataFile(std::string & origin_path, const MarkRanges & mark_ranges, const MarksInCompressedFile & marks, size_t file_marks_count, bool expected_exists);
 
     // Copy marks data from origin file to mapping hollow file
-    bool cacheRangesInDataFile(const std::string & origin_path, const MarkRanges & mark_ranges,
-        const MarksInCompressedFile & marks, size_t marks_count, size_t max_buffer_size);
+    bool cacheRangesInDataFile(const std::string & origin_path, const MarkRanges & mark_ranges, const MarksInCompressedFile & marks, size_t marks_count, size_t max_buffer_size);
 
 private:
     using OriginPath = std::string;
@@ -45,7 +42,11 @@ private:
         bool operating_bin;
 
         FileMarksCached(const OriginPath & path, size_t marks_count)
-            : path(path), status(marks_count), operating_mrk(false), operating_bin(false) {}
+            : path(path)
+            , status(marks_count)
+            , operating_mrk(false)
+            , operating_bin(false)
+        {}
     };
 
     using FilesMarksCached = std::unordered_map<OriginPath, FileMarksCached>;
@@ -68,8 +69,11 @@ private:
 
         std::mutex part_lock;
 
-        PartCacheStatus(const PartOriginPath & part_path) :
-            part_path(part_path), last_used_time(Clock::now()), operating(false) {}
+        PartCacheStatus(const PartOriginPath & part_path)
+            : part_path(part_path)
+            , last_used_time(Clock::now())
+            , operating(false)
+        {}
     };
 
     using PartCacheStatusPtr = std::shared_ptr<PartCacheStatus>;
@@ -102,18 +106,15 @@ private:
     bool getCachePath(const std::string & origin_path, bool is_part_path, std::string & cache_path);
 
     // Check all marks in mark_ranges are cached
-    bool isFileMarksAllCached(const FileMarksCached & marks_status, const MarkRanges & mark_ranges,
-        const MarksInCompressedFile & marks, size_t file_marks_count);
+    bool isFileMarksAllCached(const FileMarksCached & marks_status, const MarkRanges & mark_ranges, const MarksInCompressedFile & marks, size_t file_marks_count);
 
     // Copy all mark_ranges from origin file to cache file,
     //  the cache file will be a hollow file since not the whole file are written
-    bool copyFileRanges(const std::string & origin_path, const std::string & cache_path,
-        const MarkRanges & mark_ranges, const MarksInCompressedFile & marks, size_t file_marks_count, size_t max_buffer_size, size_t & written_size);
+    bool copyFileRanges(const std::string & origin_path, const std::string & cache_path, const MarkRanges & mark_ranges, const MarksInCompressedFile & marks, size_t file_marks_count, size_t max_buffer_size, size_t & written_size);
 
     // Copy a mark range from origin file to cache file,
     //  the cache file will be a hollow file since not the whole file are written
-    bool copyFileRange(const std::string & origin_path, const std::string & cache_path,
-        int fd_r, int fd_w, size_t pos, size_t size, char * buffer, size_t buffer_size);
+    bool copyFileRange(const std::string & origin_path, const std::string & cache_path, int fd_r, int fd_w, size_t pos, size_t size, char * buffer, size_t buffer_size);
 
 private:
     std::atomic<bool> disabled{false};
@@ -138,4 +139,4 @@ static const std::string DeletedDirPrefix = "_deleted_";
 
 using PersistedCachePtr = std::shared_ptr<PersistedCache>;
 
-}
+} // namespace DB

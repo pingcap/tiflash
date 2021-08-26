@@ -76,20 +76,32 @@ public:
 
     size_t regionSize() const;
     EngineStoreApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
-        raft_cmdpb::AdminResponse && response,
+                                           raft_cmdpb::AdminResponse && response,
+                                           UInt64 region_id,
+                                           UInt64 index,
+                                           UInt64 term,
+                                           TMTContext & tmt);
+    EngineStoreApplyRes handleWriteRaftCmd(
+        raft_cmdpb::RaftCmdRequest && request,
         UInt64 region_id,
         UInt64 index,
         UInt64 term,
         TMTContext & tmt);
-    EngineStoreApplyRes handleWriteRaftCmd(
-        raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
     RegionPreDecodeBlockDataPtr preHandleSnapshotToBlock(
-        RegionPtr new_region, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+        RegionPtr new_region,
+        const SSTViewVec,
+        uint64_t index,
+        uint64_t term,
+        TMTContext & tmt);
     std::vector<UInt64> /*   */ preHandleSnapshotToFiles(
-        RegionPtr new_region, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+        RegionPtr new_region,
+        const SSTViewVec,
+        uint64_t index,
+        uint64_t term,
+        TMTContext & tmt);
     template <typename RegionPtrWrap>
     void handlePreApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
 
@@ -116,7 +128,12 @@ private:
 
 
     std::vector<UInt64> preHandleSSTsToDTFiles(
-        RegionPtr new_region, const SSTViewVec, uint64_t index, uint64_t term, DM::FileConvertJobType, TMTContext & tmt);
+        RegionPtr new_region,
+        const SSTViewVec,
+        uint64_t index,
+        uint64_t term,
+        DM::FileConvertJobType,
+        TMTContext & tmt);
 
     template <typename RegionPtrWrap>
     void checkAndApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
@@ -129,10 +146,10 @@ private:
     // If region is destroy or moved to another node(change peer),
     // set `remove_data` true to remove obsolete data from storage.
     void removeRegion(const RegionID region_id,
-        bool remove_data,
-        RegionTable & region_table,
-        const KVStoreTaskLock & task_lock,
-        const RegionTaskLock & region_lock);
+                      bool remove_data,
+                      RegionTable & region_table,
+                      const KVStoreTaskLock & task_lock,
+                      const RegionTaskLock & region_lock);
     void mockRemoveRegion(const RegionID region_id, RegionTable & region_table);
     KVStoreTaskLock genTaskLock() const;
 
@@ -142,7 +159,11 @@ private:
     RegionMap & regionsMut();
     const RegionMap & regions() const;
     EngineStoreApplyRes handleUselessAdminRaftCmd(
-        raft_cmdpb::AdminCmdType cmd_type, UInt64 curr_region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+        raft_cmdpb::AdminCmdType cmd_type,
+        UInt64 curr_region_id,
+        UInt64 index,
+        UInt64 term,
+        TMTContext & tmt);
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
 
@@ -180,7 +201,9 @@ private:
 class KVStoreTaskLock : private boost::noncopyable
 {
     friend class KVStore;
-    KVStoreTaskLock(std::mutex & mutex_) : lock(mutex_) {}
+    KVStoreTaskLock(std::mutex & mutex_)
+        : lock(mutex_)
+    {}
     std::lock_guard<std::mutex> lock;
 };
 

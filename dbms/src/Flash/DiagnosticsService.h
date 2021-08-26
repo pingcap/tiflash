@@ -16,22 +16,21 @@
 
 namespace DB
 {
-
-
-class DiagnosticsService final : public ::diagnosticspb::Diagnostics::Service,
-                                 public std::enable_shared_from_this<DiagnosticsService>,
-                                 private boost::noncopyable
+class DiagnosticsService final : public ::diagnosticspb::Diagnostics::Service
+    , public std::enable_shared_from_this<DiagnosticsService>
+    , private boost::noncopyable
 {
 public:
-    DiagnosticsService(IServer & _server) : log(&Poco::Logger::get("DiagnosticsService")), server(_server) {}
+    DiagnosticsService(IServer & _server)
+        : log(&Poco::Logger::get("DiagnosticsService"))
+        , server(_server)
+    {}
     ~DiagnosticsService() override {}
 
 public:
-    ::grpc::Status search_log(::grpc::ServerContext * grpc_context, const ::diagnosticspb::SearchLogRequest * request,
-        ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream) override;
+    ::grpc::Status search_log(::grpc::ServerContext * grpc_context, const ::diagnosticspb::SearchLogRequest * request, ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream) override;
 
-    ::grpc::Status server_info(::grpc::ServerContext * grpc_context, const ::diagnosticspb::ServerInfoRequest * request,
-        ::diagnosticspb::ServerInfoResponse * response) override;
+    ::grpc::Status server_info(::grpc::ServerContext * grpc_context, const ::diagnosticspb::ServerInfoRequest * request, ::diagnosticspb::ServerInfoResponse * response) override;
 
 public:
     struct AvgLoad
@@ -189,8 +188,7 @@ public:
     void memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void nicLoadInfo(const NICInfo & prev_nic, std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void ioLoadInfo(const IOInfo & prev_io, std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
-    void loadInfo(std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, const NICInfo & prev_nic, const IOInfo & prev_io,
-        std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
+    void loadInfo(std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, const NICInfo & prev_nic, const IOInfo & prev_io, std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void cpuHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void memHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void diskHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);

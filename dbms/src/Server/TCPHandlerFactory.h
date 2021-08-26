@@ -2,14 +2,17 @@
 
 #include <Poco/Net/TCPServerConnectionFactory.h>
 #include <common/logger_useful.h>
+
 #include "IServer.h"
 #include "TCPHandler.h"
 
-namespace Poco { class Logger; }
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
-
 class TCPHandlerFactory : public Poco::Net::TCPServerConnectionFactory
 {
 private:
@@ -26,12 +29,12 @@ public:
     Poco::Net::TCPServerConnection * createConnection(const Poco::Net::StreamSocket & socket) override
     {
         LOG_TRACE(log,
-            "TCP Request. "
-                << "Address: "
-                << socket.peerAddress().toString());
+                  "TCP Request. "
+                      << "Address: "
+                      << socket.peerAddress().toString());
 
         return new TCPHandler(server, socket);
     }
 };
 
-}
+} // namespace DB

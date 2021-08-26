@@ -1,20 +1,19 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
-
-#include <Storages/IStorage.h>
-#include <Common/SimpleIncrement.h>
 #include <Client/ConnectionPool.h>
 #include <Client/ConnectionPoolWithFailover.h>
-#include <Interpreters/Settings.h>
+#include <Common/SimpleIncrement.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/Settings.h>
+#include <Storages/IStorage.h>
 #include <common/logger_useful.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Context;
 class StorageDistributedDirectoryMonitor;
 
@@ -25,7 +24,8 @@ class StorageDistributedDirectoryMonitor;
   * You can pass one address, not several.
   * In this case, the table can be considered remote, rather than distributed.
   */
-class StorageDistributed : public ext::shared_ptr_helper<StorageDistributed>, public IStorage
+class StorageDistributed : public ext::shared_ptr_helper<StorageDistributed>
+    , public IStorage
 {
     friend class DistributedBlockOutputStream;
     friend class StorageDistributedDirectoryMonitor;
@@ -36,8 +36,8 @@ public:
     static StoragePtr createWithOwnCluster(
         const std::string & table_name_,
         const ColumnsDescription & columns_,
-        const String & remote_database_,      /// database on remote servers.
-        const String & remote_table_,         /// The name of the table on the remote servers.
+        const String & remote_database_, /// database on remote servers.
+        const String & remote_table_, /// The name of the table on the remote servers.
         ClusterPtr & owned_cluster_,
         const Context & context_);
 
@@ -110,7 +110,7 @@ public:
     bool has_sharding_key;
     ExpressionActionsPtr sharding_key_expr;
     String sharding_key_column_name;
-    String path;    /// Can be empty if data_path_ is empty. In this case, a directory for the data to be sent is not created.
+    String path; /// Can be empty if data_path_ is empty. In this case, a directory for the data to be sent is not created.
 
     struct ClusterNodeData
     {
@@ -142,4 +142,4 @@ protected:
         bool attach);
 };
 
-}
+} // namespace DB

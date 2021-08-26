@@ -1,25 +1,21 @@
 #include "StatusFile.h"
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/file.h>
-#include <fcntl.h>
-
-#include <Poco/File.h>
-#include <common/logger_useful.h>
 #include <Common/ClickHouseRevision.h>
-#include <common/LocalDateTime.h>
-
-#include <IO/ReadBufferFromFile.h>
 #include <IO/LimitReadBuffer.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/Operators.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
+#include <Poco/File.h>
+#include <common/LocalDateTime.h>
+#include <common/logger_useful.h>
+#include <fcntl.h>
+#include <sys/file.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 
 namespace DB
 {
-
-
 StatusFile::StatusFile(const std::string & path_)
     : path(path_)
 {
@@ -34,7 +30,8 @@ StatusFile::StatusFile(const std::string & path_)
         }
 
         if (!contents.empty())
-            LOG_INFO(&Poco::Logger::get("StatusFile"), "Status file " << path << " already exists - unclean restart. Contents:\n" << contents);
+            LOG_INFO(&Poco::Logger::get("StatusFile"), "Status file " << path << " already exists - unclean restart. Contents:\n"
+                                                                      << contents);
         else
             LOG_INFO(&Poco::Logger::get("StatusFile"), "Status file " << path << " already exists and is empty - probably unclean hardware restart.");
     }
@@ -83,12 +80,10 @@ StatusFile::~StatusFile()
     char buf[128];
 
     if (0 != close(fd))
-        LOG_ERROR(&Poco::Logger::get("StatusFile"), "Cannot close file " << path << ", errno: "
-            << errno << ", strerror: " << strerror_r(errno, buf, sizeof(buf)));
+        LOG_ERROR(&Poco::Logger::get("StatusFile"), "Cannot close file " << path << ", errno: " << errno << ", strerror: " << strerror_r(errno, buf, sizeof(buf)));
 
     if (0 != unlink(path.c_str()))
-        LOG_ERROR(&Poco::Logger::get("StatusFile"), "Cannot unlink file " << path << ", errno: "
-            << errno << ", strerror: " << strerror_r(errno, buf, sizeof(buf)));
+        LOG_ERROR(&Poco::Logger::get("StatusFile"), "Cannot unlink file " << path << ", errno: " << errno << ", strerror: " << strerror_r(errno, buf, sizeof(buf)));
 }
 
-}
+} // namespace DB

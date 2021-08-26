@@ -20,7 +20,6 @@ class Logger;
 
 namespace DB
 {
-
 class Context;
 
 /** Every two seconds checks configuration files for update.

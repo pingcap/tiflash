@@ -1,20 +1,18 @@
 #pragma once
 
-#include <optional>
-
-#include <common/logger_useful.h>
-
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <Common/Throttler.h>
-#include <Interpreters/Context.h>
 #include <Client/ConnectionPool.h>
 #include <Client/MultiplexedConnections.h>
+#include <Common/Throttler.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/Cluster.h>
+#include <Interpreters/Context.h>
+#include <common/logger_useful.h>
+
+#include <optional>
 
 
 namespace DB
 {
-
 /** This class allows one to launch queries on remote replicas of one shard and get results
   */
 class RemoteBlockInputStream : public IProfilingBlockInputStream
@@ -23,26 +21,38 @@ public:
     /// Takes already set connection.
     /// If `settings` is nullptr, settings will be taken from context.
     RemoteBlockInputStream(
-            Connection & connection,
-            const String & query_, const Block & header_, const Context & context_, const Settings * settings = nullptr,
-            const ThrottlerPtr & throttler = nullptr, const Tables & external_tables_ = Tables(),
-            QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete);
+        Connection & connection,
+        const String & query_,
+        const Block & header_,
+        const Context & context_,
+        const Settings * settings = nullptr,
+        const ThrottlerPtr & throttler = nullptr,
+        const Tables & external_tables_ = Tables(),
+        QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete);
 
     /// Accepts several connections already taken from pool.
     /// If `settings` is nullptr, settings will be taken from context.
     RemoteBlockInputStream(
-            std::vector<IConnectionPool::Entry> && connections,
-            const String & query_, const Block & header_, const Context & context_, const Settings * settings = nullptr,
-            const ThrottlerPtr & throttler = nullptr, const Tables & external_tables_ = Tables(),
-            QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete);
+        std::vector<IConnectionPool::Entry> && connections,
+        const String & query_,
+        const Block & header_,
+        const Context & context_,
+        const Settings * settings = nullptr,
+        const ThrottlerPtr & throttler = nullptr,
+        const Tables & external_tables_ = Tables(),
+        QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete);
 
     /// Takes a pool and gets one or several connections from it.
     /// If `settings` is nullptr, settings will be taken from context.
     RemoteBlockInputStream(
-            const ConnectionPoolWithFailoverPtr & pool,
-            const String & query_, const Block & header_, const Context & context_, const Settings * settings = nullptr,
-            const ThrottlerPtr & throttler = nullptr, const Tables & external_tables_ = Tables(),
-            QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete);
+        const ConnectionPoolWithFailoverPtr & pool,
+        const String & query_,
+        const Block & header_,
+        const Context & context_,
+        const Settings * settings = nullptr,
+        const ThrottlerPtr & throttler = nullptr,
+        const Tables & external_tables_ = Tables(),
+        QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete);
 
     ~RemoteBlockInputStream() override;
 
@@ -114,34 +124,34 @@ private:
     std::mutex external_tables_mutex;
 
     /// Connections to replicas are established, but no queries are sent yet
-    std::atomic<bool> established { false };
+    std::atomic<bool> established{false};
 
     /// Query is sent (used before getting first block)
-    std::atomic<bool> sent_query { false };
+    std::atomic<bool> sent_query{false};
 
     /** All data from all replicas are received, before EndOfStream packet.
       * To prevent desynchronization, if not all data is read before object
       * destruction, it's required to send cancel query request to replicas and
       * read all packets before EndOfStream
       */
-    std::atomic<bool> finished { false };
+    std::atomic<bool> finished{false};
 
     /** Cancel query request was sent to all replicas beacuse data is not needed anymore
       * This behaviour may occur when:
       * - data size is already satisfactory (when using LIMIT, for example)
       * - an exception was thrown from client side
       */
-    std::atomic<bool> was_cancelled { false };
+    std::atomic<bool> was_cancelled{false};
 
     /** An exception from replica was received. No need in receiving more packets or
       * requesting to cancel query execution
       */
-    std::atomic<bool> got_exception_from_replica { false };
+    std::atomic<bool> got_exception_from_replica{false};
 
     /** Unkown packet was received from replica. No need in receiving more packets or
       * requesting to cancel query execution
       */
-    std::atomic<bool> got_unknown_packet_from_replica { false };
+    std::atomic<bool> got_unknown_packet_from_replica{false};
 
     bool append_extra_info = false;
     PoolMode pool_mode = PoolMode::GET_MANY;
@@ -150,4 +160,4 @@ private:
     Poco::Logger * log = &Poco::Logger::get("RemoteBlockInputStream");
 };
 
-}
+} // namespace DB

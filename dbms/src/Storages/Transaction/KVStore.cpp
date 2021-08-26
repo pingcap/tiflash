@@ -14,7 +14,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -22,10 +21,10 @@ extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
 KVStore::KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_)
-    : region_persister(context, region_manager),
-      raft_cmd_res(std::make_unique<RaftCommandResult>()),
-      snapshot_apply_method(snapshot_apply_method_),
-      log(&Poco::Logger::get("KVStore"))
+    : region_persister(context, region_manager)
+    , raft_cmd_res(std::make_unique<RaftCommandResult>())
+    , snapshot_apply_method(snapshot_apply_method_)
+    , log(&Poco::Logger::get("KVStore"))
 {}
 
 void KVStore::restore(const TiFlashRaftProxyHelper * proxy_helper)
@@ -59,7 +58,8 @@ RegionPtr KVStore::getRegion(const RegionID region_id) const
 }
 
 void KVStore::handleRegionsByRangeOverlap(
-    const RegionRange & range, std::function<void(RegionMap, const KVStoreTaskLock &)> && callback) const
+    const RegionRange & range,
+    std::function<void(RegionMap, const KVStoreTaskLock &)> && callback) const
 {
     auto task_lock = genTaskLock();
     callback(region_range_index.findByRangeOverlap(range), task_lock);
@@ -102,8 +102,8 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
         if (storage == nullptr)
         {
             LOG_WARNING(log,
-                "tryFlushRegionCacheInStorage can not get table for region:" + region.toString()
-                    + " with table id: " + DB::toString(table_id) + ", ignored");
+                        "tryFlushRegionCacheInStorage can not get table for region:" + region.toString()
+                            + " with table id: " + DB::toString(table_id) + ", ignored");
             return;
         }
 
@@ -112,7 +112,10 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
             // Acquire `drop_lock` so that no other threads can drop the storage during `flushCache`. `alter_lock` is not required.
             auto storage_lock = storage->lockForShare(getThreadName());
             auto rowkey_range = DM::RowKeyRange::fromRegionRange(
-                region.getRange(), region.getRange()->getMappedTableID(), storage->isCommonHandle(), storage->getRowKeyColumnSize());
+                region.getRange(),
+                region.getRange()->getMappedTableID(),
+                storage->isCommonHandle(),
+                storage->getRowKeyColumnSize());
             storage->flushCache(tmt.getContext(), rowkey_range);
         }
         catch (DB::Exception & e)
@@ -157,8 +160,7 @@ void KVStore::mockRemoveRegion(const DB::RegionID region_id, RegionTable & regio
     removeRegion(region_id, /* remove_data */ true, region_table, task_lock, region_lock);
 }
 
-void KVStore::removeRegion(const RegionID region_id, bool remove_data, RegionTable & region_table, const KVStoreTaskLock & task_lock,
-    const RegionTaskLock & region_lock)
+void KVStore::removeRegion(const RegionID region_id, bool remove_data, RegionTable & region_table, const KVStoreTaskLock & task_lock, const RegionTaskLock & region_lock)
 {
     LOG_INFO(log, "Start to remove [region " << region_id << "]");
 
@@ -182,13 +184,29 @@ void KVStore::removeRegion(const RegionID region_id, bool remove_data, RegionTab
     LOG_INFO(log, "Remove [region " << region_id << "] done");
 }
 
-KVStoreTaskLock KVStore::genTaskLock() const { return KVStoreTaskLock(task_mutex); }
-RegionMap & KVStore::regionsMut() { return region_manager.regions; }
-const RegionMap & KVStore::regions() const { return region_manager.regions; }
-KVStore::RegionManageLock KVStore::genRegionManageLock() const { return RegionManageLock(region_manager.mutex); }
+KVStoreTaskLock KVStore::genTaskLock() const
+{
+    return KVStoreTaskLock(task_mutex);
+}
+RegionMap & KVStore::regionsMut()
+{
+    return region_manager.regions;
+}
+const RegionMap & KVStore::regions() const
+{
+    return region_manager.regions;
+}
+KVStore::RegionManageLock KVStore::genRegionManageLock() const
+{
+    return RegionManageLock(region_manager.mutex);
+}
 
 EngineStoreApplyRes KVStore::handleWriteRaftCmd(
-    raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
+    raft_cmdpb::RaftCmdRequest && request,
+    UInt64 region_id,
+    UInt64 index,
+    UInt64 term,
+    TMTContext & tmt)
 {
     std::vector<BaseBuffView> keys;
     std::vector<BaseBuffView> vals;
@@ -205,25 +223,28 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
 
         switch (type)
         {
-            case raft_cmdpb::CmdType::Put:
-                keys.push_back({req.put().key().data(), req.put().key().size()});
-                vals.push_back({req.put().value().data(), req.put().value().size()});
-                cmd_types.push_back(WriteCmdType::Put);
-                cmd_cf.push_back(NameToCF(req.put().cf()));
-                break;
-            case raft_cmdpb::CmdType::Delete:
-                keys.push_back({req.delete_().key().data(), req.delete_().key().size()});
-                vals.push_back({nullptr, 0});
-                cmd_types.push_back(WriteCmdType::Del);
-                cmd_cf.push_back(NameToCF(req.delete_().cf()));
-                break;
-            default:
-                break;
+        case raft_cmdpb::CmdType::Put:
+            keys.push_back({req.put().key().data(), req.put().key().size()});
+            vals.push_back({req.put().value().data(), req.put().value().size()});
+            cmd_types.push_back(WriteCmdType::Put);
+            cmd_cf.push_back(NameToCF(req.put().cf()));
+            break;
+        case raft_cmdpb::CmdType::Delete:
+            keys.push_back({req.delete_().key().data(), req.delete_().key().size()});
+            vals.push_back({nullptr, 0});
+            cmd_types.push_back(WriteCmdType::Del);
+            cmd_cf.push_back(NameToCF(req.delete_().cf()));
+            break;
+        default:
+            break;
         }
     }
     return handleWriteRaftCmd(
         WriteCmdsView{.keys = keys.data(), .vals = vals.data(), .cmd_types = cmd_types.data(), .cmd_cf = cmd_cf.data(), .len = keys.size()},
-        region_id, index, term, tmt);
+        region_id,
+        index,
+        term,
+        tmt);
 }
 
 EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
@@ -261,8 +282,8 @@ void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes)
     REGION_COMPACT_LOG_MIN_BYTES = bytes;
 
     LOG_INFO(log,
-        __FUNCTION__ << ": threshold config: "
-                     << "period " << sec << ", rows " << rows << ", bytes " << bytes);
+             __FUNCTION__ << ": threshold config: "
+                          << "period " << sec << ", rows " << rows << ", bytes " << bytes);
 }
 
 void KVStore::persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller)
@@ -273,7 +294,11 @@ void KVStore::persistRegion(const Region & region, const RegionTaskLock & region
 }
 
 EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
-    raft_cmdpb::AdminCmdType cmd_type, UInt64 curr_region_id, UInt64 index, UInt64 term, TMTContext & tmt)
+    raft_cmdpb::AdminCmdType cmd_type,
+    UInt64 curr_region_id,
+    UInt64 index,
+    UInt64 term,
+    TMTContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(curr_region_id);
     const RegionPtr curr_region_ptr = getRegion(curr_region_id);
@@ -285,8 +310,8 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     auto & curr_region = *curr_region_ptr;
 
     LOG_DEBUG(log,
-        curr_region.toString(false) << " handle ignorable admin command " << raft_cmdpb::AdminCmdType_Name(cmd_type)
-                                    << " at [term: " << term << ", index: " << index << "]");
+              curr_region.toString(false) << " handle ignorable admin command " << raft_cmdpb::AdminCmdType_Name(cmd_type)
+                                          << " at [term: " << term << ", index: " << index << "]");
 
     curr_region.handleWriteRaftCmd({}, index, term, tmt);
 
@@ -333,22 +358,22 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
 }
 
 EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
-    raft_cmdpb::AdminResponse && response,
-    UInt64 curr_region_id,
-    UInt64 index,
-    UInt64 term,
-    TMTContext & tmt)
+                                                raft_cmdpb::AdminResponse && response,
+                                                UInt64 curr_region_id,
+                                                UInt64 index,
+                                                UInt64 term,
+                                                TMTContext & tmt)
 {
     auto type = request.cmd_type();
     switch (request.cmd_type())
     {
-        // CompactLog | VerifyHash | ComputeHash won't change region meta, there is no need to occupy task lock of kvstore.
-        case raft_cmdpb::AdminCmdType::CompactLog:
-        case raft_cmdpb::AdminCmdType::VerifyHash:
-        case raft_cmdpb::AdminCmdType::ComputeHash:
-            return handleUselessAdminRaftCmd(type, curr_region_id, index, term, tmt);
-        default:
-            break;
+    // CompactLog | VerifyHash | ComputeHash won't change region meta, there is no need to occupy task lock of kvstore.
+    case raft_cmdpb::AdminCmdType::CompactLog:
+    case raft_cmdpb::AdminCmdType::VerifyHash:
+    case raft_cmdpb::AdminCmdType::ComputeHash:
+        return handleUselessAdminRaftCmd(type, curr_region_id, index, term, tmt);
+    default:
+        break;
     }
 
     RegionTable & region_table = tmt.getRegionTable();
@@ -361,14 +386,20 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
         if (curr_region_ptr == nullptr)
         {
             LOG_WARNING(log,
-                __PRETTY_FUNCTION__ << ": [region " << curr_region_id << "] is not found at [term " << term << ", index " << index
-                                    << ", cmd " << raft_cmdpb::AdminCmdType_Name(type) << "], might be removed already");
+                        __PRETTY_FUNCTION__ << ": [region " << curr_region_id << "] is not found at [term " << term << ", index " << index
+                                            << ", cmd " << raft_cmdpb::AdminCmdType_Name(type) << "], might be removed already");
             return EngineStoreApplyRes::NotFound;
         }
 
         auto & curr_region = *curr_region_ptr;
         curr_region.makeRaftCommandDelegate(task_lock).handleAdminRaftCmd(
-            request, response, index, term, *this, region_table, *raft_cmd_res);
+            request,
+            response,
+            index,
+            term,
+            *this,
+            region_table,
+            *raft_cmd_res);
         RaftCommandResult & result = *raft_cmd_res;
 
         // After region split / merge, try to flush it
@@ -465,7 +496,11 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
                 auto source_region = getRegion(source_region_id);
                 // `source_region` is merged, don't remove its data in storage.
                 removeRegion(
-                    source_region_id, /* remove_data */ false, region_table, task_lock, region_manager.genRegionTaskLock(source_region_id));
+                    source_region_id,
+                    /* remove_data */ false,
+                    region_table,
+                    task_lock,
+                    region_manager.genRegionTaskLock(source_region_id));
             }
             region_range_index.remove(result.ori_region_range->comparableKeys(), curr_region_id);
             region_range_index.add(curr_region_ptr);
@@ -473,37 +508,36 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 
         switch (result.type)
         {
-            case RaftCommandResult::Type::IndexError:
+        case RaftCommandResult::Type::IndexError:
+        {
+            if (type == raft_cmdpb::AdminCmdType::CommitMerge)
             {
-                if (type == raft_cmdpb::AdminCmdType::CommitMerge)
+                if (auto source_region = getRegion(request.commit_merge().source().id()); source_region)
                 {
-                    if (auto source_region = getRegion(request.commit_merge().source().id()); source_region)
-                    {
-                        LOG_WARNING(log,
-                            "Admin cmd " << raft_cmdpb::AdminCmdType_Name(type) << " has been applied, try to remove source "
-                                         << source_region->toString(false));
-                        source_region->setPendingRemove();
-                        // `source_region` is merged, don't remove its data in storage.
-                        removeRegion(source_region->id(), /* remove_data */ false, region_table, task_lock,
-                            region_manager.genRegionTaskLock(source_region->id()));
-                    }
+                    LOG_WARNING(log,
+                                "Admin cmd " << raft_cmdpb::AdminCmdType_Name(type) << " has been applied, try to remove source "
+                                             << source_region->toString(false));
+                    source_region->setPendingRemove();
+                    // `source_region` is merged, don't remove its data in storage.
+                    removeRegion(source_region->id(), /* remove_data */ false, region_table, task_lock, region_manager.genRegionTaskLock(source_region->id()));
                 }
-                break;
             }
-            case RaftCommandResult::Type::BatchSplit:
-                handle_batch_split(result.split_regions);
-                break;
-            case RaftCommandResult::Type::Default:
-                persist_and_sync(curr_region);
-                break;
-            case RaftCommandResult::Type::ChangePeer:
-                handle_change_peer();
-                break;
-            case RaftCommandResult::Type::CommitMerge:
-                handle_commit_merge(result.source_region_id);
-                break;
-            default:
-                throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR);
+            break;
+        }
+        case RaftCommandResult::Type::BatchSplit:
+            handle_batch_split(result.split_regions);
+            break;
+        case RaftCommandResult::Type::Default:
+            persist_and_sync(curr_region);
+            break;
+        case RaftCommandResult::Type::ChangePeer:
+            handle_change_peer();
+            break;
+        case RaftCommandResult::Type::CommitMerge:
+            handle_commit_merge(result.source_region_id);
+            break;
+        default:
+            throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR);
         }
 
         return EngineStoreApplyRes::Persist;
@@ -529,7 +563,7 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
         total_regions_cnt = remain_regions.size();
     }
     while (region_check_watch.elapsedSeconds() < tmt.waitRegionReadyTimeout() * BATCH_READ_INDEX_TIME_RATE
-        && terminate_signals_counter.load(std::memory_order_relaxed) == 0)
+           && terminate_signals_counter.load(std::memory_order_relaxed) == 0)
     {
         std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
         for (auto it = remain_regions.begin(); it != remain_regions.end();)
@@ -585,7 +619,7 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
             } while (0));
     }
     while (region_check_watch.elapsedSeconds() < (double)tmt.waitRegionReadyTimeout()
-        && terminate_signals_counter.load(std::memory_order_relaxed) == 0)
+           && terminate_signals_counter.load(std::memory_order_relaxed) == 0)
     {
         for (auto it = regions_to_check.begin(); it != regions_to_check.end();)
         {

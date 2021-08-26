@@ -11,7 +11,6 @@
 
 namespace DB
 {
-
 struct DecodedTiKVKey;
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 

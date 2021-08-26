@@ -15,7 +15,6 @@ extern const Metric RaftNumSnapshotsPendingApply;
 
 namespace DB
 {
-
 const std::string ColumnFamilyName::Lock = "lock";
 const std::string ColumnFamilyName::Default = "default";
 const std::string ColumnFamilyName::Write = "write";
@@ -37,14 +36,14 @@ const std::string & CFToName(const ColumnFamilyType type)
 {
     switch (type)
     {
-        case ColumnFamilyType::Default:
-            return ColumnFamilyName::Default;
-        case ColumnFamilyType::Write:
-            return ColumnFamilyName::Write;
-        case ColumnFamilyType::Lock:
-            return ColumnFamilyName::Lock;
-        default:
-            throw Exception("Can not tell cf type " + std::to_string(static_cast<uint8_t>(type)), ErrorCodes::LOGICAL_ERROR);
+    case ColumnFamilyType::Default:
+        return ColumnFamilyName::Default;
+    case ColumnFamilyType::Write:
+        return ColumnFamilyName::Write;
+    case ColumnFamilyType::Lock:
+        return ColumnFamilyName::Lock;
+    default:
+        throw Exception("Can not tell cf type " + std::to_string(static_cast<uint8_t>(type)), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -72,7 +71,10 @@ EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server, Wri
 }
 
 EngineStoreApplyRes HandleAdminRaftCmd(
-    const EngineStoreServerWrap * server, BaseBuffView req_buff, BaseBuffView resp_buff, RaftCmdHeader header)
+    const EngineStoreServerWrap * server,
+    BaseBuffView req_buff,
+    BaseBuffView resp_buff,
+    RaftCmdHeader header)
 {
     try
     {
@@ -83,7 +85,12 @@ EngineStoreApplyRes HandleAdminRaftCmd(
 
         auto & kvstore = server->tmt->getKVStore();
         return kvstore->handleAdminRaftCmd(
-            std::move(request), std::move(response), header.region_id, header.index, header.term, *server->tmt);
+            std::move(request),
+            std::move(response),
+            header.region_id,
+            header.index,
+            header.term,
+            *server->tmt);
     }
     catch (...)
     {
@@ -128,7 +135,10 @@ EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec s
     }
 }
 
-uint8_t HandleCheckTerminated(EngineStoreServerWrap * server) { return server->tmt->checkTerminated(std::memory_order_relaxed) ? 1 : 0; }
+uint8_t HandleCheckTerminated(EngineStoreServerWrap * server)
+{
+    return server->tmt->checkTerminated(std::memory_order_relaxed) ? 1 : 0;
+}
 
 StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server)
 {
@@ -146,14 +156,29 @@ StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server)
     return res;
 }
 
-EngineStoreServerStatus HandleGetTiFlashStatus(EngineStoreServerWrap * server) { return server->status.load(); }
+EngineStoreServerStatus HandleGetTiFlashStatus(EngineStoreServerWrap * server)
+{
+    return server->status.load();
+}
 
-RaftProxyStatus TiFlashRaftProxyHelper::getProxyStatus() const { return fn_handle_get_proxy_status(proxy_ptr); }
+RaftProxyStatus TiFlashRaftProxyHelper::getProxyStatus() const
+{
+    return fn_handle_get_proxy_status(proxy_ptr);
+}
 
-BaseBuffView strIntoView(const std::string & view) { return BaseBuffView{view.data(), view.size()}; }
+BaseBuffView strIntoView(const std::string & view)
+{
+    return BaseBuffView{view.data(), view.size()};
+}
 
-bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const { return fn_is_encryption_enabled(proxy_ptr); }
-EncryptionMethod TiFlashRaftProxyHelper::getEncryptionMethod() const { return fn_encryption_method(proxy_ptr); }
+bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const
+{
+    return fn_is_encryption_enabled(proxy_ptr);
+}
+EncryptionMethod TiFlashRaftProxyHelper::getEncryptionMethod() const
+{
+    return fn_encryption_method(proxy_ptr);
+}
 FileEncryptionInfo TiFlashRaftProxyHelper::getFile(const std::string & view) const
 {
     return fn_handle_get_file(proxy_ptr, strIntoView(view));
@@ -175,7 +200,11 @@ struct CppStrVec
 {
     std::vector<std::string> data;
     std::vector<BaseBuffView> view;
-    CppStrVec(std::vector<std::string> && data_) : data(std::move(data_)) { updateView(); }
+    CppStrVec(std::vector<std::string> && data_)
+        : data(std::move(data_))
+    {
+        updateView();
+    }
     CppStrVec(const CppStrVec &) = delete;
     void updateView();
     CppStrVecView intoOuterView() const { return {view.data(), view.size()}; }
@@ -216,7 +245,8 @@ struct PreHandledSnapshotWithBlock
 {
     ~PreHandledSnapshotWithBlock() { CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply); }
     PreHandledSnapshotWithBlock(const RegionPtr & region_, RegionPtrWithBlock::CachePtr && cache_)
-        : region(region_), cache(std::move(cache_))
+        : region(region_)
+        , cache(std::move(cache_))
     {
         CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
     }
@@ -227,7 +257,9 @@ struct PreHandledSnapshotWithBlock
 struct PreHandledSnapshotWithFiles
 {
     ~PreHandledSnapshotWithFiles() { CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply); }
-    PreHandledSnapshotWithFiles(const RegionPtr & region_, std::vector<UInt64> && ids_) : region(region_), ingest_ids(std::move(ids_))
+    PreHandledSnapshotWithFiles(const RegionPtr & region_, std::vector<UInt64> && ids_)
+        : region(region_)
+        , ingest_ids(std::move(ids_))
     {
         CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
     }
@@ -236,7 +268,12 @@ struct PreHandledSnapshotWithFiles
 };
 
 RawCppPtr PreHandleSnapshot(
-    EngineStoreServerWrap * server, BaseBuffView region_buff, uint64_t peer_id, SSTViewVec snaps, uint64_t index, uint64_t term)
+    EngineStoreServerWrap * server,
+    BaseBuffView region_buff,
+    uint64_t peer_id,
+    SSTViewVec snaps,
+    uint64_t index,
+    uint64_t term)
 {
     try
     {
@@ -247,23 +284,23 @@ RawCppPtr PreHandleSnapshot(
         auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term);
         switch (kvstore->applyMethod())
         {
-            case TiDB::SnapshotApplyMethod::Block:
-            {
-                // Pre-decode as a block
-                auto new_region_block_cache = kvstore->preHandleSnapshotToBlock(new_region, snaps, index, term, tmt);
-                auto res = new PreHandledSnapshotWithBlock{new_region, std::move(new_region_block_cache)};
-                return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithBlock);
-            }
-            case TiDB::SnapshotApplyMethod::DTFile_Directory:
-            case TiDB::SnapshotApplyMethod::DTFile_Single:
-            {
-                // Pre-decode and save as DTFiles
-                auto ingest_ids = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
-                auto res = new PreHandledSnapshotWithFiles{new_region, std::move(ingest_ids)};
-                return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithFiles);
-            }
-            default:
-                throw Exception("Unknow Region apply method: " + applyMethodToString(kvstore->applyMethod()));
+        case TiDB::SnapshotApplyMethod::Block:
+        {
+            // Pre-decode as a block
+            auto new_region_block_cache = kvstore->preHandleSnapshotToBlock(new_region, snaps, index, term, tmt);
+            auto res = new PreHandledSnapshotWithBlock{new_region, std::move(new_region_block_cache)};
+            return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithBlock);
+        }
+        case TiDB::SnapshotApplyMethod::DTFile_Directory:
+        case TiDB::SnapshotApplyMethod::DTFile_Single:
+        {
+            // Pre-decode and save as DTFiles
+            auto ingest_ids = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
+            auto res = new PreHandledSnapshotWithFiles{new_region, std::move(ingest_ids)};
+            return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithFiles);
+        }
+        default:
+            throw Exception("Unknow Region apply method: " + applyMethodToString(kvstore->applyMethod()));
         }
     }
     catch (...)
@@ -303,21 +340,21 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
 {
     switch (static_cast<RawCppPtrTypeImpl>(type))
     {
-        case RawCppPtrTypeImpl::PreHandledSnapshotWithBlock:
-        {
-            auto * snap = reinterpret_cast<PreHandledSnapshotWithBlock *>(res);
-            ApplyPreHandledSnapshot(server, snap);
-            break;
-        }
-        case RawCppPtrTypeImpl::PreHandledSnapshotWithFiles:
-        {
-            auto * snap = reinterpret_cast<PreHandledSnapshotWithFiles *>(res);
-            ApplyPreHandledSnapshot(server, snap);
-            break;
-        }
-        default:
-            LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
-            exit(-1);
+    case RawCppPtrTypeImpl::PreHandledSnapshotWithBlock:
+    {
+        auto * snap = reinterpret_cast<PreHandledSnapshotWithBlock *>(res);
+        ApplyPreHandledSnapshot(server, snap);
+        break;
+    }
+    case RawCppPtrTypeImpl::PreHandledSnapshotWithFiles:
+    {
+        auto * snap = reinterpret_cast<PreHandledSnapshotWithFiles *>(res);
+        ApplyPreHandledSnapshot(server, snap);
+        break;
+    }
+    default:
+        LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
+        exit(-1);
     }
 }
 
@@ -327,18 +364,18 @@ void GcRawCppPtr(EngineStoreServerWrap *, RawVoidPtr ptr, RawCppPtrType type)
     {
         switch (static_cast<RawCppPtrTypeImpl>(type))
         {
-            case RawCppPtrTypeImpl::String:
-                delete reinterpret_cast<RawCppStringPtr>(ptr);
-                break;
-            case RawCppPtrTypeImpl::PreHandledSnapshotWithBlock:
-                delete reinterpret_cast<PreHandledSnapshotWithBlock *>(ptr);
-                break;
-            case RawCppPtrTypeImpl::PreHandledSnapshotWithFiles:
-                delete reinterpret_cast<PreHandledSnapshotWithFiles *>(ptr);
-                break;
-            default:
-                LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
-                exit(-1);
+        case RawCppPtrTypeImpl::String:
+            delete reinterpret_cast<RawCppStringPtr>(ptr);
+            break;
+        case RawCppPtrTypeImpl::PreHandledSnapshotWithBlock:
+            delete reinterpret_cast<PreHandledSnapshotWithBlock *>(ptr);
+            break;
+        case RawCppPtrTypeImpl::PreHandledSnapshotWithFiles:
+            delete reinterpret_cast<PreHandledSnapshotWithFiles *>(ptr);
+            break;
+        default:
+            LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
+            exit(-1);
         }
     }
 }
@@ -369,7 +406,10 @@ void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t regio
     reinterpret_cast<BatchReadIndexRes::pointer>(resp)->emplace_back(std::move(res), region_id);
 }
 
-RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_) { return RawCppPtr{ptr_, static_cast<RawCppPtrType>(type_)}; }
+RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_)
+{
+    return RawCppPtr{ptr_, static_cast<RawCppPtrType>(type_)};
+}
 
 void SetSetverInfoResp(BaseBuffView view, RawVoidPtr ptr)
 {

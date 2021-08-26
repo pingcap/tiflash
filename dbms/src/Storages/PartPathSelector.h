@@ -3,6 +3,7 @@
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <common/logger_useful.h>
+
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -17,7 +18,8 @@ class PartPathSelector
 {
 public:
     PartPathSelector(std::vector<String> && all_normal_path, std::vector<std::string> && all_fast_path)
-        : normal_and_fast_path(all_normal_path), log(&Poco::Logger::get("PartPathSelector"))
+        : normal_and_fast_path(all_normal_path)
+        , log(&Poco::Logger::get("PartPathSelector"))
     {
         if (normal_and_fast_path.empty())
         {

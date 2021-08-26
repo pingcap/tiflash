@@ -48,16 +48,16 @@ public:
     {
         switch (status)
         {
-            case WRITABLE:
-                return "WRITABLE";
-            case WRITING:
-                return "WRITING";
-            case READABLE:
-                return "READABLE";
-            case DROPPED:
-                return "DROPPED";
-            default:
-                throw Exception("Unexpected status: " + DB::toString((int)status));
+        case WRITABLE:
+            return "WRITABLE";
+        case WRITING:
+            return "WRITING";
+        case READABLE:
+            return "READABLE";
+        case DROPPED:
+            return "DROPPED";
+        default:
+            throw Exception("Unexpected status: " + DB::toString((int)status));
         }
     }
 
@@ -73,7 +73,10 @@ public:
     struct SubFileStat
     {
         SubFileStat() = default;
-        SubFileStat(UInt64 offset_, UInt64 size_) : offset{offset_}, size{size_} {}
+        SubFileStat(UInt64 offset_, UInt64 size_)
+            : offset{offset_}
+            , size{size_}
+        {}
         UInt64 offset;
         UInt64 size;
     };
@@ -89,7 +92,12 @@ public:
         UInt64 pack_stat_size;
 
         MetaPackInfo()
-            : pack_property_offset(0), pack_property_size(0), meta_offset(0), meta_size(0), pack_stat_offset(0), pack_stat_size(0)
+            : pack_property_offset(0)
+            , pack_property_size(0)
+            , meta_offset(0)
+            , meta_size(0)
+            , pack_stat_offset(0)
+            , pack_stat_size(0)
         {}
     };
 
@@ -102,10 +110,10 @@ public:
         DMSingleFileFormatVersion file_format_version;
 
         Footer()
-            : meta_pack_info(),
-              sub_file_stat_offset(0),
-              sub_file_num(0),
-              file_format_version(DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE)
+            : meta_pack_info()
+            , sub_file_stat_offset(0)
+            , sub_file_num(0)
+            , file_format_version(DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE)
         {}
     };
 
@@ -116,7 +124,11 @@ public:
     static DMFilePtr create(UInt64 file_id, const String & parent_path, bool single_file_mode = false);
 
     static DMFilePtr restore(
-        const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
+        const FileProviderPtr & file_provider,
+        UInt64 file_id,
+        UInt64 ref_id,
+        const String & parent_path,
+        bool read_meta = true);
 
     struct ListOptions
     {
@@ -191,7 +203,13 @@ public:
 
 private:
     DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Mode mode_, Status status_, Poco::Logger * log_)
-        : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), column_indices(), mode(mode_), status(status_), log(log_)
+        : file_id(file_id_)
+        , ref_id(ref_id_)
+        , parent_path(parent_path_)
+        , column_indices()
+        , mode(mode_)
+        , status(status_)
+        , log(log_)
     {}
 
     bool isFolderMode() const { return mode == Mode::FOLDER; }
@@ -300,10 +318,16 @@ private:
 };
 
 inline ReadBufferFromFileProvider openForRead(
-    const FileProviderPtr & file_provider, const String & path, const EncryptionPath & encryption_path, const size_t & file_size)
+    const FileProviderPtr & file_provider,
+    const String & path,
+    const EncryptionPath & encryption_path,
+    const size_t & file_size)
 {
     return ReadBufferFromFileProvider(
-        file_provider, path, encryption_path, std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), file_size));
+        file_provider,
+        path,
+        encryption_path,
+        std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), file_size));
 }
 
 } // namespace DM

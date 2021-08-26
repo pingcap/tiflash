@@ -1,15 +1,15 @@
 #pragma once
 
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <Common/ActionBlocker.h>
 #include <Storages/MergeTree/DiskSpaceMonitor.h>
+#include <Storages/MergeTree/MergeTreeData.h>
+
 #include <atomic>
 #include <functional>
-#include <Common/ActionBlocker.h>
 
 
 namespace DB
 {
-
 class MergeListEntry;
 class MergeProgressCallback;
 
@@ -20,7 +20,7 @@ class MergeTreeDataMerger
 {
 public:
     using CancellationHook = std::function<void()>;
-    using AllowedMergingPredicate = std::function<bool (const MergeTreeData::DataPartPtr &, const MergeTreeData::DataPartPtr &, String * reason)>;
+    using AllowedMergingPredicate = std::function<bool(const MergeTreeData::DataPartPtr &, const MergeTreeData::DataPartPtr &, String * reason)>;
 
     struct FuturePart
     {
@@ -93,7 +93,10 @@ public:
     MergeTreeData::MutableDataPartPtr mergePartsToTemporaryPart(
         const FuturePart & future_part,
         MergeListEntry & merge_entry,
-        size_t aio_threshold, time_t time_of_merge, DiskSpaceMonitor::Reservation * disk_reservation, bool deduplication,
+        size_t aio_threshold,
+        time_t time_of_merge,
+        DiskSpaceMonitor::Reservation * disk_reservation,
+        bool deduplication,
         bool final);
 
     MergeTreeData::DataPartPtr renameMergedTemporaryPart(
@@ -118,14 +121,16 @@ public:
     enum class MergeAlgorithm
     {
         Horizontal, /// per-row merge of all columns
-        Vertical    /// per-row merge of PK columns, per-column gather for non-PK columns
+        Vertical /// per-row merge of PK columns, per-column gather for non-PK columns
     };
 
 private:
-
     MergeAlgorithm chooseMergeAlgorithm(
-            const MergeTreeData & data, const MergeTreeData::DataPartsVector & parts,
-            size_t rows_upper_bound, const NamesAndTypesList & gathering_columns, bool deduplicate) const;
+        const MergeTreeData & data,
+        const MergeTreeData::DataPartsVector & parts,
+        size_t rows_upper_bound,
+        const NamesAndTypesList & gathering_columns,
+        bool deduplicate) const;
 
 private:
     MergeTreeData & data;
@@ -140,4 +145,4 @@ private:
 };
 
 
-}
+} // namespace DB

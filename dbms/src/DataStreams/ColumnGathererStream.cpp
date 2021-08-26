@@ -1,27 +1,31 @@
+#include <Common/typeid_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <common/logger_useful.h>
-#include <Common/typeid_cast.h>
+
 #include <iomanip>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int INCOMPATIBLE_COLUMNS;
-    extern const int INCORRECT_NUMBER_OF_COLUMNS;
-    extern const int NOT_FOUND_COLUMN_IN_BLOCK;
-    extern const int EMPTY_DATA_PASSED;
-    extern const int RECEIVED_EMPTY_DATA;
-}
+extern const int LOGICAL_ERROR;
+extern const int INCOMPATIBLE_COLUMNS;
+extern const int INCORRECT_NUMBER_OF_COLUMNS;
+extern const int NOT_FOUND_COLUMN_IN_BLOCK;
+extern const int EMPTY_DATA_PASSED;
+extern const int RECEIVED_EMPTY_DATA;
+} // namespace ErrorCodes
 
 ColumnGathererStream::ColumnGathererStream(
-        const String & column_name_, const BlockInputStreams & source_streams, ReadBuffer & row_sources_buf_,
-        size_t block_preferred_size_)
-    : name(column_name_), row_sources_buf(row_sources_buf_)
-    , block_preferred_size(block_preferred_size_), log(&Poco::Logger::get("ColumnGathererStream"))
+    const String & column_name_,
+    const BlockInputStreams & source_streams,
+    ReadBuffer & row_sources_buf_,
+    size_t block_preferred_size_)
+    : name(column_name_)
+    , row_sources_buf(row_sources_buf_)
+    , block_preferred_size(block_preferred_size_)
+    , log(&Poco::Logger::get("ColumnGathererStream"))
 {
     if (source_streams.empty())
         throw Exception("There are no streams to gather", ErrorCodes::EMPTY_DATA_PASSED);
@@ -42,12 +46,12 @@ void ColumnGathererStream::init()
         /// Sometimes MergeTreeReader injects additional column with partitioning key
         if (block.columns() > 2)
             throw Exception(
-                    "Block should have 1 or 2 columns, but contains " + toString(block.columns()),
-                    ErrorCodes::INCORRECT_NUMBER_OF_COLUMNS);
+                "Block should have 1 or 2 columns, but contains " + toString(block.columns()),
+                ErrorCodes::INCORRECT_NUMBER_OF_COLUMNS);
         if (!block.has(name))
             throw Exception(
-                    "Not found column `" + name + "' in block.",
-                    ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
+                "Not found column `" + name + "' in block.",
+                ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
 
         if (i == 0)
         {
@@ -118,12 +122,9 @@ void ColumnGathererStream::readSuffixImpl()
     std::stringstream speed;
     if (seconds)
         speed << ", " << profile_info.rows / seconds << " rows/sec., "
-            << profile_info.bytes / 1048576.0 / seconds << " MiB/sec.";
-    LOG_TRACE(log, std::fixed << std::setprecision(2)
-        << "Gathered column " << name
-        << " (" << static_cast<double>(profile_info.bytes) / profile_info.rows << " bytes/elem.)"
-        << " in " << seconds << " sec."
-        << speed.str());
+              << profile_info.bytes / 1048576.0 / seconds << " MiB/sec.";
+    LOG_TRACE(log, std::fixed << std::setprecision(2) << "Gathered column " << name << " (" << static_cast<double>(profile_info.bytes) / profile_info.rows << " bytes/elem.)"
+                              << " in " << seconds << " sec." << speed.str());
 }
 
-}
+} // namespace DB

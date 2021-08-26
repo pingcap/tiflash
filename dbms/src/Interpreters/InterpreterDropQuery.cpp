@@ -15,7 +15,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int TABLE_WAS_NOT_DROPPED;
@@ -30,7 +29,10 @@ namespace FailPoints
 extern const char exception_between_drop_meta_and_data[];
 }
 
-InterpreterDropQuery::InterpreterDropQuery(const ASTPtr & query_ptr_, Context & context_) : query_ptr(query_ptr_), context(context_) {}
+InterpreterDropQuery::InterpreterDropQuery(const ASTPtr & query_ptr_, Context & context_)
+    : query_ptr(query_ptr_)
+    , context(context_)
+{}
 
 
 BlockIO InterpreterDropQuery::execute()
@@ -63,7 +65,8 @@ BlockIO InterpreterDropQuery::execute()
             if (drop.database.empty() && !drop.temporary)
             {
                 LOG_WARNING(
-                    (&Poco::Logger::get("InterpreterDropQuery")), "It is recommended to use `DROP TEMPORARY TABLE` to delete temporary tables");
+                    (&Poco::Logger::get("InterpreterDropQuery")),
+                    "It is recommended to use `DROP TEMPORARY TABLE` to delete temporary tables");
             }
             table->shutdown();
             /// If table was already dropped by anyone, an exception will be thrown
@@ -95,8 +98,10 @@ BlockIO InterpreterDropQuery::execute()
 
         if (table)
             tables_to_drop.emplace_back(table,
-                context.getDDLGuard(
-                    database_name, drop.table, "Table " + database_name + "." + drop.table + " is dropping or detaching right now"));
+                                        context.getDDLGuard(
+                                            database_name,
+                                            drop.table,
+                                            "Table " + database_name + "." + drop.table + " is dropping or detaching right now"));
         else
             return {};
     }
@@ -111,9 +116,9 @@ BlockIO InterpreterDropQuery::execute()
 
         for (auto iterator = database->getIterator(context); iterator->isValid(); iterator->next())
             tables_to_drop.emplace_back(iterator->table(),
-                context.getDDLGuard(database_name,
-                    iterator->name(),
-                    "Table " + database_name + "." + iterator->name() + " is dropping or detaching right now"));
+                                        context.getDDLGuard(database_name,
+                                                            iterator->name(),
+                                                            "Table " + database_name + "." + iterator->name() + " is dropping or detaching right now"));
     }
 
     for (auto & table : tables_to_drop)

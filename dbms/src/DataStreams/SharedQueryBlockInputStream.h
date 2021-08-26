@@ -10,7 +10,6 @@
 
 namespace DB
 {
-
 /**
  * This block input stream is used by SharedQuery.
  * It enable multiple threads read from one stream.
@@ -19,7 +18,9 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_)
-        : queue(clients), log(&Poco::Logger::get("SharedQueryBlockInputStream")), in(in_)
+        : queue(clients)
+        , log(&Poco::Logger::get("SharedQueryBlockInputStream"))
+        , in(in_)
     {
         children.push_back(in);
     }

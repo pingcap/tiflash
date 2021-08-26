@@ -19,7 +19,6 @@
 
 namespace DB
 {
-
 using diagnosticspb::LogLevel;
 using diagnosticspb::SearchLogResponse;
 using diagnosticspb::ServerInfoItem;
@@ -199,9 +198,7 @@ static DiagnosticsService::IOInfo getIOInfoLinux()
             return io_info;
         }
         /// TODO: better to initialize with field names
-        DiagnosticsService::IOLoad load{std::stod(values[0]), std::stod(values[1]), std::stod(values[2]), std::stod(values[3]),
-            std::stod(values[4]), std::stod(values[5]), std::stod(values[6]), std::stod(values[7]), std::stod(values[8]),
-            std::stod(values[9]), std::stod(values[10])};
+        DiagnosticsService::IOLoad load{std::stod(values[0]), std::stod(values[1]), std::stod(values[2]), std::stod(values[3]), std::stod(values[4]), std::stod(values[5]), std::stod(values[6]), std::stod(values[7]), std::stod(values[8]), std::stod(values[9]), std::stod(values[10])};
 
         Poco::Path device_path(device.path());
         io_info.emplace(device_path.getFileName(), load);
@@ -502,12 +499,15 @@ static std::vector<DiagnosticsService::Disk> getAllDisksLinux()
         }
         static std::vector<std::string> fs_filter{
             "sysfs", // pseudo file system for kernel objects
-            "proc",  // another pseudo file system
-            "tmpfs", "devtmpfs", "cgroup", "cgroup2",
-            "pstore",     // https://www.kernel.org/doc/Documentation/ABI/testing/pstore
-            "squashfs",   // squashfs is a compressed read-only file system (for snaps)
+            "proc", // another pseudo file system
+            "tmpfs",
+            "devtmpfs",
+            "cgroup",
+            "cgroup2",
+            "pstore", // https://www.kernel.org/doc/Documentation/ABI/testing/pstore
+            "squashfs", // squashfs is a compressed read-only file system (for snaps)
             "rpc_pipefs", // The pipefs pseudo file system service
-            "iso9660"     // optical media
+            "iso9660" // optical media
         };
         if (std::find(fs_filter.begin(), fs_filter.end(), values[2]) != fs_filter.end() || boost::starts_with(values[1], "/sys")
             || boost::starts_with(values[1], "/proc")
@@ -546,7 +546,8 @@ static std::vector<DiagnosticsService::Disk> getAllDisks()
 }
 
 void DiagnosticsService::cpuLoadInfo(
-    std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
+    std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time,
+    std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
     {
         Poco::File stat_file("/proc/stat");
@@ -610,11 +611,15 @@ void DiagnosticsService::cpuLoadInfo(
         auto delta_total = static_cast<double>(delta.total());
 
         std::vector<std::pair<std::string, double>> data{{"user", static_cast<double>(delta.user) / delta_total},
-            {"nice", static_cast<double>(delta.nice) / delta_total}, {"system", static_cast<double>(delta.system) / delta_total},
-            {"idle", static_cast<double>(delta.idle) / delta_total}, {"iowait", static_cast<double>(delta.iowait) / delta_total},
-            {"irq", static_cast<double>(delta.irq) / delta_total}, {"softirq", static_cast<double>(delta.softirq) / delta_total},
-            {"steal", static_cast<double>(delta.steal) / delta_total}, {"guest", static_cast<double>(delta.guest) / delta_total},
-            {"guest_nice", static_cast<double>(delta.guest_nice) / delta_total}};
+                                                         {"nice", static_cast<double>(delta.nice) / delta_total},
+                                                         {"system", static_cast<double>(delta.system) / delta_total},
+                                                         {"idle", static_cast<double>(delta.idle) / delta_total},
+                                                         {"iowait", static_cast<double>(delta.iowait) / delta_total},
+                                                         {"irq", static_cast<double>(delta.irq) / delta_total},
+                                                         {"softirq", static_cast<double>(delta.softirq) / delta_total},
+                                                         {"steal", static_cast<double>(delta.steal) / delta_total},
+                                                         {"guest", static_cast<double>(delta.guest) / delta_total},
+                                                         {"guest_nice", static_cast<double>(delta.guest_nice) / delta_total}};
 
         std::vector<ServerInfoPair> pairs;
         for (auto & p : data)
@@ -659,19 +664,19 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
     double used_swap_percent = static_cast<double>(used_swap) / static_cast<double>(total_swap);
     double free_swap_percent = static_cast<double>(free_swap) / static_cast<double>(total_swap);
 
-    std::vector<std::pair<std::string, std::string>> memory_infos{     //
-        {"total", std::to_string(total_memory)},                       //
-        {"free", std::to_string(free_memory)},                         //
-        {"used", std::to_string(used_memory)},                         //
-        {"free-percent", fmt::format("{0:.2f}", free_memory_percent)}, //
-        {"used-percent", fmt::format("{0:.2f}", used_memory_percent)}};
+    std::vector<std::pair<std::string, std::string>> memory_infos{//
+                                                                  {"total", std::to_string(total_memory)}, //
+                                                                  {"free", std::to_string(free_memory)}, //
+                                                                  {"used", std::to_string(used_memory)}, //
+                                                                  {"free-percent", fmt::format("{0:.2f}", free_memory_percent)}, //
+                                                                  {"used-percent", fmt::format("{0:.2f}", used_memory_percent)}};
 
-    std::vector<std::pair<std::string, std::string>> swap_infos{     //
-        {"total", std::to_string(total_swap)},                       //
-        {"free", std::to_string(free_swap)},                         //
-        {"used", std::to_string(used_swap)},                         //
-        {"free-percent", fmt::format("{0:.2f}", free_swap_percent)}, //
-        {"used-percent", fmt::format("{0:.2f}", used_swap_percent)}};
+    std::vector<std::pair<std::string, std::string>> swap_infos{//
+                                                                {"total", std::to_string(total_swap)}, //
+                                                                {"free", std::to_string(free_swap)}, //
+                                                                {"used", std::to_string(used_swap)}, //
+                                                                {"free-percent", fmt::format("{0:.2f}", free_swap_percent)}, //
+                                                                {"used-percent", fmt::format("{0:.2f}", used_swap_percent)}};
 
     // Add pairs for memory_infos
     {
@@ -722,7 +727,9 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
 
 void DiagnosticsService::nicLoadInfo(const NICInfo & prev_nic, std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
-    auto rate = [](size_t prev, size_t cur) { return static_cast<double>(cur - prev) / 0.5; };
+    auto rate = [](size_t prev, size_t cur) {
+        return static_cast<double>(cur - prev) / 0.5;
+    };
     NICInfo nic_info = getNICInfo();
     for (auto [name, cur] : nic_info)
     {
@@ -761,9 +768,12 @@ void DiagnosticsService::nicLoadInfo(const NICInfo & prev_nic, std::vector<diagn
 }
 
 void DiagnosticsService::ioLoadInfo(
-    const DiagnosticsService::IOInfo & prev_io, std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
+    const DiagnosticsService::IOInfo & prev_io,
+    std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
-    auto rate = [](size_t prev, size_t cur) { return static_cast<double>(cur - prev) / 0.5; };
+    auto rate = [](size_t prev, size_t cur) {
+        return static_cast<double>(cur - prev) / 0.5;
+    };
     IOInfo io_info = getIOInfo();
     for (auto [name, cur] : io_info)
     {
@@ -804,8 +814,7 @@ void DiagnosticsService::ioLoadInfo(
     }
 }
 
-void DiagnosticsService::loadInfo(std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, const NICInfo & prev_nic,
-    const IOInfo & prev_io, std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
+void DiagnosticsService::loadInfo(std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, const NICInfo & prev_nic, const IOInfo & prev_io, std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
     cpuLoadInfo(prev_cpu_time, server_info_items);
     memLoadInfo(server_info_items);
@@ -818,10 +827,11 @@ void DiagnosticsService::loadInfo(std::optional<DiagnosticsService::LinuxCpuTime
 void DiagnosticsService::cpuHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
     std::vector<std::pair<std::string, std::string>> infos{//
-        {"cpu-logical-cores",
-            std::to_string(std::thread::hardware_concurrency())}, /// TODO: we should check both machine's core number and cgroup quota
-        {"cpu-physical-cores", std::to_string(getPhysicalCoreNumber())}, //
-        {"cpu-frequency", std::to_string(getCPUFrequency()) + "MHz"}, {"cpu-arch", getCPUArch()}};
+                                                           {"cpu-logical-cores",
+                                                            std::to_string(std::thread::hardware_concurrency())}, /// TODO: we should check both machine's core number and cgroup quota
+                                                           {"cpu-physical-cores", std::to_string(getPhysicalCoreNumber())}, //
+                                                           {"cpu-frequency", std::to_string(getCPUFrequency()) + "MHz"},
+                                                           {"cpu-arch", getCPUArch()}};
 
     // L1 to L3 cache
     for (uint8_t level = 1; level <= 3; level++)
@@ -903,15 +913,15 @@ void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoI
         double free_percent = static_cast<double>(free) / static_cast<double>(total);
         double used_percent = static_cast<double>(used) / static_cast<double>(total);
 
-        std::vector<std::pair<std::string, std::string>> infos{     //
-            {"type", disk.disk_type == disk.HDD ? "HDD" : "SSD"},   //
-            {"fstype", disk.fs_type},                               //
-            {"path", mount_point},                                  //
-            {"total", std::to_string(total)},                       //
-            {"free", std::to_string(free)},                         //
-            {"used", std::to_string(used)},                         //
-            {"free-percent", fmt::format("{0:.2f}", free_percent)}, //
-            {"used-percent", fmt::format("{0:.2f}", used_percent)}};
+        std::vector<std::pair<std::string, std::string>> infos{//
+                                                               {"type", disk.disk_type == disk.HDD ? "HDD" : "SSD"}, //
+                                                               {"fstype", disk.fs_type}, //
+                                                               {"path", mount_point}, //
+                                                               {"total", std::to_string(total)}, //
+                                                               {"free", std::to_string(free)}, //
+                                                               {"used", std::to_string(used)}, //
+                                                               {"free-percent", fmt::format("{0:.2f}", free_percent)}, //
+                                                               {"used-percent", fmt::format("{0:.2f}", used_percent)}};
 
         ServerInfoItem item;
         for (auto & info : infos)
@@ -926,7 +936,10 @@ void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoI
     }
 }
 
-void DiagnosticsService::nicHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items) { (void)server_info_items; }
+void DiagnosticsService::nicHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
+{
+    (void)server_info_items;
+}
 
 void DiagnosticsService::hardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
@@ -935,17 +948,25 @@ void DiagnosticsService::hardwareInfo(std::vector<diagnosticspb::ServerInfoItem>
     diskHardwareInfo(server_info_items);
 }
 
-void DiagnosticsService::systemInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items) { (void)server_info_items; }
+void DiagnosticsService::systemInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
+{
+    (void)server_info_items;
+}
 
-void DiagnosticsService::processInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items) { (void)server_info_items; }
+void DiagnosticsService::processInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
+{
+    (void)server_info_items;
+}
 
 ::grpc::Status DiagnosticsService::server_info(
-    ::grpc::ServerContext * context, const ::diagnosticspb::ServerInfoRequest * request, ::diagnosticspb::ServerInfoResponse * response)
+    ::grpc::ServerContext * context,
+    const ::diagnosticspb::ServerInfoRequest * request,
+    ::diagnosticspb::ServerInfoResponse * response)
 try
 {
     (void)context;
 
-#if true 
+#if true
     //defined(__APPLE__)
     const TiFlashRaftProxyHelper * helper = server.context().getTMTContext().getKVStore()->getProxyHelper();
     if (helper)
@@ -976,30 +997,30 @@ try
 
     switch (tp)
     {
-        case ServerInfoType::LoadInfo:
-        {
-            loadInfo(cpu_info, nic_info, io_info, items);
-            break;
-        }
-        case ServerInfoType::HardwareInfo:
-        {
-            hardwareInfo(items);
-            break;
-        }
-        case ServerInfoType::SystemInfo:
-        {
-            systemInfo(items);
-            break;
-        }
-        case ServerInfoType::All:
-        {
-            loadInfo(cpu_info, nic_info, io_info, items);
-            hardwareInfo(items);
-            systemInfo(items);
-            break;
-        }
-        default:
-            break;
+    case ServerInfoType::LoadInfo:
+    {
+        loadInfo(cpu_info, nic_info, io_info, items);
+        break;
+    }
+    case ServerInfoType::HardwareInfo:
+    {
+        hardwareInfo(items);
+        break;
+    }
+    case ServerInfoType::SystemInfo:
+    {
+        systemInfo(items);
+        break;
+    }
+    case ServerInfoType::All:
+    {
+        loadInfo(cpu_info, nic_info, io_info, items);
+        hardwareInfo(items);
+        systemInfo(items);
+        break;
+    }
+    default:
+        break;
     }
 
     std::sort(items.begin(), items.end(), [](const ServerInfoItem & lhs, const ServerInfoItem & rhs) -> bool {
@@ -1036,8 +1057,7 @@ catch (const std::exception & e)
     return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
 }
 
-::grpc::Status DiagnosticsService::search_log(::grpc::ServerContext * grpc_context, const ::diagnosticspb::SearchLogRequest * request,
-    ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream)
+::grpc::Status DiagnosticsService::search_log(::grpc::ServerContext * grpc_context, const ::diagnosticspb::SearchLogRequest * request, ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream)
 {
     (void)grpc_context;
 
