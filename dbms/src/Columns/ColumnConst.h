@@ -1,8 +1,8 @@
 #pragma once
 
-#include <Core/Field.h>
-#include <Common/Exception.h>
 #include <Columns/IColumn.h>
+#include <Common/Exception.h>
+#include <Core/Field.h>
 
 
 namespace DB
@@ -10,7 +10,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int NOT_IMPLEMENTED;
+extern const int NOT_IMPLEMENTED;
 }
 
 
@@ -106,12 +106,14 @@ public:
         ++s;
     }
 
-    void insertData(const char *, size_t) override
+    void insertData(const char *, size_t)
+    override
     {
         ++s;
     }
 
-    void insertFrom(const IColumn &, size_t) override
+    void insertFrom(const IColumn &, size_t)
+    override
     {
         ++s;
     }
@@ -216,7 +218,10 @@ public:
     Field getField() const { return getDataColumn()[0]; }
 
     template <typename T>
-    T getValue() const { return getField().safeGet<typename NearestFieldType<T>::Type>(); }
+    T getValue() const
+    {
+        return getField().safeGet<typename NearestFieldType<T>::Type>();
+    }
 };
 
-}
+} // namespace DB

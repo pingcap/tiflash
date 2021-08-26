@@ -1,20 +1,17 @@
 #pragma once
 
 
+#include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnString.h>
+#include <Common/Arena.h>
+#include <Common/ColumnsHashingImpl.h>
 #include <Common/HashTable/HashTable.h>
 #include <Common/HashTable/HashTableKeyHolder.h>
-#include <Common/ColumnsHashingImpl.h>
-#include <Common/Arena.h>
 #include <Common/assert_cast.h>
-#include <common/unaligned.h>
-
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnFixedString.h>
-
 #include <Core/Defines.h>
-
 #include <Interpreters/AggregationCommon.h>
 #include <Storages/Transaction/Collator.h>
+#include <common/unaligned.h>
 
 #include <memory>
 
@@ -22,7 +19,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 namespace ColumnsHashing
@@ -55,7 +52,7 @@ struct HashMethodOneNumber
     using Base::emplaceKey; /// (Data & data, size_t row, Arena & pool) -> EmplaceResult
 
     /// Find key into HashTable or HashMap. If Data is HashMap and key was found, returns ptr to value, otherwise nullptr.
-    using Base::findKey;  /// (Data & data, size_t row, Arena & pool) -> FindResult
+    using Base::findKey; /// (Data & data, size_t row, Arena & pool) -> FindResult
 
     /// Get hash value of row.
     using Base::getHash; /// (const Data & data, size_t row, Arena & pool) -> size_t
@@ -189,7 +186,7 @@ struct HashMethodKeysFixed
     /// SSSE3 shuffle method can be used. Shuffle masks will be calculated and stored here.
 #if defined(__SSSE3__) && !defined(MEMORY_SANITIZER)
     std::unique_ptr<uint8_t[]> masks;
-    std::unique_ptr<const char*[]> columns_data;
+    std::unique_ptr<const char *[]> columns_data;
 #endif
 
     PaddedPODArray<Key> prepared_keys;
@@ -207,7 +204,9 @@ struct HashMethodKeysFixed
     }
 
     HashMethodKeysFixed(const ColumnRawPtrs & key_columns, const Sizes & key_sizes_, const TiDB::TiDBCollators &)
-        : Base(key_columns), key_sizes(std::move(key_sizes_)), keys_size(key_columns.size())
+        : Base(key_columns)
+        , key_sizes(std::move(key_sizes_))
+        , keys_size(key_columns.size())
     {
         if (usePreparedKeys(key_sizes))
         {
@@ -259,7 +258,7 @@ struct HashMethodKeysFixed
                 }
             }
 
-            columns_data.reset(new const char*[keys_size]);
+            columns_data.reset(new const char *[keys_size]);
 
             for (size_t i = 0; i < keys_size; ++i)
                 columns_data[i] = Base::getActualColumns()[i]->getRawData().data;
@@ -299,8 +298,7 @@ struct HashMethodKeysFixed
         new_columns.reserve(key_columns.size());
 
         Sizes new_sizes;
-        auto fill_size = [&](size_t size)
-        {
+        auto fill_size = [&](size_t size) {
             for (size_t i = 0; i < key_sizes.size(); ++i)
             {
                 if (key_sizes[i] == size)
@@ -340,7 +338,10 @@ struct HashMethodSerialized
     TiDB::TiDBCollators collators;
 
     HashMethodSerialized(const ColumnRawPtrs & key_columns_, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators_)
-        : key_columns(key_columns_), keys_size(key_columns_.size()), collators(collators_) {}
+        : key_columns(key_columns_)
+        , keys_size(key_columns_.size())
+        , collators(collators_)
+    {}
 
     ALWAYS_INLINE SerializedKeyHolder getKeyHolder(size_t row, Arena * pool, std::vector<String> & sort_key_containers) const
     {
@@ -366,7 +367,9 @@ struct HashMethodHashed
     TiDB::TiDBCollators collators;
 
     HashMethodHashed(ColumnRawPtrs key_columns_, const Sizes &, const TiDB::TiDBCollators & collators_)
-        : key_columns(std::move(key_columns_)), collators(collators_) {}
+        : key_columns(std::move(key_columns_))
+        , collators(collators_)
+    {}
 
     ALWAYS_INLINE Key getKeyHolder(size_t row, Arena *, std::vector<String> & sort_key_containers) const
     {
@@ -376,4 +379,3 @@ struct HashMethodHashed
 
 } // namespace ColumnsHashing
 } // namespace DB
-

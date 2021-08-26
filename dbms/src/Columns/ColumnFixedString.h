@@ -1,9 +1,8 @@
 #pragma once
 
-#include <string.h> // memcpy
-
-#include <Common/PODArray.h>
 #include <Columns/IColumn.h>
+#include <Common/PODArray.h>
+#include <string.h> // memcpy
 
 
 namespace DB
@@ -32,9 +31,13 @@ private:
     struct less;
 
     /** Create an empty column of strings of fixed-length `n` */
-    ColumnFixedString(size_t n_) : n(n_) {}
+    ColumnFixedString(size_t n_)
+        : n(n_)
+    {}
 
-    ColumnFixedString(const ColumnFixedString & src) : chars(src.chars.begin(), src.chars.end()), n(src.n) {};
+    ColumnFixedString(const ColumnFixedString & src)
+        : chars(src.chars.begin(), src.chars.end())
+        , n(src.n){};
 
 public:
     std::string getName() const override { return "FixedString(" + std::to_string(n) + ")"; }
@@ -149,4 +152,4 @@ public:
 };
 
 
-}
+} // namespace DB

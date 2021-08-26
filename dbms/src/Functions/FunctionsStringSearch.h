@@ -3,9 +3,9 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeString.h>
+#include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsArithmetic.h>
 #include <Functions/IFunction.h>
-#include <Functions/FunctionHelpers.h>
 
 
 namespace DB
@@ -67,14 +67,17 @@ public:
     {
         if (!arguments[0]->isString())
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1]->isString())
             throw Exception(
-                "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         if (has_3_args && !arguments[2]->isInteger())
             throw Exception(
-                    "Illegal type " + arguments[2]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                "Illegal type " + arguments[2]->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
     }
@@ -108,13 +111,13 @@ public:
                 }
                 else
                 {
-                    escape_char = (UInt8) c;
+                    escape_char = (UInt8)c;
                 }
             }
             if (!valid_args)
             {
                 throw Exception("2nd and 3rd arguments of function " + getName() + " must "
-                      "be constants, and the 3rd argument must between 0 and 255.");
+                                                                                   "be constants, and the 3rd argument must between 0 and 255.");
             }
         }
 
@@ -137,27 +140,25 @@ public:
 
         if (col_haystack_vector && col_needle_vector)
             Impl::vector_vector(col_haystack_vector->getChars(),
-                col_haystack_vector->getOffsets(),
-                col_needle_vector->getChars(),
-                col_needle_vector->getOffsets(),
-                escape_char,
-                collator,
-                vec_res);
+                                col_haystack_vector->getOffsets(),
+                                col_needle_vector->getChars(),
+                                col_needle_vector->getOffsets(),
+                                escape_char,
+                                collator,
+                                vec_res);
         else if (col_haystack_vector && col_needle_const)
         {
             String needle_string = col_needle_const->getValue<String>();
-            Impl::vector_constant(col_haystack_vector->getChars(), col_haystack_vector->getOffsets(),
-                                  needle_string, escape_char, collator, vec_res);
+            Impl::vector_constant(col_haystack_vector->getChars(), col_haystack_vector->getOffsets(), needle_string, escape_char, collator, vec_res);
         }
         else if (col_haystack_const && col_needle_vector)
-            Impl::constant_vector(col_haystack_const->getValue<String>(), col_needle_vector->getChars(),
-                    col_needle_vector->getOffsets(), escape_char, collator, vec_res);
+            Impl::constant_vector(col_haystack_const->getValue<String>(), col_needle_vector->getChars(), col_needle_vector->getOffsets(), escape_char, collator, vec_res);
         else
             throw Exception("Illegal columns " + block.getByPosition(arguments[0]).column->getName() + " and "
-                    + block.getByPosition(arguments[1]).column->getName()
-                    + " of arguments of function "
-                    + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + block.getByPosition(arguments[1]).column->getName()
+                                + " of arguments of function "
+                                + getName(),
+                            ErrorCodes::ILLEGAL_COLUMN);
 
         block.getByPosition(result).column = std::move(col_res);
     }
@@ -194,11 +195,13 @@ public:
     {
         if (!arguments[0]->isString())
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1]->isString())
             throw Exception(
-                "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
     }
@@ -229,4 +232,4 @@ public:
     }
 };
 
-}
+} // namespace DB

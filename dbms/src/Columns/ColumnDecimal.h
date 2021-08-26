@@ -1,10 +1,10 @@
 #pragma once
 
-#include <cmath>
-
-#include <Common/typeid_cast.h>
-#include <Columns/IColumn.h>
 #include <Columns/ColumnVectorHelper.h>
+#include <Columns/IColumn.h>
+#include <Common/typeid_cast.h>
+
+#include <cmath>
 
 
 namespace DB
@@ -12,7 +12,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 /// PaddedPODArray extended by Decimal scale
@@ -24,18 +24,18 @@ public:
     using Base::operator[];
 
     DecimalPaddedPODArray(size_t size, UInt32 scale_)
-    :   Base(size),
-        scale(scale_)
+        : Base(size)
+        , scale(scale_)
     {}
 
     DecimalPaddedPODArray(size_t size, const T & x, UInt32 scale_)
-        :   Base(size, x),
-            scale(scale_)
+        : Base(size, x)
+        , scale(scale_)
     {}
 
     DecimalPaddedPODArray(const DecimalPaddedPODArray & other)
-    :   Base(other.begin(), other.end()),
-        scale(other.scale)
+        : Base(other.begin(), other.end())
+        , scale(other.scale)
     {}
 
     DecimalPaddedPODArray(DecimalPaddedPODArray && other)
@@ -72,20 +72,19 @@ public:
     using Container = DecimalPaddedPODArray<T>;
 
 private:
-
     static constexpr bool is_Decimal256 = std::is_same_v<Decimal256, T>;
     ColumnDecimal(const size_t n, UInt32 scale_)
-    :   data(n, scale_),
-        scale(scale_)
+        : data(n, scale_)
+        , scale(scale_)
     {}
     ColumnDecimal(const size_t n, const T & x, UInt32 scale_)
-        :   data(n, x, scale_),
-            scale(scale_)
+        : data(n, x, scale_)
+        , scale(scale_)
     {}
 
     ColumnDecimal(const ColumnDecimal & src)
-    :   data(src.data),
-        scale(src.scale)
+        : data(src.data)
+        , scale(src.scale)
     {}
 
 public:
@@ -104,7 +103,8 @@ public:
     void reserve(size_t n) override { data.reserve(n); }
 
     void insertFrom(const IColumn & src, size_t n) override { data.push_back(static_cast<const Self &>(src).getData()[n]); }
-    void insertData(const char * pos, size_t /*length*/) override;
+    void insertData(const char * pos, size_t /*length*/)
+    override;
     void insertDefault() override { data.push_back(T()); }
     void insert(const Field & x) override { data.push_back(DB::get<typename NearestFieldType<T>::Type>(x)); }
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
@@ -117,7 +117,7 @@ public:
         {
             throw Exception("getRawData is not supported for " + IColumn::getName());
         }
-        return StringRef(reinterpret_cast<const char*>(data.data()), byteSize());
+        return StringRef(reinterpret_cast<const char *>(data.data()), byteSize());
     }
 
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
@@ -133,17 +133,19 @@ public:
     Field operator[](size_t n) const override { return DecimalField(data[n], scale); }
 
     //StringRef getRawData() const override { return StringRef(reinterpret_cast<const char*>(data.data()), data.size()); }
-    StringRef getDataAt(size_t n) const override {
-        if constexpr (is_Decimal256) {
+    StringRef getDataAt(size_t n) const override
+    {
+        if constexpr (is_Decimal256)
+        {
             throw Exception("getDataAt is not supported for " + IColumn::getName());
         }
         return StringRef(reinterpret_cast<const char *>(&data[n]), sizeof(data[n]));
     }
     void get(size_t n, Field & res) const override { res = (*this)[n]; }
-//    bool getBool(size_t n) const override { return bool(data[n]); }
+    //    bool getBool(size_t n) const override { return bool(data[n]); }
     Int64 getInt(size_t n) const override { return Int64(static_cast<typename T::NativeType>(data[n]) * scale); }
     UInt64 get64(size_t n) const override;
-//    bool isDefaultAt(size_t n) const override { return data[n] == 0; }
+    //    bool isDefaultAt(size_t n) const override { return data[n] == 0; }
 
     ColumnPtr filter(const IColumn::Filter & filt, ssize_t result_size_hint) const override;
     ColumnPtr permute(const IColumn::Permutation & perm, size_t limit) const override;
@@ -218,4 +220,4 @@ ColumnPtr ColumnDecimal<T>::indexImpl(const PaddedPODArray<Type> & indexes, size
     return std::move(res);
 }
 
-}
+} // namespace DB

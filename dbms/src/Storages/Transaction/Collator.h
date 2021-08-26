@@ -52,7 +52,8 @@ public:
     int32_t getCollatorId() const { return collator_id; }
 
 protected:
-    explicit ITiDBCollator(int32_t collator_id_) : collator_id(collator_id_){};
+    explicit ITiDBCollator(int32_t collator_id_)
+        : collator_id(collator_id_){};
     int32_t collator_id;
 };
 

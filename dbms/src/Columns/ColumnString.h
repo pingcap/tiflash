@@ -1,12 +1,11 @@
 #pragma once
 
-#include <string.h>
-
 #include <Columns/IColumn.h>
-#include <Common/PODArray.h>
 #include <Common/Arena.h>
+#include <Common/PODArray.h>
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
+#include <string.h>
 
 
 class ICollator;
@@ -46,8 +45,8 @@ private:
     ColumnString() = default;
 
     ColumnString(const ColumnString & src)
-        : offsets(src.offsets.begin(), src.offsets.end()),
-        chars(src.chars.begin(), src.chars.end()) {};
+        : offsets(src.offsets.begin(), src.offsets.end())
+        , chars(src.chars.begin(), src.chars.end()){};
 
 public:
     const char * getFamilyName() const override { return "String"; }
@@ -119,7 +118,7 @@ public:
 #pragma GCC diagnostic pop
 #endif
 
-        void insertFrom(const IColumn & src_, size_t n) override
+    void insertFrom(const IColumn & src_, size_t n) override
     {
         const ColumnString & src = static_cast<const ColumnString &>(src_);
 
@@ -296,7 +295,7 @@ public:
             return size > rhs_size ? 1 : (size < rhs_size ? -1 : 0);
     }
 
-    int compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, int , const ICollator & collator) const override
+    int compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, int, const ICollator & collator) const override
     {
         return compareAtWithCollationImpl(n, m, rhs_, collator);
     }
@@ -305,7 +304,7 @@ public:
 
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
 
-    void getPermutationWithCollation(const ICollator & collator, bool reverse, size_t limit, int , Permutation & res) const override
+    void getPermutationWithCollation(const ICollator & collator, bool reverse, size_t limit, int, Permutation & res) const override
     {
         getPermutationWithCollationImpl(collator, reverse, limit, res);
     }
@@ -338,4 +337,4 @@ public:
 };
 
 
-}
+} // namespace DB

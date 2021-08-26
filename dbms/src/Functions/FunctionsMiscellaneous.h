@@ -1,11 +1,11 @@
 #pragma once
 
-#include <Functions/IFunction.h>
-#include <Interpreters/ExpressionActions.h>
-#include <DataTypes/DataTypeFunction.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/Operators.h>
 #include <Columns/ColumnFunction.h>
+#include <DataTypes/DataTypeFunction.h>
+#include <Functions/IFunction.h>
+#include <IO/Operators.h>
+#include <IO/WriteBufferFromString.h>
+#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
@@ -37,15 +37,21 @@ public:
 
 
 /// Executes expression. Uses for lambda functions implementation. Can't be created from factory.
-class FunctionExpression : public IFunctionBase, public IPreparedFunction,
-                           public std::enable_shared_from_this<FunctionExpression>
+class FunctionExpression : public IFunctionBase
+    , public IPreparedFunction
+    , public std::enable_shared_from_this<FunctionExpression>
 {
 public:
     FunctionExpression(const ExpressionActionsPtr & expression_actions,
-                       const DataTypes & argument_types, const Names & argument_names,
-                       const DataTypePtr & return_type, const std::string & return_name)
-            : expression_actions(expression_actions), argument_types(argument_types),
-              argument_names(argument_names), return_type(return_type), return_name(return_name)
+                       const DataTypes & argument_types,
+                       const Names & argument_names,
+                       const DataTypePtr & return_type,
+                       const std::string & return_name)
+        : expression_actions(expression_actions)
+        , argument_types(argument_types)
+        , argument_names(argument_names)
+        , return_type(return_type)
+        , return_name(return_name)
     {
     }
 
@@ -86,15 +92,18 @@ private:
 /// Returns ColumnFunction with captured columns.
 /// For lambda(x, x + y) x is in lambda_arguments, y is in captured arguments, expression_actions is 'x + y'.
 ///  execute(y) returns ColumnFunction(FunctionExpression(x + y), y) with type Function(x) -> function_return_type.
-class FunctionCapture : public IFunctionBase, public IPreparedFunction, public FunctionBuilderImpl,
-                        public std::enable_shared_from_this<FunctionCapture>
+class FunctionCapture : public IFunctionBase
+    , public IPreparedFunction
+    , public FunctionBuilderImpl
+    , public std::enable_shared_from_this<FunctionCapture>
 {
 public:
-    FunctionCapture(const ExpressionActionsPtr & expression_actions, const Names & captured,
-                    const NamesAndTypesList & lambda_arguments,
-                    const DataTypePtr & function_return_type, const std::string & expression_return_name)
-            : expression_actions(expression_actions), captured_names(captured), lambda_arguments(lambda_arguments)
-            , function_return_type(function_return_type), expression_return_name(expression_return_name)
+    FunctionCapture(const ExpressionActionsPtr & expression_actions, const Names & captured, const NamesAndTypesList & lambda_arguments, const DataTypePtr & function_return_type, const std::string & expression_return_name)
+        : expression_actions(expression_actions)
+        , captured_names(captured)
+        , lambda_arguments(lambda_arguments)
+        , function_return_type(function_return_type)
+        , expression_return_name(expression_return_name)
     {
         const auto & all_arguments = expression_actions->getRequiredColumnsWithTypes();
 
@@ -102,8 +111,7 @@ public:
         for (const auto & arg : all_arguments)
             arguments_map[arg.name] = arg.type;
 
-        auto collect = [&arguments_map](const Names & names)
-        {
+        auto collect = [&arguments_map](const Names & names) {
             DataTypes types;
             types.reserve(names.size());
             for (const auto & name : names)
@@ -129,8 +137,8 @@ public:
 
         return_type = std::make_shared<DataTypeFunction>(argument_types, function_return_type);
 
-        name = "Capture[" + toString(captured_types) + "](" + toString(argument_types) +  ") -> "
-               + function_return_type->getName();
+        name = "Capture[" + toString(captured_types) + "](" + toString(argument_types) + ") -> "
+            + function_return_type->getName();
     }
 
     String getName() const override { return name; }
@@ -166,8 +174,7 @@ public:
         for (const auto & argument : arguments)
             columns.push_back(block.getByPosition(argument));
 
-        auto function = std::make_shared<FunctionExpression>(expression_actions, types, names,
-                                                             function_return_type, expression_return_name);
+        auto function = std::make_shared<FunctionExpression>(expression_actions, types, names, function_return_type, expression_return_name);
         auto size = block.rows();
         block.getByPosition(result).column = ColumnFunction::create(size, std::move(function), columns);
     }
@@ -215,4 +222,4 @@ private:
     std::string name;
 };
 
-}
+} // namespace DB

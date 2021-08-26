@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Columns/IColumn.h>
 #include <Columns/ColumnVector.h>
+#include <Columns/IColumn.h>
 #include <Core/Defines.h>
 
 namespace DB
@@ -9,10 +9,10 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_COLUMN;
-    extern const int NOT_IMPLEMENTED;
-    extern const int BAD_ARGUMENTS;
-}
+extern const int ILLEGAL_COLUMN;
+extern const int NOT_IMPLEMENTED;
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
 
 /** A column of array values.
   * In memory, it is represented as one column of a nested type, whose size is equal to the sum of the sizes of all arrays,
@@ -47,8 +47,11 @@ public:
         return ColumnArray::create(nested_column->assumeMutable());
     }
 
-    template <typename ... Args, typename = typename std::enable_if<IsMutableColumns<Args ...>::value>::type>
-    static MutablePtr create(Args &&... args) { return Base::create(std::forward<Args>(args)...); }
+    template <typename... Args, typename = typename std::enable_if<IsMutableColumns<Args...>::value>::type>
+    static MutablePtr create(Args &&... args)
+    {
+        return Base::create(std::forward<Args>(args)...);
+    }
 
     /** On the index i there is an offset to the beginning of the i + 1 -th element. */
     using ColumnOffsets = ColumnVector<Offset>;
@@ -161,4 +164,4 @@ private:
 };
 
 
-}
+} // namespace DB

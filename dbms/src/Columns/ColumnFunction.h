@@ -1,8 +1,8 @@
 #pragma once
 
-#include <Core/NamesAndTypes.h>
-#include <Core/ColumnsWithTypeAndName.h>
 #include <Columns/IColumn.h>
+#include <Core/ColumnsWithTypeAndName.h>
+#include <Core/NamesAndTypes.h>
 
 namespace DB
 {
@@ -65,12 +65,14 @@ public:
         throw Exception("Cannot get insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertRangeFrom(const IColumn &, size_t, size_t) override
+    void insertRangeFrom(const IColumn &, size_t, size_t)
+    override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertData(const char *, size_t) override
+    void insertData(const char *, size_t)
+    override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -123,4 +125,4 @@ private:
     void appendArgument(const ColumnWithTypeAndName & column);
 };
 
-}
+} // namespace DB

@@ -1,13 +1,13 @@
 #pragma once
 
-#include <memory>
-
-#include <Core/Names.h>
-#include <Core/Field.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
+#include <Core/Field.h>
+#include <Core/Names.h>
 #include <DataTypes/IDataType.h>
 #include <Storages/Transaction/Collator.h>
+
+#include <memory>
 
 
 namespace DB
@@ -15,10 +15,10 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int NOT_IMPLEMENTED;
-    extern const int LOGICAL_ERROR;
-}
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int NOT_IMPLEMENTED;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 /// The simplest executable object.
 /// Motivation:
@@ -143,12 +143,15 @@ public:
     /// The property of monotonicity for a certain range.
     struct Monotonicity
     {
-        bool is_monotonic = false;    /// Is the function monotonous (nondecreasing or nonincreasing).
-        bool is_positive = true;    /// true if the function is nondecreasing, false, if notincreasing. If is_monotonic = false, then it does not matter.
+        bool is_monotonic = false; /// Is the function monotonous (nondecreasing or nonincreasing).
+        bool is_positive = true; /// true if the function is nondecreasing, false, if notincreasing. If is_monotonic = false, then it does not matter.
         bool is_always_monotonic = false; /// Is true if function is monotonic on the whole input range I
 
         Monotonicity(bool is_monotonic_ = false, bool is_positive_ = true, bool is_always_monotonic_ = false)
-                : is_monotonic(is_monotonic_), is_positive(is_positive_), is_always_monotonic(is_always_monotonic_) {}
+            : is_monotonic(is_monotonic_)
+            , is_positive(is_positive_)
+            , is_always_monotonic(is_always_monotonic_)
+        {}
     };
 
     /** Get information about monotonicity on a range of values. Call only if hasInformationAboutMonotonicity.
@@ -248,8 +251,10 @@ protected:
 };
 
 /// Previous function interface.
-class IFunction : public std::enable_shared_from_this<IFunction>,
-                  public FunctionBuilderImpl, public IFunctionBase, public PreparedFunctionImpl
+class IFunction : public std::enable_shared_from_this<IFunction>
+    , public FunctionBuilderImpl
+    , public IFunctionBase
+    , public PreparedFunctionImpl
 {
 public:
     String getName() const override = 0;
@@ -261,9 +266,9 @@ public:
     bool useDefaultImplementationForConstants() const override { return false; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {}; }
 
-    using PreparedFunctionImpl::execute;
-    using FunctionBuilderImpl::getReturnTypeImpl;
     using FunctionBuilderImpl::getLambdaArgumentTypesImpl;
+    using FunctionBuilderImpl::getReturnTypeImpl;
+    using PreparedFunctionImpl::execute;
 
     using FunctionBuilderImpl::getReturnType;
 
@@ -282,7 +287,7 @@ public:
         throw Exception("getReturnType is not implemented for IFunction", ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    virtual void setCollator(const TiDB::TiDBCollatorPtr &) {};
+    virtual void setCollator(const TiDB::TiDBCollatorPtr &){};
 
 protected:
     FunctionBasePtr buildImpl(
@@ -299,7 +304,9 @@ protected:
 class DefaultExecutable final : public PreparedFunctionImpl
 {
 public:
-    explicit DefaultExecutable(std::shared_ptr<IFunction> function) : function(std::move(function)) {}
+    explicit DefaultExecutable(std::shared_ptr<IFunction> function)
+        : function(std::move(function))
+    {}
 
     String getName() const override { return function->getName(); }
 
@@ -320,7 +327,10 @@ class DefaultFunction final : public IFunctionBase
 {
 public:
     DefaultFunction(std::shared_ptr<IFunction> function, DataTypes arguments, DataTypePtr return_type)
-            : function(std::move(function)), arguments(std::move(arguments)), return_type(std::move(return_type)) {}
+        : function(std::move(function))
+        , arguments(std::move(arguments))
+        , return_type(std::move(return_type))
+    {}
 
     String getName() const override { return function->getName(); }
 
@@ -343,6 +353,7 @@ public:
     {
         return function->getMonotonicityForRange(type, left, right);
     }
+
 private:
     std::shared_ptr<IFunction> function;
     DataTypes arguments;
@@ -352,7 +363,9 @@ private:
 class DefaultFunctionBuilder : public FunctionBuilderImpl
 {
 public:
-    explicit DefaultFunctionBuilder(std::shared_ptr<IFunction> function) : function(std::move(function)) {}
+    explicit DefaultFunctionBuilder(std::shared_ptr<IFunction> function)
+        : function(std::move(function))
+    {}
 
     void checkNumberOfArguments(size_t number_of_arguments) const override
     {
@@ -389,4 +402,4 @@ private:
 
 using FunctionPtr = std::shared_ptr<IFunction>;
 
-}
+} // namespace DB

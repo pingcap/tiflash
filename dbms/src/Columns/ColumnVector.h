@@ -1,8 +1,8 @@
 #pragma once
 
-#include <cmath>
-
 #include <Columns/ColumnVectorHelper.h>
+
+#include <cmath>
 
 
 namespace DB
@@ -82,16 +82,26 @@ struct FloatCompareHelper
     }
 };
 
-template <> struct CompareHelper<Float32> : public FloatCompareHelper<Float32> {};
-template <> struct CompareHelper<Float64> : public FloatCompareHelper<Float64> {};
+template <>
+struct CompareHelper<Float32> : public FloatCompareHelper<Float32>
+{
+};
+template <>
+struct CompareHelper<Float64> : public FloatCompareHelper<Float64>
+{
+};
 
 
 /** To implement `get64` function.
   */
 template <typename T>
-inline UInt64 unionCastToUInt64(T x) { return x; }
+inline UInt64 unionCastToUInt64(T x)
+{
+    return x;
+}
 
-template <> inline UInt64 unionCastToUInt64(Float64 x)
+template <>
+inline UInt64 unionCastToUInt64(Float64 x)
 {
     union
     {
@@ -103,7 +113,8 @@ template <> inline UInt64 unionCastToUInt64(Float64 x)
     return res;
 }
 
-template <> inline UInt64 unionCastToUInt64(Float32 x)
+template <>
+inline UInt64 unionCastToUInt64(Float32 x)
 {
     union
     {
@@ -123,6 +134,7 @@ template <typename T>
 class ColumnVector final : public COWPtrHelper<ColumnVectorHelper, ColumnVector<T>>
 {
     static_assert(!IsDecimal<T>);
+
 private:
     friend class COWPtrHelper<ColumnVectorHelper, ColumnVector<T>>;
 
@@ -137,12 +149,19 @@ public:
 
 private:
     ColumnVector() {}
-    explicit ColumnVector(const size_t n) : data(n) {}
-    ColumnVector(const size_t n, const value_type x) : data(n, x) {}
-    ColumnVector(const ColumnVector & src) : data(src.data.begin(), src.data.end()) {};
+    explicit ColumnVector(const size_t n)
+        : data(n)
+    {}
+    ColumnVector(const size_t n, const value_type x)
+        : data(n, x)
+    {}
+    ColumnVector(const ColumnVector & src)
+        : data(src.data.begin(), src.data.end()){};
 
     /// Sugar constructor.
-    ColumnVector(std::initializer_list<T> il) : data{il} {}
+    ColumnVector(std::initializer_list<T> il)
+        : data{il}
+    {}
 
 public:
     bool isNumeric() const override { return is_arithmetic_v<T>; }
@@ -162,7 +181,8 @@ public:
         data.push_back(static_cast<const Self &>(src).getData()[n]);
     }
 
-    void insertData(const char * pos, size_t /*length*/) override
+    void insertData(const char * pos, size_t /*length*/)
+    override
     {
         data.push_back(*reinterpret_cast<const T *>(pos));
     }
@@ -268,7 +288,7 @@ public:
 
     StringRef getRawData() const override
     {
-        return StringRef(reinterpret_cast<const char*>(data.data()), byteSize());
+        return StringRef(reinterpret_cast<const char *>(data.data()), byteSize());
     }
 
     /** More efficient methods of manipulation - to manipulate with data directly. */
@@ -297,4 +317,4 @@ protected:
 };
 
 
-}
+} // namespace DB

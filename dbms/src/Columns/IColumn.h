@@ -1,24 +1,24 @@
 #pragma once
 
 #include <Columns/Collator.h>
-#include <Core/Field.h>
 #include <Common/COWPtr.h>
-#include <Common/PODArray.h>
 #include <Common/Exception.h>
+#include <Common/PODArray.h>
 #include <Common/SipHash.h>
 #include <Common/WeakHash.h>
-#include <common/StringRef.h>
+#include <Core/Field.h>
 #include <Storages/Transaction/Collator.h>
+#include <common/StringRef.h>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const int CANNOT_GET_SIZE_OF_FIELD;
-    extern const int NOT_IMPLEMENTED;
-    extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
-}
+extern const int CANNOT_GET_SIZE_OF_FIELD;
+extern const int NOT_IMPLEMENTED;
+extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 class Arena;
 class ColumnGathererStream;
@@ -210,7 +210,7 @@ public:
       */
     virtual int compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const = 0;
 
-    virtual int compareAtWithCollation(size_t , size_t , const IColumn & , int , const ICollator &) const
+    virtual int compareAtWithCollation(size_t, size_t, const IColumn &, int, const ICollator &) const
     {
         throw Exception("Method compareAtWithCollation is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -223,7 +223,7 @@ public:
       */
     virtual void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const = 0;
 
-    virtual void getPermutationWithCollation(const ICollator & , bool , size_t , int , Permutation & ) const
+    virtual void getPermutationWithCollation(const ICollator &, bool, size_t, int, Permutation &) const
     {
         throw Exception("Method getPermutationWithCollation is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -260,7 +260,7 @@ public:
 
     /// Reserves memory for specified amount of elements. If reservation isn't possible, does nothing.
     /// It affects performance only (not correctness).
-    virtual void reserve(size_t /*n*/) {};
+    virtual void reserve(size_t /*n*/){};
 
     /// Size of column data in memory (may be approximate) - for profiling. Zero, if could not be determined.
     virtual size_t byteSize() const = 0;
@@ -279,7 +279,7 @@ public:
 
     /// If the column contains subcolumns (such as Array, Nullable, etc), do callback on them.
     /// Shallow: doesn't do recursive calls; don't do call for itself.
-    using ColumnCallback = std::function<void(Ptr&)>;
+    using ColumnCallback = std::function<void(Ptr &)>;
     virtual void forEachSubcolumn(ColumnCallback) {}
 
 
@@ -359,7 +359,6 @@ public:
     String dumpStructure() const;
 
 protected:
-
     /// Template is to devirtualize calls to insertFrom method.
     /// In derived classes (that use final keyword), implement scatter method as call to scatterImpl.
     template <typename Derived>
@@ -369,15 +368,15 @@ protected:
 
         if (num_rows != selector.size())
             throw Exception(
-                    "Size of selector: " + std::to_string(selector.size()) + " doesn't match size of column: " + std::to_string(num_rows),
-                    ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+                "Size of selector: " + std::to_string(selector.size()) + " doesn't match size of column: " + std::to_string(num_rows),
+                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
         std::vector<MutablePtr> columns(num_columns);
         for (auto & column : columns)
             column = cloneEmpty();
 
         {
-            size_t reserve_size = num_rows * 1.1 / num_columns;    /// 1.1 is just a guess. Better to use n-sigma rule.
+            size_t reserve_size = num_rows * 1.1 / num_columns; /// 1.1 is just a guess. Better to use n-sigma rule.
 
             if (reserve_size > 1)
                 for (auto & column : columns)
@@ -392,23 +391,26 @@ protected:
 };
 
 using ColumnPtr = IColumn::Ptr;
-using MutableColumnPtr  = IColumn::MutablePtr;
+using MutableColumnPtr = IColumn::MutablePtr;
 using Columns = std::vector<ColumnPtr>;
 using MutableColumns = std::vector<MutableColumnPtr>;
 
 using ColumnRawPtrs = std::vector<const IColumn *>;
 //using MutableColumnRawPtrs = std::vector<IColumn *>;
 
-template <typename ... Args>
+template <typename... Args>
 struct IsMutableColumns;
 
-template <typename Arg, typename ... Args>
-struct IsMutableColumns<Arg, Args ...>
+template <typename Arg, typename... Args>
+struct IsMutableColumns<Arg, Args...>
 {
-    static const bool value = std::is_assignable<MutableColumnPtr &&, Arg>::value && IsMutableColumns<Args ...>::value;
+    static const bool value = std::is_assignable<MutableColumnPtr &&, Arg>::value && IsMutableColumns<Args...>::value;
 };
 
 template <>
-struct IsMutableColumns<> { static const bool value = true; };
+struct IsMutableColumns<>
+{
+    static const bool value = true;
+};
 
-}
+} // namespace DB

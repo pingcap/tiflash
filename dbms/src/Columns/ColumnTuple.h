@@ -33,7 +33,10 @@ public:
     static Ptr create(const Columns & columns);
 
     template <typename Arg, typename = typename std::enable_if<std::is_rvalue_reference<Arg &&>::value>::type>
-    static MutablePtr create(Arg && arg) { return Base::create(std::forward<Arg>(arg)); }
+    static MutablePtr create(Arg && arg)
+    {
+        return Base::create(std::forward<Arg>(arg));
+    }
 
     std::string getName() const override;
     const char * getFamilyName() const override { return "Tuple"; }
@@ -85,4 +88,4 @@ public:
 };
 
 
-}
+} // namespace DB

@@ -1,22 +1,22 @@
-#include <Common/ProfileEvents.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Interpreters/Join.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnsNumber.h>
+#include <Common/ProfileEvents.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/Join.h>
 
-#include <set>
 #include <optional>
+#include <set>
 
 
 namespace ProfileEvents
 {
-    extern const Event FunctionExecute;
+extern const Event FunctionExecute;
 }
 
 namespace DB
@@ -24,14 +24,14 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int DUPLICATE_COLUMN;
-    extern const int UNKNOWN_IDENTIFIER;
-    extern const int UNKNOWN_ACTION;
-    extern const int NOT_FOUND_COLUMN_IN_BLOCK;
-    extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
-    extern const int TOO_MANY_TEMPORARY_COLUMNS;
-    extern const int TOO_MANY_TEMPORARY_NON_CONST_COLUMNS;
-}
+extern const int DUPLICATE_COLUMN;
+extern const int UNKNOWN_IDENTIFIER;
+extern const int UNKNOWN_ACTION;
+extern const int NOT_FOUND_COLUMN_IN_BLOCK;
+extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
+extern const int TOO_MANY_TEMPORARY_COLUMNS;
+extern const int TOO_MANY_TEMPORARY_NON_CONST_COLUMNS;
+} // namespace ErrorCodes
 
 
 Names ExpressionAction::getNeededColumns() const
@@ -51,13 +51,14 @@ Names ExpressionAction::getNeededColumns() const
 
 
 ExpressionAction ExpressionAction::applyFunction(const FunctionBuilderPtr & function_,
-    const std::vector<std::string> & argument_names_,
-    std::string result_name_, const TiDB::TiDBCollatorPtr & collator_)
+                                                 const std::vector<std::string> & argument_names_,
+                                                 std::string result_name_,
+                                                 const TiDB::TiDBCollatorPtr & collator_)
 {
     if (result_name_ == "")
     {
         result_name_ = function_->getName() + "(";
-        for (size_t i = 0 ; i < argument_names_.size(); ++i)
+        for (size_t i = 0; i < argument_names_.size(); ++i)
         {
             if (i)
                 result_name_ += ", ";
@@ -147,164 +148,164 @@ ExpressionAction ExpressionAction::ordinaryJoin(std::shared_ptr<const Join> join
 
 void ExpressionAction::prepare(Block & sample_block)
 {
-//    std::cerr << "preparing: " << toString() << std::endl;
+    //    std::cerr << "preparing: " << toString() << std::endl;
 
     /** Constant expressions should be evaluated, and put the result in sample_block.
       */
 
     switch (type)
     {
-        case APPLY_FUNCTION:
+    case APPLY_FUNCTION:
+    {
+        if (sample_block.has(result_name))
+            throw Exception("Column '" + result_name + "' already exists", ErrorCodes::DUPLICATE_COLUMN);
+
+        bool all_const = true;
+
+        ColumnNumbers arguments(argument_names.size());
+        for (size_t i = 0; i < argument_names.size(); ++i)
         {
-            if (sample_block.has(result_name))
-                throw Exception("Column '" + result_name + "' already exists", ErrorCodes::DUPLICATE_COLUMN);
+            arguments[i] = sample_block.getPositionByName(argument_names[i]);
+            ColumnPtr col = sample_block.safeGetByPosition(arguments[i]).column;
+            if (!col || !col->isColumnConst())
+                all_const = false;
+        }
 
-            bool all_const = true;
+        ColumnPtr new_column;
 
-            ColumnNumbers arguments(argument_names.size());
-            for (size_t i = 0; i < argument_names.size(); ++i)
+        /// If all arguments are constants, and function is suitable to be executed in 'prepare' stage - execute function.
+        if (all_const && function->isSuitableForConstantFolding())
+        {
+            size_t result_position = sample_block.columns();
+
+            ColumnWithTypeAndName new_column;
+            new_column.name = result_name;
+            new_column.type = result_type;
+            sample_block.insert(std::move(new_column));
+
+            function->execute(sample_block, arguments, result_position);
+
+            /// If the result is not a constant, just in case, we will consider the result as unknown.
+            ColumnWithTypeAndName & col = sample_block.safeGetByPosition(result_position);
+            if (!col.column->isColumnConst())
             {
-                arguments[i] = sample_block.getPositionByName(argument_names[i]);
-                ColumnPtr col = sample_block.safeGetByPosition(arguments[i]).column;
-                if (!col || !col->isColumnConst())
-                    all_const = false;
-            }
-
-            ColumnPtr new_column;
-
-            /// If all arguments are constants, and function is suitable to be executed in 'prepare' stage - execute function.
-            if (all_const && function->isSuitableForConstantFolding())
-            {
-                size_t result_position = sample_block.columns();
-
-                ColumnWithTypeAndName new_column;
-                new_column.name = result_name;
-                new_column.type = result_type;
-                sample_block.insert(std::move(new_column));
-
-                function->execute(sample_block, arguments, result_position);
-
-                /// If the result is not a constant, just in case, we will consider the result as unknown.
-                ColumnWithTypeAndName & col = sample_block.safeGetByPosition(result_position);
-                if (!col.column->isColumnConst())
-                {
-                    col.column = nullptr;
-                }
-                else
-                {
-                    /// All constant (literal) columns in block are added with size 1.
-                    /// But if there was no columns in block before executing a function, the result has size 0.
-                    /// Change the size to 1.
-
-                    if (col.column->empty())
-                        col.column = col.column->cloneResized(1);
-                }
+                col.column = nullptr;
             }
             else
             {
-                sample_block.insert({nullptr, result_type, result_name});
-            }
+                /// All constant (literal) columns in block are added with size 1.
+                /// But if there was no columns in block before executing a function, the result has size 0.
+                /// Change the size to 1.
 
-            break;
+                if (col.column->empty())
+                    col.column = col.column->cloneResized(1);
+            }
+        }
+        else
+        {
+            sample_block.insert({nullptr, result_type, result_name});
         }
 
-        case ARRAY_JOIN:
-        {
-            for (const auto & name : array_joined_columns)
-            {
-                ColumnWithTypeAndName & current = sample_block.getByName(name);
-                const DataTypeArray * array_type = typeid_cast<const DataTypeArray *>(&*current.type);
-                if (!array_type)
-                    throw Exception("ARRAY JOIN requires array argument", ErrorCodes::TYPE_MISMATCH);
-                current.type = array_type->getNestedType();
-                current.column = nullptr;
-            }
+        break;
+    }
 
-            break;
+    case ARRAY_JOIN:
+    {
+        for (const auto & name : array_joined_columns)
+        {
+            ColumnWithTypeAndName & current = sample_block.getByName(name);
+            const DataTypeArray * array_type = typeid_cast<const DataTypeArray *>(&*current.type);
+            if (!array_type)
+                throw Exception("ARRAY JOIN requires array argument", ErrorCodes::TYPE_MISMATCH);
+            current.type = array_type->getNestedType();
+            current.column = nullptr;
         }
 
-        case JOIN:
+        break;
+    }
+
+    case JOIN:
+    {
+        /// in case of coprocessor task, the join is always not null, but if the query comes from
+        /// clickhouse client, the join maybe null, skip updating column type if join is null
+        // todo find a new way to update the column type so the type can always be updated.
+        if (join != nullptr && join->getKind() == ASTTableJoin::Kind::Right && join->useNulls())
         {
-            /// in case of coprocessor task, the join is always not null, but if the query comes from
-            /// clickhouse client, the join maybe null, skip updating column type if join is null
-            // todo find a new way to update the column type so the type can always be updated.
-            if (join != nullptr && join->getKind() == ASTTableJoin::Kind::Right && join->useNulls())
+            /// update the column type for left block
+            std::unordered_set<String> keys;
+            for (auto & n : join->getLeftJoinKeys())
             {
-                /// update the column type for left block
-                std::unordered_set<String> keys;
-                for (auto & n : join->getLeftJoinKeys())
+                keys.insert(n);
+            }
+            for (auto & p : sample_block.getColumnsWithTypeAndName())
+            {
+                if (keys.find(p.name) == keys.end() && !p.type->isNullable())
                 {
-                    keys.insert(n);
-                }
-                for (auto & p : sample_block.getColumnsWithTypeAndName())
-                {
-                    if (keys.find(p.name) == keys.end() && !p.type->isNullable())
-                    {
-                        /// for right join, if the column in sample_block is not join key, then
-                        /// convert it's type to nullable
-                        auto & columnWithName = sample_block.getByName(p.name);
-                        columnWithName.type = makeNullable(columnWithName.type);
-                        if (columnWithName.column != nullptr)
-                            columnWithName.column = makeNullable(columnWithName.column);
-                    }
+                    /// for right join, if the column in sample_block is not join key, then
+                    /// convert it's type to nullable
+                    auto & columnWithName = sample_block.getByName(p.name);
+                    columnWithName.type = makeNullable(columnWithName.type);
+                    if (columnWithName.column != nullptr)
+                        columnWithName.column = makeNullable(columnWithName.column);
                 }
             }
-
-            for (const auto & col : columns_added_by_join)
-                sample_block.insert(ColumnWithTypeAndName(nullptr, col.type, col.name));
-
-            break;
         }
 
-        case PROJECT:
+        for (const auto & col : columns_added_by_join)
+            sample_block.insert(ColumnWithTypeAndName(nullptr, col.type, col.name));
+
+        break;
+    }
+
+    case PROJECT:
+    {
+        Block new_block;
+
+        for (size_t i = 0; i < projection.size(); ++i)
         {
-            Block new_block;
-
-            for (size_t i = 0; i < projection.size(); ++i)
-            {
-                const std::string & name = projection[i].first;
-                const std::string & alias = projection[i].second;
-                ColumnWithTypeAndName column = sample_block.getByName(name);
-                if (alias != "")
-                    column.name = alias;
-                new_block.insert(std::move(column));
-            }
-
-            sample_block.swap(new_block);
-            break;
+            const std::string & name = projection[i].first;
+            const std::string & alias = projection[i].second;
+            ColumnWithTypeAndName column = sample_block.getByName(name);
+            if (alias != "")
+                column.name = alias;
+            new_block.insert(std::move(column));
         }
 
-        case REMOVE_COLUMN:
-        {
-            sample_block.erase(source_name);
-            break;
-        }
+        sample_block.swap(new_block);
+        break;
+    }
 
-        case ADD_COLUMN:
-        {
-            if (sample_block.has(result_name))
-                throw Exception("Column '" + result_name + "' already exists", ErrorCodes::DUPLICATE_COLUMN);
+    case REMOVE_COLUMN:
+    {
+        sample_block.erase(source_name);
+        break;
+    }
 
-            sample_block.insert(ColumnWithTypeAndName(added_column, result_type, result_name));
-            break;
-        }
+    case ADD_COLUMN:
+    {
+        if (sample_block.has(result_name))
+            throw Exception("Column '" + result_name + "' already exists", ErrorCodes::DUPLICATE_COLUMN);
 
-        case COPY_COLUMN:
-        {
-            result_type = sample_block.getByName(source_name).type;
-            sample_block.insert(ColumnWithTypeAndName(sample_block.getByName(source_name).column, result_type, result_name));
-            break;
-        }
+        sample_block.insert(ColumnWithTypeAndName(added_column, result_type, result_name));
+        break;
+    }
 
-        default:
-            throw Exception("Unknown action type", ErrorCodes::UNKNOWN_ACTION);
+    case COPY_COLUMN:
+    {
+        result_type = sample_block.getByName(source_name).type;
+        sample_block.insert(ColumnWithTypeAndName(sample_block.getByName(source_name).column, result_type, result_name));
+        break;
+    }
+
+    default:
+        throw Exception("Unknown action type", ErrorCodes::UNKNOWN_ACTION);
     }
 }
 
 
 void ExpressionAction::execute(Block & block) const
 {
-//    std::cerr << "executing: " << toString() << std::endl;
+    //    std::cerr << "executing: " << toString() << std::endl;
 
     if (type == REMOVE_COLUMN || type == COPY_COLUMN)
         if (!block.has(source_name))
@@ -316,129 +317,129 @@ void ExpressionAction::execute(Block & block) const
 
     switch (type)
     {
-        case APPLY_FUNCTION:
+    case APPLY_FUNCTION:
+    {
+        ColumnNumbers arguments(argument_names.size());
+        for (size_t i = 0; i < argument_names.size(); ++i)
         {
-            ColumnNumbers arguments(argument_names.size());
-            for (size_t i = 0; i < argument_names.size(); ++i)
-            {
-                if (!block.has(argument_names[i]))
-                    throw Exception("Not found column: '" + argument_names[i] + "'", ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
-                arguments[i] = block.getPositionByName(argument_names[i]);
-            }
-
-            size_t num_columns_without_result = block.columns();
-            block.insert({ nullptr, result_type, result_name});
-
-            ProfileEvents::increment(ProfileEvents::FunctionExecute);
-            function->execute(block, arguments, num_columns_without_result);
-
-            break;
+            if (!block.has(argument_names[i]))
+                throw Exception("Not found column: '" + argument_names[i] + "'", ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
+            arguments[i] = block.getPositionByName(argument_names[i]);
         }
 
-        case ARRAY_JOIN:
-        {
-            if (array_joined_columns.empty())
-                throw Exception("No arrays to join", ErrorCodes::LOGICAL_ERROR);
+        size_t num_columns_without_result = block.columns();
+        block.insert({nullptr, result_type, result_name});
 
-            ColumnPtr any_array_ptr = block.getByName(*array_joined_columns.begin()).column;
+        ProfileEvents::increment(ProfileEvents::FunctionExecute);
+        function->execute(block, arguments, num_columns_without_result);
+
+        break;
+    }
+
+    case ARRAY_JOIN:
+    {
+        if (array_joined_columns.empty())
+            throw Exception("No arrays to join", ErrorCodes::LOGICAL_ERROR);
+
+        ColumnPtr any_array_ptr = block.getByName(*array_joined_columns.begin()).column;
+        if (ColumnPtr converted = any_array_ptr->convertToFullColumnIfConst())
+            any_array_ptr = converted;
+
+        const ColumnArray * any_array = typeid_cast<const ColumnArray *>(&*any_array_ptr);
+        if (!any_array)
+            throw Exception("ARRAY JOIN of not array: " + *array_joined_columns.begin(), ErrorCodes::TYPE_MISMATCH);
+
+        /// If LEFT ARRAY JOIN, then we create columns in which empty arrays are replaced by arrays with one element - the default value.
+        std::map<String, ColumnPtr> non_empty_array_columns;
+        if (array_join_is_left)
+        {
+            for (const auto & name : array_joined_columns)
+            {
+                auto src_col = block.getByName(name);
+
+                Block tmp_block{src_col, {{}, src_col.type, {}}};
+
+                function_builder->build({src_col})->execute(tmp_block, {0}, 1);
+                non_empty_array_columns[name] = tmp_block.safeGetByPosition(1).column;
+            }
+
+            any_array_ptr = non_empty_array_columns.begin()->second;
             if (ColumnPtr converted = any_array_ptr->convertToFullColumnIfConst())
                 any_array_ptr = converted;
 
-            const ColumnArray * any_array = typeid_cast<const ColumnArray *>(&*any_array_ptr);
-            if (!any_array)
-                throw Exception("ARRAY JOIN of not array: " + *array_joined_columns.begin(), ErrorCodes::TYPE_MISMATCH);
-
-            /// If LEFT ARRAY JOIN, then we create columns in which empty arrays are replaced by arrays with one element - the default value.
-            std::map<String, ColumnPtr> non_empty_array_columns;
-            if (array_join_is_left)
-            {
-                for (const auto & name : array_joined_columns)
-                {
-                    auto src_col = block.getByName(name);
-
-                    Block tmp_block{src_col, {{}, src_col.type, {}}};
-
-                    function_builder->build({src_col})->execute(tmp_block, {0}, 1);
-                    non_empty_array_columns[name] = tmp_block.safeGetByPosition(1).column;
-                }
-
-                any_array_ptr = non_empty_array_columns.begin()->second;
-                if (ColumnPtr converted = any_array_ptr->convertToFullColumnIfConst())
-                    any_array_ptr = converted;
-
-                any_array = &typeid_cast<const ColumnArray &>(*any_array_ptr);
-            }
-
-            size_t columns = block.columns();
-            for (size_t i = 0; i < columns; ++i)
-            {
-                ColumnWithTypeAndName & current = block.safeGetByPosition(i);
-
-                if (array_joined_columns.count(current.name))
-                {
-                    if (!typeid_cast<const DataTypeArray *>(&*current.type))
-                        throw Exception("ARRAY JOIN of not array: " + current.name, ErrorCodes::TYPE_MISMATCH);
-
-                    ColumnPtr array_ptr = array_join_is_left ? non_empty_array_columns[current.name] : current.column;
-
-                    if (ColumnPtr converted = array_ptr->convertToFullColumnIfConst())
-                        array_ptr = converted;
-
-                    const ColumnArray & array = typeid_cast<const ColumnArray &>(*array_ptr);
-                    if (!array.hasEqualOffsets(typeid_cast<const ColumnArray &>(*any_array_ptr)))
-                        throw Exception("Sizes of ARRAY-JOIN-ed arrays do not match", ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH);
-
-                    current.column = typeid_cast<const ColumnArray &>(*array_ptr).getDataPtr();
-                    current.type = typeid_cast<const DataTypeArray &>(*current.type).getNestedType();
-                }
-                else
-                {
-                    current.column = current.column->replicate(any_array->getOffsets());
-                }
-            }
-
-            break;
+            any_array = &typeid_cast<const ColumnArray &>(*any_array_ptr);
         }
 
-        case JOIN:
+        size_t columns = block.columns();
+        for (size_t i = 0; i < columns; ++i)
         {
-            join->joinBlock(block);
-            break;
-        }
+            ColumnWithTypeAndName & current = block.safeGetByPosition(i);
 
-        case PROJECT:
-        {
-            Block new_block;
-
-            for (size_t i = 0; i < projection.size(); ++i)
+            if (array_joined_columns.count(current.name))
             {
-                const std::string & name = projection[i].first;
-                const std::string & alias = projection[i].second;
-                ColumnWithTypeAndName column = block.getByName(name);
-                if (alias != "")
-                    column.name = alias;
-                new_block.insert(std::move(column));
+                if (!typeid_cast<const DataTypeArray *>(&*current.type))
+                    throw Exception("ARRAY JOIN of not array: " + current.name, ErrorCodes::TYPE_MISMATCH);
+
+                ColumnPtr array_ptr = array_join_is_left ? non_empty_array_columns[current.name] : current.column;
+
+                if (ColumnPtr converted = array_ptr->convertToFullColumnIfConst())
+                    array_ptr = converted;
+
+                const ColumnArray & array = typeid_cast<const ColumnArray &>(*array_ptr);
+                if (!array.hasEqualOffsets(typeid_cast<const ColumnArray &>(*any_array_ptr)))
+                    throw Exception("Sizes of ARRAY-JOIN-ed arrays do not match", ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH);
+
+                current.column = typeid_cast<const ColumnArray &>(*array_ptr).getDataPtr();
+                current.type = typeid_cast<const DataTypeArray &>(*current.type).getNestedType();
             }
-
-            block.swap(new_block);
-
-            break;
+            else
+            {
+                current.column = current.column->replicate(any_array->getOffsets());
+            }
         }
 
-        case REMOVE_COLUMN:
-            block.erase(source_name);
-            break;
+        break;
+    }
 
-        case ADD_COLUMN:
-            block.insert({ added_column->cloneResized(block.rows()), result_type, result_name });
-            break;
+    case JOIN:
+    {
+        join->joinBlock(block);
+        break;
+    }
 
-        case COPY_COLUMN:
-            block.insert({ block.getByName(source_name).column, result_type, result_name });
-            break;
+    case PROJECT:
+    {
+        Block new_block;
 
-        default:
-            throw Exception("Unknown action type", ErrorCodes::UNKNOWN_ACTION);
+        for (size_t i = 0; i < projection.size(); ++i)
+        {
+            const std::string & name = projection[i].first;
+            const std::string & alias = projection[i].second;
+            ColumnWithTypeAndName column = block.getByName(name);
+            if (alias != "")
+                column.name = alias;
+            new_block.insert(std::move(column));
+        }
+
+        block.swap(new_block);
+
+        break;
+    }
+
+    case REMOVE_COLUMN:
+        block.erase(source_name);
+        break;
+
+    case ADD_COLUMN:
+        block.insert({added_column->cloneResized(block.rows()), result_type, result_name});
+        break;
+
+    case COPY_COLUMN:
+        block.insert({block.getByName(source_name).column, result_type, result_name});
+        break;
+
+    default:
+        throw Exception("Unknown action type", ErrorCodes::UNKNOWN_ACTION);
     }
 }
 
@@ -457,67 +458,67 @@ std::string ExpressionAction::toString() const
     std::stringstream ss;
     switch (type)
     {
-        case ADD_COLUMN:
-            ss << "ADD " << result_name << " "
-                << (result_type ? result_type->getName() : "(no type)") << " "
-                << (added_column ? added_column->getName() : "(no column)");
-            break;
+    case ADD_COLUMN:
+        ss << "ADD " << result_name << " "
+           << (result_type ? result_type->getName() : "(no type)") << " "
+           << (added_column ? added_column->getName() : "(no column)");
+        break;
 
-        case REMOVE_COLUMN:
-            ss << "REMOVE " << source_name;
-            break;
+    case REMOVE_COLUMN:
+        ss << "REMOVE " << source_name;
+        break;
 
-        case COPY_COLUMN:
-            ss << "COPY " << result_name << " = " << source_name;
-            break;
+    case COPY_COLUMN:
+        ss << "COPY " << result_name << " = " << source_name;
+        break;
 
-        case APPLY_FUNCTION:
-            ss << "FUNCTION " << result_name << " "
-                << (result_type ? result_type->getName() : "(no type)") << " = "
-                << (function ? function->getName() : "(no function)") << "(";
-            for (size_t i = 0; i < argument_names.size(); ++i)
-            {
-                if (i)
-                    ss << ", ";
-                ss << argument_names[i];
-            }
-            ss << ")";
-            break;
+    case APPLY_FUNCTION:
+        ss << "FUNCTION " << result_name << " "
+           << (result_type ? result_type->getName() : "(no type)") << " = "
+           << (function ? function->getName() : "(no function)") << "(";
+        for (size_t i = 0; i < argument_names.size(); ++i)
+        {
+            if (i)
+                ss << ", ";
+            ss << argument_names[i];
+        }
+        ss << ")";
+        break;
 
-        case ARRAY_JOIN:
-            ss << (array_join_is_left ? "LEFT " : "") << "ARRAY JOIN ";
-            for (NameSet::const_iterator it = array_joined_columns.begin(); it != array_joined_columns.end(); ++it)
-            {
-                if (it != array_joined_columns.begin())
-                    ss << ", ";
-                ss << *it;
-            }
-            break;
+    case ARRAY_JOIN:
+        ss << (array_join_is_left ? "LEFT " : "") << "ARRAY JOIN ";
+        for (NameSet::const_iterator it = array_joined_columns.begin(); it != array_joined_columns.end(); ++it)
+        {
+            if (it != array_joined_columns.begin())
+                ss << ", ";
+            ss << *it;
+        }
+        break;
 
-        case JOIN:
-            ss << "JOIN ";
-            for (NamesAndTypesList::const_iterator it = columns_added_by_join.begin(); it != columns_added_by_join.end(); ++it)
-            {
-                if (it != columns_added_by_join.begin())
-                    ss << ", ";
-                ss << it->name;
-            }
-            break;
+    case JOIN:
+        ss << "JOIN ";
+        for (NamesAndTypesList::const_iterator it = columns_added_by_join.begin(); it != columns_added_by_join.end(); ++it)
+        {
+            if (it != columns_added_by_join.begin())
+                ss << ", ";
+            ss << it->name;
+        }
+        break;
 
-        case PROJECT:
-            ss << "PROJECT ";
-            for (size_t i = 0; i < projection.size(); ++i)
-            {
-                if (i)
-                    ss << ", ";
-                ss << projection[i].first;
-                if (projection[i].second != "" && projection[i].second != projection[i].first)
-                    ss << " AS " << projection[i].second;
-            }
-            break;
+    case PROJECT:
+        ss << "PROJECT ";
+        for (size_t i = 0; i < projection.size(); ++i)
+        {
+            if (i)
+                ss << ", ";
+            ss << projection[i].first;
+            if (projection[i].second != "" && projection[i].second != projection[i].first)
+                ss << " AS " << projection[i].second;
+        }
+        break;
 
-        default:
-            throw Exception("Unexpected Action type", ErrorCodes::LOGICAL_ERROR);
+    default:
+        throw Exception("Unexpected Action type", ErrorCodes::LOGICAL_ERROR);
     }
 
     return ss.str();
@@ -527,8 +528,8 @@ void ExpressionActions::checkLimits(Block & block) const
 {
     if (settings.max_temporary_columns && block.columns() > settings.max_temporary_columns)
         throw Exception("Too many temporary columns: " + block.dumpNames()
-            + ". Maximum: " + settings.max_temporary_columns.toString(),
-            ErrorCodes::TOO_MANY_TEMPORARY_COLUMNS);
+                            + ". Maximum: " + settings.max_temporary_columns.toString(),
+                        ErrorCodes::TOO_MANY_TEMPORARY_COLUMNS);
 
     if (settings.max_temporary_non_const_columns)
     {
@@ -542,11 +543,12 @@ void ExpressionActions::checkLimits(Block & block) const
             std::stringstream list_of_non_const_columns;
             for (size_t i = 0, size = block.columns(); i < size; ++i)
                 if (!block.safeGetByPosition(i).column->isColumnConst())
-                    list_of_non_const_columns << "\n" << block.safeGetByPosition(i).name;
+                    list_of_non_const_columns << "\n"
+                                              << block.safeGetByPosition(i).name;
 
             throw Exception("Too many temporary non-const columns:" + list_of_non_const_columns.str()
-                + ". Maximum: " + settings.max_temporary_non_const_columns.toString(),
-                ErrorCodes::TOO_MANY_TEMPORARY_NON_CONST_COLUMNS);
+                                + ". Maximum: " + settings.max_temporary_non_const_columns.toString(),
+                            ErrorCodes::TOO_MANY_TEMPORARY_NON_CONST_COLUMNS);
         }
     }
 }
@@ -725,7 +727,8 @@ void ExpressionActions::finalize(const Names & output_columns)
         const std::string & name = output_columns[i];
         if (!sample_block.has(name))
             throw Exception("Unknown column: " + name + ", there are only columns "
-                            + sample_block.dumpNames(), ErrorCodes::UNKNOWN_IDENTIFIER);
+                                + sample_block.dumpNames(),
+                            ErrorCodes::UNKNOWN_IDENTIFIER);
         final_columns.insert(name);
     }
 
@@ -784,10 +787,7 @@ void ExpressionActions::finalize(const Names & output_columns)
             if (!out.empty())
             {
                 /// If the result is not used and there are no side effects, throw out the action.
-                if (!needed_columns.count(out) &&
-                    (action.type == ExpressionAction::APPLY_FUNCTION
-                    || action.type == ExpressionAction::ADD_COLUMN
-                    || action.type == ExpressionAction::COPY_COLUMN))
+                if (!needed_columns.count(out) && (action.type == ExpressionAction::APPLY_FUNCTION || action.type == ExpressionAction::ADD_COLUMN || action.type == ExpressionAction::COPY_COLUMN))
                 {
                     actions.erase(actions.begin() + i);
 
@@ -846,7 +846,7 @@ void ExpressionActions::finalize(const Names & output_columns)
         }
     }
 
-/*    std::cerr << "\n";
+    /*    std::cerr << "\n";
     for (const auto & action : actions)
         std::cerr << action.toString() << "\n";
     std::cerr << "\n";*/
@@ -878,8 +878,7 @@ void ExpressionActions::finalize(const Names & output_columns)
     {
         new_actions.push_back(action);
 
-        auto process = [&] (const String & name)
-        {
+        auto process = [&](const String & name) {
             auto refcount = --columns_refcount[name];
             if (refcount <= 0)
             {
@@ -900,7 +899,7 @@ void ExpressionActions::finalize(const Names & output_columns)
 
     actions.swap(new_actions);
 
-/*    std::cerr << "\n";
+    /*    std::cerr << "\n";
     for (const auto & action : actions)
         std::cerr << action.toString() << "\n";
     std::cerr << "\n";*/
@@ -1081,10 +1080,11 @@ std::string ExpressionActionsChain::dumpChain()
         ss << "required output:\n";
         for (const std::string & name : steps[i].required_output)
             ss << name << "\n";
-        ss << "\n" << steps[i].actions->dumpActions() << "\n";
+        ss << "\n"
+           << steps[i].actions->dumpActions() << "\n";
     }
 
     return ss.str();
 }
 
-}
+} // namespace DB

@@ -1,13 +1,9 @@
 #pragma once
 
-#include <Common/Arena.h>
-
 #include <AggregateFunctions/IAggregateFunction.h>
-
 #include <Columns/IColumn.h>
-
+#include <Common/Arena.h>
 #include <Core/Field.h>
-
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
@@ -78,12 +74,16 @@ private:
     }
 
     ColumnAggregateFunction(const AggregateFunctionPtr & func_, const Arenas & arenas_)
-        : arenas(arenas_), func(func_)
+        : arenas(arenas_)
+        , func(func_)
     {
     }
 
     ColumnAggregateFunction(const ColumnAggregateFunction & src_)
-        : arenas(src_.arenas), func(src_.func), src(src_.getPtr()), data(src_.data.begin(), src_.data.end())
+        : arenas(src_.arenas)
+        , func(src_.func)
+        , src(src_.getPtr())
+        , data(src_.data.begin(), src_.data.end())
     {
     }
 
@@ -188,4 +188,4 @@ public:
 };
 
 
-}
+} // namespace DB

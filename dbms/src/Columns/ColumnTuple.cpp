@@ -1,7 +1,8 @@
 #include <Columns/ColumnTuple.h>
+#include <DataStreams/ColumnGathererStream.h>
+
 #include <ext/map.h>
 #include <ext/range.h>
-#include <DataStreams/ColumnGathererStream.h>
 
 
 namespace DB
@@ -9,10 +10,10 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_COLUMN;
-    extern const int NOT_IMPLEMENTED;
-    extern const int CANNOT_INSERT_VALUE_OF_DIFFERENT_SIZE_INTO_TUPLE;
-}
+extern const int ILLEGAL_COLUMN;
+extern const int NOT_IMPLEMENTED;
+extern const int CANNOT_INSERT_VALUE_OF_DIFFERENT_SIZE_INTO_TUPLE;
+} // namespace ErrorCodes
 
 
 std::string ColumnTuple::getName() const
@@ -67,7 +68,7 @@ MutableColumnPtr ColumnTuple::cloneEmpty() const
 
 Field ColumnTuple::operator[](size_t n) const
 {
-    return Tuple{ext::map<TupleBackend>(columns, [n] (const auto & column) { return (*column)[n]; })};
+    return Tuple{ext::map<TupleBackend>(columns, [n](const auto & column) { return (*column)[n]; })};
 }
 
 void ColumnTuple::get(size_t n, Field & res) const
@@ -159,8 +160,7 @@ void ColumnTuple::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPt
     auto s = size();
 
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
-                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     for (const auto & column : columns)
         column->updateWeakHash32(hash, collator, sort_key_container);
@@ -172,7 +172,8 @@ void ColumnTuple::insertRangeFrom(const IColumn & src, size_t start, size_t leng
     for (size_t i = 0; i < tuple_size; ++i)
         columns[i]->assumeMutableRef().insertRangeFrom(
             *static_cast<const ColumnTuple &>(src).columns[i],
-            start, length);
+            start,
+            length);
 }
 
 ColumnPtr ColumnTuple::filter(const Filter & filt, ssize_t result_size_hint) const
@@ -252,7 +253,7 @@ struct ColumnTuple::Less
             plain_columns.push_back(column.get());
     }
 
-    bool operator() (size_t a, size_t b) const
+    bool operator()(size_t a, size_t b) const
     {
         for (ColumnRawPtrs::const_iterator it = plain_columns.begin(); it != plain_columns.end(); ++it)
         {
@@ -349,5 +350,4 @@ void ColumnTuple::forEachSubcolumn(ColumnCallback callback)
 }
 
 
-
-}
+} // namespace DB
