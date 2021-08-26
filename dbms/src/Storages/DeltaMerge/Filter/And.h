@@ -4,14 +4,13 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 class And : public LogicalOp
 {
 public:
-    explicit And(const RSOperators & children_) : LogicalOp(children_)
+    explicit And(const RSOperators & children_)
+        : LogicalOp(children_)
     {
         if (children.empty())
             throw Exception("Unexpected empty children");

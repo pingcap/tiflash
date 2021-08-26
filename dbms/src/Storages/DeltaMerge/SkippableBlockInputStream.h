@@ -7,7 +7,6 @@ namespace DB
 {
 namespace DM
 {
-
 class SkippableBlockInputStream : public IBlockInputStream
 {
 public:
@@ -18,12 +17,14 @@ public:
 };
 
 using SkippableBlockInputStreamPtr = std::shared_ptr<SkippableBlockInputStream>;
-using SkippableBlockInputStreams   = std::vector<SkippableBlockInputStreamPtr>;
+using SkippableBlockInputStreams = std::vector<SkippableBlockInputStreamPtr>;
 
 class EmptySkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    EmptySkippableBlockInputStream(const ColumnDefines & read_columns_) : read_columns(read_columns_) {}
+    EmptySkippableBlockInputStream(const ColumnDefines & read_columns_)
+        : read_columns(read_columns_)
+    {}
 
     String getName() const override { return "EmptySkippable"; }
 
@@ -58,7 +59,7 @@ public:
             auto skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
 
             size_t skip;
-            bool   has_next_block = skippable_stream->getSkippedRows(skip);
+            bool has_next_block = skippable_stream->getSkippedRows(skip);
             skip_rows += skip;
 
             if (has_next_block)

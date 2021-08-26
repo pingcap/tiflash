@@ -30,7 +30,7 @@ using PSPtr = std::shared_ptr<DB::PageStorage>;
 const DB::PageId MAX_PAGE_ID = 1000;
 
 std::atomic<bool> running_without_exception = true;
-std::atomic<bool> running_without_timeout   = true;
+std::atomic<bool> running_without_timeout = true;
 
 Poco::Logger * logger = nullptr;
 
@@ -54,15 +54,15 @@ extern const char random_slow_page_storage_list_all_live_files[];
 
 struct StressOptions
 {
-    size_t num_writers      = 1;
-    size_t num_readers      = 4;
-    bool   init_pages       = false;
-    bool   clean_before_run = false;
-    size_t timeout_s        = 0;
-    size_t read_delay_ms    = 0;
+    size_t num_writers = 1;
+    size_t num_readers = 4;
+    bool init_pages = false;
+    bool clean_before_run = false;
+    size_t timeout_s = 0;
+    size_t read_delay_ms = 0;
     size_t num_writer_slots = 1;
     size_t avg_page_size_mb = 1;
-    size_t rand_seed        = 0x123987;
+    size_t rand_seed = 0x123987;
 
     std::vector<std::string> paths;
 
@@ -93,18 +93,18 @@ struct StressOptions
         namespace po = boost::program_options;
         using po::value;
         po::options_description desc("Allowed options");
-        desc.add_options()("help,h", "produce help message")                                                         //
-            ("write_concurrency,W", value<UInt32>()->default_value(4), "number of write threads")                    //
-            ("read_concurrency,R", value<UInt32>()->default_value(16), "number of read threads")                     //
-            ("clean_before_run,C", value<bool>()->default_value(false), "drop data before running")                  //
-            ("init_pages,I", value<bool>()->default_value(false), "init pages if not exist before running")          //
+        desc.add_options()("help,h", "produce help message") //
+            ("write_concurrency,W", value<UInt32>()->default_value(4), "number of write threads") //
+            ("read_concurrency,R", value<UInt32>()->default_value(16), "number of read threads") //
+            ("clean_before_run,C", value<bool>()->default_value(false), "drop data before running") //
+            ("init_pages,I", value<bool>()->default_value(false), "init pages if not exist before running") //
             ("timeout,T", value<UInt32>()->default_value(600), "maximum run time (seconds). 0 means run infinitely") //
-            ("writer_slots", value<UInt32>()->default_value(4), "number of PageStorage writer slots")                //
-            ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay")                     //
-            ("avg_page_size", value<UInt32>()->default_value(1), "avg size for each page(MiB)")                      //
-            ("rand_seed", value<UInt32>()->default_value(0x123987), "random seed")                                   //
-            ("paths,P", value<std::vector<std::string>>(), "store path(s)")                                          //
-            ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable")                            //
+            ("writer_slots", value<UInt32>()->default_value(4), "number of PageStorage writer slots") //
+            ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay") //
+            ("avg_page_size", value<UInt32>()->default_value(1), "avg size for each page(MiB)") //
+            ("rand_seed", value<UInt32>()->default_value(0x123987), "random seed") //
+            ("paths,P", value<std::vector<std::string>>(), "store path(s)") //
+            ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable") //
             ;
         po::variables_map options;
         po::store(po::parse_command_line(argc, argv, desc), options);
@@ -116,15 +116,15 @@ struct StressOptions
         }
 
         StressOptions opt;
-        opt.num_writers      = options["write_concurrency"].as<UInt32>();
-        opt.num_readers      = options["read_concurrency"].as<UInt32>();
-        opt.init_pages       = options["init_pages"].as<bool>();
+        opt.num_writers = options["write_concurrency"].as<UInt32>();
+        opt.num_readers = options["read_concurrency"].as<UInt32>();
+        opt.init_pages = options["init_pages"].as<bool>();
         opt.clean_before_run = options["clean_before_run"].as<bool>();
-        opt.timeout_s        = options["timeout"].as<UInt32>();
-        opt.read_delay_ms    = options["read_delay_ms"].as<UInt32>();
+        opt.timeout_s = options["timeout"].as<UInt32>();
+        opt.read_delay_ms = options["read_delay_ms"].as<UInt32>();
         opt.num_writer_slots = options["writer_slots"].as<UInt32>();
         opt.avg_page_size_mb = options["avg_page_size"].as<UInt32>();
-        opt.rand_seed        = options["rand_seed"].as<UInt32>();
+        opt.rand_seed = options["rand_seed"].as<UInt32>();
 
         if (options.count("paths"))
             opt.paths = options["paths"].as<std::vector<std::string>>();
@@ -139,14 +139,20 @@ struct StressOptions
 
 class PSWriter : public Poco::Runnable
 {
-    DB::UInt32   index = 0;
-    PSPtr        ps;
+    DB::UInt32 index = 0;
+    PSPtr ps;
     std::mt19937 gen;
 
     static size_t approx_page_mb;
 
 public:
-    PSWriter(const PSPtr & ps_, DB::UInt32 idx) : index(idx), ps(ps_), gen(), bytes_written(0), pages_written(0) {}
+    PSWriter(const PSPtr & ps_, DB::UInt32 idx)
+        : index(idx)
+        , ps(ps_)
+        , gen()
+        , bytes_written(0)
+        , pages_written(0)
+    {}
 
     static void setApproxPageSize(size_t size_mb)
     {
@@ -158,8 +164,8 @@ public:
     {
         // fill page with random bytes
         const size_t buff_sz = approx_page_mb * 1024 * 1024 + random() % 3000;
-        char *       buff    = (char *)malloc(buff_sz);
-        const char   buff_ch = pageId % 0xFF;
+        char * buff = (char *)malloc(buff_sz);
+        const char buff_ch = pageId % 0xFF;
         memset(buff, buff_ch, buff_sz);
 
         holder = DB::createMemHolder(buff, [&](char * p) { free(p); });
@@ -171,7 +177,7 @@ public:
     {
         for (DB::PageId pageId = 0; pageId < MAX_PAGE_ID; ++pageId)
         {
-            DB::MemHolder     holder;
+            DB::MemHolder holder;
             DB::ReadBufferPtr buff = genRandomData(pageId, holder);
 
             DB::WriteBatch wb;
@@ -191,10 +197,10 @@ public:
         {
             assert(ps != nullptr);
             std::normal_distribution<> d{MAX_PAGE_ID / 2, 150};
-            const DB::PageId           pageId = static_cast<DB::PageId>(std::round(d(gen))) % MAX_PAGE_ID;
+            const DB::PageId pageId = static_cast<DB::PageId>(std::round(d(gen))) % MAX_PAGE_ID;
             //const DB::PageId pageId = random() % MAX_PAGE_ID;
 
-            DB::MemHolder     holder;
+            DB::MemHolder holder;
             DB::ReadBufferPtr buff = genRandomData(pageId, holder);
 
             DB::WriteBatch wb;
@@ -212,13 +218,17 @@ size_t PSWriter::approx_page_mb = 2;
 
 class PSReader : public Poco::Runnable
 {
-    DB::UInt32   index = 0;
-    PSPtr        ps;
+    DB::UInt32 index = 0;
+    PSPtr ps;
     const size_t heavy_read_delay_ms;
 
 public:
     PSReader(const PSPtr & ps_, DB::UInt32 idx, size_t delay_ms)
-        : index(idx), ps(ps_), heavy_read_delay_ms(delay_ms), pages_read(0), bytes_read(0)
+        : index(idx)
+        , ps(ps_)
+        , heavy_read_delay_ms(delay_ms)
+        , pages_read(0)
+        , bytes_read(0)
     {
     }
 
@@ -284,7 +294,11 @@ class PSGc
     PSPtr ps;
 
 public:
-    PSGc(const PSPtr & ps_) : ps(ps_) { assert(ps != nullptr); }
+    PSGc(const PSPtr & ps_)
+        : ps(ps_)
+    {
+        assert(ps != nullptr);
+    }
     void onTime(Poco::Timer & /* t */)
     {
         try
@@ -306,12 +320,16 @@ class PSScanner
     PSPtr ps;
 
 public:
-    PSScanner(const PSPtr & ps_) : ps(ps_) { assert(ps != nullptr); }
+    PSScanner(const PSPtr & ps_)
+        : ps(ps_)
+    {
+        assert(ps != nullptr);
+    }
     void onTime(Poco::Timer & /* t*/)
     {
-        size_t   num_snapshots           = 0;
-        double   oldest_snapshot_seconds = 0.0;
-        unsigned oldest_snapshot_thread  = 0;
+        size_t num_snapshots = 0;
+        double oldest_snapshot_seconds = 0.0;
+        unsigned oldest_snapshot_thread = 0;
         try
         {
             LOG_INFO(logger, "Scanner start");
@@ -345,8 +363,8 @@ public:
 int main(int argc, char ** argv)
 try
 {
-    Poco::AutoPtr<Poco::ConsoleChannel>    channel = new Poco::ConsoleChannel(std::cerr);
-    Poco::AutoPtr<Poco::PatternFormatter>  formatter(new DB::UnifiedLogPatternFormatter);
+    Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
+    Poco::AutoPtr<Poco::PatternFormatter> formatter(new DB::UnifiedLogPatternFormatter);
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel("trace");
@@ -389,8 +407,8 @@ try
 
     // create PageStorage
     DB::PageStorage::Config config;
-    config.num_write_slots            = options.num_writer_slots;
-    DB::KeyManagerPtr   key_manager   = std::make_shared<DB::MockKeyManager>(false);
+    config.num_write_slots = options.num_writer_slots;
+    DB::KeyManagerPtr key_manager = std::make_shared<DB::MockKeyManager>(false);
     DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
 
     // FIXME: running with `MockDiskDelegatorMulti` is not well-testing
@@ -442,13 +460,13 @@ try
     }
 
     // start one gc thread
-    PSGc        gc(ps);
+    PSGc gc(ps);
     Poco::Timer timer(0);
     timer.setStartInterval(1000);
     timer.setPeriodicInterval(30 * 1000);
     timer.start(Poco::TimerCallback<PSGc>(gc, &PSGc::onTime));
 
-    PSScanner   scanner(ps);
+    PSScanner scanner(ps);
     Poco::Timer scanner_timer(0);
     scanner_timer.setStartInterval(1000);
     scanner_timer.setPeriodicInterval(30 * 1000);
@@ -463,7 +481,7 @@ try
     }
 
     // set timeout
-    Poco::Timer   timeout_timer(options.timeout_s);
+    Poco::Timer timeout_timer(options.timeout_s);
     StressTimeout canceler;
     if (options.timeout_s > 0)
     {
@@ -473,8 +491,8 @@ try
     }
 
     pool.joinAll();
-    high_resolution_clock::time_point endTime      = high_resolution_clock::now();
-    milliseconds                      timeInterval = std::chrono::duration_cast<milliseconds>(endTime - beginTime);
+    high_resolution_clock::time_point endTime = high_resolution_clock::now();
+    milliseconds timeInterval = std::chrono::duration_cast<milliseconds>(endTime - beginTime);
     fmt::print(stderr, "end in {}ms\n", timeInterval.count());
     double seconds_run = 1.0 * timeInterval.count() / 1000;
 

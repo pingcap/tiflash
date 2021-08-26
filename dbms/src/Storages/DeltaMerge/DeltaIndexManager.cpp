@@ -10,7 +10,6 @@ namespace DB
 {
 namespace DM
 {
-
 void DeltaIndexManager::removeOverflow(std::vector<DeltaIndexPtr> & removed)
 {
     size_t queue_size = index_map.size();
@@ -58,11 +57,11 @@ void DeltaIndexManager::refreshRef(const DeltaIndexPtr & index)
     {
         std::lock_guard lock(mutex);
 
-        auto id  = index->getId();
+        auto id = index->getId();
         auto res = index_map.emplace(std::piecewise_construct, std::forward_as_tuple(id), std::forward_as_tuple());
 
-        Holder & holder   = res.first->second;
-        bool     inserted = res.second;
+        Holder & holder = res.first->second;
+        bool inserted = res.second;
 
         if (inserted)
         {
@@ -75,7 +74,7 @@ void DeltaIndexManager::refreshRef(const DeltaIndexPtr & index)
         }
 
         holder.index = index;
-        holder.size  = index->getBytes();
+        holder.size = index->getBytes();
         current_size += holder.size;
 
         removeOverflow(removed);

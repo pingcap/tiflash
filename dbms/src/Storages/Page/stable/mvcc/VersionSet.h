@@ -19,12 +19,11 @@ namespace DB::stable
 {
 namespace MVCC
 {
-
 /// Config
 struct VersionSetConfig
 {
     size_t compact_hint_delta_deletions = 5000;
-    size_t compact_hint_delta_entries   = 200 * 1000;
+    size_t compact_hint_delta_entries = 200 * 1000;
 };
 
 /// Base type for VersionType of VersionSet
@@ -33,11 +32,15 @@ struct MultiVersionCountable
 {
 public:
     uint32_t ref_count;
-    T *      next;
-    T *      prev;
+    T * next;
+    T * prev;
 
 public:
-    explicit MultiVersionCountable(T * self) : ref_count(0), next(self), prev(self) {}
+    explicit MultiVersionCountable(T * self)
+        : ref_count(0)
+        , next(self)
+        , prev(self)
+    {}
     virtual ~MultiVersionCountable()
     {
         assert(ref_count == 0);
@@ -110,10 +113,12 @@ class VersionSet
 public:
     using BuilderType = TBuilder;
     using VersionType = TVersion;
-    using VersionPtr  = VersionType *;
+    using VersionPtr = VersionType *;
 
 public:
-    explicit VersionSet(const VersionSetConfig & config_ = VersionSetConfig()) : placeholder_node(), current(nullptr)
+    explicit VersionSet(const VersionSetConfig & config_ = VersionSetConfig())
+        : placeholder_node()
+        , current(nullptr)
     {
         (void)config_; // just ignore config
         // append a init version to link
@@ -162,7 +167,7 @@ public:
     std::string toDebugString() const
     {
         std::shared_lock lock(read_write_mutex);
-        std::string      s;
+        std::string s;
         for (VersionPtr v = placeholder_node.next; v != &placeholder_node; v = v->next)
         {
             if (!s.empty())
@@ -179,11 +184,13 @@ public:
     class Snapshot
     {
     private:
-        VersionPtr          v;     // particular version
+        VersionPtr v; // particular version
         std::shared_mutex * mutex; // mutex to be used when freeing version
 
     public:
-        Snapshot(VersionPtr version_, std::shared_mutex * mutex_) : v(version_), mutex(mutex_)
+        Snapshot(VersionPtr version_, std::shared_mutex * mutex_)
+            : v(version_)
+            , mutex(mutex_)
         {
             std::unique_lock lock(*mutex);
             v->increase(lock);
@@ -208,7 +215,7 @@ public:
 
 protected:
     VersionType placeholder_node; // Head of circular double-linked list of all versions
-    VersionPtr  current;          // current version; current == placeholder_node.prev
+    VersionPtr current; // current version; current == placeholder_node.prev
 
     mutable std::shared_mutex read_write_mutex;
 
@@ -226,8 +233,8 @@ protected:
         current->increase(lock);
 
         // Append to linked list
-        current->prev       = placeholder_node.prev;
-        current->next       = &placeholder_node;
+        current->prev = placeholder_node.prev;
+        current->next = &placeholder_node;
         current->prev->next = current;
         current->next->prev = current;
     }

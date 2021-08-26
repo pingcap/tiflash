@@ -9,20 +9,18 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 struct MIN
 {
     static constexpr auto is_min = true;
-    static constexpr auto name   = "min";
+    static constexpr auto name = "min";
 };
 
 struct MAX
 {
     static constexpr auto is_min = false;
-    static constexpr auto name   = "max";
+    static constexpr auto name = "max";
 };
 
 static constexpr size_t NONE_EXIST = std::numeric_limits<size_t>::max();
@@ -82,17 +80,19 @@ struct MinMaxValue : private boost::noncopyable
     bool has_value = false;
 
     explicit MinMaxValue() = default;
-    explicit MinMaxValue(bool has_value_) : has_value(has_value_) {}
+    explicit MinMaxValue(bool has_value_)
+        : has_value(has_value_)
+    {}
 
     virtual ~MinMaxValue() = default;
 
-    virtual void           merge(const MinMaxValue & other)                 = 0;
-    virtual MinMaxValuePtr clone()                                          = 0;
-    virtual void           write(const IDataType & type, WriteBuffer & buf) = 0;
+    virtual void merge(const MinMaxValue & other) = 0;
+    virtual MinMaxValuePtr clone() = 0;
+    virtual void write(const IDataType & type, WriteBuffer & buf) = 0;
 
 
-    virtual RSResult checkEqual(const Field & value, const DataTypePtr & type)        = 0;
-    virtual RSResult checkGreater(const Field & value, const DataTypePtr & type)      = 0;
+    virtual RSResult checkEqual(const Field & value, const DataTypePtr & type) = 0;
+    virtual RSResult checkGreater(const Field & value, const DataTypePtr & type) = 0;
     virtual RSResult checkGreaterEqual(const Field & value, const DataTypePtr & type) = 0;
 
     virtual String toString() const = 0;
@@ -106,7 +106,11 @@ struct MinMaxValueFixed : public MinMaxValue
     T max;
 
     MinMaxValueFixed() = default;
-    MinMaxValueFixed(bool has_value_, T min_, T max_) : MinMaxValue(has_value_), min(min_), max(max_) {}
+    MinMaxValueFixed(bool has_value_, T min_, T max_)
+        : MinMaxValue(has_value_)
+        , min(min_)
+        , max(max_)
+    {}
     MinMaxValueFixed(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
     {
         set(column, del_mark, offset, limit);
@@ -120,8 +124,8 @@ struct MinMaxValueFixed : public MinMaxValue
             auto & col_data = static_cast<const ColumnVector<T> &>(column).getData();
 
             has_value = true;
-            min       = col_data[min_idx];
-            max       = col_data[max_idx];
+            min = col_data[min_idx];
+            max = col_data[max_idx];
         }
     }
 
@@ -147,7 +151,7 @@ struct MinMaxValueFixed : public MinMaxValue
     void write(const IDataType & type, WriteBuffer & buf) override
     {
         writePODBinary(has_value, buf);
-        auto   col      = type.createColumn();
+        auto col = type.createColumn();
         auto & col_data = typeid_cast<ColumnVector<T> *>(col.get())->getData();
         col_data.push_back(min);
         col_data.push_back(max);
@@ -158,7 +162,7 @@ struct MinMaxValueFixed : public MinMaxValue
     {
         auto v = std::make_shared<MinMaxValueFixed<T>>();
         readPODBinary(v->has_value, buf);
-        auto   col      = type.createColumn();
+        auto col = type.createColumn();
         auto & col_data = typeid_cast<ColumnVector<T> *>(col.get())->getData();
         type.deserializeBinaryBulkWithMultipleStreams(*col, [&](const IDataType::SubstreamPath &) { return &buf; }, 2, 0, true, {});
         v->min = col_data[0];
@@ -187,7 +191,10 @@ struct MinMaxValueString : public MinMaxValue
     std::string max;
 
     MinMaxValueString() = default;
-    MinMaxValueString(bool has_value_, const std::string & min_, const std::string & max_) : MinMaxValue(has_value_), min(min_), max(max_)
+    MinMaxValueString(bool has_value_, const std::string & min_, const std::string & max_)
+        : MinMaxValue(has_value_)
+        , min(min_)
+        , max(max_)
     {
     }
     MinMaxValueString(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
@@ -203,8 +210,8 @@ struct MinMaxValueString : public MinMaxValue
             auto & cast_column = static_cast<const ColumnString &>(column);
 
             has_value = true;
-            min       = cast_column.getDataAt(min_idx).toString();
-            max       = cast_column.getDataAt(max_idx).toString();
+            min = cast_column.getDataAt(min_idx).toString();
+            max = cast_column.getDataAt(max_idx).toString();
         }
     }
 
@@ -230,7 +237,7 @@ struct MinMaxValueString : public MinMaxValue
     void write(const IDataType & type, WriteBuffer & buf) override
     {
         writePODBinary(has_value, buf);
-        auto col     = type.createColumn();
+        auto col = type.createColumn();
         auto str_col = typeid_cast<ColumnString *>(col.get());
         str_col->insertData(min.data(), min.size());
         str_col->insertData(max.data(), max.size());
@@ -241,7 +248,7 @@ struct MinMaxValueString : public MinMaxValue
     {
         auto v = std::make_shared<MinMaxValueString>();
         readPODBinary(v->has_value, buf);
-        auto col     = type.createColumn();
+        auto col = type.createColumn();
         auto str_col = typeid_cast<ColumnString *>(col.get());
         type.deserializeBinaryBulkWithMultipleStreams(*col, [&](const IDataType::SubstreamPath &) { return &buf; }, 2, 0, true, {});
         v->min = str_col->getDataAt(0).toString();
@@ -270,7 +277,11 @@ struct MinMaxValueDataGeneric : public MinMaxValue
     Field max;
 
     MinMaxValueDataGeneric() = default;
-    MinMaxValueDataGeneric(bool has_value_, const Field & min_, const Field & max_) : MinMaxValue(has_value_), min(min_), max(max_) {}
+    MinMaxValueDataGeneric(bool has_value_, const Field & min_, const Field & max_)
+        : MinMaxValue(has_value_)
+        , min(min_)
+        , max(max_)
+    {}
     MinMaxValueDataGeneric(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
     {
         set(column, del_mark, offset, limit);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
+
 #include <chrono>
 #include <mutex>
 #include <thread>
@@ -12,17 +13,16 @@ namespace DM
 {
 namespace tests
 {
-
 enum class LockType
 {
-    READ  = 0,
+    READ = 0,
     WRITE = 1
 };
 
 struct SimpleLock
 {
-    UInt64   transaction_id;
-    UInt64   tso;
+    UInt64 transaction_id;
+    UInt64 tso;
     LockType type;
 };
 
@@ -44,7 +44,7 @@ public:
             latch.lock();
             if (!isWriteLocked(id, tso))
             {
-                auto &     locks = lock_map[id];
+                auto & locks = lock_map[id];
                 SimpleLock l{transaction_id, tso, LockType::READ};
                 locks.emplace_back(l);
                 latch.unlock();
@@ -78,7 +78,7 @@ public:
             }
             if (!isReadLocked(id, tso))
             {
-                auto &     locks = lock_map[id];
+                auto & locks = lock_map[id];
                 SimpleLock l{transaction_id, tso, LockType::WRITE};
                 locks.emplace_back(l);
                 latch.unlock();
@@ -92,8 +92,8 @@ public:
     void readUnlock(UInt64 id, UInt64 transaction_id)
     {
         std::lock_guard<std::mutex> guard{mutex};
-        auto &                      locks = lock_map[id];
-        size_t                      index = UINT64_MAX;
+        auto & locks = lock_map[id];
+        size_t index = UINT64_MAX;
         for (size_t i = 0; i < locks.size(); i++)
         {
             if (locks[i].transaction_id == transaction_id && locks[i].type == LockType::READ)
@@ -115,8 +115,8 @@ public:
     void writeUnlock(UInt64 id, UInt64 transaction_id)
     {
         std::lock_guard<std::mutex> guard{mutex};
-        auto &                      locks = lock_map[id];
-        size_t                      index = UINT64_MAX;
+        auto & locks = lock_map[id];
+        size_t index = UINT64_MAX;
         for (size_t i = 0; i < locks.size(); i++)
         {
             if (locks[i].transaction_id == transaction_id && locks[i].type == LockType::WRITE)
@@ -164,7 +164,7 @@ public:
     }
 
 private:
-    std::mutex                              mutex;
+    std::mutex mutex;
     std::unordered_map<UInt64, SimpleLocks> lock_map;
 };
 } // namespace tests

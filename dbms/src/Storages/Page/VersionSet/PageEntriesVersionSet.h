@@ -12,12 +12,12 @@
 
 namespace DB
 {
-
 class PageEntriesVersionSet : public ::DB::MVCC::VersionSet<PageEntries, PageEntriesEdit, PageEntriesBuilder>
 {
 public:
     explicit PageEntriesVersionSet(String name_, const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log)
-        : ::DB::MVCC::VersionSet<PageEntries, PageEntriesEdit, PageEntriesBuilder>(config_), storage_name(std::move(name_))
+        : ::DB::MVCC::VersionSet<PageEntries, PageEntriesEdit, PageEntriesBuilder>(config_)
+        , storage_name(std::move(name_))
     {
         (void)log;
     }
