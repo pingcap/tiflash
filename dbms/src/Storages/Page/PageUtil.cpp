@@ -60,12 +60,8 @@ void syncFile(WritableFilePtr & file)
 }
 
 #ifndef NDEBUG
-void writeFile(WritableFilePtr &       file,
-               UInt64                  offset,
-               char *                  data,
-               size_t                  to_write,
-               const WriteLimiterPtr & write_limiter,
-               bool [[unused]] enable_failpoint)
+void writeFile(
+    WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter, bool enable_failpoint)
 #else
 void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter)
 #endif
