@@ -3,8 +3,6 @@
 *\#
 .tramp_history
 
-<<<<<<< HEAD
-=======
 # vscode clangd cache
 .cache
 
@@ -15,7 +13,6 @@ compile_commands.json
 # git patch reject report
 *.rej
 
->>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 # vim cache files
 *.swp
 
