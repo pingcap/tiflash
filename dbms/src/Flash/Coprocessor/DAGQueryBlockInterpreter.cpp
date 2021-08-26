@@ -397,10 +397,17 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     /// 1. for (cross) inner join, there is no problem in this swap.
     /// 2. for (cross) semi/anti-semi join, the build side is always right, needn't swap.
     /// 3. for non-cross left/right join, there is no problem in this swap.
-    /// 4. for cross left join, the build side is always right, needn't swap.
+    /// 4. for cross left join, the build side is always right, needn't and can't swap.
     /// 5. for cross right join, the build side is always left, so it will always swap and change to cross left join.
-    /// note that we don't support cross-right join now.
-    bool swap_join_side = join.inner_idx() == 0;
+    /// note that whatever the build side is, we can't support cross-right join now.
+
+    bool swap_join_side;
+    if (kind == ASTTableJoin::Kind::Cross_Right)
+        swap_join_side = true;
+    else if (kind == ASTTableJoin::Kind::Cross_Left)
+        swap_join_side = false;
+    else
+        swap_join_side = join.inner_idx() == 0;
 
     DAGPipeline left_pipeline;
     DAGPipeline right_pipeline;
