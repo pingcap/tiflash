@@ -479,7 +479,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         if (group_by_collation_sensitive)
         {
             auto type = step.actions->getSampleBlock().getByName(name).type;
-            std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr;
+            TiDB::TiDBCollatorPtr collator;
             if (removeNullable(type)->isString())
                 collator = getCollatorFromExpr(expr);
             if (!duplicated_key)
@@ -542,7 +542,7 @@ bool isUInt8Type(const DataTypePtr & type)
 }
 
 String DAGExpressionAnalyzer::applyFunction(
-    const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, std::shared_ptr<TiDB::ITiDBCollator> collator)
+    const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, const TiDB::TiDBCollatorPtr & collator)
 {
     String result_name = genFuncString(func_name, arg_names);
     if (actions->getSampleBlock().has(result_name))
