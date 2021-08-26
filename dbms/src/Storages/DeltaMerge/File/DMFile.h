@@ -72,7 +72,9 @@ public:
         size_t value;
 
     public:
-        ReadMetaMode(size_t value_) : value(value_) {}
+        ReadMetaMode(size_t value_)
+            : value(value_)
+        {}
 
         static ReadMetaMode all()
         {
