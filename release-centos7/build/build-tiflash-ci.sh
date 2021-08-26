@@ -11,11 +11,12 @@ fi
 
 command -v clang-format > /dev/null 2>&1
 if [[ $? != 0 ]]; then
-  curl -o "/usr/local/bin/clang-format" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/clang-format
+  curl -o "/usr/local/bin/clang-format" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/clang-format-12
   chmod +x "/usr/local/bin/clang-format"
 else
   echo "clang-format has been installed"
 fi
+clang-format --version
 
 set -ueox pipefail
 

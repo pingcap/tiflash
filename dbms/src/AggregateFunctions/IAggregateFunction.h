@@ -1,26 +1,25 @@
 #pragma once
 
-#include <cstddef>
-#include <memory>
-#include <vector>
-#include <type_traits>
-
-#include <Core/Types.h>
-#include <Core/Field.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/Exception.h>
 #include <Common/assert_cast.h>
+#include <Core/Field.h>
+#include <Core/Types.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/Collator.h>
 
+#include <cstddef>
+#include <memory>
+#include <type_traits>
+#include <vector>
+
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NOT_IMPLEMENTED;
+extern const int NOT_IMPLEMENTED;
 }
 
 class Arena;
@@ -91,10 +90,7 @@ public:
     virtual void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena * arena) const = 0;
 
     /// Returns true if a function requires Arena to handle own states (see add(), merge(), deserialize()).
-    virtual bool allocatesMemoryInArena() const
-    {
-        return false;
-    }
+    virtual bool allocatesMemoryInArena() const { return false; }
 
     /// Inserts results into a column.
     virtual void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const = 0;
@@ -134,7 +130,11 @@ public:
     /** The same for single place.
       */
     virtual void addBatchSinglePlace(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1) const = 0;
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const = 0;
 
     /** The same for single place when need to aggregate only filtered data.
       */
@@ -147,8 +147,12 @@ public:
         ssize_t if_argument_pos = -1) const = 0;
 
     virtual void addBatchSinglePlaceFromInterval(
-        size_t batch_begin, size_t batch_end, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1)
-        const = 0;
+        size_t batch_begin,
+        size_t batch_end,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const = 0;
 
     /** In addition to addBatch, this method collects multiple rows of arguments into array "places"
       *  as long as they are between offsets[i-1] and offsets[i]. This is used for arrayReduce and
@@ -181,7 +185,7 @@ public:
       */
     virtual const char * getHeaderFilePath() const = 0;
 
-    virtual void setCollators(TiDB::TiDBCollators & ) {}
+    virtual void setCollators(TiDB::TiDBCollators &) {}
 };
 
 /// Implement method to obtain an address of 'add' function.
@@ -235,7 +239,11 @@ public:
     }
 
     void addBatchSinglePlace(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1) const override
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const override
     {
         if (if_argument_pos >= 0)
         {
@@ -277,8 +285,12 @@ public:
     }
 
     void addBatchSinglePlaceFromInterval(
-        size_t batch_begin, size_t batch_end, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1)
-        const override
+        size_t batch_begin,
+        size_t batch_end,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const override
     {
         if (if_argument_pos >= 0)
         {
@@ -297,8 +309,12 @@ public:
     }
 
     void addBatchArray(
-        size_t batch_size, AggregateDataPtr * places, size_t place_offset, const IColumn ** columns, const UInt64 * offsets, Arena * arena)
-        const override
+        size_t batch_size,
+        AggregateDataPtr * places,
+        size_t place_offset,
+        const IColumn ** columns,
+        const UInt64 * offsets,
+        Arena * arena) const override
     {
         size_t current_offset = 0;
         for (size_t i = 0; i < batch_size; ++i)
@@ -356,14 +372,11 @@ namespace _IAggregateFunctionImpl
 template <bool with_collator = false>
 struct CollatorsHolder
 {
-    void setCollators(const TiDB::TiDBCollators &)
-    {
-    }
+    void setCollators(const TiDB::TiDBCollators &) {}
 
     template <typename T>
     void setDataCollators(T *) const
-    {
-    }
+    {}
 };
 
 template <>
@@ -371,10 +384,7 @@ struct CollatorsHolder<true>
 {
     TiDB::TiDBCollators collators;
 
-    void setCollators(const TiDB::TiDBCollators & collators_)
-    {
-        collators = collators_;
-    }
+    void setCollators(const TiDB::TiDBCollators & collators_) { collators = collators_; }
 
     template <typename T>
     void setDataCollators(T * data) const
@@ -389,19 +399,16 @@ struct AggregationCollatorsWrapper
 {
     void setCollators(const TiDB::TiDBCollators &) {}
 
-    StringRef getUpdatedValueForCollator(StringRef & in, size_t)
-    {
-        return in;
-    }
+    StringRef getUpdatedValueForCollator(StringRef & in, size_t) { return in; }
 
-    std::pair<TiDB::TiDBCollatorPtr, std::string *> getCollatorAndSortKeyContainer(size_t )
+    std::pair<TiDB::TiDBCollatorPtr, std::string *> getCollatorAndSortKeyContainer(size_t)
     {
         return std::make_pair(static_cast<TiDB::TiDBCollatorPtr>(nullptr), &TiDB::dummy_sort_key_contaner);
     }
 
-    void writeCollators(WriteBuffer & ) const {}
+    void writeCollators(WriteBuffer &) const {}
 
-    void readCollators(ReadBuffer & ) {}
+    void readCollators(ReadBuffer &) {}
 };
 
 template <>
@@ -468,7 +475,9 @@ struct AggregationCollatorsWrapper<true>
 
 /// Implements several methods for manipulation with data. T - type of structure with data for aggregation.
 template <typename T, typename Derived, bool with_collator = false>
-class IAggregateFunctionDataHelper : public IAggregateFunctionHelper<Derived>, protected _IAggregateFunctionImpl::CollatorsHolder<with_collator>
+class IAggregateFunctionDataHelper
+    : public IAggregateFunctionHelper<Derived>
+    , protected _IAggregateFunctionImpl::CollatorsHolder<with_collator>
 {
 protected:
     using Data = T;
@@ -482,31 +491,16 @@ public:
         _IAggregateFunctionImpl::CollatorsHolder<with_collator>::setCollators(collators_);
     }
 
-    void create(AggregateDataPtr __restrict place) const override
-    {
-        this->setDataCollators(new (place) Data);
-    }
+    void create(AggregateDataPtr __restrict place) const override { this->setDataCollators(new (place) Data); }
 
-    void destroy(AggregateDataPtr __restrict place) const noexcept override
-    {
-        data(place).~Data();
-    }
+    void destroy(AggregateDataPtr __restrict place) const noexcept override { data(place).~Data(); }
 
-    bool hasTrivialDestructor() const override
-    {
-        return std::is_trivially_destructible_v<Data>;
-    }
+    bool hasTrivialDestructor() const override { return std::is_trivially_destructible_v<Data>; }
 
-    size_t sizeOfData() const override
-    {
-        return sizeof(Data);
-    }
+    size_t sizeOfData() const override { return sizeof(Data); }
 
     /// NOTE: Currently not used (structures with aggregation state are put without alignment).
-    size_t alignOfData() const override
-    {
-        return alignof(Data);
-    }
+    size_t alignOfData() const override { return alignof(Data); }
 
     void addBatchLookupTable8(
         size_t batch_size,
