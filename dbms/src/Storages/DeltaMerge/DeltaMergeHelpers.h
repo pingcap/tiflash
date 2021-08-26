@@ -3,7 +3,7 @@
 #pragma once
 
 #include <Columns/ColumnVector.h>
-#include <Common/typeid_cast.h>
+#include <Common/assert_cast.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
@@ -16,10 +16,8 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
 inline Handle encodeToPK(T v)
 {
@@ -95,12 +93,12 @@ inline PaddedPODArray<T> const * toColumnVectorDataPtr(const ColumnPtr & column)
     {
         auto * const_col = static_cast<const ColumnConst *>(column.get());
 
-        const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(const_col->getDataColumn());
+        const ColumnVector<T> & c = assert_cast<const ColumnVector<T> &>(const_col->getDataColumn());
         return &c.getData();
     }
     else
     {
-        const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
+        const ColumnVector<T> & c = assert_cast<const ColumnVector<T> &>(*(column));
         return &c.getData();
     }
 }
@@ -108,21 +106,28 @@ inline PaddedPODArray<T> const * toColumnVectorDataPtr(const ColumnPtr & column)
 template <typename T>
 inline PaddedPODArray<T> * toMutableColumnVectorDataPtr(const MutableColumnPtr & column)
 {
-    ColumnVector<T> & c = typeid_cast<ColumnVector<T> &>(*(column));
+    ColumnVector<T> & c = assert_cast<ColumnVector<T> &>(*(column));
     return &c.getData();
+}
+
+template <typename T>
+inline const PaddedPODArray<T> & toColumnVectorData(const IColumn & column)
+{
+    const ColumnVector<T> & c = assert_cast<const ColumnVector<T> &>(column);
+    return c.getData();
 }
 
 template <typename T>
 inline const PaddedPODArray<T> & toColumnVectorData(const ColumnPtr & column)
 {
-    const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
+    const ColumnVector<T> & c = assert_cast<const ColumnVector<T> &>(*(column));
     return c.getData();
 }
 
 template <typename T>
 inline const PaddedPODArray<T> & toColumnVectorData(const MutableColumnPtr & column)
 {
-    auto & c = typeid_cast<ColumnVector<T> &>(*(column));
+    auto & c = assert_cast<ColumnVector<T> &>(*(column));
     return c.getData();
 }
 
@@ -138,12 +143,12 @@ inline PaddedPODArray<T> const * getColumnVectorDataPtr(const Block & block, siz
     return toColumnVectorDataPtr<T>(block.getByPosition(pos).column);
 }
 
-inline void addColumnToBlock(Block &             block,
-                             ColId               col_id,
-                             const String &      col_name,
+inline void addColumnToBlock(Block & block,
+                             ColId col_id,
+                             const String & col_name,
                              const DataTypePtr & col_type,
-                             const ColumnPtr &   col,
-                             const Field &       default_value = Field())
+                             const ColumnPtr & col,
+                             const Field & default_value = Field())
 {
     ColumnWithTypeAndName column(col, col_type, col_name, col_id, default_value);
     block.insert(std::move(column));
@@ -214,9 +219,9 @@ inline bool isSameSchema(const Block & a, const Block & b)
         auto & ca = a.getByPosition(i);
         auto & cb = b.getByPosition(i);
 
-        bool col_ok   = ca.column_id == cb.column_id;
-        bool name_ok  = ca.name == cb.name;
-        bool type_ok  = ca.type->equals(*(cb.type));
+        bool col_ok = ca.column_id == cb.column_id;
+        bool name_ok = ca.name == cb.name;
+        bool type_ok = ca.type->equals(*(cb.type));
         bool value_ok = !check_default_value || ca.default_value == cb.default_value;
 
         if (!col_ok || !name_ok || !type_ok || !value_ok)
@@ -247,7 +252,7 @@ inline void concat(Block & base, const Block & next)
     size_t next_rows = next.rows();
     for (size_t i = 0; i < base.columns(); ++i)
     {
-        auto & col     = base.getByPosition(i).column;
+        auto & col = base.getByPosition(i).column;
         auto * col_raw = const_cast<IColumn *>(col.get());
         col_raw->insertRangeFrom((*next.getByPosition(i).column), 0, next_rows);
     }
@@ -258,7 +263,7 @@ inline void concat(Block & base, const Block & next)
 inline std::pair<size_t, size_t> locatePosByAccumulation(const std::vector<size_t> & acc_seq, size_t offset)
 {
     auto it_begin = acc_seq.begin();
-    auto it       = std::upper_bound(it_begin, acc_seq.end(), offset);
+    auto it = std::upper_bound(it_begin, acc_seq.end(), offset);
     if (it == acc_seq.end())
         return {acc_seq.size(), 0};
     else
