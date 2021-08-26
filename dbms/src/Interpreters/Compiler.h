@@ -74,7 +74,7 @@ private:
 
     std::mutex mutex;
 
-    Logger * log = &Logger::get("Compiler");
+    Poco::Logger * log = &Poco::Logger::get("Compiler");
 
 
     void compile(

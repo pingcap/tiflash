@@ -71,7 +71,7 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
 }
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
-    : context(context_), meta(meta_), log(&Logger::get(fmt::format("task {}", meta_.task_id())))
+    : context(context_), meta(meta_), log(&Poco::Logger::get(fmt::format("task {}", meta_.task_id())))
 {
     id.start_ts = meta.start_ts();
     id.task_id = meta.task_id();

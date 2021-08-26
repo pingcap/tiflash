@@ -7,8 +7,8 @@ int main(int argc, char ** argv)
     using namespace DB;
 
     Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
-    Logger::root().setChannel(channel);
-    Logger::root().setLevel("trace");
+    Poco::Logger::root().setChannel(channel);
+    Poco::Logger::root().setLevel("trace");
 
     if (argc != 4)
     {

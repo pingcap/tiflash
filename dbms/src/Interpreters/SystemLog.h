@@ -118,7 +118,7 @@ protected:
       */
     std::vector<LogElement> data;
 
-    Logger * log;
+    Poco::Logger * log;
 
     /** In this thread, data is pulled from 'queue' and stored in 'data', and then written into table.
       */
@@ -146,7 +146,7 @@ SystemLog<LogElement>::SystemLog(Context & context_,
     database_name(database_name_), table_name(table_name_), storage_def(storage_def_),
     flush_interval_milliseconds(flush_interval_milliseconds_)
 {
-    log = &Logger::get("SystemLog (" + database_name + "." + table_name + ")");
+    log = &Poco::Logger::get("SystemLog (" + database_name + "." + table_name + ")");
 
     data.reserve(DBMS_SYSTEM_LOG_QUEUE_SIZE);
     saving_thread = std::thread([this] { threadFunction(); });

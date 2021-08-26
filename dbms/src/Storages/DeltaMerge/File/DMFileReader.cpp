@@ -21,7 +21,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
                              const String & file_name_base,
                              size_t         aio_threshold,
                              size_t         max_read_buffer_size,
-                             Logger *       log,
+                             Poco::Logger *       log,
                              const ReadLimiterPtr & read_limiter)
     : single_file_mode(reader.single_file_mode), avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
 {
@@ -176,7 +176,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
       file_provider(file_provider_),
       read_one_pack_every_time(read_one_pack_every_time_),
       single_file_mode(dmfile_->isSingleFileMode()),
-      log(&Logger::get("DMFileReader"))
+      log(&Poco::Logger::get("DMFileReader"))
 {
     if (dmfile->getStatus() != DMFile::Status::READABLE)
         throw Exception("DMFile [" + DB::toString(dmfile->fileId())

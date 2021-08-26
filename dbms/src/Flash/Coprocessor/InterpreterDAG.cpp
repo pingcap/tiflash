@@ -27,7 +27,7 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
       dag(dag_),
       keep_session_timezone_info(
           dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
-      log(&Logger::get("InterpreterDAG"))
+      log(&Poco::Logger::get("InterpreterDAG"))
 {
     const Settings & settings = context.getSettingsRef();
     if (dag.isBatchCop())

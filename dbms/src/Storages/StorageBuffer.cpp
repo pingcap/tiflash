@@ -58,7 +58,7 @@ StorageBuffer::StorageBuffer(const std::string & name_, const ColumnsDescription
     min_thresholds(min_thresholds_), max_thresholds(max_thresholds_),
     destination_database(destination_database_), destination_table(destination_table_),
     no_destination(destination_database.empty() && destination_table.empty()),
-    allow_materialized(allow_materialized_), log(&Logger::get("StorageBuffer (" + name + ")"))
+    allow_materialized(allow_materialized_), log(&Poco::Logger::get("StorageBuffer (" + name + ")"))
 {
 }
 

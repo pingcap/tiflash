@@ -807,7 +807,7 @@ RegionMetaSnapshot Region::dumpRegionMetaSnapshot() const { return meta.dumpRegi
 Region::Region(RegionMeta && meta_) : Region(std::move(meta_), nullptr) {}
 
 Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_)
-    : meta(std::move(meta_)), log(&Logger::get("Region")), mapped_table_id(meta.getRange()->getMappedTableID()), proxy_helper(proxy_helper_)
+    : meta(std::move(meta_)), log(&Poco::Logger::get("Region")), mapped_table_id(meta.getRange()->getMappedTableID()), proxy_helper(proxy_helper_)
 {}
 
 TableID Region::getMappedTableID() const { return mapped_table_id; }

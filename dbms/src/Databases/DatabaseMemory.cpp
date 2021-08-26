@@ -13,7 +13,7 @@ namespace ErrorCodes
 
 DatabaseMemory::DatabaseMemory(String name_)
     : DatabaseWithOwnTablesBase(std::move(name_))
-    , log(&Logger::get("DatabaseMemory(" + name + ")"))
+    , log(&Poco::Logger::get("DatabaseMemory(" + name + ")"))
 {}
 
 void DatabaseMemory::loadTables(

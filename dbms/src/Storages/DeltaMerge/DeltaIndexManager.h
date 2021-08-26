@@ -37,7 +37,7 @@ private:
     size_t       current_size = 0;
     const size_t max_size;
 
-    Logger * log;
+    Poco::Logger * log;
 
     std::mutex mutex;
 
@@ -45,7 +45,7 @@ private:
     void removeOverflow(std::vector<DeltaIndexPtr> & removed);
 
 public:
-    explicit DeltaIndexManager(size_t max_size_) : max_size(max_size_), log(&Logger::get("DeltaIndexManager")) {}
+    explicit DeltaIndexManager(size_t max_size_) : max_size(max_size_), log(&Poco::Logger::get("DeltaIndexManager")) {}
 
     /// Note that if isLimit() is false, than this method always return 0.
     size_t currentSize() { return current_size; }

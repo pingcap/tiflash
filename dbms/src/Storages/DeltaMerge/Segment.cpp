@@ -175,7 +175,7 @@ Segment::Segment(UInt64                      epoch_, //
       next_segment_id(next_segment_id_),
       delta(delta_),
       stable(stable_),
-      log(&Logger::get("Segment"))
+      log(&Poco::Logger::get("Segment"))
 {}
 
 SegmentPtr Segment::newSegment(DMContext &              context,

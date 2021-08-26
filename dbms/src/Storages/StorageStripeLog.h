@@ -62,7 +62,7 @@ private:
     FileChecker file_checker;
     mutable std::shared_mutex rwlock;
 
-    Logger * log;
+    Poco::Logger * log;
 
 protected:
     StorageStripeLog(

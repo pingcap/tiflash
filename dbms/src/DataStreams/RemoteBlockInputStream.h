@@ -147,7 +147,7 @@ private:
     PoolMode pool_mode = PoolMode::GET_MANY;
     std::optional<QualifiedTableName> main_table;
 
-    Logger * log = &Logger::get("RemoteBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("RemoteBlockInputStream");
 };
 
 }

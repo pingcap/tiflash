@@ -57,7 +57,7 @@ public:
             NestedPools nested_pools_,
             size_t max_tries_,
             time_t decrease_error_period_,
-            Logger * log_)
+            Poco::Logger * log_)
         : nested_pools(std::move(nested_pools_))
         , max_tries(max_tries_)
         , decrease_error_period(decrease_error_period_)
@@ -134,7 +134,7 @@ protected:
     /// The time when error counts were last decreased.
     time_t last_error_decrease_time = 0;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 template <typename TNestedPool>

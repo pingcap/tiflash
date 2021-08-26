@@ -69,7 +69,7 @@ private:
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;

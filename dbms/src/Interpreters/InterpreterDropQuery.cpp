@@ -63,7 +63,7 @@ BlockIO InterpreterDropQuery::execute()
             if (drop.database.empty() && !drop.temporary)
             {
                 LOG_WARNING(
-                    (&Logger::get("InterpreterDropQuery")), "It is recommended to use `DROP TEMPORARY TABLE` to delete temporary tables");
+                    (&Poco::Logger::get("InterpreterDropQuery")), "It is recommended to use `DROP TEMPORARY TABLE` to delete temporary tables");
             }
             table->shutdown();
             /// If table was already dropped by anyone, an exception will be thrown

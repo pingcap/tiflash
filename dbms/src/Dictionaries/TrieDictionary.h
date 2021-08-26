@@ -225,7 +225,7 @@ private:
 
     std::exception_ptr creation_exception;
 
-    Logger * logger;
+    Poco::Logger * logger;
 };
 
 

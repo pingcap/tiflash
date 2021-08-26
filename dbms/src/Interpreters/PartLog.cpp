@@ -118,7 +118,7 @@ bool PartLog::addNewPartToTheLog(Context & context, const MergeTreeDataPart & pa
     }
     catch (...)
     {
-        tryLogCurrentException(part_log ? part_log->log : &Logger::get("PartLog"), __PRETTY_FUNCTION__);
+        tryLogCurrentException(part_log ? part_log->log : &Poco::Logger::get("PartLog"), __PRETTY_FUNCTION__);
         return false;
     }
 

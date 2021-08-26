@@ -55,6 +55,6 @@ private:
 
     const RegionManager & region_manager;
     std::mutex mutex;
-    Logger * log;
+    Poco::Logger * log;
 };
 } // namespace DB

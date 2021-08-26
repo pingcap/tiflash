@@ -52,7 +52,7 @@ private:
 public:
     CoprocessorReader(
         const DAGSchema & schema_, pingcap::kv::Cluster * cluster, std::vector<pingcap::coprocessor::copTask> tasks, int concurrency)
-        : schema(schema_), resp_iter(std::move(tasks), cluster, concurrency, &Logger::get("pingcap/coprocessor"))
+        : schema(schema_), resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"))
     {
         resp_iter.open();
     }

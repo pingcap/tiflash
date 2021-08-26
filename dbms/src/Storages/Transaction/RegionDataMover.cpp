@@ -31,7 +31,7 @@ BlockInputStreamPtr createBlockInputStreamFromRange(
 
     std::string query = ss.str();
 
-    LOG_DEBUG(&Logger::get(RegionDataMoverName), __FUNCTION__ << ": sql " << query);
+    LOG_DEBUG(&Poco::Logger::get(RegionDataMoverName), __FUNCTION__ << ": sql " << query);
 
     return executeQuery(query, context, true, QueryProcessingStage::Complete).in;
 }
@@ -86,7 +86,7 @@ void getHandleMapByRange(
     }
 
     auto end_time = Clock::now();
-    LOG_DEBUG(&Logger::get(RegionDataMoverName),
+    LOG_DEBUG(&Poco::Logger::get(RegionDataMoverName),
         __FUNCTION__ << ": execute sql and handle data, cost "
                      << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms, read " << tol_rows
                      << " rows");
@@ -97,7 +97,7 @@ template void getHandleMapByRange<UInt64>(Context &, StorageMergeTree &, const H
 
 void tryOptimizeStorageFinal(Context & context, TableID table_id)
 {
-    auto log = &Logger::get(RegionDataMoverName);
+    auto log = &Poco::Logger::get(RegionDataMoverName);
     auto & tmt = context.getTMTContext();
     auto storage = tmt.getStorages().get(table_id);
     if (!storage)

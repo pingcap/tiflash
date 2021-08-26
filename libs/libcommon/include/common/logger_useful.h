@@ -9,8 +9,6 @@
 #define QUERY_PREVIEW_LENGTH 160
 #endif
 
-using Poco::Logger;
-
 /// Logs a message to a specified logger with that level.
 
 #define LOG_TRACE(logger, message) do { \

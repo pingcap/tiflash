@@ -132,7 +132,7 @@ void sortRangesByStartEdge(RowKeyRanges & ranges)
     });
 }
 
-RowKeyRanges tryMergeRanges(RowKeyRanges && sorted_ranges, size_t expected_ranges_count, Logger * log)
+RowKeyRanges tryMergeRanges(RowKeyRanges && sorted_ranges, size_t expected_ranges_count, Poco::Logger * log)
 {
     if (sorted_ranges.size() <= 1)
         return std::move(sorted_ranges);

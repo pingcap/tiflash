@@ -29,7 +29,7 @@ public:
                const String & file_name_base,
                size_t         aio_threshold,
                size_t         max_read_buffer_size,
-               Logger *       log,
+               Poco::Logger *       log,
                const ReadLimiterPtr & read_limiter);
 
         const bool                       single_file_mode;
@@ -131,7 +131,7 @@ private:
 
     const bool single_file_mode;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 } // namespace DM

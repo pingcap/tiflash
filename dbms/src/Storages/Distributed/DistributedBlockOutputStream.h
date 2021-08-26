@@ -14,7 +14,7 @@
 
 namespace Poco
 {
-    class Logger;
+    class Poco::Logger;
 }
 
 namespace DB

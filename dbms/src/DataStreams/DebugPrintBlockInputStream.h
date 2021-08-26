@@ -31,7 +31,7 @@ private:
 public:
     DebugPrintBlockInputStream(BlockInputStreamPtr & input_, std::string log_prefix_ = "") : input(input_)
     {
-        log = &Logger::get("DebugPrintInput." + log_prefix_);
+        log = &Poco::Logger::get("DebugPrintInput." + log_prefix_);
         children.emplace_back(input_);
     }
 
@@ -56,7 +56,7 @@ public:
     }
 
 private:
-    Logger * log;
+    Poco::Logger * log;
     BlockInputStreamPtr input;
 };
 

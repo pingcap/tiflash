@@ -53,7 +53,7 @@ private:
     std::atomic<bool> quit {false};
     std::mutex mutex;
     std::condition_variable cond;
-    Logger * log;
+    Poco::Logger * log;
     std::thread thread {&StorageDistributedDirectoryMonitor::run, this};
 };
 

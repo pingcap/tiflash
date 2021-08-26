@@ -19,7 +19,7 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_)
-        : queue(clients), log(&Logger::get("SharedQueryBlockInputStream")), in(in_)
+        : queue(clients), log(&Poco::Logger::get("SharedQueryBlockInputStream")), in(in_)
     {
         children.push_back(in);
     }
@@ -139,7 +139,7 @@ private:
 
     std::string exception_msg;
 
-    Logger * log;
+    Poco::Logger * log;
     BlockInputStreamPtr in;
 };
 } // namespace DB

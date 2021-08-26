@@ -169,7 +169,7 @@ RegionTable::RegionTable(Context & context_)
     : flush_thresholds(RegionTable::FlushThresholds::FlushThresholdsData{
         {FTH_BYTES_1, FTH_PERIOD_1}, {FTH_BYTES_2, FTH_PERIOD_2}, {FTH_BYTES_3, FTH_PERIOD_3}, {FTH_BYTES_4, FTH_PERIOD_4}}),
       context(&context_),
-      log(&Logger::get("RegionTable"))
+      log(&Poco::Logger::get("RegionTable"))
 {}
 
 void RegionTable::restore()
@@ -364,7 +364,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & re
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, skip flush.
-            LOG_WARNING(&Logger::get(__PRETTY_FUNCTION__),
+            LOG_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__),
                 "Got error while reading region committed cache: " << e.displayText() << ". Skip flush region and keep original cache.");
         }
         else

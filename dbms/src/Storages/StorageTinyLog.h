@@ -68,7 +68,7 @@ private:
 
     FileChecker file_checker;
 
-    Logger * log;
+    Poco::Logger * log;
 
     void addFile(const String & column_name, const IDataType & type, size_t level = 0);
     void addFiles(const String & column_name, const IDataType & type);

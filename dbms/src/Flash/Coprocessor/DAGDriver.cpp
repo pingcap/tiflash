@@ -36,7 +36,7 @@ DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_req
       dag_response(dag_response_),
       writer(nullptr),
       internal(internal_),
-      log(&Logger::get("DAGDriver"))
+      log(&Poco::Logger::get("DAGDriver"))
 {
     context.setSetting("read_tso", start_ts);
     if (schema_ver)
@@ -55,7 +55,7 @@ DAGDriver<true>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_requ
       retry_regions(retry_regions_),
       writer(writer_),
       internal(internal_),
-      log(&Logger::get("DAGDriver"))
+      log(&Poco::Logger::get("DAGDriver"))
 {
     context.setSetting("read_tso", start_ts);
     if (schema_ver)

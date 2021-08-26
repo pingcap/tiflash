@@ -63,7 +63,7 @@ DatabaseOrdinary::DatabaseOrdinary(String name_, const String & metadata_path_, 
     : DatabaseWithOwnTablesBase(std::move(name_)),
       metadata_path(metadata_path_),
       data_path(context.getPath() + "data/" + escapeForFileName(name) + "/"),
-      log(&Logger::get("DatabaseOrdinary (" + name + ")"))
+      log(&Poco::Logger::get("DatabaseOrdinary (" + name + ")"))
 {
     Poco::File(data_path).createDirectories();
 }

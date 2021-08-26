@@ -84,7 +84,7 @@ StorageMergeTree::StorageMergeTree(const String & path_,
       reader(data),
       writer(data),
       merger(data, context.getBackgroundPool()),
-      log(&Logger::get(database_name_ + "." + table_name + " (StorageMergeTree)"))
+      log(&Poco::Logger::get(database_name_ + "." + table_name + " (StorageMergeTree)"))
 {
     *data.table_info = table_info_;
     if (path_.empty())
@@ -338,7 +338,7 @@ void StorageMergeTree::rename(
     data.table_name = new_table_name;
     data.database_name = new_database_name;
     data.table_info->name = new_display_table_name; // update name in table info
-    /// NOTE: Logger names are not updated.
+    /// NOTE: Poco::Logger names are not updated.
 }
 
 void StorageMergeTree::alter(

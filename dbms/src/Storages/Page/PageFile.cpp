@@ -785,7 +785,7 @@ PageFile::PageFile(PageFileId              file_id_,
                    const FileProviderPtr & file_provider_,
                    PageFile::Type          type_,
                    bool                    is_create,
-                   Logger *                log_)
+                   Poco::Logger *                log_)
     : file_id(file_id_),
       level(level_),
       type(type_),
@@ -808,7 +808,7 @@ PageFile::PageFile(PageFileId              file_id_,
 }
 
 std::pair<PageFile, PageFile::Type>
-PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Logger * log)
+PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Poco::Logger * log)
 {
 
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
@@ -884,7 +884,7 @@ PageFile PageFile::newPageFile(PageFileId              file_id,
                                const std::string &     parent_path,
                                const FileProviderPtr & file_provider_,
                                PageFile::Type          type,
-                               Logger *                log)
+                               Poco::Logger *                log)
 {
 #ifndef NDEBUG
     // PageStorage may create a "Formal" PageFile for writing,
@@ -900,7 +900,7 @@ PageFile PageFile::openPageFileForRead(PageFileId              file_id,
                                        const std::string &     parent_path,
                                        const FileProviderPtr & file_provider_,
                                        PageFile::Type          type,
-                                       Logger *                log)
+                                       Poco::Logger *                log)
 {
     return PageFile(file_id, level, parent_path, file_provider_, type, false, log);
 }

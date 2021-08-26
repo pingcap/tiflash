@@ -38,7 +38,7 @@ extern const int TABLE_IS_DROPPED;
 
 
 static void writeRegionDataToStorage(
-    Context & context, const RegionPtrWithBlock & region, RegionDataReadInfoList & data_list_read, Logger * log)
+    Context & context, const RegionPtrWithBlock & region, RegionDataReadInfoList & data_list_read, Poco::Logger * log)
 {
     constexpr auto FUNCTION_NAME = __FUNCTION__;
     const auto & tmt = context.getTMTContext();
@@ -278,7 +278,7 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
 }
 
 void RegionTable::writeBlockByRegion(
-    Context & context, const RegionPtrWithBlock & region, RegionDataReadInfoList & data_list_to_remove, Logger * log, bool lock_region)
+    Context & context, const RegionPtrWithBlock & region, RegionDataReadInfoList & data_list_to_remove, Poco::Logger * log, bool lock_region)
 {
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
     if (region.pre_decode_cache)
@@ -355,7 +355,7 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
     const std::unordered_set<UInt64> * bypass_lock_ts,
     RegionVersion region_version,
     RegionVersion conf_version,
-    Logger * log)
+    Poco::Logger * log)
 {
     auto region_data_lock = resolveLocksAndReadRegionData(table_id,
         region,
@@ -409,7 +409,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, skip pre-decode and ingest sst later.
-            LOG_WARNING(&Logger::get(__PRETTY_FUNCTION__),
+            LOG_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__),
                 "Got error while reading region committed cache: " << e.displayText() << ". Skip pre-decode and keep original cache.");
             // set data_list_read and let apply snapshot process use empty block
             data_list_read = RegionDataReadInfoList();

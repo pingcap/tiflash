@@ -8,7 +8,7 @@ namespace DB
 class GCManager
 {
 public:
-    GCManager(Context & context) : global_context{context.getGlobalContext()}, log(&Logger::get("GCManager")) {};
+    GCManager(Context & context) : global_context{context.getGlobalContext()}, log(&Poco::Logger::get("GCManager")) {};
 
     ~GCManager() = default;
 
@@ -19,6 +19,6 @@ private:
 
     TableID next_table_id = InvalidTableID;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 } // namespace DB

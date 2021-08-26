@@ -231,7 +231,7 @@ void LocalServer::tryInitPath()
 int LocalServer::main(const std::vector<std::string> & /*args*/)
 try
 {
-    Logger * log = &logger();
+    Poco::Logger * log = &logger();
 
     if (!config().has("query") && !config().has("table-structure")) /// Nothing to process
     {
@@ -412,7 +412,7 @@ void LocalServer::attachSystemTables()
 
 void LocalServer::processQueries()
 {
-    Logger * log = &logger();
+    Poco::Logger * log = &logger();
 
     String initial_create_query = getInitialCreateTableQuery();
     String queries_str = initial_create_query + config().getString("query");

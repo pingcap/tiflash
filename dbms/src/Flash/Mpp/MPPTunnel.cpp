@@ -24,7 +24,7 @@ MPPTunnel::MPPTunnel(
       timeout(timeout_),
       current_task(current_task_),
       tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id())),
-      log(&Logger::get(tunnel_id))
+      log(&Poco::Logger::get(tunnel_id))
 {
 }
 

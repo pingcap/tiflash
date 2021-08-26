@@ -23,7 +23,7 @@ class DiagnosticsService final : public ::diagnosticspb::Diagnostics::Service,
                                  private boost::noncopyable
 {
 public:
-    DiagnosticsService(IServer & _server) : log(&Logger::get("DiagnosticsService")), server(_server) {}
+    DiagnosticsService(IServer & _server) : log(&Poco::Logger::get("DiagnosticsService")), server(_server) {}
     ~DiagnosticsService() override {}
 
 public:

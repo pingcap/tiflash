@@ -163,7 +163,7 @@ private:
 
     TiDB::SnapshotApplyMethod snapshot_apply_method;
 
-    Logger * log;
+    Poco::Logger * log;
 
     std::atomic<UInt64> REGION_COMPACT_LOG_PERIOD;
     std::atomic<UInt64> REGION_COMPACT_LOG_MIN_ROWS;

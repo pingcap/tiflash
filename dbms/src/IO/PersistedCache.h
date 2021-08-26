@@ -131,7 +131,7 @@ private:
     std::unique_ptr<std::thread> cleanup_thread;
     std::atomic<bool> gc_cancelled{false};
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 static const std::string DeletedDirPrefix = "_deleted_";

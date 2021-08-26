@@ -22,7 +22,7 @@ BatchCoprocessorHandler::BatchCoprocessorHandler(CoprocessorContext & cop_contex
     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
     : CoprocessorHandler(cop_context_, nullptr, nullptr), cop_request(cop_request_), writer(writer_)
 {
-    log = (&Logger::get("BatchCoprocessorHandler"));
+    log = (&Poco::Logger::get("BatchCoprocessorHandler"));
 }
 
 grpc::Status BatchCoprocessorHandler::execute()

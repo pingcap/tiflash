@@ -15,7 +15,7 @@
 
 namespace Poco
 {
-class Logger;
+class Poco::Logger;
 }
 
 namespace DB
@@ -70,7 +70,7 @@ protected:
 private:
     static constexpr auto reload_interval = std::chrono::seconds(2);
 
-    Poco::Logger * log = &Logger::get(name);
+    Poco::Logger * log = &Poco::Logger::get(name);
 
     std::string path;
     FilesChangesTracker files;

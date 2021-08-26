@@ -47,7 +47,7 @@ protected:
     const tikvpb::BatchCommandsRequest & request;
     tikvpb::BatchCommandsResponse & response;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 } // namespace DB

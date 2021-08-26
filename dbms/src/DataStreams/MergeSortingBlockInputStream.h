@@ -94,7 +94,7 @@ private:
     size_t max_bytes_before_external_sort;
     const std::string tmp_path;
 
-    Logger * log = &Logger::get("MergeSortingBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("MergeSortingBlockInputStream");
 
     Blocks blocks;
     size_t sum_bytes_in_blocks = 0;

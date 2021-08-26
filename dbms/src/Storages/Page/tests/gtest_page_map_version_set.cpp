@@ -38,7 +38,7 @@ TYPED_TEST_CASE_P(PageMapVersionSet_test);
 TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
 {
     TypeParam versions("vset_test", this->config_, this->log);
-    LOG_TRACE(&Logger::root(), "init      :" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "init      :" + versions.toDebugString());
     {
         PageEntriesEdit edit;
         PageEntry       e;
@@ -48,7 +48,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
     }
     // VersionSet, new version generate && old version removed at the same time
     // VersionSetWithDelta, delta version merged
-    LOG_TRACE(&Logger::root(), "apply    A:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "apply    A:" + versions.toDebugString());
     EXPECT_EQ(versions.size(), 1UL);
     {
         PageEntriesEdit edit;
@@ -58,7 +58,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
         edit.ref(2, 0);
         versions.apply(edit);
     }
-    LOG_TRACE(&Logger::root(), "apply    B:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "apply    B:" + versions.toDebugString());
     auto s2 = versions.getSnapshot();
     EXPECT_EQ(versions.size(), 1UL);
     auto entry = s2->version()->at(0);
@@ -78,7 +78,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     TypeParam versions("vset_test", this->config_, this->log);
     auto      s1 = versions.getSnapshot();
     EXPECT_EQ(versions.size(), 1UL);
-    LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "snapshot 1:" + versions.toDebugString());
     {
         PageEntriesEdit edit;
         PageEntry       e;
@@ -87,17 +87,17 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
         versions.apply(edit);
     }
     EXPECT_EQ(versions.size(), 2UL); // former node is hold by s1, append new version
-    LOG_TRACE(&Logger::root(), "apply    B:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "apply    B:" + versions.toDebugString());
 
     // Get snapshot for checking edit is success
     auto s2 = versions.getSnapshot();
-    LOG_TRACE(&Logger::root(), "snapshot 2:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "snapshot 2:" + versions.toDebugString());
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
 
     // Release snapshot2
     s2.reset();
-    LOG_TRACE(&Logger::root(), "rel snap 2:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "rel snap 2:" + versions.toDebugString());
     /// For VersionSet, size is 2 since A is still hold by s1
     /// For VersionDeltaSet, size is 1 since we do a compaction on delta
     if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
@@ -106,7 +106,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
         EXPECT_EQ(versions.size(), 1UL);
 
     s1.reset();
-    LOG_TRACE(&Logger::root(), "rel snap 1:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "rel snap 1:" + versions.toDebugString());
     // VersionSet, old version removed from version set
     // VersionSetWithDelta, delta version merged
     EXPECT_EQ(versions.size(), 1UL);
@@ -124,7 +124,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
         edit.put(0, e);
         versions.apply(edit);
     }
-    LOG_TRACE(&Logger::root(), "apply    C:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "apply    C:" + versions.toDebugString());
     // VersionSet, new version gen and old version remove at the same time
     // VersionSetWithDelta, C merge to delta
     EXPECT_EQ(versions.size(), 1UL);
@@ -139,19 +139,19 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
 {
     TypeParam versions("vset_test", this->config_, this->log);
     auto      s1 = versions.getSnapshot();
-    LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "snapshot 1:" + versions.toDebugString());
     PageEntriesEdit edit;
     PageEntry       e;
     e.checksum = 0x123;
     edit.put(0, e);
     versions.apply(edit);
-    LOG_TRACE(&Logger::root(), "apply    B:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "apply    B:" + versions.toDebugString());
     auto s2    = versions.getSnapshot();
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
 
     s1.reset();
-    LOG_TRACE(&Logger::root(), "rel snap 1:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "rel snap 1:" + versions.toDebugString());
     // VersionSet, size decrease to 1 when s1 release
     // VersionSetWithDelta, size is 2 since we can not do a compaction on delta
     if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
@@ -160,7 +160,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
         EXPECT_EQ(versions.size(), 2UL);
 
     s2.reset();
-    LOG_TRACE(&Logger::root(), "rel snap 2:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "rel snap 2:" + versions.toDebugString());
     EXPECT_EQ(versions.size(), 1UL);
 }
 
@@ -170,7 +170,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
 {
     TypeParam versions("vset_test", this->config_, this->log);
     auto      s1 = versions.getSnapshot();
-    LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "snapshot 1:" + versions.toDebugString());
     {
         PageEntriesEdit edit;
         PageEntry       e;
@@ -178,7 +178,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
         edit.put(0, e);
         versions.apply(edit);
     }
-    LOG_TRACE(&Logger::root(), "apply    B:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "apply    B:" + versions.toDebugString());
     auto s2    = versions.getSnapshot();
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
@@ -190,13 +190,13 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
         edit.put(1, e);
         versions.apply(edit);
     }
-    LOG_TRACE(&Logger::root(), "apply    C:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "apply    C:" + versions.toDebugString());
     auto s3 = versions.getSnapshot();
     entry   = s3->version()->at(1);
     ASSERT_EQ(entry.checksum, 0xFFUL);
 
     s1.reset();
-    LOG_TRACE(&Logger::root(), "rel snap 1:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "rel snap 1:" + versions.toDebugString());
     // VersionSet, size decrease to 2 when s1 release
     // VersionSetWithDelta, size is 3 since we can not do a compaction on delta
     if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
@@ -205,14 +205,14 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
         EXPECT_EQ(versions.size(), 3UL);
 
     s2.reset();
-    LOG_TRACE(&Logger::root(), "rel snap 2:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "rel snap 2:" + versions.toDebugString());
     if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
         EXPECT_EQ(versions.size(), 1UL);
     else
         EXPECT_EQ(versions.size(), 2UL);
 
     s3.reset();
-    LOG_TRACE(&Logger::root(), "rel snap 3:" + versions.toDebugString());
+    LOG_TRACE(&Poco::Logger::root(), "rel snap 3:" + versions.toDebugString());
     EXPECT_EQ(versions.size(), 1UL);
 }
 

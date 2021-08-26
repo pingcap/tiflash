@@ -26,7 +26,7 @@ public:
     PlaygroundBlockInputStream(BlockInputStreamPtr & input_, const SortDescription & description_) :
         input(input_), description(description_)
     {
-        log = &Logger::get("PlaygroundInput");
+        log = &Poco::Logger::get("PlaygroundInput");
         children.emplace_back(input_);
     }
 
@@ -51,7 +51,7 @@ public:
     }
 
 private:
-    Logger * log;
+    Poco::Logger * log;
     BlockInputStreamPtr input;
     const SortDescription description;
 };

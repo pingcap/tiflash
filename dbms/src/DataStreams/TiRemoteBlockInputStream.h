@@ -40,7 +40,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     std::vector<std::atomic<bool>> execution_summaries_inited;
     std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
 
-    Logger * log;
+    Poco::Logger * log;
 
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
@@ -166,7 +166,7 @@ public:
           source_num(remote_reader->getSourceNum()),
           name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")"),
           execution_summaries_inited(source_num),
-          log(&Logger::get(name))
+          log(&Poco::Logger::get(name))
     {
         // generate sample block
         ColumnsWithTypeAndName columns;

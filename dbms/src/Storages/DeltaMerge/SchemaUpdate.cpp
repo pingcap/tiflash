@@ -197,7 +197,7 @@ void applyAlter(ColumnDefines &               table_columns,
     /// Caller should ensure the command is legal.
     /// eg. The column to modify/drop/rename must exist, the column to add must not exist, the new column name of rename must not exists.
 
-    Logger * log = &Logger::get("SchemaUpdate");
+    Poco::Logger * log = &Poco::Logger::get("SchemaUpdate");
 
     if (command.type == AlterCommand::MODIFY_COLUMN)
     {

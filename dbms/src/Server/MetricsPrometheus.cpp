@@ -114,7 +114,7 @@ constexpr long INIT_DELAY = 5;
 
 MetricsPrometheus::MetricsPrometheus(
     Context & context, const AsynchronousMetrics & async_metrics_, const TiFlashSecurityConfig & security_config)
-    : timer("Prometheus"), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
+    : timer("Prometheus"), async_metrics(async_metrics_), log(&Poco::Logger::get("Prometheus"))
 {
     auto & tiflash_metrics = TiFlashMetrics::instance();
     auto & conf = context.getConfigRef();

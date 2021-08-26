@@ -9,12 +9,12 @@
 namespace DB
 {
 /** LogWithPrefix could print formalized logs.
-  * For example, adding prefix for a Logger with "[task 1 query 2333]" could help us find logs with LogSearch.
+  * For example, adding prefix for a Poco::Logger with "[task 1 query 2333]" could help us find logs with LogSearch.
   * 
   * Moreover, we can append prefix at any time with the static function "append(const String & str)".
   * For example, call append("[InputStream]") could print logs with prefix "[task 1 query 2333] [InputStream]".
   * 
-  * Interfaces in LogWithPrefix are definitely the same with the Logger, so that they could use the same
+  * Interfaces in LogWithPrefix are definitely the same with the Poco::Logger, so that they could use the same
   * macro such as LOG_INFO() etc.
   */
 class LogWithPrefix : private boost::noncopyable
@@ -68,7 +68,7 @@ public:
         log->error(m);
     }
 
-    Logger * getLog() const { return log; }
+    Poco::Logger * getLog() const { return log; }
 
     using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 

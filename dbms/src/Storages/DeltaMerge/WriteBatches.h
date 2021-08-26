@@ -35,7 +35,7 @@ struct WriteBatches : private boost::noncopyable
     {
         if constexpr (DM_RUN_CHECK)
         {
-            Logger * logger      = &Logger::get("WriteBatches");
+            Poco::Logger * logger      = &Poco::Logger::get("WriteBatches");
             auto     check_empty = [&](const WriteBatch & wb, const String & name) {
                 if (!wb.empty())
                 {
@@ -68,8 +68,8 @@ struct WriteBatches : private boost::noncopyable
 
         if constexpr (DM_RUN_CHECK)
         {
-            Logger * logger = &Logger::get("WriteBatches");
-            auto     check  = [](const WriteBatch & wb, const String & what, Logger * logger) {
+            Poco::Logger * logger = &Poco::Logger::get("WriteBatches");
+            auto     check  = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
                 for (auto & w : wb.getWrites())
@@ -112,9 +112,9 @@ struct WriteBatches : private boost::noncopyable
 
         if constexpr (DM_RUN_CHECK)
         {
-            Logger * logger = &Logger::get("WriteBatches");
+            Poco::Logger * logger = &Poco::Logger::get("WriteBatches");
 
-            auto check = [](const WriteBatch & wb, const String & what, Logger * logger) {
+            auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
                 for (auto & w : wb.getWrites())
@@ -140,9 +140,9 @@ struct WriteBatches : private boost::noncopyable
     {
         if constexpr (DM_RUN_CHECK)
         {
-            Logger * logger = &Logger::get("WriteBatches");
+            Poco::Logger * logger = &Poco::Logger::get("WriteBatches");
 
-            auto check = [](const WriteBatch & wb, const String & what, Logger * logger) {
+            auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
                 for (auto & w : wb.getWrites())
@@ -164,9 +164,9 @@ struct WriteBatches : private boost::noncopyable
     {
         if constexpr (DM_RUN_CHECK)
         {
-            Logger * logger = &Logger::get("WriteBatches");
+            Poco::Logger * logger = &Poco::Logger::get("WriteBatches");
 
-            auto check = [](const WriteBatch & wb, const String & what, Logger * logger) {
+            auto check = [](const WriteBatch & wb, const String & what, Poco::Logger * logger) {
                 if (wb.empty())
                     return;
                 for (auto & w : wb.getWrites())

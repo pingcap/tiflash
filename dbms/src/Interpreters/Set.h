@@ -36,7 +36,7 @@ class Set
 {
 public:
     Set(const SizeLimits & limits) :
-        log(&Logger::get("Set")),
+        log(&Poco::Logger::get("Set")),
         limits(limits),
         set_elements(std::make_unique<SetElements>())
     {
@@ -110,7 +110,7 @@ private:
       */
     DataTypes data_types;
 
-    Logger * log;
+    Poco::Logger * log;
 
     /// Limitations on the maximum size of the set
     SizeLimits limits;

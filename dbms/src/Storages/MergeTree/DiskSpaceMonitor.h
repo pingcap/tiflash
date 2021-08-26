@@ -45,7 +45,7 @@ public:
                 if (DiskSpaceMonitor::reserved_bytes < size)
                 {
                     DiskSpaceMonitor::reserved_bytes = 0;
-                    LOG_ERROR(&Logger::get("DiskSpaceMonitor"), "Unbalanced reservations size; it's a bug");
+                    LOG_ERROR(&Poco::Logger::get("DiskSpaceMonitor"), "Unbalanced reservations size; it's a bug");
                 }
                 else
                 {
@@ -54,7 +54,7 @@ public:
 
                 if (DiskSpaceMonitor::reservation_count == 0)
                 {
-                    LOG_ERROR(&Logger::get("DiskSpaceMonitor"), "Unbalanced reservation count; it's a bug");
+                    LOG_ERROR(&Poco::Logger::get("DiskSpaceMonitor"), "Unbalanced reservation count; it's a bug");
                 }
                 else
                 {

@@ -316,7 +316,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
             break;
         }
         default:
-            LOG_ERROR(&Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
+            LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
             exit(-1);
     }
 }
@@ -337,7 +337,7 @@ void GcRawCppPtr(EngineStoreServerWrap *, RawVoidPtr ptr, RawCppPtrType type)
                 delete reinterpret_cast<PreHandledSnapshotWithFiles *>(ptr);
                 break;
             default:
-                LOG_ERROR(&Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
+                LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__), "unknown type " + std::to_string(uint32_t(type)));
                 exit(-1);
         }
     }

@@ -23,7 +23,7 @@ namespace ErrorCodes
 DatabaseDictionary::DatabaseDictionary(const String & name_, const Context & context)
     : name(name_),
       external_dictionaries(context.getExternalDictionaries()),
-      log(&Logger::get("DatabaseDictionary(" + name + ")"))
+      log(&Poco::Logger::get("DatabaseDictionary(" + name + ")"))
 {
 }
 

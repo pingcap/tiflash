@@ -21,7 +21,7 @@ private:
     static void run(const std::string & command, const std::vector<std::string> & args);
     Context & context;
     Timer timer;
-    Logger * log;
+    Poco::Logger * log;
 };
 
 

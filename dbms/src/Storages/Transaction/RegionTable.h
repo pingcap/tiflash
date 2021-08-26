@@ -134,7 +134,7 @@ public:
     static void writeBlockByRegion(Context & context,
         const RegionPtrWithBlock & region,
         RegionDataReadInfoList & data_list_to_remove,
-        Logger * log,
+        Poco::Logger * log,
         bool lock_region = true);
 
     /// Read the data of the given region into block, take good care of learner read and locks.
@@ -162,7 +162,7 @@ public:
         const std::unordered_set<UInt64> * bypass_lock_ts,
         RegionVersion region_version,
         RegionVersion conf_version,
-        Logger * log);
+        Poco::Logger * log);
 
     void checkTableOptimize();
     void checkTableOptimize(TableID, const double);
@@ -201,7 +201,7 @@ private:
 
     mutable TableOptimizeChecker table_checker;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 

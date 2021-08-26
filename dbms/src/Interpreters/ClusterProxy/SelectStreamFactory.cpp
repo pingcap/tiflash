@@ -83,7 +83,7 @@ void SelectStreamFactory::createForShard(
             if (shard_info.pool)
             {
                 LOG_WARNING(
-                        &Logger::get("ClusterProxy::SelectStreamFactory"),
+                        &Poco::Logger::get("ClusterProxy::SelectStreamFactory"),
                         "There is no table " << main_table.database << "." << main_table.table
                         << " on local replica of shard " << shard_info.shard_num << ", will try remote replicas.");
 

@@ -276,7 +276,7 @@ void loadTable(Context & context,
     const String & file_name,
     bool has_force_restore_data_flag)
 {
-    Logger * log = &Logger::get("loadTable");
+    Poco::Logger * log = &Poco::Logger::get("loadTable");
     const String table_metadata_path = database_metadata_path + (endsWith(database_metadata_path, "/") ? "" : "/") + file_name;
 
     String s;

@@ -163,7 +163,7 @@ void StorageSetOrJoinBase::restoreFromFile(const String & file_path)
     backup_stream.readSuffix();
 
     /// TODO Add speed, compressed bytes, data volume in memory, compression ratio ... Generalize all statistics logging in project.
-    LOG_INFO(&Logger::get("StorageSetOrJoinBase"), std::fixed << std::setprecision(2)
+    LOG_INFO(&Poco::Logger::get("StorageSetOrJoinBase"), std::fixed << std::setprecision(2)
         << "Loaded from backup file " << file_path << ". "
         << backup_stream.getProfileInfo().rows << " rows, "
         << backup_stream.getProfileInfo().bytes / 1048576.0 << " MiB. "

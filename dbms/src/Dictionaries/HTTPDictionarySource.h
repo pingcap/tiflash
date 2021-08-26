@@ -5,7 +5,7 @@
 #include <common/LocalDateTime.h>
 #include <IO/ConnectionTimeouts.h>
 
-namespace Poco { class Logger; }
+namespace Poco { class Poco::Logger; }
 
 
 namespace DB

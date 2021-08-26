@@ -46,7 +46,7 @@ ExternalLoader::ExternalLoader(const Poco::Util::AbstractConfiguration & config,
                                const ExternalLoaderUpdateSettings & update_settings,
                                const ExternalLoaderConfigSettings & config_settings,
                                std::unique_ptr<IExternalLoaderConfigRepository> config_repository,
-                               Logger * log, const std::string & loadable_object_name)
+                               Poco::Logger * log, const std::string & loadable_object_name)
         : config(config)
         , update_settings(update_settings)
         , config_settings(config_settings)

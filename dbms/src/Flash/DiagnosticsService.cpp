@@ -44,7 +44,7 @@ static DiagnosticsService::AvgLoad getAvgLoadLinux()
         Poco::File avg_load_file("/proc/loadavg");
         if (!avg_load_file.exists())
         {
-            LOG_WARNING(&Logger::get("DiagnosticsService"), "/proc/loadavg doesn't exist");
+            LOG_WARNING(&Poco::Logger::get("DiagnosticsService"), "/proc/loadavg doesn't exist");
             return DiagnosticsService::AvgLoad{};
         }
     }
@@ -56,7 +56,7 @@ static DiagnosticsService::AvgLoad getAvgLoadLinux()
     boost::split(values, str, boost::is_any_of(" "));
     if (values.size() < 3)
     {
-        LOG_WARNING(&Logger::get("DiagnosticsService"), "Cannot parse /proc/loadavg");
+        LOG_WARNING(&Poco::Logger::get("DiagnosticsService"), "Cannot parse /proc/loadavg");
         return DiagnosticsService::AvgLoad{};
     }
     return DiagnosticsService::AvgLoad{std::stod(values[0]), std::stod(values[1]), std::stod(values[2])};
@@ -79,7 +79,7 @@ static MemoryInfo getMemoryInfoLinux()
         Poco::File meminfo_file("/proc/meminfo");
         if (!meminfo_file.exists())
         {
-            LOG_WARNING(&Logger::get("DiagnosticsService"), "/proc/meminfo doesn't exist");
+            LOG_WARNING(&Poco::Logger::get("DiagnosticsService"), "/proc/meminfo doesn't exist");
             return memory_info;
         }
     }
@@ -114,7 +114,7 @@ static DiagnosticsService::NICInfo getNICInfoLinux()
     Poco::File net_dir("/sys/class/net");
     if (!net_dir.exists())
     {
-        LOG_WARNING(&Logger::get("DiagnosticsService"), "/sys/class/net doesn't exist");
+        LOG_WARNING(&Poco::Logger::get("DiagnosticsService"), "/sys/class/net doesn't exist");
         return nic_info;
     }
 
@@ -177,7 +177,7 @@ static DiagnosticsService::IOInfo getIOInfoLinux()
     Poco::File io_dir("/sys/block");
     if (!io_dir.exists())
     {
-        LOG_WARNING(&Logger::get("DiagnosticsService"), "/sys/block doesn't exist");
+        LOG_WARNING(&Poco::Logger::get("DiagnosticsService"), "/sys/block doesn't exist");
         return io_info;
     }
 
@@ -195,7 +195,7 @@ static DiagnosticsService::IOInfo getIOInfoLinux()
         boost::split(values, value, boost::is_any_of("\t "), boost::token_compress_on);
         if (values.size() < 11)
         {
-            LOG_WARNING(&Logger::get("DiagnosticsService"), "Cannot parse /sys/block");
+            LOG_WARNING(&Poco::Logger::get("DiagnosticsService"), "Cannot parse /sys/block");
             return io_info;
         }
         /// TODO: better to initialize with field names
@@ -225,7 +225,7 @@ static size_t getPhysicalCoreNumberLinux()
         Poco::File info_file("/proc/cpuinfo");
         if (!info_file.exists())
         {
-            LOG_WARNING(&Logger::get("DiagnosticsService"), "/proc/cpuinfo doesn't exist");
+            LOG_WARNING(&Poco::Logger::get("DiagnosticsService"), "/proc/cpuinfo doesn't exist");
             return 0;
         }
     }
@@ -291,7 +291,7 @@ static uint64_t getCPUFrequencyLinux()
         Poco::File info_file("/proc/cpuinfo");
         if (!info_file.exists())
         {
-            LOG_WARNING(&Logger::get("DiagnosticsService"), "/proc/cpuinfo doesn't exist");
+            LOG_WARNING(&Poco::Logger::get("DiagnosticsService"), "/proc/cpuinfo doesn't exist");
             return 0;
         }
     }
@@ -474,7 +474,7 @@ static std::vector<DiagnosticsService::Disk> getAllDisksLinux()
         Poco::File mount_file("/proc/mounts");
         if (!mount_file.exists())
         {
-            LOG_WARNING(&Logger::get("DiagnosticsService"), "/proc/mounts doesn't exist");
+            LOG_WARNING(&Poco::Logger::get("DiagnosticsService"), "/proc/mounts doesn't exist");
             return disks;
         }
     }
@@ -497,7 +497,7 @@ static std::vector<DiagnosticsService::Disk> getAllDisksLinux()
         boost::split(values, mount_info, boost::is_any_of("\t "), boost::token_compress_on);
         if (values.size() < 3)
         {
-            LOG_WARNING(&Logger::get("DiagnosticsService"), "Cannot parse /proc/mounts");
+            LOG_WARNING(&Poco::Logger::get("DiagnosticsService"), "Cannot parse /proc/mounts");
             continue;
         }
         static std::vector<std::string> fs_filter{

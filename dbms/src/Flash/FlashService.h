@@ -52,7 +52,7 @@ private:
 private:
     IServer & server;
     const TiFlashSecurityConfig & security_config;
-    Logger * log;
+    Poco::Logger * log;
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;

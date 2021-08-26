@@ -25,7 +25,7 @@ KVStore::KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_met
     : region_persister(context, region_manager),
       raft_cmd_res(std::make_unique<RaftCommandResult>()),
       snapshot_apply_method(snapshot_apply_method_),
-      log(&Logger::get("KVStore"))
+      log(&Poco::Logger::get("KVStore"))
 {}
 
 void KVStore::restore(const TiFlashRaftProxyHelper * proxy_helper)
@@ -515,7 +515,7 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
     constexpr double BATCH_READ_INDEX_TIME_RATE = 0.2; // part of time for waiting shall be assigned to batch-read-index
     constexpr double MAX_SLEEP_TIME = 20;
 
-    Logger * log = &Logger::get(__FUNCTION__);
+    Poco::Logger * log = &Poco::Logger::get(__FUNCTION__);
 
     LOG_INFO(log, "start to check regions ready");
 

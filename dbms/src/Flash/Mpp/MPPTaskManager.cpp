@@ -6,7 +6,7 @@
 
 namespace DB
 {
-MPPTaskManager::MPPTaskManager() : log(&Logger::get("TaskManager")) {}
+MPPTaskManager::MPPTaskManager() : log(&Poco::Logger::get("TaskManager")) {}
 
 MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg)
 {

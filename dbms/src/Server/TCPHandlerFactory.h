@@ -5,7 +5,7 @@
 #include "IServer.h"
 #include "TCPHandler.h"
 
-namespace Poco { class Logger; }
+namespace Poco { class Poco::Logger; }
 
 namespace DB
 {
@@ -19,7 +19,7 @@ private:
 public:
     explicit TCPHandlerFactory(IServer & server_, bool secure_ = false)
         : server(server_)
-        , log(&Logger::get(std::string("TCP") + (secure_ ? "S" : "") + "HandlerFactory"))
+        , log(&Poco::Logger::get(std::string("TCP") + (secure_ ? "S" : "") + "HandlerFactory"))
     {
     }
 

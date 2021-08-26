@@ -290,7 +290,7 @@ StorageTinyLog::StorageTinyLog(
     path(path_), name(name_),
     max_compress_block_size(max_compress_block_size_),
     file_checker(path + escapeForFileName(name) + '/' + "sizes.json"),
-    log(&Logger::get("StorageTinyLog"))
+    log(&Poco::Logger::get("StorageTinyLog"))
 {
     if (path.empty())
         throw Exception("Storage " + getName() + " requires data path", ErrorCodes::INCORRECT_FILE_NAME);

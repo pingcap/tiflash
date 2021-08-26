@@ -33,9 +33,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
 
-    Logger * log;
+    Poco::Logger * log;
 
-    TiDBSchemaSyncer(KVClusterPtr cluster_) : cluster(cluster_), cur_version(0), log(&Logger::get("SchemaSyncer")) {}
+    TiDBSchemaSyncer(KVClusterPtr cluster_) : cluster(cluster_), cur_version(0), log(&Poco::Logger::get("SchemaSyncer")) {}
 
     bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
 

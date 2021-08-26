@@ -31,7 +31,7 @@ private:
     TMTContext & tmt;
     BackgroundProcessingPool & background_pool;
 
-    Logger * log;
+    Poco::Logger * log;
 
     std::mutex region_mutex;
     RegionMap regions_to_flush;

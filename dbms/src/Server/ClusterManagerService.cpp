@@ -36,7 +36,7 @@ catch (DB::Exception & e)
 }
 
 ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::string & config_path)
-    : context(context_), timer("ClusterManager"), log(&Logger::get("ClusterManagerService"))
+    : context(context_), timer("ClusterManager"), log(&Poco::Logger::get("ClusterManagerService"))
 {
     const auto & conf = context.getConfigRef();
 

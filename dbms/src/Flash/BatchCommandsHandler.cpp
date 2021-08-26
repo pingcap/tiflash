@@ -17,7 +17,7 @@ BatchCommandsContext::BatchCommandsContext(
 
 BatchCommandsHandler::BatchCommandsHandler(BatchCommandsContext & batch_commands_context_, const tikvpb::BatchCommandsRequest & request_,
     tikvpb::BatchCommandsResponse & response_)
-    : batch_commands_context(batch_commands_context_), request(request_), response(response_), log(&Logger::get("BatchCommandsHandler"))
+    : batch_commands_context(batch_commands_context_), request(request_), response(response_), log(&Poco::Logger::get("BatchCommandsHandler"))
 {}
 
 ThreadPool::Job BatchCommandsHandler::handleCommandJob(

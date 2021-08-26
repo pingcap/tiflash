@@ -35,7 +35,7 @@ class MPPTaskManager : private boost::noncopyable
 
     MPPQueryMap mpp_query_map;
 
-    Logger * log;
+    Poco::Logger * log;
 
     std::condition_variable cv;
 

@@ -30,7 +30,7 @@ constexpr char tls_err_msg[] = "common name check is failed";
 FlashService::FlashService(IServer & server_)
     : server(server_),
       security_config(server_.securityConfig()),
-      log(&Logger::get("FlashService"))
+      log(&Poco::Logger::get("FlashService"))
 {
     auto settings = server_.context().getSettingsRef();
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();

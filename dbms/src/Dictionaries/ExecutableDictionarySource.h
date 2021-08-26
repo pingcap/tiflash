@@ -4,7 +4,7 @@
 #include <Dictionaries/DictionaryStructure.h>
 
 
-namespace Poco { class Logger; }
+namespace Poco { class Poco::Logger; }
 
 
 namespace DB

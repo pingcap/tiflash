@@ -22,7 +22,7 @@ using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
-    StableValueSpace(PageId id_) : id(id_), log(&Logger::get("StableValueSpace")) {}
+    StableValueSpace(PageId id_) : id(id_), log(&Poco::Logger::get("StableValueSpace")) {}
 
     // Set DMFiles for this value space.
     // If this value space is logical split, specify `range` and `dm_context` so that we can get more precise
@@ -88,7 +88,7 @@ public:
 
         ColumnCachePtrs column_caches;
 
-        Snapshot() : log(&Logger::get("StableValueSpace::Snapshot")) {}
+        Snapshot() : log(&Poco::Logger::get("StableValueSpace::Snapshot")) {}
 
         SnapshotPtr clone()
         {
@@ -134,7 +134,7 @@ public:
         RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range);
 
     private:
-        Logger * log;
+        Poco::Logger * log;
     };
 
     SnapshotPtr createSnapshot();
@@ -153,7 +153,7 @@ private:
     StableProperty    property;
     std::atomic<bool> is_property_cached = false;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 using StableSnapshot    = StableValueSpace::Snapshot;

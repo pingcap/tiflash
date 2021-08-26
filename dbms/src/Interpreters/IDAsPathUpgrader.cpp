@@ -399,7 +399,7 @@ IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_, bool is_mock_, std::un
       mapper(is_mock ? std::make_shared<MockSchemaNameMapper>() //
                      : std::make_shared<SchemaNameMapper>()),
       reserved_databases{std::move(reserved_databases_)},
-      log{&Logger::get("IDAsPathUpgrader")}
+      log{&Poco::Logger::get("IDAsPathUpgrader")}
 {}
 
 bool IDAsPathUpgrader::needUpgrade()

@@ -88,9 +88,9 @@ struct SchemaGetter
 {
     pingcap::kv::Snapshot snap;
 
-    Logger * log;
+    Poco::Logger * log;
 
-    SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_) : snap(cluster_, tso_), log(&Logger::get("SchemaGetter")) {}
+    SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_) : snap(cluster_, tso_), log(&Poco::Logger::get("SchemaGetter")) {}
 
     Int64 getVersion();
 

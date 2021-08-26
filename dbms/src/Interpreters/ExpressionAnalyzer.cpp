@@ -1041,7 +1041,7 @@ void ExpressionAnalyzer::normalizeTreeImpl(
         {
             if (storage && select_query && !select_query->raw_for_mutable)
             {
-                // LOG_DEBUG(&Logger::get("ExpressionAnalyzer"), "Filter hidden columns for mutable table.");
+                // LOG_DEBUG(&Poco::Logger::get("ExpressionAnalyzer"), "Filter hidden columns for mutable table.");
                 filtered_names = MutableSupport::instance().hiddenColumns(storage->getName());
             }
         }

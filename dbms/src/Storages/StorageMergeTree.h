@@ -140,7 +140,7 @@ private:
     MergeTreeData::DataParts currently_merging;
     std::mutex currently_merging_mutex;
 
-    Logger * log;
+    Poco::Logger * log;
 
     std::atomic<bool> shutdown_called{false};
 

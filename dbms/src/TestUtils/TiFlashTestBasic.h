@@ -118,8 +118,8 @@ public:
         Poco::AutoPtr<UnifiedLogPatternFormatter> formatter(new UnifiedLogPatternFormatter());
         formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-        Logger::root().setChannel(formatting_channel);
-        Logger::root().setLevel(level);
+        Poco::Logger::root().setChannel(formatting_channel);
+        Poco::Logger::root().setLevel(level);
     }
 
     // If you want to run these tests, you should set this envrionment variablle
@@ -161,7 +161,7 @@ private:
 #define CHECK_TESTS_WITH_DATA_ENABLED                                                                        \
     if (!TiFlashTestEnv::isTestsWithDataEnabled())                                                           \
     {                                                                                                        \
-        LOG_INFO(&Logger::get("GTEST"),                                                                      \
+        LOG_INFO(&Poco::Logger::get("GTEST"),                                                                      \
             "Test: " << ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() << "."     \
                      << ::testing::UnitTest::GetInstance()->current_test_info()->name() << " is disabled."); \
         return;                                                                                              \

@@ -22,7 +22,7 @@ namespace CurrentMetrics
     extern const Metric TCPConnection;
 }
 
-namespace Poco { class Logger; }
+namespace Poco { class Poco::Logger; }
 
 namespace DB
 {

@@ -47,7 +47,7 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     std::tie(region_size, applied_index) = region.serialize(buffer);
     if (unlikely(region_size > static_cast<size_t>(std::numeric_limits<UInt32>::max())))
     {
-        LOG_WARNING(&Logger::get("RegionPersister"),
+        LOG_WARNING(&Poco::Logger::get("RegionPersister"),
             "Persisting big region: " << region.toString() << " with data info: " << region.dataInfo() << ", serialized size "
                                       << region_size);
     }
@@ -110,7 +110,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 }
 
 RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)
-    : global_context(global_context_), region_manager(region_manager_), log(&Logger::get("RegionPersister"))
+    : global_context(global_context_), region_manager(region_manager_), log(&Poco::Logger::get("RegionPersister"))
 {}
 
 namespace

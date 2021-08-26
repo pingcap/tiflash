@@ -32,7 +32,7 @@ private:
     size_t version_column_index;
     size_t delmark_column_index;
 
-    Logger * log = &Logger::get("TMTSortedBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("TMTSortedBlockInputStream");
 
     /// All data has been read.
     bool finished = false;

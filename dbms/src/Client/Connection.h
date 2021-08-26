@@ -243,19 +243,19 @@ private:
     std::shared_ptr<WriteBuffer> maybe_compressed_out;
     BlockOutputStreamPtr block_out;
 
-    /// Logger is created lazily, for avoid to run DNS request in constructor.
-    class LoggerWrapper
+    /// Poco::Logger is created lazily, for avoid to run DNS request in constructor.
+    class Poco::LoggerWrapper
     {
     public:
-        LoggerWrapper(Connection & parent_)
+        Poco::LoggerWrapper(Connection & parent_)
             : log(nullptr), parent(parent_)
         {
         }
 
-        Logger * get()
+        Poco::Logger * get()
         {
             if (!log)
-                log = &Logger::get("Connection (" + parent.getDescription() + ")");
+                log = &Poco::Logger::get("Connection (" + parent.getDescription() + ")");
 
             return log;
         }
@@ -265,7 +265,7 @@ private:
         Connection & parent;
     };
 
-    LoggerWrapper log_wrapper;
+    Poco::LoggerWrapper log_wrapper;
 
     void connect();
     void sendHello();

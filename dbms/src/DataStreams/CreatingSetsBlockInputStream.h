@@ -8,7 +8,7 @@
 
 namespace Poco
 {
-class Logger;
+class Poco::Logger;
 }
 
 namespace DB
@@ -63,8 +63,8 @@ private:
     std::mutex exception_mutex;
     std::vector<std::exception_ptr> exception_from_workers;
 
-    using Logger = Poco::Logger;
-    Logger * log = &Logger::get("CreatingSetsBlockInputStream");
+    using Poco::Logger = Poco::Logger;
+    Poco::Logger * log = &Poco::Logger::get("CreatingSetsBlockInputStream");
 
     void createAll();
     void createOne(SubqueryForSet & subquery);

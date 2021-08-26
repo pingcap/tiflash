@@ -739,7 +739,7 @@ private:
     Allocator * allocator;
     size_t      bytes = 0;
 
-    Logger * log;
+    Poco::Logger * log;
 
 public:
     // For test cases only.
@@ -840,7 +840,7 @@ private:
     {
         allocator = new Allocator();
 
-        log = &Logger::get("DeltaTree");
+        log = &Poco::Logger::get("DeltaTree");
 
         insert_value_space = insert_value_space_;
 
@@ -953,7 +953,7 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
       num_deletes(o.num_deletes),
       num_entries(o.num_entries),
       allocator(new Allocator()),
-      log(&Logger::get("DeltaTree"))
+      log(&Poco::Logger::get("DeltaTree"))
 {
     NodePtr my_root;
     if (isLeaf(o.root))

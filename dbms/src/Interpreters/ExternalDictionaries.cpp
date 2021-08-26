@@ -34,7 +34,7 @@ ExternalDictionaries::ExternalDictionaries(
                          externalDictionariesUpdateSettings,
                          getExternalDictionariesConfigSettings(),
                          std::move(config_repository),
-                         &Logger::get("ExternalDictionaries"),
+                         &Poco::Logger::get("ExternalDictionaries"),
                          "external dictionary"),
           context(context)
 {

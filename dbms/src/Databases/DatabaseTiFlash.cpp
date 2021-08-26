@@ -50,7 +50,7 @@ DatabaseTiFlash::DatabaseTiFlash(String name_, const String & metadata_path_, co
       data_path(context.getPath() + "data/"),
       db_info(std::make_shared<TiDB::DBInfo>(db_info_)),
       tombstone(tombstone_),
-      log(&Logger::get("DatabaseTiFlash (" + name + ")"))
+      log(&Poco::Logger::get("DatabaseTiFlash (" + name + ")"))
 {
     if (unlikely(version_ != DatabaseTiFlash::CURRENT_VERSION))
         throw Exception("Can not create database TiFlash with unknown version: " + DB::toString(version_), ErrorCodes::LOGICAL_ERROR);

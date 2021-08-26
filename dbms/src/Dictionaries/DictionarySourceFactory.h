@@ -12,7 +12,7 @@ namespace Poco
         class AbstractConfiguration;
     }
 
-    class Logger;
+    class Poco::Logger;
 }
 
 namespace DB

@@ -318,7 +318,7 @@ protected:
     }
 };
 
-void UpdateMallocConfig([[maybe_unused]] Logger * log)
+void UpdateMallocConfig([[maybe_unused]] Poco::Logger * log)
 {
 #ifdef RUN_FAIL_RETURN
     static_assert(false);
@@ -409,7 +409,7 @@ struct RaftStoreProxyRunner : boost::noncopyable
         size_t stack_size = 1024 * 1024 * 20;
     };
 
-    RaftStoreProxyRunner(RunRaftStoreProxyParms && parms_, Logger * log_) : parms(std::move(parms_)), log(log_) {}
+    RaftStoreProxyRunner(RunRaftStoreProxyParms && parms_, Poco::Logger * log_) : parms(std::move(parms_)), log(log_) {}
 
     void join()
     {
@@ -442,11 +442,11 @@ private:
 private:
     RunRaftStoreProxyParms parms;
     pthread_t thread;
-    Logger * log;
+    Poco::Logger * log;
 };
 
 // We only need this task run once.
-void initStores(Context & global_context, Logger * log, bool lazily_init_store)
+void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_store)
 {
     auto do_init_stores = [&global_context, log]() {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
@@ -484,7 +484,7 @@ void initStores(Context & global_context, Logger * log, bool lazily_init_store)
 class Server::FlashGrpcServerHolder
 {
 public:
-    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Logger * log_) : log(log_)
+    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Poco::Logger * log_) : log(log_)
     {
         grpc::ServerBuilder builder;
         if (server.security_config.has_tls_config)
@@ -538,7 +538,7 @@ public:
     }
 
 private:
-    Logger * log;
+    Poco::Logger * log;
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
@@ -547,7 +547,7 @@ private:
 class Server::TcpHttpServersHolder
 {
 public:
-    TcpHttpServersHolder(Server & server_, const Settings & settings, Logger * log_)
+    TcpHttpServersHolder(Server & server_, const Settings & settings, Poco::Logger * log_)
         : server(server_), log(log_), server_pool(1, server.config().getUInt("max_connections", 1024))
     {
         auto & config = server.config();
@@ -811,7 +811,7 @@ public:
 
 private:
     Server & server;
-    Logger * log;
+    Poco::Logger * log;
     Poco::ThreadPool server_pool;
     std::vector<std::unique_ptr<Poco::Net::TCPServer>> servers;
 };
@@ -820,7 +820,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
 
-    Logger * log = &logger();
+    Poco::Logger * log = &logger();
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
 #endif
@@ -912,7 +912,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
 
     // print necessary grpc log.
-    grpc_log = &Logger::get("grpc");
+    grpc_log = &Poco::Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
 

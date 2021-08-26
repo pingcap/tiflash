@@ -23,7 +23,7 @@ struct SharedQuery
     static constexpr Int64 unfinished_expired_microseconds = 12L * 60 * 60 * 1000 * 1000; // 12 hours
 
     SharedQuery(String query_id_, size_t clients_, const BlockInputStreamPtr & in)
-        : query_id(query_id_), clients(clients_), log(&Logger::get("SharedQuery"))
+        : query_id(query_id_), clients(clients_), log(&Poco::Logger::get("SharedQuery"))
     {
         LOG_TRACE(log, "Create SharedQuery(" << query_id << ")");
         /// We only share BlockInputStream between clients,
@@ -64,7 +64,7 @@ struct SharedQuery
     size_t          finished_clients{0};
     Poco::Timestamp last_finish_time{};
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 using SharedQueryPtr = std::shared_ptr<SharedQuery>;
@@ -159,7 +159,7 @@ public:
         }
     }
 
-    SharedQueries() : log(&Logger::get("SharedQueries"))
+    SharedQueries() : log(&Poco::Logger::get("SharedQueries"))
     {
         timer.schedule(FunctionTimerTask::create(std::bind(&SharedQueries::checkAll, this)), //
             check_interval_milliseconds,
@@ -178,7 +178,7 @@ private:
     Poco::Util::Timer timer;
     std::mutex        mutex;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 using SharedQueriesPtr = std::shared_ptr<SharedQueries>;

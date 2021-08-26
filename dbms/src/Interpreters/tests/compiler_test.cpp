@@ -9,8 +9,8 @@ int main(int, char **)
     using namespace DB;
 
     Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
-    Logger::root().setChannel(channel);
-    Logger::root().setLevel("trace");
+    Poco::Logger::root().setChannel(channel);
+    Poco::Logger::root().setLevel("trace");
 
     /// Check exception handling and catching
     try

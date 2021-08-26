@@ -152,7 +152,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
     const char *      meta_data,
     const size_t      meta_data_size,
     PageEntriesEdit & edit,
-    Logger *          log)
+    Poco::Logger *          log)
 {
     const char * meta_data_end = meta_data + meta_data_size;
 
@@ -413,7 +413,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
 
 const PageFile::Version PageFile::CURRENT_VERSION = 1;
 
-PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, const FileProviderPtr & file_provider_, PageFile::Type type_, bool is_create, Logger * log_)
+PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, const FileProviderPtr & file_provider_, PageFile::Type type_, bool is_create, Poco::Logger * log_)
     : file_id(file_id_), level(level_), type(type_), parent_path(parent_path), file_provider(file_provider_), data_file_pos(0), meta_file_pos(0), log(log_)
 {
     if (is_create)
@@ -428,7 +428,7 @@ PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & paren
     }
 }
 
-std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider, const String & page_file_name, Logger * log)
+std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider, const String & page_file_name, Poco::Logger * log)
 {
 
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
@@ -499,12 +499,12 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
     return {{}, Type::Invalid};
 }
 
-PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider, PageFile::Type type, Logger * log)
+PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider, PageFile::Type type, Poco::Logger * log)
 {
     return PageFile(file_id, level, parent_path, file_provider, type, true, log);
 }
 
-PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider, PageFile::Type type, Logger * log)
+PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider, PageFile::Type type, Poco::Logger * log)
 {
     return PageFile(file_id, level, parent_path, file_provider, type, false, log);
 }

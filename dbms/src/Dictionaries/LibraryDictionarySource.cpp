@@ -111,7 +111,7 @@ LibraryDictionarySource::LibraryDictionarySource(const DictionaryStructure & dic
     const std::string & config_prefix,
     Block & sample_block,
     const Context & context)
-    : log(&Logger::get("LibraryDictionarySource"))
+    : log(&Poco::Logger::get("LibraryDictionarySource"))
     , dict_struct{dict_struct_}
     , config_prefix{config_prefix}
     , path{config.getString(config_prefix + ".path", "")}
@@ -129,7 +129,7 @@ LibraryDictionarySource::LibraryDictionarySource(const DictionaryStructure & dic
 }
 
 LibraryDictionarySource::LibraryDictionarySource(const LibraryDictionarySource & other)
-    : log(&Logger::get("LibraryDictionarySource"))
+    : log(&Poco::Logger::get("LibraryDictionarySource"))
     , dict_struct{other.dict_struct}
     , config_prefix{other.config_prefix}
     , path{other.path}

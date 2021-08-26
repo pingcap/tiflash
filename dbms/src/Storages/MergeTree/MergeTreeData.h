@@ -580,7 +580,7 @@ private:
     BrokenPartCallback broken_part_callback;
 
     String log_name;
-    Logger * log;
+    Poco::Logger * log;
 
 
     /// Work with data parts

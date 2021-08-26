@@ -136,7 +136,7 @@ MergeTreeData::DataPart::Checksums checkDataPart(
     const DataTypes & primary_key_data_types,
     std::function<bool()> is_cancelled)
 {
-    Logger * log = &Logger::get("checkDataPart");
+    Poco::Logger * log = &Poco::Logger::get("checkDataPart");
 
     /** Responsibility:
       * - read list of columns from columns.txt;

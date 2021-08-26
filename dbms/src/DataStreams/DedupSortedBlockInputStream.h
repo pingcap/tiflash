@@ -61,7 +61,7 @@ private:
     bool outputAndUpdateCursor(DedupCursors & cursors, BoundQueue & bounds, DedupCursor & cursor);
 
 private:
-    Logger * log;
+    Poco::Logger * log;
     BlockInputStreams children;
     const SortDescription description;
 

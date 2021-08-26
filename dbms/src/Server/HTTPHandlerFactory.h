@@ -20,11 +20,11 @@ class HTTPRequestHandlerFactory : public Poco::Net::HTTPRequestHandlerFactory
 {
 private:
     IServer & server;
-    Logger * log;
+    Poco::Logger * log;
     std::string name;
 
 public:
-    HTTPRequestHandlerFactory(IServer & server_, const std::string & name_) : server(server_), log(&Logger::get(name_)), name(name_)
+    HTTPRequestHandlerFactory(IServer & server_, const std::string & name_) : server(server_), log(&Poco::Logger::get(name_)), name(name_)
     {
     }
 

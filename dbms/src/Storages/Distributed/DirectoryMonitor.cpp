@@ -97,7 +97,7 @@ StorageDistributedDirectoryMonitor::StorageDistributedDirectoryMonitor(StorageDi
     , current_batch_file_path{path + "current_batch.txt"}
     , default_sleep_time{storage.context.getSettingsRef().distributed_directory_monitor_sleep_time_ms.totalMilliseconds()}
     , sleep_time{default_sleep_time}
-    , log{&Logger::get(getLoggerName())}
+    , log{&Poco::Logger::get(getLoggerName())}
 {
     const Settings & settings = storage.context.getSettingsRef();
     should_batch_inserts = settings.distributed_directory_monitor_batch_inserts;

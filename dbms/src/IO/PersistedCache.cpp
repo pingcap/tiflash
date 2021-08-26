@@ -40,7 +40,7 @@ PersistedCache::PersistedCache(size_t max_size_in_bytes, const std::string & bas
     const std::string & persisted_path_setting, size_t min_seconds_to_evit)
     : max_size_in_bytes(max_size_in_bytes), min_seconds_to_evit(min_seconds_to_evit), base_path(ensureDirFormPath(base_path))
 {
-    log = &Logger::get("PersistedCache");
+    log = &Poco::Logger::get("PersistedCache");
 
     std::string path_setting = persisted_path_setting;
     std::vector<std::string> splitted_paths;

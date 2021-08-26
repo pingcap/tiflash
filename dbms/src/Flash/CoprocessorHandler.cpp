@@ -28,7 +28,7 @@ CoprocessorContext::CoprocessorContext(
 
 CoprocessorHandler::CoprocessorHandler(
     CoprocessorContext & cop_context_, const coprocessor::Request * cop_request_, coprocessor::Response * cop_response_)
-    : cop_context(cop_context_), cop_request(cop_request_), cop_response(cop_response_), log(&Logger::get("CoprocessorHandler"))
+    : cop_context(cop_context_), cop_request(cop_request_), cop_response(cop_response_), log(&Poco::Logger::get("CoprocessorHandler"))
 {}
 
 std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> CoprocessorHandler::GenCopKeyRange(

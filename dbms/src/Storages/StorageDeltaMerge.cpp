@@ -64,7 +64,7 @@ StorageDeltaMerge::StorageDeltaMerge( //
       store_inited(false),
       max_column_id_used(0),
       global_context(global_context_.getGlobalContext()),
-      log(&Logger::get("StorageDeltaMerge"))
+      log(&Poco::Logger::get("StorageDeltaMerge"))
 {
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");

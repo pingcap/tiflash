@@ -115,7 +115,7 @@ private:
 
     MPPTaskManager * manager = nullptr;
 
-    Logger * log;
+    Poco::Logger * log;
 
     Exception err;
 

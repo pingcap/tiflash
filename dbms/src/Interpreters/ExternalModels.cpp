@@ -39,7 +39,7 @@ ExternalModels::ExternalModels(
                          externalModelsUpdateSettings,
                          getExternalModelsConfigSettings(),
                          std::move(config_repository),
-                         &Logger::get("ExternalModels"),
+                         &Poco::Logger::get("ExternalModels"),
                          "external model"),
           context(context)
 {

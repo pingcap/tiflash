@@ -77,13 +77,13 @@ public:
             memset(buff, buff_ch, buff_sz);
             wb.putPage(pageId, 0, std::make_shared<DB::ReadBufferFromMemory>(buff, buff_sz), buff_sz);
 
-            LOG_INFO(&Logger::get("root"),
+            LOG_INFO(&Poco::Logger::get("root"),
                      "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz)
                          + ", byte: " + DB::toString((DB::UInt32)(buff_ch)));
             try
             {
                 ps->write(wb);
-                LOG_INFO(&Logger::get("root"), "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz) + " done");
+                LOG_INFO(&Poco::Logger::get("root"), "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz) + " done");
                 delete[] buff;
             }
             catch (DB::Exception & e)
@@ -103,11 +103,11 @@ public:
                 {
                     state = REWRITE_TO_FILE;
                 }
-                LOG_INFO(&Logger::get("root"),
+                LOG_INFO(&Poco::Logger::get("root"),
                          "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz) + " error: " + e.displayText());
             }
         }
-        LOG_INFO(&Logger::get("root"), "writer exit");
+        LOG_INFO(&Poco::Logger::get("root"), "writer exit");
     }
 };
 
@@ -120,8 +120,8 @@ int main(int argc, char ** argv)
     Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
     formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-    Logger::root().setChannel(formatting_channel);
-    Logger::root().setLevel("trace");
+    Poco::Logger::root().setChannel(formatting_channel);
+    Poco::Logger::root().setLevel("trace");
 
     if (argc < 2)
     {
@@ -144,7 +144,7 @@ int main(int argc, char ** argv)
     writer.run();
 
     // Check if checksum in page is correct.
-    auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Logger::get("root"));
+    auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Poco::Logger::get("root"));
     for (auto & page_file : page_files)
     {
         DB::PageEntries page_entries;

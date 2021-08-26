@@ -8,7 +8,7 @@
 #include <Storages/SelectQueryInfo.h>
 
 
-namespace Poco { class Logger; }
+namespace Poco { class Poco::Logger; }
 
 namespace DB
 {

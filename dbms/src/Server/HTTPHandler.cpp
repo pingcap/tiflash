@@ -196,7 +196,7 @@ void HTTPHandler::pushDelayedResults(Output & used_output)
 
 HTTPHandler::HTTPHandler(IServer & server_)
     : server(server_)
-    , log(&Logger::get("HTTPHandler"))
+    , log(&Poco::Logger::get("HTTPHandler"))
 {
     server_display_name = server.config().getString("display_name", getFQDNOrHostName());
 }

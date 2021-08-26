@@ -5,7 +5,7 @@
 
 namespace Poco
 {
-class Logger;
+class Poco::Logger;
 namespace Util
 {
 class LayeredConfiguration;

@@ -99,7 +99,7 @@ public:
     String remote_table;
 
     const Context & context;
-    Logger * log = &Logger::get("StorageDistributed");
+    Poco::Logger * log = &Poco::Logger::get("StorageDistributed");
 
     /// Used to implement TableFunctionRemote.
     std::shared_ptr<Cluster> owned_cluster;

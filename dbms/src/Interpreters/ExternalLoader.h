@@ -94,7 +94,7 @@ public:
                    const ExternalLoaderUpdateSettings & update_settings,
                    const ExternalLoaderConfigSettings & config_settings,
                    std::unique_ptr<IExternalLoaderConfigRepository> config_repository,
-                   Logger * log, const std::string & loadable_object_name);
+                   Poco::Logger * log, const std::string & loadable_object_name);
     virtual ~ExternalLoader();
 
     /// Forcibly reloads all loadable objects.
@@ -157,7 +157,7 @@ private:
     std::thread reloading_thread;
     Poco::Event destroy;
 
-    Logger * log;
+    Poco::Logger * log;
     /// Loadable object name to use in log messages.
     std::string object_name;
 

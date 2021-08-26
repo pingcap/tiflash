@@ -104,7 +104,7 @@ namespace ErrorCodes
   */
 struct ContextShared
 {
-    Logger * log = &Logger::get("Context");
+    Poco::Logger * log = &Poco::Logger::get("Context");
 
     std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory;
 

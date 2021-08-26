@@ -55,7 +55,7 @@ protected:
     const coprocessor::Request * cop_request;
     coprocessor::Response * cop_response;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 } // namespace DB
