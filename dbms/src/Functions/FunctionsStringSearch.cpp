@@ -1,32 +1,31 @@
-#include <Functions/FunctionsStringSearch.h>
-
-#include <memory>
-#include <mutex>
-#include <Poco/UTF8String.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNothing.h>
 #include <Common/Volnitsky.h>
+#include <Common/config.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsStringSearch.h>
 #include <Functions/Regexps.h>
 #include <IO/WriteHelpers.h>
-#include <Common/config.h>
+#include <Poco/UTF8String.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
 
+#include <memory>
+#include <mutex>
+
 #if USE_RE2_ST
-    #include <re2_st/re2.h>
+#include <re2_st/re2.h>
 #else
-    #define re2_st re2
+#define re2_st re2
 #endif
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
+extern const int BAD_ARGUMENTS;
 }
 
 namespace
@@ -169,11 +168,11 @@ struct PositionImpl
 
     /// Find one substring in many strings.
     static void vector_constant(const ColumnString::Chars_t & data,
-        const ColumnString::Offsets & offsets,
-        const std::string & needle,
-        const UInt8 escape_char,
-        std::shared_ptr<TiDB::ITiDBCollator> collator,
-        PaddedPODArray<UInt64> & res)
+                                const ColumnString::Offsets & offsets,
+                                const std::string & needle,
+                                const UInt8 escape_char,
+                                const TiDB::TiDBCollatorPtr & collator,
+                                PaddedPODArray<UInt64> & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -213,10 +212,7 @@ struct PositionImpl
     }
 
     /// Search for substring in string.
-    static void constant_constant(std::string data, std::string needle,
-            const UInt8 escape_char,
-            std::shared_ptr<TiDB::ITiDBCollator> collator,
-            UInt64 & res)
+    static void constant_constant(std::string data, std::string needle, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, UInt64 & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -232,12 +228,12 @@ struct PositionImpl
 
     /// Search each time for a different single substring inside each time different string.
     static void vector_vector(const ColumnString::Chars_t & haystack_data,
-        const ColumnString::Offsets & haystack_offsets,
-        const ColumnString::Chars_t & needle_data,
-        const ColumnString::Offsets & needle_offsets,
-        const UInt8 escape_char,
-        std::shared_ptr<TiDB::ITiDBCollator> collator,
-        PaddedPODArray<UInt64> & res)
+                              const ColumnString::Offsets & haystack_offsets,
+                              const ColumnString::Chars_t & needle_data,
+                              const ColumnString::Offsets & needle_offsets,
+                              const UInt8 escape_char,
+                              const TiDB::TiDBCollatorPtr & collator,
+                              PaddedPODArray<UInt64> & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -261,7 +257,7 @@ struct PositionImpl
                 /// It is assumed that the StringSearcher is not very difficult to initialize.
                 typename Impl::SearcherInSmallHaystack searcher
                     = Impl::createSearcherInSmallHaystack(reinterpret_cast<const char *>(&needle_data[prev_needle_offset]),
-                        needle_offsets[i] - prev_needle_offset - 1); /// zero byte at the end
+                                                          needle_offsets[i] - prev_needle_offset - 1); /// zero byte at the end
 
                 /// searcher returns a pointer to the found substring or to the end of `haystack`.
                 size_t pos = searcher.search(&haystack_data[prev_haystack_offset], &haystack_data[haystack_offsets[i] - 1])
@@ -269,8 +265,7 @@ struct PositionImpl
 
                 if (pos != haystack_size)
                 {
-                    res[i] = 1 + Impl::countChars(reinterpret_cast<const char *>(&haystack_data[prev_haystack_offset]),
-                                     reinterpret_cast<const char *>(&haystack_data[prev_haystack_offset + pos]));
+                    res[i] = 1 + Impl::countChars(reinterpret_cast<const char *>(&haystack_data[prev_haystack_offset]), reinterpret_cast<const char *>(&haystack_data[prev_haystack_offset + pos]));
                 }
                 else
                     res[i] = 0;
@@ -283,11 +278,11 @@ struct PositionImpl
 
     /// Find many substrings in one line.
     static void constant_vector(const String & haystack,
-        const ColumnString::Chars_t & needle_data,
-        const ColumnString::Offsets & needle_offsets,
-        const UInt8 escape_char,
-        std::shared_ptr<TiDB::ITiDBCollator> collator,
-        PaddedPODArray<UInt64> & res)
+                                const ColumnString::Chars_t & needle_data,
+                                const ColumnString::Offsets & needle_offsets,
+                                const UInt8 escape_char,
+                                const TiDB::TiDBCollatorPtr & collator,
+                                PaddedPODArray<UInt64> & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -308,10 +303,11 @@ struct PositionImpl
             else
             {
                 typename Impl::SearcherInSmallHaystack searcher = Impl::createSearcherInSmallHaystack(
-                    reinterpret_cast<const char *>(&needle_data[prev_needle_offset]), needle_offsets[i] - prev_needle_offset - 1);
+                    reinterpret_cast<const char *>(&needle_data[prev_needle_offset]),
+                    needle_offsets[i] - prev_needle_offset - 1);
 
                 size_t pos = searcher.search(reinterpret_cast<const UInt8 *>(haystack.data()),
-                                 reinterpret_cast<const UInt8 *>(haystack.data()) + haystack.size())
+                                             reinterpret_cast<const UInt8 *>(haystack.data()) + haystack.size())
                     - reinterpret_cast<const UInt8 *>(haystack.data());
 
                 if (pos != haystack.size())
@@ -348,19 +344,19 @@ inline bool likePatternIsStrstr(const String & pattern, String & res)
     {
         switch (*pos)
         {
-            case '%':
-            case '_':
+        case '%':
+        case '_':
+            return false;
+        case '\\':
+            ++pos;
+            if (pos == end)
                 return false;
-            case '\\':
-                ++pos;
-                if (pos == end)
-                    return false;
-                else
-                    res += *pos;
-                break;
-            default:
+            else
                 res += *pos;
-                break;
+            break;
+        default:
+            res += *pos;
+            break;
         }
         ++pos;
     }
@@ -380,7 +376,7 @@ String replaceEscapeChar(String & orig_string, UInt8 escape_char)
         auto c = orig_string[i];
         if (c == escape_char)
         {
-            if (i+1 != orig_string.size() && orig_string[i+1] == escape_char)
+            if (i + 1 != orig_string.size() && orig_string[i + 1] == escape_char)
             {
                 // two successive escape char, which means it is trying to escape itself, just remove one
                 i++;
@@ -395,7 +391,7 @@ String replaceEscapeChar(String & orig_string, UInt8 escape_char)
                 // e.g., \m is invalid in Go, but in MySQL we will get "m" for select '\m'.
                 // Following case is correct just for escape \, not for others like +.
                 // TODO: Add more checks for other escapes.
-                if (i+1 != orig_string.size() && orig_string[i+1] == CH_ESCAPE_CHAR)
+                if (i + 1 != orig_string.size() && orig_string[i + 1] == CH_ESCAPE_CHAR)
                 {
                     continue;
                 }
@@ -425,11 +421,11 @@ struct MatchImpl
     using ResultType = UInt8;
 
     static void vector_constant(const ColumnString::Chars_t & data,
-        const ColumnString::Offsets & offsets,
-        const std::string & orig_pattern,
-        const UInt8 escape_char,
-        std::shared_ptr<TiDB::ITiDBCollator> collator,
-        PaddedPODArray<UInt8> & res)
+                                const ColumnString::Offsets & offsets,
+                                const std::string & orig_pattern,
+                                const UInt8 escape_char,
+                                const TiDB::TiDBCollatorPtr & collator,
+                                PaddedPODArray<UInt8> & res)
     {
         if (collator != nullptr)
         {
@@ -509,12 +505,12 @@ struct MatchImpl
                     {
                         res[i] = revert
                             ^ regexp->getRE2()->Match(
-                                  re2_st::StringPiece(reinterpret_cast<const char *>(&data[prev_offset]), offsets[i] - prev_offset - 1),
-                                  0,
-                                  offsets[i] - prev_offset - 1,
-                                  re2_st::RE2::UNANCHORED,
-                                  nullptr,
-                                  0);
+                                re2_st::StringPiece(reinterpret_cast<const char *>(&data[prev_offset]), offsets[i] - prev_offset - 1),
+                                0,
+                                offsets[i] - prev_offset - 1,
+                                re2_st::RE2::UNANCHORED,
+                                nullptr,
+                                0);
 
                         prev_offset = offsets[i];
                     }
@@ -563,15 +559,20 @@ struct MatchImpl
                             if (required_substring_is_prefix)
                                 res[i] = revert
                                     ^ regexp->getRE2()->Match(re2_st::StringPiece(str_data, str_size),
-                                          reinterpret_cast<const char *>(pos) - str_data,
-                                          str_size,
-                                          re2_st::RE2::UNANCHORED,
-                                          nullptr,
-                                          0);
+                                                              reinterpret_cast<const char *>(pos) - str_data,
+                                                              str_size,
+                                                              re2_st::RE2::UNANCHORED,
+                                                              nullptr,
+                                                              0);
                             else
                                 res[i] = revert
                                     ^ regexp->getRE2()->Match(
-                                          re2_st::StringPiece(str_data, str_size), 0, str_size, re2_st::RE2::UNANCHORED, nullptr, 0);
+                                        re2_st::StringPiece(str_data, str_size),
+                                        0,
+                                        str_size,
+                                        re2_st::RE2::UNANCHORED,
+                                        nullptr,
+                                        0);
                         }
                     }
                     else
@@ -586,8 +587,7 @@ struct MatchImpl
         }
     }
 
-    static void constant_constant(const std::string & data, const std::string & orig_pattern, const UInt8 escape_char,
-                                  std::shared_ptr<TiDB::ITiDBCollator> collator, UInt8 & res)
+    static void constant_constant(const std::string & data, const std::string & orig_pattern, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, UInt8 & res)
     {
         if (collator != nullptr)
         {
@@ -605,13 +605,15 @@ struct MatchImpl
         }
     }
 
-    template <typename... Args> static void vector_vector(Args &&...)
+    template <typename... Args>
+    static void vector_vector(Args &&...)
     {
         throw Exception("Functions 'like' and 'match' don't support non-constant needle argument", ErrorCodes::ILLEGAL_COLUMN);
     }
 
     /// Search different needles in single haystack.
-    template <typename... Args> static void constant_vector(Args &&...)
+    template <typename... Args>
+    static void constant_vector(Args &&...)
     {
         throw Exception("Functions 'like' and 'match' don't support non-constant needle argument", ErrorCodes::ILLEGAL_COLUMN);
     }
@@ -621,10 +623,10 @@ struct MatchImpl
 struct ExtractImpl
 {
     static void vector(const ColumnString::Chars_t & data,
-        const ColumnString::Offsets & offsets,
-        const std::string & pattern,
-        ColumnString::Chars_t & res_data,
-        ColumnString::Offsets & res_offsets)
+                       const ColumnString::Offsets & offsets,
+                       const std::string & pattern,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size() / 5);
         res_offsets.resize(offsets.size());
@@ -717,20 +719,20 @@ struct ReplaceRegexpImpl
         for (const auto & it : instructions)
             if (it.first >= num_captures)
                 throw Exception("Invalid replace instruction in replacement string. Id: " + toString(it.first) + ", but regexp has only "
-                        + toString(num_captures - 1)
-                        + " subpatterns",
-                    ErrorCodes::BAD_ARGUMENTS);
+                                    + toString(num_captures - 1)
+                                    + " subpatterns",
+                                ErrorCodes::BAD_ARGUMENTS);
 
         return instructions;
     }
 
 
     static void processString(const re2_st::StringPiece & input,
-        ColumnString::Chars_t & res_data,
-        ColumnString::Offset & res_offset,
-        re2_st::RE2 & searcher,
-        int num_captures,
-        const Instructions & instructions)
+                              ColumnString::Chars_t & res_data,
+                              ColumnString::Offset & res_offset,
+                              re2_st::RE2 & searcher,
+                              int num_captures,
+                              const Instructions & instructions)
     {
         re2_st::StringPiece matches[max_captures];
 
@@ -791,11 +793,11 @@ struct ReplaceRegexpImpl
 
 
     static void vector(const ColumnString::Chars_t & data,
-        const ColumnString::Offsets & offsets,
-        const std::string & needle,
-        const std::string & replacement,
-        ColumnString::Chars_t & res_data,
-        ColumnString::Offsets & res_offsets)
+                       const ColumnString::Offsets & offsets,
+                       const std::string & needle,
+                       const std::string & replacement,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets)
     {
         ColumnString::Offset res_offset = 0;
         res_data.reserve(data.size());
@@ -825,11 +827,11 @@ struct ReplaceRegexpImpl
     }
 
     static void vector_fixed(const ColumnString::Chars_t & data,
-        size_t n,
-        const std::string & needle,
-        const std::string & replacement,
-        ColumnString::Chars_t & res_data,
-        ColumnString::Offsets & res_offsets)
+                             size_t n,
+                             const std::string & needle,
+                             const std::string & replacement,
+                             ColumnString::Chars_t & res_data,
+                             ColumnString::Offsets & res_offsets)
     {
         ColumnString::Offset res_offset = 0;
         size_t size = data.size() / n;
@@ -868,11 +870,11 @@ struct ReplaceStringImpl
     static constexpr bool support_non_const_replacement = true;
 
     static void vector(const ColumnString::Chars_t & data,
-        const ColumnString::Offsets & offsets,
-        const std::string & needle,
-        const std::string & replacement,
-        ColumnString::Chars_t & res_data,
-        ColumnString::Offsets & res_offsets)
+                       const ColumnString::Offsets & offsets,
+                       const std::string & needle,
+                       const std::string & replacement,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets)
     {
         const UInt8 * begin = &data[0];
         const UInt8 * pos = begin;
@@ -962,7 +964,7 @@ struct ReplaceStringImpl
         res_offsets.resize(offsets.size());
 
         ColumnString::Offset res_offset = 0;
-        
+
         for (size_t i = 0; i < offsets.size(); ++i)
         {
             auto data_offset = offsetAt(offsets, i);
@@ -1181,11 +1183,11 @@ struct ReplaceStringImpl
     /// Note: this function converts fixed-length strings to variable-length strings
     ///       and each variable-length string should ends with zero byte.
     static void vector_fixed(const ColumnString::Chars_t & data,
-        size_t n,
-        const std::string & needle,
-        const std::string & replacement,
-        ColumnString::Chars_t & res_data,
-        ColumnString::Offsets & res_offsets)
+                             size_t n,
+                             const std::string & needle,
+                             const std::string & replacement,
+                             ColumnString::Chars_t & res_data,
+                             ColumnString::Offsets & res_offsets)
     {
         const UInt8 * begin = &data[0];
         const UInt8 * pos = begin;
@@ -1199,16 +1201,17 @@ struct ReplaceStringImpl
         /// The current index in the string array.
         size_t i = 0;
 
-#define COPY_REST_OF_CURRENT_STRING() \
-    do { \
+#define COPY_REST_OF_CURRENT_STRING()                 \
+    do                                                \
+    {                                                 \
         const size_t len = begin + n * (i + 1) - pos; \
-        res_data.resize(res_data.size() + len + 1); \
-        memcpy(&res_data[res_offset], pos, len); \
-        res_offset += len; \
-        res_data[res_offset++] = 0; \
-        res_offsets[i] = res_offset; \
-        pos = begin + n * (i + 1); \
-        ++i; \
+        res_data.resize(res_data.size() + len + 1);   \
+        memcpy(&res_data[res_offset], pos, len);      \
+        res_offset += len;                            \
+        res_data[res_offset++] = 0;                   \
+        res_offsets[i] = res_offset;                  \
+        pos = begin + n * (i + 1);                    \
+        ++i;                                          \
     } while (false)
 
         if (needle.empty())
@@ -1291,15 +1294,16 @@ struct ReplaceStringImpl
             const UInt8 * pos = begin;
             const UInt8 * end = pos + n;
 
-#define COPY_REST_OF_CURRENT_STRING() \
-    do { \
-        const size_t len = end - pos; \
+#define COPY_REST_OF_CURRENT_STRING()               \
+    do                                              \
+    {                                               \
+        const size_t len = end - pos;               \
         res_data.resize(res_data.size() + len + 1); \
-        memcpy(&res_data[res_offset], pos, len); \
-        res_offset += len; \
-        res_data[res_offset++] = 0; \
-        res_offsets[i] = res_offset; \
-        pos = end; \
+        memcpy(&res_data[res_offset], pos, len);    \
+        res_offset += len;                          \
+        res_data[res_offset++] = 0;                 \
+        res_offsets[i] = res_offset;                \
+        pos = end;                                  \
     } while (false)
 
             auto needle_offset = offsetAt(needle_offsets, i);
@@ -1362,16 +1366,17 @@ struct ReplaceStringImpl
         /// The current index in the string array.
         size_t i = 0;
 
-#define COPY_REST_OF_CURRENT_STRING() \
-    do { \
+#define COPY_REST_OF_CURRENT_STRING()                 \
+    do                                                \
+    {                                                 \
         const size_t len = begin + n * (i + 1) - pos; \
-        res_data.resize(res_data.size() + len + 1); \
-        memcpy(&res_data[res_offset], pos, len); \
-        res_offset += len; \
-        res_data[res_offset++] = 0; \
-        res_offsets[i] = res_offset; \
-        pos = begin + n * (i + 1); \
-        ++i; \
+        res_data.resize(res_data.size() + len + 1);   \
+        memcpy(&res_data[res_offset], pos, len);      \
+        res_offset += len;                            \
+        res_data[res_offset++] = 0;                   \
+        res_offsets[i] = res_offset;                  \
+        pos = begin + n * (i + 1);                    \
+        ++i;                                          \
     } while (false)
 
         if (needle.empty())
@@ -1458,15 +1463,16 @@ struct ReplaceStringImpl
             const UInt8 * pos = begin;
             const UInt8 * end = pos + n;
 
-#define COPY_REST_OF_CURRENT_STRING() \
-    do { \
-        const size_t len = end - pos; \
+#define COPY_REST_OF_CURRENT_STRING()               \
+    do                                              \
+    {                                               \
+        const size_t len = end - pos;               \
         res_data.resize(res_data.size() + len + 1); \
-        memcpy(&res_data[res_offset], pos, len); \
-        res_offset += len; \
-        res_data[res_offset++] = 0; \
-        res_offsets[i] = res_offset; \
-        pos = end; \
+        memcpy(&res_data[res_offset], pos, len);    \
+        res_offset += len;                          \
+        res_data[res_offset++] = 0;                 \
+        res_offsets[i] = res_offset;                \
+        pos = end;                                  \
     } while (false)
 
             auto needle_offset = offsetAt(needle_offsets, i);
@@ -1569,15 +1575,15 @@ public:
     {
         if (!arguments[0]->isStringOrFixedString())
             throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1]->isStringOrFixedString())
             throw Exception("Illegal type " + arguments[1]->getName() + " of second argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[2]->isStringOrFixedString())
             throw Exception("Illegal type " + arguments[2]->getName() + " of third argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
     }
@@ -1609,6 +1615,7 @@ public:
             executeImplNonConstNeedleReplacement(column_src, column_needle, column_replacement, column_result);
         }
     }
+
 private:
     void executeImpl(
         const ColumnPtr & column_src,
@@ -1831,4 +1838,4 @@ void registerFunctionsStringSearch(FunctionFactory & factory)
     factory.registerFunction<FunctionNotLike>();
     factory.registerFunction<FunctionExtract>();
 }
-}
+} // namespace DB
