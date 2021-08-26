@@ -75,7 +75,7 @@ public:
     static LogWithPrefixPtr append(const String & str) { return std::make_shared<LogWithPrefix>(log, prefix + " " + str); }
 
 private:
-    Logger * log;
+    Poco::Logger * log;
     const String prefix;
 };
 
