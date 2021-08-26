@@ -35,7 +35,9 @@ class MemoryTracker
 
 public:
     MemoryTracker() {}
-    MemoryTracker(Int64 limit_) : limit(limit_) {}
+    MemoryTracker(Int64 limit_)
+        : limit(limit_)
+    {}
 
     ~MemoryTracker();
 

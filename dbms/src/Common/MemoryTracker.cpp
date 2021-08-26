@@ -140,10 +140,22 @@ void MemoryTracker::setOrRaiseLimit(Int64 value)
         ;
 }
 
+#if __APPLE__ && __clang__
+__thread MemoryTracker * current_memory_tracker = nullptr;
+#else
 thread_local MemoryTracker * current_memory_tracker = nullptr;
+#endif
 
 namespace CurrentMemoryTracker
 {
+<<<<<<< HEAD
+=======
+#if __APPLE__ && __clang__
+static __thread Int64 local_delta{};
+#else
+static thread_local Int64 local_delta{};
+#endif
+>>>>>>> 88e8957e1 (revert apple clang changes (#2783))
 
 static thread_local Int64 local_delta {};
 
