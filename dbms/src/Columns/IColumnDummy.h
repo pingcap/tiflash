@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
@@ -49,7 +48,7 @@ public:
     }
 
     void insertData(const char *, size_t)
-    override
+        override
     {
         ++s;
     }
@@ -78,7 +77,7 @@ public:
     }
 
     void insertFrom(const IColumn &, size_t)
-    override
+        override
     {
         ++s;
     }

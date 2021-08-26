@@ -38,7 +38,6 @@
 
 namespace DB
 {
-
 struct HasParam
 {
     using ResultType = UInt8;

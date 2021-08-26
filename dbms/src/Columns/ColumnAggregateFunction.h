@@ -11,8 +11,6 @@
 
 namespace DB
 {
-
-
 /** Column of states of aggregate functions.
   * Presented as an array of pointers to the states of aggregate functions (data).
   * The states themselves are stored in one of the pools (arenas).

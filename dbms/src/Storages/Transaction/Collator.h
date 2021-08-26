@@ -8,7 +8,6 @@
 
 namespace TiDB
 {
-
 class ITiDBCollator : public ICollator
 {
 public:

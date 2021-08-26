@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 /** A column of values of "fixed-length string" type.
   * If you insert a smaller string, it will be padded with zero bytes.
   */

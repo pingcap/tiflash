@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 class IFunctionBase;
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
 
@@ -66,13 +65,13 @@ public:
     }
 
     void insertRangeFrom(const IColumn &, size_t, size_t)
-    override
+        override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     void insertData(const char *, size_t)
-    override
+        override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }

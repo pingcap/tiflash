@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
@@ -107,13 +106,13 @@ public:
     }
 
     void insertData(const char *, size_t)
-    override
+        override
     {
         ++s;
     }
 
     void insertFrom(const IColumn &, size_t)
-    override
+        override
     {
         ++s;
     }

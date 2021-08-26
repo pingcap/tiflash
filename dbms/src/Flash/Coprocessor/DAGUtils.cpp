@@ -14,7 +14,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int COP_BAD_DAG_REQUEST;

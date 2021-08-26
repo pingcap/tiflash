@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 using NullMap = ColumnUInt8::Container;
 using ConstNullMapPtr = const NullMap *;
 

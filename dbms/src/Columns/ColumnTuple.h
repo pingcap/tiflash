@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Column, that is just group of few another columns.
   *
   * For constant Tuples, see ColumnConst.

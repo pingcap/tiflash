@@ -10,7 +10,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -407,7 +406,6 @@ size_t ColumnNullable::allocatedBytes() const
 
 namespace
 {
-
 /// The following function implements a slightly more general version
 /// of getExtremes() than the implementation from ColumnVector.
 /// It takes into account the possible presence of nullable values.

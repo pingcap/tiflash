@@ -12,7 +12,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int CANNOT_GET_SIZE_OF_FIELD;

@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 /** Stuff for comparing numbers.
   * Integer values are compared as usual.
   * Floating-point numbers are compared this way that NaNs always end up at the end
@@ -182,7 +181,7 @@ public:
     }
 
     void insertData(const char * pos, size_t /*length*/)
-    override
+        override
     {
         data.push_back(*reinterpret_cast<const T *>(pos));
     }

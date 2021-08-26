@@ -15,7 +15,6 @@
 
 namespace DB
 {
-
 class Set;
 using DAGSetPtr = std::shared_ptr<DAGSet>;
 using DAGPreparedSets = std::unordered_map<const tipb::Expr *, DAGSetPtr>;

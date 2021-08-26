@@ -14,7 +14,6 @@ bool decimalLess(T x, T y, UInt32 x_scale, UInt32 y_scale);
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int PARAMETER_OUT_OF_BOUND;

@@ -17,7 +17,6 @@
 
 namespace DB
 {
-
 bool isLiteralExpr(const tipb::Expr & expr);
 Field decodeLiteral(const tipb::Expr & expr);
 bool isFunctionExpr(const tipb::Expr & expr);

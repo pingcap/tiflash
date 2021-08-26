@@ -10,7 +10,6 @@
 
 namespace DB
 {
-
 /** Search and replace functions in strings:
   *
   * position(haystack, needle)     - the normal search for a substring in a string, returns the position (in bytes) of the found substring starting with 1, or 0 if no substring is found.

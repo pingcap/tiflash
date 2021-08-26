@@ -21,7 +21,6 @@ extern const Event FunctionExecute;
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int DUPLICATE_COLUMN;

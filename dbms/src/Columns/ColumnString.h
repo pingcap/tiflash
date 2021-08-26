@@ -13,7 +13,6 @@ class ICollator;
 
 namespace DB
 {
-
 /** Column for String values.
   */
 class ColumnString final : public COWPtrHelper<IColumn, ColumnString>

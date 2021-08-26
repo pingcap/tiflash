@@ -30,7 +30,6 @@
 
 namespace DB
 {
-
 /** Comparison functions: ==, !=, <, >, <=, >=.
   * The comparison functions always return 0 or 1 (UInt8).
   *

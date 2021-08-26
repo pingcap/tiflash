@@ -48,7 +48,6 @@
 
 namespace DB
 {
-
 String trim(const StringRef & value);
 
 enum CastError
