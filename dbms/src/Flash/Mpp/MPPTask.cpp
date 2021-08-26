@@ -22,7 +22,6 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char hang_in_execution[];
