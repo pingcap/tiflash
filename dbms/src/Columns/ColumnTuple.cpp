@@ -1,18 +1,18 @@
 #include <Columns/ColumnTuple.h>
+#include <DataStreams/ColumnGathererStream.h>
+
 #include <ext/map.h>
 #include <ext/range.h>
-#include <DataStreams/ColumnGathererStream.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_COLUMN;
-    extern const int NOT_IMPLEMENTED;
-    extern const int CANNOT_INSERT_VALUE_OF_DIFFERENT_SIZE_INTO_TUPLE;
-}
+extern const int ILLEGAL_COLUMN;
+extern const int NOT_IMPLEMENTED;
+extern const int CANNOT_INSERT_VALUE_OF_DIFFERENT_SIZE_INTO_TUPLE;
+} // namespace ErrorCodes
 
 
 std::string ColumnTuple::getName() const
@@ -67,7 +67,7 @@ MutableColumnPtr ColumnTuple::cloneEmpty() const
 
 Field ColumnTuple::operator[](size_t n) const
 {
-    return Tuple{ext::map<TupleBackend>(columns, [n] (const auto & column) { return (*column)[n]; })};
+    return Tuple{ext::map<TupleBackend>(columns, [n](const auto & column) { return (*column)[n]; })};
 }
 
 void ColumnTuple::get(size_t n, Field & res) const
@@ -125,7 +125,7 @@ void ColumnTuple::popBack(size_t n)
         column->assumeMutableRef().popBack(n);
 }
 
-StringRef ColumnTuple::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
+StringRef ColumnTuple::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     size_t values_size = 0;
     for (auto & column : columns)
@@ -134,7 +134,7 @@ StringRef ColumnTuple::serializeValueIntoArena(size_t n, Arena & arena, char con
     return StringRef(begin, values_size);
 }
 
-const char * ColumnTuple::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator> collator)
+const char * ColumnTuple::deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator)
 {
     for (auto & column : columns)
         pos = column->assumeMutableRef().deserializeAndInsertFromArena(pos, collator);
@@ -142,25 +142,24 @@ const char * ColumnTuple::deserializeAndInsertFromArena(const char * pos, std::s
     return pos;
 }
 
-void ColumnTuple::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
+void ColumnTuple::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     for (auto & column : columns)
         column->updateHashWithValue(n, hash, collator, sort_key_container);
 }
 
-void ColumnTuple::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+void ColumnTuple::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     for (auto & column : columns)
         column->updateHashWithValues(hash_values, collator, sort_key_container);
 }
 
-void ColumnTuple::updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+void ColumnTuple::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     auto s = size();
 
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
-                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     for (const auto & column : columns)
         column->updateWeakHash32(hash, collator, sort_key_container);
@@ -172,7 +171,8 @@ void ColumnTuple::insertRangeFrom(const IColumn & src, size_t start, size_t leng
     for (size_t i = 0; i < tuple_size; ++i)
         columns[i]->assumeMutableRef().insertRangeFrom(
             *static_cast<const ColumnTuple &>(src).columns[i],
-            start, length);
+            start,
+            length);
 }
 
 ColumnPtr ColumnTuple::filter(const Filter & filt, ssize_t result_size_hint) const
@@ -252,7 +252,7 @@ struct ColumnTuple::Less
             plain_columns.push_back(column.get());
     }
 
-    bool operator() (size_t a, size_t b) const
+    bool operator()(size_t a, size_t b) const
     {
         for (ColumnRawPtrs::const_iterator it = plain_columns.begin(); it != plain_columns.end(); ++it)
         {
@@ -349,5 +349,4 @@ void ColumnTuple::forEachSubcolumn(ColumnCallback callback)
 }
 
 
-
-}
+} // namespace DB
