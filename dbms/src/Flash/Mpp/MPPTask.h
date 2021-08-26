@@ -13,10 +13,7 @@
 
 #include <atomic>
 #include <boost/noncopyable.hpp>
-#include <chrono>
-#include <condition_variable>
 #include <memory>
-#include <mutex>
 
 namespace DB
 {
@@ -72,7 +69,8 @@ public:
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel);
 
-    MPPTunnelPtr getTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout, String & err_msg);
+    // tunnel and error_message
+    std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
 
     ~MPPTask();
 
@@ -105,10 +103,6 @@ private:
     Logger * log;
 
     Exception err;
-
-    std::condition_variable cv;
-
-    std::mutex tunnel_mutex;
 
     friend class MPPTaskManager;
 };
