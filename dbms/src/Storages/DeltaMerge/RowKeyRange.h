@@ -280,22 +280,25 @@ struct RowKeyColumnContainer
         , is_common_handle(is_common_handle_)
         , is_constant_column(column->isColumnConst())
     {
-        ColumnPtr non_const_column_ptr = column;
+        const IColumn * non_const_column_ptr = column.get();
         if (unlikely(is_constant_column))
         {
-            non_const_column_ptr = checkAndGetColumn<ColumnConst>(column.get())->getDataColumnPtr();
+            non_const_column_ptr = checkAndGetColumn<ColumnConst>(column.get())->getDataColumnPtr().get();
         }
+
+
         if (is_common_handle)
         {
-            const auto & column_string = *checkAndGetColumn<ColumnString>(non_const_column_ptr.get());
+            const auto & column_string = *checkAndGetColumn<ColumnString>(non_const_column_ptr);
             string_data = &column_string.getChars();
             string_offsets = &column_string.getOffsets();
         }
         else
         {
-            int_data = &toColumnVectorData<Int64>(non_const_column_ptr);
+            int_data = &toColumnVectorData<Int64>(*non_const_column_ptr);
         }
     }
+
     RowKeyValueRef getRowKeyValue(size_t index) const
     {
         // todo check index out of bound error

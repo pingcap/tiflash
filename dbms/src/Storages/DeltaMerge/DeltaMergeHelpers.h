@@ -3,7 +3,7 @@
 #pragma once
 
 #include <Columns/ColumnVector.h>
-#include <Common/typeid_cast.h>
+#include <Common/assert_cast.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
@@ -93,12 +93,12 @@ inline PaddedPODArray<T> const * toColumnVectorDataPtr(const ColumnPtr & column)
     {
         auto * const_col = static_cast<const ColumnConst *>(column.get());
 
-        const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(const_col->getDataColumn());
+        const ColumnVector<T> & c = assert_cast<const ColumnVector<T> &>(const_col->getDataColumn());
         return &c.getData();
     }
     else
     {
-        const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
+        const ColumnVector<T> & c = assert_cast<const ColumnVector<T> &>(*(column));
         return &c.getData();
     }
 }
@@ -106,21 +106,28 @@ inline PaddedPODArray<T> const * toColumnVectorDataPtr(const ColumnPtr & column)
 template <typename T>
 inline PaddedPODArray<T> * toMutableColumnVectorDataPtr(const MutableColumnPtr & column)
 {
-    ColumnVector<T> & c = typeid_cast<ColumnVector<T> &>(*(column));
+    ColumnVector<T> & c = assert_cast<ColumnVector<T> &>(*(column));
     return &c.getData();
+}
+
+template <typename T>
+inline const PaddedPODArray<T> & toColumnVectorData(const IColumn & column)
+{
+    const ColumnVector<T> & c = assert_cast<const ColumnVector<T> &>(column);
+    return c.getData();
 }
 
 template <typename T>
 inline const PaddedPODArray<T> & toColumnVectorData(const ColumnPtr & column)
 {
-    const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
+    const ColumnVector<T> & c = assert_cast<const ColumnVector<T> &>(*(column));
     return c.getData();
 }
 
 template <typename T>
 inline const PaddedPODArray<T> & toColumnVectorData(const MutableColumnPtr & column)
 {
-    auto & c = typeid_cast<ColumnVector<T> &>(*(column));
+    auto & c = assert_cast<ColumnVector<T> &>(*(column));
     return c.getData();
 }
 
