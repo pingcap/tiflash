@@ -49,7 +49,7 @@ TEST(PageUtils_test, FileNotExists)
 TEST(PageUtils_test, BigReadWriteFile)
 {
     ::remove(FileName.c_str());
-    char * buff;
+    char * buff = nullptr;
     try
     {
         WritableFilePtr file_for_write = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
@@ -86,8 +86,8 @@ TEST(PageUtils_test, DISABLED_BigReadWriteFileWithCheck)
 {
     ::remove(FileName.c_str());
 
-    char * buff_write;
-    char * buff_read;
+    char * buff_write = nullptr;
+    char * buff_read  = nullptr;
     try
     {
         WritableFilePtr file_for_write = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
