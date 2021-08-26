@@ -61,7 +61,7 @@ void DeltaValueSpace::checkPacks(const DeltaPacks & new_packs)
 // ================================================
 
 DeltaValueSpace::DeltaValueSpace(PageId id_, const DeltaPacks & packs_)
-    : id(id_), packs(packs_), delta_index(std::make_shared<DeltaIndex>()), log(&Logger::get("DeltaValueSpace"))
+    : id(id_), packs(packs_), delta_index(std::make_shared<DeltaIndex>()), log(&Poco::Logger::get("DeltaValueSpace"))
 {
     for (auto & pack : packs)
     {

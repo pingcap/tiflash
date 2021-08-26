@@ -35,7 +35,7 @@ private:
     bool finish = false;
     Block cur_block;
     Block next_block;
-    Logger * log = &Logger::get("TMTSingleSortedBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("TMTSingleSortedBlockInputStream");
 };
 
 } // namespace DB

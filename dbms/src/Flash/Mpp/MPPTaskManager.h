@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Flash/Mpp/MPPTask.h>
-
 #include <common/logger_useful.h>
 #include <kvproto/mpp.pb.h>
 
@@ -11,7 +10,6 @@
 
 namespace DB
 {
-
 struct MPPQueryTaskSet
 {
     /// to_be_cancelled is kind of lock, if to_be_cancelled is set
@@ -35,7 +33,7 @@ class MPPTaskManager : private boost::noncopyable
 
     MPPQueryMap mpp_query_map;
 
-    Logger * log;
+    Poco::Logger * log;
 
     std::condition_variable cv;
 
@@ -59,4 +57,3 @@ public:
 };
 
 } // namespace DB
-

@@ -64,7 +64,7 @@ void BackgroundProcessingPool::TaskInfo::wake()
 
 BackgroundProcessingPool::BackgroundProcessingPool(int size_) : size(size_)
 {
-    LOG_INFO(&Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool with " << size << " threads");
+    LOG_INFO(&Poco::Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool with " << size << " threads");
 
     threads.resize(size);
     for (auto & thread : threads)

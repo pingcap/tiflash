@@ -18,7 +18,7 @@ extern const int DEADLOCK_AVOIDED;
 } // namespace ErrorCodes
 
 SchemaSyncService::SchemaSyncService(DB::Context & context_)
-    : context(context_), background_pool(context_.getBackgroundPool()), log(&Logger::get("SchemaSyncService"))
+    : context(context_), background_pool(context_.getBackgroundPool()), log(&Poco::Logger::get("SchemaSyncService"))
 {
     handle = background_pool.addTask(
         [&, this] {

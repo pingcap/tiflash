@@ -76,7 +76,7 @@ void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
 // DeltaVersionEditAcceptor
 //==========================================================================================
 
-DeltaVersionEditAcceptor::DeltaVersionEditAcceptor(const PageEntriesView * view_, bool ignore_invalid_ref_, Logger * log_)
+DeltaVersionEditAcceptor::DeltaVersionEditAcceptor(const PageEntriesView * view_, bool ignore_invalid_ref_, Poco::Logger * log_)
     : view(const_cast<PageEntriesView *>(view_)),
       current_version(view->getSharedTailVersion()),
       ignore_invalid_ref(ignore_invalid_ref_),

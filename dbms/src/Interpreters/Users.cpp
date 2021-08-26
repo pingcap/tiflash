@@ -23,7 +23,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int DNS_ERROR;
@@ -75,7 +74,9 @@ public:
     bool contains(const Poco::Net::IPAddress & addr) const override
     {
         return prefixBitsEquals(
-            reinterpret_cast<const char *>(toIPv6(addr).addr()), reinterpret_cast<const char *>(mask_address.addr()), prefix_bits);
+            reinterpret_cast<const char *>(toIPv6(addr).addr()),
+            reinterpret_cast<const char *>(mask_address.addr()),
+            prefix_bits);
     }
 
 private:
@@ -133,8 +134,7 @@ private:
                 if (ai->ai_family == AF_INET6)
                 {
                     if (addr_v6
-                        == Poco::Net::IPAddress(&reinterpret_cast<sockaddr_in6 *>(ai->ai_addr)->sin6_addr, sizeof(in6_addr),
-                            reinterpret_cast<sockaddr_in6 *>(ai->ai_addr)->sin6_scope_id))
+                        == Poco::Net::IPAddress(&reinterpret_cast<sockaddr_in6 *>(ai->ai_addr)->sin6_addr, sizeof(in6_addr), reinterpret_cast<sockaddr_in6 *>(ai->ai_addr)->sin6_scope_id))
                     {
                         return true;
                     }
@@ -153,7 +153,9 @@ private:
     }
 
 public:
-    explicit HostExactPattern(const String & host_) : host(host_) {}
+    explicit HostExactPattern(const String & host_)
+        : host(host_)
+    {}
 
     bool contains(const Poco::Net::IPAddress & addr) const override
     {
@@ -183,7 +185,9 @@ private:
     }
 
 public:
-    explicit HostRegexpPattern(const String & host_regexp_) : host_regexp(host_regexp_) {}
+    explicit HostRegexpPattern(const String & host_regexp_)
+        : host_regexp(host_regexp_)
+    {}
 
     bool contains(const Poco::Net::IPAddress & addr) const override
     {
@@ -212,8 +216,8 @@ bool AddressPatterns::contains(const Poco::Net::IPAddress & addr) const
         }
         catch (const DB::Exception & e)
         {
-            LOG_WARNING(&Logger::get("AddressPatterns"),
-                "Failed to check if pattern contains address " << addr.toString() << ". " << e.displayText() << ", code = " << e.code());
+            LOG_WARNING(&Poco::Logger::get("AddressPatterns"),
+                        "Failed to check if pattern contains address " << addr.toString() << ". " << e.displayText() << ", code = " << e.code());
 
             if (e.code() == ErrorCodes::DNS_ERROR)
             {
@@ -257,10 +261,15 @@ const User & User::getDefaultUser()
 }
 
 User::User(const String & name_)
-    : name(name_), password(), password_sha256_hex(), profile(User::DEFAULT_USER_NAME), quota(QuotaForInterval::DEFAULT_QUOTA_NAME)
+    : name(name_)
+    , password()
+    , password_sha256_hex()
+    , profile(User::DEFAULT_USER_NAME)
+    , quota(QuotaForInterval::DEFAULT_QUOTA_NAME)
 {}
 
-User::User(const String & name_, const String & config_elem, Poco::Util::AbstractConfiguration & config) : name(name_)
+User::User(const String & name_, const String & config_elem, Poco::Util::AbstractConfiguration & config)
+    : name(name_)
 {
     // Allow empty "password" for TiFlash
     bool has_password = config.has(config_elem + ".password");
@@ -268,7 +277,7 @@ User::User(const String & name_, const String & config_elem, Poco::Util::Abstrac
 
     if (has_password && has_password_sha256_hex)
         throw Exception("Both fields 'password' and 'password_sha256_hex' are specified for user " + name + ". Must be only one of them.",
-            ErrorCodes::BAD_ARGUMENTS);
+                        ErrorCodes::BAD_ARGUMENTS);
 
     if (has_password)
         password = config.getString(config_elem + ".password");
@@ -279,8 +288,8 @@ User::User(const String & name_, const String & config_elem, Poco::Util::Abstrac
 
         if (password_sha256_hex.size() != 64)
             throw Exception("password_sha256_hex for user " + name + " has length " + toString(password_sha256_hex.size())
-                    + " but must be exactly 64 symbols.",
-                ErrorCodes::BAD_ARGUMENTS);
+                                + " but must be exactly 64 symbols.",
+                            ErrorCodes::BAD_ARGUMENTS);
     }
 
     profile = config.getString(config_elem + ".profile");

@@ -96,7 +96,7 @@ std::tuple<size_t, size_t> shouldOptimizeTable(const MergeTreeData & data)
     return {selected_marks, overlapped_marks};
 }
 
-bool shouldOptimizeTable(const TableID table_id, TMTContext & tmt, Logger * log, const double threshold)
+bool shouldOptimizeTable(const TableID table_id, TMTContext & tmt, Poco::Logger * log, const double threshold)
 {
     const auto storage = tmt.getStorages().get(table_id);
     if (!storage)

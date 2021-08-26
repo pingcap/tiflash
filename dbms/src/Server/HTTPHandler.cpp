@@ -1,91 +1,84 @@
-#include <chrono>
-#include <iomanip>
-
-#include <Poco/File.h>
-#include <Poco/Net/HTTPBasicCredentials.h>
-#include <Poco/Net/HTTPServerRequest.h>
-#include <Poco/Net/HTTPServerResponse.h>
-#include <Poco/Net/NetException.h>
-
-#include <ext/scope_guard.h>
+#include "HTTPHandler.h"
 
 #include <Common/ExternalTable.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
 #include <Common/getFQDNOrHostName.h>
-#include <IO/ReadBufferFromIStream.h>
-#include <IO/ZlibInflatingReadBuffer.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/ConcatReadBuffer.h>
+#include <Common/typeid_cast.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
+#include <IO/CascadeWriteBuffer.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteBufferFromHTTPServerResponse.h>
-#include <IO/WriteBufferFromFile.h>
-#include <IO/WriteHelpers.h>
-#include <IO/copyData.h>
 #include <IO/ConcatReadBuffer.h>
-#include <IO/CascadeWriteBuffer.h>
 #include <IO/MemoryReadWriteBuffer.h>
+#include <IO/ReadBufferFromIStream.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromHTTPServerResponse.h>
+#include <IO/WriteBufferFromString.h>
 #include <IO/WriteBufferFromTemporaryFile.h>
-
-#include <DataStreams/IProfilingBlockInputStream.h>
-
-#include <Interpreters/executeQuery.h>
+#include <IO/WriteHelpers.h>
+#include <IO/ZlibInflatingReadBuffer.h>
+#include <IO/copyData.h>
 #include <Interpreters/Quota.h>
-#include <Common/typeid_cast.h>
-
+#include <Interpreters/executeQuery.h>
+#include <Poco/File.h>
+#include <Poco/Net/HTTPBasicCredentials.h>
+#include <Poco/Net/HTTPServerRequest.h>
+#include <Poco/Net/HTTPServerResponse.h>
 #include <Poco/Net/HTTPStream.h>
+#include <Poco/Net/NetException.h>
 
-#include "HTTPHandler.h"
+#include <chrono>
+#include <ext/scope_guard.h>
+#include <iomanip>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int READONLY;
-    extern const int UNKNOWN_COMPRESSION_METHOD;
+extern const int READONLY;
+extern const int UNKNOWN_COMPRESSION_METHOD;
 
-    extern const int CANNOT_PARSE_TEXT;
-    extern const int CANNOT_PARSE_ESCAPE_SEQUENCE;
-    extern const int CANNOT_PARSE_QUOTED_STRING;
-    extern const int CANNOT_PARSE_DATE;
-    extern const int CANNOT_PARSE_DATETIME;
-    extern const int CANNOT_PARSE_NUMBER;
-    extern const int CANNOT_OPEN_FILE;
+extern const int CANNOT_PARSE_TEXT;
+extern const int CANNOT_PARSE_ESCAPE_SEQUENCE;
+extern const int CANNOT_PARSE_QUOTED_STRING;
+extern const int CANNOT_PARSE_DATE;
+extern const int CANNOT_PARSE_DATETIME;
+extern const int CANNOT_PARSE_NUMBER;
+extern const int CANNOT_OPEN_FILE;
 
-    extern const int UNKNOWN_ELEMENT_IN_AST;
-    extern const int UNKNOWN_TYPE_OF_AST_NODE;
-    extern const int TOO_DEEP_AST;
-    extern const int TOO_BIG_AST;
-    extern const int UNEXPECTED_AST_STRUCTURE;
+extern const int UNKNOWN_ELEMENT_IN_AST;
+extern const int UNKNOWN_TYPE_OF_AST_NODE;
+extern const int TOO_DEEP_AST;
+extern const int TOO_BIG_AST;
+extern const int UNEXPECTED_AST_STRUCTURE;
 
-    extern const int UNKNOWN_TABLE;
-    extern const int UNKNOWN_FUNCTION;
-    extern const int UNKNOWN_IDENTIFIER;
-    extern const int UNKNOWN_TYPE;
-    extern const int UNKNOWN_STORAGE;
-    extern const int UNKNOWN_DATABASE;
-    extern const int UNKNOWN_SETTING;
-    extern const int UNKNOWN_DIRECTION_OF_SORTING;
-    extern const int UNKNOWN_AGGREGATE_FUNCTION;
-    extern const int UNKNOWN_FORMAT;
-    extern const int UNKNOWN_DATABASE_ENGINE;
-    extern const int UNKNOWN_TYPE_OF_QUERY;
+extern const int UNKNOWN_TABLE;
+extern const int UNKNOWN_FUNCTION;
+extern const int UNKNOWN_IDENTIFIER;
+extern const int UNKNOWN_TYPE;
+extern const int UNKNOWN_STORAGE;
+extern const int UNKNOWN_DATABASE;
+extern const int UNKNOWN_SETTING;
+extern const int UNKNOWN_DIRECTION_OF_SORTING;
+extern const int UNKNOWN_AGGREGATE_FUNCTION;
+extern const int UNKNOWN_FORMAT;
+extern const int UNKNOWN_DATABASE_ENGINE;
+extern const int UNKNOWN_TYPE_OF_QUERY;
 
-    extern const int QUERY_IS_TOO_LARGE;
+extern const int QUERY_IS_TOO_LARGE;
 
-    extern const int NOT_IMPLEMENTED;
-    extern const int SOCKET_TIMEOUT;
+extern const int NOT_IMPLEMENTED;
+extern const int SOCKET_TIMEOUT;
 
-    extern const int UNKNOWN_USER;
-    extern const int WRONG_PASSWORD;
-    extern const int REQUIRED_PASSWORD;
+extern const int UNKNOWN_USER;
+extern const int WRONG_PASSWORD;
+extern const int REQUIRED_PASSWORD;
 
-    extern const int INVALID_SESSION_TIMEOUT;
-    extern const int HTTP_LENGTH_REQUIRED;
-}
+extern const int INVALID_SESSION_TIMEOUT;
+extern const int HTTP_LENGTH_REQUIRED;
+} // namespace ErrorCodes
 
 
 static Poco::Net::HTTPResponse::HTTPStatus exceptionCodeToHTTPStatus(int exception_code)
@@ -94,30 +87,11 @@ static Poco::Net::HTTPResponse::HTTPStatus exceptionCodeToHTTPStatus(int excepti
 
     if (exception_code == ErrorCodes::REQUIRED_PASSWORD)
         return HTTPResponse::HTTP_UNAUTHORIZED;
-    else if (exception_code == ErrorCodes::CANNOT_PARSE_TEXT ||
-             exception_code == ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE ||
-             exception_code == ErrorCodes::CANNOT_PARSE_QUOTED_STRING ||
-             exception_code == ErrorCodes::CANNOT_PARSE_DATE ||
-             exception_code == ErrorCodes::CANNOT_PARSE_DATETIME ||
-             exception_code == ErrorCodes::CANNOT_PARSE_NUMBER)
+    else if (exception_code == ErrorCodes::CANNOT_PARSE_TEXT || exception_code == ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE || exception_code == ErrorCodes::CANNOT_PARSE_QUOTED_STRING || exception_code == ErrorCodes::CANNOT_PARSE_DATE || exception_code == ErrorCodes::CANNOT_PARSE_DATETIME || exception_code == ErrorCodes::CANNOT_PARSE_NUMBER)
         return HTTPResponse::HTTP_BAD_REQUEST;
-    else if (exception_code == ErrorCodes::UNKNOWN_ELEMENT_IN_AST ||
-             exception_code == ErrorCodes::UNKNOWN_TYPE_OF_AST_NODE ||
-             exception_code == ErrorCodes::TOO_DEEP_AST ||
-             exception_code == ErrorCodes::TOO_BIG_AST ||
-             exception_code == ErrorCodes::UNEXPECTED_AST_STRUCTURE)
+    else if (exception_code == ErrorCodes::UNKNOWN_ELEMENT_IN_AST || exception_code == ErrorCodes::UNKNOWN_TYPE_OF_AST_NODE || exception_code == ErrorCodes::TOO_DEEP_AST || exception_code == ErrorCodes::TOO_BIG_AST || exception_code == ErrorCodes::UNEXPECTED_AST_STRUCTURE)
         return HTTPResponse::HTTP_BAD_REQUEST;
-    else if (exception_code == ErrorCodes::UNKNOWN_TABLE ||
-             exception_code == ErrorCodes::UNKNOWN_FUNCTION ||
-             exception_code == ErrorCodes::UNKNOWN_IDENTIFIER ||
-             exception_code == ErrorCodes::UNKNOWN_TYPE ||
-             exception_code == ErrorCodes::UNKNOWN_STORAGE ||
-             exception_code == ErrorCodes::UNKNOWN_DATABASE ||
-             exception_code == ErrorCodes::UNKNOWN_SETTING ||
-             exception_code == ErrorCodes::UNKNOWN_DIRECTION_OF_SORTING ||
-             exception_code == ErrorCodes::UNKNOWN_AGGREGATE_FUNCTION ||
-             exception_code == ErrorCodes::UNKNOWN_FORMAT ||
-             exception_code == ErrorCodes::UNKNOWN_DATABASE_ENGINE)
+    else if (exception_code == ErrorCodes::UNKNOWN_TABLE || exception_code == ErrorCodes::UNKNOWN_FUNCTION || exception_code == ErrorCodes::UNKNOWN_IDENTIFIER || exception_code == ErrorCodes::UNKNOWN_TYPE || exception_code == ErrorCodes::UNKNOWN_STORAGE || exception_code == ErrorCodes::UNKNOWN_DATABASE || exception_code == ErrorCodes::UNKNOWN_SETTING || exception_code == ErrorCodes::UNKNOWN_DIRECTION_OF_SORTING || exception_code == ErrorCodes::UNKNOWN_AGGREGATE_FUNCTION || exception_code == ErrorCodes::UNKNOWN_FORMAT || exception_code == ErrorCodes::UNKNOWN_DATABASE_ENGINE)
         return HTTPResponse::HTTP_NOT_FOUND;
     else if (exception_code == ErrorCodes::UNKNOWN_TYPE_OF_QUERY)
         return HTTPResponse::HTTP_NOT_FOUND;
@@ -125,8 +99,7 @@ static Poco::Net::HTTPResponse::HTTPStatus exceptionCodeToHTTPStatus(int excepti
         return HTTPResponse::HTTP_REQUESTENTITYTOOLARGE;
     else if (exception_code == ErrorCodes::NOT_IMPLEMENTED)
         return HTTPResponse::HTTP_NOT_IMPLEMENTED;
-    else if (exception_code == ErrorCodes::SOCKET_TIMEOUT ||
-             exception_code == ErrorCodes::CANNOT_OPEN_FILE)
+    else if (exception_code == ErrorCodes::SOCKET_TIMEOUT || exception_code == ErrorCodes::CANNOT_OPEN_FILE)
         return HTTPResponse::HTTP_SERVICE_UNAVAILABLE;
     else if (exception_code == ErrorCodes::HTTP_LENGTH_REQUIRED)
         return HTTPResponse::HTTP_LENGTH_REQUIRED;
@@ -152,8 +125,8 @@ static std::chrono::steady_clock::duration parseSessionTimeout(
 
         if (session_timeout > max_session_timeout)
             throw Exception("Session timeout '" + session_timeout_str + "' is larger than max_session_timeout: " + toString(max_session_timeout)
-                + ". Maximum session timeout could be modified in configuration file.",
-                ErrorCodes::INVALID_SESSION_TIMEOUT);
+                                + ". Maximum session timeout could be modified in configuration file.",
+                            ErrorCodes::INVALID_SESSION_TIMEOUT);
     }
 
     return std::chrono::seconds(session_timeout);
@@ -196,7 +169,7 @@ void HTTPHandler::pushDelayedResults(Output & used_output)
 
 HTTPHandler::HTTPHandler(IServer & server_)
     : server(server_)
-    , log(&Logger::get("HTTPHandler"))
+    , log(&Poco::Logger::get("HTTPHandler"))
 {
     server_display_name = server.config().getString("display_name", getFQDNOrHostName());
 }
@@ -294,7 +267,7 @@ void HTTPHandler::processQuery(
     /// The client can pass a HTTP header indicating supported compression method (gzip or deflate).
     String http_response_compression_methods = request.get("Accept-Encoding", "");
     bool client_supports_http_compression = false;
-    ZlibCompressionMethod http_response_compression_method {};
+    ZlibCompressionMethod http_response_compression_method{};
 
     if (!http_response_compression_methods.empty())
     {
@@ -318,7 +291,8 @@ void HTTPHandler::processQuery(
 
     /// At least, we should postpone sending of first buffer_size result bytes
     size_t buffer_size_total = std::max(
-        params.getParsed<size_t>("buffer_size", DBMS_DEFAULT_BUFFER_SIZE), static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE));
+        params.getParsed<size_t>("buffer_size", DBMS_DEFAULT_BUFFER_SIZE),
+        static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE));
 
     /// If it is specified, the whole result will be buffered.
     ///  First ~buffer_size bytes will be buffered in memory, the remaining bytes will be stored in temporary file.
@@ -330,8 +304,12 @@ void HTTPHandler::processQuery(
     unsigned keep_alive_timeout = config.getUInt("keep_alive_timeout", 10);
 
     used_output.out = std::make_shared<WriteBufferFromHTTPServerResponse>(
-        request, response, keep_alive_timeout,
-        client_supports_http_compression, http_response_compression_method, buffer_size_http);
+        request,
+        response,
+        keep_alive_timeout,
+        client_supports_http_compression,
+        http_response_compression_method,
+        buffer_size_http);
     if (internal_compression)
         used_output.out_maybe_compressed = std::make_shared<CompressedWriteBuffer>(*used_output.out);
     else
@@ -349,8 +327,7 @@ void HTTPHandler::processQuery(
         {
             std::string tmp_path_template = context.getTemporaryPath() + "http_buffers/";
 
-            auto create_tmp_disk_buffer = [tmp_path_template] (const WriteBufferPtr &)
-            {
+            auto create_tmp_disk_buffer = [tmp_path_template](const WriteBufferPtr &) {
                 return WriteBufferFromTemporaryFile::create(tmp_path_template);
             };
 
@@ -358,14 +335,13 @@ void HTTPHandler::processQuery(
         }
         else
         {
-            auto push_memory_buffer_and_continue = [next_buffer = used_output.out_maybe_compressed] (const WriteBufferPtr & prev_buf)
-            {
+            auto push_memory_buffer_and_continue = [next_buffer = used_output.out_maybe_compressed](const WriteBufferPtr & prev_buf) {
                 auto prev_memory_buffer = typeid_cast<MemoryWriteBuffer *>(prev_buf.get());
                 if (!prev_memory_buffer)
                     throw Exception("Expected MemoryWriteBuffer", ErrorCodes::LOGICAL_ERROR);
 
                 auto rdbuf = prev_memory_buffer->tryGetReadBuffer();
-                copyData(*rdbuf , *next_buffer);
+                copyData(*rdbuf, *next_buffer);
 
                 return next_buffer;
             };
@@ -374,7 +350,8 @@ void HTTPHandler::processQuery(
         }
 
         used_output.out_maybe_delayed_and_compressed = std::make_shared<CascadeWriteBuffer>(
-            std::move(cascade_buffer1), std::move(cascade_buffer2));
+            std::move(cascade_buffer1),
+            std::move(cascade_buffer2));
     }
     else
     {
@@ -401,7 +378,7 @@ void HTTPHandler::processQuery(
         }
         else
             throw Exception("Unknown Content-Encoding of HTTP request: " + http_request_compression_method_str,
-                ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
+                            ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
         in_post = std::make_unique<ZlibInflatingReadBuffer>(*in_post_raw, method);
     }
     else
@@ -463,10 +440,7 @@ void HTTPHandler::processQuery(
 
     auto readonly_before_query = settings.readonly;
 
-    NameSet reserved_param_names{"query", "compress", "decompress", "user", "password", "quota_key", "query_id", "stacktrace",
-        "buffer_size", "wait_end_of_query",
-        "session_id", "session_timeout", "session_check"
-    };
+    NameSet reserved_param_names{"query", "compress", "decompress", "user", "password", "quota_key", "query_id", "stacktrace", "buffer_size", "wait_end_of_query", "session_id", "session_timeout", "session_check"};
 
     for (auto it = params.begin(); it != params.end(); ++it)
     {
@@ -536,10 +510,9 @@ void HTTPHandler::processQuery(
 
     /// While still no data has been sent, we will report about query execution progress by sending HTTP headers.
     if (settings.send_progress_in_http_headers)
-        context.setProgressCallback([&used_output] (const Progress & progress) { used_output.out->onProgress(progress); });
+        context.setProgressCallback([&used_output](const Progress & progress) { used_output.out->onProgress(progress); });
 
-    executeQuery(*in, *used_output.out_maybe_delayed_and_compressed, /* allow_into_outfile = */ false, context,
-        [&response] (const String & content_type) { response.setContentType(content_type); });
+    executeQuery(*in, *used_output.out_maybe_delayed_and_compressed, /* allow_into_outfile = */ false, context, [&response](const String & content_type) { response.setContentType(content_type); });
 
     if (used_output.hasDelayed())
     {
@@ -552,9 +525,7 @@ void HTTPHandler::processQuery(
     used_output.out->finalize();
 }
 
-void HTTPHandler::trySendExceptionToClient(const std::string & s, int exception_code,
-    Poco::Net::HTTPServerRequest & request, Poco::Net::HTTPServerResponse & response,
-    Output & used_output)
+void HTTPHandler::trySendExceptionToClient(const std::string & s, int exception_code, Poco::Net::HTTPServerRequest & request, Poco::Net::HTTPServerResponse & response, Output & used_output)
 {
     try
     {
@@ -568,9 +539,7 @@ void HTTPHandler::trySendExceptionToClient(const std::string & s, int exception_
             request.stream().ignore(std::numeric_limits<std::streamsize>::max());
         }
 
-        bool auth_fail = exception_code == ErrorCodes::UNKNOWN_USER ||
-                         exception_code == ErrorCodes::WRONG_PASSWORD ||
-                         exception_code == ErrorCodes::REQUIRED_PASSWORD;
+        bool auth_fail = exception_code == ErrorCodes::UNKNOWN_USER || exception_code == ErrorCodes::WRONG_PASSWORD || exception_code == ErrorCodes::REQUIRED_PASSWORD;
 
         if (auth_fail)
         {
@@ -639,8 +608,7 @@ void HTTPHandler::handleRequest(Poco::Net::HTTPServerRequest & request, Poco::Ne
         with_stacktrace = params.getParsed<bool>("stacktrace", false);
 
         /// Workaround. Poco does not detect 411 Length Required case.
-        if (request.getMethod() == Poco::Net::HTTPRequest::HTTP_POST && !request.getChunkedTransferEncoding() &&
-            !request.hasContentLength())
+        if (request.getMethod() == Poco::Net::HTTPRequest::HTTP_POST && !request.getChunkedTransferEncoding() && !request.hasContentLength())
         {
             throw Exception("There is neither Transfer-Encoding header nor Content-Length header", ErrorCodes::HTTP_LENGTH_REQUIRED);
         }
@@ -663,4 +631,4 @@ void HTTPHandler::handleRequest(Poco::Net::HTTPServerRequest & request, Poco::Ne
 }
 
 
-}
+} // namespace DB
