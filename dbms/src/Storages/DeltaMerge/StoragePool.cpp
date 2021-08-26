@@ -1,11 +1,10 @@
 #include <Common/FailPoint.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/PathPool.h>
-
-#include "IO/WriteHelpers.h"
 
 namespace DB
 {
