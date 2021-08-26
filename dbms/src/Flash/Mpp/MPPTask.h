@@ -64,7 +64,7 @@ public:
 
     std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
 
-    void compile();
+    void preprocess();
 
     void run();
 
@@ -84,8 +84,8 @@ private:
 
     Context context;
 
-    RegionInfoMap regions;
-    RegionInfoList retry_regions;
+    RegionInfoMap local_regions;
+    RegionInfoList remote_regions;
 
     std::unique_ptr<tipb::DAGRequest> dag_req;
     std::unique_ptr<DAGContext> dag_context;

@@ -130,30 +130,19 @@ void MPPTask::unregisterTask()
     }
 }
 
-bool needRemoteRead(const RegionInfo & region_info, const RegionInfoMap & existing_regions, const TMTContext & tmt_context)
+bool isRemoteRegion(const RegionInfo & region_info, const TMTContext & tmt_context)
 {
-    if (region_info.key_ranges.empty())
+    bool is_remote_region = false;
+    RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
+    if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
+        is_remote_region = true;
+    else
     {
-        throw TiFlashException(
-            "Income key ranges is empty for region: " + std::to_string(region_info.region_id),
-            Errors::Coprocessor::BadRequest);
+        auto meta_snap = current_region->dumpRegionMetaSnapshot();
+        if (meta_snap.ver != region_info.region_version)
+            is_remote_region = true;
     }
-    bool need_remote_read = existing_regions.find(region_info.region_id) != existing_regions.end());
-    if (!need_remote_read)
-    {
-        RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
-        if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
-        {
-            need_remote_read = true;
-        }
-        else
-        {
-            auto meta_snap = current_region->dumpRegionMetaSnapshot();
-            if (meta_snap.ver != region_info.region_version)
-                need_remote_read = true;
-        }
-    }
-    return need_remote_read;
+    return is_remote_region;
 }
 
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
@@ -181,15 +170,20 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     for (auto & r : task_request.regions())
     {
         RegionInfo region_info(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr);
+        if (region_info.key_ranges.empty())
+        {
+            throw TiFlashException(
+                "Income key ranges is empty for region: " + std::to_string(region_info.region_id),
+                Errors::Coprocessor::BadRequest);
+        }
+        /// TiFlash does not support regions with duplicated region id, so for regions with duplicated
+        /// region id, only the first region will be treated as local region
+        bool duplicated_region = local_regions.find(region_info.region_id) != local_regions.end();
 
-        if (needRemoteRead(region_info, regions, tmt_context))
-        {
-            retry_regions.push_back(region_info);
-        }
+        if (duplicated_region || isRemoteRegion(region_info, tmt_context))
+            remote_regions.push_back(region_info);
         else
-        {
-            regions.insert(std::make_pair(region_info.region_id, region_info));
-        }
+            local_regions.insert(std::make_pair(region_info.region_id, region_info));
     }
     // set schema ver and start ts.
     auto schema_ver = task_request.schema_ver();
@@ -263,13 +257,13 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
 
-    return retry_regions;
+    return remote_regions;
 }
 
-void MPPTask::compile()
+void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
-    DAGQuerySource dag(context, regions, retry_regions, *dag_req, log, true);
+    DAGQuerySource dag(context, local_regions, remote_regions, *dag_req, log, true);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
 
     // get partition column ids
@@ -330,7 +324,7 @@ void MPPTask::runImpl()
     LOG_INFO(log, "task starts running");
     try
     {
-        compile();
+        preprocess();
         auto from = io.in;
         auto to = io.out;
         from->readPrefix();
