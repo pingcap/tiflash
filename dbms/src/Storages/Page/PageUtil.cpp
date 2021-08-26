@@ -16,9 +16,11 @@
 
 #include <ext/scope_guard.h>
 
+// https://man7.org/linux/man-pages/man2/write.2.html pwrite() will call the write()
 // According to POSIX.1, if count is greater than SSIZE_MAX, the result is implementation-defined;
-// SSIZE_MAX usually is (2^31 -1), Just use 1G to split.
-#define MAX_WRITE_SIZE 1 * 1024 * 1024 * 1024
+// SSIZE_MAX usually is (2^31 -1), Use SSIZE_MAX still will failed.
+// (2G - 4k) is the best value. The reason for subtracting 4k instead of 1byte is that both vfs and disks need to be aligned.
+#define MAX_IO_SIZE ((2ULL * 1024 * 1024 * 1024) - (1024 * 4))
 
 namespace ProfileEvents
 {
@@ -58,8 +60,12 @@ void syncFile(WritableFilePtr & file)
 }
 
 #ifndef NDEBUG
-void writeFile(
-    WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter, bool enable_failpoint)
+void writeFile(WritableFilePtr &       file,
+               UInt64                  offset,
+               char *                  data,
+               size_t                  to_write,
+               const WriteLimiterPtr & write_limiter,
+               bool [[unused]] enable_failpoint)
 #else
 void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter)
 #endif
@@ -71,12 +77,7 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
         write_limiter->request(to_write);
 
     size_t bytes_written = 0;
-    size_t split_bytes   = 0;
-
-    if (to_write > MAX_WRITE_SIZE)
-    {
-        split_bytes = MAX_WRITE_SIZE;
-    }
+    size_t split_bytes   = to_write > MAX_IO_SIZE ? MAX_IO_SIZE : 0;
 
     while (bytes_written != to_write)
     {
@@ -85,10 +86,9 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
         {
             CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
 
-            size_t bytes_need_be_write = split_bytes == 0
-                ? (to_write - bytes_written)
-                : ((to_write - bytes_written) < split_bytes ? (to_write - bytes_written) : split_bytes);
-            res                        = file->pwrite(data + bytes_written, bytes_need_be_write, offset + bytes_written);
+            size_t bytes_need_write = split_bytes == 0 ? (to_write - bytes_written) : std::min(to_write - bytes_written, split_bytes);
+            std::cout << "to_write : " << to_write << "bytes_need_write : " << bytes_need_write << std::endl;
+            res = file->pwrite(data + bytes_written, bytes_need_write, offset + bytes_written);
 
             fiu_do_on(FailPoints::force_set_page_file_write_errno, {
                 if (enable_failpoint)
@@ -137,15 +137,19 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
     {
         read_limiter->request(expected_bytes);
     }
-    size_t bytes_read = 0;
+    size_t bytes_read  = 0;
+    size_t split_bytes = expected_bytes > MAX_IO_SIZE ? MAX_IO_SIZE : 0;
+
     while (bytes_read < expected_bytes)
     {
         ProfileEvents::increment(ProfileEvents::PSMReadIOCalls);
 
         ssize_t res = 0;
         {
+            size_t bytes_need_read = split_bytes == 0 ? (expected_bytes - bytes_read) : std::min(expected_bytes - bytes_read, split_bytes);
             CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
-            res = file->pread(const_cast<char *>(buf + bytes_read), expected_bytes - bytes_read, offset + bytes_read);
+            std::cout << "expected_bytes : " << expected_bytes << "bytes_need_read : " << bytes_need_read << std::endl;
+            res = file->pread(const_cast<char *>(buf + bytes_read), bytes_need_read, offset + bytes_read);
         }
         if (!res)
             break;
