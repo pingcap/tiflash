@@ -8,7 +8,6 @@
 
 namespace TiDB
 {
-
 class ITiDBCollator : public ICollator
 {
 public:
@@ -52,11 +51,13 @@ public:
     int32_t getCollatorId() const { return collator_id; }
 
 protected:
-    explicit ITiDBCollator(int32_t collator_id_) : collator_id(collator_id_){};
+    explicit ITiDBCollator(int32_t collator_id_)
+        : collator_id(collator_id_){};
     int32_t collator_id;
 };
 
-using TiDBCollators = std::vector<std::shared_ptr<ITiDBCollator>>;
+using TiDBCollatorPtr = std::shared_ptr<ITiDBCollator>;
+using TiDBCollators = std::vector<TiDBCollatorPtr>;
 
 /// these dummy_xxx are used as the default value to avoid too many meaningless
 /// modification on the legacy ClickHouse code

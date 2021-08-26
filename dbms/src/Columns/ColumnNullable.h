@@ -1,11 +1,10 @@
 #pragma once
 
-#include <Columns/IColumn.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/IColumn.h>
 
 namespace DB
 {
-
 using NullMap = ColumnUInt8::Container;
 using ConstNullMapPtr = const NullMap *;
 
@@ -36,22 +35,26 @@ public:
         return ColumnNullable::create(nested_column_->assumeMutable(), null_map_->assumeMutable());
     }
 
-    template <typename ... Args, typename = typename std::enable_if<IsMutableColumns<Args ...>::value>::type>
-    static MutablePtr create(Args &&... args) { return Base::create(std::forward<Args>(args)...); }
+    template <typename... Args, typename = typename std::enable_if<IsMutableColumns<Args...>::value>::type>
+    static MutablePtr create(Args &&... args)
+    {
+        return Base::create(std::forward<Args>(args)...);
+    }
 
     const char * getFamilyName() const override { return "Nullable"; }
     std::string getName() const override { return "Nullable(" + nested_column->getName() + ")"; }
     MutableColumnPtr cloneResized(size_t size) const override;
     size_t size() const override { return nested_column->size(); }
-    bool isNullAt(size_t n) const override { return static_cast<const ColumnUInt8 &>(*null_map).getData()[n] != 0;}
+    bool isNullAt(size_t n) const override { return static_cast<const ColumnUInt8 &>(*null_map).getData()[n] != 0; }
     Field operator[](size_t n) const override;
     void get(size_t n, Field & res) const override;
     UInt64 get64(size_t n) const override { return nested_column->get64(n); }
     StringRef getDataAt(size_t n) const override;
     void insertData(const char * pos, size_t length) override;
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
-    const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
-    void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;;
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
+    const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
+    void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
+    ;
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src, size_t n) override;
 
@@ -75,9 +78,9 @@ public:
     size_t byteSize(size_t offset, size_t limit) const override;
     size_t allocatedBytes() const override;
     ColumnPtr replicate(const Offsets & replicate_offsets) const override;
-    void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
-    void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
-    void updateWeakHash32(WeakHash32 & hash, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
+    void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void getExtremes(Field & min, Field & max) const override;
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
@@ -140,4 +143,4 @@ private:
 ColumnPtr makeNullable(const ColumnPtr & column);
 std::tuple<const IColumn *, const NullMap *> removeNullable(const IColumn * column);
 
-}
+} // namespace DB
