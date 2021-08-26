@@ -397,17 +397,16 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     Names left_key_names;
     Names right_key_names;
     bool swap_join_side = false;
-    if (is_cartesian_join)
-    {
-        /// cartesian right join will always be converted to cartesian left join
-        swap_join_side = kind == ASTTableJoin::Kind::Cross_Right;
-    }
-    else
-    {
-        /// in DAG request, inner part is the build side, however for TiFlash implementation,
-        /// the build side must be the right side, so need to swap the join side if needed
-        swap_join_side = join.inner_idx() == 0;
-    }
+
+    /// in DAG request, inner part is the build side, however for TiFlash implementation,
+    /// the build side must be the right side, so need to swap the join side if needed
+    /// 1. for (cross) inner join, there is no problem in this swap.
+    /// 2. for (cross) semi/anti-semi join, the build side is always right, needn't swap.
+    /// 3. for non-cross left/right join, there is no problem in this swap.
+    /// 4. for cross left join, the build side is always right, needn't swap.
+    /// 5. for cross right join, the build side is always left, so it will always swap and change to cross left join.
+    /// note that we don't support cross-right join now. 
+    swap_join_side = join.inner_idx() == 0;
 
     if (swap_join_side)
     {
