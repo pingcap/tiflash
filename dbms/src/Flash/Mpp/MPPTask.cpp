@@ -138,11 +138,7 @@ bool needRemoteRead(const RegionInfo & region_info, const RegionInfoMap & existi
             "Income key ranges is empty for region: " + std::to_string(region_info.region_id),
             Errors::Coprocessor::BadRequest);
     }
-    bool need_remote_read = false;
-    if (existing_regions.find(region_info.region_id) != existing_regions.end())
-    {
-        need_remote_read = true;
-    }
+    bool need_remote_read = existing_regions.find(region_info.region_id) != existing_regions.end());
     if (!need_remote_read)
     {
         RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
