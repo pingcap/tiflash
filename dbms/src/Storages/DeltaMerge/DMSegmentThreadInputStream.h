@@ -30,7 +30,8 @@ public:
                                UInt64                         max_version_,
                                size_t                         expected_block_size_,
                                bool                           is_raw_,
-                               bool                           do_range_filter_for_raw_)
+                               bool                           do_range_filter_for_raw_,
+                               const std::shared_ptr<LogWithPrefix> & mpp_task_log_ = nullptr)
         : dm_context(dm_context_),
           task_pool(task_pool_),
           after_segment_read(after_segment_read_),
@@ -41,7 +42,7 @@ public:
           expected_block_size(expected_block_size_),
           is_raw(is_raw_),
           do_range_filter_for_raw(do_range_filter_for_raw_),
-          log(&Logger::get("DMSegmentThreadInputStream"))
+          mpp_task_log(getLogWithPrefix(mpp_task_log_, "DMSegmentThreadInputStream"))
     {
     }
 
@@ -67,7 +68,7 @@ protected:
                 if (!task)
                 {
                     done = true;
-                    LOG_DEBUG(log, "Read done");
+                    LOG_DEBUG(mpp_task_log, "Read done");
                     return {};
                 }
 
@@ -87,7 +88,7 @@ protected:
                         max_version,
                         std::max(expected_block_size, (size_t)(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows)));
                 }
-                LOG_TRACE(log, "Start to read segment [" + DB::toString(cur_segment->segmentId()) + "]");
+                LOG_TRACE(mpp_task_log, "Start to read segment [" + DB::toString(cur_segment->segmentId()) + "]");
             }
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
 
@@ -103,7 +104,7 @@ protected:
             else
             {
                 after_segment_read(dm_context, cur_segment);
-                LOG_TRACE(log, "Finish reading segment [" << cur_segment->segmentId() << "]");
+                LOG_TRACE(mpp_task_log, "Finish reading segment [" << cur_segment->segmentId() << "]");
                 cur_segment = {};
                 cur_stream  = {};
             }
@@ -128,7 +129,7 @@ private:
 
     SegmentPtr cur_segment;
 
-    Logger * log;
+    const std::shared_ptr<LogWithPrefix> mpp_task_log;
 };
 
 } // namespace DM

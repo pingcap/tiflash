@@ -16,7 +16,6 @@
 
 namespace DB
 {
-
 // TiRemoteBlockInputStream is a block input stream that read/receive data from remote.
 template <typename RemoteReader>
 class TiRemoteBlockInputStream : public IProfilingBlockInputStream
@@ -40,7 +39,9 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     std::vector<std::atomic<bool>> execution_summaries_inited;
     std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
 
-    Logger * log;
+    const std::shared_ptr<LogWithPrefix> mpp_task_log;
+
+    uint64_t total_rows;
 
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
@@ -75,7 +76,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 auto & executor_id = execution_summary.executor_id();
                 if (unlikely(execution_summaries_map.find(executor_id) == execution_summaries_map.end()))
                 {
-                    LOG_WARNING(log, "execution " + executor_id + " not found in execution_summaries, this should not happen");
+                    LOG_WARNING(mpp_task_log, "execution " + executor_id + " not found in execution_summaries, this should not happen");
                     continue;
                 }
                 auto & current_execution_summary = execution_summaries_map[executor_id];
@@ -107,14 +108,14 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
         auto result = remote_reader->nextResult();
         if (result.meet_error)
         {
-            LOG_WARNING(log, "remote reader meets error: " << result.error_msg);
+            LOG_WARNING(mpp_task_log, "remote reader meets error: " << result.error_msg);
             throw Exception(result.error_msg);
         }
         if (result.eof)
             return false;
         if (result.resp->has_error())
         {
-            LOG_WARNING(log, "remote reader meets error: " << result.resp->error().DebugString());
+            LOG_WARNING(mpp_task_log, "remote reader meets error: " << result.resp->error().DebugString());
             throw Exception(result.resp->error().DebugString());
         }
 
@@ -137,19 +138,25 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             const tipb::Chunk & chunk = result.resp->chunks(i);
             switch (result.resp->encode_type())
             {
-                case tipb::EncodeType::TypeCHBlock:
-                    block = CHBlockChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                    break;
-                case tipb::EncodeType::TypeChunk:
-                    block = ArrowChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                    break;
-                case tipb::EncodeType::TypeDefault:
-                    block = DefaultChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                    break;
-                default:
-                    throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
+            case tipb::EncodeType::TypeCHBlock:
+                block = CHBlockChunkCodec().decode(chunk, remote_reader->getOutputSchema());
+                break;
+            case tipb::EncodeType::TypeChunk:
+                block = ArrowChunkCodec().decode(chunk, remote_reader->getOutputSchema());
+                break;
+            case tipb::EncodeType::TypeDefault:
+                block = DefaultChunkCodec().decode(chunk, remote_reader->getOutputSchema());
+                break;
+            default:
+                throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
             }
-            LOG_DEBUG(log, "decode packet " << std::to_string(block.rows()) + " for " + result.req_info);
+
+            total_rows += block.rows();
+
+            LOG_TRACE(mpp_task_log,
+                      "recv " + std::to_string(block.rows()) + " rows from remote " << +" for " + result.req_info
+                                                                                    << ", total recv row num:" << total_rows);
+
             if (unlikely(block.rows() == 0))
                 continue;
             assertBlockSchema(expected_types, block, getName());
@@ -161,12 +168,13 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_)
-        : remote_reader(remote_reader_),
-          source_num(remote_reader->getSourceNum()),
-          name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")"),
-          execution_summaries_inited(source_num),
-          log(&Logger::get(name))
+    explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const std::shared_ptr<LogWithPrefix> & mpp_task_log_ = nullptr)
+        : remote_reader(remote_reader_)
+        , source_num(remote_reader->getSourceNum())
+        , name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")")
+        , execution_summaries_inited(source_num)
+        , mpp_task_log(getLogWithPrefix(mpp_task_log_, getName()))
+        , total_rows(0)
     {
         // generate sample block
         ColumnsWithTypeAndName columns;

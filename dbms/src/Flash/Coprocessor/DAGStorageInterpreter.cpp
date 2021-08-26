@@ -107,19 +107,23 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     const tipb::TableScan & ts,
     const std::vector<const tipb::Expr *> & conditions_,
     size_t max_streams_,
-    Poco::Logger * log_)
+    const std::shared_ptr<LogWithPrefix> & mpp_task_log_)
     : context(context_),
       dag(dag_),
       query_block(query_block_),
       table_scan(ts),
       conditions(conditions_),
       max_streams(max_streams_),
-      log(log_),
+      mpp_task_log(mpp_task_log_),
       table_id(ts.table_id()),
       settings(context.getSettingsRef()),
       tmt(context.getTMTContext()),
       mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
 {
+    if (mpp_task_log_ == nullptr)
+        mpp_task_log = std::make_shared<LogWithPrefix>(&Logger::get("DAGStorageInterpreter"), LogWithPrefix::prefix_NA);
+    else
+        mpp_task_log = mpp_task_log_;
 }
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
@@ -161,7 +165,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
     if (info_retry)
         throw RegionException({info_retry->begin()->get().region_id}, status);
 
-    return doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
+    return doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, mpp_task_log->getLog());
 }
 
 /// Will assign region_retry
@@ -189,7 +193,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
             }
             if (mvcc_query_info->regions_query_info.empty())
                 return {};
-            return doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
+            return doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, mpp_task_log->getLog());
         }
         catch (const LockException & e)
         {
@@ -258,7 +262,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                     region_ids.insert(info.region_id);
                 throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
             });
-            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
+            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, mpp_task_log->getLog());
             break;
         }
         catch (RegionException & e)
@@ -294,7 +298,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                             ++iter;
                         }
                     }
-                    LOG_WARNING(log,
+                    LOG_WARNING(mpp_task_log,
                         "RegionException after read from storage, regions ["
                             << ss.str() << "], message: " << e.message()
                             << (regions_query_info.empty() ? "" : ", retry to read from local"));
@@ -314,7 +318,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                             ss << iter->first << ",";
                         }
                     }
-                    LOG_WARNING(log, "RegionException after read from storage, regions [" << ss.str() << "], message: " << e.message());
+                    LOG_WARNING(mpp_task_log, "RegionException after read from storage, regions [" << ss.str() << "], message: " << e.message());
                     break; // break retry loop
                 }
             }
@@ -402,7 +406,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     };
 
     auto log_schema_version = [&](const String & result, Int64 storage_schema_version) {
-        LOG_DEBUG(log,
+        LOG_DEBUG(mpp_task_log,
             __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
                                 << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
     };
@@ -413,7 +417,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         tmt.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
+        LOG_DEBUG(mpp_task_log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
     };
 
     /// Try get storage and lock once.
@@ -484,7 +488,7 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
     {
         context.getQueryContext().getDAGContext()->retry_regions.push_back(r.get());
     }
-    LOG_DEBUG(log, ({
+    LOG_DEBUG(mpp_task_log, ({
         std::stringstream ss;
         ss << "Start to retry " << region_retry.size() << " regions (";
         for (auto & r : region_retry)

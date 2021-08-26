@@ -8,15 +8,18 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-DAGQuerySource::DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_,
-    const tipb::DAGRequest & dag_request_, const bool is_batch_cop_)
-    : context(context_), regions(regions_), retry_regions(retry_regions_), dag_request(dag_request_), is_batch_cop(is_batch_cop_)
+DAGQuerySource::DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_, const tipb::DAGRequest & dag_request_, const std::shared_ptr<LogWithPrefix> & mpp_task_log_, const bool is_batch_cop_)
+    : context(context_)
+    , regions(regions_)
+    , retry_regions(retry_regions_)
+    , dag_request(dag_request_)
+    , is_batch_cop(is_batch_cop_)
+    , mpp_task_log(mpp_task_log_)
 {
     if (dag_request.has_root_executor())
     {
@@ -33,8 +36,8 @@ DAGQuerySource::DAGQuerySource(Context & context_, const RegionInfoMap & regions
     {
         if (unlikely(i >= root_query_block->output_field_types.size()))
             throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Invalid output offset(schema has "
-                    + std::to_string(root_query_block->output_field_types.size()) + " columns, access index " + std::to_string(i),
-                Errors::Coprocessor::BadRequest);
+                                       + std::to_string(root_query_block->output_field_types.size()) + " columns, access index " + std::to_string(i),
+                                   Errors::Coprocessor::BadRequest);
         result_field_types.push_back(root_query_block->output_field_types[i]);
     }
     analyzeDAGEncodeType();
@@ -65,7 +68,10 @@ std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t)
     return {dag_request.DebugString(), makeDummyQuery()};
 }
 
-String DAGQuerySource::str(size_t) { return dag_request.DebugString(); }
+String DAGQuerySource::str(size_t)
+{
+    return dag_request.DebugString();
+}
 
 std::unique_ptr<IInterpreter> DAGQuerySource::interpreter(Context &, QueryProcessingStage::Enum)
 {

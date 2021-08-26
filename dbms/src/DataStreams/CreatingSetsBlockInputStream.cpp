@@ -24,15 +24,17 @@ extern const int SET_SIZE_LIMIT_EXCEEDED;
 
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
     std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
-    const SizeLimits & network_transfer_limits, Int64 mpp_task_id_)
-    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)), network_transfer_limits(network_transfer_limits), mpp_task_id(mpp_task_id_)
+    const SizeLimits & network_transfer_limits, Int64 mpp_task_id_,
+    const std::shared_ptr<LogWithPrefix> & mpp_task_log_)
+    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)), network_transfer_limits(network_transfer_limits), mpp_task_id(mpp_task_id_),
+    mpp_task_log(getLogWithPrefix(mpp_task_log_, "CreatingSetsBlockInputStream", mpp_task_id))
 {
     init(input);
 }
 
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
-    const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets, const SizeLimits & network_transfer_limits)
-    : network_transfer_limits(network_transfer_limits)
+    const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets, const SizeLimits & network_transfer_limits, const std::shared_ptr<LogWithPrefix> & mpp_task_log_)
+    : network_transfer_limits(network_transfer_limits), mpp_task_log(getLogWithPrefix(mpp_task_log_, "CreatingSetsBlockInputStream", mpp_task_id))
 {
     subqueries_for_sets_list.push_back(subqueries_for_sets);
     init(input);
@@ -126,7 +128,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
     try
     {
-        LOG_DEBUG(log,
+        LOG_DEBUG(mpp_task_log,
             (subquery.set ? "Creating set. " : "")
                 << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
                 << std::to_string(mpp_task_id));
@@ -151,7 +153,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         {
             if (isCancelled())
             {
-                LOG_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
+                LOG_DEBUG(mpp_task_log, "Query was cancelled during set / join or temporary table creation.");
                 return;
             }
 
@@ -226,12 +228,15 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 
             msg << "In " << watch.elapsedSeconds() << " sec. ";
             msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads ";
-            msg << "for task " << std::to_string(mpp_task_id) << ".";
-            LOG_DEBUG(log, msg.rdbuf());
+
+            if (mpp_task_log != nullptr)
+                LOG_DEBUG(mpp_task_log, msg.rdbuf());    
+            else
+                LOG_DEBUG(mpp_task_log, msg.rdbuf());
         }
         else
         {
-            LOG_DEBUG(log, "Subquery has empty result for task " << std::to_string(mpp_task_id) << ".");
+            LOG_DEBUG(mpp_task_log, "Subquery has empty result for task " << std::to_string(mpp_task_id) << ".");
         }
     }
     catch (std::exception & e)

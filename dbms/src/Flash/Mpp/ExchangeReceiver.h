@@ -6,7 +6,7 @@
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <common/logger_useful.h>
+#include <Common/LogWithPrefix.h>
 
 #include <chrono>
 #include <mutex>
@@ -24,7 +24,6 @@
 
 namespace DB
 {
-
 struct ExchangeReceiverResult
 {
     std::shared_ptr<tipb::SelectResponse> resp;
@@ -33,11 +32,17 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
-    ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_ = "",
-        bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
-        : resp(resp_), call_index(call_index_), req_info(req_info_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_)
+    ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_ = "", bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
+        : resp(resp_)
+        , call_index(call_index_)
+        , req_info(req_info_)
+        , meet_error(meet_error_)
+        , error_msg(error_msg_)
+        , eof(eof_)
     {}
-    ExchangeReceiverResult() : ExchangeReceiverResult(nullptr, 0) {}
+    ExchangeReceiverResult()
+        : ExchangeReceiverResult(nullptr, 0)
+    {}
 };
 
 enum State
@@ -70,7 +75,12 @@ private:
     Int32 live_connections;
     State state;
     String err_msg;
-    Logger * log;
+    std::shared_ptr<LogWithPrefix> mpp_task_log;
+
+    // control the log frequency
+    uint64_t log_frequency;
+
+    bool isLog() { return log_frequency++ % 5 == 0; }
 
     void setUpConnection();
 
@@ -103,15 +113,14 @@ private:
     }
 
 public:
-    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_)
-        : cluster(context_.getTMTContext().getKVCluster()),
-          pb_exchange_receiver(exc),
-          source_num(pb_exchange_receiver.encoded_task_meta_size()),
-          task_meta(meta),
-          max_buffer_size(max_buffer_size_),
-          live_connections(pb_exchange_receiver.encoded_task_meta_size()),
-          state(NORMAL),
-          log(&Logger::get("exchange_receiver"))
+    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_, const std::shared_ptr<LogWithPrefix> & mpp_task_log_ = nullptr)
+        : cluster(context_.getTMTContext().getKVCluster())
+        , pb_exchange_receiver(exc)
+        , source_num(pb_exchange_receiver.encoded_task_meta_size())
+        , task_meta(meta)
+        , max_buffer_size(max_buffer_size_)
+        , live_connections(pb_exchange_receiver.encoded_task_meta_size())
+        , state(NORMAL)
     {
         for (int i = 0; i < exc.field_types_size(); i++)
         {
@@ -119,6 +128,12 @@ public:
             ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
             schema.push_back(std::make_pair(name, info));
         }
+
+        if (mpp_task_log_ == nullptr)
+            mpp_task_log = std::make_shared<LogWithPrefix>(&Logger::get("ExchangeReceiver"), LogWithPrefix::prefix_NA);
+        else
+            mpp_task_log = mpp_task_log_;
+
         setUpConnection();
     }
 

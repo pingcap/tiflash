@@ -4,9 +4,8 @@
 
 namespace DB
 {
-
-ExpressionBlockInputStream::ExpressionBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_)
-    : expression(expression_)
+ExpressionBlockInputStream::ExpressionBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const std::shared_ptr<LogWithPrefix> & mpp_task_log_)
+    : expression(expression_), mpp_task_log(getLogWithPrefix(mpp_task_log_, getName()))
 {
     children.push_back(input);
 }

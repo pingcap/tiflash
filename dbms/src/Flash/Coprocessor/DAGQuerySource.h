@@ -18,7 +18,6 @@
 
 namespace DB
 {
-
 class Context;
 
 struct StreamWriter
@@ -26,7 +25,9 @@ struct StreamWriter
     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer;
     std::mutex write_mutex;
 
-    StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_) : writer(writer_) {}
+    StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
+        : writer(writer_)
+    {}
 
     void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
     {
@@ -48,8 +49,7 @@ using StreamWriterPtr = std::shared_ptr<StreamWriter>;
 class DAGQuerySource : public IQuerySource
 {
 public:
-    DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_,
-        const tipb::DAGRequest & dag_request_, const bool is_batch_cop_ = false);
+    DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_, const tipb::DAGRequest & dag_request_, const std::shared_ptr<LogWithPrefix> & mpp_task_log_, const bool is_batch_cop_ = false);
 
     std::tuple<std::string, ASTPtr> parse(size_t) override;
     String str(size_t max_query_size) override;
@@ -71,6 +71,8 @@ public:
 
     DAGContext & getDAGContext() const { return *context.getDAGContext(); }
 
+    std::string getExecutorNames() const;
+
 protected:
     void analyzeDAGEncodeType();
 
@@ -88,6 +90,8 @@ protected:
     ASTPtr ast;
 
     const bool is_batch_cop;
+
+    std::shared_ptr<LogWithPrefix> mpp_task_log;
 };
 
 } // namespace DB

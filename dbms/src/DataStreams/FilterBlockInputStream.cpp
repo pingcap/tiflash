@@ -8,7 +8,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
@@ -16,9 +15,9 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 
-FilterBlockInputStream::FilterBlockInputStream(
-    const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name)
+FilterBlockInputStream::FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name, const std::shared_ptr<LogWithPrefix> & mpp_task_log_)
     : expression(expression_)
+    , mpp_task_log(getLogWithPrefix(mpp_task_log_, getName()))
 {
     children.push_back(input);
 
@@ -42,7 +41,10 @@ FilterBlockInputStream::FilterBlockInputStream(
 }
 
 
-String FilterBlockInputStream::getName() const { return "Filter"; }
+String FilterBlockInputStream::getName() const
+{
+    return "Filter";
+}
 
 
 Block FilterBlockInputStream::getTotals()
@@ -57,7 +59,10 @@ Block FilterBlockInputStream::getTotals()
 }
 
 
-Block FilterBlockInputStream::getHeader() const { return header; }
+Block FilterBlockInputStream::getHeader() const
+{
+    return header;
+}
 
 
 Block FilterBlockInputStream::readImpl()

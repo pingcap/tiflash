@@ -1,17 +1,17 @@
 #pragma once
 
-#include <common/Exception.h>
+#include <Common/Exception.h>
 #include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
-#include <string>
+#include <common/types.h>
 
 namespace DB
 {
 /** LogWithPrefix could print formalized logs.
   * For example, adding prefix for a Logger with "[task 1 query 2333]" could help us find logs with LogSearch.
   * 
-  * Moreover, we can append prefix at any time with the static function "append(const String & str)".
+  * Moreover, we can append prefix at any time with the function "append(const String & str)".
   * For example, call append("[InputStream]") could print logs with prefix "[task 1 query 2333] [InputStream]".
   * 
   * Interfaces in LogWithPrefix are definitely the same with the Logger, so that they could use the same
@@ -20,7 +20,7 @@ namespace DB
 class LogWithPrefix : private boost::noncopyable
 {
 public:
-    LogWithPrefix(Logger * log_, const String & prefix_)
+    LogWithPrefix(Poco::Logger * log_, const String & prefix_)
         : log(log_)
         , prefix(prefix_)
     {
@@ -72,10 +72,12 @@ public:
 
     using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 
-    static LogWithPrefixPtr append(const String & str) { return std::make_shared<LogWithPrefix>(log, prefix + " " + str); }
+    LogWithPrefixPtr append(const String & str) { return std::make_shared<LogWithPrefix>(log, prefix + " " + str); }
+
+    static const String prefix_NA;
 
 private:
-    Logger * log;
+    Poco::Logger * log;
     const String prefix;
 };
 

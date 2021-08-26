@@ -1,4 +1,5 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <fmt/core.h>
 
 namespace pingcap
 {
@@ -42,14 +43,19 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 {
     bool meet_error = false;
     String local_err_msg;
+
+    Int64 send_task_id = -1;
+    Int64 recv_task_id = task_meta.task_id();
+
     try
     {
         auto sender_task = new mpp::TaskMeta();
+        send_task_id = sender_task->task_id();
         sender_task->ParseFromString(meta_raw);
         auto req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
         req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
         req->set_allocated_sender_meta(sender_task);
-        LOG_DEBUG(log, "begin start and read : " << req->DebugString());
+        LOG_DEBUG(mpp_task_log, "begin start and read : " << req->DebugString());
         ::grpc::Status status = ::grpc::Status::OK;
         for (int i = 0; i < 10; i++)
         {
@@ -58,11 +64,11 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             auto reader = cluster->rpc_client->sendStreamRequest(req->sender_meta().address(), &client_context, call);
             reader->WaitForInitialMetadata();
             mpp::MPPDataPacket packet;
-            String req_info = "tunnel" + std::to_string(sender_task->task_id()) + "+" + std::to_string(task_meta.task_id());
+            String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
             bool has_data = false;
             for (;;)
             {
-                LOG_TRACE(log, "begin next ");
+                LOG_TRACE(mpp_task_log, "begin next ");
                 bool success = reader->Read(&packet);
                 if (!success)
                     break;
@@ -76,7 +82,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                 {
                     meet_error = true;
                     local_err_msg = "Decode packet meet error";
-                    LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
+                    LOG_WARNING(mpp_task_log, "Decode packet meet error, exit from ReadLoop");
                     break;
                 }
             }
@@ -88,12 +94,12 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             status = reader->Finish();
             if (status.ok())
             {
-                LOG_DEBUG(log, "finish read : " << req->DebugString());
+                LOG_DEBUG(mpp_task_log, "finish read : " << req->DebugString());
                 break;
             }
             else
             {
-                LOG_WARNING(log,
+                LOG_WARNING(mpp_task_log,
                     "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
                 // if we have received some data, we should not retry.
                 if (has_data)
@@ -126,12 +132,20 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
     }
     std::lock_guard<std::mutex> lock(mu);
     live_connections--;
+
+    // avoid concurrent conflict
+    Int32 live_conn_copy = live_connections;
+
     if (meet_error && state == NORMAL)
         state = ERROR;
     if (meet_error && err_msg.empty())
         err_msg = local_err_msg;
     cv.notify_all();
-    LOG_DEBUG(log, "read thread end!!! live connections: " << std::to_string(live_connections));
+
+    LOG_DEBUG(mpp_task_log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, live_conn_copy));
+
+    if (live_conn_copy == 0)
+        LOG_DEBUG(mpp_task_log, fmt::format("All threads end in ExchangeReceiver"));
 }
 
 } // namespace DB
