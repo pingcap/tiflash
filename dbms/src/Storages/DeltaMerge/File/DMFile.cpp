@@ -80,7 +80,7 @@ String DMFile::ngcPath() const
 
 DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single_file_mode)
 {
-    Poco::Logger * log = &Logger::get("DMFile");
+    Poco::Logger * log = &Poco::Logger::get("DMFile");
     // On create, ref_id is the same as file_id.
     DMFilePtr new_dmfile(
         new DMFile(file_id, file_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::WRITABLE, log));
@@ -124,7 +124,7 @@ DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id,
         parent_path,
         single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER,
         Status::READABLE,
-        &Logger::get("DMFile")));
+        &Poco::Logger::get("DMFile")));
     if (read_meta)
         dmfile->readMetadata(file_provider);
     return dmfile;
@@ -475,7 +475,7 @@ std::set<UInt64> DMFile::listAllInPath(
     std::vector<std::string> file_names;
     folder.list(file_names);
     std::set<UInt64> file_ids;
-    Logger * log = &Logger::get("DMFile");
+    Poco::Logger * log = &Poco::Logger::get("DMFile");
 
     auto try_parse_file_id = [](const String & name) -> std::optional<UInt64> {
         std::vector<std::string> ss;

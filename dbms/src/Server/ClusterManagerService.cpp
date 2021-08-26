@@ -9,7 +9,6 @@
 
 namespace DB
 {
-
 const std::string TIFLASH_PREFIX = "flash";
 const std::string CLUSTER_MANAGER_PATH_KEY = TIFLASH_PREFIX + ".flash_cluster.cluster_manager_path";
 const std::string BIN_NAME = "flash_cluster_manager";
@@ -36,7 +35,9 @@ catch (DB::Exception & e)
 }
 
 ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::string & config_path)
-    : context(context_), timer("ClusterManager"), log(&Logger::get("ClusterManagerService"))
+    : context(context_)
+    , timer("ClusterManager")
+    , log(&Poco::Logger::get("ClusterManagerService"))
 {
     const auto & conf = context.getConfigRef();
 
@@ -68,10 +69,12 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
 
     LOG_INFO(log, "Registered timed cluster manager task at rate " << task_interval << " seconds");
 
-    timer.scheduleAtFixedRate(FunctionTimerTask::create(std::bind(&ClusterManagerService::run, bin_path, args)), INIT_DELAY * MILLISECOND,
-        task_interval * MILLISECOND);
+    timer.scheduleAtFixedRate(FunctionTimerTask::create(std::bind(&ClusterManagerService::run, bin_path, args)), INIT_DELAY * MILLISECOND, task_interval * MILLISECOND);
 }
 
-ClusterManagerService::~ClusterManagerService() { timer.cancel(true); }
+ClusterManagerService::~ClusterManagerService()
+{
+    timer.cancel(true);
+}
 
 } // namespace DB

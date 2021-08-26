@@ -103,7 +103,7 @@ public:
 
     static void setApproxPageSize(size_t size_kb)
     {
-        LOG_INFO(&Logger::get("root"), "Page approx size is set to " + DB::toString(size_kb / 1024.0, 2) + "MB");
+        LOG_INFO(&Poco::Logger::get("root"), "Page approx size is set to " + DB::toString(size_kb / 1024.0, 2) + "MB");
         approx_page_kb = size_kb;
     }
 
@@ -131,7 +131,7 @@ public:
             wb.putPage(pageId, 0, buff, buff->buffer().size());
             storage->write(std::move(wb));
             if (pageId % 100 == 0)
-                LOG_INFO(&Logger::get("root"), "writer wrote page" + DB::toString(pageId));
+                LOG_INFO(&Poco::Logger::get("root"), "writer wrote page" + DB::toString(pageId));
         }
     }
 
@@ -151,9 +151,9 @@ public:
             storage->write(std::move(wb));
             ++pages_written;
             bytes_written += buff->buffer().size();
-            // LOG_INFO(&Logger::get("root"), "writer[" + DB::toString(index) + "] wrote page" + DB::toString(pageId));
+            // LOG_INFO(&Poco::Logger::get("root"), "writer[" + DB::toString(index) + "] wrote page" + DB::toString(pageId));
         }
-        LOG_INFO(&Logger::get("root"), "writer[" + DB::toString(index) + "] exit");
+        LOG_INFO(&Poco::Logger::get("root"), "writer[" + DB::toString(index) + "] exit");
     }
 };
 
@@ -197,7 +197,7 @@ public:
             }
             catch (DB::Exception & e)
             {
-                LOG_TRACE(&Logger::get("root"), e.displayText());
+                LOG_TRACE(&Poco::Logger::get("root"), e.displayText());
             }
 #else
             std::vector<DB::PageId> pageIds;
@@ -223,11 +223,11 @@ public:
             }
             catch (DB::Exception & e)
             {
-                LOG_TRACE(&Logger::get("root"), e.displayText());
+                LOG_TRACE(&Poco::Logger::get("root"), e.displayText());
             }
 #endif
         }
-        LOG_INFO(&Logger::get("root"), "reader[" + DB::toString(index) + "] exit");
+        LOG_INFO(&Poco::Logger::get("root"), "reader[" + DB::toString(index) + "] exit");
     }
 };
 
@@ -260,7 +260,7 @@ struct StressTimeout
     StressTimeout(TestContext & ctx_) : ctx(ctx_) {}
     void onTime(Poco::Timer & /* t */)
     {
-        LOG_INFO(&Logger::get("root"), "Timeout. exiting...");
+        LOG_INFO(&Poco::Logger::get("root"), "Timeout. exiting...");
         ctx.running_without_timeout = false;
     }
 };
@@ -282,7 +282,7 @@ struct Suit
           cancel_timer(cancel_sec * 1000),
           cancel_runner(ctx)
     {
-        LOG_INFO(&Logger::get("root"),
+        LOG_INFO(&Poco::Logger::get("root"),
                  "start running with these threads: W:" + DB::toString(num_writers) + ",R:" + DB::toString(num_readers)
                      + ",Gc:1, config.num_writer_slots:" + DB::toString(storage->config.num_write_slots));
     }
@@ -306,7 +306,7 @@ struct Suit
         gc_timer.start(Poco::TimerCallback<PSGc>(gc_runner, &PSGc::onTime));
 
         // set timeout
-        LOG_INFO(&Logger::get("root"), "benchmark timeout: " + DB::toString(cancel_sec) + "s");
+        LOG_INFO(&Poco::Logger::get("root"), "benchmark timeout: " + DB::toString(cancel_sec) + "s");
         cancel_timer.start(Poco::TimerCallback<StressTimeout>(cancel_runner, &StressTimeout::onTime));
     }
 

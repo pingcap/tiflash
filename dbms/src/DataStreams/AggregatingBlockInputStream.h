@@ -1,16 +1,14 @@
 #pragma once
 
-#include <Interpreters/Aggregator.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBuffer.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <Interpreters/Aggregator.h>
 
 
 namespace DB
 {
-
-
 /** Aggregates the stream of blocks using the specified key columns and aggregate functions.
   * Columns with aggregate functions adds to the end of the block.
   * If final = false, the aggregate functions are not finalized, that is, they are not replaced by their value, but contain an intermediate state of calculations.
@@ -24,7 +22,10 @@ public:
       * Columns corresponding to keys and arguments of aggregate functions must already be computed.
       */
     AggregatingBlockInputStream(const BlockInputStreamPtr & input, const Aggregator::Params & params_, const FileProviderPtr & file_provider_, bool final_)
-        : params(params_), aggregator(params), file_provider{file_provider_}, final(final_)
+        : params(params_)
+        , aggregator(params)
+        , file_provider{file_provider_}
+        , final(final_)
     {
         children.push_back(input);
     }
@@ -56,10 +57,10 @@ protected:
     };
     std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
 
-     /** From here we will get the completed blocks after the aggregation. */
+    /** From here we will get the completed blocks after the aggregation. */
     std::unique_ptr<IBlockInputStream> impl;
 
-    Logger * log = &Logger::get("AggregatingBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("AggregatingBlockInputStream");
 };
 
-}
+} // namespace DB

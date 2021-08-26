@@ -66,7 +66,7 @@ private:
     size_t del_column_number;
     size_t pk_column_number;
 
-    Logger * log = &Logger::get("ReplacingTMTSortedBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("ReplacingTMTSortedBlockInputStream");
 
     bool finished = false;
 

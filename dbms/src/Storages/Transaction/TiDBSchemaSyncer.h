@@ -14,11 +14,9 @@
 
 namespace DB
 {
-
 template <bool mock_getter>
 struct TiDBSchemaSyncer : public SchemaSyncer
 {
-
     using Getter = std::conditional_t<mock_getter, MockSchemaGetter, SchemaGetter>;
 
     using NameMapper = std::conditional_t<mock_getter, MockSchemaNameMapper, SchemaNameMapper>;
@@ -33,9 +31,13 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
 
-    Logger * log;
+    Poco::Logger * log;
 
-    TiDBSchemaSyncer(KVClusterPtr cluster_) : cluster(cluster_), cur_version(0), log(&Logger::get("SchemaSyncer")) {}
+    TiDBSchemaSyncer(KVClusterPtr cluster_)
+        : cluster(cluster_)
+        , cur_version(0)
+        , log(&Poco::Logger::get("SchemaSyncer"))
+    {}
 
     bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
 
@@ -87,8 +89,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
         LOG_INFO(log,
-            "start to sync schemas. current version is: " + std::to_string(cur_version)
-                + " and try to sync schema version to: " + std::to_string(version));
+                 "start to sync schemas. current version is: " + std::to_string(cur_version)
+                     + " and try to sync schema version to: " + std::to_string(version));
 
         // Show whether the schema mutex is held for a long time or not.
         GET_METRIC(tiflash_schema_applying).Set(1.0);
@@ -120,8 +122,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
 
-        auto it = std::find_if(databases.begin(), databases.end(),
-            [&](const auto & pair) { return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name; });
+        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name; });
         if (it == databases.end())
             return nullptr;
         return it->second;

@@ -33,7 +33,7 @@ public:
 private:
     MergeTreeData & data;
 
-    Logger * log;
+    Poco::Logger * log;
 
     BlockInputStreams spreadMarkRangesAmongStreams(
         RangesInDataParts && parts,

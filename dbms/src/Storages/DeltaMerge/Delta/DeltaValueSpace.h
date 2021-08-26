@@ -102,7 +102,7 @@ private:
     // Protects the operations in this instance.
     mutable std::mutex mutex;
 
-    Logger * log;
+    Poco::Logger * log;
 
 private:
     BlockPtr lastSchema();

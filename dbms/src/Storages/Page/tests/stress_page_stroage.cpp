@@ -348,8 +348,8 @@ try
     Poco::AutoPtr<Poco::ConsoleChannel>    channel = new Poco::ConsoleChannel(std::cerr);
     Poco::AutoPtr<Poco::PatternFormatter>  formatter(new DB::UnifiedLogPatternFormatter);
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-    Logger::root().setChannel(formatting_channel);
-    Logger::root().setLevel("trace");
+    Poco::Logger::root().setChannel(formatting_channel);
+    Poco::Logger::root().setLevel("trace");
     logger = &Poco::Logger::get("root");
 
 #ifdef FIU_ENABLE

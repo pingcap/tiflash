@@ -19,7 +19,7 @@ namespace tests
 class DMRegion_test : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    DMRegion_test() : log(&Logger::get("DMRegion_test"))
+    DMRegion_test() : log(&Poco::Logger::get("DMRegion_test"))
     {
         settings.set("dt_segment_limit_rows", (UInt64)10000);
         settings.set("dt_segment_delta_limit_rows", (UInt64)1000);
@@ -49,7 +49,7 @@ protected:
     DB::Settings       settings;
     DeltaMergeStorePtr store;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 /// TODO: we temperary disable those tests. Because they take too long time to run, and the "check_approx" could fail because it is not accurate.

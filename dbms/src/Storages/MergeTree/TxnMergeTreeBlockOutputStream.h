@@ -14,7 +14,7 @@ class TxnMergeTreeBlockOutputStream : public IBlockOutputStream
 {
 public:
     TxnMergeTreeBlockOutputStream(StorageMergeTree & storage_, UInt64 partition_id_ = 0)
-        : storage(storage_), log(&Logger::get("TxnMergeTreeBlockOutputStream")), partition_id(partition_id_)
+        : storage(storage_), log(&Poco::Logger::get("TxnMergeTreeBlockOutputStream")), partition_id(partition_id_)
     {}
 
     Block getHeader() const override;
@@ -23,7 +23,7 @@ public:
 
 private:
     StorageMergeTree & storage;
-    Logger * log;
+    Poco::Logger * log;
     size_t partition_id;
 };
 

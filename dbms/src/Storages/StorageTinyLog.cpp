@@ -1,62 +1,53 @@
+#include <Columns/ColumnArray.h>
+#include <Common/Exception.h>
+#include <Common/escapeForFileName.h>
+#include <Common/typeid_cast.h>
+#include <DataStreams/IBlockOutputStream.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataTypes/NestedUtils.h>
+#include <IO/CompressedReadBuffer.h>
+#include <IO/CompressedWriteBuffer.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
+#include <Poco/DirectoryIterator.h>
+#include <Poco/Path.h>
+#include <Poco/Util/XMLConfiguration.h>
+#include <Storages/StorageFactory.h>
+#include <Storages/StorageTinyLog.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
 #include <map>
-
-#include <Poco/Path.h>
-#include <Poco/Util/XMLConfiguration.h>
-
-#include <Common/escapeForFileName.h>
-
-#include <Common/Exception.h>
-
-#include <IO/ReadBufferFromFile.h>
-#include <IO/WriteBufferFromFile.h>
-#include <IO/CompressedReadBuffer.h>
-#include <IO/CompressedWriteBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-
-#include <DataTypes/NestedUtils.h>
-
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/IBlockOutputStream.h>
-
-#include <Columns/ColumnArray.h>
-
-#include <Common/typeid_cast.h>
-
-#include <Interpreters/Context.h>
-
-#include <Storages/StorageTinyLog.h>
-#include <Storages/StorageFactory.h>
-
-#include <Poco/DirectoryIterator.h>
 
 #define DBMS_STORAGE_LOG_DATA_FILE_EXTENSION ".bin"
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int EMPTY_LIST_OF_COLUMNS_PASSED;
-    extern const int CANNOT_CREATE_DIRECTORY;
-    extern const int CANNOT_READ_ALL_DATA;
-    extern const int DUPLICATE_COLUMN;
-    extern const int LOGICAL_ERROR;
-    extern const int INCORRECT_FILE_NAME;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
+extern const int EMPTY_LIST_OF_COLUMNS_PASSED;
+extern const int CANNOT_CREATE_DIRECTORY;
+extern const int CANNOT_READ_ALL_DATA;
+extern const int DUPLICATE_COLUMN;
+extern const int LOGICAL_ERROR;
+extern const int INCORRECT_FILE_NAME;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
 class TinyLogBlockInputStream final : public IProfilingBlockInputStream
 {
 public:
     TinyLogBlockInputStream(size_t block_size_, const NamesAndTypesList & columns_, StorageTinyLog & storage_, size_t max_read_buffer_size_)
-        : block_size(block_size_), columns(columns_),
-        storage(storage_), max_read_buffer_size(max_read_buffer_size_) {}
+        : block_size(block_size_)
+        , columns(columns_)
+        , storage(storage_)
+        , max_read_buffer_size(max_read_buffer_size_)
+    {}
 
     String getName() const override { return "TinyLog"; }
 
@@ -65,13 +56,14 @@ public:
         Block res;
 
         for (const auto & name_type : columns)
-            res.insert({ name_type.type->createColumn(), name_type.type, name_type.name });
+            res.insert({name_type.type->createColumn(), name_type.type, name_type.name});
 
         return Nested::flatten(res);
     };
 
 protected:
     Block readImpl() override;
+
 private:
     size_t block_size;
     NamesAndTypesList columns;
@@ -82,8 +74,8 @@ private:
     struct Stream
     {
         Stream(const std::string & data_path, size_t max_read_buffer_size)
-            : plain(data_path, std::min(static_cast<Poco::File::FileSize>(max_read_buffer_size), Poco::File(data_path).getSize())),
-            compressed(plain)
+            : plain(data_path, std::min(static_cast<Poco::File::FileSize>(max_read_buffer_size), Poco::File(data_path).getSize()))
+            , compressed(plain)
         {
         }
 
@@ -129,9 +121,9 @@ private:
 
     struct Stream
     {
-        Stream(const std::string & data_path, size_t max_compress_block_size) :
-            plain(data_path, max_compress_block_size, O_APPEND | O_CREAT | O_WRONLY),
-            compressed(plain, CompressionSettings(CompressionMethod::LZ4), max_compress_block_size)
+        Stream(const std::string & data_path, size_t max_compress_block_size)
+            : plain(data_path, max_compress_block_size, O_APPEND | O_CREAT | O_WRONLY)
+            , compressed(plain, CompressionSettings(CompressionMethod::LZ4), max_compress_block_size)
         {
         }
 
@@ -173,10 +165,10 @@ Block TinyLogBlockInputStream::readImpl()
         /// if there are no files in the folder, it means that the table is empty
         auto it = Poco::DirectoryIterator(storage.full_path());
         size_t count = 0;
-        for (;it != Poco::DirectoryIterator(); ++it)
+        for (; it != Poco::DirectoryIterator(); ++it)
         {
             if (it.name() != "sizes.json")
-                ++ count;
+                ++count;
         }
         if (!count)
             return res;
@@ -212,8 +204,7 @@ Block TinyLogBlockInputStream::readImpl()
 
 void TinyLogBlockInputStream::readData(const String & name, const IDataType & type, IColumn & column, size_t limit)
 {
-    IDataType::InputStreamGetter stream_getter = [&] (const IDataType::SubstreamPath & path) -> ReadBuffer *
-    {
+    IDataType::InputStreamGetter stream_getter = [&](const IDataType::SubstreamPath & path) -> ReadBuffer * {
         String stream_name = IDataType::getFileNameForStream(name, path);
 
         if (!streams.count(stream_name))
@@ -228,8 +219,7 @@ void TinyLogBlockInputStream::readData(const String & name, const IDataType & ty
 
 void TinyLogBlockOutputStream::writeData(const String & name, const IDataType & type, const IColumn & column, WrittenStreams & written_streams)
 {
-    IDataType::OutputStreamGetter stream_getter = [&] (const IDataType::SubstreamPath & path) -> WriteBuffer *
-    {
+    IDataType::OutputStreamGetter stream_getter = [&](const IDataType::SubstreamPath & path) -> WriteBuffer * {
         String stream_name = IDataType::getFileNameForStream(name, path);
 
         if (!written_streams.insert(stream_name).second)
@@ -286,11 +276,12 @@ StorageTinyLog::StorageTinyLog(
     const ColumnsDescription & columns_,
     bool attach,
     size_t max_compress_block_size_)
-    : IStorage{columns_},
-    path(path_), name(name_),
-    max_compress_block_size(max_compress_block_size_),
-    file_checker(path + escapeForFileName(name) + '/' + "sizes.json"),
-    log(&Logger::get("StorageTinyLog"))
+    : IStorage{columns_}
+    , path(path_)
+    , name(name_)
+    , max_compress_block_size(max_compress_block_size_)
+    , file_checker(path + escapeForFileName(name) + '/' + "sizes.json")
+    , log(&Poco::Logger::get("StorageTinyLog"))
 {
     if (path.empty())
         throw Exception("Storage " + getName() + " requires data path", ErrorCodes::INCORRECT_FILE_NAME);
@@ -312,10 +303,9 @@ void StorageTinyLog::addFiles(const String & column_name, const IDataType & type
 {
     if (files.end() != files.find(column_name))
         throw Exception("Duplicate column with name " + column_name + " in constructor of StorageTinyLog.",
-            ErrorCodes::DUPLICATE_COLUMN);
+                        ErrorCodes::DUPLICATE_COLUMN);
 
-    IDataType::StreamCallback stream_callback = [&] (const IDataType::SubstreamPath & substream_path)
-    {
+    IDataType::StreamCallback stream_callback = [&](const IDataType::SubstreamPath & substream_path) {
         String stream_name = IDataType::getFileNameForStream(column_name, substream_path);
         if (!files.count(stream_name))
         {
@@ -363,11 +353,15 @@ BlockInputStreams StorageTinyLog::read(
     check(column_names);
     processed_stage = QueryProcessingStage::FetchColumns;
     return {std::make_shared<TinyLogBlockInputStream>(
-        max_block_size, Nested::collect(getColumns().getAllPhysical().addTypes(column_names)), *this, max_read_buffer_size)};
+        max_block_size,
+        Nested::collect(getColumns().getAllPhysical().addTypes(column_names)),
+        *this,
+        max_read_buffer_size)};
 }
 
 BlockOutputStreamPtr StorageTinyLog::write(
-    const ASTPtr & /*query*/, const Settings & /*settings*/)
+    const ASTPtr & /*query*/,
+    const Settings & /*settings*/)
 {
     return std::make_shared<TinyLogBlockOutputStream>(*this);
 }
@@ -381,17 +375,19 @@ bool StorageTinyLog::checkData() const
 
 void registerStorageTinyLog(StorageFactory & factory)
 {
-    factory.registerStorage("TinyLog", [](const StorageFactory::Arguments & args)
-    {
+    factory.registerStorage("TinyLog", [](const StorageFactory::Arguments & args) {
         if (!args.engine_args.empty())
             throw Exception(
                 "Engine " + args.engine_name + " doesn't support any arguments (" + toString(args.engine_args.size()) + " given)",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         return StorageTinyLog::create(
-            args.data_path, args.table_name, args.columns,
-            args.attach, args.context.getSettings().max_compress_block_size);
+            args.data_path,
+            args.table_name,
+            args.columns,
+            args.attach,
+            args.context.getSettings().max_compress_block_size);
     });
 }
 
-}
+} // namespace DB

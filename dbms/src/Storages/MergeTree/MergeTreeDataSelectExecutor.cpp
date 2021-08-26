@@ -94,7 +94,7 @@ extern const int REGION_MISS;
 
 
 MergeTreeDataSelectExecutor::MergeTreeDataSelectExecutor(MergeTreeData & data_)
-    : data(data_), log(&Logger::get(data.getLogName() + " (SelectExecutor)"))
+    : data(data_), log(&Poco::Logger::get(data.getLogName() + " (SelectExecutor)"))
 {}
 
 

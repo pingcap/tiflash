@@ -15,14 +15,14 @@ class MergeTreeBlockOutputStream : public IBlockOutputStream
 {
 public:
     MergeTreeBlockOutputStream(StorageMergeTree & storage_)
-        : storage(storage_), log(&Logger::get("MergeTreeBlockOutputStream")) {}
+        : storage(storage_), log(&Poco::Logger::get("MergeTreeBlockOutputStream")) {}
 
     Block getHeader() const override;
     void write(const Block & block) override;
 
 private:
     StorageMergeTree & storage;
-    Logger *log;
+    Poco::Logger *log;
 };
 
 }
