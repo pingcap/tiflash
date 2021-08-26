@@ -125,13 +125,13 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
         read_limiter->request(expected_bytes);
     }
     size_t bytes_read = 0;
+    size_t read_io_calls = 0;
     while (bytes_read < expected_bytes)
     {
-        ProfileEvents::increment(ProfileEvents::PSMReadIOCalls);
+        read_io_calls += 1;
 
         ssize_t res = 0;
         {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
             res = file->pread(const_cast<char *>(buf + bytes_read), expected_bytes - bytes_read, offset + bytes_read);
         }
         if (!res)
@@ -146,6 +146,7 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
         if (res > 0)
             bytes_read += res;
     }
+    ProfileEvents::increment(ProfileEvents::PSMReadIOCalls, read_io_calls);
     ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
 
     if (unlikely(bytes_read != expected_bytes))
