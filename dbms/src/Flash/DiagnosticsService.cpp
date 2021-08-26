@@ -1081,7 +1081,7 @@ catch (const std::exception & e)
         while (1)
         {
             ::diagnosticspb::LogMessage tmp_msg;
-            if (log_itr.next(tmp_msg))
+            if (!log_itr.next(tmp_msg))
                 break;
             i++;
             resp.mutable_messages()->Add(std::move(tmp_msg));
