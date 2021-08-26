@@ -13,6 +13,7 @@
 #include <Flash/Mpp/Utils.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>
 
@@ -131,7 +132,6 @@ void MPPTask::unregisterTask()
 
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
-    auto start_time = Clock::now();
     dag_req = std::make_unique<tipb::DAGRequest>();
     if (!dag_req->ParseFromString(task_request.encoded_plan()))
     {
@@ -151,15 +151,43 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
                 Errors::Coprocessor::BadRequest);
         }
     }
-    RegionInfoMap regions;
-    RegionInfoList retry_regions;
+    TMTContext & tmt_context = context.getTMTContext();
     for (auto & r : task_request.regions())
     {
-        auto res = regions.emplace(r.region_id(),
-                                   RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
-        if (!res.second)
+        RegionInfo region_info(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
+            CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr);
+        if (region_info.key_ranges.empty())
         {
-            retry_regions.emplace_back(RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+            throw TiFlashException(
+                "Income key ranges is empty for region: " + std::to_string(region_info.region_id), Errors::Coprocessor::BadRequest);
+        }
+        bool need_remote_read = false;
+        if (regions.find(region_info.region_id) != regions.end())
+        {
+            need_remote_read = true;
+        }
+        if (!need_remote_read)
+        {
+            RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
+            if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
+            {
+                need_remote_read = true;
+            }
+            else
+            {
+                auto meta_snap = current_region->dumpRegionMetaSnapshot();
+                if (meta_snap.ver != region_info.region_version)
+                    need_remote_read = true;
+            }
+        }
+
+        if (need_remote_read)
+        {
+            retry_regions.push_back(region_info);
+        }
+        else
+        {
+            regions.insert(std::make_pair(region_info.region_id, region_info));
         }
     }
     // set schema ver and start ts.
@@ -199,7 +227,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     }
 
     // register tunnels
-    MPPTunnelSetPtr tunnel_set = std::make_shared<MPPTunnelSet>();
+    tunnel_set = std::make_shared<MPPTunnelSet>();
     const auto & exchangeSender = dag_req->root_executor().exchange_sender();
     std::chrono::seconds timeout(task_request.timeout());
     for (int i = 0; i < exchangeSender.encoded_task_meta_size(); i++)
@@ -218,7 +246,6 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     }
 
     // register task.
-    TMTContext & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     LOG_DEBUG(log, "begin to register the task " << id.toString());
 
@@ -235,12 +262,17 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
 
-    DAGQuerySource dag(context, regions, retry_regions, *dag_req, log, true);
+    return retry_regions;
+}
 
-    // read index , this may take a long time.
+void MPPTask::compile()
+{
+    auto start_time = Clock::now();
+    DAGQuerySource dag(context, regions, retry_regions, *dag_req, log, true);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
 
     // get partition column ids
+    const auto & exchangeSender = dag_req->root_executor().exchange_sender();
     auto part_keys = exchangeSender.partition_keys();
     std::vector<Int64> partition_col_id;
     TiDB::TiDBCollators collators;
@@ -276,8 +308,6 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context->compile_time_ns = compile_time_ns;
-
-    return dag_context->retry_regions;
 }
 
 void MPPTask::runImpl()
@@ -297,10 +327,11 @@ void MPPTask::runImpl()
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
     });
     LOG_INFO(log, "task starts running");
-    auto from = io.in;
-    auto to = io.out;
     try
     {
+        compile();
+        auto from = io.in;
+        auto to = io.out;
         from->readPrefix();
         to->writePrefix();
         LOG_DEBUG(log, "begin read ");

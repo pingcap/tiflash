@@ -6,6 +6,7 @@
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
+#include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/TaskStatus.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
@@ -24,10 +25,7 @@ struct MPPTaskId
     uint64_t start_ts;
     int64_t task_id;
 
-    bool operator<(const MPPTaskId & rhs) const
-    {
-        return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id);
-    }
+    bool operator<(const MPPTaskId & rhs) const { return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id); }
 
     String toString() const;
 };
@@ -66,6 +64,8 @@ public:
 
     std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
 
+    void compile();
+
     void run();
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel);
@@ -84,6 +84,9 @@ private:
 
     Context context;
 
+    RegionInfoMap regions;
+    RegionInfoList retry_regions;
+
     std::unique_ptr<tipb::DAGRequest> dag_req;
     std::unique_ptr<DAGContext> dag_context;
 
@@ -97,6 +100,7 @@ private:
     std::atomic<Int32> status{INITIALIZING};
 
     mpp::TaskMeta meta;
+    MPPTunnelSetPtr tunnel_set;
 
     // which targeted task we should send data by which tunnel.
     std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
