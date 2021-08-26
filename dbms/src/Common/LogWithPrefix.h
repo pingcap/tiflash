@@ -9,6 +9,15 @@
 namespace DB
 {
 
+/** LogWithPrefix could print formalized logs.
+  * For example, adding prefix for a Logger with "[task 1 query 2333]" could help us find logs with LogSearch.
+  * 
+  * Moreover, we can append prefix at any time with the static function "append(const String & str)".
+  * For example, call append("[InputStream]") could print logs with prefix "[task 1 query 2333] [InputStream]".
+  * 
+  * Interfaces in LogWithPrefix are definitely the same with the Logger, so that they could use the same
+  * macro such as LOG_INFO() etc.
+  */
 class LogWithPrefix : private boost::noncopyable
 {
 public:
@@ -18,7 +27,7 @@ public:
             throw Exception("LogWithPrefix receives nullptr");
     }
 
-    bool trace() { return log->trace(); }
+    bool trace() const { return log->trace(); }
 
     void trace(const std::string & msg)
     {
@@ -26,7 +35,7 @@ public:
         log->trace(m);
     }
 
-    bool debug() { return log->debug(); }
+    bool debug() const { return log->debug(); }
 
     void debug(const std::string & msg)
     {
@@ -34,7 +43,7 @@ public:
         log->debug(m);
     }
 
-    bool information() { return log->information(); }
+    bool information() const { return log->information(); }
 
     void information(const std::string & msg)
     {
@@ -42,7 +51,7 @@ public:
         log->information(m);
     }
 
-    bool warning() { return log->warning(); }
+    bool warning() const { return log->warning(); }
 
     void warning(const std::string & msg)
     {
@@ -50,7 +59,7 @@ public:
         log->warning(m);
     }
 
-    bool error() { return log->error(); }
+    bool error() const { return log->error(); }
 
     void error(const std::string & msg)
     {
@@ -62,7 +71,7 @@ public:
 
     using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 
-    static LogWithPrefixPtr append(const String & str) { return std::make_shared<LogWithPrefix>(log, prefix + str); }
+    static LogWithPrefixPtr append(const String & str) { return std::make_shared<LogWithPrefix>(log, prefix + " " + str); }
 
 private:
     Logger * log;
