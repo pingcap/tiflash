@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
@@ -7,7 +8,6 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
-#include <Common/LogWithPrefix.h>
 
 namespace TiDB
 {

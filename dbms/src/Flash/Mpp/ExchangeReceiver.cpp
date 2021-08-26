@@ -5,19 +5,23 @@ namespace pingcap
 {
 namespace kv
 {
-
 template <>
 struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 {
     using RequestType = ::mpp::EstablishMPPConnectionRequest;
     using ResultType = ::mpp::MPPDataPacket;
     static std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> doRPCCall(
-        grpc::ClientContext * context, std::shared_ptr<KvConnClient> client, const RequestType & req)
+        grpc::ClientContext * context,
+        std::shared_ptr<KvConnClient> client,
+        const RequestType & req)
     {
         return client->stub->EstablishMPPConnection(context, req);
     }
     static std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> doAsyncRPCCall(grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client, const RequestType & req, grpc::CompletionQueue & cq, void * call)
+                                                                                           std::shared_ptr<KvConnClient> client,
+                                                                                           const RequestType & req,
+                                                                                           grpc::CompletionQueue & cq,
+                                                                                           void * call)
     {
         return client->stub->AsyncEstablishMPPConnection(context, req, &cq, call);
     }
@@ -28,7 +32,6 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 
 namespace DB
 {
-
 void ExchangeReceiver::setUpConnection()
 {
     for (int index = 0; index < pb_exchange_receiver.encoded_task_meta_size(); index++)
@@ -100,7 +103,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             else
             {
                 LOG_WARNING(mpp_task_log,
-                    "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
+                            "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
                 // if we have received some data, we should not retry.
                 if (has_data)
                     break;

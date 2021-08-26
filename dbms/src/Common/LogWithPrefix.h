@@ -2,9 +2,9 @@
 
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
+#include <common/types.h>
 
 #include <boost/noncopyable.hpp>
-#include <common/types.h>
 
 namespace DB
 {
