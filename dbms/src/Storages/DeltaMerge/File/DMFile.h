@@ -82,14 +82,13 @@ public:
         {
             return ReadMetaMode(READ_NONE);
         }
-        static ReadMetaMode memorySizeOnly()
-        {
-            return ReadMetaMode(READ_COLUMN_STAT);
-        }
+        // after restore with mode, you can call `getBytesOnDisk` to get disk size of this DMFile
         static ReadMetaMode diskSizeOnly()
         {
             return ReadMetaMode(READ_PACK_STAT);
         }
+        // after restore with mode, you can call `getRows`, `getBytes` to get memory size of this DMFile,
+        // and call `getBytesOnDisk` to get disk size of this DMFile
         static ReadMetaMode memoryAndDiskSize()
         {
             return ReadMetaMode(READ_COLUMN_STAT | READ_PACK_STAT);
