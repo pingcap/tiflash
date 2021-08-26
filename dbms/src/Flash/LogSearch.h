@@ -23,12 +23,12 @@ class LogIterator : private boost::noncopyable
 {
 public:
     explicit LogIterator(int64_t _start_time, int64_t _end_time, const std::vector<::diagnosticspb::LogLevel> & _levels,
-        const std::vector<std::string> & _patterns, std::shared_ptr<std::istream> _log_file)
+        const std::vector<std::string> & _patterns, std::unique_ptr<std::istream> && _log_file)
         : start_time(_start_time),
           end_time(_end_time),
           levels(_levels),
           patterns(_patterns),
-          log_file(_log_file),
+          log_file(std::move(_log_file)),
           log(&Poco::Logger::get("LogIterator"))
     {
         init();
@@ -89,7 +89,7 @@ private:
     std::vector<::diagnosticspb::LogLevel> levels;
     std::vector<std::string> patterns;
     std::vector<std::unique_ptr<RE2>> compiled_patterns;
-    std::shared_ptr<std::istream> log_file;
+    std::unique_ptr<std::istream> log_file;
 
     Poco::Logger * log;
 };

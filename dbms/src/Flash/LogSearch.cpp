@@ -10,7 +10,7 @@ using ::diagnosticspb::LogMessage;
 
 static time_t fast_mktime(struct tm * tm)
 {
-    thread_local struct tm cache = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    thread_local struct tm cache = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     thread_local time_t time_cache = 0;
     time_t result;
     time_t hmsarg;

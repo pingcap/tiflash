@@ -945,7 +945,7 @@ try
 {
     (void)context;
 
-#if true 
+#if true
     //defined(__APPLE__)
     const TiFlashRaftProxyHelper * helper = server.context().getTMTContext().getKVStore()->getProxyHelper();
     if (helper)
@@ -1067,9 +1067,9 @@ catch (const std::exception & e)
         patterns.push_back(pattern);
     }
 
-    auto in_ptr = std::make_shared<std::ifstream>(log_file.path());
+    auto in_ptr = std::make_unique<std::ifstream>(log_file.path());
 
-    LogIterator log_itr(start_time, end_time, levels, patterns, in_ptr);
+    LogIterator log_itr(start_time, end_time, levels, patterns, std::move(in_ptr));
 
     static constexpr size_t LOG_BATCH_SIZE = 256;
 
