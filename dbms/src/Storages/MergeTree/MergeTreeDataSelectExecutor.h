@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 class KeyCondition;
 struct SelectQueryInfo;
 
@@ -85,4 +84,4 @@ private:
         const Settings & settings) const;
 };
 
-}
+} // namespace DB

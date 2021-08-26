@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 template <bool has_checksum>
 bool CompressedReadBuffer<has_checksum>::nextImpl()
 {

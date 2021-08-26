@@ -1,21 +1,18 @@
 #pragma once
 
+#include <Core/NamesAndTypes.h>
+#include <IO/CachedCompressedReadBuffer.h>
+#include <IO/CompactContext.h>
+#include <IO/CompressedReadBufferFromFile.h>
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/MarkRange.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeRangeReader.h>
-#include <IO/CachedCompressedReadBuffer.h>
-#include <IO/CompressedReadBufferFromFile.h>
-#include <Core/NamesAndTypes.h>
-
-#include<IO/CompactContext.h>
 
 
 namespace DB
 {
-
 class IDataType;
-
 
 
 /// Reads the data between pairs of marks in the same part. When reading consecutive ranges, avoids unnecessary seeks.
@@ -27,17 +24,20 @@ public:
     using ValueSizeMap = std::map<std::string, double>;
 
     MergeTreeReader(const String & path, /// Path to the directory containing the part
-        const MergeTreeData::DataPartPtr & data_part, const NamesAndTypesList & columns,
-        PersistedCache * persisted_cache,
-        bool update_persisted_cache,
-        UncompressedCache * uncompressed_cache,
-        MarkCache * mark_cache,
-        bool save_marks_in_cache,
-        MergeTreeData & storage, const MarkRanges & all_mark_ranges,
-        size_t aio_threshold, size_t max_read_buffer_size,
-        const ValueSizeMap & avg_value_size_hints = ValueSizeMap{},
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback = ReadBufferFromFileBase::ProfileCallback{},
-        clockid_t clock_type = CLOCK_MONOTONIC_COARSE);
+                    const MergeTreeData::DataPartPtr & data_part,
+                    const NamesAndTypesList & columns,
+                    PersistedCache * persisted_cache,
+                    bool update_persisted_cache,
+                    UncompressedCache * uncompressed_cache,
+                    MarkCache * mark_cache,
+                    bool save_marks_in_cache,
+                    MergeTreeData & storage,
+                    const MarkRanges & all_mark_ranges,
+                    size_t aio_threshold,
+                    size_t max_read_buffer_size,
+                    const ValueSizeMap & avg_value_size_hints = ValueSizeMap{},
+                    const ReadBufferFromFileBase::ProfileCallback & profile_callback = ReadBufferFromFileBase::ProfileCallback{},
+                    clockid_t clock_type = CLOCK_MONOTONIC_COARSE);
 
     ~MergeTreeReader();
 
@@ -59,14 +59,21 @@ private:
     {
     public:
         Stream(
-            const String & path_prefix_, const String & stream_name, const String & extension_, size_t marks_count_,
+            const String & path_prefix_,
+            const String & stream_name,
+            const String & extension_,
+            size_t marks_count_,
             const MarkRanges & all_mark_ranges,
-            PersistedCache * persisted_cache, bool update_persisted_cache,
+            PersistedCache * persisted_cache,
+            bool update_persisted_cache,
             CompactReadContextPtr compactContextPtr_,
-            MarkCache * mark_cache, bool save_marks_in_cache,
+            MarkCache * mark_cache,
+            bool save_marks_in_cache,
             UncompressedCache * uncompressed_cache,
-            size_t aio_threshold, size_t max_read_buffer_size,
-            const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type);
+            size_t aio_threshold,
+            size_t max_read_buffer_size,
+            const ReadBufferFromFileBase::ProfileCallback & profile_callback,
+            clockid_t clock_type);
 
         void seekToMark(size_t index);
 
@@ -124,12 +131,15 @@ private:
     size_t aio_threshold;
     size_t max_read_buffer_size;
 
-    void addStreams(const String & name, const IDataType & type, const MarkRanges & all_mark_ranges,
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type);
+    void addStreams(const String & name, const IDataType & type, const MarkRanges & all_mark_ranges, const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type);
 
     void readData(
-        const String & name, const IDataType & type, IColumn & column,
-        size_t from_mark, bool continue_reading, size_t max_rows_to_read,
+        const String & name,
+        const IDataType & type,
+        IColumn & column,
+        size_t from_mark,
+        bool continue_reading,
+        size_t max_rows_to_read,
         bool read_offsets = true);
 
     /// Return the number of rows has been read or zero if there is no columns to read.
@@ -141,4 +151,4 @@ private:
     CompactReadContextPtr compactContextPtr;
 };
 
-}
+} // namespace DB

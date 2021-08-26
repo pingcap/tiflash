@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class ReadBuffer;
 
 /** Basic functionality for implementation of

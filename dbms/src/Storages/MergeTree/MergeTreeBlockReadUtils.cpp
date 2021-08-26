@@ -1,13 +1,13 @@
+#include <Columns/ColumnConst.h>
+#include <Common/typeid_cast.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <Storages/MergeTree/MergeTreeData.h>
-#include <Common/typeid_cast.h>
-#include <Columns/ColumnConst.h>
+
 #include <unordered_set>
 
 
 namespace DB
 {
-
 NameSet injectRequiredColumns(const MergeTreeData & storage, const MergeTreeData::DataPartPtr & part, Names & columns)
 {
     NameSet required_columns{std::begin(columns), std::end(columns)};
@@ -67,20 +67,35 @@ NameSet injectRequiredColumns(const MergeTreeData & storage, const MergeTreeData
 
 
 MergeTreeReadTask::MergeTreeReadTask(
-    const MergeTreeData::DataPartPtr & data_part, const MarkRanges & mark_ranges, const size_t part_index_in_query,
-    const Names & ordered_names, const NameSet & column_name_set, const NamesAndTypesList & columns,
-    const NamesAndTypesList & pre_columns, const bool remove_prewhere_column, const bool should_reorder,
+    const MergeTreeData::DataPartPtr & data_part,
+    const MarkRanges & mark_ranges,
+    const size_t part_index_in_query,
+    const Names & ordered_names,
+    const NameSet & column_name_set,
+    const NamesAndTypesList & columns,
+    const NamesAndTypesList & pre_columns,
+    const bool remove_prewhere_column,
+    const bool should_reorder,
     MergeTreeBlockSizePredictorPtr && size_predictor)
-: data_part{data_part}, mark_ranges{mark_ranges}, part_index_in_query{part_index_in_query},
-ordered_names{ordered_names}, column_name_set{column_name_set}, columns{columns}, pre_columns{pre_columns},
-remove_prewhere_column{remove_prewhere_column}, should_reorder{should_reorder}, size_predictor{std::move(size_predictor)}
+    : data_part{data_part}
+    , mark_ranges{mark_ranges}
+    , part_index_in_query{part_index_in_query}
+    , ordered_names{ordered_names}
+    , column_name_set{column_name_set}
+    , columns{columns}
+    , pre_columns{pre_columns}
+    , remove_prewhere_column{remove_prewhere_column}
+    , should_reorder{should_reorder}
+    , size_predictor{std::move(size_predictor)}
 {}
 
 MergeTreeReadTask::~MergeTreeReadTask() = default;
 
 
 MergeTreeBlockSizePredictor::MergeTreeBlockSizePredictor(
-    const MergeTreeData::DataPartPtr & data_part_, const Names & columns, const Block & sample_block)
+    const MergeTreeData::DataPartPtr & data_part_,
+    const Names & columns,
+    const Block & sample_block)
     : data_part(data_part_)
 {
     number_of_rows_in_part = data_part->rows_count;
@@ -121,7 +136,8 @@ void MergeTreeBlockSizePredictor::initialize(const Block & sample_block, const N
             info.name = column_name;
             /// If column isn't fixed and doesn't have checksum, than take first
             MergeTreeDataPart::ColumnSize column_size = data_part->getColumnSize(
-                column_name, *column_with_type_and_name.type);
+                column_name,
+                *column_with_type_and_name.type);
 
             info.bytes_per_row_global = column_size.data_uncompressed
                 ? column_size.data_uncompressed / number_of_rows_in_part
@@ -194,4 +210,4 @@ void MergeTreeBlockSizePredictor::update(const Block & block, double decay)
     }
 }
 
-}
+} // namespace DB

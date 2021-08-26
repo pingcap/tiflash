@@ -1,15 +1,15 @@
 #pragma once
 
-#include <Storages/MergeTree/MergeTreePartInfo.h>
-#include <mutex>
-#include <common/DateLUT.h>
 #include <Core/Types.h>
+#include <Storages/MergeTree/MergeTreePartInfo.h>
+#include <common/DateLUT.h>
+
 #include <map>
+#include <mutex>
 
 
 namespace DB
 {
-
 /** Supports multiple names of active parts of data.
   * Repeats part of the MergeTreeData functionality.
   * TODO: generalize with MergeTreeData. It is possible to leave this class approximately as is and use it from MergeTreeData.
@@ -18,7 +18,9 @@ namespace DB
 class ActiveDataPartSet
 {
 public:
-    ActiveDataPartSet(MergeTreeDataFormatVersion format_version_) : format_version(format_version_) {}
+    ActiveDataPartSet(MergeTreeDataFormatVersion format_version_)
+        : format_version(format_version_)
+    {}
     ActiveDataPartSet(MergeTreeDataFormatVersion format_version_, const Strings & names);
 
     void add(const String & name);
@@ -41,4 +43,4 @@ private:
     String getContainingPartImpl(const MergeTreePartInfo & part_info) const;
 };
 
-}
+} // namespace DB

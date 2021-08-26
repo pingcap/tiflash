@@ -132,12 +132,12 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
                             << " (aio_threshold: " << aio_threshold << ", max_read_buffer_size: " << max_read_buffer_size << ")");
 
     buf = std::make_unique<CompressedReadBufferFromFileProvider<>>(reader.file_provider,
-                                                                 reader.dmfile->colDataPath(file_name_base),
-                                                                 reader.dmfile->encryptionDataPath(file_name_base),
-                                                                 estimated_size,
-                                                                 aio_threshold,
-                                                                 read_limiter,
-                                                                 buffer_size);
+                                                                   reader.dmfile->colDataPath(file_name_base),
+                                                                   reader.dmfile->encryptionDataPath(file_name_base),
+                                                                   estimated_size,
+                                                                   aio_threshold,
+                                                                   read_limiter,
+                                                                   buffer_size);
 }
 
 DMFileReader::DMFileReader(const DMFilePtr & dmfile_,

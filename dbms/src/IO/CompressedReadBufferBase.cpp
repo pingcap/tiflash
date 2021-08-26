@@ -24,7 +24,6 @@ extern const Event CompressedReadBufferBytes;
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int UNKNOWN_COMPRESSION_METHOD;
@@ -114,8 +113,7 @@ void CompressedReadBufferBase<has_checksum>::decompress(char * to, size_t size_d
     }
     else if (method == static_cast<UInt8>(CompressionMethodByte::ZSTD))
     {
-        size_t res = ZSTD_decompress(to, size_decompressed, compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE,
-            size_compressed_without_checksum - COMPRESSED_BLOCK_HEADER_SIZE);
+        size_t res = ZSTD_decompress(to, size_decompressed, compressed_buffer + COMPRESSED_BLOCK_HEADER_SIZE, size_compressed_without_checksum - COMPRESSED_BLOCK_HEADER_SIZE);
 
         if (ZSTD_isError(res))
             throw Exception("Cannot ZSTD_decompress: " + std::string(ZSTD_getErrorName(res)), ErrorCodes::CANNOT_DECOMPRESS);
@@ -132,7 +130,8 @@ void CompressedReadBufferBase<has_checksum>::decompress(char * to, size_t size_d
 /// 'compressed_in' could be initialized lazily, but before first call of 'readCompressedData'.
 template <bool has_checksum>
 CompressedReadBufferBase<has_checksum>::CompressedReadBufferBase(ReadBuffer * in)
-    : compressed_in(in), own_compressed_buffer(COMPRESSED_BLOCK_HEADER_SIZE)
+    : compressed_in(in)
+    , own_compressed_buffer(COMPRESSED_BLOCK_HEADER_SIZE)
 {}
 
 template <bool has_checksum>

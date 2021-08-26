@@ -1,9 +1,9 @@
 #pragma once
 
+#include <Common/PODArray.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
 #include <IO/CompressedReadBufferFromFile.h>
-#include <Common/PODArray.h>
 
 namespace DB
 {
@@ -67,9 +67,7 @@ public:
     NativeBlockInputStream(ReadBuffer & istr_, const Block & header_, UInt64 server_revision_);
 
     /// For cases when we have an index. It allows to skip columns. Only columns specified in the index will be read.
-    NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_,
-        IndexForNativeFormat::Blocks::const_iterator index_block_it_,
-        IndexForNativeFormat::Blocks::const_iterator index_block_end_);
+    NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_, IndexForNativeFormat::Blocks::const_iterator index_block_it_, IndexForNativeFormat::Blocks::const_iterator index_block_end_);
 
     String getName() const override { return "Native"; }
 
@@ -100,4 +98,4 @@ private:
     void updateAvgValueSizeHints(const Block & block);
 };
 
-}
+} // namespace DB
