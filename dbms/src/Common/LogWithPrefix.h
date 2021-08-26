@@ -8,7 +8,6 @@
 
 namespace DB
 {
-
 /** LogWithPrefix could print formalized logs.
   * For example, adding prefix for a Logger with "[task 1 query 2333]" could help us find logs with LogSearch.
   * 
@@ -21,7 +20,9 @@ namespace DB
 class LogWithPrefix : private boost::noncopyable
 {
 public:
-    LogWithPrefix(Logger * log_, const String & prefix_) : log(log_), prefix(prefix_)
+    LogWithPrefix(Logger * log_, const String & prefix_)
+        : log(log_)
+        , prefix(prefix_)
     {
         if (log == nullptr)
             throw Exception("LogWithPrefix receives nullptr");
