@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 ActiveDataPartSet::ActiveDataPartSet(MergeTreeDataFormatVersion format_version_, const Strings & names)
     : format_version(format_version_)
 {
@@ -100,4 +99,4 @@ size_t ActiveDataPartSet::size() const
 }
 
 
-}
+} // namespace DB

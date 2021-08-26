@@ -16,7 +16,6 @@
 
 namespace DB
 {
-
 class Context;
 
 /** Using a fixed number of threads, perform an arbitrary number of tasks in an infinite loop.
@@ -39,7 +38,10 @@ public:
         void wake();
 
         TaskInfo(BackgroundProcessingPool & pool_, const Task & function_, const bool multi_, const uint64_t interval_ms_)
-            : pool(pool_), function(function_), multi(multi_), interval_milliseconds(interval_ms_)
+            : pool(pool_)
+            , function(function_)
+            , multi(multi_)
+            , interval_milliseconds(interval_ms_)
         {}
 
     private:
