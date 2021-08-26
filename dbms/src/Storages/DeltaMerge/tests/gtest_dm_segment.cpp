@@ -3,8 +3,8 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <gtest/gtest.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
 
 #include <ctime>
 #include <memory>
@@ -1042,27 +1042,19 @@ public:
 
     std::pair<RowKeyRange, std::vector<PageId>> genDMFile(DMContext & context, const Block & block)
     {
-        auto delegator = context.path_pool.getStableDiskDelegator();
-        auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        auto delegator    = context.path_pool.getStableDiskDelegator();
+        auto file_id      = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
-<<<<<<< HEAD
-        auto delegate     = context.path_pool.getStableDiskDelegator();
-        auto store_path   = delegate.choosePath();
-=======
-        auto store_path = delegator.choosePath();
+        auto store_path   = delegator.choosePath();
 
-        DMFileBlockOutputStream::Flags flags;
-        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
-
->>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
         auto dmfile
             = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, false);
 
         delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
-        auto & pk_column = block.getByPosition(0).column;
-        auto min_pk = pk_column->getInt(0);
-        auto max_pk = pk_column->getInt(block.rows() - 1);
+        auto &      pk_column = block.getByPosition(0).column;
+        auto        min_pk    = pk_column->getInt(0);
+        auto        max_pk    = pk_column->getInt(block.rows() - 1);
         HandleRange range(min_pk, max_pk + 1);
 
         return {RowKeyRange::fromHandleRange(range), {file_id}};
@@ -1086,15 +1078,14 @@ try
             case Segment_test_Mode::V2_BlockOnly:
                 segment->write(dmContext(), std::move(block));
                 break;
-            case Segment_test_Mode::V2_FileOnly:
-            {
-                auto delegate          = dmContext().path_pool.getStableDiskDelegator();
-                auto file_provider     = dmContext().db_context.getFileProvider();
-                auto [range, file_ids] = genDMFile(dmContext(), block);
-                auto file_id           = file_ids[0];
-                auto file_parent_path  = delegate.getDTFilePath(file_id);
-                auto file              = DMFile::restore(file_provider, file_id, file_id, file_parent_path);
-                auto pack              = std::make_shared<DeltaPackFile>(dmContext(), file, range);
+            case Segment_test_Mode::V2_FileOnly: {
+                auto delegate                 = dmContext().path_pool.getStableDiskDelegator();
+                auto file_provider            = dmContext().db_context.getFileProvider();
+                auto [range, file_ids]        = genDMFile(dmContext(), block);
+                auto         file_id          = file_ids[0];
+                auto         file_parent_path = delegate.getDTFilePath(file_id);
+                auto         file             = DMFile::restore(file_provider, file_id, file_id, file_parent_path);
+                auto         pack             = std::make_shared<DeltaPackFile>(dmContext(), file, range);
                 WriteBatches wbs(*storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
