@@ -5,10 +5,8 @@
 
 namespace DB
 {
-
 namespace
 {
-
 /** Estimates best set of parts to merge within passed alternatives.
   * It is selected simply: by minimal size.
   */
@@ -89,7 +87,7 @@ void selectWithinPartition(
             if (range_size <= max_total_size_to_merge)
                 estimator.consider(parts.begin() + range_begin, parts.begin() + range_end, range_size);
 
-            break;    /// Minumum level is enough.
+            break; /// Minumum level is enough.
         }
 
         if (range_begin == 0)
@@ -100,7 +98,7 @@ void selectWithinPartition(
     }
 }
 
-}
+} // namespace
 
 
 LevelMergeSelector::PartsInPartition LevelMergeSelector::select(
@@ -115,4 +113,4 @@ LevelMergeSelector::PartsInPartition LevelMergeSelector::select(
     return estimator.getBest();
 }
 
-}
+} // namespace DB

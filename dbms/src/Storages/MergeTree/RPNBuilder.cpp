@@ -1,5 +1,3 @@
-#include <Storages/MergeTree/RPNBuilder.h>
-
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/FieldToDataType.h>
@@ -9,6 +7,7 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/queryToString.h>
+#include <Storages/MergeTree/RPNBuilder.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
@@ -20,7 +19,10 @@ extern const int BAD_TYPE_OF_FIELD;
 extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
 } // namespace ErrorCodes
 
-const tipb::Expr & getChild(const tipb::Expr & node, int index) { return node.children(index); }
+const tipb::Expr & getChild(const tipb::Expr & node, int index)
+{
+    return node.children(index);
+}
 
 const ASTPtr & getChild(const ASTPtr & node, int index)
 {
@@ -34,7 +36,10 @@ const ASTPtr & getChild(const ASTPtr & node, int index)
     }
 }
 
-int getChildCount(const tipb::Expr & node) { return node.children_size(); }
+int getChildCount(const tipb::Expr & node)
+{
+    return node.children_size();
+}
 
 int getChildCount(const ASTPtr & node)
 {
@@ -48,7 +53,10 @@ int getChildCount(const ASTPtr & node)
     }
 }
 
-const String getFuncName(const tipb::Expr & node) { return getFunctionName(node); }
+const String getFuncName(const tipb::Expr & node)
+{
+    return getFunctionName(node);
+}
 
 const String getFuncName(const ASTPtr & node)
 {
@@ -66,11 +74,20 @@ const String getColumnName(const tipb::Expr & node, const std::vector<NameAndTyp
     return "";
 }
 
-const String getColumnName(const ASTPtr & node, const std::vector<NameAndTypePair> &) { return node->getColumnName(); }
+const String getColumnName(const ASTPtr & node, const std::vector<NameAndTypePair> &)
+{
+    return node->getColumnName();
+}
 
-bool isFuncNode(const ASTPtr & node) { return typeid_cast<const ASTFunction *>(node.get()); }
+bool isFuncNode(const ASTPtr & node)
+{
+    return typeid_cast<const ASTFunction *>(node.get());
+}
 
-bool isFuncNode(const tipb::Expr & node) { return node.tp() == tipb::ExprType::ScalarFunc; }
+bool isFuncNode(const tipb::Expr & node)
+{
+    return node.tp() == tipb::ExprType::ScalarFunc;
+}
 
 /** Computes value of constant expression and it data type.
   * Returns false, if expression isn't constant.
@@ -109,7 +126,6 @@ bool getConstant(const ASTPtr & expr, Block & block_with_constants, Field & out_
   */
 bool getConstant(const tipb::Expr & expr, Block &, Field & out_value, DataTypePtr & out_type)
 {
-
     if (isLiteralExpr(expr))
     {
         out_value = decodeLiteral(expr);
@@ -134,13 +150,17 @@ void castValueToType(const DataTypePtr & desired_type, Field & src_value, const 
     catch (...)
     {
         throw Exception("Key expression contains comparison between inconvertible types: " + desired_type->getName() + " and "
-                + src_type->getName() + " inside " + node,
-            ErrorCodes::BAD_TYPE_OF_FIELD);
+                            + src_type->getName() + " inside " + node,
+                        ErrorCodes::BAD_TYPE_OF_FIELD);
     }
 }
 
 void applyFunction(
-    const FunctionBasePtr & func, const DataTypePtr & arg_type, const Field & arg_value, DataTypePtr & res_type, Field & res_value)
+    const FunctionBasePtr & func,
+    const DataTypePtr & arg_type,
+    const Field & arg_value,
+    DataTypePtr & res_type,
+    Field & res_value)
 {
     res_type = func->getReturnType();
 
@@ -157,19 +177,37 @@ bool setContains(const tipb::Expr & expr, DAGPreparedSets & sets)
     return sets.count(&expr) && sets[&expr]->remaining_exprs.empty();
 }
 
-bool setContains(const ASTPtr & expr, PreparedSets & sets) { return sets.count(getChild(expr, 1).get()); }
+bool setContains(const ASTPtr & expr, PreparedSets & sets)
+{
+    return sets.count(getChild(expr, 1).get());
+}
 
-SetPtr & lookByExpr(const tipb::Expr & expr, DAGPreparedSets & sets) { return sets[&expr]->constant_set; }
+SetPtr & lookByExpr(const tipb::Expr & expr, DAGPreparedSets & sets)
+{
+    return sets[&expr]->constant_set;
+}
 
-SetPtr & lookByExpr(const ASTPtr & expr, PreparedSets & sets) { return sets[getChild(expr, 1).get()]; }
+SetPtr & lookByExpr(const ASTPtr & expr, PreparedSets & sets)
+{
+    return sets[getChild(expr, 1).get()];
+}
 
-String nodeToString(const tipb::Expr & node) { return node.DebugString(); }
+String nodeToString(const tipb::Expr & node)
+{
+    return node.DebugString();
+}
 
-String nodeToString(const ASTPtr & node) { return queryToString(node); }
+String nodeToString(const ASTPtr & node)
+{
+    return queryToString(node);
+}
 
 template <typename NodeT, typename PreparedSetsT>
 bool RPNBuilder<NodeT, PreparedSetsT>::isKeyPossiblyWrappedByMonotonicFunctionsImpl(
-    const NodeT & node, size_t & out_key_column_num, DataTypePtr & out_key_column_type, std::vector<String> & out_functions_chain)
+    const NodeT & node,
+    size_t & out_key_column_num,
+    DataTypePtr & out_key_column_type,
+    std::vector<String> & out_functions_chain)
 {
     /** By itself, the key column can be a functional expression. for example, `intHash32(UserID)`.
           * Therefore, use the full name of the expression for search.
@@ -203,10 +241,10 @@ bool RPNBuilder<NodeT, PreparedSetsT>::isKeyPossiblyWrappedByMonotonicFunctionsI
 
 template <typename NodeT, typename PreparedSetsT>
 bool RPNBuilder<NodeT, PreparedSetsT>::isKeyPossiblyWrappedByMonotonicFunctions(const NodeT & node,
-    const Context & context,
-    size_t & out_key_column_num,
-    DataTypePtr & out_key_res_column_type,
-    RPNElement::MonotonicFunctionsChain & out_functions_chain)
+                                                                                const Context & context,
+                                                                                size_t & out_key_column_num,
+                                                                                DataTypePtr & out_key_res_column_type,
+                                                                                RPNElement::MonotonicFunctionsChain & out_functions_chain)
 {
     std::vector<String> chain_not_tested_for_monotonicity;
     DataTypePtr key_column_type;
@@ -234,10 +272,10 @@ bool RPNBuilder<NodeT, PreparedSetsT>::isKeyPossiblyWrappedByMonotonicFunctions(
 
 template <typename NodeT, typename PreparedSetsT>
 void RPNBuilder<NodeT, PreparedSetsT>::getKeyTuplePositionMapping(const NodeT & node,
-    const Context & context,
-    std::vector<MergeTreeSetIndex::KeyTuplePositionMapping> & indexes_mapping,
-    const size_t tuple_index,
-    size_t & out_key_column_num)
+                                                                  const Context & context,
+                                                                  std::vector<MergeTreeSetIndex::KeyTuplePositionMapping> & indexes_mapping,
+                                                                  const size_t tuple_index,
+                                                                  size_t & out_key_column_num)
 {
     MergeTreeSetIndex::KeyTuplePositionMapping index_mapping;
     index_mapping.tuple_index = tuple_index;
@@ -254,7 +292,11 @@ void RPNBuilder<NodeT, PreparedSetsT>::getKeyTuplePositionMapping(const NodeT & 
 
 template <typename NodeT, typename PreparedSetsT>
 bool RPNBuilder<NodeT, PreparedSetsT>::isTupleIndexable(
-    const NodeT & node, const Context & context, RPNElement & out, const SetPtr & prepared_set, size_t & out_key_column_num)
+    const NodeT & node,
+    const Context & context,
+    RPNElement & out,
+    const SetPtr & prepared_set,
+    size_t & out_key_column_num)
 {
     out_key_column_num = 0;
     std::vector<MergeTreeSetIndex::KeyTuplePositionMapping> indexes_mapping;
@@ -295,7 +337,11 @@ bool RPNBuilder<NodeT, PreparedSetsT>::isTupleIndexable(
 
 template <typename NodeT, typename PreparedSetsT>
 bool RPNBuilder<NodeT, PreparedSetsT>::canConstantBeWrappedByMonotonicFunctions(
-    const NodeT & node, size_t & out_key_column_num, DataTypePtr & out_key_column_type, Field & out_value, DataTypePtr & out_type)
+    const NodeT & node,
+    size_t & out_key_column_num,
+    DataTypePtr & out_key_column_type,
+    Field & out_value,
+    DataTypePtr & out_type)
 {
     String expr_name = getColumnName(node, source_columns);
     const auto & sample_block = key_expr->getSampleBlock();
@@ -383,7 +429,11 @@ bool RPNBuilder<NodeT, PreparedSetsT>::operatorFromNodeTree(const NodeT & node, 
 
 template <typename NodeT, typename PreparedSetsT>
 bool RPNBuilder<NodeT, PreparedSetsT>::atomFromNodeTree(
-    const NodeT & node, const Context & context, Block & block_with_constants, PreparedSetsT & sets, RPNElement & out)
+    const NodeT & node,
+    const Context & context,
+    Block & block_with_constants,
+    PreparedSetsT & sets,
+    RPNElement & out)
 {
     /** Functions < > = != <= >= in `notIn`, where one argument is a constant, and the other is one of columns of key,
           *  or itself, wrapped in a chain of possibly-monotonic functions,
@@ -397,8 +447,8 @@ bool RPNBuilder<NodeT, PreparedSetsT>::atomFromNodeTree(
             return false;
 
         DataTypePtr key_expr_type; /// Type of expression containing key column
-        size_t key_arg_pos;        /// Position of argument with key column (non-const argument)
-        size_t key_column_num;     /// Number of a key column (inside sort_descr array)
+        size_t key_arg_pos; /// Position of argument with key column (non-const argument)
+        size_t key_column_num; /// Number of a key column (inside sort_descr array)
         RPNElement::MonotonicFunctionsChain chain;
         bool is_set_const = false;
         bool is_constant_transformed = false;
@@ -411,23 +461,23 @@ bool RPNBuilder<NodeT, PreparedSetsT>::atomFromNodeTree(
             is_set_const = true;
         }
         else if (getConstant(child1, block_with_constants, const_value, const_type)
-            && isKeyPossiblyWrappedByMonotonicFunctions(child0, context, key_column_num, key_expr_type, chain))
+                 && isKeyPossiblyWrappedByMonotonicFunctions(child0, context, key_column_num, key_expr_type, chain))
         {
             key_arg_pos = 0;
         }
         else if (getConstant(child1, block_with_constants, const_value, const_type)
-            && canConstantBeWrappedByMonotonicFunctions(child0, key_column_num, key_expr_type, const_value, const_type))
+                 && canConstantBeWrappedByMonotonicFunctions(child0, key_column_num, key_expr_type, const_value, const_type))
         {
             key_arg_pos = 0;
             is_constant_transformed = true;
         }
         else if (getConstant(child0, block_with_constants, const_value, const_type)
-            && isKeyPossiblyWrappedByMonotonicFunctions(child1, context, key_column_num, key_expr_type, chain))
+                 && isKeyPossiblyWrappedByMonotonicFunctions(child1, context, key_column_num, key_expr_type, chain))
         {
             key_arg_pos = 1;
         }
         else if (getConstant(child0, block_with_constants, const_value, const_type)
-            && canConstantBeWrappedByMonotonicFunctions(child1, key_column_num, key_expr_type, const_value, const_type))
+                 && canConstantBeWrappedByMonotonicFunctions(child1, key_column_num, key_expr_type, const_value, const_type))
         {
             key_arg_pos = 1;
             is_constant_transformed = true;
@@ -477,7 +527,7 @@ bool RPNBuilder<NodeT, PreparedSetsT>::atomFromNodeTree(
         if (atom_it == std::end(KeyCondition::atom_map))
             return false;
 
-        bool cast_not_needed = is_set_const                           /// Set args are already casted inside Set::createFromAST
+        bool cast_not_needed = is_set_const /// Set args are already casted inside Set::createFromAST
             || (key_expr_type->isNumber() && const_type->isNumber()); /// Numbers are accurately compared without cast.
 
         if (!cast_not_needed)
@@ -486,7 +536,10 @@ bool RPNBuilder<NodeT, PreparedSetsT>::atomFromNodeTree(
         return atom_it->second(out, const_value);
     }
     else if (getConstant(
-                 node, block_with_constants, const_value, const_type)) /// For cases where it says, for example, `WHERE 0 AND something`
+                 node,
+                 block_with_constants,
+                 const_value,
+                 const_type)) /// For cases where it says, for example, `WHERE 0 AND something`
     {
         if (const_value.getType() == Field::Types::UInt64 || const_value.getType() == Field::Types::Int64
             || const_value.getType() == Field::Types::Float64)
@@ -503,7 +556,11 @@ bool RPNBuilder<NodeT, PreparedSetsT>::atomFromNodeTree(
 
 template <typename NodeT, typename PreparedSetsT>
 void RPNBuilder<NodeT, PreparedSetsT>::traverseNodeTree(
-    const NodeT & node, const Context & context, Block & block_with_constants, PreparedSetsT & sets, RPN & rpn)
+    const NodeT & node,
+    const Context & context,
+    Block & block_with_constants,
+    PreparedSetsT & sets,
+    RPN & rpn)
 {
     RPNElement element;
 

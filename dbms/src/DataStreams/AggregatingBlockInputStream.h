@@ -49,7 +49,7 @@ protected:
     {
         FileProviderPtr file_provider;
         ReadBufferFromFileProvider file_in;
-        CompressedReadBuffer compressed_in;
+        CompressedReadBuffer<> compressed_in;
         BlockInputStreamPtr block_in;
 
         TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_);

@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 class MergeTreeData;
 
 enum TMTDataPartPropertyType : UInt32

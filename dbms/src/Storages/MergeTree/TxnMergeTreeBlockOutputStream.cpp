@@ -5,8 +5,10 @@
 
 namespace DB
 {
-
-Block TxnMergeTreeBlockOutputStream::getHeader() const { return storage.getSampleBlock(); }
+Block TxnMergeTreeBlockOutputStream::getHeader() const
+{
+    return storage.getSampleBlock();
+}
 
 void TxnMergeTreeBlockOutputStream::write(Block && block)
 {

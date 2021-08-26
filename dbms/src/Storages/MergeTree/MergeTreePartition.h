@@ -1,12 +1,11 @@
 #pragma once
 
-#include <Core/Types.h>
 #include <Core/Row.h>
+#include <Core/Types.h>
 #include <IO/WriteBuffer.h>
 
 namespace DB
 {
-
 class MergeTreeData;
 struct MergeTreeDataPartChecksums;
 
@@ -18,10 +17,14 @@ struct MergeTreePartition
 public:
     MergeTreePartition() = default;
 
-    explicit MergeTreePartition(Row value_) : value(std::move(value_)) {}
+    explicit MergeTreePartition(Row value_)
+        : value(std::move(value_))
+    {}
 
     /// For month-based partitioning.
-    explicit MergeTreePartition(UInt32 yyyymm) : value(1, static_cast<UInt64>(yyyymm)) {}
+    explicit MergeTreePartition(UInt32 yyyymm)
+        : value(1, static_cast<UInt64>(yyyymm))
+    {}
 
     String getID(const MergeTreeData & storage) const;
 
@@ -34,4 +37,4 @@ public:
 };
 
 
-}
+} // namespace DB

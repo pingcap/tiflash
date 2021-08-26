@@ -3,6 +3,7 @@
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <city.h>
+
 #include <map>
 #include <memory>
 
@@ -12,24 +13,30 @@ class SipHash;
 
 namespace DB
 {
-
 /// Checksum of one file.
 struct MergeTreeDataPartChecksum
 {
     using uint128 = CityHash_v1_0_2::uint128;
 
-    UInt64 file_size {};
-    uint128 file_hash {};
+    UInt64 file_size{};
+    uint128 file_hash{};
 
     bool is_compressed = false;
-    UInt64 uncompressed_size {};
-    uint128 uncompressed_hash {};
+    UInt64 uncompressed_size{};
+    uint128 uncompressed_hash{};
 
     MergeTreeDataPartChecksum() {}
-    MergeTreeDataPartChecksum(UInt64 file_size_, uint128 file_hash_) : file_size(file_size_), file_hash(file_hash_) {}
+    MergeTreeDataPartChecksum(UInt64 file_size_, uint128 file_hash_)
+        : file_size(file_size_)
+        , file_hash(file_hash_)
+    {}
     MergeTreeDataPartChecksum(UInt64 file_size_, uint128 file_hash_, UInt64 uncompressed_size_, uint128 uncompressed_hash_)
-        : file_size(file_size_), file_hash(file_hash_), is_compressed(true),
-        uncompressed_size(uncompressed_size_), uncompressed_hash(uncompressed_hash_) {}
+        : file_size(file_size_)
+        , file_hash(file_hash_)
+        , is_compressed(true)
+        , uncompressed_size(uncompressed_size_)
+        , uncompressed_hash(uncompressed_hash_)
+    {}
 
     void checkEqual(const MergeTreeDataPartChecksum & rhs, bool have_uncompressed, const String & name) const;
     void checkSize(const String & path) const;
@@ -93,9 +100,9 @@ struct MinimalisticDataPartChecksums
     UInt64 num_uncompressed_files = 0;
 
     using uint128 = MergeTreeDataPartChecksum::uint128;
-    uint128 hash_of_all_files {};
-    uint128 hash_of_uncompressed_files {};
-    uint128 uncompressed_hash_of_compressed_files {};
+    uint128 hash_of_all_files{};
+    uint128 hash_of_uncompressed_files{};
+    uint128 uncompressed_hash_of_compressed_files{};
 
     /// Is set only for old formats
     std::unique_ptr<MergeTreeDataPartChecksums> full_checksums;
@@ -118,4 +125,4 @@ struct MinimalisticDataPartChecksums
 };
 
 
-}
+} // namespace DB
