@@ -12,7 +12,9 @@ namespace DB
 using Clock   = std::chrono::system_clock;
 using Seconds = std::chrono::seconds;
 
-static constexpr UInt64 MB = 1048576ULL;
+static constexpr UInt64 KB = 1ULL * 1024;
+static constexpr UInt64 MB = KB * 1024;
+static constexpr UInt64 GB = MB * 1024;
 
 static constexpr UInt64 PAGE_SIZE_STEP       = (1 << 10) * 16; // 16 KB
 static constexpr UInt64 PAGE_BUFFER_SIZE     = DBMS_DEFAULT_BUFFER_SIZE;

@@ -17,6 +17,7 @@
 #include <TestUtils/MockDiskDelegator.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
+#include <signal.h>
 
 #include <atomic>
 #include <boost/program_options.hpp>
@@ -237,7 +238,7 @@ public:
     static DB::ReadBufferPtr genRandomData(const DB::PageId pageId, DB::MemHolder & holder)
     {
         // fill page with random bytes
-        const size_t buff_sz = approx_page_mb * 1024 * 1024 + random() % 3000;
+        const size_t buff_sz = approx_page_mb * DB::MB + random() % 3000;
         char *       buff    = (char *)malloc(buff_sz);
         const char   buff_ch = pageId % 0xFF;
         memset(buff, buff_ch, buff_sz);
@@ -344,7 +345,7 @@ public:
 
 protected:
     size_t batch_buffer_nums  = 100;
-    size_t batch_buffer_size  = 1 * 1024 * 1024; // 1mb
+    size_t batch_buffer_size  = 1 * DB::MB;
     size_t batch_buffer_limit = 0;
 
     virtual DB::PageId genRandomPageId() override { return static_cast<DB::PageId>(rand() % max_page_id); }
@@ -623,6 +624,7 @@ private:
 
         DB::PageStorage::Config config;
         config.num_write_slots = options.num_writer_slots;
+        initPageStorage(config);
 
         if (options.avg_page_size_mb != 0)
         {
@@ -635,8 +637,6 @@ private:
             PSWriter::fillAllPages(ps);
             LOG_INFO(logger, "All pages have been init.");
         }
-
-        initPageStorage(config);
 
         startWriter<PSWriter>(options.num_writers);
         startReader(options.num_readers);
