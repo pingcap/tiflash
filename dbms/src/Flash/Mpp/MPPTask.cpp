@@ -35,10 +35,15 @@ extern const char exception_during_mpp_root_task_run[];
 extern const char exception_during_mpp_write_err_to_tunnel[];
 } // namespace FailPoints
 
-String MPPTaskId::toString() const { return fmt::format("[{},{}]", start_ts, task_id); }
+String MPPTaskId::toString() const
+{
+    return fmt::format("[{},{}]", start_ts, task_id);
+}
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
-    : context(context_), meta(meta_), log(&Logger::get(fmt::format("task {}", meta_.task_id())))
+    : context(context_)
+    , meta(meta_)
+    , log(&Logger::get(fmt::format("task {}", meta_.task_id())))
 {
     id.start_ts = meta.start_ts();
     id.task_id = meta.task_id();
@@ -90,7 +95,9 @@ void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
 }
 
 MPPTunnelPtr MPPTask::getTunnelWithTimeout(
-    const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout, String & err_msg)
+    const ::mpp::EstablishMPPConnectionRequest * request,
+    std::chrono::seconds timeout,
+    String & err_msg)
 {
     MPPTaskId id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
     std::map<MPPTaskId, MPPTunnelPtr>::iterator it;
@@ -136,7 +143,8 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         /// ParseFromString will use the default recursion limit, which is 100 to decode the plan, if the plan tree is too deep,
         /// it may exceed this limit, so just try again by double the recursion limit
         ::google::protobuf::io::CodedInputStream coded_input_stream(
-            reinterpret_cast<const UInt8 *>(task_request.encoded_plan().data()), task_request.encoded_plan().size());
+            reinterpret_cast<const UInt8 *>(task_request.encoded_plan().data()),
+            task_request.encoded_plan().size());
         coded_input_stream.SetRecursionLimit(::google::protobuf::io::CodedInputStream::GetDefaultRecursionLimit() * 2);
         if (!dag_req->ParseFromCodedStream(&coded_input_stream))
         {
@@ -153,12 +161,10 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     for (auto & r : task_request.regions())
     {
         auto res = regions.emplace(r.region_id(),
-            RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
-                CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+                                   RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
         if (!res.second)
         {
-            retry_regions.emplace_back(RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
-                CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+            retry_regions.emplace_back(RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
         }
     }
     // set schema ver and start ts.
@@ -246,9 +252,9 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     if (has_collator_info && part_keys.size() != exchangeSender.types_size())
     {
         throw TiFlashException(std::string(__PRETTY_FUNCTION__)
-                + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is "
-                  "enabled",
-            Errors::Coprocessor::BadRequest);
+                                   + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is "
+                                     "enabled",
+                               Errors::Coprocessor::BadRequest);
     }
     for (int i = 0; i < part_keys.size(); i++)
     {
@@ -267,8 +273,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     }
     // construct writer
     std::unique_ptr<DAGResponseWriter> response_writer
-        = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, collators, exchangeSender.tp(),
-            context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), *dag_context);
+        = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, collators, exchangeSender.tp(), context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), *dag_context);
     BlockOutputStreamPtr squash_stream = std::make_shared<DAGBlockOutputStream>(io.in->getHeader(), std::move(response_writer));
     io.out = std::make_shared<SquashingBlockOutputStream>(squash_stream, 20000, 0);
     auto end_time = Clock::now();
