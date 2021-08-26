@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
+#include <Common/Stopwatch.h>
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Encryption/MockKeyManager.h>
 #include <IO/ReadBufferFromMemory.h>
@@ -21,14 +22,12 @@
 #include <boost/program_options.hpp>
 #include <chrono>
 #include <iostream>
+#include <list>
 #include <memory>
 #include <random>
 
-using std::chrono::high_resolution_clock;
-using std::chrono::milliseconds;
-using PSPtr = std::shared_ptr<DB::PageStorage>;
-
-DB::PageId MAX_PAGE_ID = 100;
+using PSPtr                          = std::shared_ptr<DB::PageStorage>;
+const DB::PageId MAX_PAGE_ID_DEFAULT = 1000;
 
 std::atomic<bool> running_without_exception = true;
 std::atomic<bool> running_without_timeout   = true;
@@ -204,11 +203,8 @@ public:
     size_t pages_used = 0;
 
 public:
-    PSRunnable(const PSPtr & ps_, DB::UInt32 index_) : index(index_), ps(ps_){};
-
     void run() override
     {
-        assert(ps != nullptr);
         MemoryTracker tarcker;
         current_memory_tracker = &tarcker;
         // If runImpl() return false, means it need break itself
@@ -218,15 +214,11 @@ public:
         }
         tarcker.setDescription(description().c_str());
         current_memory_tracker = nullptr;
-        LOG_INFO(logger, fmt::format(description() + " exit", index));
+        LOG_INFO(logger, description() + " exit");
     }
 
     virtual String description() = 0;
     virtual bool   runImpl()     = 0;
-
-protected:
-    DB::UInt32 index = 0;
-    PSPtr      ps;
 };
 
 class PSWriter : public PSRunnable
@@ -234,7 +226,7 @@ class PSWriter : public PSRunnable
     static size_t approx_page_mb;
 
 public:
-    PSWriter(const PSPtr & ps_, DB::UInt32 index_) : PSRunnable(ps_, index_), gen() {}
+    PSWriter(const PSPtr & ps_, DB::UInt32 index_) : PSRunnable(), ps(ps_), index(index_) {}
 
     static void setApproxPageSize(size_t size_mb)
     {
@@ -257,7 +249,7 @@ public:
 
     static void fillAllPages(const PSPtr & ps)
     {
-        for (DB::PageId pageId = 0; pageId < MAX_PAGE_ID; ++pageId)
+        for (DB::PageId pageId = 0; pageId < MAX_PAGE_ID_DEFAULT; ++pageId)
         {
             DB::MemHolder     holder;
             DB::ReadBufferPtr buff = genRandomData(pageId, holder);
@@ -274,6 +266,7 @@ public:
 
     virtual bool runImpl() override
     {
+        assert(ps != nullptr);
         const DB::PageId pageId = genRandomPageId();
 
         DB::MemHolder     holder;
@@ -290,18 +283,24 @@ public:
 protected:
     virtual DB::PageId genRandomPageId()
     {
-        // std::normal_distribution<> distribution{MAX_PAGE_ID / 2, 150};
-        return static_cast<DB::PageId>(rand() % MAX_PAGE_ID);
+        std::normal_distribution<> distribution{(double)max_page_id / 2, 150};
+        return static_cast<DB::PageId>(std::round(distribution(gen))) % max_page_id;
+        ;
     }
 
 protected:
+    PSPtr        ps;
+    DB::UInt32   index = 0;
     std::mt19937 gen;
+    DB::PageId   max_page_id = MAX_PAGE_ID_DEFAULT;
 };
 
+// PSCommonWriter can custom data size/numbers/page id range in one writebatch.
+// And it also can set max_io_limit,after send limit size data into pagefile. it will stop itself.
 class PSCommonWriter : public PSWriter
 {
 public:
-    PSCommonWriter(const PSPtr & ps_, DB::UInt32 index_) : PSWriter(ps_, index_){};
+    PSCommonWriter(const PSPtr & ps_, DB::UInt32 index_) : PSWriter(ps_, index_) {}
 
     void updatedRandomData()
     {
@@ -318,6 +317,7 @@ public:
 
     bool runImpl() override
     {
+        assert(ps != nullptr);
         const DB::PageId pageId = genRandomPageId();
 
         DB::WriteBatch wb;
@@ -338,12 +338,16 @@ public:
 
     void setBatchBufferSize(size_t size) { batch_buffer_size = size; }
 
-    void setBatchBufferLimit(size_t size) { batch_buffer_limit = size; }
+    void setBatchBufferLimit(size_t size_limit) { batch_buffer_limit = size_limit; }
+
+    void setBatchBufferPageRange(size_t max_page_id_) { max_page_id = max_page_id_; }
 
 protected:
     size_t batch_buffer_nums  = 100;
     size_t batch_buffer_size  = 1 * 1024 * 1024; // 1mb
     size_t batch_buffer_limit = 0;
+
+    virtual DB::PageId genRandomPageId() override { return static_cast<DB::PageId>(rand() % max_page_id); }
 
 private:
     std::vector<DB::ReadBufferPtr> buffPtrs;
@@ -356,33 +360,20 @@ class PSReader : public PSRunnable
     const size_t heavy_read_delay_ms;
 
 public:
-    PSReader(const PSPtr & ps_, DB::UInt32 index_, size_t delay_ms) : PSRunnable(ps_, index_), heavy_read_delay_ms(delay_ms) {}
+    PSReader(const PSPtr & ps_, DB::UInt32 index_, size_t delay_ms) : PSRunnable(), heavy_read_delay_ms(delay_ms), ps(ps_), index(index_) {}
 
     bool runImpl() override
     {
+        assert(ps != nullptr);
         {
             // sleep [0~10) ms
             const uint32_t micro_seconds_to_sleep = random() % 10;
             usleep(micro_seconds_to_sleep * 1000);
         }
-        assert(ps != nullptr);
-#if 0
-        const DB::PageId pageId = random() % MAX_PAGE_ID;
-        try
-        {
-            DB::Page page = ps->read(pageId);
-            ++pages_read;
-            bytes_read += page.data.size();
-        }
-        catch (DB::Exception & e)
-        {
-            LOG_TRACE(logger, e.displayText());
-        }
-#else
         std::vector<DB::PageId> pageIds;
         for (size_t i = 0; i < 5; ++i)
         {
-            pageIds.emplace_back(random() % MAX_PAGE_ID);
+            pageIds.emplace_back(random() % max_page_id);
         }
         try
         {
@@ -405,16 +396,20 @@ public:
             DB::tryLogCurrentException(__PRETTY_FUNCTION__);
         }
         return true;
-#endif
     }
 
-    String description() override { return "(Stress Test Reader)"; }
+    String description() override { return fmt::format("(Stress Test PSReader {})", index); }
+
+protected:
+    PSPtr      ps;
+    DB::UInt32 index       = 0;
+    DB::PageId max_page_id = MAX_PAGE_ID_DEFAULT;
 };
 
-class PSStatus
+class PSMetricsDumper
 {
 public:
-    PSStatus(size_t status_interval_) : status_interval(status_interval_)
+    PSMetricsDumper(size_t status_interval_) : status_interval(status_interval_)
     {
         timer_status.setStartInterval(1000);
         timer_status.setPeriodicInterval(status_interval * 1000);
@@ -435,14 +430,14 @@ public:
     String toString()
     {
         return fmt::format(
-            "Memory lastest used : {} , avg used : {} , top used {}.", lastest_memory, (memory_summary / loop_times), memory_biggest);
+            "Memory lastest used : {} , avg used : {} , top used {}. \n", lastest_memory, (memory_summary / loop_times), memory_biggest);
     }
 
     void start()
     {
         if (status_interval != 0)
         {
-            timer_status.start(Poco::TimerCallback<PSStatus>(*this, &PSStatus::onTime));
+            timer_status.start(Poco::TimerCallback<PSMetricsDumper>(*this, &PSMetricsDumper::onTime));
         }
     }
 
@@ -545,6 +540,7 @@ class StressTimeout
 public:
     StressTimeout(size_t timeout_s)
     {
+        running_without_timeout = true;
         LOG_INFO(logger, fmt::format("benchmark timeout: {}s", timeout_s));
         timeout_timer.setStartInterval(timeout_s * 1000);
     };
@@ -565,29 +561,288 @@ using StressTimeoutPtr = std::shared_ptr<StressTimeout>;
 class StressWorkload
 {
 
-private:
-#define checkAndRun(mask, flag, function) \
-    do                                    \
-    {                                     \
-        if (mask & flag)                  \
-            function();                   \
-    } while (0);
-
-    const UInt64 workload_normal                        = 0;
-    const UInt64 workload_heavy_memory_cost_in_snapshot = 0x1;
-    const UInt64 workload_page_file_update_long_time    = 0x2;
-    // shold be sum(workload 0...workload N) + 1
-    const UInt64 workload_end = 0x4;
-
 public:
-    StressWorkload(StressEnv options_)
+    StressWorkload(StressEnv & options_)
         : options(options_),
           pool(/* minCapacity= */ 1 + options.num_writers + options.num_readers, 1 + options.num_writers + options.num_readers),
-          writers(options.num_writers),
-          readers(options.num_readers),
-          status(options.status_interval){};
+          metrics_dumper(options.status_interval)
+    {
+    }
 
-    void resetEnv();
+    void resultWorkload()
+    {
+        UInt64 timeInterval = stop_watch.elapsedMilliseconds();
+        fmt::print(stderr, "result in {}ms\n", timeInterval);
+        double seconds_run = 1.0 * timeInterval / 1000;
+
+        size_t total_pages_written = 0;
+        size_t total_bytes_written = 0;
+
+        for (auto & writer : writers)
+        {
+            total_pages_written += writer->pages_used;
+            total_bytes_written += writer->bytes_used;
+        }
+
+        size_t total_pages_read = 0;
+        size_t total_bytes_read = 0;
+
+        for (auto & reader : readers)
+        {
+            total_pages_read += reader->pages_used;
+            total_bytes_read += reader->bytes_used;
+        }
+
+        fmt::print(stderr,
+                   "W: {} pages, {:.4f} GB, {:.4f} GB/s\n", //
+                   total_pages_written,
+                   total_bytes_written / DB::GB,
+                   total_bytes_written / DB::GB / seconds_run);
+        fmt::print(stderr,
+                   "R: {} pages, {:.4f} GB, {:.4f} GB/s\n", //
+                   total_pages_read,
+                   total_bytes_read / DB::GB,
+                   total_bytes_read / DB::GB / seconds_run);
+
+        if (options.status_interval != 0)
+        {
+            fmt::print(stderr, metrics_dumper.toString());
+        }
+    }
+
+    static void runNormalWorkload(StressEnv & options_) { StressWorkload(options_).normalWorkload(); }
+
+    static void runPageFileUpdateLongTimeWorkload(StressEnv & options_) { StressWorkload(options_).pageFileUpdateLongTimeWorkload(); }
+
+    static void runHeavyCostInLegacyCompactWorkload(StressEnv & options_) { StressWorkload(options_).heavyCostInLegacyCompactWorkload(); }
+
+private:
+    void normalWorkload()
+    {
+        LOG_INFO(logger, "Start Running WorkLoad-Normal");
+
+        DB::PageStorage::Config config;
+        config.num_write_slots = options.num_writer_slots;
+
+        if (options.avg_page_size_mb != 0)
+        {
+            PSWriter::setApproxPageSize(options.avg_page_size_mb);
+        }
+
+        // init all pages in PageStorage
+        if (options.init_pages)
+        {
+            PSWriter::fillAllPages(ps);
+            LOG_INFO(logger, "All pages have been init.");
+        }
+
+        initPageStorage(config);
+
+        startWriter<PSWriter>(options.num_writers);
+        startReader(options.num_readers);
+        startBackgroundTimer();
+
+        stop_watch.start();
+        pool.joinAll();
+        stop_watch.stop();
+        resultWorkload();
+    }
+
+    void pageFileUpdateLongTimeWorkload()
+    {
+        const String name = "PageFileUpdateLongTime";
+        LOG_INFO(logger,
+                 fmt::format("Start Running WorkLoad-{}, Some of options will be ignored"
+                             "`paths` will only used first one. which is {}. Data will store in {}"
+                             "Please cleanup folder after this test."
+                             "The current workload will generate 9G data, and GC will be performed at the end.",
+                             name,
+                             options.paths[0],
+                             options.paths[0] + "/" + name));
+
+        metrics_dumper.start();
+
+        // For safe , setup timeout.
+        stress_time = std::make_shared<StressTimeout>(100);
+        stress_time->start();
+
+        // Generate 8G data in the same Pagefile
+        {
+            stop_watch.start();
+
+            DB::PageStorage::Config config;
+            config.file_max_size  = 8ULL * DB::GB;
+            config.file_roll_size = 8ULL * DB::GB;
+            initPageStorage(config, name);
+
+            startWriter<PSCommonWriter>(1, [](std::shared_ptr<PSCommonWriter> writer) -> void {
+                writer->setBatchBufferNums(4);
+                writer->setBatchBufferSize(100ULL * DB::MB);
+                writer->setBatchBufferLimit(8ULL * DB::GB);
+                writer->setBatchBufferPageRange(1000000);
+            });
+
+            pool.joinAll();
+            stop_watch.stop();
+            resultWorkload();
+        }
+
+        LOG_INFO(logger, "Already generator A 8G page file");
+
+        // Generate normal data in the same Pagefile
+        {
+            stop_watch.start();
+            DB::PageStorage::Config config;
+            config.file_max_size  = DB::PAGE_FILE_MAX_SIZE;
+            config.file_roll_size = DB::PAGE_FILE_ROLL_SIZE;
+            initPageStorage(config, name);
+            startWriter<PSCommonWriter>(1, [](std::shared_ptr<PSCommonWriter> writer) -> void {
+                writer->setBatchBufferNums(4);
+                writer->setBatchBufferSize(2ULL * DB::MB);
+                writer->setBatchBufferLimit(1ULL * DB::GB);
+            });
+
+            pool.joinAll();
+            stop_watch.stop();
+            resultWorkload();
+        }
+
+        gc = std::make_shared<PSGc>(ps);
+        gc->doGcOnce();
+    }
+
+    void heavyCostInLegacyCompactWorkload()
+    {
+        const String name = "HeavyCostInLegacyCompact";
+        LOG_WARNING(logger,
+                    fmt::format("Start Running WorkLoad-{}, Some of options will be ignored"
+                                "`paths` will only used first one. which is {}. Data will store in {}"
+                                "Please cleanup folder after this test."
+                                "The current workload will elapse near 30 seconds, and GC will be performed at the end.",
+                                name,
+                                options.paths[0],
+                                options.paths[0] + "/" + name));
+        stop_watch.start();
+
+        DB::PageStorage::Config config;
+        initPageStorage(config, name);
+
+        metrics_dumper.start();
+
+        stress_time = std::make_shared<StressTimeout>(30);
+        stress_time->start();
+
+        startWriter<PSCommonWriter>(options.num_writers, [](std::shared_ptr<PSCommonWriter> writer) -> void {
+            writer->setBatchBufferNums(100);
+            writer->setBatchBufferSize(1);
+        });
+
+        pool.joinAll();
+        stop_watch.stop();
+        resultWorkload();
+
+        gc = std::make_shared<PSGc>(ps);
+        gc->doGcOnce();
+    }
+
+    void initPageStorage(DB::PageStorage::Config & config, String path_prefix = "")
+    {
+        DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(std::make_shared<DB::MockKeyManager>(false), false);
+
+        if (path_prefix.size() == 0)
+        {
+            // FIXME: running with `MockDiskDelegatorMulti` is not well-testing
+            if (options.paths.empty())
+                throw DB::Exception("Can not run without paths");
+            if (options.paths.size() == 1)
+                delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(options.paths[0]);
+            else
+                delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(options.paths);
+        }
+        else
+        {
+            // Running Special test use this path
+            delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(options.paths[0] + "/" + path_prefix);
+        }
+
+        ps = std::make_shared<DB::PageStorage>("stress_test", delegator, config, file_provider);
+        ps->restore();
+        {
+            size_t num_of_pages = 0;
+            ps->traverse([&num_of_pages](const DB::Page & page) {
+                (void)page;
+                num_of_pages++;
+            });
+            LOG_INFO(logger, fmt::format("Recover {} pages.", num_of_pages));
+        }
+    }
+
+    void startBackgroundTimer()
+    {
+        gc = std::make_shared<PSGc>(ps);
+        gc->start();
+
+        scanner = std::make_shared<PSScanner>(ps);
+        scanner->start();
+
+        metrics_dumper.start();
+        if (options.timeout_s > 0)
+        {
+            stress_time = std::make_shared<StressTimeout>(options.timeout_s);
+            stress_time->start();
+        }
+    }
+
+    template <typename T>
+    void startWriter(size_t nums_writers, std::function<void(std::shared_ptr<T>)> writer_configure = nullptr)
+    {
+        writers.clear();
+        for (size_t i = 0; i < nums_writers; ++i)
+        {
+            auto writer = std::make_shared<T>(ps, i);
+            if (writer_configure)
+            {
+                writer_configure(writer);
+            }
+            writers.insert(writers.end(), writer);
+            pool.start(*writer, "writer" + DB::toString(i));
+        }
+    }
+
+    void startReader(size_t nums_readers)
+    {
+        readers.clear();
+        for (size_t i = 0; i < nums_readers; ++i)
+        {
+            auto reader = std::make_shared<PSReader>(ps, i, options.read_delay_ms);
+            readers.insert(readers.end(), reader);
+            pool.start(*reader, "reader" + DB::toString(i));
+        }
+    }
+
+
+private:
+    StressEnv              options;
+    Poco::ThreadPool       pool;
+    PSPtr                  ps;
+    DB::PSDiskDelegatorPtr delegator;
+
+    std::list<std::shared_ptr<PSRunnable>> writers;
+    std::list<std::shared_ptr<PSRunnable>> readers;
+
+    Stopwatch stop_watch;
+
+    StressTimeoutPtr stress_time;
+    PSScannerPtr     scanner;
+    PSGcPtr          gc;
+    PSMetricsDumper  metrics_dumper;
+};
+
+
+class StressWorkloadManger
+{
+public:
+    StressWorkloadManger(StressEnv options_) : options(options_) {}
 
     void runWorkload()
     {
@@ -603,264 +858,38 @@ public:
 
         if (options.situation_mask == workload_normal)
         {
-            runNormalWorkload();
+            StressWorkload::runNormalWorkload(options);
         }
         else
         {
-            checkAndRun(options.situation_mask, workload_heavy_memory_cost_in_snapshot, runHeavyCostInLegacyCompactWorkload);
-            checkAndRun(options.situation_mask, workload_page_file_update_long_time, runPageFileUpdateLongTimeWorkload);
-        }
-    }
 
-    void resultWorkload()
-    {
-        milliseconds timeInterval = std::chrono::duration_cast<milliseconds>(endTime - beginTime);
-        fmt::print(stderr, "end in {}ms\n", timeInterval.count());
-        double seconds_run = 1.0 * timeInterval.count() / 1000;
+#define checkAndRun(mask, flag, function)   \
+    do                                      \
+    {                                       \
+        if (mask & flag)                    \
+        {                                   \
+            running_without_timeout = true; \
+            function(options);              \
+        }                                   \
+    } while (0);
 
-        size_t total_pages_written = 0;
-        size_t total_bytes_written = 0;
-        if (writer_started)
-        {
-            for (auto & writer : writers)
-            {
-                total_pages_written += writer->pages_used;
-                total_bytes_written += writer->bytes_used;
-            }
-        }
-
-
-        size_t total_pages_read = 0;
-        size_t total_bytes_read = 0;
-        if (reader_started)
-        {
-            for (auto & reader : readers)
-            {
-                total_pages_read += reader->pages_used;
-                total_bytes_read += reader->bytes_used;
-            }
-        }
-
-        const double GB = 1024 * 1024 * 1024;
-        fmt::print(stderr,
-                   "W: {} pages, {:.4f} GB, {:.4f} GB/s\n", //
-                   total_pages_written,
-                   total_bytes_written / GB,
-                   total_bytes_written / GB / seconds_run);
-        fmt::print(stderr,
-                   "R: {} pages, {:.4f} GB, {:.4f} GB/s\n", //
-                   total_pages_read,
-                   total_bytes_read / GB,
-                   total_bytes_read / GB / seconds_run);
-
-        if (options.status_interval != 0)
-        {
-            fmt::print(stderr, status.toString());
+            checkAndRun(
+                options.situation_mask, workload_heavy_memory_cost_in_snapshot, StressWorkload::runHeavyCostInLegacyCompactWorkload);
+            checkAndRun(options.situation_mask, workload_page_file_update_long_time, StressWorkload::runPageFileUpdateLongTimeWorkload);
+#undef checkAndRun
         }
     }
 
 private:
-    void runNormalWorkload()
-    {
-        DB::PageStorage::Config config;
-        config.num_write_slots = options.num_writer_slots;
-        initPageStorage(config);
+    const UInt64 workload_normal                        = 0;
+    const UInt64 workload_heavy_memory_cost_in_snapshot = 0x1;
+    const UInt64 workload_page_file_update_long_time    = 0x2;
+    // shold be sum(workload 0...workload N) + 1
+    const UInt64 workload_end = 0x4;
 
-        startWriter<PSWriter>();
-        startReader();
-        startBackgroundTimer();
-        beginTime = high_resolution_clock::now();
-        pool.joinAll();
-        endTime = high_resolution_clock::now();
-    }
-
-    void runPageFileUpdateLongTimeWorkload()
-    {
-        LOG_INFO(logger,
-                 fmt::format("Start Running WorkLoad-PageFileUpdateLongTime,"
-                             "`timeout_s`,`timeout`,`avg_page_size_mb` will be ignored,reader won't be create."
-                             "`paths` will only used first one. which is {} ."
-                             "The current workload will elapse 30 seconds, and GC will be performed at the end.",
-                             options.paths.empty() ? "" : options.paths.front()));
-        // TBD : change this 
-        MAX_PAGE_ID = 100 * 1024;
-
-        std::cout << "options.init_pages : " << options.init_pages << std::endl;
-        options.init_pages  = false;
-        options.num_writers = 1;
-
-        DB::PageStorage::Config config;
-        // TBD : replace it 
-        config.file_max_size  = 8ULL * 1024 * 1024 * 1024;
-        config.file_roll_size = 8ULL * 1024 * 1024 * 1024;
-        initPageStorage(config);
-
-        status.start();
-        stress_time = std::make_shared<StressTimeout>(100);
-        stress_time->start();
-
-        beginTime = high_resolution_clock::now();
-
-        const auto & num_writers = options.num_writers;
-
-        startWriter<PSCommonWriter>([num_writers](std::shared_ptr<PSCommonWriter> writer) -> void {
-            writer->setBatchBufferNums(4);
-            writer->setBatchBufferSize(100ULL * 1024 * 1024);
-            writer->setBatchBufferLimit(8ULL * 1024 * 1024 * 1024 / num_writers);
-        });
-
-        pool.joinAll();
-
-        // TBD: change this logger
-        LOG_INFO(logger, "Already generator A 20G page file");
-
-        config.file_max_size  = DB::PAGE_FILE_MAX_SIZE;
-        config.file_roll_size = DB::PAGE_FILE_ROLL_SIZE;
-        initPageStorage(config);
-        startWriter<PSCommonWriter>([num_writers](std::shared_ptr<PSCommonWriter> writer) -> void {
-            writer->setBatchBufferNums(4);
-            writer->setBatchBufferSize(2ULL * 1024 * 1024);
-            writer->setBatchBufferLimit(1ULL * 1024 * 1024 * 1024 / num_writers);
-        });
-
-        pool.joinAll();
-        gc = std::make_shared<PSGc>(ps);
-        gc->doGcOnce();
-        endTime = high_resolution_clock::now();
-    }
-
-    void runHeavyCostInLegacyCompactWorkload()
-    {
-        LOG_WARNING(logger,
-                    fmt::format("Start Running WorkLoad-HeavyCostInLegacyCompact,"
-                                "`timeout_s`,`timeout`,`avg_page_size_mb` will be ignored,reader won't be create"
-                                "`paths` will only used first one. which is {} ."
-                                "The current workload will elapse 30 seconds, and GC will be performed at the end. ",
-                                options.paths.empty() ? "" : options.paths.front()));
-
-
-        startWriter<PSCommonWriter>([](std::shared_ptr<PSCommonWriter> writer) -> void {
-            writer->setBatchBufferNums(100);
-            writer->setBatchBufferSize(1);
-        });
-
-        // no need other background timer
-        status.start();
-        stress_time = std::make_shared<StressTimeout>(30);
-        stress_time->start();
-
-        beginTime = high_resolution_clock::now();
-        pool.joinAll();
-
-        gc = std::make_shared<PSGc>(ps);
-        gc->doGcOnce();
-        endTime = high_resolution_clock::now();
-        // TBD Check memory max value in here
-    }
-
-    void initPageStorage(DB::PageStorage::Config & config)
-    {
-        DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(std::make_shared<DB::MockKeyManager>(false), false);
-
-        // FIXME: running with `MockDiskDelegatorMulti` is not well-testing
-        if (options.paths.empty())
-            throw DB::Exception("Can not run without paths");
-        if (options.paths.size() == 1)
-            delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(options.paths[0]);
-        else
-            delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(options.paths);
-
-        ps = std::make_shared<DB::PageStorage>("stress_test", delegator, config, file_provider);
-        ps->restore();
-        {
-            size_t num_of_pages = 0;
-            ps->traverse([&num_of_pages](const DB::Page & page) {
-                (void)page;
-                num_of_pages++;
-            });
-            LOG_INFO(logger, fmt::format("Recover {} pages.", num_of_pages));
-        }
-
-        if (options.avg_page_size_mb != 0)
-        {
-            PSWriter::setApproxPageSize(options.avg_page_size_mb);
-        }
-
-        // init all pages in PageStorage
-        if (options.init_pages)
-        {
-            PSWriter::fillAllPages(ps);
-            LOG_INFO(logger, "All pages have been init.");
-        }
-    }
-
-    void startBackgroundTimer()
-    {
-        gc = std::make_shared<PSGc>(ps);
-        gc->start();
-
-        scanner = std::make_shared<PSScanner>(ps);
-        ;
-        scanner->start();
-
-        status.start();
-        if (options.timeout_s > 0)
-        {
-            stress_time = std::make_shared<StressTimeout>(options.timeout_s);
-            stress_time->start();
-        }
-    }
-
-    template <typename T>
-    void startWriter(std::function<void(std::shared_ptr<T>)> writer_configure = nullptr)
-    {
-        writers.clear();
-        for (size_t i = 0; i < options.num_writers; ++i)
-        {
-            auto writer = std::make_shared<T>(ps, i);
-            if (writer_configure)
-            {
-                writer_configure(writer);
-            }
-            writers[i] = writer;
-            pool.start(*writers[i], "writer" + DB::toString(i));
-        }
-        writer_started = true;
-    }
-
-    void startReader()
-    {
-        readers.clear();
-        for (size_t i = 0; i < options.num_readers; ++i)
-        {
-            readers[i] = std::make_shared<PSReader>(ps, i, options.read_delay_ms);
-            pool.start(*readers[i], "reader" + DB::toString(i));
-        }
-        reader_started = true;
-    }
-
-
-private:
-    StressEnv              options;
-    Poco::ThreadPool       pool;
-    PSPtr                  ps;
-    DB::PSDiskDelegatorPtr delegator;
-
-    std::vector<std::shared_ptr<PSRunnable>> writers;
-    std::vector<std::shared_ptr<PSRunnable>> readers;
-
-    // TBD remove these flag
-    bool writer_started = false;
-    bool reader_started = false;
-
-    high_resolution_clock::time_point beginTime;
-    high_resolution_clock::time_point endTime;
-
-    StressTimeoutPtr stress_time;
-    PSScannerPtr     scanner;
-    PSGcPtr          gc;
-    PSStatus         status;
+    StressEnv options;
 };
+
 
 int main(int argc, char ** argv)
 try
@@ -869,9 +898,7 @@ try
     StressEnv env = StressEnv::parse(argc, argv);
     env.setup();
 
-    StressWorkload workload(env);
-    workload.runWorkload();
-    workload.resultWorkload();
+    StressWorkloadManger(env).runWorkload();
 
     return -running_without_exception;
 }
