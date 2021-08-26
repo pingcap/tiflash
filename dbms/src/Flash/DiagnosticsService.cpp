@@ -1078,11 +1078,12 @@ catch (const std::exception & e)
     {
         size_t i = 0;
         auto resp = SearchLogResponse::default_instance();
-        while (auto log_msg = log_itr.next())
+
+        ::diagnosticspb::LogMessage tmp_msg;
+        while (log_itr.next(tmp_msg))
         {
             i++;
-            auto added_msg = resp.add_messages();
-            *added_msg = *log_msg;
+            resp.mutable_messages()->Add(std::move(tmp_msg));
 
             if (i == LOG_BATCH_SIZE - 1)
                 break;

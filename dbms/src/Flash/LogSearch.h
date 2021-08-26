@@ -39,6 +39,7 @@ public:
 
 public:
     std::optional<::diagnosticspb::LogMessage> next();
+    bool next(::diagnosticspb::LogMessage & msg);
 
 public:
     struct Error
@@ -90,6 +91,7 @@ private:
     std::vector<std::string> patterns;
     std::vector<std::unique_ptr<RE2>> compiled_patterns;
     std::unique_ptr<std::istream> log_file;
+    std::string line;
 
     Poco::Logger * log;
 };

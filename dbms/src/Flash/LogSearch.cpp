@@ -35,7 +35,7 @@ static time_t fast_mktime(struct tm * tm)
     return result;
 }
 
-std::optional<LogMessage> LogIterator::next()
+bool LogIterator::next(::diagnosticspb::LogMessage & msg)
 {
     for (;;)
     {
@@ -46,11 +46,10 @@ std::optional<LogMessage> LogIterator::next()
             {
                 LOG_ERROR(log, "readLog error: " << err->extra_msg);
             }
-            return {};
+            return false;
         }
 
         auto entry = std::get<LogEntry>(result);
-        LogMessage msg;
         msg.set_time(entry.time);
         msg.set_message(entry.message);
         LogLevel level;
@@ -79,9 +78,19 @@ std::optional<LogMessage> LogIterator::next()
 
         if (match(msg))
         {
-            return msg;
+            return true;
         }
     }
+}
+
+std::optional<LogMessage> LogIterator::next()
+{
+    LogMessage msg;
+    if (!next(msg))
+    {
+        return {};
+    }
+    return msg;
 }
 
 bool LogIterator::match(const LogMessage & log_msg) const
@@ -115,7 +124,6 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
             return Error{Error::Type::UNKNOWN};
     }
 
-    std::string line;
     std::getline(*log_file, line);
 
     LogEntry entry;
