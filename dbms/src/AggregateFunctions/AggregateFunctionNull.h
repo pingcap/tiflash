@@ -1,6 +1,10 @@
 #pragma once
 
+#include <array>
+#include <map>
 #include <common/mem_utils.h>
+
+#include <AggregateFunctions/AggregateFunctionGroupUniqArray.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnNullable.h>
@@ -17,10 +21,6 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/sortBlock.h>
-
-#include <array>
-#include <map>
-#include "AggregateFunctionGroupUniqArray.h"
 #include <Interpreters/SetVariants.h>
 
 namespace DB
@@ -516,7 +516,7 @@ private:
     std::array<char, MAX_ARGS> is_nullable;    /// Plain array is better than std::vector due to one indirection less.
 };
 
-/// a warp function on the top of groupArray and groupUniqArray
+/// a warp function on the top of groupArray and groupUniqArray, like the AggregateFunctionNull
 
 /// the input argument is in following two types:
 /// 1. only one column with original data type and without order_by items, for example: group_concat(c)
@@ -537,7 +537,7 @@ public:
           all_columns_names_and_types(all_columns_names_and_types_), collators(collators_)
     {
         if (input_args.size() != 1)
-            throw Exception("Logical error: not single argument is passed to AggregateFunctionGroupConcat", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Logical error: more than 1 arguments are passed to AggregateFunctionGroupConcat", ErrorCodes::LOGICAL_ERROR);
         nested_type = std::make_shared<DataTypeArray>(removeNullable(input_args[0]));
 
         number_of_concat_items = all_columns_names_and_types.size() - sort_desc.size();
