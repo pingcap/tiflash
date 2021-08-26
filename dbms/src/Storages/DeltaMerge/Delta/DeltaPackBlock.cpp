@@ -11,21 +11,20 @@ namespace DB
 {
 namespace DM
 {
-
 DeltaPackPtr DeltaPackBlock::writePack(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
 {
     auto page_id = writePackData(context, block, offset, limit, wbs);
-    auto schema  = std::make_shared<Block>(block.cloneEmpty());
-    auto bytes   = block.bytes(offset, limit);
+    auto schema = std::make_shared<Block>(block.cloneEmpty());
+    auto bytes = block.bytes(offset, limit);
     return createPackWithDataPage(schema, limit, bytes, page_id);
 }
 
 DeltaPackPtr DeltaPackBlock::createPackWithDataPage(const BlockPtr & schema, UInt64 rows, UInt64 bytes, PageId data_page_id)
 {
-    auto * p          = new DeltaPackBlock(schema);
-    p->rows           = rows;
-    p->bytes          = bytes;
-    p->data_page_id   = data_page_id;
+    auto * p = new DeltaPackBlock(schema);
+    p->rows = rows;
+    p->bytes = bytes;
+    p->data_page_id = data_page_id;
     p->disable_append = true;
     return DeltaPackPtr(p);
 }
@@ -43,8 +42,8 @@ void DeltaPackBlock::appendToCache(const Block data, size_t offset, size_t limit
 
     for (size_t i = 0; i < cache->block.columns(); ++i)
     {
-        auto & col               = data.getByPosition(i).column;
-        auto & cache_col         = *cache->block.getByPosition(i).column;
+        auto & col = data.getByPosition(i).column;
+        auto & cache_col = *cache->block.getByPosition(i).column;
         auto * mutable_cache_col = const_cast<IColumn *>(&cache_col);
         mutable_cache_col->insertRangeFrom(*col, offset, limit);
     }
@@ -59,7 +58,7 @@ void DeltaPackBlock::fillColumns(const PageReader & page_reader, const ColumnDef
         return;
 
     size_t col_start = result.size();
-    size_t col_end   = col_count;
+    size_t col_end = col_count;
 
     Columns read_cols;
     if (isCached())
@@ -77,7 +76,7 @@ PageId DeltaPackBlock::writePackData(DMContext & context, const Block & block, s
     auto page_id = context.storage_pool.newLogPageId();
 
     MemoryWriteBuffer write_buf;
-    PageFieldSizes    col_data_sizes;
+    PageFieldSizes col_data_sizes;
     for (auto & col : block)
     {
         auto last_buf_size = write_buf.count();
@@ -86,7 +85,7 @@ PageId DeltaPackBlock::writePackData(DMContext & context, const Block & block, s
     }
 
     auto data_size = write_buf.count();
-    auto buf       = write_buf.tryGetReadBuffer();
+    auto buf = write_buf.tryGetReadBuffer();
     wbs.log.putPage(page_id, 0, buf, data_size, col_data_sizes);
 
     ProfileEvents::increment(ProfileEvents::DMWriteBytes, data_size);
@@ -98,8 +97,8 @@ Block DeltaPackBlock::readFromCache() const
 {
     std::scoped_lock lock(cache->mutex);
 
-    auto &         cache_block = cache->block;
-    MutableColumns columns     = cache_block.cloneEmptyColumns();
+    auto & cache_block = cache->block;
+    MutableColumns columns = cache_block.cloneEmptyColumns();
     for (size_t i = 0; i < cache_block.columns(); ++i)
         columns[i]->insertRangeFrom(*cache_block.getByPosition(i).column, 0, rows);
     return cache_block.cloneWithColumns(std::move(columns));
@@ -115,7 +114,7 @@ Block DeltaPackBlock::readFromDisk(const PageReader & page_reader) const
         fields.second.push_back(i);
 
     auto page_map = page_reader.read({fields});
-    auto page     = page_map[data_page_id];
+    auto page = page_map[data_page_id];
 
     auto columns = schema_.cloneEmptyColumns();
 
@@ -124,9 +123,9 @@ Block DeltaPackBlock::readFromDisk(const PageReader & page_reader) const
 
     for (size_t index = 0; index < schema_.columns(); ++index)
     {
-        auto   data_buf = page.getFieldData(index);
-        auto & type     = schema_.getByPosition(index).type;
-        auto & column   = columns[index];
+        auto data_buf = page.getFieldData(index);
+        auto & type = schema_.getByPosition(index).type;
+        auto & column = columns[index];
         deserializeColumn(*column, type, data_buf, rows);
     }
 
@@ -145,7 +144,7 @@ Columns DeltaPackBlock::readFromCache(const ColumnDefines & column_defines, size
     std::scoped_lock lock(cache->mutex);
 
     const auto & cache_block = cache->block;
-    Columns      columns;
+    Columns columns;
     for (size_t i = col_start; i < col_end; ++i)
     {
         const auto & cd = column_defines[i];
@@ -168,10 +167,10 @@ Columns DeltaPackBlock::readFromCache(const ColumnDefines & column_defines, size
     return columns;
 }
 
-Columns DeltaPackBlock::readFromDisk(const PageReader &    page_reader, //
+Columns DeltaPackBlock::readFromDisk(const PageReader & page_reader, //
                                      const ColumnDefines & column_defines,
-                                     size_t                col_start,
-                                     size_t                col_end) const
+                                     size_t col_start,
+                                     size_t col_end) const
 {
     const size_t num_columns_read = col_end - col_start;
 
@@ -195,7 +194,7 @@ Columns DeltaPackBlock::readFromDisk(const PageReader &    page_reader, //
     }
 
     auto page_map = page_reader.read({fields});
-    Page page     = page_map[data_page_id];
+    Page page = page_map[data_page_id];
     for (size_t index = col_start; index < col_end; ++index)
     {
         const size_t index_in_read_columns = index - col_start;
@@ -204,9 +203,9 @@ Columns DeltaPackBlock::readFromDisk(const PageReader &    page_reader, //
             // the column is fill with default values.
             continue;
         }
-        auto col_id    = column_defines[index].id;
+        auto col_id = column_defines[index].id;
         auto col_index = colid_to_offset.at(col_id);
-        auto data_buf  = page.getFieldData(col_index);
+        auto data_buf = page.getFieldData(col_index);
 
         const auto & cd = column_defines[index];
         // Deserialize column by pack's schema
