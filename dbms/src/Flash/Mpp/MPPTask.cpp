@@ -130,6 +130,36 @@ void MPPTask::unregisterTask()
     }
 }
 
+bool needRemoteRead(const RegionInfo & region_info, const RegionInfoMap & existing_regions, const TMTContext & tmt_context)
+{
+    if (region_info.key_ranges.empty())
+    {
+        throw TiFlashException(
+            "Income key ranges is empty for region: " + std::to_string(region_info.region_id),
+            Errors::Coprocessor::BadRequest);
+    }
+    bool need_remote_read = false;
+    if (existing_regions.find(region_info.region_id) != existing_regions.end())
+    {
+        need_remote_read = true;
+    }
+    if (!need_remote_read)
+    {
+        RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
+        if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
+        {
+            need_remote_read = true;
+        }
+        else
+        {
+            auto meta_snap = current_region->dumpRegionMetaSnapshot();
+            if (meta_snap.ver != region_info.region_version)
+                need_remote_read = true;
+        }
+    }
+    return need_remote_read;
+}
+
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     dag_req = std::make_unique<tipb::DAGRequest>();
@@ -154,34 +184,9 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     TMTContext & tmt_context = context.getTMTContext();
     for (auto & r : task_request.regions())
     {
-        RegionInfo region_info(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
-            CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr);
-        if (region_info.key_ranges.empty())
-        {
-            throw TiFlashException(
-                "Income key ranges is empty for region: " + std::to_string(region_info.region_id), Errors::Coprocessor::BadRequest);
-        }
-        bool need_remote_read = false;
-        if (regions.find(region_info.region_id) != regions.end())
-        {
-            need_remote_read = true;
-        }
-        if (!need_remote_read)
-        {
-            RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
-            if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
-            {
-                need_remote_read = true;
-            }
-            else
-            {
-                auto meta_snap = current_region->dumpRegionMetaSnapshot();
-                if (meta_snap.ver != region_info.region_version)
-                    need_remote_read = true;
-            }
-        }
+        RegionInfo region_info(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr);
 
-        if (need_remote_read)
+        if (needRemoteRead(region_info, regions, tmt_context))
         {
             retry_regions.push_back(region_info);
         }
