@@ -11,7 +11,6 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
-#include <fmt/format.h>
 
 #include <random>
 #include <set>
@@ -358,8 +357,8 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
     if (auto iter = pool.dt_file_path_map.find(file_id); unlikely(iter != pool.dt_file_path_map.end()))
     {
         const auto & path_info = pool.main_path_infos[iter->second];
-        throw DB::TiFlashException(
-            fmt::format("Try to add a DTFile with duplicated id. [id={}] [path={}] [existed_path={}]", file_id, path, path_info.path),
+        throw DB::TiFlashException("Try to add a DTFile with duplicated id. [id=" + DB::toString(file_id) + "] [path=" + String(path)
+                + "] [existed_path=" + path_info.path + "]",
             Errors::DeltaTree::Internal);
     }
 
@@ -374,7 +373,8 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
     }
     if (unlikely(index == UINT32_MAX))
         throw DB::TiFlashException(
-            fmt::format("Try to add a DTFile to an unrecognized path. [id={}] [path={}]", file_id, path), Errors::DeltaTree::Internal);
+            "Try to add a DTFile to an unrecognized path. [id=" + DB::toString(file_id) + "] [path=" + String(path) + "]",
+            Errors::DeltaTree::Internal);
     pool.dt_file_path_map.emplace(file_id, index);
     pool.main_path_infos[index].file_size_map.emplace(file_id, file_size);
     // update global used size

@@ -20,10 +20,10 @@ static const std::chrono::seconds DELTA_MERGE_GC_PERIOD(60);
 class StoragePool : private boost::noncopyable
 {
 public:
-    using Clock = std::chrono::system_clock;
+    using Clock     = std::chrono::system_clock;
     using Timepoint = Clock::time_point;
-    using Duration = Clock::duration;
-    using Seconds = std::chrono::seconds;
+    using Duration  = Clock::duration;
+    using Seconds   = std::chrono::seconds;
 
     StoragePool(const String & name, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings);
 
@@ -59,29 +59,18 @@ private:
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
     std::mutex mutex;
-<<<<<<< HEAD
-=======
 
     const Context & global_context;
->>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 };
 
 struct StorageSnapshot : private boost::noncopyable
 {
-<<<<<<< HEAD
     StorageSnapshot(StoragePool & storage, bool snapshot_read = true)
         : log_reader(storage.log(), snapshot_read ? storage.log().getSnapshot() : nullptr),
           data_reader(storage.data(), snapshot_read ? storage.data().getSnapshot() : nullptr),
           meta_reader(storage.meta(), snapshot_read ? storage.meta().getSnapshot() : nullptr)
     {
     }
-=======
-    StorageSnapshot(StoragePool & storage, ReadLimiterPtr read_limiter, bool snapshot_read = true)
-        : log_reader(storage.log(), snapshot_read ? storage.log().getSnapshot() : nullptr, read_limiter),
-          data_reader(storage.data(), snapshot_read ? storage.data().getSnapshot() : nullptr, read_limiter),
-          meta_reader(storage.meta(), snapshot_read ? storage.meta().getSnapshot() : nullptr, read_limiter)
-    {}
->>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 
     PageReader log_reader;
     PageReader data_reader;
