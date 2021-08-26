@@ -29,19 +29,6 @@ inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_exp
         return ::testing::AssertionSuccess();
     return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toDebugString(), rhs.toDebugString(), false);
 }
-<<<<<<< HEAD
-=======
-/// helper functions for comparing HandleRange
-inline ::testing::AssertionResult RowKeyRangeCompare(const char *        lhs_expr,
-                                                     const char *        rhs_expr, //
-                                                     const RowKeyRange & lhs,
-                                                     const RowKeyRange & rhs)
-{
-    if (lhs == rhs)
-        return ::testing::AssertionSuccess();
-    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toDebugString(), rhs.toDebugString(), false);
-}
->>>>>>> 818794fdb (Fix duplicated ID DTFile that cause inconsistent query result (#2770))
 #define ASSERT_RANGE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::DM::tests::HandleRangeCompare, val1, val2)
 #define EXPECT_RANGE_EQ(val1, val2) EXPECT_PRED_FORMAT2(::DB::DM::tests::HandleRangeCompare, val1, val2)
 #define GET_GTEST_FULL_NAME                                                                     \
