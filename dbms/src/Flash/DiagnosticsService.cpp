@@ -17,9 +17,6 @@
 
 #endif
 
-#include <atomic>
-#include <chrono>
-#include <thread>
 namespace DB
 {
 
