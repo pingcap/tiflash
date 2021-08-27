@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 class KeyCondition;
 struct SelectQueryInfo;
 
@@ -33,7 +32,7 @@ public:
 private:
     MergeTreeData & data;
 
-    Logger * log;
+    Poco::Logger * log;
 
     BlockInputStreams spreadMarkRangesAmongStreams(
         RangesInDataParts && parts,
@@ -85,4 +84,4 @@ private:
         const Settings & settings) const;
 };
 
-}
+} // namespace DB

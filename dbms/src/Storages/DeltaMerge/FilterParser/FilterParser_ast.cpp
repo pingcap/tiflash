@@ -13,7 +13,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int COP_BAD_DAG_REQUEST;
@@ -23,7 +22,6 @@ namespace DM
 {
 namespace ast
 {
-
 String astToDebugString(const IAST * const ast)
 {
     std::stringstream ss;
@@ -41,19 +39,19 @@ parseASTCompareFunction(const ASTFunction * const func, const FilterParser::Attr
 
     /// Only support `column` `op` `constant` now.
 
-    Attr             attr;
-    Field            value;
-    UInt32           state             = 0x0;
-    constexpr UInt32 state_has_column  = 0x1;
+    Attr attr;
+    Field value;
+    UInt32 state = 0x0;
+    constexpr UInt32 state_has_column = 0x1;
     constexpr UInt32 state_has_literal = 0x2;
-    constexpr UInt32 state_finish      = state_has_column | state_has_literal;
+    constexpr UInt32 state_finish = state_has_column | state_has_literal;
     for (auto & child : func->arguments->children)
     {
         if (auto * id = dynamic_cast<ASTIdentifier *>(child.get()); id != nullptr && id->kind == ASTIdentifier::Column)
         {
             state |= state_has_column;
             const String & col_name = id->name;
-            attr                    = creator(col_name);
+            attr = creator(col_name);
         }
         else if (auto * liter = dynamic_cast<ASTLiteral *>(child.get()); liter != nullptr)
         {
@@ -85,7 +83,7 @@ RSOperatorPtr parseASTFunction(const ASTFunction * const func, const FilterParse
     assert(func != nullptr);
     RSOperatorPtr op = EMPTY_FILTER;
 
-    if (func->name == "equals" || func->name == "notEquals"           //
+    if (func->name == "equals" || func->name == "notEquals" //
         || func->name == "greater" || func->name == "greaterOrEquals" //
         || func->name == "less" || func->name == "lessOrEquals")
     {
@@ -115,7 +113,9 @@ RSOperatorPtr parseASTFunction(const ASTFunction * const func, const FilterParse
     {
         if (unlikely(func->arguments->children.size() != 1))
             op = createUnsupported(
-                astToDebugString(func), "logical not with " + DB::toString(func->arguments->children.size()) + " children", false);
+                astToDebugString(func),
+                "logical not with " + DB::toString(func->arguments->children.size()) + " children",
+                false);
         else
         {
             if (ASTFunction * sub_func = dynamic_cast<ASTFunction *>(func->arguments->children[0].get()); sub_func != nullptr)

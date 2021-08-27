@@ -1,56 +1,53 @@
-#include <iomanip>
-#include <thread>
-#include <future>
-
-#include <Common/Stopwatch.h>
-#include <Common/setThreadName.h>
-
-#include <DataTypes/DataTypeAggregateFunction.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnArray.h>
-#include <Columns/ColumnTuple.h>
 #include <AggregateFunctions/AggregateFunctionArray.h>
 #include <AggregateFunctions/AggregateFunctionCount.h>
 #include <AggregateFunctions/AggregateFunctionState.h>
+#include <Columns/ColumnArray.h>
+#include <Columns/ColumnTuple.h>
+#include <Columns/ColumnsNumber.h>
+#include <Common/ClickHouseRevision.h>
+#include <Common/MemoryTracker.h>
+#include <Common/Stopwatch.h>
+#include <Common/ThreadFactory.h>
+#include <Common/setThreadName.h>
+#include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
+#include <DataTypes/DataTypeAggregateFunction.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/CompressedWriteBuffer.h>
-
 #include <Interpreters/Aggregator.h>
-#include <Common/ClickHouseRevision.h>
-#include <Common/MemoryTracker.h>
-#include <Common/ThreadFactory.h>
-#include <Common/typeid_cast.h>
 #include <common/demangle.h>
+
+#include <future>
+#include <iomanip>
+#include <thread>
 
 
 namespace ProfileEvents
 {
-    extern const Event ExternalAggregationWritePart;
-    extern const Event ExternalAggregationCompressedBytes;
-    extern const Event ExternalAggregationUncompressedBytes;
-}
+extern const Event ExternalAggregationWritePart;
+extern const Event ExternalAggregationCompressedBytes;
+extern const Event ExternalAggregationUncompressedBytes;
+} // namespace ProfileEvents
 
 namespace CurrentMetrics
 {
-    extern const Metric QueryThread;
+extern const Metric QueryThread;
 }
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_AGGREGATED_DATA_VARIANT;
-    extern const int TOO_MANY_ROWS;
-    extern const int EMPTY_DATA_PASSED;
-    extern const int CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS;
-    extern const int LOGICAL_ERROR;
-}
+extern const int UNKNOWN_AGGREGATED_DATA_VARIANT;
+extern const int TOO_MANY_ROWS;
+extern const int EMPTY_DATA_PASSED;
+extern const int CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 AggregatedDataVariants::~AggregatedDataVariants()
@@ -76,19 +73,19 @@ void AggregatedDataVariants::convertToTwoLevel()
 
     switch (type)
     {
-    #define M(NAME) \
-        case Type::NAME: \
-            NAME ## _two_level = std::make_unique<decltype(NAME ## _two_level)::element_type>(*NAME); \
-            NAME.reset(); \
-            type = Type::NAME ## _two_level; \
-            break;
+#define M(NAME)                                                                               \
+    case Type::NAME:                                                                          \
+        NAME##_two_level = std::make_unique<decltype(NAME##_two_level)::element_type>(*NAME); \
+        NAME.reset();                                                                         \
+        type = Type::NAME##_two_level;                                                        \
+        break;
 
         APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
 
-    #undef M
+#undef M
 
-        default:
-            throw Exception("Wrong data variant passed.", ErrorCodes::LOGICAL_ERROR);
+    default:
+        throw Exception("Wrong data variant passed.", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -140,7 +137,7 @@ Block Aggregator::Params::getHeader(
             else
                 type = std::make_shared<DataTypeAggregateFunction>(aggregate.function, argument_types, aggregate.parameters);
 
-            res.insert({ type, aggregate.column_name });
+            res.insert({type, aggregate.column_name});
         }
     }
 
@@ -149,8 +146,8 @@ Block Aggregator::Params::getHeader(
 
 
 Aggregator::Aggregator(const Params & params_)
-    : params(params_),
-    isCancelled([]() { return false; })
+    : params(params_)
+    , isCancelled([]() { return false; })
 {
     if (current_memory_tracker)
         memory_usage_before_aggregation = current_memory_tracker->get();
@@ -390,8 +387,7 @@ void NO_INLINE Aggregator::executeImplBatch(
                 rows,
                 reinterpret_cast<AggregateDataPtr *>(method.data.data()),
                 inst->state_offset,
-                [&](AggregateDataPtr & aggregate_data)
-                {
+                [&](AggregateDataPtr & aggregate_data) {
                     aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
                     createAggregateStates(aggregate_data);
                 },
@@ -462,15 +458,17 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
     {
         if (inst->offsets)
             inst->batch_that->addBatchSinglePlace(
-                inst->offsets[static_cast<ssize_t>(rows - 1)], res + inst->state_offset, inst->batch_arguments, arena);
+                inst->offsets[static_cast<ssize_t>(rows - 1)],
+                res + inst->state_offset,
+                inst->batch_arguments,
+                arena);
         else
             inst->batch_that->addBatchSinglePlace(rows, res + inst->state_offset, inst->batch_arguments, arena);
     }
 }
 
 
-void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns & aggregate_columns, Columns & materialized_columns,
-    AggregateFunctionInstructions & aggregate_functions_instructions)
+void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns & aggregate_columns, Columns & materialized_columns, AggregateFunctionInstructions & aggregate_functions_instructions)
 {
     for (size_t i = 0; i < params.aggregates_size; ++i)
         aggregate_columns[i].resize(params.aggregates[i].arguments.size());
@@ -511,8 +509,7 @@ void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns 
     }
 }
 
-bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & result, const FileProviderPtr & file_provider,
-    ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, bool & no_more_keys)
+bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & result, const FileProviderPtr & file_provider, ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, bool & no_more_keys)
 {
     if (isCancelled())
         return true;
@@ -576,14 +573,15 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
         /// This is where data is written that does not fit in `max_rows_to_group_by` with `group_by_overflow_mode = any`.
         AggregateDataPtr overflow_row_ptr = params.overflow_row ? result.without_key : nullptr;
 
-        #define M(NAME, IS_TWO_LEVEL) \
-            else if (result.type == AggregatedDataVariants::Type::NAME) \
-                executeImpl(*result.NAME, result.aggregates_pool, num_rows, key_columns, result.collators,\
-                    aggregate_functions_instructions.data(), no_more_keys, overflow_row_ptr);
+#define M(NAME, IS_TWO_LEVEL)                                   \
+    else if (result.type == AggregatedDataVariants::Type::NAME) \
+        executeImpl(*result.NAME, result.aggregates_pool, num_rows, key_columns, result.collators, aggregate_functions_instructions.data(), no_more_keys, overflow_row_ptr);
 
-            if (false) {} // NOLINT
-            APPLY_FOR_AGGREGATED_VARIANTS(M)
-        #undef M
+        if (false)
+        {
+        } // NOLINT
+        APPLY_FOR_AGGREGATED_VARIANTS(M)
+#undef M
     }
 
     size_t result_size = result.sizeWithoutOverflowRow();
@@ -591,7 +589,7 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
     if (current_memory_tracker)
         current_memory_usage = current_memory_tracker->get();
 
-    auto result_size_bytes = current_memory_usage - memory_usage_before_aggregation;    /// Here all the results in the sum are taken into account, from different threads.
+    auto result_size_bytes = current_memory_usage - memory_usage_before_aggregation; /// Here all the results in the sum are taken into account, from different threads.
 
     bool worth_convert_to_two_level
         = (params.group_by_two_level_threshold && result_size >= params.group_by_two_level_threshold)
@@ -638,15 +636,16 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
 
     /// Flush only two-level data and possibly overflow data.
 
-#define M(NAME) \
+#define M(NAME)                                                        \
     else if (data_variants.type == AggregatedDataVariants::Type::NAME) \
         writeToTemporaryFileImpl(data_variants, *data_variants.NAME, block_out);
 
-    if (false) {}
+    if (false)
+    {
+    }
     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
-    else
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+    else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
     /// NOTE Instead of freeing up memory and creating new hash tables and arenas, you can re-use the old ones.
     data_variants.init(data_variants.type);
@@ -672,17 +671,8 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     ProfileEvents::increment(ProfileEvents::ExternalAggregationCompressedBytes, compressed_bytes);
     ProfileEvents::increment(ProfileEvents::ExternalAggregationUncompressedBytes, uncompressed_bytes);
 
-    LOG_TRACE(log, std::fixed << std::setprecision(3)
-        << "Written part in " << elapsed_seconds << " sec., "
-        << rows << " rows, "
-        << (uncompressed_bytes / 1048576.0) << " MiB uncompressed, "
-        << (compressed_bytes / 1048576.0) << " MiB compressed, "
-        << (uncompressed_bytes / rows) << " uncompressed bytes per row, "
-        << (compressed_bytes / rows) << " compressed bytes per row, "
-        << "compression rate: " << (uncompressed_bytes / compressed_bytes)
-        << " (" << (rows / elapsed_seconds) << " rows/sec., "
-        << (uncompressed_bytes / elapsed_seconds / 1048576.0) << " MiB/sec. uncompressed, "
-        << (compressed_bytes / elapsed_seconds / 1048576.0) << " MiB/sec. compressed)");
+    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Written part in " << elapsed_seconds << " sec., " << rows << " rows, " << (uncompressed_bytes / 1048576.0) << " MiB uncompressed, " << (compressed_bytes / 1048576.0) << " MiB compressed, " << (uncompressed_bytes / rows) << " uncompressed bytes per row, " << (compressed_bytes / rows) << " compressed bytes per row, "
+                              << "compression rate: " << (uncompressed_bytes / compressed_bytes) << " (" << (rows / elapsed_seconds) << " rows/sec., " << (uncompressed_bytes / elapsed_seconds / 1048576.0) << " MiB/sec. uncompressed, " << (compressed_bytes / elapsed_seconds / 1048576.0) << " MiB/sec. compressed)");
 }
 
 
@@ -694,16 +684,9 @@ Block Aggregator::convertOneBucketToBlock(
     bool final,
     size_t bucket) const
 {
-    Block block = prepareBlockAndFill(data_variants, final, method.data.impls[bucket].size(),
-        [bucket, &method, arena, this] (
-            MutableColumns & key_columns,
-            AggregateColumnsData & aggregate_columns,
-            MutableColumns & final_aggregate_columns,
-            bool final_)
-        {
-            convertToBlockImpl(method, method.data.impls[bucket],
-                key_columns, aggregate_columns, final_aggregate_columns, arena, final_);
-        });
+    Block block = prepareBlockAndFill(data_variants, final, method.data.impls[bucket].size(), [bucket, &method, arena, this](MutableColumns & key_columns, AggregateColumnsData & aggregate_columns, MutableColumns & final_aggregate_columns, bool final_) {
+        convertToBlockImpl(method, method.data.impls[bucket], key_columns, aggregate_columns, final_aggregate_columns, arena, final_);
+    });
 
     block.info.bucket_num = bucket;
     return block;
@@ -719,8 +702,7 @@ void Aggregator::writeToTemporaryFileImpl(
     size_t max_temporary_block_size_rows = 0;
     size_t max_temporary_block_size_bytes = 0;
 
-    auto update_max_sizes = [&](const Block & block)
-    {
+    auto update_max_sizes = [&](const Block & block) {
         size_t block_size_rows = block.rows();
         size_t block_size_bytes = block.bytes();
 
@@ -748,9 +730,7 @@ void Aggregator::writeToTemporaryFileImpl(
     /// `data_variants` will not destroy them in the destructor, they are now owned by ColumnAggregateFunction objects.
     data_variants.aggregator = nullptr;
 
-    LOG_TRACE(log, std::fixed << std::setprecision(3)
-        << "Max size of temporary block: " << max_temporary_block_size_rows << " rows, "
-        << (max_temporary_block_size_bytes / 1048576.0) << " MiB.");
+    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Max size of temporary block: " << max_temporary_block_size_rows << " rows, " << (max_temporary_block_size_bytes / 1048576.0) << " MiB.");
 }
 
 
@@ -760,17 +740,17 @@ bool Aggregator::checkLimits(size_t result_size, bool & no_more_keys) const
     {
         switch (params.group_by_overflow_mode)
         {
-            case OverflowMode::THROW:
-                throw Exception("Limit for rows to GROUP BY exceeded: has " + toString(result_size)
-                    + " rows, maximum: " + toString(params.max_rows_to_group_by),
-                    ErrorCodes::TOO_MANY_ROWS);
+        case OverflowMode::THROW:
+            throw Exception("Limit for rows to GROUP BY exceeded: has " + toString(result_size)
+                                + " rows, maximum: " + toString(params.max_rows_to_group_by),
+                            ErrorCodes::TOO_MANY_ROWS);
 
-            case OverflowMode::BREAK:
-                return false;
+        case OverflowMode::BREAK:
+            return false;
 
-            case OverflowMode::ANY:
-                no_more_keys = true;
-                break;
+        case OverflowMode::ANY:
+            no_more_keys = true;
+            break;
         }
     }
 
@@ -820,10 +800,9 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
 
     double elapsed_seconds = watch.elapsedSeconds();
     size_t rows = result.sizeWithoutOverflowRow();
-    LOG_TRACE(log, std::fixed << std::setprecision(3)
-        << "Aggregated. " << src_rows << " to " << rows << " rows (from " << src_bytes / 1048576.0 << " MiB)"
-        << " in " << elapsed_seconds << " sec."
-        << " (" << src_rows / elapsed_seconds << " rows/sec., " << src_bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
+    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Aggregated. " << src_rows << " to " << rows << " rows (from " << src_bytes / 1048576.0 << " MiB)"
+                              << " in " << elapsed_seconds << " sec."
+                              << " (" << src_rows / elapsed_seconds << " rows/sec., " << src_bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
 }
 
 template <typename Method, typename Table>
@@ -929,15 +908,14 @@ template <typename Method, typename Table>
 void NO_INLINE Aggregator::convertToBlockImplFinal(
     Method & method,
     Table & data,
-    std::vector<IColumn *>  key_columns,
+    std::vector<IColumn *> key_columns,
     MutableColumns & final_aggregate_columns,
     Arena * arena) const
 {
     auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns, key_sizes);
-    const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes :  key_sizes;
+    const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
-    data.forEachValue([&](const auto & key, auto & mapped)
-    {
+    data.forEachValue([&](const auto & key, auto & mapped) {
         method.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
         insertAggregatesIntoColumns(mapped, final_aggregate_columns, arena);
     });
@@ -947,14 +925,13 @@ template <typename Method, typename Table>
 void NO_INLINE Aggregator::convertToBlockImplNotFinal(
     Method & method,
     Table & data,
-    std::vector<IColumn *>  key_columns,
+    std::vector<IColumn *> key_columns,
     AggregateColumnsData & aggregate_columns) const
 {
     auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns, key_sizes);
-    const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes :  key_sizes;
+    const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
-    data.forEachValue([&](const auto & key, auto & mapped)
-    {
+    data.forEachValue([&](const auto & key, auto & mapped) {
         method.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
 
         /// reserved, so push_back does not throw exceptions
@@ -1048,11 +1025,10 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
     size_t rows = 1;
 
     auto filler = [&data_variants, this](
-        MutableColumns & key_columns,
-        AggregateColumnsData & aggregate_columns,
-        MutableColumns & final_aggregate_columns,
-        bool final_)
-    {
+                      MutableColumns & key_columns,
+                      AggregateColumnsData & aggregate_columns,
+                      MutableColumns & final_aggregate_columns,
+                      bool final_) {
         if (data_variants.type == AggregatedDataVariants::Type::without_key || params.overflow_row)
         {
             AggregatedDataWithoutKey & data = data_variants.without_key;
@@ -1095,21 +1071,19 @@ Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_v
     size_t rows = data_variants.sizeWithoutOverflowRow();
 
     auto filler = [&data_variants, this](
-        MutableColumns & key_columns,
-        AggregateColumnsData & aggregate_columns,
-        MutableColumns & final_aggregate_columns,
-        bool final_)
-    {
-    #define M(NAME) \
-        else if (data_variants.type == AggregatedDataVariants::Type::NAME) \
-            convertToBlockImpl(*data_variants.NAME, data_variants.NAME->data, \
-                key_columns, aggregate_columns, final_aggregate_columns, data_variants.aggregates_pool, final_);
-
-        if (false) {} // NOLINT
+                      MutableColumns & key_columns,
+                      AggregateColumnsData & aggregate_columns,
+                      MutableColumns & final_aggregate_columns,
+                      bool final_) {
+#define M(NAME)                                                        \
+    else if (data_variants.type == AggregatedDataVariants::Type::NAME) \
+        convertToBlockImpl(*data_variants.NAME, data_variants.NAME->data, key_columns, aggregate_columns, final_aggregate_columns, data_variants.aggregates_pool, final_);
+        if (false)
+        {
+        } // NOLINT
         APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
-    #undef M
-        else
-            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+#undef M
+        else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
     };
 
     return prepareBlockAndFill(data_variants, final, rows, filler);
@@ -1119,14 +1093,14 @@ Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_v
 BlocksList Aggregator::prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const
 {
 #define M(NAME) \
-    else if (data_variants.type == AggregatedDataVariants::Type::NAME) \
-        return prepareBlocksAndFillTwoLevelImpl(data_variants, *data_variants.NAME, final, thread_pool);
+    else if (data_variants.type == AggregatedDataVariants::Type::NAME) return prepareBlocksAndFillTwoLevelImpl(data_variants, *data_variants.NAME, final, thread_pool);
 
-    if (false) {} // NOLINT
+    if (false)
+    {
+    } // NOLINT
     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
-    else
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+    else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 }
 
 
@@ -1144,8 +1118,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
 
     std::atomic<UInt32> next_bucket_to_merge = 0;
 
-    auto converter = [&](size_t thread_id)
-    {
+    auto converter = [&](size_t thread_id) {
         BlocksList blocks;
         while (true)
         {
@@ -1223,8 +1196,8 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
         return blocks;
 
     std::unique_ptr<ThreadPool> thread_pool;
-    if (max_threads > 1 && data_variants.sizeWithoutOverflowRow() > 100000  /// TODO Make a custom threshold.
-        && data_variants.isTwoLevel())                      /// TODO Use the shared thread pool with the `merge` function.
+    if (max_threads > 1 && data_variants.sizeWithoutOverflowRow() > 100000 /// TODO Make a custom threshold.
+        && data_variants.isTwoLevel()) /// TODO Use the shared thread pool with the `merge` function.
         thread_pool = std::make_unique<ThreadPool>(max_threads);
 
     if (isCancelled())
@@ -1232,7 +1205,9 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
 
     if (data_variants.without_key)
         blocks.emplace_back(prepareBlockAndFillWithoutKey(
-            data_variants, final, data_variants.type != AggregatedDataVariants::Type::without_key));
+            data_variants,
+            final,
+            data_variants.type != AggregatedDataVariants::Type::without_key));
 
     if (isCancelled())
         return BlocksList();
@@ -1265,11 +1240,9 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
     }
 
     double elapsed_seconds = watch.elapsedSeconds();
-    LOG_TRACE(log, std::fixed << std::setprecision(3)
-        << "Converted aggregated data to blocks. "
-        << rows << " rows, " << bytes / 1048576.0 << " MiB"
-        << " in " << elapsed_seconds << " sec."
-        << " (" << rows / elapsed_seconds << " rows/sec., " << bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
+    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Converted aggregated data to blocks. " << rows << " rows, " << bytes / 1048576.0 << " MiB"
+                              << " in " << elapsed_seconds << " sec."
+                              << " (" << rows / elapsed_seconds << " rows/sec., " << bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
 
     return blocks;
 }
@@ -1282,26 +1255,25 @@ void NO_INLINE Aggregator::mergeDataImpl(
     Arena * arena) const
 {
     table_src.mergeToViaEmplace(table_dst,
-        [&](AggregateDataPtr & __restrict dst, AggregateDataPtr & __restrict src, bool inserted)
-    {
-        if (!inserted)
-        {
-            for (size_t i = 0; i < params.aggregates_size; ++i)
-                aggregate_functions[i]->merge(
-                    dst + offsets_of_aggregate_states[i],
-                    src + offsets_of_aggregate_states[i],
-                    arena);
+                                [&](AggregateDataPtr & __restrict dst, AggregateDataPtr & __restrict src, bool inserted) {
+                                    if (!inserted)
+                                    {
+                                        for (size_t i = 0; i < params.aggregates_size; ++i)
+                                            aggregate_functions[i]->merge(
+                                                dst + offsets_of_aggregate_states[i],
+                                                src + offsets_of_aggregate_states[i],
+                                                arena);
 
-            for (size_t i = 0; i < params.aggregates_size; ++i)
-                aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
-        }
-        else
-        {
-            dst = src;
-        }
+                                        for (size_t i = 0; i < params.aggregates_size; ++i)
+                                            aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
+                                    }
+                                    else
+                                    {
+                                        dst = src;
+                                    }
 
-        src = nullptr;
-    });
+                                    src = nullptr;
+                                });
     table_src.clearAndShrink();
 }
 
@@ -1313,8 +1285,7 @@ void NO_INLINE Aggregator::mergeDataNoMoreKeysImpl(
     Table & table_src,
     Arena * arena) const
 {
-    table_src.mergeToViaFind(table_dst, [&](AggregateDataPtr dst, AggregateDataPtr & src, bool found)
-    {
+    table_src.mergeToViaFind(table_dst, [&](AggregateDataPtr dst, AggregateDataPtr & src, bool found) {
         AggregateDataPtr res_data = found ? dst : overflows;
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -1339,22 +1310,21 @@ void NO_INLINE Aggregator::mergeDataOnlyExistingKeysImpl(
     Arena * arena) const
 {
     table_src.mergeToViaFind(table_dst,
-        [&](AggregateDataPtr dst, AggregateDataPtr & src, bool found)
-    {
-        if (!found)
-            return;
+                             [&](AggregateDataPtr dst, AggregateDataPtr & src, bool found) {
+                                 if (!found)
+                                     return;
 
-        for (size_t i = 0; i < params.aggregates_size; ++i)
-            aggregate_functions[i]->merge(
-                dst + offsets_of_aggregate_states[i],
-                src + offsets_of_aggregate_states[i],
-                arena);
+                                 for (size_t i = 0; i < params.aggregates_size; ++i)
+                                     aggregate_functions[i]->merge(
+                                         dst + offsets_of_aggregate_states[i],
+                                         src + offsets_of_aggregate_states[i],
+                                         arena);
 
-        for (size_t i = 0; i < params.aggregates_size; ++i)
-            aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
+                                 for (size_t i = 0; i < params.aggregates_size; ++i)
+                                     aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
 
-        src = nullptr;
-    });
+                                 src = nullptr;
+                             });
     table_src.clearAndShrink();
 }
 
@@ -1418,15 +1388,17 @@ void NO_INLINE Aggregator::mergeSingleLevelDataImpl(
     }
 }
 
-#define M(NAME) \
+#define M(NAME)                                                                                                         \
     template void NO_INLINE Aggregator::mergeSingleLevelDataImpl<decltype(AggregatedDataVariants::NAME)::element_type>( \
         ManyAggregatedDataVariants & non_empty_data) const;
-    APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
+APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
 #undef M
 
 template <typename Method>
 void NO_INLINE Aggregator::mergeBucketImpl(
-    ManyAggregatedDataVariants & data, Int32 bucket, Arena * arena) const
+    ManyAggregatedDataVariants & data,
+    Int32 bucket,
+    Arena * arena) const
 {
     /// We merge all aggregation results to the first.
     AggregatedDataVariantsPtr & res = data[0];
@@ -1457,7 +1429,10 @@ public:
       *  which are all either single-level, or are two-level.
       */
     MergingAndConvertingBlockInputStream(const Aggregator & aggregator_, ManyAggregatedDataVariants & data_, bool final_, size_t threads_)
-        : aggregator(aggregator_), data(data_), final(final_), threads(threads_)
+        : aggregator(aggregator_)
+        , data(data_)
+        , final(final_)
+        , threads(threads_)
     {
         /// At least we need one arena in first data item per thread
         if (!data.empty() && threads > data[0]->aggregates_pools.size())
@@ -1474,7 +1449,7 @@ public:
 
     ~MergingAndConvertingBlockInputStream()
     {
-        LOG_TRACE(&Logger::get(__PRETTY_FUNCTION__), "Waiting for threads to finish");
+        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Waiting for threads to finish");
 
         /// We need to wait for threads to finish before destructor of 'parallel_merge_data',
         ///  because the threads access 'parallel_merge_data'.
@@ -1501,7 +1476,9 @@ protected:
             {
                 aggregator.mergeWithoutKeyDataImpl(data);
                 return aggregator.prepareBlockAndFillWithoutKey(
-                    *first, final, first->type != AggregatedDataVariants::Type::without_key);
+                    *first,
+                    final,
+                    first->type != AggregatedDataVariants::Type::without_key);
             }
         }
 
@@ -1515,14 +1492,15 @@ protected:
 
             ++current_bucket_num;
 
-        #define M(NAME) \
-            else if (first->type == AggregatedDataVariants::Type::NAME) \
-                aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(data);
-            if (false) {}
+#define M(NAME)                                                 \
+    else if (first->type == AggregatedDataVariants::Type::NAME) \
+        aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(data);
+            if (false)
+            {
+            }
             APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
-        #undef M
-            else
-                throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+#undef M
+            else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
             return aggregator.prepareBlockAndFillSingleLevel(*first, final);
         }
@@ -1584,7 +1562,9 @@ private:
         std::condition_variable condvar;
         ThreadPool pool;
 
-        explicit ParallelMergeData(size_t threads) : pool(threads) {}
+        explicit ParallelMergeData(size_t threads)
+            : pool(threads)
+        {}
     };
 
     std::unique_ptr<ParallelMergeData> parallel_merge_data;
@@ -1596,7 +1576,7 @@ private:
             return;
 
         parallel_merge_data->pool.schedule(
-            ThreadFactory(true, "MergingAggregtd").newJob([this, num]{ thread(num); }));
+            ThreadFactory(true, "MergingAggregtd").newJob([this, num] { thread(num); }));
     }
 
     void thread(Int32 bucket_num)
@@ -1616,15 +1596,15 @@ private:
             Arena * arena = merged_data.aggregates_pools.at(thread_number).get();
 
             if (false) {}
-        #define M(NAME) \
-            else if (method == AggregatedDataVariants::Type::NAME) \
-            { \
-                aggregator.mergeBucketImpl<decltype(merged_data.NAME)::element_type>(data, bucket_num, arena); \
-                block = aggregator.convertOneBucketToBlock(merged_data, *merged_data.NAME, arena, final, bucket_num); \
-            }
+#define M(NAME)                                                                                               \
+    else if (method == AggregatedDataVariants::Type::NAME)                                                    \
+    {                                                                                                         \
+        aggregator.mergeBucketImpl<decltype(merged_data.NAME)::element_type>(data, bucket_num, arena);        \
+        block = aggregator.convertOneBucketToBlock(merged_data, *merged_data.NAME, arena, final, bucket_num); \
+    }
 
             APPLY_FOR_VARIANTS_TWO_LEVEL(M)
-        #undef M
+#undef M
 
             std::lock_guard<std::mutex> lock(parallel_merge_data->mutex);
             parallel_merge_data->ready_blocks[bucket_num] = std::move(block);
@@ -1642,7 +1622,9 @@ private:
 
 
 std::unique_ptr<IBlockInputStream> Aggregator::mergeAndConvertToBlocks(
-    ManyAggregatedDataVariants & data_variants, bool final, size_t max_threads) const
+    ManyAggregatedDataVariants & data_variants,
+    bool final,
+    size_t max_threads) const
 {
     if (data_variants.empty())
         throw Exception("Empty data passed to Aggregator::mergeAndConvertToBlocks.", ErrorCodes::EMPTY_DATA_PASSED);
@@ -1661,11 +1643,9 @@ std::unique_ptr<IBlockInputStream> Aggregator::mergeAndConvertToBlocks(
     if (non_empty_data.size() > 1)
     {
         /// Sort the states in descending order so that the merge is more efficient (since all states are merged into the first).
-        std::sort(non_empty_data.begin(), non_empty_data.end(),
-            [](const AggregatedDataVariantsPtr & lhs, const AggregatedDataVariantsPtr & rhs)
-            {
-                return lhs->sizeWithoutOverflowRow() > rhs->sizeWithoutOverflowRow();
-            });
+        std::sort(non_empty_data.begin(), non_empty_data.end(), [](const AggregatedDataVariantsPtr & lhs, const AggregatedDataVariantsPtr & rhs) {
+            return lhs->sizeWithoutOverflowRow() > rhs->sizeWithoutOverflowRow();
+        });
     }
 
     /// If at least one of the options is two-level, then convert all the options into two-level ones, if there are not such.
@@ -1697,7 +1677,8 @@ std::unique_ptr<IBlockInputStream> Aggregator::mergeAndConvertToBlocks(
           * Therefore, it must own all the arenas of all other sets.
           */
         first->aggregates_pools.insert(first->aggregates_pools.end(),
-            non_empty_data[i]->aggregates_pools.begin(), non_empty_data[i]->aggregates_pools.end());
+                                       non_empty_data[i]->aggregates_pools.begin(),
+                                       non_empty_data[i]->aggregates_pools.end());
     }
 
     return std::make_unique<MergingAndConvertingBlockInputStream>(*this, non_empty_data, final, max_threads);
@@ -1723,11 +1704,9 @@ ManyAggregatedDataVariants Aggregator::prepareVariantsToMerge(ManyAggregatedData
     if (non_empty_data.size() > 1)
     {
         /// Sort the states in descending order so that the merge is more efficient (since all states are merged into the first).
-        std::sort(non_empty_data.begin(), non_empty_data.end(),
-            [](const AggregatedDataVariantsPtr & lhs, const AggregatedDataVariantsPtr & rhs)
-            {
-                return lhs->sizeWithoutOverflowRow() > rhs->sizeWithoutOverflowRow();
-            });
+        std::sort(non_empty_data.begin(), non_empty_data.end(), [](const AggregatedDataVariantsPtr & lhs, const AggregatedDataVariantsPtr & rhs) {
+            return lhs->sizeWithoutOverflowRow() > rhs->sizeWithoutOverflowRow();
+        });
     }
 
     /// If at least one of the options is two-level, then convert all the options into two-level ones, if there are not such.
@@ -1759,7 +1738,8 @@ ManyAggregatedDataVariants Aggregator::prepareVariantsToMerge(ManyAggregatedData
           * Therefore, it must own all the arenas of all other sets.
           */
         first->aggregates_pools.insert(first->aggregates_pools.end(),
-            non_empty_data[i]->aggregates_pools.begin(), non_empty_data[i]->aggregates_pools.end());
+                                       non_empty_data[i]->aggregates_pools.begin(),
+                                       non_empty_data[i]->aggregates_pools.end());
     }
 
     return non_empty_data;
@@ -1832,7 +1812,9 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
     {
         /// Merge state of aggregate functions.
         aggregate_functions[j]->mergeBatch(
-            rows, places.get(), offsets_of_aggregate_states[j],
+            rows,
+            places.get(),
+            offsets_of_aggregate_states[j],
             aggregate_columns[j]->data(),
             aggregates_pool);
     }
@@ -1932,13 +1914,13 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
 
     if (has_two_level)
     {
-    #define M(NAME) \
-        if (method_chosen == AggregatedDataVariants::Type::NAME) \
-            method_chosen = AggregatedDataVariants::Type::NAME ## _two_level;
+#define M(NAME)                                              \
+    if (method_chosen == AggregatedDataVariants::Type::NAME) \
+        method_chosen = AggregatedDataVariants::Type::NAME##_two_level;
 
         APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
 
-    #undef M
+#undef M
     }
 
     if (isCancelled())
@@ -1963,27 +1945,27 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
 
         LOG_TRACE(log, "Merging partially aggregated two-level data.");
 
-        auto merge_bucket = [&bucket_to_blocks, &result, this](Int32 bucket, Arena * aggregates_pool)
-        {
+        auto merge_bucket = [&bucket_to_blocks, &result, this](Int32 bucket, Arena * aggregates_pool) {
             for (Block & block : bucket_to_blocks[bucket])
             {
                 if (isCancelled())
                     return;
 
-            #define M(NAME) \
-                else if (result.type == AggregatedDataVariants::Type::NAME) \
-                    mergeStreamsImpl(block, aggregates_pool, *result.NAME, result.NAME->data.impls[bucket], nullptr, false);
+#define M(NAME)                                                 \
+    else if (result.type == AggregatedDataVariants::Type::NAME) \
+        mergeStreamsImpl(block, aggregates_pool, *result.NAME, result.NAME->data.impls[bucket], nullptr, false);
 
-                if (false) {}
-                    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
-            #undef M
-                else
-                    throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+                if (false)
+                {
+                }
+                APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+#undef M
+                else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
             }
         };
 
         std::unique_ptr<ThreadPool> thread_pool;
-        if (max_threads > 1 && total_input_rows > 100000    /// TODO Make a custom threshold.
+        if (max_threads > 1 && total_input_rows > 100000 /// TODO Make a custom threshold.
             && has_two_level)
             thread_pool = std::make_unique<ThreadPool>(max_threads);
 
@@ -2038,14 +2020,13 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
             if (result.type == AggregatedDataVariants::Type::without_key || block.info.is_overflows)
                 mergeWithoutKeyStreamsImpl(block, result);
 
-        #define M(NAME, IS_TWO_LEVEL) \
-            else if (result.type == AggregatedDataVariants::Type::NAME) \
-                mergeStreamsImpl(block, result.aggregates_pool, *result.NAME, result.NAME->data, result.without_key, no_more_keys);
+#define M(NAME, IS_TWO_LEVEL)                                   \
+    else if (result.type == AggregatedDataVariants::Type::NAME) \
+        mergeStreamsImpl(block, result.aggregates_pool, *result.NAME, result.NAME->data, result.without_key, no_more_keys);
 
             APPLY_FOR_AGGREGATED_VARIANTS(M)
-        #undef M
-            else if (result.type != AggregatedDataVariants::Type::without_key)
-                throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+#undef M
+            else if (result.type != AggregatedDataVariants::Type::without_key) throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
         }
 
         LOG_TRACE(log, "Merged partially aggregated single-level data.");
@@ -2071,16 +2052,16 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
     auto merge_method = method_chosen;
 
 #define APPLY_FOR_VARIANTS_THAT_MAY_USE_BETTER_HASH_FUNCTION(M) \
-        M(key64)            \
-        M(key_string)       \
-        M(key_fixed_string) \
-        M(keys128)          \
-        M(keys256)          \
-        M(serialized)       \
+    M(key64)                                                    \
+    M(key_string)                                               \
+    M(key_fixed_string)                                         \
+    M(keys128)                                                  \
+    M(keys256)                                                  \
+    M(serialized)
 
-#define M(NAME) \
+#define M(NAME)                                             \
     if (merge_method == AggregatedDataVariants::Type::NAME) \
-        merge_method = AggregatedDataVariants::Type::NAME ## _hash64; \
+        merge_method = AggregatedDataVariants::Type::NAME##_hash64;
 
     APPLY_FOR_VARIANTS_THAT_MAY_USE_BETTER_HASH_FUNCTION(M)
 #undef M
@@ -2105,14 +2086,13 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
         if (result.type == AggregatedDataVariants::Type::without_key || is_overflows)
             mergeWithoutKeyStreamsImpl(block, result);
 
-    #define M(NAME, IS_TWO_LEVEL) \
-        else if (result.type == AggregatedDataVariants::Type::NAME) \
-            mergeStreamsImpl(block, result.aggregates_pool, *result.NAME, result.NAME->data, nullptr, false);
+#define M(NAME, IS_TWO_LEVEL)                                   \
+    else if (result.type == AggregatedDataVariants::Type::NAME) \
+        mergeStreamsImpl(block, result.aggregates_pool, *result.NAME, result.NAME->data, nullptr, false);
 
         APPLY_FOR_AGGREGATED_VARIANTS(M)
-    #undef M
-        else if (result.type != AggregatedDataVariants::Type::without_key)
-            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+#undef M
+        else if (result.type != AggregatedDataVariants::Type::without_key) throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
     }
 
     Block block;
@@ -2131,11 +2111,9 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
     size_t rows = block.rows();
     size_t bytes = block.bytes();
     double elapsed_seconds = watch.elapsedSeconds();
-    LOG_TRACE(log, std::fixed << std::setprecision(3)
-        << "Merged partially aggregated blocks. "
-        << rows << " rows, " << bytes / 1048576.0 << " MiB."
-        << " in " << elapsed_seconds << " sec."
-        << " (" << rows / elapsed_seconds << " rows/sec., " << bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
+    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Merged partially aggregated blocks. " << rows << " rows, " << bytes / 1048576.0 << " MiB."
+                              << " in " << elapsed_seconds << " sec."
+                              << " (" << rows / elapsed_seconds << " rows/sec., " << bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
 
     block.info.bucket_num = bucket_num;
     return block;
@@ -2212,42 +2190,46 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
     data.keys_size = params.keys_size;
     data.key_sizes = key_sizes;
 
-#define M(NAME) \
+#define M(NAME)                                          \
     else if (type == AggregatedDataVariants::Type::NAME) \
-        type = AggregatedDataVariants::Type::NAME ## _two_level;
+        type                                             \
+        = AggregatedDataVariants::Type::NAME##_two_level;
 
-    if (false) {} // NOLINT
+    if (false)
+    {
+    } // NOLINT
     APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
 #undef M
-    else
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+    else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
     data.init(type);
 
     size_t num_buckets = 0;
 
-#define M(NAME) \
+#define M(NAME)                                               \
     else if (data.type == AggregatedDataVariants::Type::NAME) \
-        num_buckets = data.NAME->data.NUM_BUCKETS;
+        num_buckets                                           \
+        = data.NAME->data.NUM_BUCKETS;
 
-    if (false) {} // NOLINT
+    if (false)
+    {
+    } // NOLINT
     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
-    else
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+    else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
     std::vector<Block> splitted_blocks(num_buckets);
 
-#define M(NAME) \
+#define M(NAME)                                               \
     else if (data.type == AggregatedDataVariants::Type::NAME) \
-        convertBlockToTwoLevelImpl(*data.NAME, data.aggregates_pool, \
-            key_columns, block, splitted_blocks);
+        convertBlockToTwoLevelImpl(*data.NAME, data.aggregates_pool, key_columns, block, splitted_blocks);
 
-    if (false) {} // NOLINT
+    if (false)
+    {
+    } // NOLINT
     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
-    else
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+    else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
     return splitted_blocks;
 }
@@ -2256,8 +2238,7 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
 template <typename Method, typename Table>
 void NO_INLINE Aggregator::destroyImpl(Table & table) const
 {
-    table.forEachMapped([&](AggregateDataPtr & data)
-    {
+    table.forEachMapped([&](AggregateDataPtr & data) {
         /** If an exception (usually a lack of memory, the MemoryTracker throws) arose
           *  after inserting the key into a hash table, but before creating all states of aggregate functions,
           *  then data will be equal nullptr.
@@ -2298,15 +2279,16 @@ void Aggregator::destroyAllAggregateStates(AggregatedDataVariants & result)
     if (result.type == AggregatedDataVariants::Type::without_key || params.overflow_row)
         destroyWithoutKey(result);
 
-#define M(NAME, IS_TWO_LEVEL) \
+#define M(NAME, IS_TWO_LEVEL)                                   \
     else if (result.type == AggregatedDataVariants::Type::NAME) \
         destroyImpl<decltype(result.NAME)::element_type>(result.NAME->data);
 
-    if (false) {} // NOLINT
+    if (false)
+    {
+    } // NOLINT
     APPLY_FOR_AGGREGATED_VARIANTS(M)
 #undef M
-    else if (result.type != AggregatedDataVariants::Type::without_key)
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+    else if (result.type != AggregatedDataVariants::Type::without_key) throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 }
 
 
@@ -2316,4 +2298,4 @@ void Aggregator::setCancellationHook(const CancellationHook cancellation_hook)
 }
 
 
-}
+} // namespace DB

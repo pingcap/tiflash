@@ -4,14 +4,14 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 class Greater : public ColCmpVal
 {
 public:
-    Greater(const Attr & attr_, const Field & value_, int null_direction_) : ColCmpVal(attr_, value_, null_direction_) {}
+    Greater(const Attr & attr_, const Field & value_, int null_direction_)
+        : ColCmpVal(attr_, value_, null_direction_)
+    {}
 
     String name() override { return "greater"; }
 

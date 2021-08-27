@@ -19,7 +19,6 @@ namespace DB
 {
 namespace stable
 {
-
 #define DELTA_VERSION_SET
 
 /**
@@ -39,13 +38,13 @@ public:
 
         bool sync_on_write = true;
 
-        size_t file_roll_size  = PAGE_FILE_ROLL_SIZE;
-        size_t file_max_size   = PAGE_FILE_MAX_SIZE;
+        size_t file_roll_size = PAGE_FILE_ROLL_SIZE;
+        size_t file_max_size = PAGE_FILE_MAX_SIZE;
         size_t file_small_size = PAGE_FILE_SMALL_SIZE;
 
-        Float64 merge_hint_low_used_rate            = 0.35;
-        size_t  merge_hint_low_used_file_total_size = PAGE_FILE_ROLL_SIZE;
-        size_t  merge_hint_low_used_file_num        = 10;
+        Float64 merge_hint_low_used_rate = 0.35;
+        size_t merge_hint_low_used_file_total_size = PAGE_FILE_ROLL_SIZE;
+        size_t merge_hint_low_used_file_num = 10;
 
         // Minimum number of legacy files to be selected for compaction
         size_t gc_compact_legacy_min_num = 3;
@@ -57,8 +56,8 @@ public:
     {
         ListPageFilesOption() {}
 
-        bool remove_tmp_files  = false;
-        bool ignore_legacy     = false;
+        bool remove_tmp_files = false;
+        bool ignore_legacy = false;
         bool ignore_checkpoint = false;
     };
 
@@ -68,12 +67,12 @@ public:
     using VersionedPageEntries = PageEntriesVersionSet;
 #endif
 
-    using SnapshotPtr   = VersionedPageEntries::SnapshotPtr;
-    using WriterPtr     = std::unique_ptr<PageFile::Writer>;
-    using ReaderPtr     = std::shared_ptr<PageFile::Reader>;
+    using SnapshotPtr = VersionedPageEntries::SnapshotPtr;
+    using WriterPtr = std::unique_ptr<PageFile::Writer>;
+    using ReaderPtr = std::shared_ptr<PageFile::Reader>;
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
 
-    using PathAndIdsVec        = std::vector<std::pair<String, std::set<PageId>>>;
+    using PathAndIdsVec = std::vector<std::pair<String, std::set<PageId>>>;
     using ExternalPagesScanner = std::function<PathAndIdsVec()>;
     using ExternalPagesRemover
         = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
@@ -86,15 +85,15 @@ public:
     void write(const WriteBatch & write_batch);
 
     SnapshotPtr getSnapshot();
-    size_t      getNumSnapshots() const;
+    size_t getNumSnapshots() const;
 
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {});
-    Page      read(PageId page_id, SnapshotPtr snapshot = {});
-    PageMap   read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot = {});
-    void      read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot = {});
-    void      traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = {});
-    void      traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
-    bool      gc();
+    Page read(PageId page_id, SnapshotPtr snapshot = {});
+    PageMap read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot = {});
+    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot = {});
+    void traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = {});
+    void traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
+    bool gc();
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
 
@@ -110,15 +109,15 @@ public:
 
 private:
     PageFile::Writer & getWriter();
-    ReaderPtr          getReader(const PageFileIdAndLevel & file_id_level);
+    ReaderPtr getReader(const PageFileIdAndLevel & file_id_level);
     // gc helper functions
     using GcCandidates = std::set<PageFileIdAndLevel>;
     using GcLivesPages = std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>>;
     GcCandidates gcSelectCandidateFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
-                                        const GcLivesPages &                             file_valid_pages,
-                                        const PageFileIdAndLevel &                       writing_file_id_level,
-                                        UInt64 &                                         candidate_total_size,
-                                        size_t &                                         migrate_page_count) const;
+                                        const GcLivesPages & file_valid_pages,
+                                        const PageFileIdAndLevel & writing_file_id_level,
+                                        UInt64 & candidate_total_size,
+                                        size_t & migrate_page_count) const;
 
     std::set<PageFile, PageFile::Comparator> gcCompactLegacy(std::set<PageFile, PageFile::Comparator> && page_files);
 
@@ -128,14 +127,14 @@ private:
 
     void archievePageFiles(const std::set<PageFile, PageFile::Comparator> & page_files_to_archieve);
 
-    PageEntriesEdit gcMigratePages(const SnapshotPtr &  snapshot,
+    PageEntriesEdit gcMigratePages(const SnapshotPtr & snapshot,
                                    const GcLivesPages & file_valid_pages,
                                    const GcCandidates & merge_files,
-                                   size_t               migrate_page_count) const;
+                                   size_t migrate_page_count) const;
 
     static void gcRemoveObsoleteData(std::set<PageFile, PageFile::Comparator> & page_files,
-                                     const PageFileIdAndLevel &                 writing_file_id_level,
-                                     const std::set<PageFileIdAndLevel> &       live_files);
+                                     const PageFileIdAndLevel & writing_file_id_level,
+                                     const std::set<PageFileIdAndLevel> & live_files);
 
 private:
     String storage_name; // Identify between different Storage
@@ -144,11 +143,11 @@ private:
 
     FileProviderPtr file_provider;
 
-    PageFile  write_file;
+    PageFile write_file;
     WriterPtr write_file_writer;
 
     OpenReadFiles open_read_files;
-    std::mutex    open_read_files_mutex; // A mutex only used to protect open_read_files.
+    std::mutex open_read_files_mutex; // A mutex only used to protect open_read_files.
 
     Poco::Logger * page_file_log;
     Poco::Logger * log;
@@ -163,8 +162,8 @@ private:
     ExternalPagesRemover external_pages_remover = nullptr;
 
     size_t deletes = 0;
-    size_t puts    = 0;
-    size_t refs    = 0;
+    size_t puts = 0;
+    size_t refs = 0;
     size_t upserts = 0;
 };
 
@@ -172,20 +171,26 @@ class PageReader
 {
 public:
     /// Not snapshot read.
-    explicit PageReader(PageStorage & storage_) : storage(storage_), snap() {}
+    explicit PageReader(PageStorage & storage_)
+        : storage(storage_)
+        , snap()
+    {}
     /// Snapshot read.
-    PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_) : storage(storage_), snap(snap_) {}
+    PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_)
+        : storage(storage_)
+        , snap(snap_)
+    {}
 
-    Page    read(PageId page_id) const { return storage.read(page_id, snap); }
+    Page read(PageId page_id) const { return storage.read(page_id, snap); }
     PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, snap); }
-    void    read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, snap); };
+    void read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, snap); };
 
-    PageId    getNormalPageId(PageId page_id) const { return storage.getNormalPageId(page_id, snap); }
-    UInt64    getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }
+    PageId getNormalPageId(PageId page_id) const { return storage.getNormalPageId(page_id, snap); }
+    UInt64 getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }
     PageEntry getPageEntry(PageId page_id) const { return storage.getEntry(page_id, snap); }
 
 private:
-    PageStorage &            storage;
+    PageStorage & storage;
     PageStorage::SnapshotPtr snap;
 };
 

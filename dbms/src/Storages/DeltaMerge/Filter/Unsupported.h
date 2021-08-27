@@ -4,19 +4,23 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 class Unsupported : public RSOperator
 {
     String content;
     String reason;
-    bool   is_not;
+    bool is_not;
 
 public:
-    Unsupported(const String & content_, const String & reason_) : Unsupported(content_, reason_, false) {}
-    Unsupported(const String & content_, const String & reason_, bool is_not_) : content(content_), reason(reason_), is_not(is_not_) {}
+    Unsupported(const String & content_, const String & reason_)
+        : Unsupported(content_, reason_, false)
+    {}
+    Unsupported(const String & content_, const String & reason_, bool is_not_)
+        : content(content_)
+        , reason(reason_)
+        , is_not(is_not_)
+    {}
 
     String name() override { return "unsupported"; }
 
@@ -24,8 +28,8 @@ public:
 
     String toDebugString() override
     {
-        return R"({"op":")" + name() +     //
-            R"(","reason":")" + reason +   //
+        return R"({"op":")" + name() + //
+            R"(","reason":")" + reason + //
             R"(","content":")" + content + //
             R"(","is_not":")" + DB::toString(is_not) + "\"}";
     }

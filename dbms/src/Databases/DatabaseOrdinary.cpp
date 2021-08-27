@@ -1,6 +1,3 @@
-#include <Poco/DirectoryIterator.h>
-#include <common/logger_useful.h>
-
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -16,12 +13,13 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Poco/DirectoryIterator.h>
 #include <common/ThreadPool.h>
+#include <common/logger_useful.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int TABLE_ALREADY_EXISTS;
@@ -60,10 +58,10 @@ String getDatabaseMetadataPath(const String & base_path)
 } // namespace detail
 
 DatabaseOrdinary::DatabaseOrdinary(String name_, const String & metadata_path_, const Context & context)
-    : DatabaseWithOwnTablesBase(std::move(name_)),
-      metadata_path(metadata_path_),
-      data_path(context.getPath() + "data/" + escapeForFileName(name) + "/"),
-      log(&Logger::get("DatabaseOrdinary (" + name + ")"))
+    : DatabaseWithOwnTablesBase(std::move(name_))
+    , metadata_path(metadata_path_)
+    , data_path(context.getPath() + "data/" + escapeForFileName(name) + "/")
+    , log(&Poco::Logger::get("DatabaseOrdinary (" + name + ")"))
 {
     Poco::File(data_path).createDirectories();
 }
@@ -157,8 +155,7 @@ void DatabaseOrdinary::createTable(const Context & context, const String & table
         statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
-            true, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), true, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (settings.fsync_metadata)
@@ -175,8 +172,7 @@ void DatabaseOrdinary::createTable(const Context & context, const String & table
                 throw Exception("Table " + name + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
         }
 
-        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), table_metadata_path,
-            EncryptionPath(table_metadata_path, ""), true);
+        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), table_metadata_path, EncryptionPath(table_metadata_path, ""), true);
     }
     catch (...)
     {
@@ -208,7 +204,10 @@ void DatabaseOrdinary::removeTable(const Context & /*context*/, const String & t
 }
 
 void DatabaseOrdinary::renameTable(
-    const Context & context, const String & table_name, IDatabase & to_database, const String & to_table_name)
+    const Context & context,
+    const String & table_name,
+    IDatabase & to_database,
+    const String & to_table_name)
 {
     DatabaseOrdinary * to_database_concrete = typeid_cast<DatabaseOrdinary *>(&to_database);
 
@@ -224,7 +223,9 @@ void DatabaseOrdinary::renameTable(
     try
     {
         table->rename(
-            context.getPath() + "/data/" + escapeForFileName(to_database_concrete->name) + "/", to_database_concrete->name, to_table_name);
+            context.getPath() + "/data/" + escapeForFileName(to_database_concrete->name) + "/",
+            to_database_concrete->name,
+            to_table_name);
     }
     catch (const Exception & e)
     {
@@ -355,12 +356,16 @@ void DatabaseOrdinary::drop(const Context & context)
     if (auto meta_file = Poco::File(detail::getDatabaseMetadataPath(getMetadataPath())); meta_file.exists())
     {
         context.getFileProvider()->deleteRegularFile(
-            detail::getDatabaseMetadataPath(getMetadataPath()), EncryptionPath(detail::getDatabaseMetadataPath(getMetadataPath()), ""));
+            detail::getDatabaseMetadataPath(getMetadataPath()),
+            EncryptionPath(detail::getDatabaseMetadataPath(getMetadataPath()), ""));
     }
 }
 
 void DatabaseOrdinary::alterTable(
-    const Context & context, const String & name, const ColumnsDescription & columns, const ASTModifier & storage_modifier)
+    const Context & context,
+    const String & name,
+    const ColumnsDescription & columns,
+    const ASTModifier & storage_modifier)
 {
     /// Read the definition of the table and replace the necessary parts with new ones.
 
@@ -372,7 +377,13 @@ void DatabaseOrdinary::alterTable(
     {
         char in_buf[METADATA_FILE_BUFFER_SIZE];
         ReadBufferFromFileProvider in(
-            context.getFileProvider(), table_metadata_path, EncryptionPath(table_metadata_path, ""), METADATA_FILE_BUFFER_SIZE, /*read_limiter*/ nullptr, -1, in_buf);
+            context.getFileProvider(),
+            table_metadata_path,
+            EncryptionPath(table_metadata_path, ""),
+            METADATA_FILE_BUFFER_SIZE,
+            /*read_limiter*/ nullptr,
+            -1,
+            in_buf);
         readStringUntilEOF(statement, in);
     }
 
@@ -394,8 +405,7 @@ void DatabaseOrdinary::alterTable(
         = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
     {
         bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
-        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info,
-            nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (context.getSettingsRef().fsync_metadata)
@@ -406,8 +416,7 @@ void DatabaseOrdinary::alterTable(
     try
     {
         /// rename atomically replaces the old file with the new one.
-        context.getFileProvider()->renameFile(table_metadata_tmp_path, encryption_path, table_metadata_path,
-            EncryptionPath(table_metadata_path, ""), !use_target_encrypt_info);
+        context.getFileProvider()->renameFile(table_metadata_tmp_path, encryption_path, table_metadata_path, EncryptionPath(table_metadata_path, ""), !use_target_encrypt_info);
     }
     catch (...)
     {
@@ -416,9 +425,15 @@ void DatabaseOrdinary::alterTable(
     }
 }
 
-String DatabaseOrdinary::getDataPath() const { return data_path; }
+String DatabaseOrdinary::getDataPath() const
+{
+    return data_path;
+}
 
-String DatabaseOrdinary::getMetadataPath() const { return metadata_path; }
+String DatabaseOrdinary::getMetadataPath() const
+{
+    return metadata_path;
+}
 
 String DatabaseOrdinary::getTableMetadataPath(const String & table_name) const
 {

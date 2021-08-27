@@ -1,24 +1,21 @@
 #pragma once
 
-#include <common/logger_useful.h>
-
 #include <Common/ConcurrentBoundedQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
+#include <common/logger_useful.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 
 namespace _UnionBlockInputStreamImpl
 {
-
 template <StreamUnionMode mode>
 struct OutputData;
 
@@ -30,8 +27,12 @@ struct OutputData<StreamUnionMode::Basic>
     std::exception_ptr exception;
 
     OutputData() {}
-    OutputData(Block & block_) : block(block_) {}
-    OutputData(std::exception_ptr & exception_) : exception(exception_) {}
+    OutputData(Block & block_)
+        : block(block_)
+    {}
+    OutputData(std::exception_ptr & exception_)
+        : exception(exception_)
+    {}
 };
 
 /// Block + additional information or an exception.
@@ -43,8 +44,13 @@ struct OutputData<StreamUnionMode::ExtraInfo>
     std::exception_ptr exception;
 
     OutputData() {}
-    OutputData(Block & block_, BlockExtraInfo & extra_info_) : block(block_), extra_info(extra_info_) {}
-    OutputData(std::exception_ptr & exception_) : exception(exception_) {}
+    OutputData(Block & block_, BlockExtraInfo & extra_info_)
+        : block(block_)
+        , extra_info(extra_info_)
+    {}
+    OutputData(std::exception_ptr & exception_)
+        : exception(exception_)
+    {}
 };
 
 } // namespace _UnionBlockInputStreamImpl
@@ -72,12 +78,11 @@ private:
     using Self = UnionBlockInputStream<mode>;
 
 public:
-    UnionBlockInputStream(BlockInputStreams inputs, BlockInputStreamPtr additional_input_at_end, size_t max_threads,
-        ExceptionCallback exception_callback_ = ExceptionCallback()) :
-        output_queue(std::min(inputs.size(), max_threads)),
-        handler(*this),
-        processor(inputs, additional_input_at_end, max_threads, handler),
-        exception_callback(exception_callback_)
+    UnionBlockInputStream(BlockInputStreams inputs, BlockInputStreamPtr additional_input_at_end, size_t max_threads, ExceptionCallback exception_callback_ = ExceptionCallback())
+        : output_queue(std::min(inputs.size(), max_threads))
+        , handler(*this)
+        , processor(inputs, additional_input_at_end, max_threads, handler)
+        , exception_callback(exception_callback_)
     {
         children = inputs;
         if (additional_input_at_end)
@@ -236,7 +241,7 @@ private:
             return received_payload.extra_info;
         else
             throw Exception("Method getBlockExtraInfo is not supported for mode StreamUnionMode::Basic",
-                ErrorCodes::NOT_IMPLEMENTED);
+                            ErrorCodes::NOT_IMPLEMENTED);
     }
 
 private:
@@ -254,7 +259,9 @@ private:
 
     struct Handler
     {
-        Handler(Self & parent_) : parent(parent_) {}
+        Handler(Self & parent_)
+            : parent(parent_)
+        {}
 
         void onBlock(Block & block, size_t /*thread_num*/)
         {
@@ -284,7 +291,7 @@ private:
             ///  and the exception is lost.
 
             parent.output_queue.push(exception);
-            parent.cancel(false);    /// Does not throw exceptions.
+            parent.cancel(false); /// Does not throw exceptions.
         }
 
         Self & parent;
@@ -300,7 +307,7 @@ private:
     bool started = false;
     bool all_read = false;
 
-    Logger * log = &Logger::get("UnionBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("UnionBlockInputStream");
 };
 
-}
+} // namespace DB

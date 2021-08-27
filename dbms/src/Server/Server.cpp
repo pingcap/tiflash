@@ -135,7 +135,7 @@ void loadMiConfig(Logger * log)
 
 namespace
 {
-[[maybe_unused]] void loadBooleanConfig(Logger * log, bool & target, const char * name)
+[[maybe_unused]] void loadBooleanConfig(Poco::Logger * log, bool & target, const char * name)
 {
     auto config = getenv(name);
     if (config)
@@ -165,7 +165,6 @@ extern const Metric Revision;
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int NO_ELEMENTS_IN_CONFIG;
@@ -189,7 +188,10 @@ static std::string getCanonicalPath(std::string path)
     return path;
 }
 
-static String getNormalizedPath(const String & s) { return getCanonicalPath(Poco::Path{s}.toString()); }
+static String getNormalizedPath(const String & s)
+{
+    return getCanonicalPath(Poco::Path{s}.toString());
+}
 
 void Server::uninitialize()
 {
@@ -203,7 +205,10 @@ void Server::initialize(Poco::Util::Application & self)
     logger().information("starting up");
 }
 
-std::string Server::getDefaultCorePath() const { return getCanonicalPath(config().getString("path")) + "cores"; }
+std::string Server::getDefaultCorePath() const
+{
+    return getCanonicalPath(config().getString("path")) + "cores";
+}
 
 struct TiFlashProxyConfig
 {
@@ -269,7 +274,7 @@ pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_c
     return config;
 }
 
-Logger * grpc_log = nullptr;
+Poco::Logger * grpc_log = nullptr;
 
 void printGRPCLog(gpr_log_func_args * args)
 {
@@ -290,8 +295,7 @@ void printGRPCLog(gpr_log_func_args * args)
 
 struct HTTPServer : Poco::Net::HTTPServer
 {
-    HTTPServer(Poco::Net::HTTPRequestHandlerFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket,
-        Poco::Net::HTTPServerParams::Ptr pParams)
+    HTTPServer(Poco::Net::HTTPRequestHandlerFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket, Poco::Net::HTTPServerParams::Ptr pParams)
         : Poco::Net::HTTPServer(pFactory, threadPool, socket, pParams)
     {}
 
@@ -305,8 +309,7 @@ protected:
 
 struct TCPServer : Poco::Net::TCPServer
 {
-    TCPServer(Poco::Net::TCPServerConnectionFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket,
-        Poco::Net::TCPServerParams::Ptr pParams)
+    TCPServer(Poco::Net::TCPServerConnectionFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket, Poco::Net::TCPServerParams::Ptr pParams)
         : Poco::Net::TCPServer(pFactory, threadPool, socket, pParams)
     {}
 
@@ -318,7 +321,7 @@ protected:
     }
 };
 
-void UpdateMallocConfig([[maybe_unused]] Logger * log)
+void UpdateMallocConfig([[maybe_unused]] Poco::Logger * log)
 {
 #ifdef RUN_FAIL_RETURN
     static_assert(false);
@@ -409,7 +412,10 @@ struct RaftStoreProxyRunner : boost::noncopyable
         size_t stack_size = 1024 * 1024 * 20;
     };
 
-    RaftStoreProxyRunner(RunRaftStoreProxyParms && parms_, Logger * log_) : parms(std::move(parms_)), log(log_) {}
+    RaftStoreProxyRunner(RunRaftStoreProxyParms && parms_, Poco::Logger * log_)
+        : parms(std::move(parms_))
+        , log(log_)
+    {}
 
     void join()
     {
@@ -442,11 +448,11 @@ private:
 private:
     RunRaftStoreProxyParms parms;
     pthread_t thread;
-    Logger * log;
+    Poco::Logger * log;
 };
 
 // We only need this task run once.
-void initStores(Context & global_context, Logger * log, bool lazily_init_store)
+void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_store)
 {
     auto do_init_stores = [&global_context, log]() {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
@@ -466,8 +472,8 @@ void initStores(Context & global_context, Logger * log, bool lazily_init_store)
             }
         }
         LOG_INFO(log,
-            "Storage inited finish. [total_count=" << storages.size() << "] [init_count=" << init_cnt << "] [error_count=" << err_cnt
-                                                   << "]");
+                 "Storage inited finish. [total_count=" << storages.size() << "] [init_count=" << init_cnt << "] [error_count=" << err_cnt
+                                                        << "]");
     };
     if (lazily_init_store)
     {
@@ -484,7 +490,8 @@ void initStores(Context & global_context, Logger * log, bool lazily_init_store)
 class Server::FlashGrpcServerHolder
 {
 public:
-    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Logger * log_) : log(log_)
+    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Poco::Logger * log_)
+        : log(log_)
     {
         grpc::ServerBuilder builder;
         if (server.security_config.has_tls_config)
@@ -538,7 +545,7 @@ public:
     }
 
 private:
-    Logger * log;
+    Poco::Logger * log;
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
@@ -547,8 +554,10 @@ private:
 class Server::TcpHttpServersHolder
 {
 public:
-    TcpHttpServersHolder(Server & server_, const Settings & settings, Logger * log_)
-        : server(server_), log(log_), server_pool(1, server.config().getUInt("max_connections", 1024))
+    TcpHttpServersHolder(Server & server_, const Settings & settings, Poco::Logger * log_)
+        : server(server_)
+        , log(log_)
+        , server_pool(1, server.config().getUInt("max_connections", 1024))
     {
         auto & config = server.config();
         auto & security_config = server.security_config;
@@ -583,11 +592,11 @@ public:
                 )
                 {
                     LOG_ERROR(log,
-                        "Cannot resolve listen_host (" << host << "), error " << e.code() << ": " << e.message()
-                                                       << ". "
-                                                          "If it is an IPv6 address and your host has disabled IPv6, then consider to "
-                                                          "specify IPv4 address to listen in <listen_host> element of configuration "
-                                                          "file. Example: <listen_host>0.0.0.0</listen_host>");
+                              "Cannot resolve listen_host (" << host << "), error " << e.code() << ": " << e.message()
+                                                             << ". "
+                                                                "If it is an IPv6 address and your host has disabled IPv6, then consider to "
+                                                                "specify IPv4 address to listen in <listen_host> element of configuration "
+                                                                "file. Example: <listen_host>0.0.0.0</listen_host>");
                 }
 
                 throw;
@@ -646,10 +655,10 @@ public:
                         LOG_ERROR(log, "https_port is set but tls config is not set");
                     }
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
-                        security_config.key_path,
-                        security_config.cert_path,
-                        security_config.ca_path,
-                        Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+                                                                             security_config.key_path,
+                                                                             security_config.cert_path,
+                                                                             security_config.ca_path,
+                                                                             Poco::Net::Context::VerificationMode::VERIFY_STRICT);
                     std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name
                         = [&](const Poco::Crypto::X509Certificate & cert) {
                               if (security_config.allowed_common_names.empty())
@@ -671,7 +680,7 @@ public:
                     LOG_INFO(log, "Listening https://" + address.toString());
 #else
                     throw Exception{"HTTPS protocol is disabled because Poco library was built without NetSSL support.",
-                        ErrorCodes::SUPPORT_IS_DISABLED};
+                                    ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
                 }
 
@@ -701,19 +710,22 @@ public:
                 {
 #if Poco_NetSSL_FOUND
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
-                        security_config.key_path,
-                        security_config.cert_path,
-                        security_config.ca_path);
+                                                                             security_config.key_path,
+                                                                             security_config.cert_path,
+                                                                             security_config.ca_path);
                     Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port_secure"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);
                     socket.setSendTimeout(settings.send_timeout);
                     servers.emplace_back(new TCPServer(
-                        new TCPHandlerFactory(server, /* secure= */ true), server_pool, socket, new Poco::Net::TCPServerParams));
+                        new TCPHandlerFactory(server, /* secure= */ true),
+                        server_pool,
+                        socket,
+                        new Poco::Net::TCPServerParams));
                     LOG_INFO(log, "Listening tcp_secure: " + address.toString());
 #else
                     throw Exception{"SSL support for TCP protocol is disabled because Poco library was built without NetSSL support.",
-                        ErrorCodes::SUPPORT_IS_DISABLED};
+                                    ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
                 }
                 else if (security_config.has_tls_config)
@@ -733,7 +745,10 @@ public:
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
                     servers.emplace_back(new HTTPServer(
-                        new InterserverIOHTTPHandlerFactory(server, "InterserverIOHTTPHandler-factory"), server_pool, socket, http_params));
+                        new InterserverIOHTTPHandlerFactory(server, "InterserverIOHTTPHandler-factory"),
+                        server_pool,
+                        socket,
+                        http_params));
 
                     LOG_INFO(log, "Listening interserver http: " + address.toString());
                 }
@@ -746,11 +761,11 @@ public:
             {
                 if (listen_try)
                     LOG_ERROR(log,
-                        "Listen [" << listen_host << "]: " << e.code() << ": " << e.what() << ": " << e.message()
-                                   << "  If it is an IPv6 or IPv4 address and your host has disabled IPv6 or IPv4, then consider to "
-                                      "specify not disabled IPv4 or IPv6 address to listen in <listen_host> element of configuration "
-                                      "file. Example for disabled IPv6: <listen_host>0.0.0.0</listen_host> ."
-                                      " Example for disabled IPv4: <listen_host>::</listen_host>");
+                              "Listen [" << listen_host << "]: " << e.code() << ": " << e.what() << ": " << e.message()
+                                         << "  If it is an IPv6 or IPv4 address and your host has disabled IPv6 or IPv4, then consider to "
+                                            "specify not disabled IPv4 or IPv6 address to listen in <listen_host> element of configuration "
+                                            "file. Example for disabled IPv6: <listen_host>0.0.0.0</listen_host> ."
+                                            " Example for disabled IPv4: <listen_host>::</listen_host>");
                 else
                     throw;
             }
@@ -758,7 +773,7 @@ public:
 
         if (servers.empty())
             throw Exception("No servers started (add valid listen_host and 'tcp_port' or 'http_port' to configuration file.)",
-                ErrorCodes::NO_ELEMENTS_IN_CONFIG);
+                            ErrorCodes::NO_ELEMENTS_IN_CONFIG);
 
         for (auto & server : servers)
             server->start();
@@ -779,9 +794,9 @@ public:
         }
 
         LOG_DEBUG(log,
-            "Closed all listening sockets." << (current_connections
-                    ? " Waiting for " + toString(current_connections) + " outstanding connections."
-                    : ""));
+                  "Closed all listening sockets." << (current_connections
+                                                          ? " Waiting for " + toString(current_connections) + " outstanding connections."
+                                                          : ""));
 
         if (current_connections)
         {
@@ -801,17 +816,17 @@ public:
         }
 
         LOG_DEBUG(log,
-            "Closed connections." << (current_connections ? " But " + toString(current_connections)
-                        + " remains."
-                          " Tip: To increase wait time add to config: <shutdown_wait_unfinished>60</shutdown_wait_unfinished>"
-                                                          : ""));
+                  "Closed connections." << (current_connections ? " But " + toString(current_connections)
+                                                    + " remains."
+                                                      " Tip: To increase wait time add to config: <shutdown_wait_unfinished>60</shutdown_wait_unfinished>"
+                                                                : ""));
     }
 
     const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const { return servers; }
 
 private:
     Server & server;
-    Logger * log;
+    Poco::Logger * log;
     Poco::ThreadPool server_pool;
     std::vector<std::unique_ptr<Poco::Net::TCPServer>> servers;
 };
@@ -820,7 +835,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
 
-    Logger * log = &logger();
+    Poco::Logger * log = &logger();
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
 #endif
@@ -912,7 +927,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
 
     // print necessary grpc log.
-    grpc_log = &Logger::get("grpc");
+    grpc_log = &Poco::Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
 
@@ -975,17 +990,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (storage_config.format_version)
         setStorageFormat(storage_config.format_version);
 
-    global_context->initializePathCapacityMetric(                           //
-        global_capacity_quota,                                              //
-        storage_config.main_data_paths, storage_config.main_capacity_quota, //
-        storage_config.latest_data_paths, storage_config.latest_capacity_quota);
+    global_context->initializePathCapacityMetric( //
+        global_capacity_quota, //
+        storage_config.main_data_paths,
+        storage_config.main_capacity_quota, //
+        storage_config.latest_data_paths,
+        storage_config.latest_capacity_quota);
     TiFlashRaftConfig raft_config = TiFlashRaftConfig::parseSettings(config(), log);
-    global_context->setPathPool(            //
-        storage_config.main_data_paths,     //
-        storage_config.latest_data_paths,   //
-        storage_config.kvstore_data_path,   //
+    global_context->setPathPool( //
+        storage_config.main_data_paths, //
+        storage_config.latest_data_paths, //
+        storage_config.kvstore_data_path, //
         raft_config.enable_compatible_mode, //
-        global_context->getPathCapacity(), global_context->getFileProvider());
+        global_context->getPathCapacity(),
+        global_context->getFileProvider());
 
     // Use pd address to define which default_database we use by default.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
@@ -1035,8 +1053,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             int rc = setrlimit(RLIMIT_NOFILE, &rlim);
             if (rc != 0)
                 LOG_WARNING(log,
-                    "Cannot set max number of file descriptors to "
-                        << rlim.rlim_cur << ". Try to specify max_open_files according to your system limits. error: " << strerror(errno));
+                            "Cannot set max number of file descriptors to "
+                                << rlim.rlim_cur << ". Try to specify max_open_files according to your system limits. error: " << strerror(errno));
             else
                 LOG_DEBUG(log, "Set max number of file descriptors to " << rlim.rlim_cur << " (was " << old << ").");
         }
@@ -1080,7 +1098,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /** Directory with user provided files that are usable by 'file' table function.
       */
     {
-
         std::string user_files_path = config().getString("user_files_path", path + "user_files/");
         global_context->setUserFilesPath(user_files_path);
         Poco::File(user_files_path).createDirectories();
@@ -1094,8 +1111,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             this_host = getFQDNOrHostName();
             LOG_DEBUG(log,
-                "Configuration parameter 'interserver_http_host' doesn't exist or exists and empty. Will use '" + this_host
-                    + "' as replica host.");
+                      "Configuration parameter 'interserver_http_host' doesn't exist or exists and empty. Will use '" + this_host
+                          + "' as replica host.");
         }
 
         String port_str = config().getString("interserver_http_port");
@@ -1206,7 +1223,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // Besides, database engine in reserved_databases just keep as
             // what they are.
             IDAsPathUpgrader upgrader(
-                *global_context, /*is_mock=*/raft_config.pd_addrs.empty(), /*reserved_databases=*/raft_config.ignore_databases);
+                *global_context,
+                /*is_mock=*/raft_config.pd_addrs.empty(),
+                /*reserved_databases=*/raft_config.ignore_databases);
             if (!upgrader.needUpgrade())
                 break;
             upgrader.doUpgrade();
@@ -1229,8 +1248,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             const int wait_seconds = 3;
             LOG_ERROR(log,
-                "Bootstrap failed because sync schema error: " << e.displayText() << "\nWe will sleep for " << wait_seconds
-                                                               << " seconds and try again.");
+                      "Bootstrap failed because sync schema error: " << e.displayText() << "\nWe will sleep for " << wait_seconds
+                                                                     << " seconds and try again.");
             ::sleep(wait_seconds);
         }
     }

@@ -12,7 +12,7 @@ public:
     ExtraHeadTailBlockInputStream(BlockInputStreamPtr & input_, const SortDescription & description_, const Block & head_, const Block & tail_)
         : input(input_), description(description_), head(head_), tail(tail_), head_done(!head), input_done(false), tail_done(!tail)
     {
-        log = &Logger::get("ExtraHeadTailInput");
+        log = &Poco::Logger::get("ExtraHeadTailInput");
         children.emplace_back(input_);
     }
 
@@ -68,7 +68,7 @@ private:
     }
 
 private:
-    Logger * log;
+    Poco::Logger * log;
     BlockInputStreamPtr input;
     const SortDescription description;
     Block head;

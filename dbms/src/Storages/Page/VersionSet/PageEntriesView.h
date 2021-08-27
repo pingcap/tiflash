@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 /// Treat a list of PageEntriesForDelta as a single PageEntries
 class PageEntriesView
 {
@@ -13,7 +12,9 @@ private:
     PageEntriesForDeltaPtr tail;
 
 public:
-    explicit PageEntriesView(PageEntriesForDeltaPtr tail_) : tail(std::move(tail_)) {}
+    explicit PageEntriesView(PageEntriesForDeltaPtr tail_)
+        : tail(std::move(tail_))
+    {}
 
     std::optional<PageEntry> find(PageId page_id) const;
 
@@ -25,7 +26,7 @@ public:
     std::set<PageId> validPageIds() const;
 
     // For iterate over all normal pages
-    std::set<PageId>         validNormalPageIds() const;
+    std::set<PageId> validNormalPageIds() const;
     std::optional<PageEntry> findNormalPageEntry(PageId page_id) const;
 
     PageId maxId() const;

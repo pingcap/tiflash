@@ -1,11 +1,11 @@
-#include <common/likely.h>
-#include <common/logger_useful.h>
 #include <Common/Exception.h>
+#include <Common/MemoryTracker.h>
 #include <Common/formatReadable.h>
 #include <IO/WriteHelpers.h>
-#include <iomanip>
+#include <common/likely.h>
+#include <common/logger_useful.h>
 
-#include <Common/MemoryTracker.h>
+#include <iomanip>
 
 MemoryTracker::~MemoryTracker()
 {
@@ -17,7 +17,7 @@ MemoryTracker::~MemoryTracker()
         }
         catch (...)
         {
-            /// Exception in Logger, intentionally swallow.
+            /// Exception in Poco::Logger, intentionally swallow.
         }
     }
 
@@ -35,14 +35,19 @@ MemoryTracker::~MemoryTracker()
         free(value);
 }
 
+static Poco::Logger * getLogger()
+{
+    static Poco::Logger * logger = &Poco::Logger::get("MemoryTracker");
+    return logger;
+}
 
 void MemoryTracker::logPeakMemoryUsage() const
 {
-    LOG_DEBUG(&Logger::get("MemoryTracker"),
-        "Peak memory usage" << (description ? " " + std::string(description) : "")
-        << ": " << formatReadableSizeWithBinarySuffix(peak) << ".");
+    LOG_DEBUG(
+        getLogger(),
+        "Peak memory usage" << (description ? " " + std::string(description) : "") << ": " << formatReadableSizeWithBinarySuffix(peak)
+                            << ".");
 }
-
 
 void MemoryTracker::alloc(Int64 size)
 {
@@ -67,9 +72,9 @@ void MemoryTracker::alloc(Int64 size)
         message << "Memory tracker";
         if (description)
             message << " " << description;
-        message << ": fault injected. Would use " << formatReadableSizeWithBinarySuffix(will_be)
-            << " (attempt to allocate chunk of " << size << " bytes)"
-            << ", maximum: " << formatReadableSizeWithBinarySuffix(current_limit);
+        message << ": fault injected. Would use " << formatReadableSizeWithBinarySuffix(will_be) << " (attempt to allocate chunk of "
+                << size << " bytes)"
+                << ", maximum: " << formatReadableSizeWithBinarySuffix(current_limit);
 
         throw DB::TiFlashException(message.str(), DB::Errors::Coprocessor::MemoryLimitExceeded);
     }
@@ -82,14 +87,14 @@ void MemoryTracker::alloc(Int64 size)
         message << "Memory limit";
         if (description)
             message << " " << description;
-        message << " exceeded: would use " << formatReadableSizeWithBinarySuffix(will_be)
-            << " (attempt to allocate chunk of " << size << " bytes)"
-            << ", maximum: " << formatReadableSizeWithBinarySuffix(current_limit);
+        message << " exceeded: would use " << formatReadableSizeWithBinarySuffix(will_be) << " (attempt to allocate chunk of " << size
+                << " bytes)"
+                << ", maximum: " << formatReadableSizeWithBinarySuffix(current_limit);
 
         throw DB::TiFlashException(message.str(), DB::Errors::Coprocessor::MemoryLimitExceeded);
     }
 
-    if (will_be > peak.load(std::memory_order_relaxed))        /// Races doesn't matter. Could rewrite with CAS, but not worth.
+    if (will_be > peak.load(std::memory_order_relaxed)) /// Races doesn't matter. Could rewrite with CAS, but not worth.
         peak.store(will_be, std::memory_order_relaxed);
 
     if (auto loaded_next = next.load(std::memory_order_relaxed))
@@ -147,21 +152,44 @@ thread_local MemoryTracker * current_memory_tracker = nullptr;
 
 namespace CurrentMemoryTracker
 {
-    void alloc(Int64 size)
-    {
-        if (current_memory_tracker)
-            current_memory_tracker->alloc(size);
-    }
+#if __APPLE__ && __clang__
+static __thread Int64 local_delta{};
+#else
+static thread_local Int64 local_delta{};
+#endif
 
-    void realloc(Int64 old_size, Int64 new_size)
+__attribute__((always_inline)) inline void checkSubmit()
+{
+    if (unlikely(local_delta > MEMORY_TRACER_SUBMIT_THRESHOLD))
     {
         if (current_memory_tracker)
-            current_memory_tracker->alloc(new_size - old_size);
+            current_memory_tracker->alloc(local_delta);
+        local_delta = 0;
     }
-
-    void free(Int64 size)
+    else if (unlikely(local_delta < -MEMORY_TRACER_SUBMIT_THRESHOLD))
     {
         if (current_memory_tracker)
-            current_memory_tracker->free(size);
+            current_memory_tracker->free(-local_delta);
+        local_delta = 0;
     }
 }
+
+void alloc(Int64 size)
+{
+    local_delta += size;
+    checkSubmit();
+}
+
+void realloc(Int64 old_size, Int64 new_size)
+{
+    local_delta += new_size - old_size;
+    checkSubmit();
+}
+
+void free(Int64 size)
+{
+    local_delta -= size;
+    checkSubmit();
+}
+
+} // namespace CurrentMemoryTracker

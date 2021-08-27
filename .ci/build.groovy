@@ -43,7 +43,7 @@ catchError {
                 stage("Build & Upload") {
                     timeout(time: 70, unit: 'MINUTES') {
                         container("builder") {
-                            sh "NPROC=5 BUILD_BRANCH=${ghprbTargetBranch} release-centos7/build/build-tiflash-ci.sh"
+                            sh "NPROC=5 BUILD_BRANCH=${ghprbTargetBranch} ENABLE_FORMAT_CHECK=true release-centos7/build/build-tiflash-ci.sh"
                             sh "PULL_ID=${ghprbPullId} COMMIT_HASH=${ghprbActualCommit} release-centos7/build/upload-ci-build.sh"
                         }
                     }

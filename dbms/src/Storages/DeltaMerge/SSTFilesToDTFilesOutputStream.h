@@ -15,7 +15,6 @@ class Logger;
 
 namespace DB
 {
-
 class TMTContext;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
@@ -29,9 +28,8 @@ struct DecodingStorageSchemaSnapshot;
 
 namespace DM
 {
-
 struct ColumnDefine;
-using ColumnDefines    = std::vector<ColumnDefine>;
+using ColumnDefines = std::vector<ColumnDefine>;
 using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
 
 class DMFile;
@@ -50,12 +48,12 @@ enum class FileConvertJobType
 class SSTFilesToDTFilesOutputStream : private boost::noncopyable
 {
 public:
-    SSTFilesToDTFilesOutputStream(BoundedSSTFilesToBlockInputStreamPtr  child_,
-                                  StorageDeltaMergePtr                  storage_,
+    SSTFilesToDTFilesOutputStream(BoundedSSTFilesToBlockInputStreamPtr child_,
+                                  StorageDeltaMergePtr storage_,
                                   const DecodingStorageSchemaSnapshot & schema_snap_,
-                                  TiDB::SnapshotApplyMethod             method_,
-                                  FileConvertJobType                    job_type_,
-                                  TMTContext &                          tmt_);
+                                  TiDB::SnapshotApplyMethod method_,
+                                  FileConvertJobType job_type_,
+                                  TMTContext & tmt_);
     ~SSTFilesToDTFilesOutputStream();
 
     void writePrefix();
@@ -74,20 +72,20 @@ private:
     void stop();
 
 private:
-    BoundedSSTFilesToBlockInputStreamPtr  child;
-    StorageDeltaMergePtr                  storage;
+    BoundedSSTFilesToBlockInputStreamPtr child;
+    StorageDeltaMergePtr storage;
     const DecodingStorageSchemaSnapshot & schema_snap;
-    const TiDB::SnapshotApplyMethod       method;
-    const FileConvertJobType              job_type;
-    TMTContext &                          tmt;
-    Poco::Logger *                        log;
+    const TiDB::SnapshotApplyMethod method;
+    const FileConvertJobType job_type;
+    TMTContext & tmt;
+    Poco::Logger * log;
 
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;
 
     std::vector<DMFilePtr> ingest_files;
 
-    size_t    schema_sync_trigger_count = 0;
-    size_t    commit_rows               = 0;
+    size_t schema_sync_trigger_count = 0;
+    size_t commit_rows = 0;
     Stopwatch watch;
 };
 

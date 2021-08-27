@@ -20,12 +20,11 @@ namespace DB
 {
 namespace tests
 {
-
 TEST(LegacyCompactor_test, WriteMultipleBatchRead)
 try
 {
     PageStorage::Config config;
-    Poco::Logger *      log = &Poco::Logger::get("LegacyCompactor_test");
+    Poco::Logger * log = &Poco::Logger::get("LegacyCompactor_test");
 
     PageEntriesVersionSetWithDelta original_version("test", config.version_set_config, log);
 
@@ -34,15 +33,15 @@ try
         PageEntry entry1, entry2;
         // Specify magic checksum for test
         entry1.checksum = 0x123;
-        entry1.offset   = 0x111;
+        entry1.offset = 0x111;
         entry2.checksum = 0x321;
-        entry2.offset   = 0x222;
+        entry2.offset = 0x222;
 
         entry1.field_offsets = {{0, 0x11}, {255, 0xff}};
-        entry1.size          = 1024;
+        entry1.size = 1024;
 
         entry2.field_offsets = {{0, 0xdd}, {16, 0xaa}, {77, 0x77}};
-        entry2.size          = 1010;
+        entry2.size = 1010;
 
         PageEntriesEdit edit;
 
@@ -61,8 +60,8 @@ try
     // Restore a new version set with snapshot WriteBatch
     WriteBatch::SequenceID seq_write = 0x1234;
     {
-        auto       snapshot = original_version.getSnapshot();
-        WriteBatch wb       = LegacyCompactor::prepareCheckpointWriteBatch(snapshot, seq_write);
+        auto snapshot = original_version.getSnapshot();
+        WriteBatch wb = LegacyCompactor::prepareCheckpointWriteBatch(snapshot, seq_write);
         EXPECT_EQ(wb.getSequence(), seq_write);
 
         PageEntriesEdit edit;
@@ -90,9 +89,9 @@ try
     // Compare the two versions above
     {
         auto original_snapshot = original_version.getSnapshot();
-        auto original          = original_snapshot->version();
+        auto original = original_snapshot->version();
         auto restored_snapshot = version_restored_with_snapshot.getSnapshot();
-        auto restored          = restored_snapshot->version();
+        auto restored = restored_snapshot->version();
 
         auto original_normal_page_ids = original->validNormalPageIds();
         auto restored_normal_page_ids = restored->validNormalPageIds();
@@ -158,17 +157,17 @@ CATCH
 TEST(LegacyCompactor_test, DISABLED_CompactAndRestore)
 try
 {
-    auto                  ctx           = TiFlashTestEnv::getContext();
+    auto ctx = TiFlashTestEnv::getContext();
     const FileProviderPtr file_provider = ctx.getFileProvider();
-    StoragePathPool       spool         = ctx.getPathPool().withTable("test", "t", false);
-    auto                  delegator     = spool.getPSDiskDelegatorSingle("meta");
-    PageStorage           storage("compact_test", delegator, PageStorage::Config{}, file_provider);
+    StoragePathPool spool = ctx.getPathPool().withTable("test", "t", false);
+    auto delegator = spool.getPSDiskDelegatorSingle("meta");
+    PageStorage storage("compact_test", delegator, PageStorage::Config{}, file_provider);
 
     PageStorage::ListPageFilesOption opt;
     opt.ignore_checkpoint = false;
-    opt.ignore_legacy     = false;
-    opt.remove_tmp_files  = false;
-    auto page_files       = PageStorage::listAllPageFiles(file_provider, delegator, storage.page_file_log, opt);
+    opt.ignore_legacy = false;
+    opt.remove_tmp_files = false;
+    auto page_files = PageStorage::listAllPageFiles(file_provider, delegator, storage.page_file_log, opt);
 
     LegacyCompactor compactor(storage, nullptr, nullptr);
     auto && [page_files_left, page_files_compacted, bytes_written] = compactor.tryCompact(std::move(page_files), {});
@@ -191,7 +190,7 @@ try
         }
     }
 
-    DB::PageStorage::StatisticsInfo   debug_info;
+    DB::PageStorage::StatisticsInfo debug_info;
     PageStorage::VersionedPageEntries vset_restored("restore_vset", storage.config.version_set_config, storage.log);
     auto && [old_checkpoint_file, old_checkpoint_sequence, page_files_to_remove]
         = restoreFromCheckpoints(mergine_queue, vset_restored, debug_info, "restore_test", storage.log);
@@ -205,7 +204,7 @@ try
         ASSERT_EQ(s0->version()->numPages(), s1->version()->numPages());
         ASSERT_EQ(s0->version()->numNormalPages(), s1->version()->numNormalPages());
 
-        auto   page_ids  = s0->version()->validPageIds();
+        auto page_ids = s0->version()->validPageIds();
         size_t num_pages = 0;
         for (auto page_id : page_ids)
         {

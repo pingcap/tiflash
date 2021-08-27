@@ -1,34 +1,31 @@
-#include <optional>
-
-#include <Poco/File.h>
-#include <Poco/DirectoryIterator.h>
-
-#include <Storages/MergeTree/checkDataPart.h>
+#include <Common/CurrentMetrics.h>
 #include <DataStreams/MarkInCompressedFile.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/HashingReadBuffer.h>
-#include <Common/CurrentMetrics.h>
+#include <Poco/DirectoryIterator.h>
+#include <Poco/File.h>
+#include <Storages/MergeTree/checkDataPart.h>
+
+#include <optional>
 
 
 namespace CurrentMetrics
 {
-    extern const Metric ReplicatedChecks;
+extern const Metric ReplicatedChecks;
 }
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CORRUPTED_DATA;
-    extern const int INCORRECT_MARK;
-    extern const int EMPTY_LIST_OF_COLUMNS_PASSED;
-}
+extern const int CORRUPTED_DATA;
+extern const int INCORRECT_MARK;
+extern const int EMPTY_LIST_OF_COLUMNS_PASSED;
+} // namespace ErrorCodes
 
 
 namespace
 {
-
 /** To read and checksum single stream (a pair of .bin, .mrk files) for a single column.
   */
 class Stream
@@ -37,29 +34,31 @@ public:
     String base_name;
     String bin_file_path;
     String mrk_file_path;
+
 private:
     ReadBufferFromFile file_buf;
     HashingReadBuffer compressed_hashing_buf;
-    CompressedReadBuffer uncompressing_buf;
+    CompressedReadBuffer<> uncompressing_buf;
+
 public:
     HashingReadBuffer uncompressed_hashing_buf;
 
 private:
     ReadBufferFromFile mrk_file_buf;
+
 public:
     HashingReadBuffer mrk_hashing_buf;
 
     Stream(const String & path, const String & base_name)
-        :
-        base_name(base_name),
-        bin_file_path(path + base_name + ".bin"),
-        mrk_file_path(path + base_name + ".mrk"),
-        file_buf(bin_file_path),
-        compressed_hashing_buf(file_buf),
-        uncompressing_buf(compressed_hashing_buf),
-        uncompressed_hashing_buf(uncompressing_buf),
-        mrk_file_buf(mrk_file_path),
-        mrk_hashing_buf(mrk_file_buf)
+        : base_name(base_name)
+        , bin_file_path(path + base_name + ".bin")
+        , mrk_file_path(path + base_name + ".mrk")
+        , file_buf(bin_file_path)
+        , compressed_hashing_buf(file_buf)
+        , uncompressing_buf(compressed_hashing_buf)
+        , uncompressed_hashing_buf(uncompressing_buf)
+        , mrk_file_buf(mrk_file_path)
+        , mrk_hashing_buf(mrk_file_buf)
     {}
 
     void assertMark()
@@ -96,37 +95,40 @@ public:
         data_mark.offset_in_decompressed_block = uncompressed_hashing_buf.offset();
 
         if (mrk_mark != data_mark)
-            throw Exception("Incorrect mark: " + data_mark.toString() +
-                (has_alternative_mark ? " or " + alternative_data_mark.toString() : "") + " in data, " +
-                mrk_mark.toString() + " in " + mrk_file_path + " file", ErrorCodes::INCORRECT_MARK);
+            throw Exception("Incorrect mark: " + data_mark.toString() + (has_alternative_mark ? " or " + alternative_data_mark.toString() : "") + " in data, " + mrk_mark.toString() + " in " + mrk_file_path + " file", ErrorCodes::INCORRECT_MARK);
     }
 
     void assertEnd()
     {
         if (!uncompressed_hashing_buf.eof())
             throw Exception("EOF expected in " + bin_file_path + " file"
-                + " at position "
-                + toString(compressed_hashing_buf.count()) + " (compressed), "
-                + toString(uncompressed_hashing_buf.count()) + " (uncompressed)", ErrorCodes::CORRUPTED_DATA);
+                                + " at position "
+                                + toString(compressed_hashing_buf.count()) + " (compressed), "
+                                + toString(uncompressed_hashing_buf.count()) + " (uncompressed)",
+                            ErrorCodes::CORRUPTED_DATA);
 
         if (!mrk_hashing_buf.eof())
             throw Exception("EOF expected in " + mrk_file_path + " file"
-                + " at position "
-                + toString(mrk_hashing_buf.count()), ErrorCodes::CORRUPTED_DATA);
+                                + " at position "
+                                + toString(mrk_hashing_buf.count()),
+                            ErrorCodes::CORRUPTED_DATA);
     }
 
     void saveChecksums(MergeTreeData::DataPart::Checksums & checksums)
     {
         checksums.files[base_name + ".bin"] = MergeTreeData::DataPart::Checksums::Checksum(
-            compressed_hashing_buf.count(), compressed_hashing_buf.getHash(),
-            uncompressed_hashing_buf.count(), uncompressed_hashing_buf.getHash());
+            compressed_hashing_buf.count(),
+            compressed_hashing_buf.getHash(),
+            uncompressed_hashing_buf.count(),
+            uncompressed_hashing_buf.getHash());
 
         checksums.files[base_name + ".mrk"] = MergeTreeData::DataPart::Checksums::Checksum(
-            mrk_hashing_buf.count(), mrk_hashing_buf.getHash());
+            mrk_hashing_buf.count(),
+            mrk_hashing_buf.getHash());
     }
 };
 
-}
+} // namespace
 
 
 MergeTreeData::DataPart::Checksums checkDataPart(
@@ -136,7 +138,7 @@ MergeTreeData::DataPart::Checksums checkDataPart(
     const DataTypes & primary_key_data_types,
     std::function<bool()> is_cancelled)
 {
-    Logger * log = &Logger::get("checkDataPart");
+    Poco::Logger * log = &Poco::Logger::get("checkDataPart");
 
     /** Responsibility:
       * - read list of columns from columns.txt;
@@ -251,26 +253,26 @@ MergeTreeData::DataPart::Checksums checkDataPart(
         {
             /// Check that mark points to current position in file.
             bool marks_eof = false;
-            name_type.type->enumerateStreams([&](const IDataType::SubstreamPath & substream_path)
-                {
-                    String file_name = IDataType::getFileNameForStream(name_type.name, substream_path);
-                    auto & stream = streams.try_emplace(file_name, path, file_name).first->second;
+            name_type.type->enumerateStreams([&](const IDataType::SubstreamPath & substream_path) {
+                String file_name = IDataType::getFileNameForStream(name_type.name, substream_path);
+                auto & stream = streams.try_emplace(file_name, path, file_name).first->second;
 
-                    try
-                    {
-                        if (!stream.mrk_hashing_buf.eof())
-                            stream.assertMark();
-                        else
-                            marks_eof = true;
-                    }
-                    catch (Exception & e)
-                    {
-                        e.addMessage("Cannot read mark " + toString(mark_num) + " at row " + toString(column_size)
-                            + " in file " + stream.mrk_file_path
-                            + ", mrk file offset: " + toString(stream.mrk_hashing_buf.count()));
-                        throw;
-                    }
-                }, {});
+                try
+                {
+                    if (!stream.mrk_hashing_buf.eof())
+                        stream.assertMark();
+                    else
+                        marks_eof = true;
+                }
+                catch (Exception & e)
+                {
+                    e.addMessage("Cannot read mark " + toString(mark_num) + " at row " + toString(column_size)
+                                 + " in file " + stream.mrk_file_path
+                                 + ", mrk file offset: " + toString(stream.mrk_hashing_buf.count()));
+                    throw;
+                }
+            },
+                                             {});
 
             ++mark_num;
 
@@ -280,8 +282,7 @@ MergeTreeData::DataPart::Checksums checkDataPart(
             MutableColumnPtr tmp_column = name_type.type->createColumn();
             name_type.type->deserializeWidenBinaryBulkWithMultipleStreams(
                 *tmp_column,
-                [&](const IDataType::SubstreamPath & substream_path)
-                {
+                [&](const IDataType::SubstreamPath & substream_path) {
                     String file_name = IDataType::getFileNameForStream(name_type.name, substream_path);
                     auto stream_it = streams.find(file_name);
                     if (stream_it == streams.end())
@@ -289,7 +290,9 @@ MergeTreeData::DataPart::Checksums checkDataPart(
                     return &stream_it->second.uncompressed_hashing_buf;
                 },
                 index_granularity,
-                0, true, {});
+                0,
+                true,
+                {});
 
             size_t read_size = tmp_column->size();
             column_size += read_size;
@@ -308,20 +311,20 @@ MergeTreeData::DataPart::Checksums checkDataPart(
             rows = column_size;
         else if (*rows != column_size)
             throw Exception{"Unexpected number of rows in column "
-                + name_type.name + " (" + toString(column_size) + ", expected: " + toString(*rows) + ")",
-                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH};
+                                + name_type.name + " (" + toString(column_size) + ", expected: " + toString(*rows) + ")",
+                            ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH};
 
         /// Save checksums for column.
-        name_type.type->enumerateStreams([&](const IDataType::SubstreamPath & substream_path)
-            {
-                String file_name = IDataType::getFileNameForStream(name_type.name, substream_path);
-                auto stream_it = streams.find(file_name);
-                if (stream_it == streams.end())
-                    throw Exception("Logical error: cannot find stream " + file_name);
+        name_type.type->enumerateStreams([&](const IDataType::SubstreamPath & substream_path) {
+            String file_name = IDataType::getFileNameForStream(name_type.name, substream_path);
+            auto stream_it = streams.find(file_name);
+            if (stream_it == streams.end())
+                throw Exception("Logical error: cannot find stream " + file_name);
 
-                stream_it->second.assertEnd();
-                stream_it->second.saveChecksums(checksums_data);
-            }, {});
+            stream_it->second.assertEnd();
+            stream_it->second.saveChecksums(checksums_data);
+        },
+                                         {});
 
         if (is_cancelled())
             return {};
@@ -335,11 +338,12 @@ MergeTreeData::DataPart::Checksums checkDataPart(
         size_t expected_marks = (*rows - 1) / index_granularity + 1;
         if (expected_marks != marks_in_primary_key)
             throw Exception("Size of primary key doesn't match expected number of marks."
-                " Number of rows in columns: " + toString(*rows)
-                + ", index_granularity: " + toString(index_granularity)
-                + ", expected number of marks: " + toString(expected_marks)
-                + ", size of primary key: " + toString(marks_in_primary_key),
-                ErrorCodes::CORRUPTED_DATA);
+                            " Number of rows in columns: "
+                                + toString(*rows)
+                                + ", index_granularity: " + toString(index_granularity)
+                                + ", expected number of marks: " + toString(expected_marks)
+                                + ", size of primary key: " + toString(marks_in_primary_key),
+                            ErrorCodes::CORRUPTED_DATA);
     }
 
     if (require_checksums || !checksums_txt.files.empty())
@@ -348,4 +352,4 @@ MergeTreeData::DataPart::Checksums checkDataPart(
     return checksums_data;
 }
 
-}
+} // namespace DB
