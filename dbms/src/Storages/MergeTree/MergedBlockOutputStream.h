@@ -1,20 +1,17 @@
 #pragma once
 
-#include <IO/WriteBufferFromFile.h>
-#include <IO/WriteBufferFromOStream.h>
+#include <Columns/ColumnArray.h>
+#include <DataStreams/IBlockOutputStream.h>
+#include <IO/CompactContext.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/HashingWriteBuffer.h>
-#include <IO/CompactContext.h>
+#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromOStream.h>
 #include <Storages/MergeTree/MergeTreeData.h>
-#include <DataStreams/IBlockOutputStream.h>
-
-#include <Columns/ColumnArray.h>
 
 
 namespace DB
 {
-
-
 class IMergedBlockOutputStream : public IBlockOutputStream
 {
 public:
@@ -44,7 +41,7 @@ protected:
         ColumnStream(
             const String & escaped_column_name_,
             CompressionSettings compression_settings,
-            const CompactWriteContextPtr& compactCtxPtr,
+            const CompactWriteContextPtr & compactCtxPtr,
             bool is_substream);
 
         String escaped_column_name;
@@ -57,7 +54,7 @@ protected:
         std::ostringstream substream_mark_stream;
         std::unique_ptr<WriteBufferFromOStream> substream_ostream;
         std::shared_ptr<HashingWriteBuffer> plain_hashing;
-        CompressedWriteBuffer compressed_buf;
+        CompressedWriteBuffer<> compressed_buf;
         HashingWriteBuffer compressed;
 
         /// marks -> marks_file
@@ -134,9 +131,9 @@ public:
     void writeSuffix() override;
 
     void writeSuffixAndFinalizePart(
-            MergeTreeData::MutableDataPartPtr & new_part,
-            const NamesAndTypesList * total_columns_list = nullptr,
-            MergeTreeData::DataPart::Checksums * additional_column_checksums = nullptr);
+        MergeTreeData::MutableDataPartPtr & new_part,
+        const NamesAndTypesList * total_columns_list = nullptr,
+        MergeTreeData::DataPart::Checksums * additional_column_checksums = nullptr);
 
 private:
     void init();
@@ -164,7 +161,12 @@ class MergedColumnOnlyOutputStream final : public IMergedBlockOutputStream
 {
 public:
     MergedColumnOnlyOutputStream(
-        MergeTreeData & storage_, const Block & header_, String part_path_, bool sync_, CompressionSettings compression_settings, bool skip_offsets_);
+        MergeTreeData & storage_,
+        const Block & header_,
+        String part_path_,
+        bool sync_,
+        CompressionSettings compression_settings,
+        bool skip_offsets_);
 
     Block getHeader() const override { return header; }
     void write(const Block & block) override;
@@ -180,4 +182,4 @@ private:
     bool skip_offsets;
 };
 
-}
+} // namespace DB

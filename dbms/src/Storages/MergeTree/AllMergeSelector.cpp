@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 AllMergeSelector::PartsInPartition AllMergeSelector::select(
     const Partitions & partitions,
     const size_t /*max_total_size_to_merge*/)
@@ -35,4 +34,4 @@ AllMergeSelector::PartsInPartition AllMergeSelector::select(
         return {};
 }
 
-}
+} // namespace DB
