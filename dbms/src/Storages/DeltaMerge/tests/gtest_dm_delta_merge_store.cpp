@@ -108,7 +108,8 @@ String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
 // Read write test suit for DeltaMergeStore.
 // We will instantiate test cases for different `TestMode`
 // to test with different pack types.
-class DeltaMergeStore_RWTest : public DB::base::TiFlashStorageTestBasic
+class DeltaMergeStore_RWTest
+    : public DB::base::TiFlashStorageTestBasic
     , public testing::WithParamInterface<TestMode>
 {
 public:
