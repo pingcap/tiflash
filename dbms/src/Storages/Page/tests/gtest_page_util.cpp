@@ -1,3 +1,4 @@
+#include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/PosixWritableFile.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageUtil.h>
@@ -5,6 +6,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_split_io_size_4k[];
+} // namespace FailPoints
+
 namespace tests
 {
 static const std::string FileName = "page_util_test";
@@ -13,20 +19,26 @@ TEST(PageUtils_test, ReadWriteFile)
 {
     ::remove(FileName.c_str());
 
-    WritableFilePtr file = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
+    size_t buff_size = 1024;
+    char buff_write[buff_size];
 
-    std::string data_to_write = "123";
+    for (size_t i = 0; i < buff_size; i++)
+    {
+        buff_write[i] = i % 0xFF;
+    }
+    WritableFilePtr file_for_write = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
 #ifndef NDEBUG
-    PageUtil::writeFile(file, 0, data_to_write.data(), 3, nullptr, true);
+    PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, nullptr, true);
 #else
-    PageUtil::writeFile(file, 0, data_to_write.data(), 3, nullptr);
+    PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, nullptr);
 #endif
-    PageUtil::syncFile(file);
-    file->close();
+    PageUtil::syncFile(file_for_write);
+    file_for_write->close();
 
-    int fd2 = PageUtil::openFile<true, true>(FileName);
-    ASSERT_GT(fd2, 0);
-    ::close(fd2);
+    char buff_read[buff_size];
+    RandomAccessFilePtr file_for_read = std::make_shared<PosixRandomAccessFile>(FileName, -1, nullptr);
+    PageUtil::readFile(file_for_read, 0, buff_read, buff_size, nullptr);
+    ASSERT_EQ(strcmp(buff_write, buff_read), 0);
 
     ::remove(FileName.c_str());
 }
@@ -37,6 +49,46 @@ TEST(PageUtils_test, FileNotExists)
 
     int fd = PageUtil::openFile<true, false>(FileName);
     ASSERT_EQ(fd, 0);
+}
+
+TEST(PageUtils_test, BigReadWriteFile)
+{
+    ::remove(FileName.c_str());
+
+    FailPointHelper::enableFailPoint(FailPoints::force_split_io_size_4k);
+    try
+    {
+        WritableFilePtr file_for_write = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
+        size_t buff_size = 13 * 1024 + 123;
+        char buff_write[buff_size];
+        char buff_read[buff_size];
+
+        for (size_t i = 0; i < buff_size; i++)
+        {
+            buff_write[i] = i % 0xFF;
+        }
+
+#ifndef NDEBUG
+        PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, nullptr, false);
+#else
+        PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, nullptr);
+#endif
+        PageUtil::syncFile(file_for_write);
+        file_for_write->close();
+
+        RandomAccessFilePtr file_for_read = std::make_shared<PosixRandomAccessFile>(FileName, -1, nullptr);
+        PageUtil::readFile(file_for_read, 0, buff_read, buff_size, nullptr);
+        ASSERT_EQ(strcmp(buff_write, buff_read), 0);
+
+        ::remove(FileName.c_str());
+        FailPointHelper::disableFailPoint(FailPoints::force_split_io_size_4k);
+    }
+    catch (DB::Exception & e)
+    {
+        ::remove(FileName.c_str());
+        FailPointHelper::disableFailPoint(FailPoints::force_split_io_size_4k);
+        FAIL() << e.getStackTrace().toString();
+    }
 }
 
 } // namespace tests
