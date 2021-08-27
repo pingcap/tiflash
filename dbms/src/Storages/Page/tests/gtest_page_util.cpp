@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char force_split_io_size_4k[];
