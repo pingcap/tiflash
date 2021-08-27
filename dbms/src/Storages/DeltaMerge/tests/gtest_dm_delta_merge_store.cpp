@@ -12,9 +12,12 @@
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <fmt/format.h>
 
 #include <memory>
+#include <vector>
 
 #include "dm_basic_include.h"
 
@@ -353,31 +356,15 @@ try
         {
             block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
             // Add a column of col2:String for test
-            ColumnWithTypeAndName col2({}, col_str_define.type, col_str_define.name, col_str_define.id);
-            {
-                IColumn::MutablePtr m_col2 = col2.type->createColumn();
-                for (size_t i = 0; i < num_rows_write; i++)
-                {
-                    String s = DB::toString(i);
-                    Field field(s.c_str(), s.size());
-                    m_col2->insert(field);
-                }
-                col2.column = std::move(m_col2);
-            }
-            block.insert(std::move(col2));
-
+            block.insert(DB::tests::createColumn<String>(
+                createNumberStrings(0, num_rows_write),
+                col_str_define.name,
+                col_str_define.id));
             // Add a column of i8:Int8 for test
-            ColumnWithTypeAndName i8({}, col_i8_define.type, col_i8_define.name, col_i8_define.id);
-            {
-                IColumn::MutablePtr m_i8 = i8.type->createColumn();
-                for (size_t i = 0; i < num_rows_write; i++)
-                {
-                    Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                    m_i8->insert(Field(num));
-                }
-                i8.column = std::move(m_i8);
-            }
-            block.insert(std::move(i8));
+            block.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(0, num_rows_write),
+                col_i8_define.name,
+                col_i8_define.id));
         }
 
         switch (mode)
@@ -1402,8 +1389,8 @@ try
     {
         {
             // write to store
-            Block block = DMTestEnv::prepareSimpleWriteBlock( //
-                num_rows_write_in_total + 1, //
+            Block block = DMTestEnv::prepareSimpleWriteBlock(
+                num_rows_write_in_total + 1,
                 num_rows_write_in_total + 1 + num_rows_per_write,
                 false);
 
@@ -1481,20 +1468,19 @@ try
                             {
                                 // Convenient for debug.
                                 EXPECT_EQ(expected, value);
-                                // std::cerr << "pk:" << c->getInt(i) << std::endl;
                             }
                         }
                     }
                 }
             }
             in->readSuffix();
-            // if (num_rows_read != num_rows_write_in_total)
             ASSERT_EQ(num_rows_read, num_rows_write_in_total);
 
             LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1," << num_rows_write_in_total << "]");
         }
 
-        if (num_rows_write_in_total >= 1000)
+        // Reading with a large number of small DTFile ingested will greatly slow down the testing
+        if (num_rows_write_in_total >= 200)
             break;
     }
 }
@@ -1530,18 +1516,11 @@ try
         Block block;
         {
             block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-            // Add a column of int8 for test
-            ColumnWithTypeAndName col2({}, std::make_shared<DataTypeInt8>(), col_name_ddl, col_id_ddl);
-            {
-                IColumn::MutablePtr m_col2 = col2.type->createColumn();
-                for (size_t i = 0; i < num_rows_write; i++)
-                {
-                    Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                    m_col2->insert(Field(num));
-                }
-                col2.column = std::move(m_col2);
-            }
-            block.insert(col2);
+            // Add a column of i8:Int8 for test
+            block.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(0, num_rows_write),
+                col_name_ddl,
+                col_id_ddl));
         }
         store->write(*db_context, db_context->getSettingsRef(), std::move(block));
     }
@@ -1643,18 +1622,11 @@ try
         Block block;
         {
             block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-            // Add a column of col2:String for test
-            ColumnWithTypeAndName col2({}, std::make_shared<DataTypeInt8>(), col_name_to_drop, col_id_to_drop);
-            {
-                IColumn::MutablePtr m_col2 = col2.type->createColumn();
-                for (size_t i = 0; i < num_rows_write; i++)
-                {
-                    Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                    m_col2->insert(Field(num));
-                }
-                col2.column = std::move(m_col2);
-            }
-            block.insert(col2);
+            // Add a column of i8:Int8 for test
+            block.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(0, num_rows_write),
+                col_name_to_drop,
+                col_id_to_drop));
         }
         store->write(*db_context, db_context->getSettingsRef(), std::move(block));
     }
@@ -1739,17 +1711,10 @@ try
         {
             block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
             // Add a column of i8:Int8 for test
-            ColumnWithTypeAndName col1({}, std::make_shared<DataTypeInt8>(), col_name_c1, col_id_c1);
-            {
-                IColumn::MutablePtr m_col1 = col1.type->createColumn();
-                for (size_t i = 0; i < num_rows_write; i++)
-                {
-                    Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                    m_col1->insert(Field(num));
-                }
-                col1.column = std::move(m_col1);
-            }
-            block.insert(col1);
+            block.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(0, num_rows_write),
+                col_name_c1,
+                col_id_c1));
         }
         store->write(*db_context, db_context->getSettingsRef(), std::move(block));
     }
@@ -2007,18 +1972,11 @@ try
         Block block;
         {
             block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-            // Add a column for test
-            ColumnWithTypeAndName col2({}, col_type, col_name_before_ddl, col_id_ddl);
-            {
-                IColumn::MutablePtr m_col2 = col2.type->createColumn();
-                for (size_t i = 0; i < num_rows_write; i++)
-                {
-                    Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                    m_col2->insert(Field(num));
-                }
-                col2.column = std::move(m_col2);
-            }
-            block.insert(col2);
+            // Add a column of i8:Int8 for test
+            block.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(0, num_rows_write),
+                col_name_before_ddl,
+                col_id_ddl));
         }
         store->write(*db_context, db_context->getSettingsRef(), std::move(block));
     }
@@ -2129,7 +2087,14 @@ try
     const size_t num_rows_write = 128;
     {
         // write to store
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false, /*tso=*/2, col_name_before_ddl, col_id_ddl, col_type);
+        Block block = DMTestEnv::prepareSimpleWriteBlock(
+            0,
+            num_rows_write,
+            false,
+            /*tso=*/2,
+            col_name_before_ddl,
+            col_id_ddl,
+            col_type);
         store->write(*db_context, db_context->getSettingsRef(), std::move(block));
     }
 
@@ -2361,18 +2326,15 @@ try
         FailPointHelper::enableFailPoint(FailPoints::force_triggle_foreground_flush);
 
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write * 2, false);
-        ColumnWithTypeAndName f_col(nullptr, col_type_to_add, col_name_to_add, col_id_to_add, col_default_value);
         {
-            IColumn::MutablePtr m_col = f_col.type->createColumn();
-            auto & column_data = typeid_cast<ColumnVector<Float32> &>(*m_col).getData();
-            column_data.resize(num_rows_write);
-            for (size_t i = 0; i < num_rows_write; ++i)
-            {
-                column_data[i] = static_cast<Float32>(3.1415);
-            }
-            f_col.column = std::move(m_col);
+            // Add a column of float for test
+            auto col = DB::tests::createColumn<Float32>(
+                std::vector<Float64>(num_rows_write, 3.1415),
+                col_name_to_add,
+                col_id_to_add);
+            col.default_value = col_default_value;
+            block.insert(std::move(col));
         }
-        block.insert(f_col);
         store->write(*db_context, db_context->getSettingsRef(), std::move(block));
     }
 
@@ -2475,31 +2437,15 @@ try
                                                        true,
                                                        rowkey_column_size);
             // Add a column of col2:String for test
-            ColumnWithTypeAndName col2({}, col_str_define.type, col_str_define.name, col_str_define.id);
-            {
-                IColumn::MutablePtr m_col2 = col2.type->createColumn();
-                for (size_t i = 0; i < num_rows_write; i++)
-                {
-                    String s = DB::toString(i);
-                    Field field(s.c_str(), s.size());
-                    m_col2->insert(field);
-                }
-                col2.column = std::move(m_col2);
-            }
-            block.insert(std::move(col2));
-
+            block.insert(DB::tests::createColumn<String>(
+                createNumberStrings(0, num_rows_write),
+                col_str_define.name,
+                col_str_define.id));
             // Add a column of i8:Int8 for test
-            ColumnWithTypeAndName i8({}, col_i8_define.type, col_i8_define.name, col_i8_define.id);
-            {
-                IColumn::MutablePtr m_i8 = i8.type->createColumn();
-                for (size_t i = 0; i < num_rows_write; i++)
-                {
-                    Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                    m_i8->insert(Field(num));
-                }
-                i8.column = std::move(m_i8);
-            }
-            block.insert(std::move(i8));
+            block.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(0, num_rows_write),
+                col_i8_define.name,
+                col_i8_define.id));
         }
         store->write(*db_context, db_context->getSettingsRef(), std::move(block));
     }

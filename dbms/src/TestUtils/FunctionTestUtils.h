@@ -194,10 +194,10 @@ ColumnPtr makeConstColumn(const DataTypePtr & data_type, size_t size, const Infe
 }
 
 template <typename T>
-ColumnWithTypeAndName createColumn(const InferredDataVector<T> & vec, String name = "")
+ColumnWithTypeAndName createColumn(const InferredDataVector<T> & vec, const String & name = "", Int64 column_id = 0)
 {
     DataTypePtr data_type = makeDataType<T>();
-    return {makeColumn<T>(data_type, vec), data_type, name};
+    return {makeColumn<T>(data_type, vec), data_type, name, column_id};
 }
 
 template <typename T>
