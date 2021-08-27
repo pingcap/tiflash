@@ -34,7 +34,6 @@ extern const Event PSMReadFailed;
 namespace CurrentMetrics
 {
 extern const Metric Write;
-extern const Metric Read;
 } // namespace CurrentMetrics
 
 namespace DB
