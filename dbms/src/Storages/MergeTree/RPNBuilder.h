@@ -14,18 +14,27 @@ namespace DB
 using RPN = std::vector<RPNElement>;
 
 void applyFunction(
-    const FunctionBasePtr & func, const DataTypePtr & arg_type, const Field & arg_value, DataTypePtr & res_type, Field & res_value);
+    const FunctionBasePtr & func,
+    const DataTypePtr & arg_type,
+    const Field & arg_value,
+    DataTypePtr & res_type,
+    Field & res_value);
 
 template <typename NodeT, typename PreparedSetsT>
 class RPNBuilder
 {
 public:
     RPNBuilder(const ExpressionActionsPtr & key_expr_, ColumnIndices & key_columns_, const std::vector<NameAndTypePair> & source_columns_)
-        : key_expr(key_expr_), key_columns(key_columns_), source_columns(source_columns_)
+        : key_expr(key_expr_)
+        , key_columns(key_columns_)
+        , source_columns(source_columns_)
     {}
 
     bool isKeyPossiblyWrappedByMonotonicFunctionsImpl(
-        const NodeT & node, size_t & out_key_column_num, DataTypePtr & out_key_column_type, std::vector<String> & out_functions_chain);
+        const NodeT & node,
+        size_t & out_key_column_num,
+        DataTypePtr & out_key_column_type,
+        std::vector<String> & out_functions_chain);
 
     /** Is node the key column
       *  or expression in which column of key is wrapped by chain of functions,
@@ -34,27 +43,39 @@ public:
       *  and fills chain of possibly-monotonic functions.
       */
     bool isKeyPossiblyWrappedByMonotonicFunctions(const NodeT & node,
-        const Context & context,
-        size_t & out_key_column_num,
-        DataTypePtr & out_key_res_column_type,
-        RPNElement::MonotonicFunctionsChain & out_functions_chain);
+                                                  const Context & context,
+                                                  size_t & out_key_column_num,
+                                                  DataTypePtr & out_key_res_column_type,
+                                                  RPNElement::MonotonicFunctionsChain & out_functions_chain);
 
     void getKeyTuplePositionMapping(const NodeT & node,
-        const Context & context,
-        std::vector<MergeTreeSetIndex::KeyTuplePositionMapping> & indexes_mapping,
-        const size_t tuple_index,
-        size_t & out_key_column_num);
+                                    const Context & context,
+                                    std::vector<MergeTreeSetIndex::KeyTuplePositionMapping> & indexes_mapping,
+                                    const size_t tuple_index,
+                                    size_t & out_key_column_num);
     /// Try to prepare KeyTuplePositionMapping for tuples from IN expression.
     bool isTupleIndexable(
-        const NodeT & node, const Context & context, RPNElement & out, const SetPtr & prepared_set, size_t & out_key_column_num);
+        const NodeT & node,
+        const Context & context,
+        RPNElement & out,
+        const SetPtr & prepared_set,
+        size_t & out_key_column_num);
 
     bool canConstantBeWrappedByMonotonicFunctions(
-        const NodeT & node, size_t & out_key_column_num, DataTypePtr & out_key_column_type, Field & out_value, DataTypePtr & out_type);
+        const NodeT & node,
+        size_t & out_key_column_num,
+        DataTypePtr & out_key_column_type,
+        Field & out_value,
+        DataTypePtr & out_type);
 
     bool operatorFromNodeTree(const NodeT & node, RPNElement & out);
 
     bool atomFromNodeTree(
-        const NodeT & node, const Context & context, Block & block_with_constants, PreparedSetsT & sets, RPNElement & out);
+        const NodeT & node,
+        const Context & context,
+        Block & block_with_constants,
+        PreparedSetsT & sets,
+        RPNElement & out);
 
     void traverseNodeTree(const NodeT & node, const Context & context, Block & block_with_constants, PreparedSetsT & sets, RPN & rpn);
 

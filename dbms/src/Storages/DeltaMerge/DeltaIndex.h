@@ -8,7 +8,6 @@ namespace DB
 {
 namespace DM
 {
-
 class DeltaIndex;
 using DeltaIndexPtr = std::shared_ptr<DeltaIndex>;
 
@@ -36,7 +35,9 @@ public:
         TupleRefs idx_mapping;
 
         Update(size_t delete_ranges_offset_, size_t rows_offset_, const IColumn::Permutation & sort_perm)
-            : delete_ranges_offset(delete_ranges_offset_), rows_offset(rows_offset_), idx_mapping(sort_perm.size())
+            : delete_ranges_offset(delete_ranges_offset_)
+            , rows_offset(rows_offset_)
+            , idx_mapping(sort_perm.size())
         {
             for (size_t pos = 0; pos < sort_perm.size(); ++pos)
                 idx_mapping[sort_perm[pos]] = pos;
@@ -72,8 +73,8 @@ private:
     DeltaIndexPtr tryCloneInner(size_t placed_deletes_limit, const Updates * updates = nullptr)
     {
         DeltaTreePtr delta_tree_copy;
-        size_t       placed_rows_copy    = 0;
-        size_t       placed_deletes_copy = 0;
+        size_t placed_rows_copy = 0;
+        size_t placed_deletes_copy = 0;
         // Make sure the delta index do not place more deletes than `placed_deletes_limit`.
         // Because delete ranges can break MVCC view.
         {
@@ -81,8 +82,8 @@ private:
             // Safe to reuse the copy of the existing DeltaIndex
             if (placed_deletes <= placed_deletes_limit)
             {
-                delta_tree_copy     = delta_tree;
-                placed_rows_copy    = placed_rows;
+                delta_tree_copy = delta_tree;
+                placed_rows_copy = placed_rows;
                 placed_deletes_copy = placed_deletes;
             }
         }
@@ -90,7 +91,7 @@ private:
         if (delta_tree_copy)
         {
             auto new_delta_tree = std::make_shared<DefaultDeltaTree>(*delta_tree_copy);
-            auto new_index      = std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy);
+            auto new_index = std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy);
             // try to do some updates before return it if need
             if (updates)
                 new_index->applyUpdates(*updates);
@@ -104,10 +105,18 @@ private:
     }
 
 public:
-    DeltaIndex() : id(++NEXT_DELTA_INDEX_ID), delta_tree(std::make_shared<DefaultDeltaTree>()), placed_rows(0), placed_deletes(0) {}
+    DeltaIndex()
+        : id(++NEXT_DELTA_INDEX_ID)
+        , delta_tree(std::make_shared<DefaultDeltaTree>())
+        , placed_rows(0)
+        , placed_deletes(0)
+    {}
 
     DeltaIndex(const DeltaTreePtr & delta_tree_, size_t placed_rows_, size_t placed_deletes_)
-        : id(++NEXT_DELTA_INDEX_ID), delta_tree(delta_tree_), placed_rows(placed_rows_), placed_deletes(placed_deletes_)
+        : id(++NEXT_DELTA_INDEX_ID)
+        , delta_tree(delta_tree_)
+        , placed_rows(placed_rows_)
+        , placed_deletes(placed_deletes_)
     {
     }
 
@@ -151,8 +160,8 @@ public:
     void update(const DeltaTreePtr & delta_tree_, size_t placed_rows_, size_t placed_deletes_)
     {
         std::scoped_lock lock(mutex);
-        delta_tree     = delta_tree_;
-        placed_rows    = placed_rows_;
+        delta_tree = delta_tree_;
+        placed_rows = placed_rows_;
         placed_deletes = placed_deletes_;
     }
 
@@ -163,8 +172,8 @@ public:
         if ((maybe_advanced.placed_rows >= placed_rows && maybe_advanced.placed_deletes >= placed_deletes)
             && !(maybe_advanced.placed_rows == placed_rows && maybe_advanced.placed_deletes == placed_deletes))
         {
-            delta_tree     = maybe_advanced.delta_tree;
-            placed_rows    = maybe_advanced.placed_rows;
+            delta_tree = maybe_advanced.delta_tree;
+            placed_rows = maybe_advanced.placed_rows;
             placed_deletes = maybe_advanced.placed_deletes;
             return true;
         }

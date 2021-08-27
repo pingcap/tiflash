@@ -15,7 +15,6 @@ namespace DM
 {
 namespace tests
 {
-
 struct StressOptions
 {
     UInt32 insert_concurrency;
@@ -29,7 +28,7 @@ struct StressOptions
     UInt32 gen_rows_per_block;
     UInt32 gen_concurrency;
     String table_name;
-    bool   verify;
+    bool verify;
     UInt32 verify_sleep_sec;
 
     std::vector<std::string> failpoints;
@@ -41,10 +40,12 @@ template <typename T>
 class IDGenerator
 {
 public:
-    IDGenerator(T t_) : t(t_) {}
+    IDGenerator(T t_)
+        : t(t_)
+    {}
     std::vector<T> get(Int32 count)
     {
-        T              start = t.fetch_add(count);
+        T start = t.fetch_add(count);
         std::vector<T> v(count);
         for (int i = 0; i < count; i++)
         {
@@ -66,7 +67,9 @@ class KeyLock
 public:
     static constexpr UInt32 default_key_lock_slot_count = 4096;
 
-    KeyLock(UInt32 slot_count = default_key_lock_slot_count) : key_rmutexs(slot_count) {}
+    KeyLock(UInt32 slot_count = default_key_lock_slot_count)
+        : key_rmutexs(slot_count)
+    {}
 
     std::vector<std::unique_lock<std::recursive_mutex>> getLocks(const std::vector<Int64> & keys)
     {
@@ -95,16 +98,19 @@ public:
     }
 
 private:
-    UInt32                                 getLockIdx(Int64 key) { return key % key_rmutexs.size(); }
+    UInt32 getLockIdx(Int64 key) { return key % key_rmutexs.size(); }
     std::unique_lock<std::recursive_mutex> getLockByIdx(UInt32 idx) { return std::unique_lock(key_rmutexs[idx]); }
-    std::vector<std::recursive_mutex>      key_rmutexs;
+    std::vector<std::recursive_mutex> key_rmutexs;
 };
 
 class KeySet
 {
 public:
     static constexpr UInt32 default_key_set_slot_count = 4096;
-    KeySet(UInt32 slot_count = default_key_set_slot_count) : key_set_mutexs(slot_count), key_sets(slot_count) {}
+    KeySet(UInt32 slot_count = default_key_set_slot_count)
+        : key_set_mutexs(slot_count)
+        , key_sets(slot_count)
+    {}
 
     void insert(const std::vector<Int64> & ids)
     {
@@ -124,7 +130,7 @@ public:
 
     bool exist(Int64 id)
     {
-        int             idx = id % key_set_mutexs.size();
+        int idx = id % key_set_mutexs.size();
         std::lock_guard lock(key_set_mutexs[idx]);
         return key_sets[idx].count(id) > 0;
     }
@@ -143,19 +149,19 @@ public:
 private:
     void insert(Int64 id)
     {
-        int             idx = id % key_set_mutexs.size();
+        int idx = id % key_set_mutexs.size();
         std::lock_guard lock(key_set_mutexs[idx]);
         key_sets[idx].insert(id); // ignore fail
     }
 
     void erase(Int64 id)
     {
-        int             idx = id % key_set_mutexs.size();
+        int idx = id % key_set_mutexs.size();
         std::lock_guard lock(key_set_mutexs[idx]);
         key_sets[idx].erase(id);
     }
 
-    std::vector<std::mutex>                key_set_mutexs;
+    std::vector<std::mutex> key_set_mutexs;
     std::vector<std::unordered_set<Int64>> key_sets;
 };
 class DMStressProxy
@@ -180,42 +186,42 @@ public:
     void waitVerifyThread();
 
 private:
-    void   genData(UInt32 id, UInt64 rows);
-    void   write(const std::vector<Int64> & ids);
+    void genData(UInt32 id, UInt64 rows);
+    void write(const std::vector<Int64> & ids);
     UInt64 countRows(UInt32 rnd_break_prob);
-    void   genBlock(Block & block, const std::vector<Int64> & ids);
-    void   joinThreads(std::vector<std::thread> & threads);
-    void   insert();
-    void   update();
-    void   deleteRange();
-    void   verify();
+    void genBlock(Block & block, const std::vector<Int64> & ids);
+    void joinThreads(std::vector<std::thread> & threads);
+    void insert();
+    void update();
+    void deleteRange();
+    void verify();
 
-    String                   name;
+    String name;
     std::unique_ptr<Context> context;
-    const ColumnDefine       col_balance_define;
-    const ColumnDefine       col_random_define;
-    DeltaMergeStorePtr       store;
+    const ColumnDefine col_balance_define;
+    const ColumnDefine col_random_define;
+    DeltaMergeStorePtr store;
 
     const String pk_name = EXTRA_HANDLE_COLUMN_NAME;
 
     std::mutex mutex;
 
     Poco::Logger * log;
-    StressOptions  opts;
+    StressOptions opts;
 
     std::vector<std::thread> gen_threads;
     std::vector<std::thread> read_threads;
     std::vector<std::thread> insert_threads;
     std::vector<std::thread> update_threads;
     std::vector<std::thread> delete_threads;
-    std::thread              verify_thread;
+    std::thread verify_thread;
 
     std::default_random_engine rnd;
 
     KeyLock key_lock; // Prevent the same key write concurrent.
-    KeySet  pks;
+    KeySet pks;
 
-    std::atomic<bool>       stop;
+    std::atomic<bool> stop;
     static constexpr UInt64 max_total_count = 200000000; // 20kw
 };
 } // namespace tests

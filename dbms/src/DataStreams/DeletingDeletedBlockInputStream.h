@@ -20,7 +20,7 @@ public:
     DeletingDeletedBlockInputStream(BlockInputStreamPtr & input_, const std::string & delmark_column_) :
         input(input_), delmark_column(delmark_column_)
     {
-        log = &Logger::get(getName());
+        log = &Poco::Logger::get(getName());
         children.emplace_back(input_);
     }
 
@@ -45,7 +45,7 @@ public:
     }
 
 private:
-    Logger * log;
+    Poco::Logger * log;
     BlockInputStreamPtr input;
     const std::string delmark_column;
 };

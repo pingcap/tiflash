@@ -5,6 +5,7 @@
 ### Prerequisites
 
 - CMake 3.13.2+
+- clang-format 12.0.0+
 
 ### Setup Compiler
 
@@ -48,3 +49,13 @@ $ popd
 ```
 
 Now you will get TiFlash binary under `WORKSPACE/tics/build/dbms/src/Server/tiflash`.
+
+### Notice
+
+Before submitting pull request, please use [format-diff.py](format-diff.py) to format source code, otherwise ci-build may raise error.
+```
+# WORKSPACE/tics
+$ python3 format-diff.py --diff_from `git merge-base ${TARGET_REMOTE_BRANCH} HEAD`
+```
+
+You can download the `clang-format` from [muttleyxd/clang-tools-static-binaries](https://github.com/muttleyxd/clang-tools-static-binaries/releases). clang-format 12.0.0+ is required.

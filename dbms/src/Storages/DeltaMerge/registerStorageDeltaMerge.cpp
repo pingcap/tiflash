@@ -9,7 +9,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
@@ -91,7 +90,14 @@ void registerStorageDeltaMerge(StorageFactory & factory)
                 throw Exception("Engine DeltaMerge tombstone must be a UInt64" + getDeltaMergeVerboseHelp(), ErrorCodes::BAD_ARGUMENTS);
         }
         return StorageDeltaMerge::create(
-            args.database_engine, args.database_name, args.table_name, table_info, args.columns, primary_expr_list, tombstone, args.context);
+            args.database_engine,
+            args.database_name,
+            args.table_name,
+            table_info,
+            args.columns,
+            primary_expr_list,
+            tombstone,
+            args.context);
     });
 }
 

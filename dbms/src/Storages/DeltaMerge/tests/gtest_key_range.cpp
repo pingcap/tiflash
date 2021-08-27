@@ -8,7 +8,6 @@ namespace DM
 {
 namespace tests
 {
-
 TEST(HandleRange_test, Redact)
 {
     HandleRange range(20, 400);
@@ -33,7 +32,7 @@ std::shared_ptr<RegionRangeKeys> genTestRegionRangeKeys()
         TiDB::TableInfo table_info(table_info_json);
 
         start = RecordKVFormat::genKey(table_info, std::vector{Field{"aaa", strlen("aaa")}, Field{"abc", strlen("abc")}});
-        end   = RecordKVFormat::genKey(table_info, std::vector{Field{"bbb", strlen("bbb")}, Field{"abc", strlen("abc")}});
+        end = RecordKVFormat::genKey(table_info, std::vector{Field{"bbb", strlen("bbb")}, Field{"abc", strlen("abc")}});
     }
     return std::make_shared<RegionRangeKeys>(std::move(start), std::move(end));
 }
@@ -64,11 +63,11 @@ TEST(RowKeyRange_test, RedactRangeFromHandle)
 
 TEST(RowKeyRange_test, RedactRangeFromCommonHandle)
 {
-    auto        region_range = genTestRegionRangeKeys();
-    TableID     table_id     = 49;
-    RowKeyRange range        = RowKeyRange::fromRegionRange(region_range, table_id, true, 3);
-    RowKeyRange all_range    = RowKeyRange::newAll(true, 3);
-    RowKeyRange none_range   = RowKeyRange::newNone(true, 3);
+    auto region_range = genTestRegionRangeKeys();
+    TableID table_id = 49;
+    RowKeyRange range = RowKeyRange::fromRegionRange(region_range, table_id, true, 3);
+    RowKeyRange all_range = RowKeyRange::newAll(true, 3);
+    RowKeyRange none_range = RowKeyRange::newNone(true, 3);
 
     // print some values
     Redact::setRedactLog(false);

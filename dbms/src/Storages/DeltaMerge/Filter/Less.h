@@ -4,14 +4,14 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 class Less : public ColCmpVal
 {
 public:
-    Less(const Attr & attr_, const Field & value_, int null_direction) : ColCmpVal(attr_, value_, null_direction) {}
+    Less(const Attr & attr_, const Field & value_, int null_direction)
+        : ColCmpVal(attr_, value_, null_direction)
+    {}
 
     String name() override { return "less"; }
 

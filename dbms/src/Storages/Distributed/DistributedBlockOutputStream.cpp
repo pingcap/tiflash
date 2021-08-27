@@ -59,7 +59,7 @@ DistributedBlockOutputStream::DistributedBlockOutputStream(
     StorageDistributed & storage, const ASTPtr & query_ast, const ClusterPtr & cluster_,
     const Settings & settings_, bool insert_sync_, UInt64 insert_timeout_)
     : storage(storage), query_ast(query_ast), cluster(cluster_), settings(settings_), insert_sync(insert_sync_),
-      insert_timeout(insert_timeout_), log(&Logger::get("DistributedBlockOutputStream"))
+      insert_timeout(insert_timeout_), log(&Poco::Logger::get("DistributedBlockOutputStream"))
 {
 }
 

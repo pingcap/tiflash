@@ -1,32 +1,31 @@
-#include <Storages/MergeTree/KeyCondition.h>
-#include <Storages/MergeTree/BoolMask.h>
-#include <Storages/MergeTree/RPNBuilder.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/ExpressionActions.h>
-#include <DataTypes/DataTypeEnum.h>
+#include <Common/FieldVisitors.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
-#include <Common/FieldVisitors.h>
-#include <Common/typeid_cast.h>
-#include <Interpreters/convertFieldToType.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Set.h>
+#include <Interpreters/convertFieldToType.h>
 #include <Parsers/queryToString.h>
+#include <Storages/MergeTree/BoolMask.h>
+#include <Storages/MergeTree/KeyCondition.h>
+#include <Storages/MergeTree/RPNBuilder.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int BAD_TYPE_OF_FIELD;
-    extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
-}
+extern const int LOGICAL_ERROR;
+extern const int BAD_TYPE_OF_FIELD;
+extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
 String Range::toString() const
@@ -58,19 +57,19 @@ static String extractFixedPrefixFromLikePattern(const String & like_pattern)
     {
         switch (*pos)
         {
-            case '%':
-                [[fallthrough]];
-            case '_':
-                return fixed_prefix;
+        case '%':
+            [[fallthrough]];
+        case '_':
+            return fixed_prefix;
 
-            case '\\':
-                ++pos;
-                if (pos == end)
-                    break;
-                [[fallthrough]];
-            default:
-                fixed_prefix += *pos;
+        case '\\':
+            ++pos;
+            if (pos == end)
                 break;
+            [[fallthrough]];
+        default:
+            fixed_prefix += *pos;
+            break;
         }
 
         ++pos;
@@ -107,121 +106,98 @@ static String firstStringThatIsGreaterThanAllStringsWithPrefix(const String & pr
 
 
 /// A dictionary containing actions to the corresponding functions to turn them into `RPNElement`
-const KeyCondition::AtomMap KeyCondition::atom_map
+const KeyCondition::AtomMap KeyCondition::atom_map{
+    {"notEquals",
+     [](RPNElement & out, const Field & value) {
+         out.function = RPNElement::FUNCTION_NOT_IN_RANGE;
+         out.range = Range(value);
+         return true;
+     }},
+    {"equals",
+     [](RPNElement & out, const Field & value) {
+         out.function = RPNElement::FUNCTION_IN_RANGE;
+         out.range = Range(value);
+         return true;
+     }},
+    {"less",
+     [](RPNElement & out, const Field & value) {
+         out.function = RPNElement::FUNCTION_IN_RANGE;
+         out.range = Range::createRightBounded(value, false);
+         return true;
+     }},
+    {"greater",
+     [](RPNElement & out, const Field & value) {
+         out.function = RPNElement::FUNCTION_IN_RANGE;
+         out.range = Range::createLeftBounded(value, false);
+         return true;
+     }},
+    {"lessOrEquals",
+     [](RPNElement & out, const Field & value) {
+         out.function = RPNElement::FUNCTION_IN_RANGE;
+         out.range = Range::createRightBounded(value, true);
+         return true;
+     }},
+    {"greaterOrEquals",
+     [](RPNElement & out, const Field & value) {
+         out.function = RPNElement::FUNCTION_IN_RANGE;
+         out.range = Range::createLeftBounded(value, true);
+         return true;
+     }},
+    {"in",
+     [](RPNElement & out, const Field &) {
+         out.function = RPNElement::FUNCTION_IN_SET;
+         return true;
+     }},
+    {"notIn",
+     [](RPNElement & out, const Field &) {
+         out.function = RPNElement::FUNCTION_NOT_IN_SET;
+         return true;
+     }},
+    {"like",
+     [](RPNElement & out, const Field & value) {
+         if (value.getType() != Field::Types::String)
+             return false;
+
+         String prefix = extractFixedPrefixFromLikePattern(value.get<const String &>());
+         if (prefix.empty())
+             return false;
+
+         String right_bound = firstStringThatIsGreaterThanAllStringsWithPrefix(prefix);
+
+         out.function = RPNElement::FUNCTION_IN_RANGE;
+         out.range = !right_bound.empty()
+             ? Range(prefix, true, right_bound, false)
+             : Range::createLeftBounded(prefix, true);
+
+         return true;
+     }}};
+
+
+inline bool Range::equals(const Field & lhs, const Field & rhs)
 {
-    {
-        "notEquals",
-        [] (RPNElement & out, const Field & value)
-        {
-            out.function = RPNElement::FUNCTION_NOT_IN_RANGE;
-            out.range = Range(value);
-            return true;
-        }
-    },
-    {
-        "equals",
-        [] (RPNElement & out, const Field & value)
-        {
-            out.function = RPNElement::FUNCTION_IN_RANGE;
-            out.range = Range(value);
-            return true;
-        }
-    },
-    {
-        "less",
-        [] (RPNElement & out, const Field & value)
-        {
-            out.function = RPNElement::FUNCTION_IN_RANGE;
-            out.range = Range::createRightBounded(value, false);
-            return true;
-        }
-    },
-    {
-        "greater",
-        [] (RPNElement & out, const Field & value)
-        {
-            out.function = RPNElement::FUNCTION_IN_RANGE;
-            out.range = Range::createLeftBounded(value, false);
-            return true;
-        }
-    },
-    {
-        "lessOrEquals",
-        [] (RPNElement & out, const Field & value)
-        {
-            out.function = RPNElement::FUNCTION_IN_RANGE;
-            out.range = Range::createRightBounded(value, true);
-            return true;
-        }
-    },
-    {
-        "greaterOrEquals",
-        [] (RPNElement & out, const Field & value)
-        {
-            out.function = RPNElement::FUNCTION_IN_RANGE;
-            out.range = Range::createLeftBounded(value, true);
-            return true;
-        }
-    },
-    {
-        "in",
-        [] (RPNElement & out, const Field &)
-        {
-            out.function = RPNElement::FUNCTION_IN_SET;
-            return true;
-        }
-    },
-    {
-        "notIn",
-        [] (RPNElement & out, const Field &)
-        {
-            out.function = RPNElement::FUNCTION_NOT_IN_SET;
-            return true;
-        }
-    },
-    {
-        "like",
-        [] (RPNElement & out, const Field & value)
-        {
-            if (value.getType() != Field::Types::String)
-                return false;
-
-            String prefix = extractFixedPrefixFromLikePattern(value.get<const String &>());
-            if (prefix.empty())
-                return false;
-
-            String right_bound = firstStringThatIsGreaterThanAllStringsWithPrefix(prefix);
-
-            out.function = RPNElement::FUNCTION_IN_RANGE;
-            out.range = !right_bound.empty()
-                ? Range(prefix, true, right_bound, false)
-                : Range::createLeftBounded(prefix, true);
-
-            return true;
-        }
-    }
-};
-
-
-inline bool Range::equals(const Field & lhs, const Field & rhs) { return applyVisitor(FieldVisitorAccurateEquals(), lhs, rhs); }
-inline bool Range::less(const Field & lhs, const Field & rhs) { return applyVisitor(FieldVisitorAccurateLess(), lhs, rhs); }
+    return applyVisitor(FieldVisitorAccurateEquals(), lhs, rhs);
+}
+inline bool Range::less(const Field & lhs, const Field & rhs)
+{
+    return applyVisitor(FieldVisitorAccurateLess(), lhs, rhs);
+}
 
 
 FieldWithInfinity::FieldWithInfinity(const Field & field_)
-    : field(field_),
-    type(Type::NORMAL)
+    : field(field_)
+    , type(Type::NORMAL)
 {
 }
 
 FieldWithInfinity::FieldWithInfinity(Field && field_)
-    : field(std::move(field_)),
-    type(Type::NORMAL)
+    : field(std::move(field_))
+    , type(Type::NORMAL)
 {
 }
 
 FieldWithInfinity::FieldWithInfinity(const Type type_)
-    : field(),
-    type(type_)
+    : field()
+    , type(type_)
 {
 }
 
@@ -250,12 +226,12 @@ bool FieldWithInfinity::operator==(const FieldWithInfinity & other) const
   * For index to work when something like "WHERE Date = toDate(now())" is written.
   */
 Block KeyCondition::getBlockWithConstants(
-    const ASTPtr & query, const Context & context, const NamesAndTypesList & all_columns)
+    const ASTPtr & query,
+    const Context & context,
+    const NamesAndTypesList & all_columns)
 {
-    Block result
-    {
-        { DataTypeUInt8().createColumnConstWithDefaultValue(1), std::make_shared<DataTypeUInt8>(), "_dummy" }
-    };
+    Block result{
+        {DataTypeUInt8().createColumnConstWithDefaultValue(1), std::make_shared<DataTypeUInt8>(), "_dummy"}};
 
     const auto expr_for_constant_folding = ExpressionAnalyzer{query, context, nullptr, all_columns}.getConstActions();
 
@@ -271,7 +247,8 @@ KeyCondition::KeyCondition(
     const NamesAndTypesList & all_columns,
     const SortDescription & sort_descr_,
     const ExpressionActionsPtr & key_expr_)
-    : sort_descr(sort_descr_), key_expr(key_expr_)
+    : sort_descr(sort_descr_)
+    , key_expr(key_expr_)
 {
     for (size_t i = 0; i < sort_descr.size(); ++i)
     {
@@ -477,7 +454,7 @@ bool KeyCondition::mayBeTrueInRange(
 {
     std::vector<Range> key_ranges(used_key_size, Range());
 
-/*  std::cerr << "Checking for: [";
+    /*  std::cerr << "Checking for: [";
     for (size_t i = 0; i != used_key_size; ++i)
         std::cerr << (i != 0 ? ", " : "") << applyVisitor(FieldVisitorToString(), left_key[i]);
     std::cerr << " ... ";
@@ -491,12 +468,10 @@ bool KeyCondition::mayBeTrueInRange(
     else
         std::cerr << "+inf)\n";*/
 
-    return forAnyParallelogram(used_key_size, left_key, right_key, true, right_bounded, key_ranges, 0,
-        [&] (const std::vector<Range> & key_ranges)
-    {
+    return forAnyParallelogram(used_key_size, left_key, right_key, true, right_bounded, key_ranges, 0, [&](const std::vector<Range> & key_ranges) {
         auto res = mayBeTrueInRangeImpl(key_ranges, data_types);
 
-/*      std::cerr << "Parallelogram: ";
+        /*      std::cerr << "Parallelogram: ";
         for (size_t i = 0, size = key_ranges.size(); i != size; ++i)
             std::cerr << (i != 0 ? " x " : "") << key_ranges[i].toString();
         std::cerr << ": " << res << "\n";*/
@@ -508,14 +483,15 @@ bool KeyCondition::mayBeTrueInRange(
 std::optional<Range> KeyCondition::applyMonotonicFunctionsChainToRange(
     Range key_range,
     RPNElement::MonotonicFunctionsChain & functions,
-    DataTypePtr current_type
-)
+    DataTypePtr current_type)
 {
     for (auto & func : functions)
     {
         /// We check the monotonicity of each function on a specific range.
         IFunction::Monotonicity monotonicity = func->getMonotonicityForRange(
-            *current_type.get(), key_range.left, key_range.right);
+            *current_type.get(),
+            key_range.left,
+            key_range.right);
 
         if (!monotonicity.is_monotonic)
         {
@@ -553,7 +529,7 @@ bool KeyCondition::mayBeTrueInRangeImpl(const std::vector<Range> & key_ranges, c
             rpn_stack.emplace_back(true, true);
         }
         else if (element.function == RPNElement::FUNCTION_IN_RANGE
-            || element.function == RPNElement::FUNCTION_NOT_IN_RANGE)
+                 || element.function == RPNElement::FUNCTION_NOT_IN_RANGE)
         {
             const Range * key_range = &key_ranges[element.key_column];
 
@@ -564,8 +540,7 @@ bool KeyCondition::mayBeTrueInRangeImpl(const std::vector<Range> & key_ranges, c
                 std::optional<Range> new_range = applyMonotonicFunctionsChainToRange(
                     *key_range,
                     element.monotonic_functions_chain,
-                    data_types[element.key_column]
-                );
+                    data_types[element.key_column]);
 
                 if (!new_range)
                 {
@@ -629,13 +604,18 @@ bool KeyCondition::mayBeTrueInRangeImpl(const std::vector<Range> & key_ranges, c
 
 
 bool KeyCondition::mayBeTrueInRange(
-    size_t used_key_size, const Field * left_key, const Field * right_key, const DataTypes & data_types) const
+    size_t used_key_size,
+    const Field * left_key,
+    const Field * right_key,
+    const DataTypes & data_types) const
 {
     return mayBeTrueInRange(used_key_size, left_key, right_key, data_types, true);
 }
 
 bool KeyCondition::mayBeTrueAfter(
-    size_t used_key_size, const Field * left_key, const DataTypes & data_types) const
+    size_t used_key_size,
+    const Field * left_key,
+    const DataTypes & data_types) const
 {
     return mayBeTrueInRange(used_key_size, left_key, nullptr, data_types, false);
 }
@@ -643,8 +623,7 @@ bool KeyCondition::mayBeTrueAfter(
 
 String RPNElement::toString() const
 {
-    auto print_wrapped_column = [this](std::ostringstream & ss)
-    {
+    auto print_wrapped_column = [this](std::ostringstream & ss) {
         for (auto it = monotonic_functions_chain.rbegin(); it != monotonic_functions_chain.rend(); ++it)
             ss << (*it)->getName() << "(";
 
@@ -657,42 +636,42 @@ String RPNElement::toString() const
     std::ostringstream ss;
     switch (function)
     {
-        case FUNCTION_AND:
-            return "and";
-        case FUNCTION_OR:
-            return "or";
-        case FUNCTION_NOT:
-            return "not";
-        case FUNCTION_UNKNOWN:
-            return "unknown";
-        case FUNCTION_NOT_IN_SET:
-        case FUNCTION_IN_SET:
-        {
-            ss << "(";
-            print_wrapped_column(ss);
-            ss << (function == FUNCTION_IN_SET ? " in " : " notIn ");
-            if (!set_index)
-                ss << "unknown size set";
-            else
-                ss << set_index->size() << "-element set";
-            ss << ")";
-            return ss.str();
-        }
-        case FUNCTION_IN_RANGE:
-        case FUNCTION_NOT_IN_RANGE:
-        {
-            ss << "(";
-            print_wrapped_column(ss);
-            ss << (function == FUNCTION_NOT_IN_RANGE ? " not" : "") << " in " << range.toString();
-            ss << ")";
-            return ss.str();
-        }
-        case ALWAYS_FALSE:
-            return "false";
-        case ALWAYS_TRUE:
-            return "true";
-        default:
-            throw Exception("Unknown function in RPNElement", ErrorCodes::LOGICAL_ERROR);
+    case FUNCTION_AND:
+        return "and";
+    case FUNCTION_OR:
+        return "or";
+    case FUNCTION_NOT:
+        return "not";
+    case FUNCTION_UNKNOWN:
+        return "unknown";
+    case FUNCTION_NOT_IN_SET:
+    case FUNCTION_IN_SET:
+    {
+        ss << "(";
+        print_wrapped_column(ss);
+        ss << (function == FUNCTION_IN_SET ? " in " : " notIn ");
+        if (!set_index)
+            ss << "unknown size set";
+        else
+            ss << set_index->size() << "-element set";
+        ss << ")";
+        return ss.str();
+    }
+    case FUNCTION_IN_RANGE:
+    case FUNCTION_NOT_IN_RANGE:
+    {
+        ss << "(";
+        print_wrapped_column(ss);
+        ss << (function == FUNCTION_NOT_IN_RANGE ? " not" : "") << " in " << range.toString();
+        ss << ")";
+        return ss.str();
+    }
+    case ALWAYS_FALSE:
+        return "false";
+    case ALWAYS_TRUE:
+        return "true";
+    default:
+        throw Exception("Unknown function in RPNElement", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -709,10 +688,10 @@ bool KeyCondition::alwaysUnknownOrTrue() const
             rpn_stack.push_back(true);
         }
         else if (element.function == RPNElement::FUNCTION_NOT_IN_RANGE
-            || element.function == RPNElement::FUNCTION_IN_RANGE
-            || element.function == RPNElement::FUNCTION_IN_SET
-            || element.function == RPNElement::FUNCTION_NOT_IN_SET
-            || element.function == RPNElement::ALWAYS_FALSE)
+                 || element.function == RPNElement::FUNCTION_IN_RANGE
+                 || element.function == RPNElement::FUNCTION_IN_SET
+                 || element.function == RPNElement::FUNCTION_NOT_IN_SET
+                 || element.function == RPNElement::ALWAYS_FALSE)
         {
             rpn_stack.push_back(false);
         }
@@ -758,4 +737,4 @@ size_t KeyCondition::getMaxKeyColumn() const
     return res;
 }
 
-}
+} // namespace DB

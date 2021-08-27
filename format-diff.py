@@ -15,11 +15,10 @@ def run_cmd(cmd, show_cmd=False):
 def main():
     default_suffix = ['.cpp', '.h', '.cc', '.hpp']
     parser = argparse.ArgumentParser(description='TiFlash Code Format',
-                                     formatter_class=argparse.RawTextHelpFormatter)
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--repo_path', help='path of tics repository', default=os.getcwd())
     parser.add_argument('--suffix',
-                        help='suffix of files to format, split by space, default: {}'.format(' '.join(default_suffix)),
-                        default=' '.join(default_suffix))
+                        help='suffix of files to format, split by space', default=' '.join(default_suffix))
     parser.add_argument('--ignore_suffix', help='ignore files with suffix, split by space')
     parser.add_argument('--diff_from', help='commit hash/branch to check git diff', default='HEAD')
     parser.add_argument('--check_formatted', help='exit -1 if NOT formatted', action='store_true')
@@ -32,7 +31,7 @@ def main():
 
     os.chdir(tics_repo_path)
     files_to_check = run_cmd('git diff HEAD --stat') if args.diff_from == 'HEAD' else run_cmd(
-        'git diff HEAD {} --stat'.format(args.diff_from))
+        'git diff {} --stat'.format(args.diff_from))
     files_to_check = [os.path.join(tics_repo_path, s.split()[0]) for s in files_to_check[:-1]]
     files_to_format = []
     for f in files_to_check:
@@ -55,14 +54,17 @@ def main():
             cmd = 'clang-format -i {}'.format(' '.join(files_to_format))
             if subprocess.Popen(cmd, shell=True, cwd=tics_repo_path).wait():
                 exit(-1)
-            if run_cmd('git diff --stat'):
+            diff_res = run_cmd('git diff --stat')
+            if diff_res:
                 print('Error: found files NOT formatted')
+                print('\n'.join(diff_res[:-1]))
                 exit(-1)
             else:
                 print("Format check passed")
         else:
             cmd = 'clang-format -i {}'.format(' '.join(files_to_format))
             subprocess.Popen(cmd, shell=True, cwd=tics_repo_path).wait()
+            print("Finish code format")
     else:
         print('No file to format')
 

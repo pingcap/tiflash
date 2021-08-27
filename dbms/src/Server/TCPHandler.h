@@ -1,33 +1,32 @@
 #pragma once
 
-#include <Poco/Net/TCPServerConnection.h>
-
-#include <Common/getFQDNOrHostName.h>
+#include <Client/TimeoutSetter.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Stopwatch.h>
-#include <IO/Progress.h>
+#include <Common/getFQDNOrHostName.h>
 #include <Core/Protocol.h>
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
+#include <IO/Progress.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Client/TimeoutSetter.h>
-
+#include <Poco/Net/TCPServerConnection.h>
 #include <Storages/Transaction/RegionLockInfo.h>
 
 #include "IServer.h"
 
 namespace CurrentMetrics
 {
-    extern const Metric TCPConnection;
+extern const Metric TCPConnection;
 }
 
-namespace Poco { class Logger; }
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
-
-
 /// State of query processing.
 struct QueryState
 {
@@ -88,7 +87,7 @@ public:
         , connection_context(server.context())
         , query_context(server.context())
     {
-        server_display_name =  server.config().getString("display_name", getFQDNOrHostName());
+        server_display_name = server.config().getString("display_name", getFQDNOrHostName());
     }
 
     void run();
@@ -140,7 +139,7 @@ private:
     void processTablesStatusRequest();
 
     void sendHello();
-    void sendData(const Block & block);    /// Write a block to the network.
+    void sendData(const Block & block); /// Write a block to the network.
     void sendException(const Exception & e);
     void sendRegionException(const std::vector<UInt64> & region_ids);
     void sendLockInfos(const LockInfoPtr & lock_info);
@@ -160,4 +159,4 @@ private:
     void updateProgress(const Progress & value);
 };
 
-}
+} // namespace DB

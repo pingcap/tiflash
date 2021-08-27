@@ -11,7 +11,6 @@
 
 namespace DB::stable
 {
-
 class DeltaVersionEditAcceptor;
 
 class PageEntriesVersionSetWithDelta : public DB::stable::MVCC::VersionSetWithDelta< //
@@ -21,13 +20,15 @@ class PageEntriesVersionSetWithDelta : public DB::stable::MVCC::VersionSetWithDe
                                            DeltaVersionEditAcceptor>
 {
 public:
-    using BaseType     = DB::stable::MVCC::VersionSetWithDelta<PageEntriesForDelta, PageEntriesView, PageEntriesEdit, DeltaVersionEditAcceptor>;
+    using BaseType = DB::stable::MVCC::VersionSetWithDelta<PageEntriesForDelta, PageEntriesView, PageEntriesEdit, DeltaVersionEditAcceptor>;
     using EditAcceptor = BaseType::EditAcceptor;
-    using VersionType  = BaseType::VersionType;
-    using VersionPtr   = BaseType::VersionPtr;
+    using VersionType = BaseType::VersionType;
+    using VersionPtr = BaseType::VersionPtr;
 
 public:
-    explicit PageEntriesVersionSetWithDelta(const DB::stable::MVCC::VersionSetConfig & config_, Poco::Logger * log_) : BaseType(config_, log_) {}
+    explicit PageEntriesVersionSetWithDelta(const DB::stable::MVCC::VersionSetConfig & config_, Poco::Logger * log_)
+        : BaseType(config_, log_)
+    {}
 
 public:
     std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> gcApply(PageEntriesEdit & edit, bool need_scan_page_ids = true);
@@ -37,10 +38,10 @@ public:
                                                                                bool need_scan_page_ids = true) const;
 
 private:
-    void collectLiveFilesFromVersionList(const PageEntriesView &        view,
+    void collectLiveFilesFromVersionList(const PageEntriesView & view,
                                          std::set<PageFileIdAndLevel> & live_files,
-                                         std::set<PageId> &             live_normal_pages,
-                                         bool                           need_scan_page_ids) const;
+                                         std::set<PageId> & live_normal_pages,
+                                         bool need_scan_page_ids) const;
 };
 
 /// Read old entries state from `view_` and apply new edit to `view_->tail`
@@ -48,8 +49,8 @@ class DeltaVersionEditAcceptor
 {
 public:
     explicit DeltaVersionEditAcceptor(const PageEntriesView * view_, //
-                                      bool                    ignore_invalid_ref_ = false,
-                                      Poco::Logger *          log_                = nullptr);
+                                      bool ignore_invalid_ref_ = false,
+                                      Poco::Logger * log_ = nullptr);
 
     ~DeltaVersionEditAcceptor();
 
@@ -61,7 +62,7 @@ public:
 
     static void gcApplyInplace( //
         const PageEntriesVersionSetWithDelta::VersionPtr & current,
-        PageEntriesEdit &                                  edit)
+        PageEntriesEdit & edit)
     {
         assert(current->isBase());
         assert(current.use_count() == 1);
@@ -77,10 +78,10 @@ private:
     void decreasePageRef(PageId page_id);
 
 private:
-    PageEntriesView *                          view;
+    PageEntriesView * view;
     PageEntriesVersionSetWithDelta::VersionPtr current_version;
-    bool                                       ignore_invalid_ref;
-    Poco::Logger *                             log;
+    bool ignore_invalid_ref;
+    Poco::Logger * log;
 };
 
 } // namespace DB::stable

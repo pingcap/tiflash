@@ -1,21 +1,21 @@
+#include <Columns/ColumnArray.h>
+#include <Columns/FilterDescription.h>
+#include <Common/typeid_cast.h>
 #include <Storages/MergeTree/MergeTreeBaseBlockInputStream.h>
+#include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <Storages/MergeTree/MergeTreeRangeReader.h>
 #include <Storages/MergeTree/MergeTreeReader.h>
-#include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
-#include <Columns/FilterDescription.h>
-#include <Columns/ColumnArray.h>
-#include <Common/typeid_cast.h>
+
 #include <ext/range.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
-    extern const int LOGICAL_ERROR;
-}
+extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 MergeTreeBaseBlockInputStream::MergeTreeBaseBlockInputStream(
@@ -31,20 +31,19 @@ MergeTreeBaseBlockInputStream::MergeTreeBaseBlockInputStream(
     bool save_marks_in_cache,
     bool update_persisted_cache,
     const Names & virt_column_names)
-:
-    storage(storage),
-    prewhere_actions(prewhere_actions),
-    prewhere_column_name(prewhere_column_name),
-    max_block_size_rows(max_block_size_rows),
-    preferred_block_size_bytes(preferred_block_size_bytes),
-    preferred_max_column_in_block_size_bytes(preferred_max_column_in_block_size_bytes),
-    min_bytes_to_use_direct_io(min_bytes_to_use_direct_io),
-    max_read_buffer_size(max_read_buffer_size),
-    use_uncompressed_cache(use_uncompressed_cache),
-    save_marks_in_cache(save_marks_in_cache),
-    update_persisted_cache(update_persisted_cache),
-    virt_column_names(virt_column_names),
-    max_block_size_marks(max_block_size_rows / storage.index_granularity)
+    : storage(storage)
+    , prewhere_actions(prewhere_actions)
+    , prewhere_column_name(prewhere_column_name)
+    , max_block_size_rows(max_block_size_rows)
+    , preferred_block_size_bytes(preferred_block_size_bytes)
+    , preferred_max_column_in_block_size_bytes(preferred_max_column_in_block_size_bytes)
+    , min_bytes_to_use_direct_io(min_bytes_to_use_direct_io)
+    , max_read_buffer_size(max_read_buffer_size)
+    , use_uncompressed_cache(use_uncompressed_cache)
+    , save_marks_in_cache(save_marks_in_cache)
+    , update_persisted_cache(update_persisted_cache)
+    , virt_column_names(virt_column_names)
+    , max_block_size_marks(max_block_size_rows / storage.index_granularity)
 {
 }
 
@@ -82,10 +81,9 @@ Block MergeTreeBaseBlockInputStream::readFromPart()
     const auto index_granularity = storage.index_granularity;
     const double min_filtration_ratio = 0.00001;
 
-    auto estimateNumRows = [preferred_block_size_bytes, max_block_size_rows,
-        index_granularity, preferred_max_column_in_block_size_bytes, min_filtration_ratio](
-        MergeTreeReadTask & task, MergeTreeRangeReader & reader)
-    {
+    auto estimateNumRows = [preferred_block_size_bytes, max_block_size_rows, index_granularity, preferred_max_column_in_block_size_bytes, min_filtration_ratio](
+                               MergeTreeReadTask & task,
+                               MergeTreeRangeReader & reader) {
         if (!task.size_predictor)
             return max_block_size_rows;
 
@@ -124,27 +122,53 @@ Block MergeTreeBaseBlockInputStream::readFromPart()
             if (reader->getColumns().empty())
             {
                 task->range_reader = MergeTreeRangeReader(
-                        pre_reader.get(), index_granularity, nullptr, prewhere_actions,
-                        &prewhere_column_name, &task->ordered_names,
-                        task->should_reorder, task->remove_prewhere_column, true);
+                    pre_reader.get(),
+                    index_granularity,
+                    nullptr,
+                    prewhere_actions,
+                    &prewhere_column_name,
+                    &task->ordered_names,
+                    task->should_reorder,
+                    task->remove_prewhere_column,
+                    true);
             }
             else
             {
                 task->pre_range_reader = MergeTreeRangeReader(
-                        pre_reader.get(), index_granularity, nullptr, prewhere_actions,
-                        &prewhere_column_name, &task->ordered_names,
-                        task->should_reorder, task->remove_prewhere_column, false);
+                    pre_reader.get(),
+                    index_granularity,
+                    nullptr,
+                    prewhere_actions,
+                    &prewhere_column_name,
+                    &task->ordered_names,
+                    task->should_reorder,
+                    task->remove_prewhere_column,
+                    false);
 
                 task->range_reader = MergeTreeRangeReader(
-                        reader.get(), index_granularity, &task->pre_range_reader, nullptr,
-                        nullptr, &task->ordered_names, true, false, true);
+                    reader.get(),
+                    index_granularity,
+                    &task->pre_range_reader,
+                    nullptr,
+                    nullptr,
+                    &task->ordered_names,
+                    true,
+                    false,
+                    true);
             }
         }
         else
         {
             task->range_reader = MergeTreeRangeReader(
-                    reader.get(), index_granularity, nullptr, prewhere_actions,
-                    nullptr, &task->ordered_names, task->should_reorder, false, true);
+                reader.get(),
+                index_granularity,
+                nullptr,
+                prewhere_actions,
+                nullptr,
+                &task->ordered_names,
+                task->should_reorder,
+                false,
+                true);
         }
     }
 
@@ -160,7 +184,7 @@ Block MergeTreeBaseBlockInputStream::readFromPart()
 
     size_t num_filtered_rows = read_result.numReadRows() - read_result.block.rows();
 
-    progressImpl({ read_result.numReadRows(), read_result.numBytesRead() });
+    progressImpl({read_result.numReadRows(), read_result.numBytesRead()});
 
     if (task->size_predictor)
     {
@@ -201,7 +225,7 @@ void MergeTreeBaseBlockInputStream::injectVirtualColumns(Block & block) const
                 else
                     column = DataTypeString().createColumn();
 
-                block.insert({ column, std::make_shared<DataTypeString>(), virt_column_name});
+                block.insert({column, std::make_shared<DataTypeString>(), virt_column_name});
             }
             else if (virt_column_name == "_part_index")
             {
@@ -211,7 +235,7 @@ void MergeTreeBaseBlockInputStream::injectVirtualColumns(Block & block) const
                 else
                     column = DataTypeUInt64().createColumn();
 
-                block.insert({ column, std::make_shared<DataTypeUInt64>(), virt_column_name});
+                block.insert({column, std::make_shared<DataTypeUInt64>(), virt_column_name});
             }
         }
     }
@@ -220,4 +244,4 @@ void MergeTreeBaseBlockInputStream::injectVirtualColumns(Block & block) const
 
 MergeTreeBaseBlockInputStream::~MergeTreeBaseBlockInputStream() = default;
 
-}
+} // namespace DB

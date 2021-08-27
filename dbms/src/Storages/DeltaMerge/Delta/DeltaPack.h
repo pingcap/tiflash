@@ -11,7 +11,6 @@ namespace DB
 {
 namespace DM
 {
-
 static constexpr size_t PACK_SERIALIZE_BUFFER_SIZE = 65536;
 
 struct DMContext;
@@ -22,18 +21,18 @@ class DeltaPackDeleteRange;
 class DMFileBlockInputStream;
 class DeltaPackReader;
 
-using DeltaPackReaderPtr        = std::shared_ptr<DeltaPackReader>;
+using DeltaPackReaderPtr = std::shared_ptr<DeltaPackReader>;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
-using DeltaPackPtr              = std::shared_ptr<DeltaPack>;
-using DeltaPackBlockPtr         = std::shared_ptr<DeltaPackBlock>;
-using DeltaPackFilePtr          = std::shared_ptr<DeltaPackFile>;
-using DeltaPackDeleteRangePtr   = std::shared_ptr<DeltaPackDeleteRange>;
+using DeltaPackPtr = std::shared_ptr<DeltaPack>;
+using DeltaPackBlockPtr = std::shared_ptr<DeltaPackBlock>;
+using DeltaPackFilePtr = std::shared_ptr<DeltaPackFile>;
+using DeltaPackDeleteRangePtr = std::shared_ptr<DeltaPackDeleteRange>;
 
 using ConstDeltaPackPtr = std::shared_ptr<const DeltaPack>;
 using DeltaPackBlockPtr = std::shared_ptr<DeltaPackBlock>;
-using DeltaPackFilePtr  = std::shared_ptr<DeltaPackFile>;
-using DeltaPacks        = std::vector<DeltaPackPtr>;
-using DeltaPackBlocks   = std::vector<DeltaPackBlockPtr>;
+using DeltaPackFilePtr = std::shared_ptr<DeltaPackFile>;
+using DeltaPacks = std::vector<DeltaPackPtr>;
+using DeltaPackBlocks = std::vector<DeltaPackBlockPtr>;
 
 static std::atomic_uint64_t MAX_PACK_ID{0};
 
@@ -44,7 +43,9 @@ protected:
 
     bool saved = false;
 
-    DeltaPack() : id(++MAX_PACK_ID) {}
+    DeltaPack()
+        : id(++MAX_PACK_ID)
+    {}
 
     virtual ~DeltaPack() = default;
 
@@ -52,20 +53,24 @@ public:
     enum Type : UInt32
     {
         DELETE_RANGE = 1,
-        BLOCK        = 2,
-        FILE         = 3,
+        BLOCK = 2,
+        FILE = 3,
     };
 
     struct Cache
     {
-        Cache(const Block & header) : block(header.cloneWithColumns(header.cloneEmptyColumns())) {}
-        Cache(Block && block) : block(std::move(block)) {}
+        Cache(const Block & header)
+            : block(header.cloneWithColumns(header.cloneEmptyColumns()))
+        {}
+        Cache(Block && block)
+            : block(std::move(block))
+        {}
 
         std::mutex mutex;
-        Block      block;
+        Block block;
     };
 
-    using CachePtr      = std::shared_ptr<Cache>;
+    using CachePtr = std::shared_ptr<Cache>;
     using ColIdToOffset = std::unordered_map<ColId, size_t>;
 
 public:
@@ -92,8 +97,8 @@ public:
     /// Is a DeltaPackDeleteRange or not.
     bool isDeleteRange() const { return getType() == Type::DELETE_RANGE; };
 
-    DeltaPackBlock *       tryToBlock();
-    DeltaPackFile *        tryToFile();
+    DeltaPackBlock * tryToBlock();
+    DeltaPackFile * tryToFile();
     DeltaPackDeleteRange * tryToDeleteRange();
 
     /// Put the data's page id into the corresponding WriteBatch.
@@ -111,8 +116,8 @@ public:
 class DeltaPackReader
 {
 public:
-    virtual ~DeltaPackReader()                 = default;
-    DeltaPackReader()                          = default;
+    virtual ~DeltaPackReader() = default;
+    DeltaPackReader() = default;
     DeltaPackReader(const DeltaPackReader & o) = delete;
 
     /// Read data from this reader and store the result into output_cols.
@@ -130,9 +135,14 @@ public:
 };
 
 size_t copyColumnsData(
-    const Columns & from, const ColumnPtr & pk_col, MutableColumns & to, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
+    const Columns & from,
+    const ColumnPtr & pk_col,
+    MutableColumns & to,
+    size_t rows_offset,
+    size_t rows_limit,
+    const RowKeyRange * range);
 
-void     serializeSchema(WriteBuffer & buf, const BlockPtr & schema);
+void serializeSchema(WriteBuffer & buf, const BlockPtr & schema);
 BlockPtr deserializeSchema(ReadBuffer & buf);
 
 void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, bool compress);
@@ -144,10 +154,10 @@ void serializeSavedPacks(WriteBuffer & buf, const DeltaPacks & packs);
 /// Recreate pack instances from buf.
 DeltaPacks deserializePacks(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
 
-void       serializeSavedPacks_v2(WriteBuffer & buf, const DeltaPacks & packs);
+void serializeSavedPacks_v2(WriteBuffer & buf, const DeltaPacks & packs);
 DeltaPacks deserializePacks_V2(ReadBuffer & buf, UInt64 version);
 
-void       serializeSavedPacks_V3(WriteBuffer & buf, const DeltaPacks & packs);
+void serializeSavedPacks_V3(WriteBuffer & buf, const DeltaPacks & packs);
 DeltaPacks deserializePacks_V3(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf, UInt64 version);
 
 /// Debugging string

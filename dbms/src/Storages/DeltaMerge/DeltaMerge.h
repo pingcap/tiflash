@@ -15,18 +15,18 @@ namespace DB
 {
 namespace DM
 {
-
 /// Note that the columns in stable input stream and value space must exactly the same, including name, type, and id.
 /// The first column must be PK column.
 /// This class does not guarantee that the rows in the return blocks are filltered by range.
 template <class DeltaValueReader, class IndexIterator, bool skippable_place = false>
-class DeltaMergeBlockInputStream final : public SkippableBlockInputStream, Allocator<false>
+class DeltaMergeBlockInputStream final : public SkippableBlockInputStream
+    , Allocator<false>
 {
     static constexpr size_t UNLIMITED = std::numeric_limits<UInt64>::max();
 
 private:
     using DeltaValueReaderPtr = std::shared_ptr<DeltaValueReader>;
-    using SharedLock          = std::shared_lock<std::shared_mutex>;
+    using SharedLock = std::shared_lock<std::shared_mutex>;
 
     SkippableBlockInputStreamPtr stable_input_stream;
 
@@ -37,60 +37,60 @@ private:
     ssize_t stable_ignore = 0;
 
     /// Those vars are only used in skippable_place mode
-    size_t sk_call_status      = 0; // 0: initial, 1: called once by getSkippedRows
+    size_t sk_call_status = 0; // 0: initial, 1: called once by getSkippedRows
     size_t sk_skip_stable_rows = 0;
-    size_t sk_skip_total_rows  = 0;
-    Block  sk_first_block;
+    size_t sk_skip_total_rows = 0;
+    Block sk_first_block;
 
     DeltaValueReaderPtr delta_value_reader;
-    IndexIterator       delta_index_it;
-    IndexIterator       delta_index_end;
+    IndexIterator delta_index_it;
+    IndexIterator delta_index_end;
 
     RowKeyRange rowkey_range;
-    bool        is_common_handle;
-    size_t      rowkey_column_size;
+    bool is_common_handle;
+    size_t rowkey_column_size;
 
     size_t max_block_size;
 
-    Block  header;
+    Block header;
     size_t num_columns;
 
     size_t use_stable_rows;
 
     size_t use_delta_offset = 0;
-    size_t use_delta_rows   = 0;
+    size_t use_delta_rows = 0;
 
     Columns cur_stable_block_columns;
-    size_t  cur_stable_block_rows = 0;
-    size_t  cur_stable_block_pos  = 0;
+    size_t cur_stable_block_rows = 0;
+    size_t cur_stable_block_pos = 0;
 
     bool stable_done = false;
-    bool delta_done  = false;
+    bool delta_done = false;
 
     // How many times `read` is called.
     size_t num_read = 0;
 
-    RowKeyValue    last_value;
+    RowKeyValue last_value;
     RowKeyValueRef last_value_ref;
-    UInt64         last_version         = 0;
-    size_t         last_handle_pos      = 0;
-    size_t         last_handle_read_num = 0;
+    UInt64 last_version = 0;
+    size_t last_handle_pos = 0;
+    size_t last_handle_read_num = 0;
 
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
-                               const DeltaValueReaderPtr &          delta_value_reader_,
-                               const IndexIterator &                delta_index_start_,
-                               const IndexIterator &                delta_index_end_,
-                               const RowKeyRange                    rowkey_range_,
-                               size_t                               max_block_size_)
-        : stable_input_stream(stable_input_stream_),
-          delta_value_reader(delta_value_reader_),
-          delta_index_it(delta_index_start_),
-          delta_index_end(delta_index_end_),
-          rowkey_range(rowkey_range_),
-          is_common_handle(rowkey_range.is_common_handle),
-          rowkey_column_size(rowkey_range.rowkey_column_size),
-          max_block_size(max_block_size_)
+                               const DeltaValueReaderPtr & delta_value_reader_,
+                               const IndexIterator & delta_index_start_,
+                               const IndexIterator & delta_index_end_,
+                               const RowKeyRange rowkey_range_,
+                               size_t max_block_size_)
+        : stable_input_stream(stable_input_stream_)
+        , delta_value_reader(delta_value_reader_)
+        , delta_index_it(delta_index_start_)
+        , delta_index_end(delta_index_end_)
+        , rowkey_range(rowkey_range_)
+        , is_common_handle(rowkey_range.is_common_handle)
+        , rowkey_column_size(rowkey_range.rowkey_column_size)
+        , max_block_size(max_block_size_)
     {
         if constexpr (skippable_place)
         {
@@ -98,25 +98,25 @@ public:
                 throw Exception("The end of rowkey range should be +Inf in skippable_place mode");
         }
 
-        header      = stable_input_stream->getHeader();
+        header = stable_input_stream->getHeader();
         num_columns = header.columns();
 
         if (delta_index_it == delta_index_end)
         {
             use_stable_rows = UNLIMITED;
-            delta_done      = true;
+            delta_done = true;
         }
         else
         {
             use_stable_rows = delta_index_it.getSid();
         }
         auto all_range = RowKeyRange::newAll(is_common_handle, rowkey_column_size);
-        last_value     = all_range.getStart().toRowKeyValue();
+        last_value = all_range.getStart().toRowKeyValue();
         last_value_ref = last_value.toRowKeyValueRef();
     }
 
     String getName() const override { return "DeltaMerge"; }
-    Block  getHeader() const override { return header; }
+    Block getHeader() const override { return header; }
 
     bool getSkippedRows(size_t & skip_rows) override
     {
@@ -135,9 +135,9 @@ public:
 
         sk_first_block = doRead();
 
-        skip_rows           = sk_skip_total_rows;
+        skip_rows = sk_skip_total_rows;
         sk_skip_stable_rows = 0;
-        sk_skip_total_rows  = 0;
+        sk_skip_total_rows = 0;
         return true;
     }
 
@@ -169,20 +169,20 @@ private:
         if constexpr (DM_RUN_CHECK)
         {
             // In some cases like Segment::getSplitPointSlow, only handle column in block.
-            if (block.columns() < 2                                           //
+            if (block.columns() < 2 //
                 || block.getByPosition(0).column_id != EXTRA_HANDLE_COLUMN_ID //
                 || block.getByPosition(1).column_id != VERSION_COLUMN_ID)
                 return;
 
             ++num_read;
 
-            auto   rowkey_column  = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle);
+            auto rowkey_column = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle);
             auto & version_column = toColumnVectorData<UInt64>(block.getByPosition(1).column);
             for (size_t i = 0; i < rowkey_column.column->size(); ++i)
             {
                 auto rowkey_value = rowkey_column.getRowKeyValue(i);
-                auto version      = version_column[i];
-                int  cmp_result   = compare(rowkey_value, last_value_ref);
+                auto version = version_column[i];
+                int cmp_result = compare(rowkey_value, last_value_ref);
                 if (cmp_result < 0 || (cmp_result == 0 && version < last_version))
                 {
                     throw Exception("DeltaMerge return wrong result, current handle[" + rowkey_value.toDebugString() + "]version["
@@ -191,14 +191,14 @@ private:
                                     + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
                                     + DB::toString(last_handle_pos) + "]");
                 }
-                last_value_ref       = rowkey_value;
-                last_version         = version;
-                last_handle_pos      = i;
+                last_value_ref = rowkey_value;
+                last_version = version;
+                last_handle_pos = i;
                 last_handle_read_num = num_read;
             }
             /// last_value is based on block, when block is released, it will
             /// become invalid, so need to update last_value here
-            last_value     = last_value_ref.toRowKeyValue();
+            last_value = last_value_ref.toRowKeyValue();
             last_value_ref = last_value.toRowKeyValueRef();
         }
     }
@@ -284,7 +284,7 @@ private:
                     if (do_write)
                     {
                         use_delta_offset = delta_index_it.getValue();
-                        use_delta_rows   = delta_index_it.getCount();
+                        use_delta_rows = delta_index_it.getCount();
                         writeInsertFromDelta(output_columns, output_write_limit);
                     }
                 }
@@ -310,7 +310,7 @@ private:
     inline size_t skipRowsInCurStableBlock(size_t n)
     {
         size_t remaining = cur_stable_block_rows - cur_stable_block_pos;
-        size_t skipped   = std::min(n, remaining);
+        size_t skipped = std::min(n, remaining);
         cur_stable_block_pos += skipped;
         return skipped;
     }
@@ -322,8 +322,8 @@ private:
 
         cur_stable_block_columns.clear();
         cur_stable_block_rows = 0;
-        cur_stable_block_pos  = 0;
-        auto block            = stable_input_stream->read();
+        cur_stable_block_pos = 0;
+        auto block = stable_input_stream->read();
         if (!block || !block.rows())
             return false;
 
@@ -412,7 +412,7 @@ private:
                 {
                     if constexpr (c_delta_done)
                     {
-                        stable_done     = true;
+                        stable_done = true;
                         use_stable_rows = 0;
                         break;
                     }
@@ -428,9 +428,9 @@ private:
         auto output_offset = output_columns.at(0)->size();
 
         size_t copy_rows = std::min(output_write_limit, use_stable_rows);
-        copy_rows        = std::min(copy_rows, cur_stable_block_rows - cur_stable_block_pos);
-        auto offset      = cur_stable_block_pos;
-        auto limit       = copy_rows;
+        copy_rows = std::min(copy_rows, cur_stable_block_rows - cur_stable_block_pos);
+        auto offset = cur_stable_block_pos;
+        auto limit = copy_rows;
 
         auto [final_offset, final_limit] = RowKeyFilter::getPosRangeOfSorted(rowkey_range, cur_stable_block_columns[0], offset, limit);
 
@@ -506,7 +506,7 @@ private:
 
         if (delta_index_it == delta_index_end)
         {
-            delta_done      = true;
+            delta_done = true;
             use_stable_rows = UNLIMITED;
         }
         else

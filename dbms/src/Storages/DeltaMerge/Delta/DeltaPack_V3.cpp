@@ -8,7 +8,6 @@ namespace DB
 {
 namespace DM
 {
-
 void serializeSavedPacks_V3(WriteBuffer & buf, const DeltaPacks & packs)
 {
     size_t saved_packs = std::find_if(packs.begin(), packs.end(), [](const DeltaPackPtr & p) { return !p->isSaved(); }) - packs.begin();
@@ -25,16 +24,19 @@ void serializeSavedPacks_V3(WriteBuffer & buf, const DeltaPacks & packs)
 
         switch (pack->getType())
         {
-        case DeltaPack::Type::DELETE_RANGE: {
+        case DeltaPack::Type::DELETE_RANGE:
+        {
             pack->serializeMetadata(buf, false);
             break;
         }
-        case DeltaPack::Type::FILE: {
+        case DeltaPack::Type::FILE:
+        {
             pack->serializeMetadata(buf, false);
             break;
         }
-        case DeltaPack::Type::BLOCK: {
-            auto dp_block   = pack->tryToBlock();
+        case DeltaPack::Type::BLOCK:
+        {
+            auto dp_block = pack->tryToBlock();
             auto cur_schema = dp_block->getSchema();
             if (unlikely(!cur_schema))
                 throw Exception("A data pack without schema: " + pack->toString(), ErrorCodes::LOGICAL_ERROR);
@@ -54,7 +56,7 @@ DeltaPacks deserializePacks_V3(DMContext & context, const RowKeyRange & segment_
     size_t pack_count;
     readIntBinary(pack_count, buf);
     DeltaPacks packs;
-    BlockPtr   last_schema;
+    BlockPtr last_schema;
     for (size_t i = 0; i < pack_count; ++i)
     {
         std::underlying_type<DeltaPack::Type>::type pack_type;
@@ -65,11 +67,13 @@ DeltaPacks deserializePacks_V3(DMContext & context, const RowKeyRange & segment_
         case DeltaPack::Type::DELETE_RANGE:
             pack = DeltaPackDeleteRange::deserializeMetadata(buf);
             break;
-        case DeltaPack::Type::BLOCK: {
+        case DeltaPack::Type::BLOCK:
+        {
             std::tie(pack, last_schema) = DeltaPackBlock::deserializeMetadata(buf, last_schema);
             break;
         }
-        case DeltaPack::Type::FILE: {
+        case DeltaPack::Type::FILE:
+        {
             pack = DeltaPackFile::deserializeMetadata(context, segment_range, buf);
             break;
         }

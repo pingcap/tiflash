@@ -1,28 +1,27 @@
 #include "MergeTreeDataPartChecksum.h"
+
 #include <Common/SipHash.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 
 
 namespace DB
 {
-
-
 namespace ErrorCodes
 {
-    extern const int CHECKSUM_DOESNT_MATCH;
-    extern const int BAD_SIZE_OF_FILE_IN_DATA_PART;
-    extern const int FORMAT_VERSION_TOO_OLD;
-    extern const int FILE_DOESNT_EXIST;
-    extern const int UNEXPECTED_FILE_IN_DATA_PART;
-    extern const int UNKNOWN_FORMAT;
-    extern const int NO_FILE_IN_DATA_PART;
-}
+extern const int CHECKSUM_DOESNT_MATCH;
+extern const int BAD_SIZE_OF_FILE_IN_DATA_PART;
+extern const int FORMAT_VERSION_TOO_OLD;
+extern const int FILE_DOESNT_EXIST;
+extern const int UNEXPECTED_FILE_IN_DATA_PART;
+extern const int UNKNOWN_FORMAT;
+extern const int NO_FILE_IN_DATA_PART;
+} // namespace ErrorCodes
 
 
 void MergeTreeDataPartChecksum::checkEqual(const MergeTreeDataPartChecksum & rhs, bool have_uncompressed, const String & name) const
@@ -51,7 +50,7 @@ void MergeTreeDataPartChecksum::checkSize(const String & path) const
     UInt64 size = file.getSize();
     if (size != file_size)
         throw Exception(path + " has unexpected size: " + toString(size) + " instead of " + toString(file_size),
-            ErrorCodes::BAD_SIZE_OF_FILE_IN_DATA_PART);
+                        ErrorCodes::BAD_SIZE_OF_FILE_IN_DATA_PART);
 }
 
 
@@ -90,16 +89,16 @@ bool MergeTreeDataPartChecksums::read(ReadBuffer & in, size_t format_version)
 {
     switch (format_version)
     {
-        case 1:
-            return false;
-        case 2:
-            return read_v2(in);
-        case 3:
-            return read_v3(in);
-        case 4:
-            return read_v4(in);
-        default:
-            throw Exception("Bad checksums format version: " + DB::toString(format_version), ErrorCodes::UNKNOWN_FORMAT);
+    case 1:
+        return false;
+    case 2:
+        return read_v2(in);
+    case 3:
+        return read_v3(in);
+    case 4:
+        return read_v4(in);
+    default:
+        throw Exception("Bad checksums format version: " + DB::toString(format_version), ErrorCodes::UNKNOWN_FORMAT);
     }
 }
 
@@ -267,9 +266,9 @@ MergeTreeDataPartChecksums MergeTreeDataPartChecksums::deserializeFrom(const Str
 bool MergeTreeDataPartChecksums::isBadChecksumsErrorCode(int code)
 {
     return code == ErrorCodes::CHECKSUM_DOESNT_MATCH
-           || code == ErrorCodes::BAD_SIZE_OF_FILE_IN_DATA_PART
-           || code == ErrorCodes::NO_FILE_IN_DATA_PART
-           || code == ErrorCodes::UNEXPECTED_FILE_IN_DATA_PART;
+        || code == ErrorCodes::BAD_SIZE_OF_FILE_IN_DATA_PART
+        || code == ErrorCodes::NO_FILE_IN_DATA_PART
+        || code == ErrorCodes::UNEXPECTED_FILE_IN_DATA_PART;
 }
 
 void MinimalisticDataPartChecksums::serialize(WriteBuffer & to) const
@@ -331,8 +330,7 @@ void MinimalisticDataPartChecksums::computeTotalChecksums(const MergeTreeDataPar
     SipHash hash_of_uncompressed_files_;
     SipHash uncompressed_hash_of_compressed_files_;
 
-    auto update_hash = [] (SipHash & hash, const std::string & data)
-    {
+    auto update_hash = [](SipHash & hash, const std::string & data) {
         UInt64 len = data.size();
         hash.update(len);
         hash.update(data.data(), len);
@@ -360,8 +358,7 @@ void MinimalisticDataPartChecksums::computeTotalChecksums(const MergeTreeDataPar
         }
     }
 
-    auto get_hash = [] (SipHash & hash, uint128 & data)
-    {
+    auto get_hash = [](SipHash & hash, uint128 & data) {
         hash.get128(data.first, data.second);
     };
 
@@ -406,7 +403,7 @@ void MinimalisticDataPartChecksums::checkEqualImpl(const MinimalisticDataPartChe
     {
         std::stringstream error_msg;
         error_msg << "Different number of files: " << rhs.num_compressed_files << " compressed (expected " << num_compressed_files << ")"
-            << " and " << rhs.num_uncompressed_files << " uncompressed ones (expected " << num_uncompressed_files << ")";
+                  << " and " << rhs.num_uncompressed_files << " uncompressed ones (expected " << num_uncompressed_files << ")";
 
         throw Exception(error_msg.str(), ErrorCodes::CHECKSUM_DOESNT_MATCH);
     }
@@ -445,4 +442,4 @@ MinimalisticDataPartChecksums MinimalisticDataPartChecksums::deserializeFrom(con
     return res;
 }
 
-}
+} // namespace DB

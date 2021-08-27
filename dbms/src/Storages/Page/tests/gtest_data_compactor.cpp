@@ -20,7 +20,6 @@ extern const char force_legacy_or_checkpoint_page_file_exists[];
 } // namespace FailPoints
 namespace tests
 {
-
 // #define GENERATE_TEST_DATA
 
 TEST(DataCompactor_test, MigratePages)
@@ -34,7 +33,7 @@ try
     const Strings test_paths = TiFlashTestEnv::findTestDataPath("page_storage_compactor_migrate");
     ASSERT_EQ(test_paths.size(), 2);
 #else
-    const String  test_path  = TiFlashTestEnv::getTemporaryPath() + "page_storage_compactor_migrate";
+    const String test_path = TiFlashTestEnv::getTemporaryPath() + "page_storage_compactor_migrate";
     if (Poco::File f(test_path); f.exists())
         f.remove(true);
     const Strings test_paths = Strings{
@@ -43,9 +42,9 @@ try
     };
 #endif
 
-    auto               ctx           = TiFlashTestEnv::getContext(DB::Settings());
-    const auto         file_provider = ctx.getFileProvider();
-    PSDiskDelegatorPtr delegate      = std::make_shared<MockDiskDelegatorMulti>(test_paths);
+    auto ctx = TiFlashTestEnv::getContext(DB::Settings());
+    const auto file_provider = ctx.getFileProvider();
+    PSDiskDelegatorPtr delegate = std::make_shared<MockDiskDelegatorMulti>(test_paths);
 
     PageStorage storage("data_compact_test", delegate, config, file_provider);
 
@@ -54,8 +53,8 @@ try
     storage.restore();
     // Created by these write batches:
     {
-        char i               = 0;
-        char buf[1024]       = {'\0'};
+        char i = 0;
+        char buf[1024] = {'\0'};
         auto create_buff_ptr = [&buf, &i](size_t sz) -> ReadBufferPtr {
             buf[0] = i++;
             return std::make_shared<ReadBufferFromMemory>(buf, sz);
@@ -73,7 +72,7 @@ try
             WriteBatch wb;
             wb.putPage(1, 1, create_buff_ptr(page_size), page_size); // new version of page 1, data 1
             wb.putPage(2, 0, create_buff_ptr(page_size), page_size); // page 2, data 2
-            wb.putRefPage(3, 2);                                     // page 3 -ref-> page 2
+            wb.putRefPage(3, 2); // page 3 -ref-> page 2
             wb.putPage(4, 0, create_buff_ptr(page_size), page_size); // page 4, data 3
             storage.write(std::move(wb));
         }
@@ -81,9 +80,9 @@ try
             // This is written to PageFile{1, 0}
             WriteBatch wb;
             wb.putPage(1, 2, create_buff_ptr(page_size), page_size); // new version of page 1, data 4
-            wb.delPage(4);                                           // del page 4
-            wb.putRefPage(5, 3);                                     // page 5 -ref-> page 3 --> page 2
-            wb.delPage(3);                                           // del page 3, page 5 -ref-> page 2
+            wb.delPage(4); // del page 4
+            wb.putRefPage(5, 3); // page 5 -ref-> page 3 --> page 2
+            wb.delPage(3); // del page 3, page 5 -ref-> page 2
             wb.putPage(6, 0, create_buff_ptr(page_size), page_size); // page 6, data 5
             storage.write(std::move(wb));
         }
@@ -102,15 +101,15 @@ try
 
     // valid_pages
     DataCompactor<MockSnapshotPtr> compactor(storage, config, nullptr, nullptr);
-    auto                           valid_pages = DataCompactor<MockSnapshotPtr>::collectValidPagesInPageFile(snapshot);
+    auto valid_pages = DataCompactor<MockSnapshotPtr>::collectValidPagesInPageFile(snapshot);
     ASSERT_EQ(valid_pages.size(), 2); // 3 valid pages in 2 PageFiles
 
-    auto                     candidates = PageStorage::listAllPageFiles(file_provider, delegate, storage.page_file_log);
+    auto candidates = PageStorage::listAllPageFiles(file_provider, delegate, storage.page_file_log);
     const PageFileIdAndLevel target_id_lvl{2, 1};
     {
         // Apply migration
         auto [edits, bytes_written] = compactor.migratePages(snapshot, valid_pages, candidates, PageFileSet{}, 0);
-        std::ignore                 = bytes_written;
+        std::ignore = bytes_written;
         ASSERT_EQ(edits.size(), 3); // page 1, 2, 6
         auto & records = edits.getRecords();
         for (size_t i = 0; i < records.size(); ++i)
@@ -130,7 +129,7 @@ try
     for (size_t i = 0; i < delegate->numPaths(); ++i)
     {
         // Try to apply migration again, should be ignore because PageFile_2_1 exists
-        size_t bytes_written                 = 0;
+        size_t bytes_written = 0;
         std::tie(std::ignore, bytes_written) = compactor.migratePages(snapshot, valid_pages, candidates, PageFileSet{}, 0);
         ASSERT_EQ(bytes_written, 0) << "should not apply migration";
     }
@@ -140,7 +139,7 @@ try
         // Mock that PageFile_2_1 have been "Legacy", try to apply migration again, should be ignore because legacy.PageFile_2_1 exists
         FailPointHelper::enableFailPoint(FailPoints::force_formal_page_file_not_exists);
         FailPointHelper::enableFailPoint(FailPoints::force_legacy_or_checkpoint_page_file_exists);
-        size_t bytes_written                 = 0;
+        size_t bytes_written = 0;
         std::tie(std::ignore, bytes_written) = compactor.migratePages(snapshot, valid_pages, candidates, PageFileSet{}, 0);
         ASSERT_EQ(bytes_written, 0) << "should not apply migration";
     }

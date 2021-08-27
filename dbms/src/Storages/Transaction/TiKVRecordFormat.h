@@ -281,7 +281,7 @@ template <typename R>
 inline R readRawString(const char *& data, size_t & len, size_t str_len)
 {
     R res{};
-    if constexpr (!std::is_same_v<R, nullptr_t>)
+    if constexpr (!std::is_same_v<R, std::nullptr_t>)
     {
         res = R(data, str_len);
     }

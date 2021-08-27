@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /// Select all parts within partition (having at least two parts) with minumum total size.
 class AllMergeSelector : public IMergeSelector
 {
@@ -16,4 +15,4 @@ public:
         const size_t max_total_size_to_merge) override;
 };
 
-}
+} // namespace DB

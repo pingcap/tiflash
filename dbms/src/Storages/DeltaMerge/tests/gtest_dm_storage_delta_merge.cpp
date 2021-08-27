@@ -33,7 +33,6 @@ namespace DM
 {
 namespace tests
 {
-
 TEST(StorageDeltaMerge_test, ReadWriteCase1)
 try
 {
@@ -70,10 +69,10 @@ try
         sample.insert(col2);
     }
 
-    Context    ctx = DMTestEnv::getContext();
+    Context ctx = DMTestEnv::getContext();
     StoragePtr storage;
-    DataTypes  data_types;
-    Names      column_names;
+    DataTypes data_types;
+    Names column_names;
     // create table
     {
         NamesAndTypesList names_and_types_list{
@@ -88,13 +87,13 @@ try
         }
 
         const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
-        Poco::File   path(path_name);
+        Poco::File path(path_name);
         if (path.exists())
             path.remove(true);
 
         // primary_expr_ast
         const String table_name = "tmp_table";
-        ASTPtr       astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
+        ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
         storage = StorageDeltaMerge::create("TiFlash",
@@ -110,7 +109,7 @@ try
 
     // test writing to DeltaMergeStorage
     {
-        ASTPtr               insertptr(new ASTInsertQuery());
+        ASTPtr insertptr(new ASTInsertQuery());
         BlockOutputStreamPtr output = storage->write(insertptr, ctx.getSettingsRef());
 
         output->writePrefix();
@@ -120,10 +119,10 @@ try
 
     // get read stream from DeltaMergeStorage
     QueryProcessingStage::Enum stage2;
-    SelectQueryInfo            query_info;
-    query_info.query                          = std::make_shared<ASTSelectQuery>();
-    query_info.mvcc_query_info                = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max());
-    BlockInputStreams ins                     = storage->read(column_names, query_info, ctx, stage2, 8192, 1);
+    SelectQueryInfo query_info;
+    query_info.query = std::make_shared<ASTSelectQuery>();
+    query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max());
+    BlockInputStreams ins = storage->read(column_names, query_info, ctx, stage2, 8192, 1);
     ASSERT_EQ(ins.size(), 1UL);
     BlockInputStreamPtr in = ins[0];
     in->readPrefix();
@@ -159,16 +158,16 @@ CATCH
 TEST(StorageDeltaMerge_test, Rename)
 try
 {
-    Context    ctx = DMTestEnv::getContext();
+    Context ctx = DMTestEnv::getContext();
     std::shared_ptr<StorageDeltaMerge> storage;
-    DataTypes  data_types;
-    Names      column_names;
+    DataTypes data_types;
+    Names column_names;
     const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
     const String table_name = "tmp_table";
     const String db_name = "default";
     // create table
     {
-        NamesAndTypesList names_and_types_list {
+        NamesAndTypesList names_and_types_list{
             //{"col1", std::make_shared<DataTypeUInt64>()},
             {"col1", std::make_shared<DataTypeInt64>()},
             {"col2", std::make_shared<DataTypeString>()},
@@ -179,14 +178,14 @@ try
             column_names.push_back(name_type.name);
         }
 
-        Poco::File   path(path_name);
+        Poco::File path(path_name);
         if (path.exists())
         {
             path.remove(true);
         }
 
         // primary_expr_ast
-        ASTPtr       astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
+        ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
         storage = StorageDeltaMerge::create("TiFlash",
@@ -247,7 +246,7 @@ try
     }
     // Writing will create store object.
     {
-        ASTPtr               insertptr(new ASTInsertQuery());
+        ASTPtr insertptr(new ASTInsertQuery());
         BlockOutputStreamPtr output = storage->write(insertptr, ctx.getSettingsRef());
         output->writePrefix();
         output->write(sample);
@@ -260,23 +259,22 @@ try
     storage->rename(path_name, new_db_name, new_table_name, new_table_name);
     ASSERT_EQ(storage->getTableName(), new_table_name);
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
-
 }
 CATCH
 
 TEST(StorageDeltaMerge_test, HandleCol)
 try
 {
-    Context    ctx = DMTestEnv::getContext();
+    Context ctx = DMTestEnv::getContext();
     std::shared_ptr<StorageDeltaMerge> storage;
-    DataTypes  data_types;
-    Names      column_names;
+    DataTypes data_types;
+    Names column_names;
     const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
     const String table_name = "tmp_table";
     const String db_name = "default";
     // create table
     {
-        NamesAndTypesList names_and_types_list {
+        NamesAndTypesList names_and_types_list{
             //{"col1", std::make_shared<DataTypeUInt64>()},
             {"col1", std::make_shared<DataTypeInt64>()},
             {"col2", std::make_shared<DataTypeString>()},
@@ -294,7 +292,7 @@ try
         }
 
         // primary_expr_ast
-        ASTPtr       astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
+        ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
         storage = StorageDeltaMerge::create("TiFlash",
@@ -313,7 +311,7 @@ try
     auto sort_desc = storage->getPrimarySortDescription();
     ASSERT_FALSE(storage->storeInited());
 
-    auto& store = storage->getStore();
+    auto & store = storage->getStore();
     ASSERT_TRUE(storage->storeInited());
     auto pk_type2 = store->getPKDataType();
     auto sort_desc2 = store->getPrimarySortDescription();
@@ -330,7 +328,7 @@ CATCH
 TEST(StorageDeltaMerge_internal_test, GetMergedQueryRanges)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
-    RegionQueryInfo                 region;
+    RegionQueryInfo region;
     region.range_in_table = GET_REGION_RANGE(100, 200, 1);
     regions.emplace_back(region);
     region.range_in_table = GET_REGION_RANGE(200, 250, 1);
@@ -350,7 +348,7 @@ TEST(StorageDeltaMerge_internal_test, GetMergedQueryRanges)
 TEST(StorageDeltaMerge_internal_test, GetMergedQueryRangesCommonHandle)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
-    RegionQueryInfo                 region;
+    RegionQueryInfo region;
     region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(100, 200, 2).toRegionRange(1);
     regions.emplace_back(region);
     region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(200, 250, 2).toRegionRange(1);
@@ -370,7 +368,7 @@ TEST(StorageDeltaMerge_internal_test, GetMergedQueryRangesCommonHandle)
 TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRanges)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
-    RegionQueryInfo                 region;
+    RegionQueryInfo region;
     region.range_in_table = GET_REGION_RANGE(2360148, 2456148, 1);
     regions.emplace_back(region);
     region.range_in_table = GET_REGION_RANGE(1961680, 2057680, 1);
@@ -400,7 +398,7 @@ TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRanges)
 TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRangesCommonHandle)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
-    RegionQueryInfo                 region;
+    RegionQueryInfo region;
     region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(2360148, 2456148, 2).toRegionRange(1);
     regions.emplace_back(region);
     region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(1961680, 2057680, 2).toRegionRange(1);
@@ -430,7 +428,7 @@ TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRangesCommonHandle)
 TEST(StorageDeltaMerge_internal_test, GetFullQueryRanges)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
-    RegionQueryInfo                 region;
+    RegionQueryInfo region;
     region.range_in_table = GET_REGION_RANGE(std::numeric_limits<HandleID>::min(), std::numeric_limits<HandleID>::max(), 1);
     regions.emplace_back(region);
 
@@ -443,7 +441,7 @@ TEST(StorageDeltaMerge_internal_test, GetFullQueryRanges)
 TEST(StorageDeltaMerge_internal_test, OverlapQueryRanges)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
-    RegionQueryInfo                 region;
+    RegionQueryInfo region;
     region.range_in_table = GET_REGION_RANGE(100, 200, 1);
     regions.emplace_back(region);
     region.range_in_table = GET_REGION_RANGE(150, 250, 1);
@@ -460,7 +458,7 @@ TEST(StorageDeltaMerge_internal_test, OverlapQueryRanges)
 TEST(StorageDeltaMerge_internal_test, OverlapQueryRangesCommonHandle)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
-    RegionQueryInfo                 region;
+    RegionQueryInfo region;
     region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(100, 200, 2).toRegionRange(1);
     regions.emplace_back(region);
     region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(150, 250, 2).toRegionRange(1);
@@ -478,7 +476,7 @@ TEST(StorageDeltaMerge_internal_test, WeirdRange)
 {
     // [100, 200), [200, MAX]
     MvccQueryInfo::RegionsQueryInfo regions;
-    RegionQueryInfo                 region;
+    RegionQueryInfo region;
     region.range_in_table = GET_REGION_RANGE(100, 200, 1);
     regions.emplace_back(region);
     region.range_in_table = GET_REGION_RANGE(200, std::numeric_limits<HandleID>::max(), 1);
@@ -493,7 +491,7 @@ TEST(StorageDeltaMerge_internal_test, WeirdRangeCommonHandle)
 {
     // [100, 200), [200, MAX), [MAX, MAX)
     MvccQueryInfo::RegionsQueryInfo regions;
-    RegionQueryInfo                 region;
+    RegionQueryInfo region;
     region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(100, 200, 2).toRegionRange(1);
     regions.emplace_back(region);
     region.range_in_table
@@ -512,7 +510,7 @@ TEST(StorageDeltaMerge_internal_test, RangeSplit)
 {
     {
         MvccQueryInfo::RegionsQueryInfo regions;
-        RegionQueryInfo                 region;
+        RegionQueryInfo region;
         region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(100, 200, 2).toRegionRange(1);
         regions.emplace_back(region);
         region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(200, 300, 2).toRegionRange(1);
@@ -560,7 +558,7 @@ TEST(StorageDeltaMerge_internal_test, RangeSplit)
 
     {
         MvccQueryInfo::RegionsQueryInfo regions;
-        RegionQueryInfo                 region;
+        RegionQueryInfo region;
         region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(0, 100, 2).toRegionRange(1);
         regions.emplace_back(region);
         region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(200, 300, 2).toRegionRange(1);
