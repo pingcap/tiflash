@@ -95,7 +95,9 @@ public:
 
     String choosePath() const;
 
-    String getDTFilePath(UInt64 file_id) const;
+    // Get the path of the DTFile with file_id.
+    // If throw_on_not_exist is false, return empty string when the path is not exists.
+    String getDTFilePath(UInt64 file_id, bool throw_on_not_exist = true) const;
 
     void addDTFile(UInt64 file_id, size_t file_size, std::string_view path);
 

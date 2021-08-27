@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Completely checks the part data
     * - Calculates checksums and compares them with checksums.txt.
     * - For arrays and strings, checks the correspondence of the size and amount of data.
@@ -16,7 +15,7 @@ MergeTreeData::DataPart::Checksums checkDataPart(
     const String & path,
     size_t index_granularity,
     bool require_checksums,
-    const DataTypes & primary_key_data_types,    /// Check the primary key. If it is not necessary, pass an empty array.
-    std::function<bool()> is_cancelled = []{ return false; });
+    const DataTypes & primary_key_data_types, /// Check the primary key. If it is not necessary, pass an empty array.
+    std::function<bool()> is_cancelled = [] { return false; });
 
-}
+} // namespace DB

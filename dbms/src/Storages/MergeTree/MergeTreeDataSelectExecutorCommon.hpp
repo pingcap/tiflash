@@ -2,7 +2,6 @@
 
 namespace DB
 {
-
 static inline void extendMutableEngineColumnNames(Names & column_names_to_read, const MergeTreeData & data)
 {
     column_names_to_read.insert(column_names_to_read.end(), MutableSupport::version_column_name);
@@ -44,11 +43,11 @@ static inline size_t computeMinMarksForSeek(const Settings & settings, const Mer
 
 template <typename TargetType>
 static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart & data_part,
-    const TiKVHandle::Handle<TargetType> & handle_begin,
-    const TiKVHandle::Handle<TargetType> & handle_end,
-    const MarkRanges & ori_mark_ranges,
-    const size_t min_marks_for_seek,
-    const Settings & settings)
+                                                   const TiKVHandle::Handle<TargetType> & handle_begin,
+                                                   const TiKVHandle::Handle<TargetType> & handle_end,
+                                                   const MarkRanges & ori_mark_ranges,
+                                                   const size_t min_marks_for_seek,
+                                                   const Settings & settings)
 {
     if (handle_end <= handle_begin)
         return {};
@@ -111,7 +110,8 @@ static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart
     return res;
 }
 
-struct ReadGroup {
+struct ReadGroup
+{
     std::deque<size_t> mem_block_indexes;
     size_t start_range_index;
     size_t end_range_index;
@@ -123,14 +123,14 @@ struct ReadGroup {
 /// 2. a mem block only exists in a single read groups
 template <typename TargetType>
 static inline void computeHandleRanges(std::vector<ReadGroup> & read_groups,
-    std::vector<std::pair<DB::HandleRange<TargetType>, size_t>> & handle_ranges,
-    std::vector<RangesInDataParts> & region_group_range_parts,
-    std::vector<DB::HandleRange<TargetType>> & region_group_handle_ranges,
-    const RangesInDataParts & parts_with_ranges,
-    size_t & region_sum_marks,
-    size_t & region_sum_ranges,
-    const Settings & settings,
-    const size_t min_marks_for_seek)
+                                       std::vector<std::pair<DB::HandleRange<TargetType>, size_t>> & handle_ranges,
+                                       std::vector<RangesInDataParts> & region_group_range_parts,
+                                       std::vector<DB::HandleRange<TargetType>> & region_group_handle_ranges,
+                                       const RangesInDataParts & parts_with_ranges,
+                                       size_t & region_sum_marks,
+                                       size_t & region_sum_ranges,
+                                       const Settings & settings,
+                                       const size_t min_marks_for_seek)
 {
     read_groups.resize(handle_ranges.size());
     {
@@ -185,7 +185,12 @@ static inline void computeHandleRanges(std::vector<ReadGroup> & read_groups,
         for (const RangesInDataPart & ranges : parts_with_ranges)
         {
             MarkRanges mark_ranges = markRangesFromRegionRange<TargetType>(
-                *ranges.data_part, handle_range.first.first, handle_range.first.second, ranges.ranges, min_marks_for_seek, settings);
+                *ranges.data_part,
+                handle_range.first.first,
+                handle_range.first.second,
+                ranges.ranges,
+                min_marks_for_seek,
+                settings);
 
             if (mark_ranges.empty())
                 continue;
@@ -200,13 +205,16 @@ static inline void computeHandleRanges(std::vector<ReadGroup> & read_groups,
 }
 
 template <TMTPKType pk_type>
-BlockInputStreamPtr makeMultiWayMergeSortInput(const BlockInputStreams & inputs, const SortDescription & description,
-    const size_t version_column_index, const size_t delmark_column_index, size_t max_block_size)
+BlockInputStreamPtr makeMultiWayMergeSortInput(const BlockInputStreams & inputs, const SortDescription & description, const size_t version_column_index, const size_t delmark_column_index, size_t max_block_size)
 {
     if (pk_type != TMTPKType::UNSPECIFIED && inputs.size() == 1)
         return std::make_shared<TMTSingleSortedBlockInputStream>(inputs[0]);
     return std::make_shared<TMTSortedBlockInputStream<pk_type>>(
-        inputs, description, version_column_index, delmark_column_index, max_block_size);
+        inputs,
+        description,
+        version_column_index,
+        delmark_column_index,
+        max_block_size);
 };
 
 } // namespace DB

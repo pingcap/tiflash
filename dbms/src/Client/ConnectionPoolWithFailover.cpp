@@ -1,37 +1,34 @@
 #include <Client/ConnectionPoolWithFailover.h>
-
-#include <Poco/Net/NetException.h>
-#include <Poco/Net/DNS.h>
-
+#include <Common/ProfileEvents.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Common/isLocalAddress.h>
-#include <Common/ProfileEvents.h>
 #include <Interpreters/Settings.h>
+#include <Poco/Net/DNS.h>
+#include <Poco/Net/NetException.h>
 
 
 namespace ProfileEvents
 {
-    extern const Event DistributedConnectionMissingTable;
-    extern const Event DistributedConnectionStaleReplica;
-}
+extern const Event DistributedConnectionMissingTable;
+extern const Event DistributedConnectionStaleReplica;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NETWORK_ERROR;
-    extern const int SOCKET_TIMEOUT;
-    extern const int LOGICAL_ERROR;
-}
+extern const int NETWORK_ERROR;
+extern const int SOCKET_TIMEOUT;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 ConnectionPoolWithFailover::ConnectionPoolWithFailover(
-        ConnectionPoolPtrs nested_pools_,
-        LoadBalancing load_balancing,
-        size_t max_tries_,
-        time_t decrease_error_period_)
-    : Base(std::move(nested_pools_), max_tries_, decrease_error_period_, &Logger::get("ConnectionPoolWithFailover"))
+    ConnectionPoolPtrs nested_pools_,
+    LoadBalancing load_balancing,
+    size_t max_tries_,
+    time_t decrease_error_period_)
+    : Base(std::move(nested_pools_), max_tries_, decrease_error_period_, &Poco::Logger::get("ConnectionPoolWithFailover"))
     , default_load_balancing(load_balancing)
 {
     const std::string & local_hostname = getFQDNOrHostName();
@@ -46,8 +43,7 @@ ConnectionPoolWithFailover::ConnectionPoolWithFailover(
 
 IConnectionPool::Entry ConnectionPoolWithFailover::get(const Settings * settings, bool /*force_connected*/)
 {
-    TryGetEntryFunc try_get_entry = [&](NestedPool & pool, std::string & fail_message)
-    {
+    TryGetEntryFunc try_get_entry = [&](NestedPool & pool, std::string & fail_message) {
         return tryGetEntry(pool, fail_message, settings);
     };
 
@@ -55,10 +51,14 @@ IConnectionPool::Entry ConnectionPoolWithFailover::get(const Settings * settings
     switch (settings ? LoadBalancing(settings->load_balancing) : default_load_balancing)
     {
     case LoadBalancing::NEAREST_HOSTNAME:
-        get_priority = [&](size_t i) { return hostname_differences[i]; };
+        get_priority = [&](size_t i) {
+            return hostname_differences[i];
+        };
         break;
     case LoadBalancing::IN_ORDER:
-        get_priority = [](size_t i) { return i; };
+        get_priority = [](size_t i) {
+            return i;
+        };
         break;
     case LoadBalancing::RANDOM:
         break;
@@ -69,8 +69,7 @@ IConnectionPool::Entry ConnectionPoolWithFailover::get(const Settings * settings
 
 std::vector<IConnectionPool::Entry> ConnectionPoolWithFailover::getMany(const Settings * settings, PoolMode pool_mode)
 {
-    TryGetEntryFunc try_get_entry = [&](NestedPool & pool, std::string & fail_message)
-    {
+    TryGetEntryFunc try_get_entry = [&](NestedPool & pool, std::string & fail_message) {
         return tryGetEntry(pool, fail_message, settings);
     };
 
@@ -84,19 +83,20 @@ std::vector<IConnectionPool::Entry> ConnectionPoolWithFailover::getMany(const Se
 }
 
 std::vector<ConnectionPoolWithFailover::TryResult> ConnectionPoolWithFailover::getManyChecked(
-        const Settings * settings, PoolMode pool_mode, const QualifiedTableName & table_to_check)
+    const Settings * settings,
+    PoolMode pool_mode,
+    const QualifiedTableName & table_to_check)
 {
-    TryGetEntryFunc try_get_entry = [&](NestedPool & pool, std::string & fail_message)
-    {
+    TryGetEntryFunc try_get_entry = [&](NestedPool & pool, std::string & fail_message) {
         return tryGetEntry(pool, fail_message, settings, &table_to_check);
     };
     return getManyImpl(settings, pool_mode, try_get_entry);
 }
 
 std::vector<ConnectionPoolWithFailover::TryResult> ConnectionPoolWithFailover::getManyImpl(
-        const Settings * settings,
-        PoolMode pool_mode,
-        const TryGetEntryFunc & try_get_entry)
+    const Settings * settings,
+    PoolMode pool_mode,
+    const TryGetEntryFunc & try_get_entry)
 {
     size_t min_entries = (settings && settings->skip_unavailable_shards) ? 0 : 1;
     size_t max_entries;
@@ -116,10 +116,14 @@ std::vector<ConnectionPoolWithFailover::TryResult> ConnectionPoolWithFailover::g
     switch (settings ? LoadBalancing(settings->load_balancing) : default_load_balancing)
     {
     case LoadBalancing::NEAREST_HOSTNAME:
-        get_priority = [&](size_t i) { return hostname_differences[i]; };
+        get_priority = [&](size_t i) {
+            return hostname_differences[i];
+        };
         break;
     case LoadBalancing::IN_ORDER:
-        get_priority = [](size_t i) { return i; };
+        get_priority = [](size_t i) {
+            return i;
+        };
         break;
     case LoadBalancing::RANDOM:
         break;
@@ -132,10 +136,10 @@ std::vector<ConnectionPoolWithFailover::TryResult> ConnectionPoolWithFailover::g
 
 ConnectionPoolWithFailover::TryResult
 ConnectionPoolWithFailover::tryGetEntry(
-        IConnectionPool & pool,
-        std::string & fail_message,
-        const Settings * settings,
-        const QualifiedTableName * table_to_check)
+    IConnectionPool & pool,
+    std::string & fail_message,
+    const Settings * settings,
+    const QualifiedTableName * table_to_check)
 {
     TryResult result;
     try
@@ -193,9 +197,10 @@ ConnectionPoolWithFailover::tryGetEntry(
             result.staleness = delay;
 
             LOG_TRACE(
-                    log, "Server " << result.entry->getDescription() << " has unacceptable replica delay "
-                    << "for table " << table_to_check->database << "." << table_to_check->table
-                    << ": "  << delay);
+                log,
+                "Server " << result.entry->getDescription() << " has unacceptable replica delay "
+                          << "for table " << table_to_check->database << "." << table_to_check->table
+                          << ": " << delay);
             ProfileEvents::increment(ProfileEvents::DistributedConnectionStaleReplica);
         }
     }
@@ -216,4 +221,4 @@ ConnectionPoolWithFailover::tryGetEntry(
     return result;
 };
 
-}
+} // namespace DB

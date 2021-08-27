@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 class WriteBatch : private boost::noncopyable
 {
 public:
@@ -29,11 +28,11 @@ private:
     struct Write
     {
         WriteType type;
-        PageId    page_id;
-        UInt64    tag;
+        PageId page_id;
+        UInt64 tag;
         // Page's data and size
         ReadBufferPtr read_buffer;
-        PageSize      size;
+        PageSize size;
         // RefPage's origin page
         PageId ori_page_id;
         // Fields' offset inside Page's data
@@ -44,8 +43,8 @@ private:
         /// data is actually store in.
         /// Should only use by `UPSERT` now.
 
-        UInt64             page_offset;
-        UInt64             page_checksum;
+        UInt64 page_offset;
+        UInt64 page_checksum;
         PageFileIdAndLevel target_file_id;
     };
     using Writes = std::vector<Write>;
@@ -55,7 +54,7 @@ public:
     {
         // Conver from data_sizes to the offset of each field
         PageFieldOffsetChecksums offsets;
-        PageFieldOffset          off = 0;
+        PageFieldOffset off = 0;
         for (auto data_sz : data_sizes)
         {
             offsets.emplace_back(off, 0);
@@ -78,13 +77,13 @@ public:
         writes.emplace_back(std::move(w));
     }
 
-    // Upsert a page{page_id} and writer page's data to a new PageFile{file_id}. 
+    // Upsert a page{page_id} and writer page's data to a new PageFile{file_id}.
     // Now it's used in DataCompactor to move page's data to new file.
-    void upsertPage(PageId                           page_id,
-                    UInt64                           tag,
-                    const PageFileIdAndLevel &       file_id,
-                    const ReadBufferPtr &            read_buffer,
-                    UInt32                           size,
+    void upsertPage(PageId page_id,
+                    UInt64 tag,
+                    const PageFileIdAndLevel & file_id,
+                    const ReadBufferPtr & read_buffer,
+                    UInt32 size,
                     const PageFieldOffsetChecksums & offsets)
     {
         Write w{WriteType::UPSERT, page_id, tag, read_buffer, size, 0, offsets, 0, 0, file_id};
@@ -94,12 +93,12 @@ public:
     // Upsering a page{page_id} to PageFile{file_id}. This type of upsert is a simple mark and
     // only used for checkpoint. That page will be overwriten by WriteBatch with larger sequence,
     // so we don't need to write page's data.
-    void upsertPage(PageId                           page_id,
-                    UInt64                           tag,
-                    const PageFileIdAndLevel &       file_id,
-                    UInt64                           page_offset,
-                    UInt32                           size,
-                    UInt64                           page_checksum,
+    void upsertPage(PageId page_id,
+                    UInt64 tag,
+                    const PageFileIdAndLevel & file_id,
+                    UInt64 page_offset,
+                    UInt32 size,
+                    UInt64 page_checksum,
                     const PageFieldOffsetChecksums & offsets)
     {
         Write w{WriteType::UPSERT, page_id, tag, nullptr, size, 0, offsets, page_offset, page_checksum, file_id};
@@ -122,7 +121,7 @@ public:
     bool empty() const { return writes.empty(); }
 
     const Writes & getWrites() const { return writes; }
-    Writes &       getWrites() { return writes; }
+    Writes & getWrites() { return writes; }
 
     size_t putWriteCount() const
     {
@@ -170,10 +169,13 @@ public:
     }
 
     WriteBatch() = default;
-    WriteBatch(WriteBatch && rhs) : writes(std::move(rhs.writes)), sequence(rhs.sequence) {}
+    WriteBatch(WriteBatch && rhs)
+        : writes(std::move(rhs.writes))
+        , sequence(rhs.sequence)
+    {}
 
 private:
-    Writes     writes;
+    Writes writes;
     SequenceID sequence = 0;
 };
 

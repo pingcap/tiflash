@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 class MergeTreeReadPool;
 
 
@@ -45,4 +44,4 @@ protected:
     size_t min_marks_to_read;
 };
 
-}
+} // namespace DB

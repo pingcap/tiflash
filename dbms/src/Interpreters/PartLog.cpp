@@ -1,55 +1,51 @@
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
-#include <Storages/MergeTree/MergeTreeDataPart.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/PartLog.h>
+#include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergeTreeDataPart.h>
 
 
 namespace DB
 {
-
 Block PartLogElement::createBlock()
 {
     auto event_type_datatype = std::make_shared<DataTypeEnum8>(
         DataTypeEnum8::Values{
-            {"NEW_PART",       static_cast<Int8>(NEW_PART)},
-            {"MERGE_PARTS",    static_cast<Int8>(MERGE_PARTS)},
-            {"DOWNLOAD_PART",  static_cast<Int8>(DOWNLOAD_PART)},
-            {"REMOVE_PART",    static_cast<Int8>(REMOVE_PART)}
-        }
-    );
+            {"NEW_PART", static_cast<Int8>(NEW_PART)},
+            {"MERGE_PARTS", static_cast<Int8>(MERGE_PARTS)},
+            {"DOWNLOAD_PART", static_cast<Int8>(DOWNLOAD_PART)},
+            {"REMOVE_PART", static_cast<Int8>(REMOVE_PART)}});
 
-    return
-    {
-        {ColumnInt8::create(),    std::move(event_type_datatype),       "event_type"},
-        {ColumnUInt16::create(),  std::make_shared<DataTypeDate>(),     "event_date"},
-        {ColumnUInt32::create(),  std::make_shared<DataTypeDateTime>(), "event_time"},
-        {ColumnUInt64::create(),  std::make_shared<DataTypeUInt64>(),   "duration_ms"},
+    return {
+        {ColumnInt8::create(), std::move(event_type_datatype), "event_type"},
+        {ColumnUInt16::create(), std::make_shared<DataTypeDate>(), "event_date"},
+        {ColumnUInt32::create(), std::make_shared<DataTypeDateTime>(), "event_time"},
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "duration_ms"},
 
-        {ColumnString::create(),  std::make_shared<DataTypeString>(),   "database"},
-        {ColumnString::create(),  std::make_shared<DataTypeString>(),   "table"},
-        {ColumnString::create(),  std::make_shared<DataTypeString>(),   "part_name"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "database"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "table"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "part_name"},
 
-        {ColumnUInt64::create(),  std::make_shared<DataTypeUInt64>(),   "rows"},
-        {ColumnUInt64::create(),  std::make_shared<DataTypeUInt64>(),   "size_in_bytes"}, // On disk
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "rows"},
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "size_in_bytes"}, // On disk
 
         /// Merge-specific info
         {ColumnArray::create(ColumnString::create()), std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()), "merged_from"},
-        {ColumnUInt64::create(),  std::make_shared<DataTypeUInt64>(),   "bytes_uncompressed"}, // Result bytes
-        {ColumnUInt64::create(),  std::make_shared<DataTypeUInt64>(),   "read_rows"},
-        {ColumnUInt64::create(),  std::make_shared<DataTypeUInt64>(),   "read_bytes"},
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "bytes_uncompressed"}, // Result bytes
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "read_rows"},
+        {ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "read_bytes"},
 
         /// Is there an error during the execution or commit
-        {ColumnUInt16::create(),  std::make_shared<DataTypeUInt16>(),   "error"},
-        {ColumnString::create(),  std::make_shared<DataTypeString>(),   "exception"},
-  };
+        {ColumnUInt16::create(), std::make_shared<DataTypeUInt16>(), "error"},
+        {ColumnString::create(), std::make_shared<DataTypeString>(), "exception"},
+    };
 }
 
 void PartLogElement::appendToBlock(Block & block) const
@@ -118,11 +114,11 @@ bool PartLog::addNewPartToTheLog(Context & context, const MergeTreeDataPart & pa
     }
     catch (...)
     {
-        tryLogCurrentException(part_log ? part_log->log : &Logger::get("PartLog"), __PRETTY_FUNCTION__);
+        tryLogCurrentException(part_log ? part_log->log : &Poco::Logger::get("PartLog"), __PRETTY_FUNCTION__);
         return false;
     }
 
     return true;
 }
 
-}
+} // namespace DB

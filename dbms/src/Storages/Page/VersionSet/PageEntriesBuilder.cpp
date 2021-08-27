@@ -2,7 +2,6 @@
 
 namespace DB
 {
-
 void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
 {
     for (const auto & rec : edit.getRecords())

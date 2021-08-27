@@ -2,6 +2,7 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+
 #include <unordered_set>
 
 
@@ -9,12 +10,12 @@ namespace DB
 {
 namespace DM
 {
-
 class DMColumnFilterBlockInputStream : public IBlockInputStream
 {
 public:
     DMColumnFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_)
-        : columns_to_read(columns_to_read_), header(toEmptyBlock(columns_to_read))
+        : columns_to_read(columns_to_read_)
+        , header(toEmptyBlock(columns_to_read))
     {
         children.emplace_back(input);
     }
@@ -38,7 +39,7 @@ public:
 
 private:
     ColumnDefines columns_to_read;
-    Block         header;
+    Block header;
 };
 
 class DMHandleConvertBlockInputStream : public IBlockInputStream
@@ -47,10 +48,12 @@ public:
     using ColumnNames = std::vector<std::string>;
 
     DMHandleConvertBlockInputStream(const BlockInputStreamPtr & input,
-                                    const String &              handle_name_,
-                                    const DataTypePtr &         handle_original_type_,
-                                    const Context &             context_)
-        : handle_name(handle_name_), handle_original_type(handle_original_type_), context(context_)
+                                    const String & handle_name_,
+                                    const DataTypePtr & handle_original_type_,
+                                    const Context & context_)
+        : handle_name(handle_name_)
+        , handle_original_type(handle_original_type_)
+        , context(context_)
     {
         children.emplace_back(input);
     }
@@ -74,9 +77,9 @@ public:
     }
 
 private:
-    Block           header;
-    String          handle_name;
-    DataTypePtr     handle_original_type;
+    Block header;
+    String handle_name;
+    DataTypePtr handle_original_type;
     const Context & context;
 };
 

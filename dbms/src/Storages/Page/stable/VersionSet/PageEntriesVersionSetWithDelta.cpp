@@ -5,7 +5,6 @@
 
 namespace DB::stable
 {
-
 //==========================================================================================
 // PageEntriesVersionSetWithDelta
 //==========================================================================================
@@ -28,7 +27,7 @@ PageEntriesVersionSetWithDelta::gcApply(PageEntriesEdit & edit, bool need_scan_p
                 VersionPtr v = VersionType::createDelta();
                 appendVersion(std::move(v), lock);
             }
-            auto         view = std::make_shared<PageEntriesView>(current);
+            auto view = std::make_shared<PageEntriesView>(current);
             EditAcceptor builder(view.get());
             builder.gcApply(edit);
         }
@@ -43,7 +42,7 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(const std::unique_lock<std::sha
 
     /// TODO: this is costly, maybe we should find a better way not to block generating other snapshot.
     std::set<PageFileIdAndLevel> live_files;
-    std::set<PageId>             live_normal_pages;
+    std::set<PageId> live_normal_pages;
     // Iterate all snapshot to collect all PageFile in used.
     for (auto s = snapshots->next; s != snapshots.get(); s = s->next)
     {
@@ -56,10 +55,10 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(const std::unique_lock<std::sha
 }
 
 void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
-    const PageEntriesView &        view,
+    const PageEntriesView & view,
     std::set<PageFileIdAndLevel> & live_files,
-    std::set<PageId> &             live_normal_pages,
-    bool                           need_scan_page_ids) const
+    std::set<PageId> & live_normal_pages,
+    bool need_scan_page_ids) const
 {
     std::set<PageId> normal_pages_this_snapshot = view.validNormalPageIds();
     for (auto normal_page_id : normal_pages_this_snapshot)
@@ -76,11 +75,11 @@ void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
 // DeltaVersionEditAcceptor
 //==========================================================================================
 
-DeltaVersionEditAcceptor::DeltaVersionEditAcceptor(const PageEntriesView * view_, bool ignore_invalid_ref_, Logger * log_)
-    : view(const_cast<PageEntriesView *>(view_)),
-      current_version(view->getSharedTailVersion()),
-      ignore_invalid_ref(ignore_invalid_ref_),
-      log(log_)
+DeltaVersionEditAcceptor::DeltaVersionEditAcceptor(const PageEntriesView * view_, bool ignore_invalid_ref_, Poco::Logger * log_)
+    : view(const_cast<PageEntriesView *>(view_))
+    , current_version(view->getSharedTailVersion())
+    , ignore_invalid_ref(ignore_invalid_ref_)
+    , log(log_)
 {
 #ifndef NDEBUG
     // tail of view must be a delta
@@ -141,13 +140,13 @@ void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
     if (!old_entry)
     {
         // Page{normal_page_id} not exist
-        rec.entry.ref                                 = 1;
+        rec.entry.ref = 1;
         current_version->normal_pages[normal_page_id] = rec.entry;
     }
     else
     {
         // replace ori Page{normal_page_id}'s entry but inherit ref-counting
-        rec.entry.ref                                 = old_entry->ref + !is_ref_exist;
+        rec.entry.ref = old_entry->ref + !is_ref_exist;
         current_version->normal_pages[normal_page_id] = rec.entry;
     }
 
@@ -183,7 +182,7 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
     // if `page_id` is a ref-id, collapse the ref-path to actual PageId
     // eg. exist RefPage2 -> Page1, add RefPage3 -> RefPage2, collapse to RefPage3 -> Page1
     const PageId normal_page_id = view->resolveRefId(rec.ori_page_id);
-    const auto   old_entry      = view->findNormalPageEntry(normal_page_id);
+    const auto old_entry = view->findNormalPageEntry(normal_page_id);
     if (likely(old_entry))
     {
         // if RefPage{ref_id} already exist, release that ref first
@@ -222,8 +221,8 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
 }
 
 void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta::VersionPtr & current,
-                                            const PageEntriesEdit &                            edit,
-                                            Poco::Logger *                                     log)
+                                            const PageEntriesEdit & edit,
+                                            Poco::Logger * log)
 {
     assert(current->isBase());
     assert(current.use_count() == 1);
@@ -263,7 +262,7 @@ void DeltaVersionEditAcceptor::decreasePageRef(const PageId page_id)
     if (old_entry)
     {
         auto entry = *old_entry;
-        entry.ref  = old_entry->ref <= 1 ? 0 : old_entry->ref - 1;
+        entry.ref = old_entry->ref <= 1 ? 0 : old_entry->ref - 1;
         // Keep an tombstone entry (ref-count == 0), so that we can delete this entry when merged to base
         current_version->normal_pages[page_id] = entry;
     }

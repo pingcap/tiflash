@@ -27,11 +27,11 @@
 #include <memory>
 #include <random>
 
-using PSPtr                          = std::shared_ptr<DB::PageStorage>;
+using PSPtr = std::shared_ptr<DB::PageStorage>;
 const DB::PageId MAX_PAGE_ID_DEFAULT = 1000;
 
 std::atomic<bool> running_without_exception = true;
-std::atomic<bool> running_without_timeout   = true;
+std::atomic<bool> running_without_timeout = true;
 
 Poco::Logger * logger = nullptr;
 
@@ -55,17 +55,17 @@ extern const char random_slow_page_storage_list_all_live_files[];
 
 struct StressEnv
 {
-    size_t num_writers      = 1;
-    size_t num_readers      = 4;
-    bool   init_pages       = false;
-    bool   clean_before_run = false;
-    size_t timeout_s        = 0;
-    size_t read_delay_ms    = 0;
+    size_t num_writers = 1;
+    size_t num_readers = 4;
+    bool init_pages = false;
+    bool clean_before_run = false;
+    size_t timeout_s = 0;
+    size_t read_delay_ms = 0;
     size_t num_writer_slots = 1;
     size_t avg_page_size_mb = 1;
-    size_t rand_seed        = 0x123987;
-    size_t status_interval  = 1;
-    size_t situation_mask   = 0;
+    size_t rand_seed = 0x123987;
+    size_t status_interval = 1;
+    size_t situation_mask = 0;
 
     std::vector<std::string> paths;
     std::vector<std::string> failpoints;
@@ -94,11 +94,11 @@ struct StressEnv
 
     static void initGlobalLogger()
     {
-        Poco::AutoPtr<Poco::ConsoleChannel>    channel = new Poco::ConsoleChannel(std::cerr);
-        Poco::AutoPtr<Poco::PatternFormatter>  formatter(new DB::UnifiedLogPatternFormatter);
+        Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
+        Poco::AutoPtr<Poco::PatternFormatter> formatter(new DB::UnifiedLogPatternFormatter);
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-        Logger::root().setChannel(formatting_channel);
-        Logger::root().setLevel("trace");
+        Poco::Logger::root().setChannel(formatting_channel);
+        Poco::Logger::root().setLevel("trace");
         logger = &Poco::Logger::get("root");
     }
 
@@ -108,20 +108,20 @@ struct StressEnv
         namespace po = boost::program_options;
         using po::value;
         po::options_description desc("Allowed options");
-        desc.add_options()("help,h", "produce help message")                                                              //
-            ("write_concurrency,W", value<UInt32>()->default_value(4), "number of write threads")                         //
-            ("read_concurrency,R", value<UInt32>()->default_value(16), "number of read threads")                          //
-            ("clean_before_run,C", value<bool>()->default_value(false), "drop data before running")                       //
-            ("init_pages,I", value<bool>()->default_value(false), "init pages if not exist before running")               //
-            ("timeout,T", value<UInt32>()->default_value(600), "maximum run time (seconds). 0 means run infinitely")      //
-            ("writer_slots", value<UInt32>()->default_value(4), "number of PageStorage writer slots")                     //
-            ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay")                          //
-            ("avg_page_size", value<UInt32>()->default_value(1), "avg size for each page(MiB)")                           //
-            ("rand_seed", value<UInt32>()->default_value(0x123987), "random seed")                                        //
-            ("paths,P", value<std::vector<std::string>>(), "store path(s)")                                               //
-            ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable")                                 //
+        desc.add_options()("help,h", "produce help message") //
+            ("write_concurrency,W", value<UInt32>()->default_value(4), "number of write threads") //
+            ("read_concurrency,R", value<UInt32>()->default_value(16), "number of read threads") //
+            ("clean_before_run,C", value<bool>()->default_value(false), "drop data before running") //
+            ("init_pages,I", value<bool>()->default_value(false), "init pages if not exist before running") //
+            ("timeout,T", value<UInt32>()->default_value(600), "maximum run time (seconds). 0 means run infinitely") //
+            ("writer_slots", value<UInt32>()->default_value(4), "number of PageStorage writer slots") //
+            ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay") //
+            ("avg_page_size", value<UInt32>()->default_value(1), "avg size for each page(MiB)") //
+            ("rand_seed", value<UInt32>()->default_value(0x123987), "random seed") //
+            ("paths,P", value<std::vector<std::string>>(), "store path(s)") //
+            ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable") //
             ("status_interval,S", value<UInt32>()->default_value(1), "Status statistics interval. 0 means no statistics") //
-            ("situation_mask,M", value<UInt64>()->default_value(0), "Run special tests sequentially,example -M 0x2");     //
+            ("situation_mask,M", value<UInt64>()->default_value(0), "Run special tests sequentially,example -M 0x2"); //
 
         po::variables_map options;
         po::store(po::parse_command_line(argc, argv, desc), options);
@@ -134,17 +134,17 @@ struct StressEnv
         }
 
         StressEnv opt;
-        opt.num_writers      = options["write_concurrency"].as<UInt32>();
-        opt.num_readers      = options["read_concurrency"].as<UInt32>();
-        opt.init_pages       = options["init_pages"].as<bool>();
+        opt.num_writers = options["write_concurrency"].as<UInt32>();
+        opt.num_readers = options["read_concurrency"].as<UInt32>();
+        opt.init_pages = options["init_pages"].as<bool>();
         opt.clean_before_run = options["clean_before_run"].as<bool>();
-        opt.timeout_s        = options["timeout"].as<UInt32>();
-        opt.read_delay_ms    = options["read_delay_ms"].as<UInt32>();
+        opt.timeout_s = options["timeout"].as<UInt32>();
+        opt.read_delay_ms = options["read_delay_ms"].as<UInt32>();
         opt.num_writer_slots = options["writer_slots"].as<UInt32>();
         opt.avg_page_size_mb = options["avg_page_size"].as<UInt32>();
-        opt.rand_seed        = options["rand_seed"].as<UInt32>();
-        opt.status_interval  = options["status_interval"].as<UInt32>();
-        opt.situation_mask   = options["situation_mask"].as<UInt64>();
+        opt.rand_seed = options["rand_seed"].as<UInt32>();
+        opt.status_interval = options["status_interval"].as<UInt32>();
+        opt.situation_mask = options["situation_mask"].as<UInt64>();
 
         if (options.count("paths"))
             opt.paths = options["paths"].as<std::vector<std::string>>();
@@ -158,7 +158,6 @@ struct StressEnv
 
     void setup()
     {
-
 #ifdef FIU_ENABLE
         fiu_init(0);
 #endif
@@ -219,7 +218,7 @@ public:
     }
 
     virtual String description() = 0;
-    virtual bool   runImpl()     = 0;
+    virtual bool runImpl() = 0;
 };
 
 class PSWriter : public PSRunnable
@@ -227,7 +226,11 @@ class PSWriter : public PSRunnable
     static size_t approx_page_mb;
 
 public:
-    PSWriter(const PSPtr & ps_, DB::UInt32 index_) : PSRunnable(), ps(ps_), index(index_) {}
+    PSWriter(const PSPtr & ps_, DB::UInt32 index_)
+        : PSRunnable()
+        , ps(ps_)
+        , index(index_)
+    {}
 
     static void setApproxPageSize(size_t size_mb)
     {
@@ -239,8 +242,8 @@ public:
     {
         // fill page with random bytes
         const size_t buff_sz = approx_page_mb * DB::MB + random() % 3000;
-        char *       buff    = (char *)malloc(buff_sz);
-        const char   buff_ch = pageId % 0xFF;
+        char * buff = (char *)malloc(buff_sz);
+        const char buff_ch = pageId % 0xFF;
         memset(buff, buff_ch, buff_sz);
 
         holder = DB::createMemHolder(buff, [&](char * p) { free(p); });
@@ -252,7 +255,7 @@ public:
     {
         for (DB::PageId pageId = 0; pageId < MAX_PAGE_ID_DEFAULT; ++pageId)
         {
-            DB::MemHolder     holder;
+            DB::MemHolder holder;
             DB::ReadBufferPtr buff = genRandomData(pageId, holder);
 
             DB::WriteBatch wb;
@@ -270,7 +273,7 @@ public:
         assert(ps != nullptr);
         const DB::PageId pageId = genRandomPageId();
 
-        DB::MemHolder     holder;
+        DB::MemHolder holder;
         DB::ReadBufferPtr buff = genRandomData(pageId, holder);
 
         DB::WriteBatch wb;
@@ -290,10 +293,10 @@ protected:
     }
 
 protected:
-    PSPtr        ps;
-    DB::UInt32   index = 0;
+    PSPtr ps;
+    DB::UInt32 index = 0;
     std::mt19937 gen;
-    DB::PageId   max_page_id = MAX_PAGE_ID_DEFAULT;
+    DB::PageId max_page_id = MAX_PAGE_ID_DEFAULT;
 };
 
 // PSCommonWriter can custom data size/numbers/page id range in one writebatch.
@@ -301,14 +304,16 @@ protected:
 class PSCommonWriter : public PSWriter
 {
 public:
-    PSCommonWriter(const PSPtr & ps_, DB::UInt32 index_) : PSWriter(ps_, index_) {}
+    PSCommonWriter(const PSPtr & ps_, DB::UInt32 index_)
+        : PSWriter(ps_, index_)
+    {}
 
     void updatedRandomData()
     {
         buffPtrs.clear();
         for (size_t i = 0; i < batch_buffer_nums; ++i)
         {
-            char *        buff   = (char *)malloc(batch_buffer_size);
+            char * buff = (char *)malloc(batch_buffer_size);
             DB::MemHolder holder = DB::createMemHolder(buff, [&](char * p) { free(p); });
             buffPtrs.push_back(std::make_shared<DB::ReadBufferFromMemory>(buff, batch_buffer_size));
         }
@@ -344,8 +349,8 @@ public:
     void setBatchBufferPageRange(size_t max_page_id_) { max_page_id = max_page_id_; }
 
 protected:
-    size_t batch_buffer_nums  = 100;
-    size_t batch_buffer_size  = 1 * DB::MB;
+    size_t batch_buffer_nums = 100;
+    size_t batch_buffer_size = 1 * DB::MB;
     size_t batch_buffer_limit = 0;
 
     virtual DB::PageId genRandomPageId() override { return static_cast<DB::PageId>(rand() % max_page_id); }
@@ -361,7 +366,12 @@ class PSReader : public PSRunnable
     const size_t heavy_read_delay_ms;
 
 public:
-    PSReader(const PSPtr & ps_, DB::UInt32 index_, size_t delay_ms) : PSRunnable(), heavy_read_delay_ms(delay_ms), ps(ps_), index(index_) {}
+    PSReader(const PSPtr & ps_, DB::UInt32 index_, size_t delay_ms)
+        : PSRunnable()
+        , heavy_read_delay_ms(delay_ms)
+        , ps(ps_)
+        , index(index_)
+    {}
 
     bool runImpl() override
     {
@@ -402,15 +412,16 @@ public:
     String description() override { return fmt::format("(Stress Test PSReader {})", index); }
 
 protected:
-    PSPtr      ps;
-    DB::UInt32 index       = 0;
+    PSPtr ps;
+    DB::UInt32 index = 0;
     DB::PageId max_page_id = MAX_PAGE_ID_DEFAULT;
 };
 
 class PSMetricsDumper
 {
 public:
-    PSMetricsDumper(size_t status_interval_) : status_interval(status_interval_)
+    PSMetricsDumper(size_t status_interval_)
+        : status_interval(status_interval_)
     {
         timer_status.setStartInterval(1000);
         timer_status.setPeriodicInterval(status_interval * 1000);
@@ -431,7 +442,10 @@ public:
     String toString()
     {
         return fmt::format(
-            "Memory lastest used : {} , avg used : {} , top used {}. \n", lastest_memory, (memory_summary / loop_times), memory_biggest);
+            "Memory lastest used : {} , avg used : {} , top used {}. \n",
+            lastest_memory,
+            (memory_summary / loop_times),
+            memory_biggest);
     }
 
     void start()
@@ -444,10 +458,10 @@ public:
 
 private:
     size_t status_interval = 0;
-    UInt32 loop_times      = 0;
-    UInt32 memory_summary  = 0;
-    UInt32 memory_biggest  = 0;
-    UInt32 lastest_memory  = 0;
+    UInt32 loop_times = 0;
+    UInt32 memory_summary = 0;
+    UInt32 memory_biggest = 0;
+    UInt32 lastest_memory = 0;
 
     Poco::Timer timer_status;
 };
@@ -457,7 +471,8 @@ class PSGc
     PSPtr ps;
 
 public:
-    PSGc(const PSPtr & ps_) : ps(ps_)
+    PSGc(const PSPtr & ps_)
+        : ps(ps_)
     {
         assert(ps != nullptr);
         gc_timer.setStartInterval(1000);
@@ -497,7 +512,8 @@ class PSScanner
     PSPtr ps;
 
 public:
-    PSScanner(const PSPtr & ps_) : ps(ps_)
+    PSScanner(const PSPtr & ps_)
+        : ps(ps_)
     {
         assert(ps != nullptr);
 
@@ -507,9 +523,9 @@ public:
 
     void onTime(Poco::Timer & /* t*/)
     {
-        size_t   num_snapshots           = 0;
-        double   oldest_snapshot_seconds = 0.0;
-        unsigned oldest_snapshot_thread  = 0;
+        size_t num_snapshots = 0;
+        double oldest_snapshot_seconds = 0.0;
+        unsigned oldest_snapshot_thread = 0;
         try
         {
             LOG_INFO(logger, "Scanner start");
@@ -561,12 +577,11 @@ using StressTimeoutPtr = std::shared_ptr<StressTimeout>;
 
 class StressWorkload
 {
-
 public:
     StressWorkload(StressEnv & options_)
-        : options(options_),
-          pool(/* minCapacity= */ 1 + options.num_writers + options.num_readers, 1 + options.num_writers + options.num_readers),
-          metrics_dumper(options.status_interval)
+        : options(options_)
+        , pool(/* minCapacity= */ 1 + options.num_writers + options.num_readers, 1 + options.num_writers + options.num_readers)
+        , metrics_dumper(options.status_interval)
     {
     }
 
@@ -671,7 +686,7 @@ private:
             stop_watch.start();
 
             DB::PageStorage::Config config;
-            config.file_max_size  = 8ULL * DB::GB;
+            config.file_max_size = 8ULL * DB::GB;
             config.file_roll_size = 8ULL * DB::GB;
             initPageStorage(config, name);
 
@@ -693,7 +708,7 @@ private:
         {
             stop_watch.start();
             DB::PageStorage::Config config;
-            config.file_max_size  = DB::PAGE_FILE_MAX_SIZE;
+            config.file_max_size = DB::PAGE_FILE_MAX_SIZE;
             config.file_roll_size = DB::PAGE_FILE_ROLL_SIZE;
             initPageStorage(config, name);
             startWriter<PSCommonWriter>(1, [](std::shared_ptr<PSCommonWriter> writer) -> void {
@@ -822,9 +837,9 @@ private:
 
 
 private:
-    StressEnv              options;
-    Poco::ThreadPool       pool;
-    PSPtr                  ps;
+    StressEnv options;
+    Poco::ThreadPool pool;
+    PSPtr ps;
     DB::PSDiskDelegatorPtr delegator;
 
     std::list<std::shared_ptr<PSRunnable>> writers;
@@ -833,16 +848,18 @@ private:
     Stopwatch stop_watch;
 
     StressTimeoutPtr stress_time;
-    PSScannerPtr     scanner;
-    PSGcPtr          gc;
-    PSMetricsDumper  metrics_dumper;
+    PSScannerPtr scanner;
+    PSGcPtr gc;
+    PSMetricsDumper metrics_dumper;
 };
 
 
 class StressWorkloadManger
 {
 public:
-    StressWorkloadManger(StressEnv options_) : options(options_) {}
+    StressWorkloadManger(StressEnv options_)
+        : options(options_)
+    {}
 
     void runWorkload()
     {
@@ -862,7 +879,6 @@ public:
         }
         else
         {
-
 #define checkAndRun(mask, flag, function)   \
     do                                      \
     {                                       \
@@ -874,16 +890,18 @@ public:
     } while (0);
 
             checkAndRun(
-                options.situation_mask, workload_heavy_memory_cost_in_snapshot, StressWorkload::runHeavyCostInLegacyCompactWorkload);
+                options.situation_mask,
+                workload_heavy_memory_cost_in_snapshot,
+                StressWorkload::runHeavyCostInLegacyCompactWorkload);
             checkAndRun(options.situation_mask, workload_page_file_update_long_time, StressWorkload::runPageFileUpdateLongTimeWorkload);
 #undef checkAndRun
         }
     }
 
 private:
-    const UInt64 workload_normal                        = 0;
+    const UInt64 workload_normal = 0;
     const UInt64 workload_heavy_memory_cost_in_snapshot = 0x1;
-    const UInt64 workload_page_file_update_long_time    = 0x2;
+    const UInt64 workload_page_file_update_long_time = 0x2;
     // shold be sum(workload 0...workload N) + 1
     const UInt64 workload_end = 0x4;
 

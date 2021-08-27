@@ -9,7 +9,6 @@ namespace DB
 {
 namespace stable
 {
-
 class WriteBatch
 {
 public:
@@ -29,11 +28,11 @@ private:
     struct Write
     {
         WriteType type;
-        PageId    page_id;
-        UInt64    tag;
+        PageId page_id;
+        UInt64 tag;
         // Page's data and size
         ReadBufferPtr read_buffer;
-        PageSize      size;
+        PageSize size;
         // RefPage's origin page
         PageId ori_page_id;
     };

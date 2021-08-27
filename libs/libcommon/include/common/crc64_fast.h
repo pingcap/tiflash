@@ -3,21 +3,19 @@
 namespace crc64::_detail
 {
 
-#if __SSE2__ || defined(TIFLASH_ENABLE_ASIMD_SUPPORT)
-uint64_t update_simd(uint64_t state, const void * src, size_t length);
-#endif
-
+#if defined(TIFLASH_ENABLE_ASIMD_SUPPORT) || __SSE2__
+#define TIFLASH_CRC64_HAS_SIMD_SUPPORT
+// avx2 and avx512 variants
 #if TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT
-
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
 extern uint64_t update_vpclmulqdq_avx512(uint64_t state, const void * src, size_t length);
-#endif
-
+#endif // TIFLASH_ENABLE_AVX512_SUPPORT
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 extern uint64_t update_vpclmulqdq_avx2(uint64_t state, const void * src, size_t length);
-#endif
+#endif // TIFLASH_ENABLE_AVX_SUPPORT
+#endif // TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT
 
-#endif
+uint64_t update_simd(uint64_t state, const void * src, size_t length);
 
 template <uintptr_t ALIGN = 128, class Fn>
 static inline uint64_t update_fast(Fn func, uint64_t state, const void * src, size_t length)
@@ -51,5 +49,6 @@ static inline uint64_t update_fast(Fn func, uint64_t state, const void * src, si
     }
     return state;
 }
+#endif
 
 } // namespace crc64::_detail
