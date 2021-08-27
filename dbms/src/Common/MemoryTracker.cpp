@@ -148,18 +148,14 @@ thread_local MemoryTracker * current_memory_tracker = nullptr;
 
 namespace CurrentMemoryTracker
 {
-<<<<<<< HEAD
-=======
 #if __APPLE__ && __clang__
 static __thread Int64 local_delta{};
 #else
 static thread_local Int64 local_delta{};
 #endif
->>>>>>> 88e8957e1 (revert apple clang changes (#2783))
 
-static thread_local Int64 local_delta {};
-
-__attribute__((always_inline)) inline void checkSubmit() {
+__attribute__((always_inline)) inline void checkSubmit()
+{
     if (unlikely(local_delta > MEMORY_TRACER_SUBMIT_THRESHOLD))
     {
         if (current_memory_tracker)
