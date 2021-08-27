@@ -15,7 +15,6 @@ using namespace std::chrono_literals;
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -73,7 +72,9 @@ TEST(WriteLimiter_test, LimiterStat_NotLimit)
         ASSERT_EQ(e.code(), ErrorCodes::LOGICAL_ERROR);
     }
 
-    auto noop = []() { return 0; };
+    auto noop = []() {
+        return 0;
+    };
     ReadLimiter read_limiter(noop, 0, LimiterType::UNKNOW, 100);
     try
     {
@@ -88,7 +89,6 @@ TEST(WriteLimiter_test, LimiterStat_NotLimit)
 
 TEST(WriteLimiter_test, LimiterStat)
 {
-
     WriteLimiter write_limiter(1000, LimiterType::UNKNOW, 100);
     try
     {
@@ -164,7 +164,9 @@ TEST(WriteLimiter_test, LimiterStat)
 TEST(ReadLimiter_test, GetIOStatPeroid_2000us)
 {
     Int64 consumed = 0;
-    auto getStat = [&consumed]() { return consumed; };
+    auto getStat = [&consumed]() {
+        return consumed;
+    };
     auto request = [&consumed](ReadLimiter & limiter, Int64 bytes) {
         limiter.request(bytes);
         consumed += bytes;
@@ -214,7 +216,7 @@ void testSetStop(int blocked_thread_cnt)
 
     std::atomic<UInt32> finished_count{0};
     auto worker = [&]() {
-        write_limiter->request(1); 
+        write_limiter->request(1);
         finished_count.fetch_add(1, std::memory_order_relaxed);
     };
     std::vector<std::thread> threads;
@@ -223,7 +225,7 @@ void testSetStop(int blocked_thread_cnt)
         // All threads are blocked inside limiter.
         threads.push_back(std::thread(worker));
     }
-    
+
     // Wait threads to be scheduled.
     while (write_limiter->pendingCount() + finished_count.load(std::memory_order_relaxed) < threads.size())
     {
@@ -252,7 +254,9 @@ TEST(WriteLimiter_test, setStop)
 TEST(ReadLimiter_test, LimiterStat)
 {
     Int64 consumed = 0;
-    auto getStat = [&consumed]() { return consumed; };
+    auto getStat = [&consumed]() {
+        return consumed;
+    };
     auto request = [&consumed](ReadLimiter & limiter, Int64 bytes) {
         limiter.request(bytes);
         consumed += bytes;
@@ -528,16 +532,28 @@ TEST(IOLimitTuner_test, NotNeedTune)
 }
 
 template <typename T>
-IOLimitTuner::Watermark watermarkOfBgWrite(const T & tuner) { return tuner.getWatermark(tuner.bg_write_stat->pct()); }
+IOLimitTuner::Watermark watermarkOfBgWrite(const T & tuner)
+{
+    return tuner.getWatermark(tuner.bg_write_stat->pct());
+}
 
 template <typename T>
-IOLimitTuner::Watermark watermarkOfFgWrite(const T & tuner) { return tuner.getWatermark(tuner.fg_write_stat->pct()); }
+IOLimitTuner::Watermark watermarkOfFgWrite(const T & tuner)
+{
+    return tuner.getWatermark(tuner.fg_write_stat->pct());
+}
 
 template <typename T>
-IOLimitTuner::Watermark watermarkOfBgRead(const T & tuner) { return tuner.getWatermark(tuner.bg_read_stat->pct()); }
+IOLimitTuner::Watermark watermarkOfBgRead(const T & tuner)
+{
+    return tuner.getWatermark(tuner.bg_read_stat->pct());
+}
 
 template <typename T>
-IOLimitTuner::Watermark watermarkOfFgRead(const T & tuner) { return tuner.getWatermark(tuner.fg_read_stat->pct()); }
+IOLimitTuner::Watermark watermarkOfFgRead(const T & tuner)
+{
+    return tuner.getWatermark(tuner.fg_read_stat->pct());
+}
 
 void updateWatermarkPct(StorageIORateLimitConfig & io_config, int emergency, int high, int medium)
 {
