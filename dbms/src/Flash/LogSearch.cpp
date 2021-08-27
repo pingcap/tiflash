@@ -51,7 +51,8 @@ bool LogIterator::next(::diagnosticspb::LogMessage & msg)
         }
 
         msg.set_time(entry.time);
-        msg.set_message(std::move(entry.message));
+        std::string tmp_message{entry.message};
+        msg.set_message(std::move(tmp_message));
         LogLevel level;
         switch (entry.level)
         {
@@ -204,7 +205,8 @@ LogIterator::Error LogIterator::readLog(LogEntry & entry)
     {
         return Error{Error::Type::UNEXPECTED_LOG_HEAD};
     }
-    entry.message.assign(line.begin() + message_begin, line.end());
+    entry.message = std::string_view(line);
+    entry.message = entry.message.substr(message_begin, std::string_view::npos);
     return Error{Error::Type::OK};
 }
 

@@ -17,6 +17,9 @@
 
 #endif
 
+#include <atomic>
+#include <chrono>
+#include <thread>
 namespace DB
 {
 
@@ -1078,16 +1081,13 @@ catch (const std::exception & e)
     {
         size_t i = 0;
         auto resp = SearchLogResponse::default_instance();
-        while (1)
+        for (; i < LOG_BATCH_SIZE;)
         {
             ::diagnosticspb::LogMessage tmp_msg;
             if (!log_itr.next(tmp_msg))
                 break;
             i++;
             resp.mutable_messages()->Add(std::move(tmp_msg));
-
-            if (i == LOG_BATCH_SIZE - 1)
-                break;
         }
 
         if (i == 0)

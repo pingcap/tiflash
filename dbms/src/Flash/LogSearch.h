@@ -74,8 +74,7 @@ public:
         };
         Level level;
 
-        std::string channel;
-        std::string message;
+        std::string_view message;
     };
 
 private:
