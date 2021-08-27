@@ -153,9 +153,9 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
             total_rows += block.rows();
 
-            LOG_TRACE(mpp_task_log,
-                      "recv " + std::to_string(block.rows()) + " rows from remote " << +" for " + result.req_info
-                                                                                    << ", total recv row num:" << total_rows);
+            LOG_TRACE(
+                mpp_task_log,
+                fmt::format("recv {} rows from remote for {}, total recv row num: {}", block.rows(), result.req_info, total_rows));
 
             if (unlikely(block.rows() == 0))
                 continue;

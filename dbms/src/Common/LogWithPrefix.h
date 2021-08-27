@@ -75,6 +75,8 @@ public:
 
     LogWithPrefixPtr append(const String & str) { return std::make_shared<LogWithPrefix>(log, prefix + " " + str); }
 
+    static String getNAPrefix() { return "[task: N/A query: N/A] "; }
+
 private:
     Poco::Logger * log;
     const String prefix;

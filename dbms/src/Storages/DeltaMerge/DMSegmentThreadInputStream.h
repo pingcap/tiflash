@@ -43,7 +43,7 @@ public:
         , is_raw(is_raw_)
         , do_range_filter_for_raw(do_range_filter_for_raw_)
     {
-        mpp_task_log = mpp_task_log_ != nullptr ? mpp_task_log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get(getName()), "");
+        mpp_task_log = mpp_task_log_ != nullptr ? mpp_task_log_ : getLogWithPrefix(mpp_task_log_, getName());
     }
 
     String getName() const override { return "DeltaMergeSegmentThread"; }

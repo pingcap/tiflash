@@ -27,7 +27,7 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, 
     , keep_session_timezone_info(
           dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock)
 {
-    mpp_task_log = mpp_task_log_ != nullptr ? mpp_task_log : std::make_shared<LogWithPrefix>(&Poco::Logger::get("InterpreterDAG"), "");
+    mpp_task_log = mpp_task_log_ != nullptr ? mpp_task_log : std::make_shared<LogWithPrefix>(&Poco::Logger::get("InterpreterDAG"), LogWithPrefix::getNAPrefix());
 
     const Settings & settings = context.getSettingsRef();
     if (dag.isBatchCop())

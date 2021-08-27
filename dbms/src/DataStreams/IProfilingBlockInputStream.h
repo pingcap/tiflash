@@ -7,6 +7,7 @@
 #include <IO/Progress.h>
 #include <Interpreters/SettingsCommon.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
 
 #include <atomic>
 
@@ -199,7 +200,7 @@ protected:
     {
         if (log == nullptr)
         {
-            String prefix = mpp_task_id_ == -1 ? "" : "[task: " + std::to_string(mpp_task_id_) + " query: N/A] ";
+            String prefix = mpp_task_id_ == -1 ? LogWithPrefix::getNAPrefix() : fmt::format("[task: {} query: N/A] ", mpp_task_id_);
             return std::make_shared<LogWithPrefix>(&Poco::Logger::get(name), prefix);
         }
 

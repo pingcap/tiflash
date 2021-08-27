@@ -120,10 +120,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
       tmt(context.getTMTContext()),
       mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
 {
-    if (mpp_task_log_ == nullptr)
-        mpp_task_log = std::make_shared<LogWithPrefix>(&Poco::Logger::get("DAGStorageInterpreter"), "");
-    else
-        mpp_task_log = mpp_task_log_;
+    mpp_task_log = mpp_task_log_ != nullptr ? mpp_task_log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("DAGStorageInterpreter"), LogWithPrefix::getNAPrefix());
 }
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)

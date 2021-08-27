@@ -78,11 +78,6 @@ private:
 
     std::shared_ptr<LogWithPrefix> mpp_task_log;
 
-    // control the log frequency
-    uint64_t log_frequency;
-
-    bool isLog() { return log_frequency++ % 5 == 0; }
-
     void setUpConnection();
 
     void ReadLoop(const String & meta_raw, size_t source_index);
@@ -123,7 +118,7 @@ public:
         , live_connections(pb_exchange_receiver.encoded_task_meta_size())
         , state(NORMAL)
     {
-        mpp_task_log = mpp_task_log_ != nullptr ? mpp_task_log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("ExchangeReceiver"), "");
+        mpp_task_log = mpp_task_log_ != nullptr ? mpp_task_log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("ExchangeReceiver"), LogWithPrefix::getNAPrefix());
 
         for (int i = 0; i < exc.field_types_size(); i++)
         {

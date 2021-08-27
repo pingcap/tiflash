@@ -27,10 +27,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWr
       collators(std::move(collators_)),
       thread_pool(dag_context.final_concurrency)
 {
-    if (mpp_task_log_ == nullptr)
-        mpp_task_log = std::make_shared<LogWithPrefix>(&Poco::Logger::get("StreamingDAGResponseWriter"), "");
-    else
-        mpp_task_log = mpp_task_log_;
+    mpp_task_log = mpp_task_log_ != nullptr ? mpp_task_log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("StreamingDAGResponseWriter"), LogWithPrefix::getNAPrefix());
     
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
