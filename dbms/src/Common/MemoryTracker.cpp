@@ -174,6 +174,11 @@ __attribute__((always_inline)) inline void checkSubmit()
     }
 }
 
+void disableThreshold()
+{
+    MEMORY_TRACER_SUBMIT_THRESHOLD = 0;
+}
+
 void alloc(Int64 size)
 {
     local_delta += size;

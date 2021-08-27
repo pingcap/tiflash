@@ -158,6 +158,7 @@ struct StressEnv
 
     void setup()
     {
+        CurrentMemoryTracker::disableThreshold();
 #ifdef FIU_ENABLE
         fiu_init(0);
 #endif
@@ -444,7 +445,7 @@ public:
         return fmt::format(
             "Memory lastest used : {} , avg used : {} , top used {}. \n",
             lastest_memory,
-            (memory_summary / loop_times),
+            loop_times == 0 ? 0 : (memory_summary / loop_times),
             memory_biggest);
     }
 
@@ -612,13 +613,13 @@ public:
         fmt::print(stderr,
                    "W: {} pages, {:.4f} GB, {:.4f} GB/s\n", //
                    total_pages_written,
-                   total_bytes_written / DB::GB,
-                   total_bytes_written / DB::GB / seconds_run);
+                   (double)total_bytes_written / DB::GB,
+                   (double)total_bytes_written / DB::GB / seconds_run);
         fmt::print(stderr,
                    "R: {} pages, {:.4f} GB, {:.4f} GB/s\n", //
                    total_pages_read,
-                   total_bytes_read / DB::GB,
-                   total_bytes_read / DB::GB / seconds_run);
+                   (double)total_bytes_read / DB::GB,
+                   (double)total_bytes_read / DB::GB / seconds_run);
 
         if (options.status_interval != 0)
         {
@@ -754,10 +755,10 @@ private:
 
         pool.joinAll();
         stop_watch.stop();
-        resultWorkload();
 
         gc = std::make_shared<PSGc>(ps);
         gc->doGcOnce();
+        resultWorkload();
     }
 
     void initPageStorage(DB::PageStorage::Config & config, String path_prefix = "")
@@ -918,7 +919,7 @@ try
 
     StressWorkloadManger(env).runWorkload();
 
-    return -running_without_exception;
+    return running_without_exception ? 0 : -1;
 }
 catch (...)
 {
