@@ -610,6 +610,29 @@ ConfigurationPtr Context::getUsersConfig()
     return shared->users_config;
 }
 
+void Context::reloadDtConfig(const Poco::Util::AbstractConfiguration & config)
+{
+    auto default_profile_name = config.getString("default_profile", "default");
+    ;
+    String elem = "profiles." + default_profile_name;
+    if (!config.has(elem))
+    {
+        LOG_INFO(shared->log, "no \"" << elem << "\" configurations for TiFlash");
+        return;
+    }
+    Poco::Util::AbstractConfiguration::Keys config_keys;
+    config.keys(elem, config_keys);
+    for (const std::string & key : config_keys)
+    {
+        if (key.find("dt") == 0)
+        {
+            String config_value = config.getString(elem + "." + key);
+            settings.set(key, config_value);
+            LOG_INFO(shared->log, "reload config" << key << " to " << config_value);
+        }
+    }
+}
+
 void Context::calculateUserSettings()
 {
     auto lock = getLock();

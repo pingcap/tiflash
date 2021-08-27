@@ -611,5 +611,37 @@ background_read_weight=2
 }
 CATCH
 
+TEST_F(UsersConfigParser_test, ReloadDtConfig)
+try
+{
+    Strings tests = {
+        R"(
+[profiles]
+[profiles.default]
+max_rows_in_set = 455
+dt_segment_limit_rows = 1000005
+dt_enable_rough_set_filter = false
+max_memory_usage = 102000
+        )"};
+
+    auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+
+        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+
+        // Reload users config with test case
+        global_ctx.reloadDtConfig(*config);
+
+        ASSERT_EQ(global_ctx.getSettingsRef().max_rows_in_set, 0);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_enable_rough_set_filter, 0);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_limit_rows, 1000005);
+        ASSERT_EQ(global_ctx.getSettingsRef().max_memory_usage, 0);
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
