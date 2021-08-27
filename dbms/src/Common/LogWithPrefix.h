@@ -8,7 +8,6 @@
 
 namespace DB
 {
-
 class LogWithPrefix;
 using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 

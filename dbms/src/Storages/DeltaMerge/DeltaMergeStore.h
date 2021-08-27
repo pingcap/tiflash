@@ -485,7 +485,7 @@ private:
     mutable std::shared_mutex read_write_mutex;
 
     UInt64 hash_salt;
-    
+
     Poco::Logger * log;
 }; // namespace DM
 
