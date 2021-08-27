@@ -39,19 +39,19 @@ bool LogIterator::next(::diagnosticspb::LogMessage & msg)
 {
     for (;;)
     {
-        auto result = readLog();
-        if (auto err = std::get_if<Error>(&result); err)
+        LogEntry entry;
+        Error err = readLog(entry);
+        if (err.tp != Error::Type::OK)
         {
-            if (err->tp != Error::Type::EOI)
+            if (err.tp != Error::Type::EOI)
             {
-                LOG_ERROR(log, "readLog error: " << err->extra_msg);
+                LOG_ERROR(log, "readLog error: " << err.extra_msg);
             }
             return false;
         }
 
-        auto entry = std::get<LogEntry>(result);
         msg.set_time(entry.time);
-        msg.set_message(entry.message);
+        msg.set_message(std::move(entry.message));
         LogLevel level;
         switch (entry.level)
         {
@@ -114,7 +114,7 @@ bool LogIterator::match(const LogMessage & log_msg) const
     return true;
 }
 
-LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
+LogIterator::Error LogIterator::readLog(LogEntry & entry)
 {
     if (!*log_file)
     {
@@ -125,8 +125,6 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
     }
 
     std::getline(*log_file, line);
-
-    LogEntry entry;
 
     thread_local char level_buff[20];
     thread_local char prev_time_buff[35] = {0};
@@ -201,13 +199,13 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
     if (level_buff_len == 0 || level_buff[level_buff_len] != '\0')
         return Error{Error::Type::INVALID_LOG_LEVEL, "level: " + std::string(level_buff)};
 
-    size_t message_begin = kLogLevelStartFinishOffset + level_buff_len + 3;
+    size_t message_begin = kLogLevelStartFinishOffset + level_buff_len + 3; // [] and a space
     if (line.size() <= message_begin)
     {
         return Error{Error::Type::UNEXPECTED_LOG_HEAD};
     }
     entry.message.assign(line.begin() + message_begin, line.end());
-    return entry;
+    return Error{Error::Type::OK};
 }
 
 void LogIterator::init()

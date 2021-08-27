@@ -46,6 +46,7 @@ public:
     {
         enum Type
         {
+            OK,
             EOI,
             INVALID_LOG_LEVEL,
             UNEXPECTED_LOG_HEAD,
@@ -82,7 +83,7 @@ private:
     bool match(const ::diagnosticspb::LogMessage & log_msg) const;
     void init();
 
-    Result<LogEntry> readLog();
+    Error readLog(LogEntry &);
 
 private:
     int64_t start_time;
