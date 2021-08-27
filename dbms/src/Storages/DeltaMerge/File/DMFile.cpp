@@ -114,7 +114,12 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     return new_dmfile;
 }
 
-DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, const ReadMetaMode & read_meta_mode)
+DMFilePtr DMFile::restore(
+    const FileProviderPtr & file_provider,
+    UInt64 file_id,
+    UInt64 ref_id,
+    const String & parent_path,
+    const ReadMetaMode & read_meta_mode)
 {
     String path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
     bool single_file_mode = Poco::File(path).isFile();

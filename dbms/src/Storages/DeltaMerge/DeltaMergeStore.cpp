@@ -611,6 +611,7 @@ void DeltaMergeStore::ingestFiles(
     {
         auto file_parent_path = delegate.getDTFilePath(file_id);
 
+        // we always create a ref file to this DMFile with all meta info restored later, so here we just restore meta info to calculate its' memory and disk size
         auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::memoryAndDiskSize());
         rows += file->getRows();
         bytes += file->getBytes();
