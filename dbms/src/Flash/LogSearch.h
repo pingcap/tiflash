@@ -79,7 +79,7 @@ public:
 
 private:
     static Result<::diagnosticspb::LogMessage> parseLog(const std::string & log_content);
-    bool match(const ::diagnosticspb::LogMessage & log_msg) const;
+    bool match(const ::diagnosticspb::LogMessage & log_msg, const char * c, size_t sz) const;
     void init();
 
     Error readLog(LogEntry &);
