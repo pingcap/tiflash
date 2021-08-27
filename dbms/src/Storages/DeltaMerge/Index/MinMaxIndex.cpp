@@ -1,3 +1,6 @@
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnVector.h>
+#include <Columns/IColumn.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
@@ -9,11 +12,38 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/Index/RoughCheck.h>
 
 namespace DB
 {
 namespace DM
 {
+static constexpr size_t NONE_EXIST = std::numeric_limits<size_t>::max();
+
+namespace details
+{
+inline std::pair<size_t, size_t> minmax(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
+{
+    const auto * del_mark_data = (!del_mark) ? nullptr : &(del_mark->getData());
+
+    size_t batch_min_idx = NONE_EXIST;
+    size_t batch_max_idx = NONE_EXIST;
+
+    for (size_t i = offset; i < offset + limit; ++i)
+    {
+        if (!del_mark_data || !(*del_mark_data)[i])
+        {
+            if (batch_min_idx == NONE_EXIST || column.compareAt(i, batch_min_idx, column, -1) < 0)
+                batch_min_idx = i;
+            if (batch_max_idx == NONE_EXIST || column.compareAt(batch_max_idx, i, column, -1) < 0)
+                batch_max_idx = i;
+        }
+    }
+
+    return {batch_min_idx, batch_max_idx};
+}
+} // namespace details
+
 void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark)
 {
     const IColumn * column_ptr = &column;
