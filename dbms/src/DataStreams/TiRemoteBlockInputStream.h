@@ -39,7 +39,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     std::vector<std::atomic<bool>> execution_summaries_inited;
     std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
 
-    const std::shared_ptr<LogWithPrefix> mpp_task_log;
+    const std::shared_ptr<LogWithPrefix> log;
 
     uint64_t total_rows;
 
@@ -76,7 +76,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 auto & executor_id = execution_summary.executor_id();
                 if (unlikely(execution_summaries_map.find(executor_id) == execution_summaries_map.end()))
                 {
-                    LOG_WARNING(mpp_task_log, "execution " + executor_id + " not found in execution_summaries, this should not happen");
+                    LOG_WARNING(log, "execution " + executor_id + " not found in execution_summaries, this should not happen");
                     continue;
                 }
                 auto & current_execution_summary = execution_summaries_map[executor_id];
@@ -108,14 +108,14 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
         auto result = remote_reader->nextResult();
         if (result.meet_error)
         {
-            LOG_WARNING(mpp_task_log, "remote reader meets error: " << result.error_msg);
+            LOG_WARNING(log, "remote reader meets error: " << result.error_msg);
             throw Exception(result.error_msg);
         }
         if (result.eof)
             return false;
         if (result.resp->has_error())
         {
-            LOG_WARNING(mpp_task_log, "remote reader meets error: " << result.resp->error().DebugString());
+            LOG_WARNING(log, "remote reader meets error: " << result.resp->error().DebugString());
             throw Exception(result.resp->error().DebugString());
         }
 
@@ -154,7 +154,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             total_rows += block.rows();
 
             LOG_TRACE(
-                mpp_task_log,
+                log,
                 fmt::format("recv {} rows from remote for {}, total recv row num: {}", block.rows(), result.req_info, total_rows));
 
             if (unlikely(block.rows() == 0))
@@ -168,12 +168,12 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const std::shared_ptr<LogWithPrefix> & mpp_task_log_ = nullptr)
+    explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
         , name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")")
         , execution_summaries_inited(source_num)
-        , mpp_task_log(getLogWithPrefix(mpp_task_log_, getName()))
+        , log(getLogWithPrefix(log_, getName()))
         , total_rows(0)
     {
         // generate sample block

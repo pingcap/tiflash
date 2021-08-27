@@ -13,13 +13,13 @@ namespace ErrorCodes
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-DAGQuerySource::DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_, const tipb::DAGRequest & dag_request_, const std::shared_ptr<LogWithPrefix> & mpp_task_log_, const bool is_batch_cop_)
+DAGQuerySource::DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_, const tipb::DAGRequest & dag_request_, const std::shared_ptr<LogWithPrefix> & log_, const bool is_batch_cop_)
     : context(context_)
     , regions(regions_)
     , retry_regions(retry_regions_)
     , dag_request(dag_request_)
     , is_batch_cop(is_batch_cop_)
-    , mpp_task_log(mpp_task_log_)
+    , log(log_)
 {
     if (dag_request.has_root_executor())
     {

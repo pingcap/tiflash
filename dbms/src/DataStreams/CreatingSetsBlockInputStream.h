@@ -22,12 +22,12 @@ class CreatingSetsBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     CreatingSetsBlockInputStream(
-        const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets_, const SizeLimits & network_transfer_limits, const std::shared_ptr<LogWithPrefix> & mpp_task_log_ = nullptr);
+        const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets_, const SizeLimits & network_transfer_limits, const std::shared_ptr<LogWithPrefix> & log_ = nullptr);
 
     CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
         std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
         const SizeLimits & network_transfer_limits, Int64 mpp_task_id_,
-        const std::shared_ptr<LogWithPrefix> & mpp_task_log_ = nullptr);
+        const std::shared_ptr<LogWithPrefix> & log_ = nullptr);
     ~CreatingSetsBlockInputStream()
     {
         for (auto & worker : workers)
@@ -64,7 +64,7 @@ private:
     std::mutex exception_mutex;
     std::vector<std::exception_ptr> exception_from_workers;
 
-    const std::shared_ptr<LogWithPrefix> mpp_task_log;
+    const std::shared_ptr<LogWithPrefix> log;
 
     void createAll();
     void createOne(SubqueryForSet & subquery);

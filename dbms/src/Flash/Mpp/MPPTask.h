@@ -73,7 +73,7 @@ public:
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
 
-    std::shared_ptr<LogWithPrefix> getMPPTaskLog() const { return mpp_task_log; }
+    std::shared_ptr<LogWithPrefix> getMPPTaskLog() const { return log; }
 
     ~MPPTask();
 
@@ -103,9 +103,7 @@ private:
 
     MPPTaskManager * manager = nullptr;
 
-    Poco::Logger * log;
-
-    const std::shared_ptr<LogWithPrefix> mpp_task_log;
+    const std::shared_ptr<LogWithPrefix> log;
 
     Exception err;
 

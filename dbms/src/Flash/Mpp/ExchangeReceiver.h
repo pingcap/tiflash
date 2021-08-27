@@ -76,7 +76,7 @@ private:
     State state;
     String err_msg;
 
-    std::shared_ptr<LogWithPrefix> mpp_task_log;
+    std::shared_ptr<LogWithPrefix> log;
 
     void setUpConnection();
 
@@ -109,7 +109,7 @@ private:
     }
 
 public:
-    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_, const std::shared_ptr<LogWithPrefix> & mpp_task_log_ = nullptr)
+    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
         : cluster(context_.getTMTContext().getKVCluster())
         , pb_exchange_receiver(exc)
         , source_num(pb_exchange_receiver.encoded_task_meta_size())
@@ -118,7 +118,7 @@ public:
         , live_connections(pb_exchange_receiver.encoded_task_meta_size())
         , state(NORMAL)
     {
-        mpp_task_log = mpp_task_log_ != nullptr ? mpp_task_log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("ExchangeReceiver"), LogWithPrefix::getNAPrefix());
+        log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("ExchangeReceiver"), "");
 
         for (int i = 0; i < exc.field_types_size(); i++)
         {

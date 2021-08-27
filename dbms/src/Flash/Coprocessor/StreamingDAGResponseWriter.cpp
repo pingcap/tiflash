@@ -19,7 +19,7 @@ extern const int LOGICAL_ERROR;
 template <class StreamWriterPtr>
 StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_, tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, const std::shared_ptr<LogWithPrefix> & mpp_task_log_)
+    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, const std::shared_ptr<LogWithPrefix> & log_)
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_),
       exchange_type(exchange_type_),
       writer(writer_),
@@ -27,7 +27,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWr
       collators(std::move(collators_)),
       thread_pool(dag_context.final_concurrency)
 {
-    mpp_task_log = mpp_task_log_ != nullptr ? mpp_task_log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("StreamingDAGResponseWriter"), LogWithPrefix::getNAPrefix());
+    log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("StreamingDAGResponseWriter"), "");
     
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();

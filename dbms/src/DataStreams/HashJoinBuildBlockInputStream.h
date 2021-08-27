@@ -10,8 +10,8 @@ namespace DB
 class HashJoinBuildBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    HashJoinBuildBlockInputStream(const BlockInputStreamPtr & input, JoinPtr join_,size_t stream_index_, const std::shared_ptr<LogWithPrefix> & mpp_task_log_ = nullptr)
-        :stream_index(stream_index_), mpp_task_log(getLogWithPrefix(mpp_task_log_, getName()))
+    HashJoinBuildBlockInputStream(const BlockInputStreamPtr & input, JoinPtr join_,size_t stream_index_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
+        :stream_index(stream_index_), log(getLogWithPrefix(log_, getName()))
     {
         children.push_back(input);
         join = join_;
@@ -25,7 +25,7 @@ protected:
 private:
     JoinPtr join;
     size_t stream_index;
-    const std::shared_ptr<LogWithPrefix> mpp_task_log;
+    const std::shared_ptr<LogWithPrefix> log;
 };
 
 } // namespace DB

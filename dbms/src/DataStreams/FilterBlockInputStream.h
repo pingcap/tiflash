@@ -19,7 +19,7 @@ private:
     using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
 public:
-    FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name_, const std::shared_ptr<LogWithPrefix> & mpp_task_log_ = nullptr);
+    FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr);
 
     String getName() const override;
     Block getTotals() override;
@@ -35,7 +35,7 @@ private:
 
     ConstantFilterDescription constant_filter_description;
 
-    const std::shared_ptr<LogWithPrefix> mpp_task_log;
+    const std::shared_ptr<LogWithPrefix> log;
 };
 
 } // namespace DB

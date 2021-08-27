@@ -15,9 +15,9 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 
-FilterBlockInputStream::FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name, const std::shared_ptr<LogWithPrefix> & mpp_task_log_)
+FilterBlockInputStream::FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name, const std::shared_ptr<LogWithPrefix> & log_)
     : expression(expression_)
-    , mpp_task_log(getLogWithPrefix(mpp_task_log_, getName()))
+    , log(getLogWithPrefix(log_, getName()))
 {
     children.push_back(input);
 

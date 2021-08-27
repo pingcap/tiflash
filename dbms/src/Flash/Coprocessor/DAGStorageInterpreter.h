@@ -38,7 +38,7 @@ public:
         const tipb::TableScan & ts,
         const std::vector<const tipb::Expr *> & conditions_,
         size_t max_streams_,
-        const std::shared_ptr<LogWithPrefix> & mpp_task_log_ = nullptr);
+        const std::shared_ptr<LogWithPrefix> & log_ = nullptr);
 
     DAGStorageInterpreter(DAGStorageInterpreter &&) = delete;
     DAGStorageInterpreter & operator=(DAGStorageInterpreter &&) = delete;
@@ -81,7 +81,7 @@ private:
     const tipb::TableScan & table_scan;
     const std::vector<const tipb::Expr *> & conditions;
     size_t max_streams;
-    std::shared_ptr<LogWithPrefix> mpp_task_log;
+    std::shared_ptr<LogWithPrefix> log;
 
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime
 
