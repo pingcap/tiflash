@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Select parts to merge based on its level.
   * Select first range of parts of parts_to_merge length with minimum level.
   */
@@ -17,7 +16,9 @@ public:
         size_t parts_to_merge = 10;
     };
 
-    explicit LevelMergeSelector(const Settings & settings) : settings(settings) {}
+    explicit LevelMergeSelector(const Settings & settings)
+        : settings(settings)
+    {}
 
     PartsInPartition select(
         const Partitions & partitions,
@@ -27,4 +28,4 @@ private:
     const Settings settings;
 };
 
-}
+} // namespace DB

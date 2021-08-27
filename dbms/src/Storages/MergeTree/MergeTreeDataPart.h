@@ -1,19 +1,19 @@
 #pragma once
 
-#include <Core/Row.h>
+#include <Columns/IColumn.h>
 #include <Core/Block.h>
 #include <Core/NamesAndTypes.h>
+#include <Core/Row.h>
+#include <IO/CompactContext.h>
+#include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 #include <Storages/MergeTree/MergeTreePartInfo.h>
 #include <Storages/MergeTree/MergeTreePartition.h>
-#include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
-#include <Columns/IColumn.h>
-#include <IO/CompactContext.h>
+
 #include <shared_mutex>
 
 
 namespace DB
 {
-
 class MergeTreeData;
 struct TMTDataPartProperty;
 
@@ -82,11 +82,11 @@ struct MergeTreeDataPart
 
     size_t rows_count = 0;
     size_t marks_count = 0;
-    std::atomic<UInt64> bytes_on_disk {0};  /// 0 - if not counted;
-                                            /// Is used from several threads without locks (it is changed with ALTER).
+    std::atomic<UInt64> bytes_on_disk{0}; /// 0 - if not counted;
+        /// Is used from several threads without locks (it is changed with ALTER).
     time_t modification_time = 0;
     /// When the part is removed from the working set. Changes once.
-    mutable std::atomic<time_t> remove_time { std::numeric_limits<time_t>::max() };
+    mutable std::atomic<time_t> remove_time{std::numeric_limits<time_t>::max()};
 
     /// If true, the destructor will delete the directory with the part.
     bool is_temp = false;
@@ -114,11 +114,11 @@ struct MergeTreeDataPart
      */
     enum class State
     {
-        Temporary,      /// the part is generating now, it is not in data_parts list
-        PreCommitted,   /// the part is in data_parts, but not used for SELECTs
-        Committed,      /// active data part, used by current and upcoming SELECTs
-        Outdated,       /// not active data part, but could be used by only current SELECTs, could be deleted after SELECTs finishes
-        Deleting        /// not active data part with identity refcounter, it is deleting right now by a cleaner
+        Temporary, /// the part is generating now, it is not in data_parts list
+        PreCommitted, /// the part is in data_parts, but not used for SELECTs
+        Committed, /// active data part, used by current and upcoming SELECTs
+        Outdated, /// not active data part, but could be used by only current SELECTs, could be deleted after SELECTs finishes
+        Deleting /// not active data part with identity refcounter, it is deleting right now by a cleaner
     };
 
     /// Current state of the part. If the part is in working set already, it should be accessed via data_parts mutex
@@ -151,9 +151,11 @@ struct MergeTreeDataPart
     struct StatesFilter
     {
         std::initializer_list<State> affordable_states;
-        StatesFilter(const std::initializer_list<State> & affordable_states) : affordable_states(affordable_states) {}
+        StatesFilter(const std::initializer_list<State> & affordable_states)
+            : affordable_states(affordable_states)
+        {}
 
-        bool operator() (const std::shared_ptr<const MergeTreeDataPart> & part) const
+        bool operator()(const std::shared_ptr<const MergeTreeDataPart> & part) const
         {
             return part->checkState(affordable_states);
         }
@@ -279,4 +281,4 @@ private:
 
 using MergeTreeDataPartState = MergeTreeDataPart::State;
 
-}
+} // namespace DB
