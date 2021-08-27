@@ -55,24 +55,13 @@ TEST(PageUtils_test, BigReadWriteFile)
 {
     ::remove(FileName.c_str());
 
-    char * buff_write = nullptr;
-    char * buff_read = nullptr;
     FailPointHelper::enableFailPoint(FailPoints::force_split_io_size_4k);
     try
     {
         WritableFilePtr file_for_write = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
         size_t buff_size = 13 * 1024 + 123;
-        buff_write = (char *)malloc(buff_size);
-        if (buff_write == nullptr)
-        {
-            return;
-        }
-
-        buff_read = (char *)malloc(buff_size);
-        if (buff_read == nullptr)
-        {
-            return;
-        }
+        char buff_write[buff_size];
+        char buff_read[buff_size];
 
         for (size_t i = 0; i < buff_size; i++)
         {
@@ -92,15 +81,11 @@ TEST(PageUtils_test, BigReadWriteFile)
         ASSERT_EQ(strcmp(buff_write, buff_read), 0);
 
         ::remove(FileName.c_str());
-        free(buff_write);
-        free(buff_read);
         FailPointHelper::disableFailPoint(FailPoints::force_split_io_size_4k);
     }
     catch (DB::Exception & e)
     {
         ::remove(FileName.c_str());
-        free(buff_write);
-        free(buff_read);
         FailPointHelper::disableFailPoint(FailPoints::force_split_io_size_4k);
         FAIL() << e.getStackTrace().toString();
     }

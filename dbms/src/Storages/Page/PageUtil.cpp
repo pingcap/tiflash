@@ -66,7 +66,7 @@ void writeFile(
     char * data,
     size_t to_write,
     const WriteLimiterPtr & write_limiter,
-    bool enable_failpoint)
+    [[maybe_unused]] bool enable_failpoint)
 #else
 void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter)
 #endif
