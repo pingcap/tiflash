@@ -3,20 +3,21 @@
 
 namespace DB
 {
-
 void throwExceptionForIncompletelyParsedValue(
-    ReadBuffer & read_buffer, Block & block, size_t result)
+    ReadBuffer & read_buffer,
+    Block & block,
+    size_t result)
 {
     const IDataType & to_type = *block.getByPosition(result).type;
 
     WriteBufferFromOwnString message_buf;
     message_buf << "Cannot parse string " << quote << String(read_buffer.buffer().begin(), read_buffer.buffer().size())
-        << " as " << to_type.getName()
-        << ": syntax error";
+                << " as " << to_type.getName()
+                << ": syntax error";
 
     if (read_buffer.offset())
         message_buf << " at position " << read_buffer.offset()
-            << " (parsed just " << quote << String(read_buffer.buffer().begin(), read_buffer.offset()) << ")";
+                    << " (parsed just " << quote << String(read_buffer.buffer().begin(), read_buffer.offset()) << ")";
     else
         message_buf << " at begin of string";
 
@@ -27,8 +28,14 @@ void throwExceptionForIncompletelyParsedValue(
 }
 
 
-struct NameTiDBUnixTimeStampInt { static constexpr auto name = "tidbUnixTimeStampInt"; };
-struct NameTiDBUnixTimeStampDec { static constexpr auto name = "tidbUnixTimeStampDec"; };
+struct NameTiDBUnixTimeStampInt
+{
+    static constexpr auto name = "tidbUnixTimeStampInt";
+};
+struct NameTiDBUnixTimeStampDec
+{
+    static constexpr auto name = "tidbUnixTimeStampDec";
+};
 
 template <typename Name>
 class FunctionTiDBUnixTimeStamp : public IFunction
@@ -36,7 +43,8 @@ class FunctionTiDBUnixTimeStamp : public IFunction
 public:
     static constexpr auto name = Name::name;
     static FunctionPtr create(const Context & context) { return std::make_shared<FunctionTiDBUnixTimeStamp>(context); };
-    explicit FunctionTiDBUnixTimeStamp(const Context & context) : timezone_(context.getTimezoneInfo()){};
+    explicit FunctionTiDBUnixTimeStamp(const Context & context)
+        : timezone_(context.getTimezoneInfo()){};
 
     String getName() const override
     {
@@ -61,7 +69,7 @@ public:
             auto & datetimeType = dynamic_cast<const DataTypeMyDateTime &>(*arguments[0].type);
             fsp = datetimeType.getFraction();
         }
-        return std::make_shared<DataTypeDecimal64>(12+fsp, fsp);
+        return std::make_shared<DataTypeDecimal64>(12 + fsp, fsp);
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
@@ -215,4 +223,4 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionStrToDate<NameStrToDateDatetime>>();
 }
 
-}
+} // namespace DB

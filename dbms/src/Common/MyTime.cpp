@@ -500,8 +500,14 @@ int MyTimeBase::weekDay() const
     return diff;
 }
 
+bool checkFormatValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
+{
+    return (year >= 0 && year <= 9999) && (month >= 0 && month <= 12) && (day >= 1 && day <= 31) && (hour >= 0 && hour <= 23) && (minute >= 0 && minute <= 59)
+        && (second >= 0 && second <= 59);
+}
+
 // TODO: support parse time from float string
-Field parseMyDateTime(const String & str, int8_t fsp)
+Field parseMyDateTime(const String & str, int8_t fsp, bool checkValid)
 {
     // Since we only use DateLUTImpl as parameter placeholder of AddSecondsImpl::execute
     // and it's costly to construct a DateLUTImpl, a shared static instance is enough.
@@ -709,6 +715,11 @@ Field parseMyDateTime(const String & str, int8_t fsp)
         {
             year = adjustYear(year);
         }
+    }
+
+    if (checkFormatValid(year, month, day, hour, minute, second))
+    {
+        throw Exception("Wrong datetime format");
     }
 
     UInt32 micro_second = 0;

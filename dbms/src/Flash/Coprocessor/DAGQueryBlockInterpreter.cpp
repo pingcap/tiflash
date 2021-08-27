@@ -380,34 +380,37 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     {
         throw TiFlashException("Join query block must have 2 input streams", Errors::BroadcastJoin::Internal);
     }
-    bool is_cartesian_join = join.left_join_keys_size() == 0;
-    auto & join_type_map = is_cartesian_join ? cartesian_join_type_map : equal_join_type_map;
 
+    auto & join_type_map = join.left_join_keys_size() == 0 ? cartesian_join_type_map : equal_join_type_map;
     auto join_type_it = join_type_map.find(join.join_type());
     if (join_type_it == join_type_map.end())
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
+
     ASTTableJoin::Kind kind = join_type_it->second;
     ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
     bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin;
     if (is_semi_join)
         strictness = ASTTableJoin::Strictness::Any;
 
-    BlockInputStreams left_streams;
-    BlockInputStreams right_streams;
-    Names left_key_names;
-    Names right_key_names;
-    bool swap_join_side = false;
-    if (is_cartesian_join)
-    {
-        /// cartesian right join will always be converted to cartesian left join
-        swap_join_side = kind == ASTTableJoin::Kind::Cross_Right;
-    }
+    /// in DAG request, inner part is the build side, however for TiFlash implementation,
+    /// the build side must be the right side, so need to swap the join side if needed
+    /// 1. for (cross) inner join, there is no problem in this swap.
+    /// 2. for (cross) semi/anti-semi join, the build side is always right, needn't swap.
+    /// 3. for non-cross left/right join, there is no problem in this swap.
+    /// 4. for cross left join, the build side is always right, needn't and can't swap.
+    /// 5. for cross right join, the build side is always left, so it will always swap and change to cross left join.
+    /// note that whatever the build side is, we can't support cross-right join now.
+
+    bool swap_join_side;
+    if (kind == ASTTableJoin::Kind::Cross_Right)
+        swap_join_side = true;
+    else if (kind == ASTTableJoin::Kind::Cross_Left)
+        swap_join_side = false;
     else
-    {
-        /// in DAG request, inner part is the build side, however for TiFlash implementation,
-        /// the build side must be the right side, so need to swap the join side if needed
         swap_join_side = join.inner_idx() == 0;
-    }
+
+    DAGPipeline left_pipeline;
+    DAGPipeline right_pipeline;
 
     if (swap_join_side)
     {
@@ -417,13 +420,13 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
             kind = ASTTableJoin::Kind::Left;
         else if (kind == ASTTableJoin::Kind::Cross_Right)
             kind = ASTTableJoin::Kind::Cross_Left;
-        left_streams = input_streams_vec[1];
-        right_streams = input_streams_vec[0];
+        left_pipeline.streams = input_streams_vec[1];
+        right_pipeline.streams = input_streams_vec[0];
     }
     else
     {
-        left_streams = input_streams_vec[0];
-        right_streams = input_streams_vec[1];
+        left_pipeline.streams = input_streams_vec[0];
+        right_pipeline.streams = input_streams_vec[1];
     }
 
     std::vector<NameAndTypePair> join_output_columns;
@@ -462,7 +465,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     /// all the columns from right table should be added after join, even for the join key
     NamesAndTypesList columns_added_by_join;
     make_nullable = is_tiflash_left_join;
-    for (auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
+    for (auto const & p : right_pipeline.streams[0]->getHeader().getNamesAndTypesList())
     {
         columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
@@ -484,28 +487,24 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
                 collators.push_back(nullptr);
         }
 
+    Names left_key_names, right_key_names;
+    String left_filter_column_name = "", right_filter_column_name = "";
+
     /// add necessary transformation if the join key is an expression
-    DAGPipeline left_pipeline;
-    left_pipeline.streams = left_streams;
-    String left_filter_column_name = "";
+
     prepareJoin(swap_join_side ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names, true,
         is_tiflash_right_join, swap_join_side ? join.right_conditions() : join.left_conditions(), left_filter_column_name);
-    DAGPipeline right_pipeline;
-    right_pipeline.streams = right_streams;
-    String right_filter_column_name = "";
+
     prepareJoin(swap_join_side ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names, false,
         is_tiflash_right_join, swap_join_side ? join.left_conditions() : join.right_conditions(), right_filter_column_name);
 
-    left_streams = left_pipeline.streams;
-    right_streams = right_pipeline.streams;
-    String other_filter_column_name = "";
-    String other_eq_filter_from_in_column_name = "";
-    for (auto const & p : left_streams[0]->getHeader().getNamesAndTypesList())
+    String other_filter_column_name = "", other_eq_filter_from_in_column_name = "";
+    for (auto const & p : left_pipeline.streams[0]->getHeader().getNamesAndTypesList())
     {
         if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
             columns_for_other_join_filter.emplace_back(p.name, p.type);
     }
-    for (auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
+    for (auto const & p : right_pipeline.streams[0]->getHeader().getNamesAndTypesList())
     {
         if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
             columns_for_other_join_filter.emplace_back(p.name, p.type);
@@ -518,28 +517,40 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, right_pipeline.streams.size()) : 1;
     size_t max_block_size_for_cross_join = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
-    JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness,
-        join_build_concurrency, collators, left_filter_column_name, right_filter_column_name, other_filter_column_name,
-        other_eq_filter_from_in_column_name, other_condition_expr, max_block_size_for_cross_join);
+
+    JoinPtr joinPtr = std::make_shared<Join>(left_key_names,
+        right_key_names,
+        true,
+        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode),
+        kind,
+        strictness,
+        join_build_concurrency,
+        collators,
+        left_filter_column_name,
+        right_filter_column_name,
+        other_filter_column_name,
+        other_eq_filter_from_in_column_name,
+        other_condition_expr,
+        max_block_size_for_cross_join);
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
     right_pipeline.transform(
         [&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++); });
     executeUnion(right_pipeline, max_streams);
+
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
     dag.getDAGContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
     std::vector<NameAndTypePair> source_columns;
-    for (const auto & p : left_streams[0]->getHeader().getNamesAndTypesList())
+    for (const auto & p : left_pipeline.streams[0]->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
     ExpressionActionsChain chain;
     dag_analyzer.appendJoin(chain, right_query, columns_added_by_join);
-    pipeline.streams = left_streams;
+    pipeline.streams = left_pipeline.streams;
     /// add join input stream
     if (is_tiflash_right_join)
     {
@@ -555,7 +566,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     for (auto & c : join_output_columns)
     {
         /// do not need to care about duplicated column names because
-        /// because it is guaranteed by its children query block
+        /// it is guaranteed by its children query block
         project_cols.emplace_back(c.name, c.name);
     }
     executeProject(pipeline, project_cols);

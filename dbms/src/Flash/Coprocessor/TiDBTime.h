@@ -10,11 +10,11 @@
 
 namespace DB
 {
-
 class TiDBTime
 {
 public:
-    TiDBTime(UInt64 packed, const tipb::FieldType & field_type) : my_date_time(packed)
+    TiDBTime(UInt64 packed, const tipb::FieldType & field_type)
+        : my_date_time(packed)
     {
         time_type = field_type.tp();
         fsp = field_type.decimal();
@@ -31,9 +31,18 @@ public:
             ret |= MyTimeBase::FSPTT_FOR_DATE;
             return ret;
         }
-        if (fsp > 0)
-            ret |= UInt64(fsp) << 1u;
-        if (time_type == TiDB::TypeTimestamp)
+
+        Int8 realFsp = fsp;
+
+        if (my_date_time.micro_second <= UInt32(999999) && my_date_time.micro_second > UInt32(0))
+        {
+            realFsp = static_cast<Int8>(6);
+        }
+
+        if (realFsp > 0)
+            ret |= UInt64(realFsp) << 1u;
+
+        if (time_type == TiDB::TypeTimestamp || time_type == TiDB::TypeDatetime)
             ret |= 1u;
         return ret;
     }
