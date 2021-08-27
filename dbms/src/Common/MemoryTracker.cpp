@@ -140,14 +140,22 @@ void MemoryTracker::setOrRaiseLimit(Int64 value)
         ;
 }
 
+#if __APPLE__ && __clang__
+__thread MemoryTracker * current_memory_tracker = nullptr;
+#else
 thread_local MemoryTracker * current_memory_tracker = nullptr;
+#endif
 
 namespace CurrentMemoryTracker
 {
+#if __APPLE__ && __clang__
+static __thread Int64 local_delta{};
+#else
+static thread_local Int64 local_delta{};
+#endif
 
-static thread_local Int64 local_delta {};
-
-__attribute__((always_inline)) inline void checkSubmit() {
+__attribute__((always_inline)) inline void checkSubmit()
+{
     if (unlikely(local_delta > MEMORY_TRACER_SUBMIT_THRESHOLD))
     {
         if (current_memory_tracker)
