@@ -112,7 +112,7 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
                 DB::throwFromErrno(fmt::format("Cannot write to file {},[truncate_res = {}],[errno_after_truncate = {}],"
                                                "[bytes_written={},to_write={},offset = {}]",
                                                file->getFileName(),
-                                               DB::toString(truncate_res),
+                                               truncate_res,
                                                strerror(errno),
                                                bytes_written,
                                                to_write,
