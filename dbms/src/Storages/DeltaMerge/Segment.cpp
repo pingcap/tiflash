@@ -884,9 +884,16 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
         wbs.data.putRefPage(other_dmfile_id, file_id);
         wbs.removed_data.delPage(ori_ref_id);
 
-        auto my_dmfile = DMFile::restore(dm_context.db_context.getFileProvider(), file_id, /* ref_id= */ my_dmfile_id, file_parent_path);
-        auto other_dmfile
-            = DMFile::restore(dm_context.db_context.getFileProvider(), file_id, /* ref_id= */ other_dmfile_id, file_parent_path);
+        auto my_dmfile    = DMFile::restore(dm_context.db_context.getFileProvider(),
+                                         file_id,
+                                         /* ref_id= */ my_dmfile_id,
+                                         file_parent_path,
+                                         DMFile::ReadMetaMode::all());
+        auto other_dmfile = DMFile::restore(dm_context.db_context.getFileProvider(),
+                                            file_id,
+                                            /* ref_id= */ other_dmfile_id,
+                                            file_parent_path,
+                                            DMFile::ReadMetaMode::all());
 
         my_stable_files.push_back(my_dmfile);
         other_stable_files.push_back(other_dmfile);

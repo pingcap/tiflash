@@ -87,7 +87,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
         auto file_id          = context.storage_pool.data().getNormalPageId(ref_id);
         auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
 
-        auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, ref_id, file_parent_path);
+        auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
         stable->files.push_back(dmfile);
     }
 

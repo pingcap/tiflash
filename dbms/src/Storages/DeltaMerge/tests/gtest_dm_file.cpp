@@ -122,7 +122,7 @@ public:
         auto ref_id        = dm_file->refId();
         auto parent_path   = dm_file->parentPath();
         auto file_provider = dbContext().getFileProvider();
-        return DMFile::restore(file_provider, file_id, ref_id, parent_path, /*read_meta=*/true);
+        return DMFile::restore(file_provider, file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
     }
 
 
