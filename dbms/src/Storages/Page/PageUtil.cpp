@@ -48,6 +48,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_set_page_file_write_errno[];
+extern const char force_split_io_size_4k[];
 } // namespace FailPoints
 
 namespace PageUtil
@@ -75,6 +76,8 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
     size_t bytes_written = 0;
     size_t split_bytes   = to_write > MAX_IO_SIZE ? MAX_IO_SIZE : 0;
 
+    fiu_do_on(FailPoints::force_split_io_size_4k, { split_bytes = 4 * 1024; });
+
     while (bytes_written != to_write)
     {
         ProfileEvents::increment(ProfileEvents::PSMWriteIOCalls);
@@ -83,8 +86,7 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
             CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
 
             size_t bytes_need_write = split_bytes == 0 ? (to_write - bytes_written) : std::min(to_write - bytes_written, split_bytes);
-            std::cout << "to_write : " << to_write << "bytes_need_write : " << bytes_need_write << std::endl;
-            res = file->pwrite(data + bytes_written, bytes_need_write, offset + bytes_written);
+            res                     = file->pwrite(data + bytes_written, bytes_need_write, offset + bytes_written);
 
             fiu_do_on(FailPoints::force_set_page_file_write_errno, {
                 if (enable_failpoint)
@@ -136,6 +138,8 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
     size_t bytes_read  = 0;
     size_t split_bytes = expected_bytes > MAX_IO_SIZE ? MAX_IO_SIZE : 0;
 
+    fiu_do_on(FailPoints::force_split_io_size_4k, { split_bytes = 4 * 1024; });
+
     while (bytes_read < expected_bytes)
     {
         ProfileEvents::increment(ProfileEvents::PSMReadIOCalls);
@@ -144,7 +148,6 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
         {
             size_t bytes_need_read = split_bytes == 0 ? (expected_bytes - bytes_read) : std::min(expected_bytes - bytes_read, split_bytes);
             CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
-            std::cout << "expected_bytes : " << expected_bytes << "bytes_need_read : " << bytes_need_read << std::endl;
             res = file->pread(const_cast<char *>(buf + bytes_read), bytes_need_read, offset + bytes_read);
         }
         if (!res)

@@ -51,6 +51,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(force_set_page_file_write_errno)                       \
+    M(force_split_io_size_4k)                                \
     M(minimum_block_size_for_cross_join)                     \
     M(random_exception_after_dt_write_done)                  \
     M(random_slow_page_storage_write)                        \

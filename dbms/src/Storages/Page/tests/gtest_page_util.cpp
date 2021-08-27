@@ -49,49 +49,14 @@ TEST(PageUtils_test, FileNotExists)
 TEST(PageUtils_test, BigReadWriteFile)
 {
     ::remove(FileName.c_str());
-    char * buff = nullptr;
-    try
-    {
-        WritableFilePtr file_for_write = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
-        size_t          buff_size      = 3ULL * 1024 * 1024 * 1024 + 123;
-        // Stack may not allow to alloc so large data in some platform
-        // If malloc failed, give up this test
-        buff = (char *)malloc(buff_size);
-        if (buff == nullptr)
-        {
-            return;
-        }
-#ifndef NDEBUG
-        PageUtil::writeFile(file_for_write, 0, buff, buff_size, nullptr, false);
-#else
-        PageUtil::writeFile(file_for_write, 0, buff, buff_size, nullptr);
-#endif
-        PageUtil::syncFile(file_for_write);
-        file_for_write->close();
-
-        RandomAccessFilePtr file_for_read = std::make_shared<PosixRandomAccessFile>(FileName, -1, nullptr);
-        PageUtil::readFile(file_for_read, 0, buff, buff_size, nullptr);
-        ::remove(FileName.c_str());
-        free(buff);
-    }
-    catch (DB::Exception & e)
-    {
-        ::remove(FileName.c_str());
-        free(buff);
-        FAIL() << e.getStackTrace().toString();
-    }
-}
-
-TEST(PageUtils_test, DISABLED_BigReadWriteFileWithCheck)
-{
-    ::remove(FileName.c_str());
 
     char * buff_write = nullptr;
     char * buff_read  = nullptr;
+    FailPointHelper::enableFailPoint(FailPoints::force_split_io_size_4k);
     try
     {
         WritableFilePtr file_for_write = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
-        size_t          buff_size      = 3ULL * 1024 * 1024 * 1024 + 123;
+        size_t          buff_size      = 13 * 1024 + 123;
         buff_write                     = (char *)malloc(buff_size);
         if (buff_write == nullptr)
         {
@@ -124,12 +89,14 @@ TEST(PageUtils_test, DISABLED_BigReadWriteFileWithCheck)
         ::remove(FileName.c_str());
         free(buff_write);
         free(buff_read);
+        FailPointHelper::disableFailPoint(FailPoints::force_split_io_size_4k);
     }
     catch (DB::Exception & e)
     {
         ::remove(FileName.c_str());
         free(buff_write);
         free(buff_read);
+        FailPointHelper::disableFailPoint(FailPoints::force_split_io_size_4k);
         FAIL() << e.getStackTrace().toString();
     }
 }
