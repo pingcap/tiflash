@@ -1,14 +1,15 @@
 #pragma once
 
-#include <Common/Stopwatch.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/MemoryTracker.h>
+#include <Common/Stopwatch.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/MergeTreeData.h>
-#include <memory>
-#include <list>
-#include <mutex>
+
 #include <atomic>
+#include <list>
+#include <memory>
+#include <mutex>
 
 
 /** Maintains a list of currently running merges.
@@ -17,12 +18,11 @@
 
 namespace CurrentMetrics
 {
-    extern const Metric Merge;
+extern const Metric Merge;
 }
 
 namespace DB
 {
-
 struct MergeInfo
 {
     std::string database;
@@ -72,8 +72,7 @@ struct MergeListElement : boost::noncopyable
     UInt32 thread_number;
 
 
-    MergeListElement(const std::string & database, const std::string & table, const std::string & result_part_name,
-                     const MergeTreeData::DataPartsVector & source_parts);
+    MergeListElement(const std::string & database, const std::string & table, const std::string & result_part_name, const MergeTreeData::DataPartsVector & source_parts);
 
     MergeInfo getInfo() const;
 
@@ -90,13 +89,16 @@ class MergeListEntry
     using container_t = std::list<MergeListElement>;
     container_t::iterator it;
 
-    CurrentMetrics::Increment num_merges {CurrentMetrics::Merge};
+    CurrentMetrics::Increment num_merges{CurrentMetrics::Merge};
 
 public:
     MergeListEntry(const MergeListEntry &) = delete;
     MergeListEntry & operator=(const MergeListEntry &) = delete;
 
-    MergeListEntry(MergeList & list, const container_t::iterator it) : list(list), it{it} {}
+    MergeListEntry(MergeList & list, const container_t::iterator it)
+        : list(list)
+        , it{it}
+    {}
     ~MergeListEntry();
 
     MergeListElement * operator->() { return &*it; }
@@ -142,4 +144,4 @@ inline MergeListEntry::~MergeListEntry()
 }
 
 
-}
+} // namespace DB

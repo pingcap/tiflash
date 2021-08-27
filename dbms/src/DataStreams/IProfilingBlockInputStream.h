@@ -6,6 +6,7 @@
 #include <DataStreams/SizeLimits.h>
 #include <IO/Progress.h>
 #include <Interpreters/SettingsCommon.h>
+#include <common/logger_useful.h>
 
 #include <atomic>
 
@@ -198,8 +199,8 @@ protected:
     {
         if (log == nullptr)
         {
-            String prefix = mpp_task_id_ == -1 ? LogWithPrefix::prefix_NA : "[task: " + std::to_string(mpp_task_id_) + " query: N/A] ";
-            return std::make_shared<LogWithPrefix>(&Logger::get(name), prefix);
+            String prefix = mpp_task_id_ == -1 ? "" : "[task: " + std::to_string(mpp_task_id_) + " query: N/A] ";
+            return std::make_shared<LogWithPrefix>(&Poco::Logger::get(name), prefix);
         }
 
         return log;

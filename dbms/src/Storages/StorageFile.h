@@ -1,24 +1,22 @@
 #pragma once
 
-#include <Storages/IStorage.h>
-
 #include <Poco/File.h>
 #include <Poco/Path.h>
-
+#include <Storages/IStorage.h>
 #include <common/logger_useful.h>
 
 #include <atomic>
-#include <shared_mutex>
 #include <ext/shared_ptr_helper.h>
+#include <shared_mutex>
 
 
 namespace DB
 {
-
 class StorageFileBlockInputStream;
 class StorageFileBlockOutputStream;
 
-class StorageFile : public ext::shared_ptr_helper<StorageFile>, public IStorage
+class StorageFile : public ext::shared_ptr_helper<StorageFile>
+    , public IStorage
 {
 public:
     std::string getName() const override
@@ -68,7 +66,6 @@ protected:
         Context & context_);
 
 private:
-
     std::string table_name;
     std::string format_name;
     Context & context_global;
@@ -76,14 +73,14 @@ private:
     std::string path;
     int table_fd = -1;
 
-    bool is_db_table = true;                     /// Table is stored in real database, not user's file
-    bool use_table_fd = false;                    /// Use table_fd insted of path
+    bool is_db_table = true; /// Table is stored in real database, not user's file
+    bool use_table_fd = false; /// Use table_fd insted of path
     std::atomic<bool> table_fd_was_used{false}; /// To detect repeating reads from stdin
-    off_t table_fd_init_offset = -1;            /// Initial position of fd, used for repeating reads
+    off_t table_fd_init_offset = -1; /// Initial position of fd, used for repeating reads
 
     mutable std::shared_mutex rwlock;
 
-    Logger * log = &Logger::get("StorageFile");
+    Poco::Logger * log = &Poco::Logger::get("StorageFile");
 };
 
-}
+} // namespace DB

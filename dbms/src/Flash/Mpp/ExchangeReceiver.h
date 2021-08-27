@@ -75,6 +75,7 @@ private:
     Int32 live_connections;
     State state;
     String err_msg;
+
     std::shared_ptr<LogWithPrefix> mpp_task_log;
 
     // control the log frequency
@@ -122,17 +123,14 @@ public:
         , live_connections(pb_exchange_receiver.encoded_task_meta_size())
         , state(NORMAL)
     {
+        mpp_task_log = mpp_task_log_ != nullptr ? mpp_task_log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("ExchangeReceiver"), "");
+
         for (int i = 0; i < exc.field_types_size(); i++)
         {
             String name = "exchange_receiver_" + std::to_string(i);
             ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
             schema.push_back(std::make_pair(name, info));
         }
-
-        if (mpp_task_log_ == nullptr)
-            mpp_task_log = std::make_shared<LogWithPrefix>(&Logger::get("ExchangeReceiver"), LogWithPrefix::prefix_NA);
-        else
-            mpp_task_log = mpp_task_log_;
 
         setUpConnection();
     }

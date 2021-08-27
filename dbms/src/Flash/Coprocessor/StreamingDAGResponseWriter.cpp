@@ -28,7 +28,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWr
       thread_pool(dag_context.final_concurrency)
 {
     if (mpp_task_log_ == nullptr)
-        mpp_task_log = std::make_shared<LogWithPrefix>(&Logger::get("StreamingDAGResponseWriter"), LogWithPrefix::prefix_NA);
+        mpp_task_log = std::make_shared<LogWithPrefix>(&Poco::Logger::get("StreamingDAGResponseWriter"), "");
     else
         mpp_task_log = mpp_task_log_;
     

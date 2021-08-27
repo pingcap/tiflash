@@ -6,18 +6,20 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 extern const int TABLE_IS_DROPPED;
-}
+} // namespace ErrorCodes
 
 static const std::string RegionDataMoverName = "RegionDataMover";
 
 template <typename HandleType>
 BlockInputStreamPtr createBlockInputStreamFromRange(
-    Context & context, const StorageMergeTree & storage, const HandleRange<HandleType> & handle_range, const std::string & pk_name)
+    Context & context,
+    const StorageMergeTree & storage,
+    const HandleRange<HandleType> & handle_range,
+    const std::string & pk_name)
 {
     std::stringstream ss;
     ss << "SELRAW NOKVSTORE `" << MutableSupport::version_column_name << "`, `" << MutableSupport::delmark_column_name << "`, `" << pk_name
@@ -31,14 +33,17 @@ BlockInputStreamPtr createBlockInputStreamFromRange(
 
     std::string query = ss.str();
 
-    LOG_DEBUG(&Logger::get(RegionDataMoverName), __FUNCTION__ << ": sql " << query);
+    LOG_DEBUG(&Poco::Logger::get(RegionDataMoverName), __FUNCTION__ << ": sql " << query);
 
     return executeQuery(query, context, true, QueryProcessingStage::Complete).in;
 }
 
 template <typename HandleType>
 void getHandleMapByRange(
-    Context & context, StorageMergeTree & storage, const HandleRange<HandleType> & handle_range, HandleMap & output_data)
+    Context & context,
+    StorageMergeTree & storage,
+    const HandleRange<HandleType> & handle_range,
+    HandleMap & output_data)
 {
     SortDescription pk_columns = storage.getData().getPrimarySortDescription();
     if (pk_columns.size() != 1)
@@ -86,10 +91,10 @@ void getHandleMapByRange(
     }
 
     auto end_time = Clock::now();
-    LOG_DEBUG(&Logger::get(RegionDataMoverName),
-        __FUNCTION__ << ": execute sql and handle data, cost "
-                     << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms, read " << tol_rows
-                     << " rows");
+    LOG_DEBUG(&Poco::Logger::get(RegionDataMoverName),
+              __FUNCTION__ << ": execute sql and handle data, cost "
+                           << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms, read " << tol_rows
+                           << " rows");
 }
 
 template void getHandleMapByRange<Int64>(Context &, StorageMergeTree &, const HandleRange<Int64> &, HandleMap &);
@@ -97,7 +102,7 @@ template void getHandleMapByRange<UInt64>(Context &, StorageMergeTree &, const H
 
 void tryOptimizeStorageFinal(Context & context, TableID table_id)
 {
-    auto log = &Logger::get(RegionDataMoverName);
+    auto log = &Poco::Logger::get(RegionDataMoverName);
     auto & tmt = context.getTMTContext();
     auto storage = tmt.getStorages().get(table_id);
     if (!storage)

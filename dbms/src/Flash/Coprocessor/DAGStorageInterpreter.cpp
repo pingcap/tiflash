@@ -121,7 +121,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
       mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
 {
     if (mpp_task_log_ == nullptr)
-        mpp_task_log = std::make_shared<LogWithPrefix>(&Logger::get("DAGStorageInterpreter"), LogWithPrefix::prefix_NA);
+        mpp_task_log = std::make_shared<LogWithPrefix>(&Poco::Logger::get("DAGStorageInterpreter"), "");
     else
         mpp_task_log = mpp_task_log_;
 }

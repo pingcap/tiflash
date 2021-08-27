@@ -35,7 +35,7 @@ DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_req
     , dag_response(dag_response_)
     , writer(nullptr)
     , internal(internal_)
-    , log(&Logger::get("DAGDriver"))
+    , log(&Poco::Logger::get("DAGDriver"))
 {
     context.setSetting("read_tso", start_ts);
     if (schema_ver)
@@ -52,7 +52,7 @@ DAGDriver<true>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_requ
     , retry_regions(retry_regions_)
     , writer(writer_)
     , internal(internal_)
-    , log(&Logger::get("DAGDriver"))
+    , log(&Poco::Logger::get("DAGDriver"))
 {
     context.setSetting("read_tso", start_ts);
     if (schema_ver)
@@ -68,7 +68,7 @@ try
     auto start_time = Clock::now();
     DAGContext dag_context(dag_request);
     context.setDAGContext(&dag_context);
-    DAGQuerySource dag(context, regions, retry_regions, dag_request, std::make_shared<LogWithPrefix>(&Logger::get("CoprocessorHandler"), ""), batch);
+    DAGQuerySource dag(context, regions, retry_regions, dag_request, std::make_shared<LogWithPrefix>(&Poco::Logger::get("CoprocessorHandler"), ""), batch);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)

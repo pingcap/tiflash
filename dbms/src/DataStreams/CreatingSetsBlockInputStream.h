@@ -64,8 +64,6 @@ private:
     std::mutex exception_mutex;
     std::vector<std::exception_ptr> exception_from_workers;
 
-    using Logger = Poco::Logger;
-
     const std::shared_ptr<LogWithPrefix> mpp_task_log;
 
     void createAll();

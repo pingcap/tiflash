@@ -47,7 +47,6 @@ extern const Metric Read;
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int UNKNOWN_FORMAT_VERSION;
@@ -63,7 +62,6 @@ extern const int FILE_SIZE_NOT_MATCH;
 
 namespace stable
 {
-
 namespace PageUtil
 {
 // =========================================================

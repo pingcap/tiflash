@@ -1,5 +1,5 @@
-#include <Storages/MergeTree/SimpleMergeSelector.h>
 #include <Common/interpolate.h>
+#include <Storages/MergeTree/SimpleMergeSelector.h>
 
 #include <cmath>
 #include <iostream>
@@ -7,10 +7,8 @@
 
 namespace DB
 {
-
 namespace
 {
-
 /** Estimates best set of parts to merge within passed alternatives.
   */
 struct Estimator
@@ -26,8 +24,7 @@ struct Estimator
         {
             double difference = std::abs(log2(static_cast<double>(sum_size) / size_prev_at_left));
             if (difference < settings.heuristic_to_align_parts_max_absolute_difference_in_powers_of_two)
-                current_score *= interpolateLinear(settings.heuristic_to_align_parts_max_score_adjustment, 1,
-                    difference / settings.heuristic_to_align_parts_max_absolute_difference_in_powers_of_two);
+                current_score *= interpolateLinear(settings.heuristic_to_align_parts_max_score_adjustment, 1, difference / settings.heuristic_to_align_parts_max_absolute_difference_in_powers_of_two);
         }
 
         if (settings.enable_heuristic_to_remove_small_parts_at_right)
@@ -83,8 +80,8 @@ struct Estimator
 double mapPiecewiseLinearToUnit(double value, double min, double max)
 {
     return value <= min ? 0
-        : (value >= max ? 1
-        : ((value - min) / (max - min)));
+                        : (value >= max ? 1
+                                        : ((value - min) / (max - min)));
 }
 
 
@@ -98,39 +95,39 @@ bool allow(
     double partition_size,
     const SimpleMergeSelector::Settings & settings)
 {
-//    std::cerr << "sum_size: " << sum_size << "\n";
+    //    std::cerr << "sum_size: " << sum_size << "\n";
 
     /// Map size to 0..1 using logarithmic scale
     double size_normalized = mapPiecewiseLinearToUnit(log1p(sum_size), log1p(settings.min_size_to_lower_base), log1p(settings.max_size_to_lower_base));
 
-//    std::cerr << "size_normalized: " << size_normalized << "\n";
+    //    std::cerr << "size_normalized: " << size_normalized << "\n";
 
     /// Calculate boundaries for age
     double min_age_to_lower_base = interpolateLinear(settings.min_age_to_lower_base_at_min_size, settings.min_age_to_lower_base_at_max_size, size_normalized);
     double max_age_to_lower_base = interpolateLinear(settings.max_age_to_lower_base_at_min_size, settings.max_age_to_lower_base_at_max_size, size_normalized);
 
-//    std::cerr << "min_age_to_lower_base: " << min_age_to_lower_base << "\n";
-//    std::cerr << "max_age_to_lower_base: " << max_age_to_lower_base << "\n";
+    //    std::cerr << "min_age_to_lower_base: " << min_age_to_lower_base << "\n";
+    //    std::cerr << "max_age_to_lower_base: " << max_age_to_lower_base << "\n";
 
     /// Map age to 0..1
     double age_normalized = mapPiecewiseLinearToUnit(min_age, min_age_to_lower_base, max_age_to_lower_base);
 
-//    std::cerr << "age: " << min_age << "\n";
-//    std::cerr << "age_normalized: " << age_normalized << "\n";
+    //    std::cerr << "age: " << min_age << "\n";
+    //    std::cerr << "age_normalized: " << age_normalized << "\n";
 
     /// Map partition_size to 0..1
     double num_parts_normalized = mapPiecewiseLinearToUnit(partition_size, settings.min_parts_to_lower_base, settings.max_parts_to_lower_base);
 
-//    std::cerr << "partition_size: " << partition_size << "\n";
-//    std::cerr << "num_parts_normalized: " << num_parts_normalized << "\n";
+    //    std::cerr << "partition_size: " << partition_size << "\n";
+    //    std::cerr << "num_parts_normalized: " << num_parts_normalized << "\n";
 
     double combined_ratio = std::min(1.0, age_normalized + num_parts_normalized);
 
-//    std::cerr << "combined_ratio: " << combined_ratio << "\n";
+    //    std::cerr << "combined_ratio: " << combined_ratio << "\n";
 
     double lowered_base = interpolateLinear(settings.base, 2.0, combined_ratio);
 
-//    std::cerr << "------- lowered_base: " << lowered_base << "\n";
+    //    std::cerr << "------- lowered_base: " << lowered_base << "\n";
 
     return (sum_size + range_size * settings.size_fixed_cost_to_add) / (max_size + settings.size_fixed_cost_to_add) >= lowered_base;
 }
@@ -182,7 +179,7 @@ void selectWithinPartition(
     }
 }
 
-}
+} // namespace
 
 
 SimpleMergeSelector::PartsInPartition SimpleMergeSelector::select(
@@ -197,4 +194,4 @@ SimpleMergeSelector::PartsInPartition SimpleMergeSelector::select(
     return estimator.getBest();
 }
 
-}
+} // namespace DB

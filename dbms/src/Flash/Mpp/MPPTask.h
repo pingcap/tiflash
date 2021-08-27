@@ -103,7 +103,7 @@ private:
 
     MPPTaskManager * manager = nullptr;
 
-    Logger * log;
+    Poco::Logger * log;
 
     const std::shared_ptr<LogWithPrefix> mpp_task_log;
 

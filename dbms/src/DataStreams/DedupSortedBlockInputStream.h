@@ -2,7 +2,6 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/dedupUtils.h>
-
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
@@ -11,7 +10,6 @@
 
 namespace DB
 {
-
 class DedupSortedBlockInputStream : public IProfilingBlockInputStream
 {
 public:
@@ -61,7 +59,7 @@ private:
     bool outputAndUpdateCursor(DedupCursors & cursors, BoundQueue & bounds, DedupCursor & cursor);
 
 private:
-    Logger * log;
+    Poco::Logger * log;
     BlockInputStreams children;
     const SortDescription description;
 
@@ -77,4 +75,4 @@ private:
     size_t finished_streams = 0;
 };
 
-}
+} // namespace DB

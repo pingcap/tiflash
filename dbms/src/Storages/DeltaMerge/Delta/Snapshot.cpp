@@ -7,8 +7,6 @@
 
 namespace DB::DM
 {
-
-
 std::pair<size_t, size_t> findPack(const DeltaPacks & packs, size_t rows_offset, size_t deletes_offset)
 {
     size_t rows_count = 0;
@@ -26,9 +24,9 @@ std::pair<size_t, size_t> findPack(const DeltaPacks & packs, size_t rows_offset,
             {
                 if (unlikely(rows_count != rows_offset))
                     throw Exception("rows_count and rows_offset are expected to be equal. pack_index: " + DB::toString(pack_index)
-                        + ", pack_size: " + DB::toString(packs.size()) + ", rows_count: " + DB::toString(rows_count)
-                        + ", rows_offset: " + DB::toString(rows_offset) + ", deletes_count: " + DB::toString(deletes_count)
-                        + ", deletes_offset: " + DB::toString(deletes_offset));
+                                    + ", pack_size: " + DB::toString(packs.size()) + ", rows_count: " + DB::toString(rows_count)
+                                    + ", rows_offset: " + DB::toString(rows_offset) + ", deletes_count: " + DB::toString(deletes_count)
+                                    + ", deletes_offset: " + DB::toString(deletes_offset));
                 return {pack_index, 0};
             }
             ++deletes_count;
@@ -40,9 +38,9 @@ std::pair<size_t, size_t> findPack(const DeltaPacks & packs, size_t rows_offset,
             {
                 if (unlikely(deletes_count != deletes_offset))
                     throw Exception("deletes_count and deletes_offset are expected to be equal. pack_index: " + DB::toString(pack_index)
-                        + ", pack_size: " + DB::toString(packs.size()) + ", rows_count: " + DB::toString(rows_count)
-                        + ", rows_offset: " + DB::toString(rows_offset) + ", deletes_count: " + DB::toString(deletes_count)
-                        + ", deletes_offset: " + DB::toString(deletes_offset));
+                                    + ", pack_size: " + DB::toString(packs.size()) + ", rows_count: " + DB::toString(rows_count)
+                                    + ", rows_offset: " + DB::toString(rows_offset) + ", deletes_count: " + DB::toString(deletes_count)
+                                    + ", deletes_offset: " + DB::toString(deletes_offset));
 
                 return {pack_index, pack->getRows() - (rows_count - rows_offset)};
             }
@@ -50,8 +48,8 @@ std::pair<size_t, size_t> findPack(const DeltaPacks & packs, size_t rows_offset,
     }
     if (rows_count != rows_offset || deletes_count != deletes_offset)
         throw Exception("illegal rows_offset and deletes_offset. pack_size: " + DB::toString(packs.size())
-            + ", rows_count: " + DB::toString(rows_count) + ", rows_offset: " + DB::toString(rows_offset)
-            + ", deletes_count: " + DB::toString(deletes_count) + ", deletes_offset: " + DB::toString(deletes_offset));
+                        + ", rows_count: " + DB::toString(rows_count) + ", rows_offset: " + DB::toString(rows_offset)
+                        + ", deletes_count: " + DB::toString(deletes_count) + ", deletes_offset: " + DB::toString(deletes_offset));
 
     return {pack_index, 0};
 }
@@ -139,8 +137,13 @@ RowKeyRange DeltaValueSnapshot::getSquashDeleteRange() const
 // ================================================
 
 DeltaValueReader::DeltaValueReader(
-    const DMContext & context, const DeltaSnapshotPtr & delta_snap_, const ColumnDefinesPtr & col_defs_, const RowKeyRange & segment_range_)
-    : delta_snap(delta_snap_), col_defs(col_defs_), segment_range(segment_range_)
+    const DMContext & context,
+    const DeltaSnapshotPtr & delta_snap_,
+    const ColumnDefinesPtr & col_defs_,
+    const RowKeyRange & segment_range_)
+    : delta_snap(delta_snap_)
+    , col_defs(col_defs_)
+    , segment_range(segment_range_)
 {
     size_t total_rows = 0;
     for (auto & p : delta_snap->getPacks())
@@ -290,10 +293,10 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes
 }
 
 bool DeltaValueReader::shouldPlace(const DMContext & context,
-    DeltaIndexPtr my_delta_index,
-    const RowKeyRange & segment_range,
-    const RowKeyRange & relevant_range,
-    UInt64 max_version)
+                                   DeltaIndexPtr my_delta_index,
+                                   const RowKeyRange & segment_range,
+                                   const RowKeyRange & relevant_range,
+                                   UInt64 max_version)
 {
     auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
     auto & packs = delta_snap->getPacks();
@@ -302,7 +305,7 @@ bool DeltaValueReader::shouldPlace(const DMContext & context,
     if (placed_rows >= delta_snap->getRows() && placed_delete_ranges == delta_snap->getDeletes())
         return false;
 
-    if (relevant_range.all() || relevant_range == segment_range                 //
+    if (relevant_range.all() || relevant_range == segment_range //
         || delta_snap->getRows() - placed_rows > context.delta_cache_limit_rows //
         || placed_delete_ranges != delta_snap->getDeletes())
         return true;

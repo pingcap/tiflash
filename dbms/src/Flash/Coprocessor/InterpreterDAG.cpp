@@ -27,6 +27,8 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, 
     , keep_session_timezone_info(
           dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock)
 {
+    mpp_task_log = mpp_task_log_ != nullptr ? mpp_task_log : std::make_shared<LogWithPrefix>(&Poco::Logger::get("InterpreterDAG"), "");
+
     const Settings & settings = context.getSettingsRef();
     if (dag.isBatchCop())
         max_streams = settings.max_threads;
@@ -36,11 +38,6 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, 
     {
         max_streams *= settings.max_streams_to_max_threads_ratio;
     }
-
-    if (mpp_task_log_ == nullptr)
-        mpp_task_log = std::make_shared<LogWithPrefix>(&Logger::get("InterpreterDAG"), LogWithPrefix::prefix_NA);
-    else
-        mpp_task_log = mpp_task_log_;
 }
 
 BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets)

@@ -194,8 +194,8 @@ private:
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
 
     Context & global_context;
-    Logger * log;
-    std::shared_ptr<LogWithPrefix> mpp_task_log;
+
+    Poco::Logger * log;
 };
 
 

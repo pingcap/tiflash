@@ -22,32 +22,32 @@ class DMSegmentThreadInputStream : public IProfilingBlockInputStream
 {
 public:
     /// If handle_real_type_ is empty, means do not convert handle column back to real type.
-    DMSegmentThreadInputStream(const DMContextPtr &           dm_context_,
+    DMSegmentThreadInputStream(const DMContextPtr & dm_context_,
                                const SegmentReadTaskPoolPtr & task_pool_,
-                               AfterSegmentRead               after_segment_read_,
-                               const ColumnDefines &          columns_to_read_,
-                               const RSOperatorPtr &          filter_,
-                               UInt64                         max_version_,
-                               size_t                         expected_block_size_,
-                               bool                           is_raw_,
-                               bool                           do_range_filter_for_raw_,
+                               AfterSegmentRead after_segment_read_,
+                               const ColumnDefines & columns_to_read_,
+                               const RSOperatorPtr & filter_,
+                               UInt64 max_version_,
+                               size_t expected_block_size_,
+                               bool is_raw_,
+                               bool do_range_filter_for_raw_,
                                const std::shared_ptr<LogWithPrefix> & mpp_task_log_ = nullptr)
-        : dm_context(dm_context_),
-          task_pool(task_pool_),
-          after_segment_read(after_segment_read_),
-          columns_to_read(columns_to_read_),
-          filter(filter_),
-          header(toEmptyBlock(columns_to_read)),
-          max_version(max_version_),
-          expected_block_size(expected_block_size_),
-          is_raw(is_raw_),
-          do_range_filter_for_raw(do_range_filter_for_raw_),
-          mpp_task_log(getLogWithPrefix(mpp_task_log_, "DMSegmentThreadInputStream"))
+        : dm_context(dm_context_)
+        , task_pool(task_pool_)
+        , after_segment_read(after_segment_read_)
+        , columns_to_read(columns_to_read_)
+        , filter(filter_)
+        , header(toEmptyBlock(columns_to_read))
+        , max_version(max_version_)
+        , expected_block_size(expected_block_size_)
+        , is_raw(is_raw_)
+        , do_range_filter_for_raw(do_range_filter_for_raw_)
     {
+        mpp_task_log = mpp_task_log_ != nullptr ? mpp_task_log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get(getName()), "");
     }
 
     String getName() const override { return "DeltaMergeSegmentThread"; }
-    Block  getHeader() const override { return header; }
+    Block getHeader() const override { return header; }
 
 protected:
     Block readImpl() override
@@ -106,22 +106,22 @@ protected:
                 after_segment_read(dm_context, cur_segment);
                 LOG_TRACE(mpp_task_log, "Finish reading segment [" << cur_segment->segmentId() << "]");
                 cur_segment = {};
-                cur_stream  = {};
+                cur_stream = {};
             }
         }
     }
 
 private:
-    DMContextPtr           dm_context;
+    DMContextPtr dm_context;
     SegmentReadTaskPoolPtr task_pool;
-    AfterSegmentRead       after_segment_read;
-    ColumnDefines          columns_to_read;
-    RSOperatorPtr          filter;
-    Block                  header;
-    const UInt64           max_version;
-    const size_t           expected_block_size;
-    const bool             is_raw;
-    const bool             do_range_filter_for_raw;
+    AfterSegmentRead after_segment_read;
+    ColumnDefines columns_to_read;
+    RSOperatorPtr filter;
+    Block header;
+    const UInt64 max_version;
+    const size_t expected_block_size;
+    const bool is_raw;
+    const bool do_range_filter_for_raw;
 
     bool done = false;
 
@@ -129,7 +129,7 @@ private:
 
     SegmentPtr cur_segment;
 
-    const std::shared_ptr<LogWithPrefix> mpp_task_log;
+    std::shared_ptr<LogWithPrefix> mpp_task_log;
 };
 
 } // namespace DM

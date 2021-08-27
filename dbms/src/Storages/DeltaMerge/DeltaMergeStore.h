@@ -271,9 +271,9 @@ public:
             return light_tasks.size() + heavy_tasks.size();
         }
 
-        bool addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
+        bool addTask(const BackgroundTask & task, const ThreadType & whom, Poco::Logger * log_);
 
-        BackgroundTask nextTask(bool is_heavy, Logger * log_);
+        BackgroundTask nextTask(bool is_heavy, Poco::Logger * log_);
     };
 
     DeltaMergeStore(Context & db_context, //
@@ -485,7 +485,7 @@ private:
     mutable std::shared_mutex read_write_mutex;
 
     UInt64 hash_salt;
-
+    
     Poco::Logger * log;
 }; // namespace DM
 

@@ -1,12 +1,12 @@
 #pragma once
 
+#include <tipb/expression.pb.h>
+
 #include <cassert>
 #include <sstream>
-#include <tipb/expression.pb.h>
 
 namespace DB
 {
-
 class ASTSelectQuery;
 
 struct DAGQueryInfo;
@@ -26,10 +26,10 @@ public:
 public:
     /// From dag.
     using AttrCreatorByColumnID = std::function<Attr(const ColumnID)>;
-    static RSOperatorPtr parseDAGQuery(const DAGQueryInfo &     dag_info,
-                                       const ColumnDefines &    columns_to_read,
+    static RSOperatorPtr parseDAGQuery(const DAGQueryInfo & dag_info,
+                                       const ColumnDefines & columns_to_read,
                                        AttrCreatorByColumnID && creator,
-                                       Poco::Logger *           log);
+                                       Poco::Logger * log);
 
     /// Some helper structure
 
