@@ -35,15 +35,27 @@ extern std::atomic<Value> values[];
 Metric end();
 
 /// Set value of specified metric.
-inline void set(Metric metric, Value value) { values[metric].store(value, std::memory_order_relaxed); }
+inline void set(Metric metric, Value value)
+{
+    values[metric].store(value, std::memory_order_relaxed);
+}
 
 /// Get value of specified metric.
-inline Value get(Metric metric) { return values[metric]; }
+inline Value get(Metric metric)
+{
+    return values[metric];
+}
 
 /// Add value for specified metric. You must subtract value later; or see class Increment below.
-inline void add(Metric metric, Value value = 1) { values[metric].fetch_add(value, std::memory_order_relaxed); }
+inline void add(Metric metric, Value value = 1)
+{
+    values[metric].fetch_add(value, std::memory_order_relaxed);
+}
 
-inline void sub(Metric metric, Value value = 1) { add(metric, -value); }
+inline void sub(Metric metric, Value value = 1)
+{
+    add(metric, -value);
+}
 
 /// For lifetime of object, add amount for specified metric. Then subtract.
 class Increment
@@ -52,10 +64,17 @@ private:
     std::atomic<Value> * what;
     Value amount;
 
-    Increment(std::atomic<Value> * what, Value amount) : what(what), amount(amount) { *what += amount; }
+    Increment(std::atomic<Value> * what, Value amount)
+        : what(what)
+        , amount(amount)
+    {
+        *what += amount;
+    }
 
 public:
-    Increment(Metric metric, Value amount = 1) : Increment(&values[metric], amount) {}
+    Increment(Metric metric, Value amount = 1)
+        : Increment(&values[metric], amount)
+    {}
 
     ~Increment()
     {
