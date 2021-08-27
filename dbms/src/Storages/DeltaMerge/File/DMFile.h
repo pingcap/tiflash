@@ -61,6 +61,49 @@ public:
         }
     }
 
+    struct ReadMetaMode
+    {
+    private:
+        static constexpr size_t READ_NONE = 0x00;
+        static constexpr size_t READ_COLUMN_STAT = 0x01;
+        static constexpr size_t READ_PACK_STAT = 0x02;
+        static constexpr size_t READ_PACK_PROPERTY = 0x04;
+
+        size_t value;
+
+    public:
+        ReadMetaMode(size_t value_)
+            : value(value_)
+        {}
+
+        static ReadMetaMode all()
+        {
+            return ReadMetaMode(READ_COLUMN_STAT | READ_PACK_STAT | READ_PACK_PROPERTY);
+        }
+        static ReadMetaMode none()
+        {
+            return ReadMetaMode(READ_NONE);
+        }
+        // after restore with mode, you can call `getBytesOnDisk` to get disk size of this DMFile
+        static ReadMetaMode diskSizeOnly()
+        {
+            return ReadMetaMode(READ_COLUMN_STAT);
+        }
+        // after restore with mode, you can call `getRows`, `getBytes` to get memory size of this DMFile,
+        // and call `getBytesOnDisk` to get disk size of this DMFile
+        static ReadMetaMode memoryAndDiskSize()
+        {
+            return ReadMetaMode(READ_COLUMN_STAT | READ_PACK_STAT);
+        }
+
+        inline bool needColumnStat() const { return value & READ_COLUMN_STAT; }
+        inline bool needPackStat() const { return value & READ_PACK_STAT; }
+        inline bool needPackProperty() const { return value & READ_PACK_PROPERTY; }
+
+        inline bool isNone() const { return value == READ_NONE; }
+        inline bool isAll() const { return needColumnStat() && needPackStat() && needPackProperty(); }
+    };
+
     struct PackStat
     {
         UInt32 rows;
@@ -86,16 +129,16 @@ public:
     {
         UInt64 pack_property_offset;
         UInt64 pack_property_size;
-        UInt64 meta_offset;
-        UInt64 meta_size;
+        UInt64 column_stat_offset;
+        UInt64 column_stat_size;
         UInt64 pack_stat_offset;
         UInt64 pack_stat_size;
 
         MetaPackInfo()
             : pack_property_offset(0)
             , pack_property_size(0)
-            , meta_offset(0)
-            , meta_size(0)
+            , column_stat_offset(0)
+            , column_stat_size(0)
             , pack_stat_offset(0)
             , pack_stat_size(0)
         {}
@@ -128,7 +171,7 @@ public:
         UInt64 file_id,
         UInt64 ref_id,
         const String & parent_path,
-        bool read_meta = true);
+        const ReadMetaMode & read_meta_mode);
 
     struct ListOptions
     {
@@ -264,12 +307,12 @@ private:
 
     void writeMeta(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
     void writePackProperty(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
-    void readMeta(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
+    void readColumnStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
     void readPackStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
     void readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
 
     void writeMetadata(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
-    void readMetadata(const FileProviderPtr & file_provider);
+    void readMetadata(const FileProviderPtr & file_provider, const ReadMetaMode & read_meta_mode);
 
     void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver);
 
