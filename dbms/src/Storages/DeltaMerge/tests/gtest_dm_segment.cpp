@@ -1091,10 +1091,10 @@ try
                 auto delegate          = dmContext().path_pool.getStableDiskDelegator();
                 auto file_provider     = dmContext().db_context.getFileProvider();
                 auto [range, file_ids] = genDMFile(dmContext(), block);
-                auto file_id           = file_ids[0];
-                auto file_parent_path  = delegate.getDTFilePath(file_id);
-                auto file              = DMFile::restore(file_provider, file_id, file_id, file_parent_path);
-                auto pack              = std::make_shared<DeltaPackFile>(dmContext(), file, range);
+                auto         file_id          = file_ids[0];
+                auto         file_parent_path = delegate.getDTFilePath(file_id);
+                auto         file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
+                auto         pack = std::make_shared<DeltaPackFile>(dmContext(), file, range);
                 WriteBatches wbs(*storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
