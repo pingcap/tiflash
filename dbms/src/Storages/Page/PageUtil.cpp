@@ -53,7 +53,6 @@ extern const char force_split_io_size_4k[];
 
 namespace PageUtil
 {
-
 void syncFile(WritableFilePtr & file)
 {
     if (-1 == file->fsync())
@@ -62,7 +61,12 @@ void syncFile(WritableFilePtr & file)
 
 #ifndef NDEBUG
 void writeFile(
-    WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter, bool enable_failpoint)
+    WritableFilePtr & file,
+    UInt64 offset,
+    char * data,
+    size_t to_write,
+    const WriteLimiterPtr & write_limiter,
+    bool enable_failpoint)
 #else
 void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter)
 #endif
@@ -74,7 +78,7 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
         write_limiter->request(to_write);
 
     size_t bytes_written = 0;
-    size_t split_bytes   = to_write > MAX_IO_SIZE ? MAX_IO_SIZE : 0;
+    size_t split_bytes = to_write > MAX_IO_SIZE ? MAX_IO_SIZE : 0;
 
     fiu_do_on(FailPoints::force_split_io_size_4k, { split_bytes = 4 * 1024; });
 
@@ -86,12 +90,12 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
             CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
 
             size_t bytes_need_write = split_bytes == 0 ? (to_write - bytes_written) : std::min(to_write - bytes_written, split_bytes);
-            res                     = file->pwrite(data + bytes_written, bytes_need_write, offset + bytes_written);
+            res = file->pwrite(data + bytes_written, bytes_need_write, offset + bytes_written);
 
             fiu_do_on(FailPoints::force_set_page_file_write_errno, {
                 if (enable_failpoint)
                 {
-                    res   = -1;
+                    res = -1;
                     errno = ENOSPC;
                 }
             });
@@ -135,7 +139,7 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
     {
         read_limiter->request(expected_bytes);
     }
-    size_t bytes_read  = 0;
+    size_t bytes_read = 0;
     size_t split_bytes = expected_bytes > MAX_IO_SIZE ? MAX_IO_SIZE : 0;
 
     fiu_do_on(FailPoints::force_split_io_size_4k, { split_bytes = 4 * 1024; });
