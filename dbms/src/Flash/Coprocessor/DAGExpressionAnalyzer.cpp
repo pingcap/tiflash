@@ -31,7 +31,7 @@ extern const int COP_BAD_DAG_REQUEST;
 extern const int UNSUPPORTED_METHOD;
 } // namespace ErrorCodes
 
-static String genFuncString(const String & func_name, const Names & argument_names)
+static String genFuncString(const String & func_name, const Names & argument_names, const TiDB::TiDBCollators & collators)
 {
     std::stringstream ss;
     ss << func_name << "(";
@@ -48,7 +48,15 @@ static String genFuncString(const String & func_name, const Names & argument_nam
         }
         ss << argument_name;
     }
-    ss << ") ";
+    ss << ")_collator";
+    for (const auto & collator : collators)
+    {
+        if (collator == nullptr)
+            ss << "_0";
+        else
+            ss << "_" << std::to_string(collator->getCollatorId());
+    }
+    ss << " ";
     return ss.str();
 }
 
@@ -251,7 +259,7 @@ static const String tidb_cast_name = "tidb_cast";
 static String buildCastFunctionInternal(DAGExpressionAnalyzer * analyzer, const Names & argument_names, bool in_union,
     const tipb::FieldType & field_type, ExpressionActionsPtr & actions)
 {
-    String result_name = genFuncString(tidb_cast_name, argument_names);
+    String result_name = genFuncString(tidb_cast_name, argument_names, {nullptr});
     if (actions->getSampleBlock().has(result_name))
         return result_name;
 
@@ -597,7 +605,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
             aggregate.argument_names[i] = arg_name;
             step.required_output.push_back(arg_name);
         }
-        String func_string = genFuncString(agg_func_name, aggregate.argument_names);
+        String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
         bool duplicate = false;
         for (const auto & pre_agg : aggregate_descriptions)
         {
@@ -661,7 +669,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
                 types[0] = type;
                 aggregate.argument_names[0] = name;
 
-                String func_string = genFuncString(agg_func_name, aggregate.argument_names);
+                String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
                 bool duplicate = false;
                 for (const auto & pre_agg : aggregate_descriptions)
                 {
@@ -706,7 +714,7 @@ bool isUInt8Type(const DataTypePtr & type)
 String DAGExpressionAnalyzer::applyFunction(
     const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, const TiDB::TiDBCollatorPtr & collator)
 {
-    String result_name = genFuncString(func_name, arg_names);
+    String result_name = genFuncString(func_name, arg_names, {collator});
     if (actions->getSampleBlock().has(result_name))
         return result_name;
     const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, context);
