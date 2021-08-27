@@ -1,14 +1,14 @@
 #pragma once
 
-#include <optional>
 #include <Core/NamesAndTypes.h>
-#include <Storages/MergeTree/RangesInDataPart.h>
 #include <Storages/MergeTree/MergeTreeRangeReader.h>
+#include <Storages/MergeTree/RangesInDataPart.h>
+
+#include <optional>
 
 
 namespace DB
 {
-
 class MergeTreeData;
 struct MergeTreeReadTask;
 struct MergeTreeBlockSizePredictor;
@@ -56,9 +56,15 @@ struct MergeTreeReadTask
     bool isFinished() const { return mark_ranges.empty() && range_reader.isCurrentRangeFinished(); }
 
     MergeTreeReadTask(
-        const MergeTreeData::DataPartPtr & data_part, const MarkRanges & mark_ranges, const size_t part_index_in_query,
-        const Names & ordered_names, const NameSet & column_name_set, const NamesAndTypesList & columns,
-        const NamesAndTypesList & pre_columns, const bool remove_prewhere_column, const bool should_reorder,
+        const MergeTreeData::DataPartPtr & data_part,
+        const MarkRanges & mark_ranges,
+        const size_t part_index_in_query,
+        const Names & ordered_names,
+        const NameSet & column_name_set,
+        const NamesAndTypesList & columns,
+        const NamesAndTypesList & pre_columns,
+        const bool remove_prewhere_column,
+        const bool should_reorder,
         MergeTreeBlockSizePredictorPtr && size_predictor);
 
     virtual ~MergeTreeReadTask();
@@ -121,7 +127,6 @@ struct MergeTreeBlockSizePredictor
     static double DECAY() { return 1. - std::pow(TARGET_WEIGHT, 1. / NUM_UPDATES_TO_TARGET_WEIGHT); }
 
 protected:
-
     MergeTreeData::DataPartPtr data_part;
 
     struct ColumnInfo
@@ -145,7 +150,6 @@ protected:
     void initialize(const Block & sample_block, const Names & columns, bool from_update = false);
 
 public:
-
     size_t block_size_bytes = 0;
     size_t block_size_rows = 0;
 
@@ -156,4 +160,4 @@ public:
     double filtered_rows_ratio = 0;
 };
 
-}
+} // namespace DB

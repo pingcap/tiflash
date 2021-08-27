@@ -22,12 +22,12 @@
 
 namespace DB
 {
-
 class MetricHandler : public Poco::Net::HTTPRequestHandler
 {
-
 public:
-    MetricHandler(const std::weak_ptr<prometheus::Collectable> & collectable_) : collectable(collectable_) {}
+    MetricHandler(const std::weak_ptr<prometheus::Collectable> & collectable_)
+        : collectable(collectable_)
+    {}
 
     ~MetricHandler() {}
 
@@ -49,7 +49,9 @@ private:
         {
             auto && metrics = collect->Collect();
             collected_metrics.insert(
-                collected_metrics.end(), std::make_move_iterator(metrics.begin()), std::make_move_iterator(metrics.end()));
+                collected_metrics.end(),
+                std::make_move_iterator(metrics.begin()),
+                std::make_move_iterator(metrics.end()));
         }
         return collected_metrics;
     }
@@ -59,9 +61,10 @@ private:
 
 class MetricHandlerFactory : public Poco::Net::HTTPRequestHandlerFactory
 {
-
 public:
-    MetricHandlerFactory(const std::weak_ptr<prometheus::Collectable> & collectable_) : collectable(collectable_) {}
+    MetricHandlerFactory(const std::weak_ptr<prometheus::Collectable> & collectable_)
+        : collectable(collectable_)
+    {}
 
     ~MetricHandlerFactory() {}
 
@@ -83,10 +86,11 @@ private:
 };
 
 std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
-    const TiFlashSecurityConfig & security_config, const std::weak_ptr<prometheus::Collectable> & collectable, const String & metrics_port)
+    const TiFlashSecurityConfig & security_config,
+    const std::weak_ptr<prometheus::Collectable> & collectable,
+    const String & metrics_port)
 {
-    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path,
-        security_config.cert_path, security_config.ca_path, Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path, security_config.cert_path, security_config.ca_path, Poco::Net::Context::VerificationMode::VERIFY_STRICT);
 
     std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
         if (security_config.allowed_common_names.empty())
@@ -113,8 +117,12 @@ constexpr long MILLISECOND = 1000;
 constexpr long INIT_DELAY = 5;
 
 MetricsPrometheus::MetricsPrometheus(
-    Context & context, const AsynchronousMetrics & async_metrics_, const TiFlashSecurityConfig & security_config)
-    : timer("Prometheus"), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
+    Context & context,
+    const AsynchronousMetrics & async_metrics_,
+    const TiFlashSecurityConfig & security_config)
+    : timer("Prometheus")
+    , async_metrics(async_metrics_)
+    , log(&Poco::Logger::get("Prometheus"))
 {
     auto & tiflash_metrics = TiFlashMetrics::instance();
     auto & conf = context.getConfigRef();
@@ -188,10 +196,15 @@ MetricsPrometheus::MetricsPrometheus(
     }
 
     timer.scheduleAtFixedRate(
-        FunctionTimerTask::create(std::bind(&MetricsPrometheus::run, this)), INIT_DELAY * MILLISECOND, metrics_interval * MILLISECOND);
+        FunctionTimerTask::create(std::bind(&MetricsPrometheus::run, this)),
+        INIT_DELAY * MILLISECOND,
+        metrics_interval * MILLISECOND);
 }
 
-MetricsPrometheus::~MetricsPrometheus() { timer.cancel(true); }
+MetricsPrometheus::~MetricsPrometheus()
+{
+    timer.cancel(true);
+}
 
 void MetricsPrometheus::run()
 {

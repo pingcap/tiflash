@@ -6,7 +6,6 @@ namespace DB
 {
 namespace DM
 {
-
 /// A delta pack which contains a DMFile. The DMFile could have many Blocks.
 class DeltaPackFile : public DeltaPack
 {
@@ -14,13 +13,16 @@ class DeltaPackFile : public DeltaPack
 
 private:
     DMFilePtr file;
-    size_t    valid_rows;
-    size_t    valid_bytes;
+    size_t valid_rows;
+    size_t valid_bytes;
 
     RowKeyRange segment_range;
 
     DeltaPackFile(const DMFilePtr & file_, size_t valid_rows_, size_t valid_bytes_, const RowKeyRange & segment_range_)
-        : file(file_), valid_rows(valid_rows_), valid_bytes(valid_bytes_), segment_range(segment_range_)
+        : file(file_)
+        , valid_rows(valid_rows_)
+        , valid_bytes(valid_bytes_)
+        , segment_range(segment_range_)
     {
     }
 
@@ -33,8 +35,8 @@ public:
 
     DeltaPackFilePtr cloneWith(DMContext & context, const DMFilePtr & new_file, const RowKeyRange & new_segment_range)
     {
-        auto new_pack           = new DeltaPackFile(*this);
-        new_pack->file          = new_file;
+        auto new_pack = new DeltaPackFile(*this);
+        new_pack->file = new_file;
         new_pack->segment_range = new_segment_range;
         // update `valid_rows` and `valid_bytes` by `new_segment_range`
         new_pack->calculateStat(context);
@@ -63,15 +65,15 @@ public:
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    static DeltaPackPtr deserializeMetadata(DMContext &         context, //
+    static DeltaPackPtr deserializeMetadata(DMContext & context, //
                                             const RowKeyRange & segment_range,
-                                            ReadBuffer &        buf);
+                                            ReadBuffer & buf);
 
     String toString() const override
     {
         String s = "{file,rows:" + DB::toString(getRows()) //
-            + ",bytes:" + DB::toString(getBytes())         //
-            + ",saved:" + DB::toString(saved) + "}";       //
+            + ",bytes:" + DB::toString(getBytes()) //
+            + ",saved:" + DB::toString(saved) + "}"; //
         return s;
     }
 };
@@ -79,8 +81,8 @@ public:
 class DPFileReader : public DeltaPackReader
 {
 private:
-    const DMContext &      context;
-    const DeltaPackFile &  pack;
+    const DMContext & context;
+    const DeltaPackFile & pack;
     const ColumnDefinesPtr col_defs;
 
     bool pk_ver_only;
@@ -90,23 +92,25 @@ private:
     // The data members for reading only pk and version columns.
     // we cache them to minimize the cost.
     std::vector<Columns> cached_pk_ver_columns;
-    std::vector<size_t>  cached_block_rows_end;
+    std::vector<size_t> cached_block_rows_end;
 
     // The data members for reading all columns, but can only read once.
     size_t rows_before_cur_block = 0;
-    size_t cur_block_offset      = 0;
+    size_t cur_block_offset = 0;
 
-    Block   cur_block;
+    Block cur_block;
     Columns cur_block_data; // The references to columns in cur_block, for faster access.
 
 private:
-    void   initStream();
+    void initStream();
     size_t readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
     size_t readRowsOnce(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
 
 public:
     DPFileReader(const DMContext & context_, const DeltaPackFile & pack_, const ColumnDefinesPtr & col_defs_)
-        : context(context_), pack(pack_), col_defs(col_defs_)
+        : context(context_)
+        , pack(pack_)
+        , col_defs(col_defs_)
     {
         pk_ver_only = col_defs->size() <= 2;
     }

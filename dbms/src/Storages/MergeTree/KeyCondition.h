@@ -1,22 +1,21 @@
 #pragma once
 
-#include <sstream>
-#include <optional>
-
+#include <Core/SortDescription.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Set.h>
-#include <Core/SortDescription.h>
 #include <Parsers/ASTExpressionList.h>
-#include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSelectQuery.h>
 #include <Storages/SelectQueryInfo.h>
+
+#include <optional>
+#include <sstream>
 
 
 namespace DB
 {
-
 class IFunction;
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
 
@@ -29,25 +28,34 @@ private:
     static bool less(const Field & lhs, const Field & rhs);
 
 public:
-    Field left;                       /// the left border, if any
-    Field right;                      /// the right border, if any
-    bool left_bounded = false;        /// bounded at the left
-    bool right_bounded = false;       /// bounded at the right
-    bool left_included = false;       /// includes the left border, if any
-    bool right_included = false;      /// includes the right border, if any
+    Field left; /// the left border, if any
+    Field right; /// the right border, if any
+    bool left_bounded = false; /// bounded at the left
+    bool right_bounded = false; /// bounded at the right
+    bool left_included = false; /// includes the left border, if any
+    bool right_included = false; /// includes the right border, if any
 
     /// The whole unversum.
     Range() {}
 
     /// One point.
     Range(const Field & point)
-        : left(point), right(point), left_bounded(true), right_bounded(true), left_included(true), right_included(true) {}
+        : left(point)
+        , right(point)
+        , left_bounded(true)
+        , right_bounded(true)
+        , left_included(true)
+        , right_included(true)
+    {}
 
     /// A bounded two-sided range.
     Range(const Field & left_, bool left_included_, const Field & right_, bool right_included_)
-        : left(left_), right(right_),
-        left_bounded(true), right_bounded(true),
-        left_included(left_included_), right_included(right_included_)
+        : left(left_)
+        , right(right_)
+        , left_bounded(true)
+        , right_bounded(true)
+        , left_included(left_included_)
+        , right_included(right_included_)
     {
         shrinkToIncludedIfPossible();
     }
@@ -123,16 +131,16 @@ public:
     bool rightThan(const Field & x) const
     {
         return (left_bounded
-            ? !(less(left, x) || (left_included && equals(x, left)))
-            : false);
+                    ? !(less(left, x) || (left_included && equals(x, left)))
+                    : false);
     }
 
     /// x is to the right
     bool leftThan(const Field & x) const
     {
         return (right_bounded
-            ? !(less(x, right) || (right_included && equals(x, right)))
-            : false);
+                    ? !(less(x, right) || (right_included && equals(x, right)))
+                    : false);
     }
 
     bool intersectsRange(const Range & r) const
@@ -148,8 +156,8 @@ public:
         /// r to the right of me.
         if (r.left_bounded
             && right_bounded
-            && (less(right, r.left)                          /// ...} {...
-                || ((!right_included || !r.left_included)    /// ...) [... or ...] (...
+            && (less(right, r.left) /// ...} {...
+                || ((!right_included || !r.left_included) /// ...) [... or ...] (...
                     && equals(r.left, right))))
             return false;
 
@@ -237,10 +245,18 @@ struct RPNElement
     };
 
     RPNElement() {}
-    RPNElement(Function function_) : function(function_) {}
-    RPNElement(Function function_, size_t key_column_) : function(function_), key_column(key_column_) {}
+    RPNElement(Function function_)
+        : function(function_)
+    {}
+    RPNElement(Function function_, size_t key_column_)
+        : function(function_)
+        , key_column(key_column_)
+    {}
     RPNElement(Function function_, size_t key_column_, const Range & range_)
-        : function(function_), range(range_), key_column(key_column_) {}
+        : function(function_)
+        , range(range_)
+        , key_column(key_column_)
+    {}
 
     String toString() const;
 
@@ -258,7 +274,7 @@ struct RPNElement
       * (for example: -toFloat64(toDayOfWeek(date))), then here the functions will be located: toDayOfWeek, toFloat64, negate.
     */
     using MonotonicFunctionsChain = std::vector<FunctionBasePtr>;
-    mutable MonotonicFunctionsChain monotonic_functions_chain;    /// The function execution does not violate the constancy.
+    mutable MonotonicFunctionsChain monotonic_functions_chain; /// The function execution does not violate the constancy.
 };
 
 using RPN = std::vector<RPNElement>;
@@ -304,9 +320,11 @@ public:
     String toString() const;
 
     static Block getBlockWithConstants(
-            const ASTPtr & query, const Context & context, const NamesAndTypesList & all_columns);
+        const ASTPtr & query,
+        const Context & context,
+        const NamesAndTypesList & all_columns);
 
-    using AtomMap = std::unordered_map<std::string, bool(*)(RPNElement & out, const Field & value)>;
+    using AtomMap = std::unordered_map<std::string, bool (*)(RPNElement & out, const Field & value)>;
     static const AtomMap atom_map;
 
     static std::optional<Range> applyMonotonicFunctionsChainToRange(
@@ -315,7 +333,6 @@ public:
         DataTypePtr current_type);
 
 private:
-
     bool mayBeTrueInRange(
         size_t used_key_size,
         const Field * left_key,
@@ -332,4 +349,4 @@ private:
     ExpressionActionsPtr key_expr;
 };
 
-}
+} // namespace DB

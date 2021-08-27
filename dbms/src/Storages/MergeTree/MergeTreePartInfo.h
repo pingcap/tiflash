@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 /// Information about partition and the range of blocks contained in the part.
 /// Allows determining if parts are disjoint or one part fully contains the other.
 struct MergeTreePartInfo
@@ -19,7 +18,10 @@ struct MergeTreePartInfo
 
     MergeTreePartInfo() = default;
     MergeTreePartInfo(String partition_id_, Int64 min_block_, Int64 max_block_, UInt32 level_)
-        : partition_id(std::move(partition_id_)), min_block(min_block_), max_block(max_block_), level(level_)
+        : partition_id(std::move(partition_id_))
+        , min_block(min_block_)
+        , max_block(max_block_)
+        , level(level_)
     {
     }
 
@@ -37,7 +39,7 @@ struct MergeTreePartInfo
     /// Contains another part (obtained after merging another part with some other)
     bool contains(const MergeTreePartInfo & rhs) const
     {
-        return partition_id == rhs.partition_id        /// Parts for different partitions are not merged
+        return partition_id == rhs.partition_id /// Parts for different partitions are not merged
             && min_block <= rhs.min_block
             && max_block >= rhs.max_block
             && level >= rhs.level;
@@ -67,4 +69,4 @@ struct MergeTreePartInfo
     static bool contains(const String & outer_part_name, const String & inner_part_name, MergeTreeDataFormatVersion format_version);
 };
 
-}
+} // namespace DB

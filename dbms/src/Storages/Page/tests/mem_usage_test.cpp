@@ -1,10 +1,10 @@
 #include <stdint.h>
-#include <utility>
 
 #include <iostream>
 #include <map>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 
@@ -12,22 +12,22 @@ using PageId = uint64_t;
 struct PageEntry
 {
     // if file_id == 0, means it is invalid
-    uint64_t file_id  = 0;
-    uint32_t level    = 0;
-    uint32_t size     = 0;
-    uint64_t offset   = 0;
-    uint64_t tag      = 0;
+    uint64_t file_id = 0;
+    uint32_t level = 0;
+    uint32_t size = 0;
+    uint64_t offset = 0;
+    uint64_t tag = 0;
     uint64_t checksum = 0;
-    uint32_t ref      = 1; // for ref counting
+    uint32_t ref = 1; // for ref counting
 
-    inline bool                          isValid() const { return file_id != 0; }
+    inline bool isValid() const { return file_id != 0; }
     inline std::pair<uint64_t, uint32_t> fileIdLevel() const { return std::make_pair(file_id, level); }
 };
 
 int main(int argc, char ** argv)
 {
     std::string mode;
-    size_t      num_entries = 9 * 1000 * 1000;
+    size_t num_entries = 9 * 1000 * 1000;
     if (argc < 2)
     {
         fprintf(stderr, "Usage: %s <map|vec> <num_entries>\n", argv[0]);
@@ -48,8 +48,8 @@ int main(int argc, char ** argv)
     }
 
     printf("inserting to %s with size: %zu\n", mode.c_str(), num_entries);
-    std::unordered_map<PageId, PageEntry>     entries_map;
-    std::map<PageId, PageEntry>               entries_tree_map;
+    std::unordered_map<PageId, PageEntry> entries_map;
+    std::map<PageId, PageEntry> entries_tree_map;
     std::vector<std::pair<PageId, PageEntry>> entries_vec;
     for (size_t i = 0; i < num_entries; ++i)
     {

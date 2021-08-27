@@ -1,49 +1,52 @@
+#include <Common/typeid_cast.h>
 #include <Core/Defines.h>
-
+#include <DataStreams/NativeBlockInputStream.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <IO/CompressedReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
-#include <IO/CompressedReadBufferFromFile.h>
 
-#include <DataTypes/DataTypeFactory.h>
-#include <Common/typeid_cast.h>
 #include <ext/range.h>
-
-#include <DataStreams/NativeBlockInputStream.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int INCORRECT_INDEX;
-    extern const int LOGICAL_ERROR;
-    extern const int CANNOT_READ_ALL_DATA;
-    extern const int NOT_IMPLEMENTED;
-}
+extern const int INCORRECT_INDEX;
+extern const int LOGICAL_ERROR;
+extern const int CANNOT_READ_ALL_DATA;
+extern const int NOT_IMPLEMENTED;
+} // namespace ErrorCodes
 
 NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_, std::vector<String> && output_names_)
-    : istr(istr_), server_revision(server_revision_), output_names(std::move(output_names_))
+    : istr(istr_)
+    , server_revision(server_revision_)
+    , output_names(std::move(output_names_))
 {
 }
 
 NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_)
-    : istr(istr_), server_revision(server_revision_)
+    : istr(istr_)
+    , server_revision(server_revision_)
 {
 }
 
 NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, const Block & header_, UInt64 server_revision_)
-    : istr(istr_), header(header_), server_revision(server_revision_)
+    : istr(istr_)
+    , header(header_)
+    , server_revision(server_revision_)
 {
 }
 
-NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_,
-    IndexForNativeFormat::Blocks::const_iterator index_block_it_,
-    IndexForNativeFormat::Blocks::const_iterator index_block_end_)
-    : istr(istr_), server_revision(server_revision_),
-    use_index(true), index_block_it(index_block_it_), index_block_end(index_block_end_)
+NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_, IndexForNativeFormat::Blocks::const_iterator index_block_it_, IndexForNativeFormat::Blocks::const_iterator index_block_end_)
+    : istr(istr_)
+    , server_revision(server_revision_)
+    , use_index(true)
+    , index_block_it(index_block_it_)
+    , index_block_end(index_block_end_)
 {
-    istr_concrete = typeid_cast<CompressedReadBufferFromFile *>(&istr);
+    istr_concrete = typeid_cast<CompressedReadBufferFromFile<> *>(&istr);
     if (!istr_concrete)
         throw Exception("When need to use index for NativeBlockInputStream, istr must be CompressedReadBufferFromFile.", ErrorCodes::LOGICAL_ERROR);
 
@@ -56,14 +59,16 @@ NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server
     for (const auto & column : index_block_it->columns)
     {
         auto type = DataTypeFactory::instance().get(column.type);
-        header.insert(ColumnWithTypeAndName{ type, column.name });
+        header.insert(ColumnWithTypeAndName{type, column.name});
     }
 }
 
 
 void NativeBlockInputStream::readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows, double avg_value_size_hint)
 {
-    IDataType::InputStreamGetter input_stream_getter = [&] (const IDataType::SubstreamPath &) { return &istr; };
+    IDataType::InputStreamGetter input_stream_getter = [&](const IDataType::SubstreamPath &) {
+        return &istr;
+    };
     type.deserializeBinaryBulkWithMultipleStreams(column, input_stream_getter, rows, avg_value_size_hint, false, {});
 
     if (column.size() != rows)
@@ -115,7 +120,8 @@ Block NativeBlockInputStream::readImpl()
 
     if (output_names.size() > 0 && output_names.size() != columns)
         throw Exception("NativeBlockInputStream with explicity output name, but the block column size "
-                        "is not equal to the size of output names", ErrorCodes::LOGICAL_ERROR);
+                        "is not equal to the size of output names",
+                        ErrorCodes::LOGICAL_ERROR);
     bool explicit_output_name = output_names.size() > 0;
 
     for (size_t i = 0; i < columns; ++i)
@@ -151,7 +157,7 @@ Block NativeBlockInputStream::readImpl()
         MutableColumnPtr read_column = column.type->createColumn();
 
         double avg_value_size_hint = avg_value_size_hints.empty() ? 0 : avg_value_size_hints[i];
-        if (rows)    /// If no rows, nothing to read.
+        if (rows) /// If no rows, nothing to read.
             readData(*column.type, *read_column, istr, rows, avg_value_size_hint);
 
         column.column = std::move(read_column);
@@ -225,4 +231,4 @@ void IndexForNativeFormat::read(ReadBuffer & istr, const NameSet & required_colu
     }
 }
 
-}
+} // namespace DB

@@ -17,18 +17,19 @@ extern const Event WriteBufferAIOWriteBytes;
 
 namespace DB::DM
 {
-
 struct FlushPackTask
 {
-    FlushPackTask(const DeltaPackPtr & pack_) : pack(pack_) {}
+    FlushPackTask(const DeltaPackPtr & pack_)
+        : pack(pack_)
+    {}
 
     DeltaPackPtr pack;
 
-    Block  block_data;
+    Block block_data;
     PageId data_page = 0;
 
-    bool   sorted         = false;
-    size_t rows_offset    = 0;
+    bool sorted = false;
+    size_t rows_offset = 0;
     size_t deletes_offset = 0;
 };
 using FlushPackTasks = std::vector<FlushPackTask>;
@@ -42,10 +43,10 @@ bool DeltaValueSpace::flush(DMContext & context)
     ///  2. The serialized metadata of packs in DeltaValueSpace
 
     FlushPackTasks tasks;
-    WriteBatches   wbs(context.storage_pool, context.getWriteLimiter());
+    WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
 
-    size_t flush_rows    = 0;
-    size_t flush_bytes   = 0;
+    size_t flush_rows = 0;
+    size_t flush_bytes = 0;
     size_t flush_deletes = 0;
 
     DeltaIndexPtr cur_delta_index;
@@ -58,7 +59,7 @@ bool DeltaValueSpace::flush(DMContext & context)
             return false;
         }
 
-        size_t total_rows    = 0;
+        size_t total_rows = 0;
         size_t total_deletes = 0;
         for (auto & pack : packs)
         {
@@ -86,9 +87,9 @@ bool DeltaValueSpace::flush(DMContext & context)
                             throw Exception("Mutable pack does not have cache", ErrorCodes::LOGICAL_ERROR);
 
 
-                        task.rows_offset    = total_rows;
+                        task.rows_offset = total_rows;
                         task.deletes_offset = total_deletes;
-                        task.block_data     = dpb->readFromCache();
+                        task.block_data = dpb->readFromCache();
                     }
                 }
 
@@ -115,7 +116,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     }
 
     DeltaIndex::Updates delta_index_updates;
-    DeltaIndexPtr       new_delta_index;
+    DeltaIndexPtr new_delta_index;
     {
         /// Write prepared data to disk.
         for (auto & task : tasks)
@@ -225,10 +226,10 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         if constexpr (DM_RUN_CHECK)
         {
-            size_t check_unsaved_rows    = 0;
+            size_t check_unsaved_rows = 0;
             size_t check_unsaved_deletes = 0;
-            size_t total_rows            = 0;
-            size_t total_deletes         = 0;
+            size_t total_rows = 0;
+            size_t total_deletes = 0;
             for (auto & pack : packs_copy)
             {
                 if (!pack->isSaved())
@@ -239,9 +240,9 @@ bool DeltaValueSpace::flush(DMContext & context)
                 total_rows += pack->getRows();
                 total_deletes += pack->isDeleteRange();
             }
-            if (unlikely(check_unsaved_rows + flush_rows != unsaved_rows             //
+            if (unlikely(check_unsaved_rows + flush_rows != unsaved_rows //
                          || check_unsaved_deletes + flush_deletes != unsaved_deletes //
-                         || total_rows != rows                                       //
+                         || total_rows != rows //
                          || total_deletes != deletes))
                 throw Exception("Rows and deletes check failed", ErrorCodes::LOGICAL_ERROR);
         }
@@ -284,7 +285,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     ProfileEvents::increment(ProfileEvents::DMWriteBytes, flush_bytes);
 
     // Also update the write amplification
-    auto total_write  = ProfileEvents::counters[ProfileEvents::DMWriteBytes].load(std::memory_order_relaxed);
+    auto total_write = ProfileEvents::counters[ProfileEvents::DMWriteBytes].load(std::memory_order_relaxed);
     auto actual_write = ProfileEvents::counters[ProfileEvents::PSMWriteBytes].load(std::memory_order_relaxed)
         + ProfileEvents::counters[ProfileEvents::WriteBufferFromFileDescriptorWriteBytes].load(std::memory_order_relaxed)
         + ProfileEvents::counters[ProfileEvents::WriteBufferAIOWriteBytes].load(std::memory_order_relaxed);

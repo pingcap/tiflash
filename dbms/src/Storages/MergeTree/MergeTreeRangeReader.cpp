@@ -1,7 +1,8 @@
-#include <Storages/MergeTree/MergeTreeReader.h>
-#include <Columns/FilterDescription.h>
-#include <ext/range.h>
 #include <Columns/ColumnsCommon.h>
+#include <Columns/FilterDescription.h>
+#include <Storages/MergeTree/MergeTreeReader.h>
+
+#include <ext/range.h>
 
 #if __SSE2__
 #include <emmintrin.h>
@@ -9,12 +10,17 @@
 
 namespace DB
 {
-
 MergeTreeRangeReader::DelayedStream::DelayedStream(
-        size_t from_mark, size_t index_granularity, MergeTreeReader * merge_tree_reader)
-        : current_mark(from_mark), current_offset(0), num_delayed_rows(0)
-        , index_granularity(index_granularity), merge_tree_reader(merge_tree_reader)
-        , continue_reading(false), is_finished(false)
+    size_t from_mark,
+    size_t index_granularity,
+    MergeTreeReader * merge_tree_reader)
+    : current_mark(from_mark)
+    , current_offset(0)
+    , num_delayed_rows(0)
+    , index_granularity(index_granularity)
+    , merge_tree_reader(merge_tree_reader)
+    , continue_reading(false)
+    , is_finished(false)
 {
 }
 
@@ -87,10 +93,15 @@ size_t MergeTreeRangeReader::DelayedStream::finalize(Block & block)
 
 
 MergeTreeRangeReader::Stream::Stream(
-        size_t from_mark, size_t to_mark, size_t index_granularity, MergeTreeReader * merge_tree_reader)
-        : current_mark(from_mark), offset_after_current_mark(0)
-        , index_granularity(index_granularity), last_mark(to_mark)
-        , stream(from_mark, index_granularity, merge_tree_reader)
+    size_t from_mark,
+    size_t to_mark,
+    size_t index_granularity,
+    MergeTreeReader * merge_tree_reader)
+    : current_mark(from_mark)
+    , offset_after_current_mark(0)
+    , index_granularity(index_granularity)
+    , last_mark(to_mark)
+    , stream(from_mark, index_granularity, merge_tree_reader)
 {
 }
 
@@ -196,7 +207,7 @@ void MergeTreeRangeReader::ReadResult::adjustLastGranule()
 
     if (num_rows_to_subtract > rows_per_granule.back())
         throw Exception("Can't adjust last granule because it has " + toString(rows_per_granule.back())
-                        + "rows, but try to subtract " + toString(num_rows_to_subtract) + " rows.",
+                            + "rows, but try to subtract " + toString(num_rows_to_subtract) + " rows.",
                         ErrorCodes::LOGICAL_ERROR);
 
     rows_per_granule.back() -= num_rows_to_subtract;
@@ -236,7 +247,6 @@ void MergeTreeRangeReader::ReadResult::optimize()
     /// Just a guess. If only a few rows may be skipped, it's better not to skip at all.
     if (2 * total_zero_rows_in_tails > filter->size())
     {
-
         auto new_filter = ColumnUInt8::create(filter->size() - total_zero_rows_in_tails);
         IColumn::Filter & new_data = new_filter->getData();
 
@@ -272,8 +282,7 @@ size_t MergeTreeRangeReader::ReadResult::countZeroTails(const IColumn::Filter & 
     return total_zero_rows_in_tails;
 }
 
-void MergeTreeRangeReader::ReadResult::collapseZeroTails(const IColumn::Filter & filter, IColumn::Filter & new_filter,
-                                                         const NumRows & zero_tails)
+void MergeTreeRangeReader::ReadResult::collapseZeroTails(const IColumn::Filter & filter, IColumn::Filter & new_filter, const NumRows & zero_tails)
 {
     auto filter_data = filter.data();
     auto new_filter_data = new_filter.data();
@@ -305,19 +314,21 @@ size_t MergeTreeRangeReader::ReadResult::numZerosInTail(const UInt8 * begin, con
     {
         end -= 64;
         auto pos = end;
-        UInt64 val =
-                static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpgt_epi8(
-                        _mm_loadu_si128(reinterpret_cast<const __m128i *>(pos)),
-                        zero16)))
-                | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpgt_epi8(
-                        _mm_loadu_si128(reinterpret_cast<const __m128i *>(pos + 16)),
-                        zero16))) << 16)
-                | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpgt_epi8(
-                        _mm_loadu_si128(reinterpret_cast<const __m128i *>(pos + 32)),
-                        zero16))) << 32)
-                | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpgt_epi8(
-                        _mm_loadu_si128(reinterpret_cast<const __m128i *>(pos + 48)),
-                        zero16))) << 48);
+        UInt64 val = static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpgt_epi8(
+                         _mm_loadu_si128(reinterpret_cast<const __m128i *>(pos)),
+                         zero16)))
+            | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpgt_epi8(
+                   _mm_loadu_si128(reinterpret_cast<const __m128i *>(pos + 16)),
+                   zero16)))
+               << 16)
+            | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpgt_epi8(
+                   _mm_loadu_si128(reinterpret_cast<const __m128i *>(pos + 32)),
+                   zero16)))
+               << 32)
+            | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpgt_epi8(
+                   _mm_loadu_si128(reinterpret_cast<const __m128i *>(pos + 48)),
+                   zero16)))
+               << 48);
         if (val == 0)
             count += 64;
         else
@@ -346,7 +357,8 @@ void MergeTreeRangeReader::ReadResult::setFilter(const ColumnPtr & new_filter)
 
         if (new_size != total_rows_per_granule)
             throw Exception("Can't set filter because it's size is " + toString(new_size) + " but "
-                            + toString(total_rows_per_granule) + " rows was read.", ErrorCodes::LOGICAL_ERROR);
+                                + toString(total_rows_per_granule) + " rows was read.",
+                            ErrorCodes::LOGICAL_ERROR);
     }
 
     ConstantFilterDescription const_description(*new_filter);
@@ -364,15 +376,25 @@ void MergeTreeRangeReader::ReadResult::setFilter(const ColumnPtr & new_filter)
 
 
 MergeTreeRangeReader::MergeTreeRangeReader(
-        MergeTreeReader * merge_tree_reader, size_t index_granularity,
-        MergeTreeRangeReader * prev_reader, ExpressionActionsPtr prewhere_actions,
-        const String * prewhere_column_name, const Names * ordered_names,
-        bool always_reorder, bool remove_prewhere_column, bool last_reader_in_chain)
-        : index_granularity(index_granularity), merge_tree_reader(merge_tree_reader)
-        , prev_reader(prev_reader), prewhere_column_name(prewhere_column_name)
-        , ordered_names(ordered_names), prewhere_actions(std::move(prewhere_actions))
-        , always_reorder(always_reorder), remove_prewhere_column(remove_prewhere_column)
-        , last_reader_in_chain(last_reader_in_chain), is_initialized(true)
+    MergeTreeReader * merge_tree_reader,
+    size_t index_granularity,
+    MergeTreeRangeReader * prev_reader,
+    ExpressionActionsPtr prewhere_actions,
+    const String * prewhere_column_name,
+    const Names * ordered_names,
+    bool always_reorder,
+    bool remove_prewhere_column,
+    bool last_reader_in_chain)
+    : index_granularity(index_granularity)
+    , merge_tree_reader(merge_tree_reader)
+    , prev_reader(prev_reader)
+    , prewhere_column_name(prewhere_column_name)
+    , ordered_names(ordered_names)
+    , prewhere_actions(std::move(prewhere_actions))
+    , always_reorder(always_reorder)
+    , remove_prewhere_column(remove_prewhere_column)
+    , last_reader_in_chain(last_reader_in_chain)
+    , is_initialized(true)
 {
 }
 
@@ -559,7 +581,8 @@ Block MergeTreeRangeReader::continueReadingChain(ReadResult & result)
     /// added_rows may be zero if all columns were read in prewhere and it's ok.
     if (added_rows && added_rows != result.totalRowsPerGranule())
         throw Exception("RangeReader read " + toString(added_rows) + " rows, but "
-                        + toString(result.totalRowsPerGranule()) + " expected.", ErrorCodes::LOGICAL_ERROR);
+                            + toString(result.totalRowsPerGranule()) + " expected.",
+                        ErrorCodes::LOGICAL_ERROR);
 
     return block;
 }
@@ -630,4 +653,4 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
     }
 }
 
-}
+} // namespace DB

@@ -15,20 +15,20 @@ using SegmentPtr = std::shared_ptr<Segment>;
 struct SegmentSnapshot;
 using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
 
-using DMContextPtr       = std::shared_ptr<DMContext>;
+using DMContextPtr = std::shared_ptr<DMContext>;
 using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;
-using SegmentReadTasks   = std::list<SegmentReadTaskPtr>;
-using AfterSegmentRead   = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
+using SegmentReadTasks = std::list<SegmentReadTaskPtr>;
+using AfterSegmentRead = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
 
 struct SegmentReadTask
 {
-    SegmentPtr         segment;
+    SegmentPtr segment;
     SegmentSnapshotPtr read_snapshot;
-    RowKeyRanges       ranges;
+    RowKeyRanges ranges;
 
-    SegmentReadTask(const SegmentPtr &         segment_, //
+    SegmentReadTask(const SegmentPtr & segment_, //
                     const SegmentSnapshotPtr & read_snapshot_,
-                    const RowKeyRanges &       ranges_);
+                    const RowKeyRanges & ranges_);
 
     explicit SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshotPtr & read_snapshot_);
 
@@ -46,7 +46,9 @@ struct SegmentReadTask
 class SegmentReadTaskPool : private boost::noncopyable
 {
 public:
-    SegmentReadTaskPool(SegmentReadTasks && tasks_) : tasks(std::move(tasks_)) {}
+    SegmentReadTaskPool(SegmentReadTasks && tasks_)
+        : tasks(std::move(tasks_))
+    {}
 
     SegmentReadTaskPtr nextTask()
     {

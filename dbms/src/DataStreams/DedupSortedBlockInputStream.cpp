@@ -29,7 +29,7 @@ DedupSortedBlockInputStream::DedupSortedBlockInputStream(BlockInputStreams & inp
     : description(description_), queue_max(1), source_blocks(inputs_.size(), queue_max),
         output_block(inputs_.size() * queue_max), readers(inputs_.size())
 {
-    log = &Logger::get("DedupSorted");
+    log = &Poco::Logger::get("DedupSorted");
 
     children.insert(children.end(), inputs_.begin(), inputs_.end());
 

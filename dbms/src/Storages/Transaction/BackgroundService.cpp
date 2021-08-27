@@ -9,7 +9,7 @@ namespace DB
 {
 
 BackgroundService::BackgroundService(TMTContext & tmt_)
-    : tmt(tmt_), background_pool(tmt.getContext().getBackgroundPool()), log(&Logger::get("BackgroundService"))
+    : tmt(tmt_), background_pool(tmt.getContext().getBackgroundPool()), log(&Poco::Logger::get("BackgroundService"))
 {
     if (!tmt.isInitialized())
         throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);

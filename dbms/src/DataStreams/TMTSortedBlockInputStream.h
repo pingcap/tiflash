@@ -2,20 +2,19 @@
 
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <common/logger_useful.h>
+
 #include <Core/TMTSortCursor.hpp>
 
 namespace DB
 {
-
 template <TMTPKType pk_type>
 class TMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {
 public:
-    TMTSortedBlockInputStream(const BlockInputStreams & inputs_, const SortDescription & description_, const size_t version_column_index_,
-        const size_t delmark_column_index_, size_t max_block_size_)
-        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, nullptr, true),
-          version_column_index(version_column_index_),
-          delmark_column_index(delmark_column_index_)
+    TMTSortedBlockInputStream(const BlockInputStreams & inputs_, const SortDescription & description_, const size_t version_column_index_, const size_t delmark_column_index_, size_t max_block_size_)
+        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, nullptr, true)
+        , version_column_index(version_column_index_)
+        , delmark_column_index(delmark_column_index_)
     {}
 
     String getName() const override { return "TMTSortedBlockInputStream"; }
@@ -32,7 +31,7 @@ private:
     size_t version_column_index;
     size_t delmark_column_index;
 
-    Logger * log = &Logger::get("TMTSortedBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("TMTSortedBlockInputStream");
 
     /// All data has been read.
     bool finished = false;

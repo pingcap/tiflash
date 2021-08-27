@@ -8,10 +8,9 @@ namespace DB
 {
 namespace DM
 {
-
 struct ColumnStat
 {
-    ColId       col_id;
+    ColId col_id;
     DataTypePtr type;
     // The average size of values. A hint for speeding up deserialize.
     double avg_size;
@@ -30,9 +29,9 @@ inline void readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadB
     DB::readText(count, buf);
     DB::assertString("\n\n", buf);
 
-    ColId  id = 0;
+    ColId id = 0;
     String type_name;
-    double avg_size         = 0.0;
+    double avg_size = 0.0;
     size_t serialized_bytes = 0;
     for (size_t i = 0; i < count; ++i)
     {

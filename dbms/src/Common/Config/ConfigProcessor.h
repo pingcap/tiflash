@@ -58,7 +58,7 @@ private:
     const std::string path;
     const std::string preprocessed_path;
 
-    Logger * log;
+    Poco::Logger * log;
     Poco::AutoPtr<Poco::Channel> channel_ptr;
 
     Substitutions substitutions;

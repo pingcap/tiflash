@@ -2,13 +2,12 @@
 #include <Common/FailPoint.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/Utils.h>
 #include <Flash/Mpp/TaskStatus.h>
+#include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char exception_during_mpp_close_tunnel[];
@@ -19,12 +18,12 @@ MPPTunnel::MPPTunnel(
     const mpp::TaskMeta & sender_meta_,
     const std::chrono::seconds timeout_,
     const std::shared_ptr<MPPTask> & current_task_)
-    : connected(false),
-      finished(false),
-      timeout(timeout_),
-      current_task(current_task_),
-      tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id())),
-      log(&Logger::get(tunnel_id))
+    : connected(false)
+    , finished(false)
+    , timeout(timeout_)
+    , current_task(current_task_)
+    , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
+    , log(&Poco::Logger::get(tunnel_id))
 {
 }
 
@@ -71,7 +70,6 @@ bool MPPTunnel::isTaskCancelled()
 // TODO: consider to hold a buffer
 void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
 {
-
     LOG_TRACE(log, "ready to write");
     {
         std::unique_lock<std::mutex> lk(mu);
@@ -127,7 +125,9 @@ void MPPTunnel::waitForFinish()
 
 void MPPTunnel::waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk)
 {
-    auto connected_or_cancelled = [&]() { return connected || isTaskCancelled(); };
+    auto connected_or_cancelled = [&]() {
+        return connected || isTaskCancelled();
+    };
     if (timeout.count() > 0)
     {
         if (!cv_for_connected.wait_for(lk, timeout, connected_or_cancelled))
@@ -148,4 +148,3 @@ void MPPTunnel::finishWithLock()
 }
 
 } // namespace DB
-

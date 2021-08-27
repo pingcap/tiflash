@@ -2,7 +2,6 @@
 
 namespace DB::stable
 {
-
 std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSet::gcApply(PageEntriesEdit & edit)
 {
     std::unique_lock lock(read_write_mutex);
@@ -25,7 +24,7 @@ PageEntriesVersionSet::listAllLiveFiles(const std::unique_lock<std::shared_mutex
 {
     (void)lock;
     std::set<PageFileIdAndLevel> live_files;
-    std::set<PageId>             live_normal_pages;
+    std::set<PageId> live_normal_pages;
     for (PageEntries * v = placeholder_node.next; v != &placeholder_node; v = v->next)
     {
         for (auto it = v->pages_cbegin(); it != v->pages_cend(); ++it)

@@ -188,7 +188,7 @@ protected:
 private:
     size_t sign_column_number = 0;
 
-    Logger * log = &Logger::get("VersionedCollapsingSortedBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("VersionedCollapsingSortedBlockInputStream");
 
     /// Read is finished.
     bool finished = false;

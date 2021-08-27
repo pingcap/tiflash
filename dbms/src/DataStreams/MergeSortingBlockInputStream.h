@@ -94,7 +94,7 @@ private:
     size_t max_bytes_before_external_sort;
     const std::string tmp_path;
 
-    Logger * log = &Logger::get("MergeSortingBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("MergeSortingBlockInputStream");
 
     Blocks blocks;
     size_t sum_bytes_in_blocks = 0;
@@ -113,7 +113,7 @@ private:
     struct TemporaryFileStream
     {
         ReadBufferFromFile file_in;
-        CompressedReadBuffer compressed_in;
+        CompressedReadBuffer<> compressed_in;
         BlockInputStreamPtr block_in;
 
         TemporaryFileStream(const std::string & path, const Block & header)

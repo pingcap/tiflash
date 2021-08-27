@@ -5,27 +5,27 @@
 namespace DB
 {
 LegacyCompactor::LegacyCompactor(const PageStorage & storage, const WriteLimiterPtr & write_limiter_, const ReadLimiterPtr & read_limiter_)
-    : storage_name(storage.storage_name),
-      delegator(storage.delegator),
-      file_provider(storage.getFileProvider()),
-      config(storage.config),
-      log(storage.log),
-      page_file_log(storage.page_file_log),
-      version_set(storage.storage_name + ".legacy_compactor", config.version_set_config, log),
-      write_limiter(write_limiter_),
-      read_limiter(read_limiter_)
+    : storage_name(storage.storage_name)
+    , delegator(storage.delegator)
+    , file_provider(storage.getFileProvider())
+    , config(storage.config)
+    , log(storage.log)
+    , page_file_log(storage.page_file_log)
+    , version_set(storage.storage_name + ".legacy_compactor", config.version_set_config, log)
+    , write_limiter(write_limiter_)
+    , read_limiter(read_limiter_)
 {
 }
 
 std::tuple<PageFileSet, PageFileSet, size_t> //
-LegacyCompactor::tryCompact(                 //
-    PageFileSet &&               page_files,
+LegacyCompactor::tryCompact( //
+    PageFileSet && page_files,
     const WritingFilesSnapshot & writing_files)
 {
     // Select PageFiles to compact, all compacted WriteBatch will apply to `this->version_set`
-    PageFileSet             page_files_to_remove;
-    PageFileSet             page_files_to_compact;
-    WriteBatch::SequenceID  checkpoint_sequence = 0;
+    PageFileSet page_files_to_remove;
+    PageFileSet page_files_to_compact;
+    WriteBatch::SequenceID checkpoint_sequence = 0;
     std::optional<PageFile> old_checkpoint;
     std::tie(page_files_to_remove, page_files_to_compact, checkpoint_sequence, old_checkpoint)
         = collectPageFilesToCompact(page_files, writing_files);
@@ -72,7 +72,7 @@ LegacyCompactor::tryCompact(                 //
 
     // Build a version_set with snapshot
     auto snapshot = version_set.getSnapshot();
-    auto wb       = prepareCheckpointWriteBatch(snapshot, checkpoint_sequence);
+    auto wb = prepareCheckpointWriteBatch(snapshot, checkpoint_sequence);
 
     {
         std::stringstream legacy_ss;
@@ -83,8 +83,8 @@ LegacyCompactor::tryCompact(                 //
         const String old_checkpoint_str = (old_checkpoint ? old_checkpoint->toString() : "(none)");
 
         LOG_INFO(log,
-                 storage_name << " Compact legacy PageFile " << legacy_ss.str()                                     //
-                              << " and old checkpoint: " << old_checkpoint_str                                      //
+                 storage_name << " Compact legacy PageFile " << legacy_ss.str() //
+                              << " and old checkpoint: " << old_checkpoint_str //
                               << " into checkpoint PageFile_" << checkpoint_id.first << "_" << checkpoint_id.second //
                               << " with " << info.toString() << " sequence: " << checkpoint_sequence);
     }
@@ -146,9 +146,9 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         // stopped by a writable file that contains no valid meta.
     }
 
-    std::optional<PageFile>               old_checkpoint_file;
+    std::optional<PageFile> old_checkpoint_file;
     std::optional<WriteBatch::SequenceID> old_checkpoint_sequence;
-    PageFileSet                           page_files_to_remove;
+    PageFileSet page_files_to_remove;
     std::tie(old_checkpoint_file, old_checkpoint_sequence, page_files_to_remove) = //
         restoreFromCheckpoints(merging_queue, version_set, info, storage_name, log);
 
@@ -159,10 +159,10 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
     if (old_checkpoint_sequence)
     {
         compact_sequence = *old_checkpoint_sequence;
-        last_sequence    = *old_checkpoint_sequence;
+        last_sequence = *old_checkpoint_sequence;
     }
 
-    const auto  gc_safe_sequence = writing_files.minPersistedSequence();
+    const auto gc_safe_sequence = writing_files.minPersistedSequence();
     PageFileSet page_files_to_compact;
     while (!merging_queue.empty())
     {
@@ -173,7 +173,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         // If any, just stop collecting `page_files_to_remove`.
         const auto reader_wb_seq = reader->writeBatchSequence();
         if (reader->belongingPageFile().getType() == PageFile::Type::Formal //
-            || reader_wb_seq >= gc_safe_sequence                            //
+            || reader_wb_seq >= gc_safe_sequence //
             || writing_files.contains(reader->fileIdLevel()))
         {
             LOG_DEBUG(log,
@@ -210,7 +210,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
             {
                 auto edits = reader->getEdits();
                 version_set.apply(edits);
-                last_sequence    = reader_wb_seq;
+                last_sequence = reader_wb_seq;
                 compact_sequence = std::max(compact_sequence, reader_wb_seq);
                 info.mergeEdits(edits);
             }
@@ -271,15 +271,15 @@ WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::Snaps
     return wb;
 }
 
-size_t LegacyCompactor::writeToCheckpoint(const String &             storage_path,
+size_t LegacyCompactor::writeToCheckpoint(const String & storage_path,
                                           const PageFileIdAndLevel & file_id,
-                                          WriteBatch &&              wb,
-                                          FileProviderPtr &          file_provider,
-                                          Poco::Logger *             log,
-                                          const WriteLimiterPtr &     write_limiter)
+                                          WriteBatch && wb,
+                                          FileProviderPtr & file_provider,
+                                          Poco::Logger * log,
+                                          const WriteLimiterPtr & write_limiter)
 {
-    size_t bytes_written   = 0;
-    auto   checkpoint_file = PageFile::newPageFile(file_id.first, file_id.second, storage_path, file_provider, PageFile::Type::Temp, log);
+    size_t bytes_written = 0;
+    auto checkpoint_file = PageFile::newPageFile(file_id.first, file_id.second, storage_path, file_provider, PageFile::Type::Temp, log);
     {
         auto checkpoint_writer = checkpoint_file.createWriter(false, true);
 

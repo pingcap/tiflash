@@ -17,7 +17,7 @@ MemoryTracker::~MemoryTracker()
         }
         catch (...)
         {
-            /// Exception in Logger, intentionally swallow.
+            /// Exception in Poco::Logger, intentionally swallow.
         }
     }
 
@@ -35,10 +35,16 @@ MemoryTracker::~MemoryTracker()
         free(value);
 }
 
+static Poco::Logger * getLogger()
+{
+    static Poco::Logger * logger = &Poco::Logger::get("MemoryTracker");
+    return logger;
+}
 
 void MemoryTracker::logPeakMemoryUsage() const
 {
-    LOG_DEBUG(&Logger::get("MemoryTracker"),
+    LOG_DEBUG(
+        getLogger(),
         "Peak memory usage" << (description ? " " + std::string(description) : "") << ": " << formatReadableSizeWithBinarySuffix(peak)
                             << ".");
 }
@@ -138,12 +144,19 @@ void MemoryTracker::setOrRaiseLimit(Int64 value)
         ;
 }
 
+#if __APPLE__ && __clang__
+__thread MemoryTracker * current_memory_tracker = nullptr;
+#else
 thread_local MemoryTracker * current_memory_tracker = nullptr;
+#endif
 
 namespace CurrentMemoryTracker
 {
-
+#if __APPLE__ && __clang__
+static __thread Int64 local_delta{};
+#else
 static thread_local Int64 local_delta{};
+#endif
 
 __attribute__((always_inline)) inline void checkSubmit()
 {

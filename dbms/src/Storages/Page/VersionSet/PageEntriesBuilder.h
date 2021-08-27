@@ -6,17 +6,17 @@
 
 namespace DB
 {
-
 class PageEntriesBuilder
 {
 public:
     explicit PageEntriesBuilder(const PageEntries * old_version_, //
-                                bool                ignore_invalid_ref_ = false,
-                                Poco::Logger *      log_                = nullptr)
-        : old_version(const_cast<PageEntries *>(old_version_)),
-          current_version(new PageEntries), //
-          ignore_invalid_ref(ignore_invalid_ref_),
-          log(log_)
+                                bool ignore_invalid_ref_ = false,
+                                Poco::Logger * log_ = nullptr)
+        : old_version(const_cast<PageEntries *>(old_version_))
+        , current_version(new PageEntries)
+        , //
+        ignore_invalid_ref(ignore_invalid_ref_)
+        , log(log_)
     {
 #ifndef NDEBUG
         if (ignore_invalid_ref)
@@ -56,7 +56,7 @@ public:
             if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
             {
                 // no new page write to `page_entry_map`, replace it with gc page
-                rec.entry.ref                          = old_page_entry->ref;
+                rec.entry.ref = old_page_entry->ref;
                 new_version->normal_pages[rec.page_id] = rec.entry;
             }
             // else new page written by another thread, gc page is replaced. leave the page for next gc
@@ -64,9 +64,9 @@ public:
     }
 
 private:
-    PageEntries *  old_version;
-    PageEntries *  current_version;
-    bool           ignore_invalid_ref;
+    PageEntries * old_version;
+    PageEntries * current_version;
+    bool ignore_invalid_ref;
     Poco::Logger * log;
 };
 

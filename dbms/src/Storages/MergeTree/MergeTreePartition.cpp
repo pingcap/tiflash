@@ -1,21 +1,18 @@
-#include <Storages/MergeTree/MergeTreePartition.h>
+#include <Common/FieldVisitors.h>
+#include <Common/SipHash.h>
+#include <Common/hex.h>
+#include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeDate.h>
+#include <IO/HashingWriteBuffer.h>
+#include <IO/ReadBufferFromFile.h>
+#include <Poco/File.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataPart.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/HashingWriteBuffer.h>
-#include <Common/FieldVisitors.h>
-#include <DataTypes/DataTypeDate.h>
-#include <Common/SipHash.h>
-#include <Common/typeid_cast.h>
-#include <Common/hex.h>
-
-#include <Poco/File.h>
-
+#include <Storages/MergeTree/MergeTreePartition.h>
 #include <Storages/MutableSupport.h>
 
 namespace DB
 {
-
 static ReadBufferFromFile openForReading(const String & path)
 {
     return ReadBufferFromFile(path, std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(path).getSize()));
@@ -141,4 +138,4 @@ void MergeTreePartition::store(const MergeTreeData & storage, const String & par
     checksums.files["partition.dat"].file_hash = out_hashing.getHash();
 }
 
-}
+} // namespace DB

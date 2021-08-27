@@ -3,15 +3,14 @@
 
 namespace DB
 {
-
 void mergeConfigFromSettings(const DB::Settings & settings, PageStorage::Config & config)
 {
     config.open_file_max_idle_time = Seconds(settings.dt_open_file_max_idle_seconds);
 
     {
         // The probability is [0~1000] out of 1000
-        Int64 prob                          = settings.dt_page_gc_low_write_prob * 1000;
-        prob                                = std::max(0, std::min(1000, prob));
+        Int64 prob = settings.dt_page_gc_low_write_prob * 1000;
+        prob = std::max(0, std::min(1000, prob));
         config.prob_do_gc_when_write_is_low = prob;
     }
 

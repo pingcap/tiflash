@@ -9,10 +9,8 @@ namespace DB
 {
 namespace DM
 {
-
 namespace RowKeyFilter
 {
-
 /// return <offset, limit>
 inline std::pair<size_t, size_t>
 getPosRangeOfSorted(const RowKeyRange & rowkey_range, const ColumnPtr & rowkey_column, const size_t offset, const size_t limit)
@@ -33,8 +31,8 @@ inline Block cutBlock(Block && block, size_t offset, size_t limit)
         size_t pop_size = rows - limit;
         for (size_t i = 0; i < block.columns(); i++)
         {
-            auto & column     = block.getByPosition(i);
-            auto   mutate_col = (*std::move(column.column)).mutate();
+            auto & column = block.getByPosition(i);
+            auto mutate_col = (*std::move(column.column)).mutate();
             mutate_col->popBack(pop_size);
             column.column = std::move(mutate_col);
         }
@@ -43,8 +41,8 @@ inline Block cutBlock(Block && block, size_t offset, size_t limit)
     {
         for (size_t i = 0; i < block.columns(); i++)
         {
-            auto & column     = block.getByPosition(i);
-            auto   new_column = column.column->cloneEmpty();
+            auto & column = block.getByPosition(i);
+            auto new_column = column.column->cloneEmpty();
             new_column->insertRangeFrom(*column.column, offset, limit);
             column.column = std::move(new_column);
         }
@@ -60,14 +58,14 @@ inline Block filterSorted(const RowKeyRange & rowkey_range, Block && block, size
 
 inline Block filterUnsorted(const RowKeyRange & rowkey_range, Block && block, size_t handle_pos)
 {
-    size_t rows          = block.rows();
-    auto   rowkey_column = RowKeyColumnContainer(block.getByPosition(handle_pos).column, rowkey_range.is_common_handle);
+    size_t rows = block.rows();
+    auto rowkey_column = RowKeyColumnContainer(block.getByPosition(handle_pos).column, rowkey_range.is_common_handle);
 
     IColumn::Filter filter(rows);
-    size_t          passed_count = 0;
+    size_t passed_count = 0;
     for (size_t i = 0; i < rows; ++i)
     {
-        bool ok   = rowkey_range.check(rowkey_column.getRowKeyValue(i));
+        bool ok = rowkey_range.check(rowkey_column.getRowKeyValue(i));
         filter[i] = ok;
         passed_count += ok;
     }
@@ -91,13 +89,14 @@ class DMRowKeyFilterBlockInputStream : public IBlockInputStream
 {
 public:
     DMRowKeyFilterBlockInputStream(const BlockInputStreamPtr & input, const RowKeyRange & rowkey_range_, size_t handle_col_pos_)
-        : rowkey_range(rowkey_range_), handle_col_pos(handle_col_pos_)
+        : rowkey_range(rowkey_range_)
+        , handle_col_pos(handle_col_pos_)
     {
         children.push_back(input);
     }
 
     String getName() const override { return "DeltaMergeHandleFilter"; }
-    Block  getHeader() const override { return children.back()->getHeader(); }
+    Block getHeader() const override { return children.back()->getHeader(); }
 
     Block read() override
     {
@@ -130,7 +129,7 @@ public:
 
 private:
     RowKeyRange rowkey_range;
-    size_t      handle_col_pos;
+    size_t handle_col_pos;
 };
 
 } // namespace DM
