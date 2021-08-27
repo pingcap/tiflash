@@ -291,7 +291,7 @@ private:
     void readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
 
     void writeMetadata(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
-    void readMetadata(const FileProviderPtr & file_provider);
+    void readMetadata(const FileProviderPtr & file_provider, const ReadMetaMode & read_meta_mode);
 
     void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver);
 
