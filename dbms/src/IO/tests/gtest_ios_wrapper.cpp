@@ -44,7 +44,6 @@ TEST(IOSWrapper, Streaming)
 
 TEST(IOSWrapper, MassiveStreaming)
 {
-
     std::random_device dev;
     auto seed = dev();
     std::mt19937_64 eng{seed};
@@ -66,7 +65,8 @@ TEST(IOSWrapper, MassiveStreaming)
     auto result = buffer.releaseStr();
     auto reader = ReadBufferFromString{result};
     auto stream = InputStreamWrapper{reader};
-    for (auto i : data) {
+    for (auto i : data)
+    {
         int j;
         stream >> j;
         ASSERT_EQ(i, j);

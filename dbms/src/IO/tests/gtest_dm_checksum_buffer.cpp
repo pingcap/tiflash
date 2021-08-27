@@ -23,12 +23,10 @@ namespace DB
 {
 namespace tests
 {
-
 namespace
 {
-
-std::random_device dev;    // NOLINT(cert-err58-cpp)
-uint64_t seed = dev();     // NOLINT(cert-err58-cpp)
+std::random_device dev; // NOLINT(cert-err58-cpp)
+uint64_t seed = dev(); // NOLINT(cert-err58-cpp)
 std::mt19937_64 eng(seed); // NOLINT(cert-err58-cpp)
 
 std::pair<std::vector<char>, uint64_t> randomData(size_t size)
@@ -93,14 +91,12 @@ void runStreamingTest()
     {
         auto [data, seed] = randomData(size);
         {
-
             auto writable_file_ptr = std::make_shared<PosixWritableFile>(CHECKSUM_BUFFER_TEST_PATH, true, -1, 0755);
             auto buffer = DB::FramedChecksumWriteBuffer<D>(writable_file_ptr);
             buffer.write(data.data(), data.size());
         }
 
         {
-
             auto readable_file_ptr = std::make_shared<PosixRandomAccessFile>(CHECKSUM_BUFFER_TEST_PATH, -1);
             auto buffer = DB::FramedChecksumReadBuffer<D>(readable_file_ptr);
             auto cmp = std::vector<char>(size);
@@ -207,19 +203,29 @@ template <ChecksumAlgo D>
 void runStackingTest()
 {
     auto [limiter, provider] = prepareIO();
-    auto config              = DM::DMConfiguration{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
+    auto config = DM::DMConfiguration{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
     for (auto size = 1024; size <= 4096 * 1024; size <<= 1)
     {
         auto [data, seed] = randomData(size);
         {
             auto buffer = createWriteBufferFromFileBaseByFileProvider(
-                provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, true, limiter->getReadLimiter(), config);
+                provider,
+                "/tmp/test",
+                {"/tmp/test.enc", "test.enc"},
+                true,
+                limiter->getReadLimiter(),
+                config);
             auto compression_buffer = CompressedWriteBuffer<false>(*buffer);
             compression_buffer.write(data.data(), data.size());
         }
         {
             auto buffer = CompressedReadBufferFromFileProvider<false>(
-                provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, config.getChecksumFrameLength(), limiter->getReadLimiter(), config);
+                provider,
+                "/tmp/test",
+                {"/tmp/test.enc", "test.enc"},
+                config.getChecksumFrameLength(),
+                limiter->getReadLimiter(),
+                config);
             auto cmp = std::vector<char>(size);
             ASSERT_EQ(buffer.read(cmp.data(), size), size) << "random seed: " << seed << std::endl;
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
@@ -242,17 +248,22 @@ TEST_STACKING(XXH3)
 template <ChecksumAlgo D>
 void runStackedSeekingTest()
 {
-    auto local_engine                                                 = std::mt19937_64{seed};
-    auto [limiter, provider]                                          = prepareIO();
-    auto                                                       config = DM::DMConfiguration{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
-    size_t                                                     size   = 1024 * 1024 * 1024;
+    auto local_engine = std::mt19937_64{seed};
+    auto [limiter, provider] = prepareIO();
+    auto config = DM::DMConfiguration{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
+    size_t size = 1024 * 1024 * 1024;
     std::vector<std::tuple<std::vector<char>, size_t, size_t>> slices;
     auto [data, seed] = randomData(size);
     {
         auto buffer = createWriteBufferFromFileBaseByFileProvider(
-            provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, true, limiter->getWriteLimiter(), config);
-        auto   compression_buffer = CompressedWriteBuffer<false>(*buffer);
-        size_t acc                = 0;
+            provider,
+            "/tmp/test",
+            {"/tmp/test.enc", "test.enc"},
+            true,
+            limiter->getWriteLimiter(),
+            config);
+        auto compression_buffer = CompressedWriteBuffer<false>(*buffer);
+        size_t acc = 0;
         for (size_t length = 1; acc + length <= size; acc += length, length <<= 1)
         {
             std::vector<char> slice;
@@ -262,7 +273,7 @@ void runStackedSeekingTest()
             {
                 compression_buffer.next();
             }
-            auto x = buffer->count();             // compressed position
+            auto x = buffer->count(); // compressed position
             auto y = compression_buffer.offset(); // uncompressed position
             compression_buffer.write(slice.data(), slice.size());
             slices.template emplace_back(std::move(slice), x, y);
@@ -270,7 +281,12 @@ void runStackedSeekingTest()
     }
     {
         auto buffer = CompressedReadBufferFromFileProvider<false>(
-            provider, "/tmp/test", {"/tmp/test.enc", "test.enc"}, config.getChecksumFrameLength(), limiter->getReadLimiter(), config);
+            provider,
+            "/tmp/test",
+            {"/tmp/test.enc", "test.enc"},
+            config.getChecksumFrameLength(),
+            limiter->getReadLimiter(),
+            config);
         std::shuffle(slices.begin(), slices.end(), local_engine);
         for (const auto & [x, y, z] : slices)
         {

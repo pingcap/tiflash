@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 namespace _Impl
 {
 class OutputBufferWrapper : public std::streambuf
@@ -14,7 +13,8 @@ class OutputBufferWrapper : public std::streambuf
     WriteBuffer & underlying;
 
 public:
-    explicit OutputBufferWrapper(WriteBuffer & underlying) : underlying(underlying)
+    explicit OutputBufferWrapper(WriteBuffer & underlying)
+        : underlying(underlying)
     {
         underlying.next();
         auto gptr = underlying.buffer().begin();
@@ -50,7 +50,8 @@ class InputBufferWrapper : public std::streambuf
     ReadBuffer & underlying;
 
 public:
-    explicit InputBufferWrapper(ReadBuffer & underlying) : underlying(underlying)
+    explicit InputBufferWrapper(ReadBuffer & underlying)
+        : underlying(underlying)
     {
         this->setg(underlying.buffer().begin(), underlying.position(), underlying.buffer().end());
     }
@@ -71,13 +72,17 @@ public:
 struct InputStreamWrapperBase
 {
     _Impl::InputBufferWrapper buffer_wrapper;
-    explicit InputStreamWrapperBase(ReadBuffer & underlying) : buffer_wrapper(underlying) {}
+    explicit InputStreamWrapperBase(ReadBuffer & underlying)
+        : buffer_wrapper(underlying)
+    {}
 };
 
 struct OutputStreamWrapperBase
 {
     _Impl::OutputBufferWrapper buffer_wrapper;
-    explicit OutputStreamWrapperBase(WriteBuffer & underlying) : buffer_wrapper(underlying) {}
+    explicit OutputStreamWrapperBase(WriteBuffer & underlying)
+        : buffer_wrapper(underlying)
+    {}
 };
 
 
@@ -86,19 +91,25 @@ struct OutputStreamWrapperBase
 // the problem here is that `std::ios` is the base class determining the buffer, but it is hard to
 // construct a buffer before `std::ios` unless we set the virtual base for the wrapper. By doing so,
 // we can construct the virtual base first and then pass the buffer to `std::ios`.
-class InputStreamWrapper : virtual _Impl::InputStreamWrapperBase, public std::istream
+class InputStreamWrapper : virtual _Impl::InputStreamWrapperBase
+    , public std::istream
 {
 public:
     explicit InputStreamWrapper(ReadBuffer & underlying)
-        : _Impl::InputStreamWrapperBase(underlying), std::ios(&this->buffer_wrapper), std::istream(&this->buffer_wrapper)
+        : _Impl::InputStreamWrapperBase(underlying)
+        , std::ios(&this->buffer_wrapper)
+        , std::istream(&this->buffer_wrapper)
     {}
 };
 
-class OutputStreamWrapper : virtual _Impl::OutputStreamWrapperBase, public std::ostream
+class OutputStreamWrapper : virtual _Impl::OutputStreamWrapperBase
+    , public std::ostream
 {
 public:
     explicit OutputStreamWrapper(WriteBuffer & underlying)
-        : _Impl::OutputStreamWrapperBase(underlying), std::ios(&this->buffer_wrapper), std::ostream(&this->buffer_wrapper)
+        : _Impl::OutputStreamWrapperBase(underlying)
+        , std::ios(&this->buffer_wrapper)
+        , std::ostream(&this->buffer_wrapper)
     {}
 };
 

@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 // Those versions use different data types. It is definitely a bad design pattern.
 // Unfortunately we cannot change it for compatibility issue.
 
@@ -92,19 +91,25 @@ inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
 {
     switch (setting)
     {
-        case 1:
-            return STORAGE_FORMAT_V1;
-        case 2:
-            return STORAGE_FORMAT_V2;
-        case 3:
-            return STORAGE_FORMAT_V3;
-        default:
-            throw Exception("Illegal setting value: " + DB::toString(setting));
+    case 1:
+        return STORAGE_FORMAT_V1;
+    case 2:
+        return STORAGE_FORMAT_V2;
+    case 3:
+        return STORAGE_FORMAT_V3;
+    default:
+        throw Exception("Illegal setting value: " + DB::toString(setting));
     }
 }
 
-inline void setStorageFormat(UInt64 setting) { STORAGE_FORMAT_CURRENT = toStorageFormat(setting); }
+inline void setStorageFormat(UInt64 setting)
+{
+    STORAGE_FORMAT_CURRENT = toStorageFormat(setting);
+}
 
-inline void setStorageFormat(const StorageFormatVersion & version) { STORAGE_FORMAT_CURRENT = version; }
+inline void setStorageFormat(const StorageFormatVersion & version)
+{
+    STORAGE_FORMAT_CURRENT = version;
+}
 
 } // namespace DB
