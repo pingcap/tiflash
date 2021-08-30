@@ -160,6 +160,10 @@ bool LogIterator::read_level(size_t limit, const char * s, size_t & level_start,
     level_start++;
     while (1)
     {
+        if(level_size > 7){
+            // max length is 5
+            return false;
+        }
         if (level_start + level_size >= limit)
             return false;
         if (s[level_start + level_size] == ']')
