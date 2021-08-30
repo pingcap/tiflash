@@ -3,6 +3,7 @@
 #include <AggregateFunctions/AggregateFunctionNothing.h>
 #include <AggregateFunctions/AggregateFunctionNull.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeTuple.h>
 
 #include <unordered_set>
 
@@ -34,6 +35,11 @@ public:
     AggregateFunctionPtr transformAggregateFunction(
         const AggregateFunctionPtr & nested_function, const DataTypes & arguments, const Array &) const override
     {
+        /// group_concat reuses groupArray and groupUniqArray with the special warp function `AggregateFunctionGroupConcat` to process,
+        /// the warp function needs more complex arguments, including collators, sort descriptions and others, which are hard to deliver via Array type,
+        /// so it is specially added outside, instead of being added here, so directly return in this function.
+        if (nested_function && (nested_function->getName() == "groupArray" || nested_function->getName() == "groupUniqArray"))
+            return nested_function;
         bool has_nullable_types = false;
         bool has_null_types = false;
         for (const auto & arg_type : arguments)
@@ -48,7 +54,6 @@ public:
                 }
             }
         }
-
 
         /// Special case for 'count' function. It could be called with Nullable arguments
         /// - that means - count number of calls, when all arguments are not NULL.
