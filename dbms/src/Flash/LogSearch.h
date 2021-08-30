@@ -28,9 +28,14 @@ public:
         , patterns(_patterns)
         , log_file(std::move(_log_file))
         , log(&Poco::Logger::get("LogIterator"))
+        , cur_lineno(0)
+        , last_err_lineno(0)
+        , last_err_reason(Error::Type::OK)
     {
         init();
     }
+
+    ~LogIterator();
 
 public:
     static constexpr size_t MAX_MESSAGE_SIZE = 4096;
@@ -64,7 +69,6 @@ public:
             UNKNOWN
         };
         Type tp;
-        std::string extra_msg = "";
     };
 
     template <typename T>
@@ -105,6 +109,10 @@ private:
     std::string line;
 
     Poco::Logger * log;
+
+    uint32_t cur_lineno;
+    uint32_t last_err_lineno;
+    int last_err_reason;
 };
 
 }; // namespace DB

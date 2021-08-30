@@ -43,6 +43,18 @@ bool LogIterator::next(::diagnosticspb::LogMessage & msg)
         Error err = readLog(entry);
         if (err.tp != Error::Type::OK)
         {
+            if (last_err_reason != Error::Type::OK)
+            {
+                switch (err.tp)
+                {
+                case Error::Type::UNEXPECTED_LOG_HEAD:
+                    last_err_reason = err.tp;
+                    last_err_lineno = cur_lineno;
+                    break;
+                default:
+                    break;
+                }
+            }
             if (err.tp != Error::Type::EOI && err.tp != Error::Type::UNKNOWN)
             {
                 continue;
@@ -227,8 +239,8 @@ LogIterator::Error LogIterator::readLog(LogEntry & entry)
     }
 
     std::getline(*log_file, line);
+    cur_lineno++;
 
-    thread_local char level_buff[20] = {0};
     thread_local char prev_time_buff[35] = {0};
     thread_local time_t prev_time_t;
 
@@ -306,7 +318,7 @@ LogIterator::Error LogIterator::readLog(LogEntry & entry)
         entry.level = LogEntry::Level::Error;
     }
     if (loglevel_size == 0)
-        return Error{Error::Type::INVALID_LOG_LEVEL, "level: " + std::string(level_buff)};
+        return Error{Error::Type::INVALID_LOG_LEVEL};
 
     size_t message_begin = kLogLevelStartFinishOffset + loglevel_size + 3; // [] and a space
     if (line.size() <= message_begin)
@@ -328,6 +340,15 @@ void LogIterator::init()
     for (auto && pattern : patterns)
     {
         compiled_patterns.push_back(std::make_unique<RE2>(pattern));
+    }
+}
+
+
+LogIterator::~LogIterator()
+{
+    if (last_err_reason != Error::Type::OK)
+    {
+        LOG_ERROR(log, "LogIterator search end with error " << std::to_string(last_err_reason) << " at line " << std::to_string(last_err_lineno));
     }
 }
 
