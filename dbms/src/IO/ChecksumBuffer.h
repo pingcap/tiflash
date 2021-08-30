@@ -10,11 +10,6 @@
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <fmt/format.h>
 
-namespace CurrentMetrics
-{
-extern const Metric Write;
-} // namespace CurrentMetrics
-
 namespace ProfileEvents
 {
 extern const Event ChecksumBufferRead;
@@ -83,7 +78,6 @@ private:
 
             ssize_t count;
             {
-                CurrentMetrics::Increment increment{CurrentMetrics::Write};
                 count = out->write(iter, expected);
             }
             if (unlikely(count == -1))

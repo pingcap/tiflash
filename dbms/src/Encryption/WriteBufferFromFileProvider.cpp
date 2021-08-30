@@ -11,11 +11,6 @@ extern const Event WriteBufferFromFileDescriptorWriteFailed;
 extern const Event WriteBufferFromFileDescriptorWriteBytes;
 } // namespace ProfileEvents
 
-namespace CurrentMetrics
-{
-extern const Metric Write;
-}
-
 namespace DB
 {
 namespace ErrorCodes
@@ -56,7 +51,6 @@ void WriteBufferFromFileProvider::nextImpl()
 
         ssize_t res = 0;
         {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
             res = file->write(working_buffer.begin() + bytes_written, offset() - bytes_written);
         }
 

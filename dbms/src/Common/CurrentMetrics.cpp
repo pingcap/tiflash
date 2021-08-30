@@ -17,7 +17,6 @@
     M(InterserverConnection)                    \
     M(OpenFileForRead)                          \
     M(OpenFileForWrite)                         \
-    M(Write)                                    \
     M(SendExternalTables)                       \
     M(QueryThread)                              \
     M(ReadonlyReplica)                          \

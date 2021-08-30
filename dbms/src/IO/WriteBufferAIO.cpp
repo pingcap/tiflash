@@ -17,11 +17,6 @@ namespace ProfileEvents
     extern const Event WriteBufferAIOWriteBytes;
 }
 
-namespace CurrentMetrics
-{
-    extern const Metric Write;
-}
-
 namespace DB
 {
 
@@ -182,8 +177,6 @@ bool WriteBufferAIO::waitForAIOCompletion()
 {
     if (!is_pending_write)
         return false;
-
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
 
     while (io_getevents(aio_context.ctx, events.size(), events.size(), events.data(), nullptr) < 0)
     {
