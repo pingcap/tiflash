@@ -95,6 +95,8 @@ struct AnalysisResult
     bool has_order_by = false;
 
     ExpressionActionsPtr timezone_cast;
+    NamesWithAliases project_after_timezone_cast;
+    NamesWithAliases project_after_timezone_cast_for_remote_read;
     ExpressionActionsPtr before_where;
     ExpressionActionsPtr before_aggregation;
     ExpressionActionsPtr before_having;
@@ -140,11 +142,19 @@ AnalysisResult analyzeExpressions(
     ExpressionActionsChain chain;
     if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
     {
+        auto original_source_columns = analyzer.getCurrentInputColumns();
         if (addTimeZoneCastAfterTS(analyzer, is_ts_column, chain))
         {
             res.need_timezone_cast_after_tablescan = true;
             res.timezone_cast = chain.getLastActions();
             chain.addStep();
+            size_t index = 0;
+            for (const auto & col : analyzer.getCurrentInputColumns())
+            {
+                res.project_after_timezone_cast.emplace_back(col.name, col.name);
+                res.project_after_timezone_cast_for_remote_read.emplace_back(original_source_columns[index].name, col.name);
+                index++;
+            }
         }
     }
     if (!conditions.empty())
@@ -248,6 +258,18 @@ void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
 
 } // namespace
 
+ExpressionActionsPtr generateProjectExpressionActions(const BlockInputStreamPtr & stream, const Context & context, NamesWithAliases & project_cols)
+{
+    auto columns = stream->getHeader();
+    NamesAndTypesList input_column;
+    for (auto & column : columns.getColumnsWithTypeAndName())
+    {
+        input_column.emplace_back(column.name, column.type);
+    }
+    ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
+    project->add(ExpressionAction::project(project_cols));
+    return project;
+}
 
 // the flow is the same as executeFetchcolumns
 void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline)
@@ -755,12 +777,10 @@ void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, cons
 void copyExecutorTreeWithLocalTableScan(
     tipb::DAGRequest & dag_req,
     const tipb::Executor * root,
-    tipb::EncodeType encode_type,
     const tipb::DAGRequest & org_req)
 {
     const tipb::Executor * current = root;
     auto * exec = dag_req.mutable_root_executor();
-    int exec_id = 0;
     while (current->tp() != tipb::ExecType::TypeTableScan)
     {
         exec->set_tp(current->tp());
@@ -816,7 +836,6 @@ void copyExecutorTreeWithLocalTableScan(
         {
             throw TiFlashException("Not supported yet", Errors::Coprocessor::Unimplemented);
         }
-        exec_id++;
     }
 
     if (current->tp() != tipb::ExecType::TypeTableScan)
@@ -827,8 +846,9 @@ void copyExecutorTreeWithLocalTableScan(
     new_ts->set_next_read_engine(tipb::EngineType::Local);
     exec->set_allocated_tbl_scan(new_ts);
 
-    dag_req.set_encode_type(encode_type);
-    if (org_req.has_time_zone_name() && org_req.time_zone_name().length() > 0)
+    dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
+    dag_req.set_force_encode_type(true);
+    if (org_req.has_time_zone_name() && !org_req.time_zone_name().empty())
         dag_req.set_time_zone_name(org_req.time_zone_name());
     else if (org_req.has_time_zone_offset())
         dag_req.set_time_zone_offset(org_req.time_zone_offset());
@@ -861,17 +881,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
 
     ::tipb::DAGRequest dag_req;
 
-    /// still need to choose encode_type although it read data from TiFlash node because
-    /// in TiFlash it has no way to tell whether the cop request is from TiFlash or TIDB
-    tipb::EncodeType encode_type;
-    if (!isUnsupportedEncodeType(query_block.output_field_types, tipb::EncodeType::TypeCHBlock))
-        encode_type = tipb::EncodeType::TypeCHBlock;
-    else if (!isUnsupportedEncodeType(query_block.output_field_types, tipb::EncodeType::TypeChunk))
-        encode_type = tipb::EncodeType::TypeChunk;
-    else
-        encode_type = tipb::EncodeType::TypeDefault;
-
-    copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, encode_type, rqst);
+    copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, rqst);
     DAGSchema schema;
     ColumnsWithTypeAndName columns;
     BoolVec is_ts_column;
@@ -891,34 +901,13 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     executeRemoteQueryImpl(pipeline, cop_key_ranges, dag_req, schema);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-    bool need_append_final_project = false;
-    if (encode_type == tipb::EncodeType::TypeDefault)
-    {
-        /// if the encode type is default, the timestamp column in dag response is UTC based
-        /// so need to cast the timezone
-        ExpressionActionsChain chain;
-        if (addTimeZoneCastAfterTS(*analyzer, is_ts_column, chain))
-        {
-            for (size_t i = 0; i < final_project.size(); i++)
-            {
-                if (is_ts_column[i])
-                    final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
-            }
-            pipeline.transform(
-                [&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log); });
-            need_append_final_project = true;
-        }
-    }
-
-    if (need_append_final_project)
-        executeProject(pipeline, final_project);
 }
 
 void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
-    DAGPipeline & pipeline,
-    const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
-    ::tipb::DAGRequest & dag_req,
-    const DAGSchema & schema)
+DAGPipeline & pipeline,
+                                                      const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
+                                                      ::tipb::DAGRequest & dag_req,
+                                                      const DAGSchema & schema)
 {
     pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
     dag_req.SerializeToString(&(req->data));
@@ -1039,7 +1028,29 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (res.need_timezone_cast_after_tablescan)
     {
         /// execute timezone cast
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, res.timezone_cast); });
+        ExpressionActionsPtr project;
+        ExpressionActionsPtr project_for_cop_read;
+        for (auto & stream : pipeline.streams)
+        {
+            bool is_cop_stream = dynamic_cast<CoprocessorBlockInputStream *>(stream.get()) != nullptr;
+            if (is_cop_stream)
+            {
+                if (project_for_cop_read == nullptr)
+                {
+                    project_for_cop_read = generateProjectExpressionActions(stream, context, res.project_after_timezone_cast_for_remote_read);
+                }
+                stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read);
+            }
+            else
+            {
+                stream = std::make_shared<ExpressionBlockInputStream>(stream, res.timezone_cast);
+                if (project == nullptr)
+                {
+                    project = generateProjectExpressionActions(stream, context, res.project_after_timezone_cast);
+                }
+                stream = std::make_shared<ExpressionBlockInputStream>(stream, project);
+            }
+        }
     }
     // execute selection
     if (res.has_where)
@@ -1099,14 +1110,7 @@ void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithA
 {
     if (project_cols.empty())
         return;
-    auto columns = pipeline.firstStream()->getHeader();
-    NamesAndTypesList input_column;
-    for (auto & column : columns.getColumnsWithTypeAndName())
-    {
-        input_column.emplace_back(column.name, column.type);
-    }
-    ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
-    project->add(ExpressionAction::project(project_cols));
+    ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream(), context, project_cols);
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project, log); });
 }
 
