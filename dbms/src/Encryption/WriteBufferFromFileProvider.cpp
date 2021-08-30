@@ -1,4 +1,3 @@
-#include <Common/CurrentMetrics.h>
 #include <Common/ProfileEvents.h>
 
 #include <Encryption/WriteBufferFromFileProvider.h>
