@@ -1,6 +1,6 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <AggregateFunctions/AggregateFunctionNull.h>
 #include <AggregateFunctions/AggregateFunctionGroupConcat.h>
+#include <AggregateFunctions/AggregateFunctionNull.h>
 #include <Columns/ColumnSet.h>
 #include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -214,8 +214,7 @@ static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
-static String buildTupleFunctionForGroupConcat(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, SortDescription & sort_desc,
-    NamesAndTypes & names_and_types, TiDB::TiDBCollators & collators, ExpressionActionsPtr & actions)
+static String buildTupleFunctionForGroupConcat(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, SortDescription & sort_desc, NamesAndTypes & names_and_types, TiDB::TiDBCollators & collators, ExpressionActionsPtr & actions)
 {
     const String & func_name = "tuple";
     Names argument_names;
@@ -418,7 +417,28 @@ static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr &
 }
 
 static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>>
-    function_builder_map({{"in", buildInFunction}, {"notIn", buildInFunction}, {"globalIn", buildInFunction}, {"globalNotIn", buildInFunction}, {"tidbIn", buildInFunction}, {"tidbNotIn", buildInFunction}, {"ifNull", buildIfNullFunction}, {"multiIf", buildMultiIfFunction}, {"tidb_cast", buildCastFunction}, {"and", buildLogicalFunction}, {"or", buildLogicalFunction}, {"xor", buildLogicalFunction}, {"not", buildLogicalFunction}, {"bitAnd", buildBitwiseFunction}, {"bitOr", buildBitwiseFunction}, {"bitXor", buildBitwiseFunction}, {"bitNot", buildBitwiseFunction}, {"leftUTF8", buildLeftUTF8Function}, {"date_add", buildDateAddOrSubFunction<DateAdd>}, {"date_sub", buildDateAddOrSubFunction<DateSub>}, {"tidbRound", buildRoundFunction}});
+    function_builder_map(
+        {{"in", buildInFunction},
+         {"notIn", buildInFunction},
+         {"globalIn", buildInFunction},
+         {"globalNotIn", buildInFunction},
+         {"tidbIn", buildInFunction},
+         {"tidbNotIn", buildInFunction},
+         {"ifNull", buildIfNullFunction},
+         {"multiIf", buildMultiIfFunction},
+         {"tidb_cast", buildCastFunction},
+         {"and", buildLogicalFunction},
+         {"or", buildLogicalFunction},
+         {"xor", buildLogicalFunction},
+         {"not", buildLogicalFunction},
+         {"bitAnd", buildBitwiseFunction},
+         {"bitOr", buildBitwiseFunction},
+         {"bitXor", buildBitwiseFunction},
+         {"bitNot", buildBitwiseFunction},
+         {"leftUTF8", buildLeftUTF8Function},
+         {"date_add", buildDateAddOrSubFunction<DateAdd>},
+         {"date_sub", buildDateAddOrSubFunction<DateSub>},
+         {"tidbRound", buildRoundFunction}});
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_))
@@ -438,11 +458,11 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> & sour
     settings = context.getSettings();
 }
 
-void DAGExpressionAnalyzer::buildGroupConcat(const tipb::Expr & expr, ExpressionActionsChain::Step & step, const String& agg_func_name, AggregateDescriptions & aggregate_descriptions, bool result_is_nullable)
+void DAGExpressionAnalyzer::buildGroupConcat(const tipb::Expr & expr, ExpressionActionsChain::Step & step, const String & agg_func_name, AggregateDescriptions & aggregate_descriptions, bool result_is_nullable)
 {
     AggregateDescription aggregate;
     /// the last parametric is the separator
-    auto child_size = expr.children_size()-1;
+    auto child_size = expr.children_size() - 1;
     NamesAndTypes all_columns_names_and_types;
     String delimiter = "";
     SortDescription sort_description;
@@ -522,12 +542,26 @@ void DAGExpressionAnalyzer::buildGroupConcat(const tipb::Expr & expr, Expression
         if (only_one_column)
         {
             aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, true>>(
-                aggregate.function, types, delimiter, max_len, sort_description, all_columns_names_and_types, arg_collators, expr.has_distinct());
+                aggregate.function,
+                types,
+                delimiter,
+                max_len,
+                sort_description,
+                all_columns_names_and_types,
+                arg_collators,
+                expr.has_distinct());
         }
         else
         {
             aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, false>>(
-                aggregate.function, types, delimiter, max_len, sort_description, all_columns_names_and_types, arg_collators, expr.has_distinct());
+                aggregate.function,
+                types,
+                delimiter,
+                max_len,
+                sort_description,
+                all_columns_names_and_types,
+                arg_collators,
+                expr.has_distinct());
         }
     }
     else
@@ -535,12 +569,26 @@ void DAGExpressionAnalyzer::buildGroupConcat(const tipb::Expr & expr, Expression
         if (only_one_column)
         {
             aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, true>>(
-                aggregate.function, types, delimiter, max_len, sort_description, all_columns_names_and_types, arg_collators, expr.has_distinct());
+                aggregate.function,
+                types,
+                delimiter,
+                max_len,
+                sort_description,
+                all_columns_names_and_types,
+                arg_collators,
+                expr.has_distinct());
         }
         else
         {
             aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, false>>(
-                aggregate.function, types, delimiter, max_len, sort_description, all_columns_names_and_types, arg_collators, expr.has_distinct());
+                aggregate.function,
+                types,
+                delimiter,
+                max_len,
+                sort_description,
+                all_columns_names_and_types,
+                arg_collators,
+                expr.has_distinct());
         }
     }
 
@@ -582,7 +630,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
 
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
-            buildGroupConcat(expr,step,agg_func_name,aggregate_descriptions, agg.group_by_size() == 0);
+            buildGroupConcat(expr, step, agg_func_name, aggregate_descriptions, agg.group_by_size() == 0);
             continue;
         }
 
