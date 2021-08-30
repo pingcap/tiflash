@@ -73,7 +73,7 @@ public:
 
     Poco::Logger * getLog() const { return log; }
 
-    LogWithPrefixPtr append(const String & str) { return std::make_shared<LogWithPrefix>(log, prefix + " " + str); }
+    LogWithPrefixPtr append(const String & str) const { return std::make_shared<LogWithPrefix>(log, prefix + " " + str); }
 
 private:
     Poco::Logger * log;
