@@ -20,6 +20,8 @@ TEST_F(LogSearch_Test, LogSearch)
     int milli_second;
     int timezone_hour, timezone_min;
     int year, month, day, hour, minute, second;
+    size_t loglevel_size;
+    size_t loglevel_s;
     ASSERT_TRUE(LogIterator::read_date(s.size(), s.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
                 && LogIterator::read_level(s.size(), s.data(), loglevel_s, loglevel_size));
     EXPECT_EQ(year, 2020);
