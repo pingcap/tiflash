@@ -692,7 +692,7 @@ ReturnType readMyDateTimeTextImpl(UInt64 & packed, int fsp, ReadBuffer & buf)
     buf.position() = buf.buffer().end();
     try
     {
-        Field packed_uint_value = parseMyDateTime(str, fsp, true);
+        Field packed_uint_value = parseMyDateTime(str, fsp);
         packed = packed_uint_value.template safeGet<UInt64>();
         return ReturnType(true);
     }
