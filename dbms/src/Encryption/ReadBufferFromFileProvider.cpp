@@ -1,5 +1,4 @@
 #include <Common/ProfileEvents.h>
-#include <Common/CurrentMetrics.h>
 
 #include <Encryption/ReadBufferFromFileProvider.h>
 
