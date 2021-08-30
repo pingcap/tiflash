@@ -1,0 +1,543 @@
+mysql> drop table if exists test.t;
+mysql> create table test.t(id int not null, nid int, name char(20) not null, nname char(20), score float not null, nscore float, birth date not null, nbirth date);
+mysql> alter table test.t set tiflash replica 1;
+mysql> insert into test.t values (1,2, '2','2',1.1,1.2, '2021-08-01','2021-08-02'),(2,null,'B',null,2.3,null,'2021-08-12',null),(1,11, '1','11',1.1,1.2, '2021-08-01','2021-08-03'),(2,2,'2','2',2.2,null,'2021-08-4',null),(3,null,'B',null,2.2,null,'2021-08-12',null),(1,2, '2','2',1.1,1.2, '2021-08-01','2021-08-02'),(2,null,'B',null,2.3,null,'2021-08-12',null),(1,11, '1','11',1.1,1.2, '2021-08-01','2021-08-03'),(2,2,'3','33',2.2,null,'2021-08-4',null);
+mysql> analyze table test.t;
+
+func> wait_table test t
+
+# mutiple data types + distinct + order by
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; select id, group_concat(nid,nname order by score,nscore,nbirth,1) from t group by id;
++----+--------------------------------------------------------+
+| id | group_concat(nid,nname order by score,nscore,nbirth,1) |
++----+--------------------------------------------------------+
+|  1 | 22,22,1111,1111                                        |
+|  2 | 22,233                                                 |
+|  3 | NULL                                                   |
++----+--------------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; select id, group_concat(nid,nname,nscore,nbirth order by score,1,birth) from t group by id;
++----+---------------------------------------------------------------------+
+| id | group_concat(nid,nname,nscore,nbirth order by score,1,birth)        |
++----+---------------------------------------------------------------------+
+|  1 | 221.22021-08-02,221.22021-08-02,11111.22021-08-03,11111.22021-08-03 |
+|  2 | NULL                                                                |
+|  3 | NULL                                                                |
++----+---------------------------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; select id, group_concat(id,name,score,birth order by 2.2,1,2,3,4) from t group by id;
++----+-----------------------------------------------------------------+
+| id | group_concat(id,name,score,birth order by 2.2,1,2,3,4)          |
++----+-----------------------------------------------------------------+
+|  1 | 111.12021-08-01,111.12021-08-01,121.12021-08-01,121.12021-08-01 |
+|  2 | 222.22021-08-04,232.22021-08-04,2B2.32021-08-12,2B2.32021-08-12 |
+|  3 | 3B2.22021-08-12                                                 |
++----+-----------------------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; select id, group_concat(score,nscore order by 1,2, birth) from t group by id;
++----+------------------------------------------------+
+| id | group_concat(score,nscore order by 1,2, birth) |
++----+------------------------------------------------+
+|  1 | 1.11.2,1.11.2,1.11.2,1.11.2                    |
+|  2 | NULL                                           |
+|  3 | NULL                                           |
++----+------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; select id, group_concat(name,nname order by 2.1,1,2) from t group by id;
++----+-------------------------------------------+
+| id | group_concat(name,nname order by 2.1,1,2) |
++----+-------------------------------------------+
+|  1 | 111,111,22,22                             |
+|  2 | 22,333                                    |
+|  3 | NULL                                      |
++----+-------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; select id, group_concat(distinct nid,nname order by 2,1) from t group by id;
++----+-----------------------------------------------+
+| id | group_concat(distinct nid,nname order by 2,1) |
++----+-----------------------------------------------+
+|  1 | 1111,22                                       |
+|  2 | 22,233                                        |
+|  3 | NULL                                          |
++----+-----------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; select id, group_concat(distinct nid,nname,nscore,nbirth order by 3 desc, 1 ,2 desc, 4) from t group by id;
++----+------------------------------------------------------------------------------+
+| id | group_concat(distinct nid,nname,nscore,nbirth order by 3 desc, 1 ,2 desc, 4) |
++----+------------------------------------------------------------------------------+
+|  1 | 221.22021-08-02,11111.22021-08-03                                            |
+|  2 | NULL                                                                         |
+|  3 | NULL                                                                         |
++----+------------------------------------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; select id, group_concat(distinct id,name,score,birth order by nbirth,nscore,1,2) from t group by id;
++----+-----------------------------------------------------------------------+
+| id | group_concat(distinct id,name,score,birth order by nbirth,nscore,1,2) |
++----+-----------------------------------------------------------------------+
+|  1 | 121.12021-08-01,111.12021-08-01                                       |
+|  2 | 222.22021-08-04,232.22021-08-04,2B2.32021-08-12                       |
+|  3 | 3B2.22021-08-12                                                       |
++----+-----------------------------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; select id, group_concat(distinct score,nscore order by 2 desc, 1 , id) from t group by id;
++----+-------------------------------------------------------------+
+| id | group_concat(distinct score,nscore order by 2 desc, 1 , id) |
++----+-------------------------------------------------------------+
+|  1 | 1.11.2                                                      |
+|  2 | NULL                                                        |
+|  3 | NULL                                                        |
++----+-------------------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; select id, group_concat(distinct name,nname,id order by 1, nid) from t group by id;
++----+------------------------------------------------------+
+| id | group_concat(distinct name,nname,id order by 1, nid) |
++----+------------------------------------------------------+
+|  1 | 1111,221                                             |
+|  2 | 222,3332                                             |
+|  3 | NULL                                                 |
++----+------------------------------------------------------+
+
+# order by + distinct
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nid,name order by 1 desc,2) from t group by id;
++----+------------------------------------------+
+| id | group_concat(nid,name order by 1 desc,2) |
++----+------------------------------------------+
+|  1 | 111,111,22,22                            |
+|  2 | 22,23                                    |
+|  3 | NULL                                     |
++----+------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nid,name order by 1,2) from t group by id;
++----+-------------------------------------+
+| id | group_concat(nid,name order by 1,2) |
++----+-------------------------------------+
+|  1 | 22,22,111,111                       |
+|  2 | 22,23                               |
+|  3 | NULL                                |
++----+-------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nid,name order by 2 desc) from t group by id;
++----+----------------------------------------+
+| id | group_concat(nid,name order by 2 desc) |
++----+----------------------------------------+
+|  1 | 22,22,111,111                          |
+|  2 | 23,22                                  |
+|  3 | NULL                                   |
++----+----------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nid,name order by 2) from t group by id;
++----+-----------------------------------+
+| id | group_concat(nid,name order by 2) |
++----+-----------------------------------+
+|  1 | 111,111,22,22                     |
+|  2 | 22,23                             |
+|  3 | NULL                              |
++----+-----------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nid,name order by 1 desc,2) from t group by id;
++----+---------------------------------------------------+
+| id | group_concat(distinct nid,name order by 1 desc,2) |
++----+---------------------------------------------------+
+|  1 | 111,22                                            |
+|  2 | 22,23                                             |
+|  3 | NULL                                              |
++----+---------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nid,name order by 1,2) from t group by id;
++----+----------------------------------------------+
+| id | group_concat(distinct nid,name order by 1,2) |
++----+----------------------------------------------+
+|  1 | 22,111                                       |
+|  2 | 22,23                                        |
+|  3 | NULL                                         |
++----+----------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nid,name order by 2 desc) from t group by id;
++----+-------------------------------------------------+
+| id | group_concat(distinct nid,name order by 2 desc) |
++----+-------------------------------------------------+
+|  1 | 22,111                                          |
+|  2 | 23,22                                           |
+|  3 | NULL                                            |
++----+-------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nid,name order by 2) from t group by id;
++----+--------------------------------------------+
+| id | group_concat(distinct nid,name order by 2) |
++----+--------------------------------------------+
+|  1 | 111,22                                     |
+|  2 | 22,23                                      |
+|  3 | NULL                                       |
++----+--------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nid,nname order by 1 desc,2) from t group by id;
++----+-------------------------------------------+
+| id | group_concat(nid,nname order by 1 desc,2) |
++----+-------------------------------------------+
+|  1 | 1111,1111,22,22                           |
+|  2 | 22,233                                    |
+|  3 | NULL                                      |
++----+-------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nid,nname order by 1,2) from t group by id;
++----+--------------------------------------+
+| id | group_concat(nid,nname order by 1,2) |
++----+--------------------------------------+
+|  1 | 22,22,1111,1111                      |
+|  2 | 22,233                               |
+|  3 | NULL                                 |
++----+--------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nid,nname order by 2 desc) from t group by id;
++----+-----------------------------------------+
+| id | group_concat(nid,nname order by 2 desc) |
++----+-----------------------------------------+
+|  1 | 22,22,1111,1111                         |
+|  2 | 233,22                                  |
+|  3 | NULL                                    |
++----+-----------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nid,nname order by 2) from t group by id;
++----+------------------------------------+
+| id | group_concat(nid,nname order by 2) |
++----+------------------------------------+
+|  1 | 1111,1111,22,22                    |
+|  2 | 22,233                             |
+|  3 | NULL                               |
++----+------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nid,nname order by 1 desc,2) from t group by id;
++----+----------------------------------------------------+
+| id | group_concat(distinct nid,nname order by 1 desc,2) |
++----+----------------------------------------------------+
+|  1 | 1111,22                                            |
+|  2 | 22,233                                             |
+|  3 | NULL                                               |
++----+----------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nid,nname order by 1,2) from t group by id;
++----+-----------------------------------------------+
+| id | group_concat(distinct nid,nname order by 1,2) |
++----+-----------------------------------------------+
+|  1 | 22,1111                                       |
+|  2 | 22,233                                        |
+|  3 | NULL                                          |
++----+-----------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nid,nname order by 2 desc) from t group by id;
++----+--------------------------------------------------+
+| id | group_concat(distinct nid,nname order by 2 desc) |
++----+--------------------------------------------------+
+|  1 | 22,1111                                          |
+|  2 | 233,22                                           |
+|  3 | NULL                                             |
++----+--------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nid,nname order by 2) from t group by id;
++----+---------------------------------------------+
+| id | group_concat(distinct nid,nname order by 2) |
++----+---------------------------------------------+
+|  1 | 1111,22                                     |
+|  2 | 22,233                                      |
+|  3 | NULL                                        |
++----+---------------------------------------------+
+
+# only one argument, distinct, order by
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nid order by 1) from t group by id;
++----+------------------------------+
+| id | group_concat(nid order by 1) |
++----+------------------------------+
+|  1 | 2,2,11,11                    |
+|  2 | 2,2                          |
+|  3 | NULL                         |
++----+------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nid order by 1) from t group by id;
++----+---------------------------------------+
+| id | group_concat(distinct nid order by 1) |
++----+---------------------------------------+
+|  1 | 2,11                                  |
+|  2 | 2                                     |
+|  3 | NULL                                  |
++----+---------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(score order by 1) from t group by id;
++----+--------------------------------+
+| id | group_concat(score order by 1) |
++----+--------------------------------+
+|  1 | 1.1,1.1,1.1,1.1                |
+|  2 | 2.2,2.2,2.3,2.3                |
+|  3 | 2.2                            |
++----+--------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct score order by 1) from t group by id;
++----+-----------------------------------------+
+| id | group_concat(distinct score order by 1) |
++----+-----------------------------------------+
+|  1 | 1.1                                     |
+|  2 | 2.2,2.3                                 |
+|  3 | 2.2                                     |
++----+-----------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nscore order by 1) from t group by id;
++----+---------------------------------+
+| id | group_concat(nscore order by 1) |
++----+---------------------------------+
+|  1 | 1.2,1.2,1.2,1.2                 |
+|  2 | NULL                            |
+|  3 | NULL                            |
++----+---------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nscore order by 1) from t group by id;
++----+------------------------------------------+
+| id | group_concat(distinct nscore order by 1) |
++----+------------------------------------------+
+|  1 | 1.2                                      |
+|  2 | NULL                                     |
+|  3 | NULL                                     |
++----+------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(birth order by 1) from t group by id;
++----+---------------------------------------------+
+| id | group_concat(birth order by 1)              |
++----+---------------------------------------------+
+|  1 | 2021-08-01,2021-08-01,2021-08-01,2021-08-01 |
+|  2 | 2021-08-04,2021-08-04,2021-08-12,2021-08-12 |
+|  3 | 2021-08-12                                  |
++----+---------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct birth order by 1) from t group by id;
++----+-----------------------------------------+
+| id | group_concat(distinct birth order by 1) |
++----+-----------------------------------------+
+|  1 | 2021-08-01                              |
+|  2 | 2021-08-04,2021-08-12                   |
+|  3 | 2021-08-12                              |
++----+-----------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nbirth order by 1) from t group by id;
++----+---------------------------------------------+
+| id | group_concat(nbirth order by 1)             |
++----+---------------------------------------------+
+|  1 | 2021-08-02,2021-08-02,2021-08-03,2021-08-03 |
+|  2 | NULL                                        |
+|  3 | NULL                                        |
++----+---------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nbirth order by 1) from t group by id;
++----+------------------------------------------+
+| id | group_concat(distinct nbirth order by 1) |
++----+------------------------------------------+
+|  1 | 2021-08-02,2021-08-03                    |
+|  2 | NULL                                     |
+|  3 | NULL                                     |
++----+------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(name order by 1) from t group by id;
++----+-------------------------------+
+| id | group_concat(name order by 1) |
++----+-------------------------------+
+|  1 | 1,1,2,2                       |
+|  2 | 2,3,B,B                       |
+|  3 | B                             |
++----+-------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct name order by 1) from t group by id;
++----+----------------------------------------+
+| id | group_concat(distinct name order by 1) |
++----+----------------------------------------+
+|  1 | 1,2                                    |
+|  2 | 2,3,B                                  |
+|  3 | B                                      |
++----+----------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nname order by 1) from t group by id;
++----+--------------------------------+
+| id | group_concat(nname order by 1) |
++----+--------------------------------+
+|  1 | 11,11,2,2                      |
+|  2 | 2,33                           |
+|  3 | NULL                           |
++----+--------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nname order by 1) from t group by id;
++----+-----------------------------------------+
+| id | group_concat(distinct nname order by 1) |
++----+-----------------------------------------+
+|  1 | 11,2                                    |
+|  2 | 2,33                                    |
+|  3 | NULL                                    |
++----+-----------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select nid, group_concat(nname order by 1) from t group by nid;
++------+--------------------------------+
+| nid  | group_concat(nname order by 1) |
++------+--------------------------------+
+|    2 | 2,2,2,33                       |
+| NULL | NULL                           |
+|   11 | 11,11                          |
++------+--------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select nid, group_concat(distinct nname order by 1) from t group by nid;
++------+-----------------------------------------+
+| nid  | group_concat(distinct nname order by 1) |
++------+-----------------------------------------+
+|    2 | 2,33                                    |
+| NULL | NULL                                    |
+|   11 | 11                                      |
++------+-----------------------------------------+
+
+# empty inputs with group by -> empty results
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nid,name order by 1 desc) from t where id = 0 group by id;
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nid,name order by 2) from t  where id = 0 group by id;
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(name) from t where id = 0 group by id;
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct name) from t  where id = 0 group by id;
+
+# empty inputs with group by -> null
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(nid,name order by 1 desc) from t where id = 0;
++----------------------------------------+
+| group_concat(nid,name order by 1 desc) |
++----------------------------------------+
+| NULL                                   |
++----------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(distinct nid,name order by 2) from t  where id = 0;
++--------------------------------------------+
+| group_concat(distinct nid,name order by 2) |
++--------------------------------------------+
+| NULL                                       |
++--------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(name) from t where id = 0;
++--------------------+
+| group_concat(name) |
++--------------------+
+| NULL               |
++--------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(distinct name) from t  where id = 0;
++-----------------------------+
+| group_concat(distinct name) |
++-----------------------------+
+| NULL                        |
++-----------------------------+
+
+# null inputs with group by , separator
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select nid, group_concat(nid,nname,nscore,nbirth order by 1, 2 desc, 3, 4  desc separator '#' ) from t   where id = 3 group by nid;
++------+-------------------------------------------------------------------------------------+
+| nid  | group_concat(nid,nname,nscore,nbirth order by 1, 2 desc, 3, 4  desc separator '#' ) |
++------+-------------------------------------------------------------------------------------+
+| NULL | NULL                                                                                |
++------+-------------------------------------------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select nid, group_concat(distinct nid,nname,nscore,nbirth  order by 1, 2 desc, 3, 4  desc separator '#' ) from t    where id = 3 group by nid;
++------+-----------------------------------------------------------------------------------------------+
+| nid  | group_concat(distinct nid,nname,nscore,nbirth  order by 1, 2 desc, 3, 4  desc separator '#' ) |
++------+-----------------------------------------------------------------------------------------------+
+| NULL | NULL                                                                                          |
++------+-----------------------------------------------------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(nname separator '#' ) from t   where id = 3 group by id;
++----+------------------------------------+
+| id | group_concat(nname separator '#' ) |
++----+------------------------------------+
+|  3 | NULL                               |
++----+------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select id, group_concat(distinct nname separator '#' ) from t   where id = 3 group by id;
++----+---------------------------------------------+
+| id | group_concat(distinct nname separator '#' ) |
++----+---------------------------------------------+
+|  3 | NULL                                        |
++----+---------------------------------------------+
+
+# null inputs with group by, separator
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(nid,nname,nscore,nbirth order by 1, 2 desc, 3, 4  desc separator '***' ) from t   where id = 3;
++---------------------------------------------------------------------------------------+
+| group_concat(nid,nname,nscore,nbirth order by 1, 2 desc, 3, 4  desc separator '***' ) |
++---------------------------------------------------------------------------------------+
+| NULL                                                                                  |
++---------------------------------------------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(distinct nid,nname,nscore,nbirth  order by 1, 2 desc, 3, 4  desc separator '***' ) from t   where id = 3;
++-------------------------------------------------------------------------------------------------+
+| group_concat(distinct nid,nname,nscore,nbirth  order by 1, 2 desc, 3, 4  desc separator '***' ) |
++-------------------------------------------------------------------------------------------------+
+| NULL                                                                                            |
++-------------------------------------------------------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(nname separator '***' ) from t  where id = 3;
++--------------------------------------+
+| group_concat(nname separator '***' ) |
++--------------------------------------+
+| NULL                                 |
++--------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(distinct nname separator '***' ) from t   where id = 3;
++-----------------------------------------------+
+| group_concat(distinct nname separator '***' ) |
++-----------------------------------------------+
+| NULL                                          |
++-----------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(nid,nname,nscore,nbirth order by 1, 2 desc, 3, 4  desc separator '***' ) from t ;
++---------------------------------------------------------------------------------------+
+| group_concat(nid,nname,nscore,nbirth order by 1, 2 desc, 3, 4  desc separator '***' ) |
++---------------------------------------------------------------------------------------+
+| 221.22021-08-02***221.22021-08-02***11111.22021-08-03***11111.22021-08-03             |
++---------------------------------------------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(distinct nid,nname,nscore,nbirth  order by 1, 2 desc, 3, 4  desc separator '***' ) from t;
++-------------------------------------------------------------------------------------------------+
+| group_concat(distinct nid,nname,nscore,nbirth  order by 1, 2 desc, 3, 4  desc separator '***' ) |
++-------------------------------------------------------------------------------------------------+
+| 221.22021-08-02***11111.22021-08-03                                                             |
++-------------------------------------------------------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(nname order by 1 separator '***' ) from t;
++-------------------------------------------------+
+| group_concat(nname order by 1 separator '***' ) |
++-------------------------------------------------+
+| 11***11***2***2***2***33                        |
++-------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(distinct nname order by 1 separator '***' ) from t ;
++----------------------------------------------------------+
+| group_concat(distinct nname order by 1 separator '***' ) |
++----------------------------------------------------------+
+| 11***2***33                                              |
++----------------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(nname order by 1 separator '' ) from t;
++----------------------------------------------+
+| group_concat(nname order by 1 separator '' ) |
++----------------------------------------------+
+| 111122233                                    |
++----------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;select group_concat(distinct nname order by 1 separator '' ) from t ;
++-------------------------------------------------------+
+| group_concat(distinct nname order by 1 separator '' ) |
++-------------------------------------------------------+
+| 11233                                                 |
++-------------------------------------------------------+
+
+# group_concat_max_len
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;set @@group_concat_max_len=0; select group_concat(nname order by 1 separator '#' ) from t;
++-----------------------------------------------+
+| group_concat(nname order by 1 separator '#' ) |
++-----------------------------------------------+
+| 1#11                                          |
++-----------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;set @@group_concat_max_len=0; select group_concat(distinct nname order by 1 separator '#') from t ;
++-------------------------------------------------------+
+| group_concat(distinct nname order by 1 separator '#') |
++-------------------------------------------------------+
+| 11#2                                               |
++-------------------------------------------------------+
+
+mysql> drop table if exists test.t;
