@@ -5,7 +5,6 @@
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ParserSetQuery.h>
 
-
 namespace DB
 {
 /// Parse `name = value`.

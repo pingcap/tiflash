@@ -156,8 +156,8 @@ public:
 
 
 private:
-    T dec;
-    UInt32 scale;
+    T dec {};
+    UInt32 scale {};
 };
 
 /** Discriminated union of several types.

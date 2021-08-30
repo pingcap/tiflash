@@ -28,6 +28,7 @@ if (NOT NO_WERROR)
 endif ()
 
 find_package (Threads)
+find_package (CURL) # CURL_LIBRARIES can be unset till this file, so we find it explicitly
 
 if (ENABLE_FAILPOINTS)
     add_definitions(-DFIU_ENABLE)
