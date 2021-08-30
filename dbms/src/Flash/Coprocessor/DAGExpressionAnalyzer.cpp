@@ -508,7 +508,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(const tipb::Expr & expr, Expression
     }
 
     /// return directly if the agg is duplicated
-    String func_string = genFuncString(agg_func_name, aggregate.argument_names);
+    String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
     for (const auto & pre_agg : aggregate_descriptions)
     {
         if (pre_agg.column_name == func_string)
