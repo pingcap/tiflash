@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 static ReadBufferFromFile openForReading(const String & path)
 {
     return ReadBufferFromFile(path, std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(path).getSize()));
@@ -23,15 +22,15 @@ void TMTDataPartProperty::load(const MergeTreeData & storage, const String & par
         readBinary(tmt_type, file);
         switch ((TMTDataPartPropertyType)tmt_type)
         {
-            case MIN_MAX_PK:
-                type->deserializeBinary(min_pk, file);
-                type->deserializeBinary(max_pk, file);
-                break;
-            case END:
-                over = true;
-                break;
-            default:
-                throw Exception("[TMTDataPartProperty::load] got invalid type: " + DB::toString(tmt_type), ErrorCodes::LOGICAL_ERROR);
+        case MIN_MAX_PK:
+            type->deserializeBinary(min_pk, file);
+            type->deserializeBinary(max_pk, file);
+            break;
+        case END:
+            over = true;
+            break;
+        default:
+            throw Exception("[TMTDataPartProperty::load] got invalid type: " + DB::toString(tmt_type), ErrorCodes::LOGICAL_ERROR);
         }
     }
     initialized = true;
@@ -41,7 +40,8 @@ void TMTDataPartProperty::store(const MergeTreeData & storage, const String & pa
 {
     if (!initialized)
         throw Exception(
-            "Attempt to store uninitialized TMT property for part " + part_path + ". This is a bug.", ErrorCodes::LOGICAL_ERROR);
+            "Attempt to store uninitialized TMT property for part " + part_path + ". This is a bug.",
+            ErrorCodes::LOGICAL_ERROR);
 
     const String & file_name = TMTDataPartPropertyFileName;
 
@@ -93,7 +93,6 @@ void TMTDataPartProperty::merge(const TMTDataPartProperty & other)
     }
     else
     {
-
         min_pk = std::min(min_pk, other.min_pk);
         max_pk = std::max(max_pk, other.max_pk);
     }

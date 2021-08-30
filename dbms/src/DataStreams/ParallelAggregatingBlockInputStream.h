@@ -65,7 +65,7 @@ private:
     {
         FileProviderPtr file_provider;
         ReadBufferFromFileProvider file_in;
-        CompressedReadBuffer compressed_in;
+        CompressedReadBuffer<> compressed_in;
         BlockInputStreamPtr block_in;
 
         TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_);
@@ -73,7 +73,7 @@ private:
     };
     std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
 
-    Logger * log = &Logger::get("ParallelAggregatingBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("ParallelAggregatingBlockInputStream");
 
 
     ManyAggregatedDataVariants many_data;

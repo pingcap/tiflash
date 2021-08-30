@@ -17,7 +17,6 @@
 
 namespace DB
 {
-
 namespace DM
 {
 class Segment;
@@ -181,26 +180,26 @@ public:
     {
         switch (type)
         {
-            case Init:
-                return "Init";
-            case Write:
-                return "Write";
-            case Read:
-                return "Read";
-            case BG_Split:
-                return "BG_Split";
-            case BG_Merge:
-                return "BG_Merge";
-            case BG_MergeDelta:
-                return "BG_MergeDelta";
-            case BG_Compact:
-                return "BG_Compact";
-            case BG_Flush:
-                return "BG_Flush";
-            case BG_GC:
-                return "BG_GC";
-            default:
-                return "Unknown";
+        case Init:
+            return "Init";
+        case Write:
+            return "Write";
+        case Read:
+            return "Read";
+        case BG_Split:
+            return "BG_Split";
+        case BG_Merge:
+            return "BG_Merge";
+        case BG_MergeDelta:
+            return "BG_MergeDelta";
+        case BG_Compact:
+            return "BG_Compact";
+        case BG_Flush:
+            return "BG_Flush";
+        case BG_GC:
+            return "BG_GC";
+        default:
+            return "Unknown";
         }
     }
 
@@ -208,20 +207,20 @@ public:
     {
         switch (type)
         {
-            case Split:
-                return "Split";
-            case Merge:
-                return "Merge";
-            case MergeDelta:
-                return "MergeDelta";
-            case Compact:
-                return "Compact";
-            case Flush:
-                return "Flush";
-            case PlaceIndex:
-                return "PlaceIndex";
-            default:
-                return "Unknown";
+        case Split:
+            return "Split";
+        case Merge:
+            return "Merge";
+        case MergeDelta:
+            return "MergeDelta";
+        case Compact:
+            return "Compact";
+        case Flush:
+            return "Flush";
+        case PlaceIndex:
+            return "PlaceIndex";
+        default:
+            return "Unknown";
         }
     }
 
@@ -229,14 +228,14 @@ public:
     {
         switch (type)
         {
-            case BackgroundThreadPool:
-                return "BackgroundThreadPool";
-            case Foreground:
-                return "Foreground";
-            case BackgroundGCThread:
-                return "BackgroundGCThread";
-            default:
-                return "Unknown";
+        case BackgroundThreadPool:
+            return "BackgroundThreadPool";
+        case Foreground:
+            return "Foreground";
+        case BackgroundGCThread:
+            return "BackgroundGCThread";
+        default:
+            return "Unknown";
         }
     }
 
@@ -253,7 +252,6 @@ public:
 
     class MergeDeltaTaskPool
     {
-
 #ifndef DBMS_PUBLIC_GTEST
     private:
 #else
@@ -273,20 +271,20 @@ public:
             return light_tasks.size() + heavy_tasks.size();
         }
 
-        bool addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
+        bool addTask(const BackgroundTask & task, const ThreadType & whom, Poco::Logger * log_);
 
-        BackgroundTask nextTask(bool is_heavy, Logger * log_);
+        BackgroundTask nextTask(bool is_heavy, Poco::Logger * log_);
     };
 
     DeltaMergeStore(Context & db_context, //
-        bool data_path_contains_database_name,
-        const String & db_name,
-        const String & tbl_name,
-        const ColumnDefines & columns,
-        const ColumnDefine & handle,
-        bool is_common_handle_,
-        size_t rowkey_column_size_,
-        const Settings & settings_ = EMPTY_SETTINGS);
+                    bool data_path_contains_database_name,
+                    const String & db_name,
+                    const String & tbl_name,
+                    const ColumnDefines & columns,
+                    const ColumnDefine & handle,
+                    bool is_common_handle_,
+                    size_t rowkey_column_size_,
+                    const Settings & settings_ = EMPTY_SETTINGS);
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
@@ -312,15 +310,15 @@ public:
     void preIngestFile(const String & parent_path, const PageId file_id, size_t file_size);
 
     void ingestFiles(const DMContextPtr & dm_context, //
-        const RowKeyRange & range,
-        const std::vector<PageId> & file_ids,
-        bool clear_data_in_range);
+                     const RowKeyRange & range,
+                     const std::vector<PageId> & file_ids,
+                     bool clear_data_in_range);
 
     void ingestFiles(const Context & db_context, //
-        const DB::Settings & db_settings,
-        const RowKeyRange & range,
-        const std::vector<PageId> & file_ids,
-        bool clear_data_in_range)
+                     const DB::Settings & db_settings,
+                     const RowKeyRange & range,
+                     const std::vector<PageId> & file_ids,
+                     bool clear_data_in_range)
     {
         auto dm_context = newDMContext(db_context, db_settings);
         return ingestFiles(dm_context, range, file_ids, clear_data_in_range);
@@ -328,22 +326,22 @@ public:
 
     /// Read all rows without MVCC filtering
     BlockInputStreams readRaw(const Context & db_context,
-        const DB::Settings & db_settings,
-        const ColumnDefines & column_defines,
-        size_t num_streams,
-        const SegmentIdSet & read_segments = {});
+                              const DB::Settings & db_settings,
+                              const ColumnDefines & column_defines,
+                              size_t num_streams,
+                              const SegmentIdSet & read_segments = {});
 
     /// Read rows with MVCC filtering
     /// `sorted_ranges` should be already sorted and merged
     BlockInputStreams read(const Context & db_context,
-        const DB::Settings & db_settings,
-        const ColumnDefines & columns_to_read,
-        const RowKeyRanges & sorted_ranges,
-        size_t num_streams,
-        UInt64 max_version,
-        const RSOperatorPtr & filter,
-        size_t expected_block_size = DEFAULT_BLOCK_SIZE,
-        const SegmentIdSet & read_segments = {});
+                           const DB::Settings & db_settings,
+                           const ColumnDefines & columns_to_read,
+                           const RowKeyRanges & sorted_ranges,
+                           size_t num_streams,
+                           UInt64 max_version,
+                           const RSOperatorPtr & filter,
+                           size_t expected_block_size = DEFAULT_BLOCK_SIZE,
+                           const SegmentIdSet & read_segments = {});
 
     /// Force flush all data to disk.
     void flushCache(const Context & context, const RowKeyRange & range)
@@ -365,9 +363,9 @@ public:
 
     /// Apply DDL `commands` on `table_columns`
     void applyAlters(const AlterCommands & commands, //
-        const OptionTableInfoConstRef table_info,
-        ColumnID & max_column_id_used,
-        const Context & context);
+                     const OptionTableInfoConstRef table_info,
+                     ColumnID & max_column_id_used,
+                     const Context & context);
 
     const ColumnDefinesPtr getStoreColumns() const
     {
@@ -395,7 +393,10 @@ public:
 
     /// Get the split point of region with check_range. Currently only do half split.
     RegionSplitRes getRegionSplitPoint(
-        const Context & db_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
+        const Context & db_context,
+        const RowKeyRange & check_range,
+        size_t max_region_size,
+        size_t split_size);
 
     RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
@@ -415,7 +416,10 @@ private:
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
     void segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
     SegmentPtr segmentMergeDelta(
-        DMContext & dm_context, const SegmentPtr & segment, const TaskRunThread thread, SegmentSnapshotPtr segment_snap = nullptr);
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        const TaskRunThread thread,
+        SegmentSnapshotPtr segment_snap = nullptr);
 
     bool updateGCSafePoint();
 
@@ -429,9 +433,9 @@ private:
     void restoreStableFiles();
 
     SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
-        const RowKeyRanges & sorted_ranges,
-        size_t expected_tasks_count = 1,
-        const SegmentIdSet & read_segments = {});
+                                          const RowKeyRanges & sorted_ranges,
+                                          size_t expected_tasks_count = 1,
+                                          const SegmentIdSet & read_segments = {});
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -481,7 +485,7 @@ private:
     mutable std::shared_mutex read_write_mutex;
 
     UInt64 hash_salt;
-    Logger * log;
+    Poco::Logger * log;
 }; // namespace DM
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;

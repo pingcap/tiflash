@@ -8,11 +8,12 @@ namespace DM
 {
 namespace tests
 {
-
 class DeltaIndexManager_test : public ::testing::Test
 {
 public:
-    DeltaIndexManager_test() : one_node_size(DefaultDeltaTree().getBytes()) {}
+    DeltaIndexManager_test()
+        : one_node_size(DefaultDeltaTree().getBytes())
+    {}
 
 protected:
     size_t one_node_size;

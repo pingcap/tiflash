@@ -1,33 +1,30 @@
+#include <Common/ProfileEvents.h>
+#include <Common/SipHash.h>
+#include <IO/BufferWithOwnMemory.h>
 #include <IO/PersistedCache.h>
-
-#include <fcntl.h>
-#include <queue>
-
-#include <boost/algorithm/string.hpp>
-
 #include <Poco/File.h>
 #include <Poco/Path.h>
-#include <Common/SipHash.h>
-#include <Common/ProfileEvents.h>
-#include <IO/BufferWithOwnMemory.h>
+#include <fcntl.h>
+
+#include <boost/algorithm/string.hpp>
+#include <queue>
 
 namespace ProfileEvents
 {
-    extern const Event PersistedMarksFileHits;
-    extern const Event PersistedMarksFileMisses;
-    extern const Event PersistedMarksFileBusy;
-    extern const Event PersistedMarksFileUpdate;
-    extern const Event PersistedCacheFileHits;
-    extern const Event PersistedCacheFileMisses;
-    extern const Event PersistedCacheFileExpectedMisses;
-    extern const Event PersistedCacheFileBusy;
-    extern const Event PersistedCacheFileUpdate;
-    extern const Event PersistedCachePartBusy;
-}
+extern const Event PersistedMarksFileHits;
+extern const Event PersistedMarksFileMisses;
+extern const Event PersistedMarksFileBusy;
+extern const Event PersistedMarksFileUpdate;
+extern const Event PersistedCacheFileHits;
+extern const Event PersistedCacheFileMisses;
+extern const Event PersistedCacheFileExpectedMisses;
+extern const Event PersistedCacheFileBusy;
+extern const Event PersistedCacheFileUpdate;
+extern const Event PersistedCachePartBusy;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
 inline std::string ensureDirFormPath(const std::string & path)
 {
     if (path.at(path.size() - 1) != '/')
@@ -36,21 +33,21 @@ inline std::string ensureDirFormPath(const std::string & path)
         return path;
 }
 
-PersistedCache::PersistedCache(size_t max_size_in_bytes, const std::string & base_path,
-    const std::string & persisted_path_setting, size_t min_seconds_to_evit)
-    : max_size_in_bytes(max_size_in_bytes), min_seconds_to_evit(min_seconds_to_evit), base_path(ensureDirFormPath(base_path))
+PersistedCache::PersistedCache(size_t max_size_in_bytes, const std::string & base_path, const std::string & persisted_path_setting, size_t min_seconds_to_evit)
+    : max_size_in_bytes(max_size_in_bytes)
+    , min_seconds_to_evit(min_seconds_to_evit)
+    , base_path(ensureDirFormPath(base_path))
 {
-    log = &Logger::get("PersistedCache");
+    log = &Poco::Logger::get("PersistedCache");
 
     std::string path_setting = persisted_path_setting;
     std::vector<std::string> splitted_paths;
     boost::split(splitted_paths, path_setting, boost::is_any_of(",;:"));
 
-    for (auto path: splitted_paths)
+    for (auto path : splitted_paths)
         persisted_paths.emplace_back(ensureDirFormPath(path));
 
-    cleanup_thread = std::make_unique<std::thread>([this]
-    {
+    cleanup_thread = std::make_unique<std::thread>([this] {
         while (true)
         {
             std::this_thread::sleep_for(std::chrono::seconds(51));
@@ -67,8 +64,7 @@ PersistedCache::PersistedCache(size_t max_size_in_bytes, const std::string & bas
         }
     });
 
-    gc_thread = std::make_unique<std::thread>([this]
-    {
+    gc_thread = std::make_unique<std::thread>([this] {
         size_t n = 0;
         while (!gc_cancelled)
         {
@@ -201,8 +197,7 @@ bool PersistedCache::cacheMarksFile(const std::string & origin_path, size_t file
 }
 
 
-std::string markRangesToString(const MarkRanges & mark_ranges, const MarksInCompressedFile & marks,
-    size_t file_marks_count, bool align = false)
+std::string markRangesToString(const MarkRanges & mark_ranges, const MarksInCompressedFile & marks, size_t file_marks_count, bool align = false)
 {
     std::stringstream ss;
     ss << "[";
@@ -211,8 +206,7 @@ std::string markRangesToString(const MarkRanges & mark_ranges, const MarksInComp
         size_t right = mark_ranges[i].end;
         if (align && right < file_marks_count && marks[right].offset_in_decompressed_block > 0)
         {
-            while (right < file_marks_count &&
-                    marks[right].offset_in_compressed_file == marks[mark_ranges[i].end].offset_in_compressed_file)
+            while (right < file_marks_count && marks[right].offset_in_compressed_file == marks[mark_ranges[i].end].offset_in_compressed_file)
                 ++right;
         }
 
@@ -228,8 +222,7 @@ std::string markRangesToString(const MarkRanges & mark_ranges, const MarksInComp
 }
 
 
-bool PersistedCache::redirectDataFile(std::string & origin_path, const MarkRanges & mark_ranges,
-    const MarksInCompressedFile & marks, size_t file_marks_count, bool expected_exists)
+bool PersistedCache::redirectDataFile(std::string & origin_path, const MarkRanges & mark_ranges, const MarksInCompressedFile & marks, size_t file_marks_count, bool expected_exists)
 {
     if (disabled)
         return false;
@@ -300,8 +293,7 @@ bool PersistedCache::redirectDataFile(std::string & origin_path, const MarkRange
 
     if (marks_status.status.size() != file_marks_count)
     {
-        LOG_WARNING(log, "Marks count of persisted cache bin file not matched: " << origin_path
-            << ", marks count: " << marks_status.status.size() << ", expected: " << file_marks_count);
+        LOG_WARNING(log, "Marks count of persisted cache bin file not matched: " << origin_path << ", marks count: " << marks_status.status.size() << ", expected: " << file_marks_count);
         if (expected_exists)
             ProfileEvents::increment(ProfileEvents::PersistedCacheFileMisses);
         else
@@ -325,9 +317,7 @@ bool PersistedCache::redirectDataFile(std::string & origin_path, const MarkRange
     {
         if (expected_exists)
         {
-            LOG_INFO(log, "PersistedCacheMisses, not all marks cached: " << origin_path
-                << ", required ranges: " << markRangesToString(mark_ranges, marks, file_marks_count)
-                << ", aligned ranges: " << markRangesToString(mark_ranges, marks, file_marks_count, true));
+            LOG_INFO(log, "PersistedCacheMisses, not all marks cached: " << origin_path << ", required ranges: " << markRangesToString(mark_ranges, marks, file_marks_count) << ", aligned ranges: " << markRangesToString(mark_ranges, marks, file_marks_count, true));
             ProfileEvents::increment(ProfileEvents::PersistedCacheFileMisses);
         }
         else
@@ -339,8 +329,7 @@ bool PersistedCache::redirectDataFile(std::string & origin_path, const MarkRange
 }
 
 
-bool PersistedCache::cacheRangesInDataFile(const std::string & origin_path, const MarkRanges & mark_ranges,
-    const MarksInCompressedFile & marks, size_t file_marks_count, size_t max_buffer_size)
+bool PersistedCache::cacheRangesInDataFile(const std::string & origin_path, const MarkRanges & mark_ranges, const MarksInCompressedFile & marks, size_t file_marks_count, size_t max_buffer_size)
 {
     if (disabled)
         return false;
@@ -400,8 +389,7 @@ bool PersistedCache::cacheRangesInDataFile(const std::string & origin_path, cons
             size_t right = mark_ranges[i].end;
             if (right < file_marks_count && marks[right].offset_in_decompressed_block > 0)
             {
-                while (right < file_marks_count &&
-                    marks[right].offset_in_compressed_file == marks[mark_ranges[i].end].offset_in_compressed_file)
+                while (right < file_marks_count && marks[right].offset_in_compressed_file == marks[mark_ranges[i].end].offset_in_compressed_file)
                     ++right;
             }
 
@@ -467,16 +455,14 @@ bool PersistedCache::getCachePath(const std::string & origin_path, bool is_part_
 }
 
 
-bool PersistedCache::isFileMarksAllCached(const FileMarksCached & marks_status, const MarkRanges & mark_ranges,
-    const MarksInCompressedFile & marks, size_t file_marks_count)
+bool PersistedCache::isFileMarksAllCached(const FileMarksCached & marks_status, const MarkRanges & mark_ranges, const MarksInCompressedFile & marks, size_t file_marks_count)
 {
     for (size_t i = 0; i < mark_ranges.size(); ++i)
     {
         size_t right = mark_ranges[i].end;
         if (right < file_marks_count && marks[right].offset_in_decompressed_block > 0)
         {
-            while (right < file_marks_count &&
-                marks[right].offset_in_compressed_file == marks[mark_ranges[i].end].offset_in_compressed_file)
+            while (right < file_marks_count && marks[right].offset_in_compressed_file == marks[mark_ranges[i].end].offset_in_compressed_file)
                 ++right;
         }
 
@@ -488,8 +474,7 @@ bool PersistedCache::isFileMarksAllCached(const FileMarksCached & marks_status, 
 }
 
 
-bool PersistedCache::copyFileRanges(const std::string & origin_path, const std::string & cache_path,
-    const MarkRanges & mark_ranges, const MarksInCompressedFile & marks, size_t file_marks_count, size_t max_buffer_size, size_t & written_size)
+bool PersistedCache::copyFileRanges(const std::string & origin_path, const std::string & cache_path, const MarkRanges & mark_ranges, const MarksInCompressedFile & marks, size_t file_marks_count, size_t max_buffer_size, size_t & written_size)
 {
     Memory memory(max_buffer_size);
 
@@ -512,8 +497,7 @@ bool PersistedCache::copyFileRanges(const std::string & origin_path, const std::
         size_t right = mark_ranges[i].end;
         if (right < file_marks_count && marks[right].offset_in_decompressed_block > 0)
         {
-            while (right < file_marks_count &&
-                marks[right].offset_in_compressed_file == marks[mark_ranges[i].end].offset_in_compressed_file)
+            while (right < file_marks_count && marks[right].offset_in_compressed_file == marks[mark_ranges[i].end].offset_in_compressed_file)
                 ++right;
         }
 
@@ -538,8 +522,7 @@ bool PersistedCache::copyFileRanges(const std::string & origin_path, const std::
 }
 
 
-bool PersistedCache::copyFileRange(const std::string & origin_path, const std::string & cache_path,
-    int fd_r, int fd_w, size_t pos, size_t size, char * buffer, size_t buffer_size)
+bool PersistedCache::copyFileRange(const std::string & origin_path, const std::string & cache_path, int fd_r, int fd_w, size_t pos, size_t size, char * buffer, size_t buffer_size)
 {
     while (size > 0)
     {
@@ -547,16 +530,14 @@ bool PersistedCache::copyFileRange(const std::string & origin_path, const std::s
         size_t res = ::pread(fd_r, buffer, n, pos);
         if (n != res)
         {
-            LOG_ERROR(log, "Origin file can't be read while copying to persisted cache: " << origin_path <<
-                ", pos: " << pos << ", size: " << n << ", errno: " << errno);
+            LOG_ERROR(log, "Origin file can't be read while copying to persisted cache: " << origin_path << ", pos: " << pos << ", size: " << n << ", errno: " << errno);
             return false;
         }
 
         res = ::pwrite(fd_w, buffer, n, pos);
         if (n != res)
         {
-            LOG_ERROR(log, "cache file can't be written while copying to persisted cache: " << cache_path <<
-                ", pos: " << pos << ", size: " << n << ", errno: " << errno);
+            LOG_ERROR(log, "cache file can't be written while copying to persisted cache: " << cache_path << ", pos: " << pos << ", size: " << n << ", errno: " << errno);
             return false;
         }
 
@@ -608,7 +589,7 @@ size_t PersistedCache::removeDeletedParts()
 {
     size_t removed_count = 0;
 
-    for (auto persisted_path: persisted_paths)
+    for (auto persisted_path : persisted_paths)
     {
         std::string root_path = persisted_path + "data";
         Poco::File root(root_path);
@@ -618,19 +599,19 @@ size_t PersistedCache::removeDeletedParts()
         std::vector<std::string> dbs;
         root.list(dbs);
 
-        for (auto db: dbs)
+        for (auto db : dbs)
         {
             std::string db_path = root_path + "/" + db;
             std::vector<std::string> tables;
             Poco::File(db_path).list(tables);
 
-            for (auto table: tables)
+            for (auto table : tables)
             {
                 std::string table_path = db_path + "/" + table;
                 std::vector<std::string> parts;
                 Poco::File(table_path).list(parts);
 
-                for (auto part: parts)
+                for (auto part : parts)
                 {
                     if (strncmp(part.c_str(), DeletedDirPrefix.c_str(), DeletedDirPrefix.size()) == 0)
                     {
@@ -650,7 +631,7 @@ size_t PersistedCache::removeDeletedParts()
 
 void PersistedCache::scanUnregisteredParts()
 {
-    for (auto persisted_path: persisted_paths)
+    for (auto persisted_path : persisted_paths)
     {
         std::string root_path = "data";
         Poco::File root(persisted_path + root_path);
@@ -660,19 +641,19 @@ void PersistedCache::scanUnregisteredParts()
         std::vector<std::string> dbs;
         root.list(dbs);
 
-        for (auto db: dbs)
+        for (auto db : dbs)
         {
             std::string db_path = root_path + "/" + db;
             std::vector<std::string> tables;
             Poco::File(persisted_path + db_path).list(tables);
 
-            for (auto table: tables)
+            for (auto table : tables)
             {
                 std::string table_path = db_path + "/" + table;
                 std::vector<std::string> parts;
                 Poco::File(persisted_path + table_path).list(parts);
 
-                for (auto part: parts)
+                for (auto part : parts)
                 {
                     std::string origin_part_path = base_path + table_path + "/" + part + "/";
                     std::string cache_part_path = persisted_path + table_path + "/" + part + "/";
@@ -689,7 +670,8 @@ void PersistedCache::scanUnregisteredParts()
                         if (part_status_it != cache_status.end())
                             continue;
                         part_status_it = cache_status.emplace(origin_part_path,
-                            std::make_shared<PartCacheStatus>(origin_part_path)).first;
+                                                              std::make_shared<PartCacheStatus>(origin_part_path))
+                                             .first;
                         part_status = part_status_it->second;
                     }
 
@@ -703,11 +685,9 @@ void PersistedCache::scanUnregisteredParts()
                         part_status->operating = true;
 
                         if (!Poco::File(origin_part_path).exists())
-                            LOG_INFO(log, "Origin part not exists and part cache unloaded, deleting cache, origin part path: "
-                                << origin_part_path);
+                            LOG_INFO(log, "Origin part not exists and part cache unloaded, deleting cache, origin part path: " << origin_part_path);
                         else
-                            LOG_INFO(log, "Part cache exists but unloaded, deleting it, origin part path: "
-                                << origin_part_path);
+                            LOG_INFO(log, "Part cache exists but unloaded, deleting it, origin part path: " << origin_part_path);
                     }
 
                     deletePart(cache_part_path);
@@ -735,7 +715,7 @@ void PersistedCache::evictMostUnusedParts()
         std::string path;
         Timestamp ts;
 
-        bool operator < (const Part & rhs) const
+        bool operator<(const Part & rhs) const
         {
             return rhs.ts < this->ts;
         }
@@ -744,7 +724,7 @@ void PersistedCache::evictMostUnusedParts()
     std::priority_queue<Part> parts;
     {
         std::lock_guard<std::mutex> lock(cache_lock);
-        for (auto it: cache_status)
+        for (auto it : cache_status)
             parts.push({it.first, it.second->last_used_time});
     }
 
@@ -783,8 +763,7 @@ void PersistedCache::evictMostUnusedParts()
             part_status->operating = true;
         }
 
-        LOG_DEBUG(log, "Delete cache to make space, origin path: " << origin_part_path << ", bytes: "
-            << part_status->occuppied_bytes << ", lives: " << live_sec << "s");
+        LOG_DEBUG(log, "Delete cache to make space, origin path: " << origin_part_path << ", bytes: " << part_status->occuppied_bytes << ", lives: " << live_sec << "s");
 
         deletePart(cache_part_path);
 
@@ -798,4 +777,4 @@ void PersistedCache::evictMostUnusedParts()
     }
 }
 
-}
+} // namespace DB

@@ -1,18 +1,21 @@
 #pragma once
 
-#include <memory>
-#include <unordered_map>
-#include <set>
-#include <boost/noncopyable.hpp>
 #include <Core/Block.h>
 #include <Storages/SelectQueryInfo.h>
 
+#include <boost/noncopyable.hpp>
+#include <memory>
+#include <set>
+#include <unordered_map>
 
-namespace Poco { class Logger; }
+
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
-
 class ASTSelectQuery;
 class ASTFunction;
 class MergeTreeData;
@@ -85,4 +88,4 @@ private:
 };
 
 
-}
+} // namespace DB

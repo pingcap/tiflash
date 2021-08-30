@@ -16,7 +16,6 @@
 
 namespace DB
 {
-
 // TiRemoteBlockInputStream is a block input stream that read/receive data from remote.
 template <typename RemoteReader>
 class TiRemoteBlockInputStream : public IProfilingBlockInputStream
@@ -40,7 +39,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     std::vector<std::atomic<bool>> execution_summaries_inited;
     std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
 
-    Logger * log;
+    Poco::Logger * log;
 
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
@@ -137,17 +136,17 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             const tipb::Chunk & chunk = result.resp->chunks(i);
             switch (result.resp->encode_type())
             {
-                case tipb::EncodeType::TypeCHBlock:
-                    block = CHBlockChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                    break;
-                case tipb::EncodeType::TypeChunk:
-                    block = ArrowChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                    break;
-                case tipb::EncodeType::TypeDefault:
-                    block = DefaultChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                    break;
-                default:
-                    throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
+            case tipb::EncodeType::TypeCHBlock:
+                block = CHBlockChunkCodec().decode(chunk, remote_reader->getOutputSchema());
+                break;
+            case tipb::EncodeType::TypeChunk:
+                block = ArrowChunkCodec().decode(chunk, remote_reader->getOutputSchema());
+                break;
+            case tipb::EncodeType::TypeDefault:
+                block = DefaultChunkCodec().decode(chunk, remote_reader->getOutputSchema());
+                break;
+            default:
+                throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
             }
             LOG_DEBUG(log, "decode packet " << std::to_string(block.rows()) + " for " + result.req_info);
             if (unlikely(block.rows() == 0))
@@ -162,11 +161,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
 public:
     explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_)
-        : remote_reader(remote_reader_),
-          source_num(remote_reader->getSourceNum()),
-          name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")"),
-          execution_summaries_inited(source_num),
-          log(&Logger::get(name))
+        : remote_reader(remote_reader_)
+        , source_num(remote_reader->getSourceNum())
+        , name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")")
+        , execution_summaries_inited(source_num)
+        , log(&Poco::Logger::get(name))
     {
         // generate sample block
         ColumnsWithTypeAndName columns;

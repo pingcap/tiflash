@@ -25,8 +25,6 @@ extern const Metric MemoryTrackingInBackgroundProcessingPool;
 
 namespace DB
 {
-
-
 constexpr double BackgroundProcessingPool::sleep_seconds;
 constexpr double BackgroundProcessingPool::sleep_seconds_random_part;
 
@@ -62,9 +60,10 @@ void BackgroundProcessingPool::TaskInfo::wake()
 }
 
 
-BackgroundProcessingPool::BackgroundProcessingPool(int size_) : size(size_)
+BackgroundProcessingPool::BackgroundProcessingPool(int size_)
+    : size(size_)
 {
-    LOG_INFO(&Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool with " << size << " threads");
+    LOG_INFO(&Poco::Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool with " << size << " threads");
 
     threads.resize(size);
     for (auto & thread : threads)
@@ -173,8 +172,8 @@ void BackgroundProcessingPool::threadFunction()
             {
                 std::unique_lock<std::mutex> lock(tasks_mutex);
                 wake_event.wait_for(lock,
-                    std::chrono::duration<double>(
-                        sleep_seconds + std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));
+                                    std::chrono::duration<double>(
+                                        sleep_seconds + std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));
                 continue;
             }
 
@@ -184,8 +183,8 @@ void BackgroundProcessingPool::threadFunction()
             {
                 std::unique_lock<std::mutex> lock(tasks_mutex);
                 wake_event.wait_for(lock,
-                    std::chrono::microseconds(
-                        min_time - current_time + std::uniform_int_distribution<uint64_t>(0, sleep_seconds_random_part * 1000000)(rng)));
+                                    std::chrono::microseconds(
+                                        min_time - current_time + std::uniform_int_distribution<uint64_t>(0, sleep_seconds_random_part * 1000000)(rng)));
             }
 
             std::shared_lock<std::shared_mutex> rlock(task->rwlock);

@@ -37,7 +37,7 @@ private:
     ssize_t version_column_number = -1;
     ssize_t delmark_column_number = -1;
 
-    Logger * log = &Logger::get("ReplacingDeletingSorted");
+    Poco::Logger * log = &Poco::Logger::get("ReplacingDeletingSorted");
 
     /// All data has been read.
     bool finished = false;

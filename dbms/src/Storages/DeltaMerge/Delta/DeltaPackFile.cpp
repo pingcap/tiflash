@@ -9,10 +9,9 @@ namespace DB
 {
 namespace DM
 {
-
-
 DeltaPackFile::DeltaPackFile(const DMContext & context, const DMFilePtr & file_, const RowKeyRange & segment_range_)
-    : file(file_), segment_range(segment_range_)
+    : file(file_)
+    , segment_range(segment_range_)
 {
     calculateStat(context);
 }
@@ -20,7 +19,7 @@ DeltaPackFile::DeltaPackFile(const DMContext & context, const DMFilePtr & file_,
 void DeltaPackFile::calculateStat(const DMContext & context)
 {
     auto index_cache = context.db_context.getGlobalContext().getMinMaxIndexCache();
-    auto hash_salt   = context.hash_salt;
+    auto hash_salt = context.hash_salt;
 
     auto pack_filter
         = DMFilePackFilter::loadFrom(file, index_cache, hash_salt, segment_range, EMPTY_FILTER, {}, context.db_context.getFileProvider(), context.getReadLimiter());
@@ -41,9 +40,9 @@ void DeltaPackFile::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) c
     writeIntBinary(valid_bytes, buf);
 }
 
-DeltaPackPtr DeltaPackFile::deserializeMetadata(DMContext &         context, //
+DeltaPackPtr DeltaPackFile::deserializeMetadata(DMContext & context, //
                                                 const RowKeyRange & segment_range,
-                                                ReadBuffer &        buf)
+                                                ReadBuffer & buf)
 {
     UInt64 file_ref_id;
     size_t valid_rows, valid_bytes;
@@ -52,10 +51,10 @@ DeltaPackPtr DeltaPackFile::deserializeMetadata(DMContext &         context, //
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
-    auto file_id          = context.storage_pool.data().getNormalPageId(file_ref_id);
+    auto file_id = context.storage_pool.data().getNormalPageId(file_ref_id);
     auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
 
-    auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_ref_id, file_parent_path);
+    auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
 
     auto dp_file = new DeltaPackFile(dmfile, valid_rows, valid_bytes, segment_range);
     return std::shared_ptr<DeltaPackFile>(dp_file);
@@ -80,7 +79,7 @@ void DPFileReader::initStream()
     // If we only need to read pk and version columns, then cache columns data in memory.
     if (pk_ver_only)
     {
-        Block  block;
+        Block block;
         size_t total_rows = 0;
         while ((block = file_stream->read()))
         {
@@ -103,7 +102,7 @@ size_t DPFileReader::readRowsRepeatedly(MutableColumns & output_cols, size_t row
     /// Read pk and version columns from cached.
 
     auto [start_block_index, rows_start_in_start_block] = locatePosByAccumulation(cached_block_rows_end, rows_offset);
-    auto [end_block_index, rows_end_in_end_block]       = locatePosByAccumulation(cached_block_rows_end, //
+    auto [end_block_index, rows_end_in_end_block] = locatePosByAccumulation(cached_block_rows_end, //
                                                                             rows_offset + rows_limit);
 
     size_t actual_read = 0;
@@ -119,7 +118,7 @@ size_t DPFileReader::readRowsRepeatedly(MutableColumns & output_cols, size_t row
         if (rows_start_in_block == rows_end_in_block)
             continue;
 
-        const auto & columns   = cached_pk_ver_columns.at(block_index);
+        const auto & columns = cached_pk_ver_columns.at(block_index);
         const auto & pk_column = columns[0];
 
         actual_read += copyColumnsData(columns, pk_column, output_cols, rows_start_in_block, rows_in_block_limit, range);
@@ -127,16 +126,16 @@ size_t DPFileReader::readRowsRepeatedly(MutableColumns & output_cols, size_t row
     return actual_read;
 }
 
-size_t DPFileReader::readRowsOnce(MutableColumns &    output_cols, //
-                                  size_t              rows_offset,
-                                  size_t              rows_limit,
+size_t DPFileReader::readRowsOnce(MutableColumns & output_cols, //
+                                  size_t rows_offset,
+                                  size_t rows_limit,
                                   const RowKeyRange * range)
 {
     auto read_next_block = [&, this]() -> bool {
         rows_before_cur_block += ((bool)cur_block) ? cur_block.rows() : 0;
         cur_block_data.clear();
 
-        cur_block        = file_stream->read();
+        cur_block = file_stream->read();
         cur_block_offset = 0;
 
         if (!cur_block)
@@ -152,7 +151,7 @@ size_t DPFileReader::readRowsOnce(MutableColumns &    output_cols, //
         }
     };
 
-    size_t rows_end    = rows_offset + rows_limit;
+    size_t rows_end = rows_offset + rows_limit;
     size_t actual_read = 0;
     size_t read_offset = rows_offset;
     while (read_offset < rows_end)

@@ -4,14 +4,14 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 class Not : public LogicalOp
 {
 public:
-    Not(const RSOperatorPtr & child) : LogicalOp({child}) {}
+    Not(const RSOperatorPtr & child)
+        : LogicalOp({child})
+    {}
 
     String name() override { return "not"; }
 

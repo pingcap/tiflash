@@ -20,11 +20,11 @@ public:
 
     struct Result
     {
-        bool   do_compaction     = false;
-        size_t candidate_size    = 0;
+        bool do_compaction = false;
+        size_t candidate_size = 0;
         size_t num_migrate_pages = 0;
-        size_t bytes_migrate     = 0; // only contain migrate data part
-        size_t bytes_written     = 0; // written bytes of migrate file
+        size_t bytes_migrate = 0; // only contain migrate data part
+        size_t bytes_written = 0; // written bytes of migrate file
     };
 
 public:
@@ -60,24 +60,24 @@ private:
     static ValidPages collectValidPagesInPageFile(const SnapshotPtr & snapshot);
 
     std::tuple<PageFileSet, PageFileSet, size_t, size_t> //
-    selectCandidateFiles(const PageFileSet &          page_files,
-                         const ValidPages &           files_valid_pages,
+    selectCandidateFiles(const PageFileSet & page_files,
+                         const ValidPages & files_valid_pages,
                          const WritingFilesSnapshot & writing_files) const;
 
     std::tuple<PageEntriesEdit, size_t> //
     migratePages(const SnapshotPtr & snapshot,
-                 const ValidPages &  files_valid_pages,
+                 const ValidPages & files_valid_pages,
                  const PageFileSet & candidates,
                  const PageFileSet & files_without_valid_pages,
-                 const size_t        migrate_page_count) const;
+                 const size_t migrate_page_count) const;
 
     std::tuple<PageEntriesEdit, size_t> //
     mergeValidPages(PageStorage::OpenReadFiles && data_readers,
-                    const ValidPages &            files_valid_pages,
-                    const SnapshotPtr &           snapshot,
-                    const WriteBatch::SequenceID  compact_sequence,
-                    PageFile &                    gc_file,
-                    MigrateInfos &                migrate_infos) const;
+                    const ValidPages & files_valid_pages,
+                    const SnapshotPtr & snapshot,
+                    const WriteBatch::SequenceID compact_sequence,
+                    PageFile & gc_file,
+                    MigrateInfos & migrate_infos) const;
 
     static PageIdAndEntries collectValidEntries(const PageIdSet & valid_pages, const SnapshotPtr & snap);
 
@@ -90,7 +90,7 @@ private:
     const String & storage_name;
 
     PSDiskDelegatorPtr delegator;
-    FileProviderPtr    file_provider;
+    FileProviderPtr file_provider;
 
     const PageStorage::Config config;
 

@@ -13,7 +13,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -33,15 +32,21 @@ public:
         size_t index;
         size_t offset;
 
-        FieldOffset(size_t index_) : index(index_), offset(0) {}
-        FieldOffset(size_t index_, size_t offset_) : index(index_), offset(offset_) {}
+        FieldOffset(size_t index_)
+            : index(index_)
+            , offset(0)
+        {}
+        FieldOffset(size_t index_, size_t offset_)
+            : index(index_)
+            , offset(offset_)
+        {}
 
         bool operator<(const FieldOffset & rhs) const { return index < rhs.index; }
     };
 
-    PageId     page_id;
+    PageId page_id;
     ByteBuffer data;
-    MemHolder  mem_holder;
+    MemHolder mem_holder;
     // Field offsets inside this page.
     std::set<FieldOffset> field_offsets;
 
@@ -63,28 +68,28 @@ public:
 
     size_t fieldSize() const { return field_offsets.size(); }
 };
-using Pages       = std::vector<Page>;
-using PageMap     = std::map<PageId, Page>;
+using Pages = std::vector<Page>;
+using PageMap = std::map<PageId, Page>;
 using PageHandler = std::function<void(PageId page_id, const Page &)>;
 
 // Indicate the page size && offset in PageFile.
 struct PageEntry
 {
     // if file_id == 0, means it is invalid
-    PageFileId file_id  = 0; // PageFile id
-    PageSize   size     = 0; // Page data's size
-    UInt64     offset   = 0; // Page data's offset in PageFile
-    UInt64     tag      = 0;
-    UInt64     checksum = 0; // The checksum of whole page data
-    UInt32     level    = 0; // PageFile level
-    UInt32     ref      = 1; // for ref counting
+    PageFileId file_id = 0; // PageFile id
+    PageSize size = 0; // Page data's size
+    UInt64 offset = 0; // Page data's offset in PageFile
+    UInt64 tag = 0;
+    UInt64 checksum = 0; // The checksum of whole page data
+    UInt32 level = 0; // PageFile level
+    UInt32 ref = 1; // for ref counting
 
     // The offset to the begining of specify field.
     PageFieldOffsetChecksums field_offsets{};
 
 public:
-    inline bool               isValid() const { return file_id != 0; }
-    inline bool               isTombstone() const { return ref == 0; }
+    inline bool isValid() const { return file_id != 0; }
+    inline bool isTombstone() const { return ref == 0; }
     inline PageFileIdAndLevel fileIdLevel() const { return std::make_pair(file_id, level); }
 
     inline size_t getFieldSize(size_t index) const
@@ -130,7 +135,7 @@ public:
     }
 };
 
-using PageIdAndEntry   = std::pair<PageId, PageEntry>;
+using PageIdAndEntry = std::pair<PageId, PageEntry>;
 using PageIdAndEntries = std::vector<PageIdAndEntry>;
 
 } // namespace DB

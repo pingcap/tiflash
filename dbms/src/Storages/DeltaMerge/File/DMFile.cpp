@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+#include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
@@ -14,7 +15,6 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
@@ -23,15 +23,20 @@ extern const char exception_before_dmfile_remove_from_disk[];
 
 namespace DM
 {
-
 namespace details
 {
 inline constexpr static const char * NGC_FILE_NAME = "NGC";
 inline constexpr static const char * FOLDER_PREFIX_WRITABLE = ".tmp.dmf_";
 inline constexpr static const char * FOLDER_PREFIX_READABLE = "dmf_";
 inline constexpr static const char * FOLDER_PREFIX_DROPPED = ".del.dmf_";
+inline constexpr static const char * DATA_FILE_SUFFIX = ".dat";
+inline constexpr static const char * INDEX_FILE_SUFFIX = ".idx";
+inline constexpr static const char * MARK_FILE_SUFFIX = ".mrk";
 
-inline String getNGCPath(const String & prefix, bool is_single_mode) { return prefix + (is_single_mode ? "." : "/") + NGC_FILE_NAME; }
+inline String getNGCPath(const String & prefix, bool is_single_mode)
+{
+    return prefix + (is_single_mode ? "." : "/") + NGC_FILE_NAME;
+}
 } // namespace details
 
 // Some static helper functions
@@ -41,16 +46,16 @@ String DMFile::getPathByStatus(const String & parent_path, UInt64 file_id, DMFil
     String s = parent_path + "/";
     switch (status)
     {
-        case DMFile::Status::READABLE:
-            s += details::FOLDER_PREFIX_READABLE;
-            break;
-        case DMFile::Status::WRITABLE:
-        case DMFile::Status::WRITING:
-            s += details::FOLDER_PREFIX_WRITABLE;
-            break;
-        case DMFile::Status::DROPPED:
-            s += details::FOLDER_PREFIX_DROPPED;
-            break;
+    case DMFile::Status::READABLE:
+        s += details::FOLDER_PREFIX_READABLE;
+        break;
+    case DMFile::Status::WRITABLE:
+    case DMFile::Status::WRITING:
+        s += details::FOLDER_PREFIX_WRITABLE;
+        break;
+    case DMFile::Status::DROPPED:
+        s += details::FOLDER_PREFIX_DROPPED;
+        break;
     }
     s += DB::toString(file_id);
     return s;
@@ -63,13 +68,19 @@ String DMFile::getNGCPath(const String & parent_path, UInt64 file_id, DMFile::St
 
 //
 
-String DMFile::path() const { return getPathByStatus(parent_path, file_id, status); }
+String DMFile::path() const
+{
+    return getPathByStatus(parent_path, file_id, status);
+}
 
-String DMFile::ngcPath() const { return getNGCPath(parent_path, file_id, status, isSingleFileMode()); }
+String DMFile::ngcPath() const
+{
+    return getNGCPath(parent_path, file_id, status, isSingleFileMode());
+}
 
 DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single_file_mode)
 {
-    Logger * log = &Logger::get("DMFile");
+    Poco::Logger * log = &Poco::Logger::get("DMFile");
     // On create, ref_id is the same as file_id.
     DMFilePtr new_dmfile(
         new DMFile(file_id, file_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::WRITABLE, log));
@@ -103,14 +114,24 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     return new_dmfile;
 }
 
-DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta)
+DMFilePtr DMFile::restore(
+    const FileProviderPtr & file_provider,
+    UInt64 file_id,
+    UInt64 ref_id,
+    const String & parent_path,
+    const ReadMetaMode & read_meta_mode)
 {
     String path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
     bool single_file_mode = Poco::File(path).isFile();
     DMFilePtr dmfile(new DMFile(
-        file_id, ref_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::READABLE, &Logger::get("DMFile")));
-    if (read_meta)
-        dmfile->readMetadata(file_provider);
+        file_id,
+        ref_id,
+        parent_path,
+        single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER,
+        Status::READABLE,
+        &Poco::Logger::get("DMFile")));
+    if (!read_meta_mode.isNone())
+        dmfile->readMetadata(file_provider, read_meta_mode);
     return dmfile;
 }
 
@@ -151,22 +172,25 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
     }
 }
 
-const String DMFile::encryptionBasePath() const { return getPathByStatus(parent_path, file_id, DMFile::Status::READABLE); }
+const String DMFile::encryptionBasePath() const
+{
+    return getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
+}
 
 
 const EncryptionPath DMFile::encryptionDataPath(const FileNameBase & file_name_base) const
 {
-    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + ".dat");
+    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::DATA_FILE_SUFFIX);
 }
 
 const EncryptionPath DMFile::encryptionIndexPath(const FileNameBase & file_name_base) const
 {
-    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + ".idx");
+    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::INDEX_FILE_SUFFIX);
 }
 
 const EncryptionPath DMFile::encryptionMarkPath(const FileNameBase & file_name_base) const
 {
-    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + ".mrk");
+    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::MARK_FILE_SUFFIX);
 }
 
 const EncryptionPath DMFile::encryptionMetaPath() const
@@ -182,6 +206,19 @@ const EncryptionPath DMFile::encryptionPackStatPath() const
 const EncryptionPath DMFile::encryptionPackPropertyPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packPropertyFileName());
+}
+
+String DMFile::colDataFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::DATA_FILE_SUFFIX;
+}
+String DMFile::colIndexFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::INDEX_FILE_SUFFIX;
+}
+String DMFile::colMarkFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::MARK_FILE_SUFFIX;
 }
 
 DMFile::OffsetAndSize DMFile::writeMetaToBuffer(WriteBuffer & buffer)
@@ -280,10 +317,10 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileForm
     }
 }
 
-void DMFile::readMeta(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
+void DMFile::readColumnStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
-    auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.meta_size);
-    buf.seek(meta_pack_info.meta_offset);
+    auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.column_stat_size);
+    buf.seek(meta_pack_info.column_stat_offset);
 
     DMFileFormat::Version ver; // Binary version
     assertString("DTFile format: ", buf);
@@ -315,7 +352,7 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
     pack_properties.ParseFromString(tmp_buf);
 }
 
-void DMFile::readMetadata(const FileProviderPtr & file_provider)
+void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaMode & read_meta_mode)
 {
     Footer footer;
     if (isSingleFileMode())
@@ -328,8 +365,8 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
         buf.seek(file.getSize() - sizeof(Footer), SEEK_SET);
         DB::readIntBinary(footer.meta_pack_info.pack_property_offset, buf);
         DB::readIntBinary(footer.meta_pack_info.pack_property_size, buf);
-        DB::readIntBinary(footer.meta_pack_info.meta_offset, buf);
-        DB::readIntBinary(footer.meta_pack_info.meta_size, buf);
+        DB::readIntBinary(footer.meta_pack_info.column_stat_offset, buf);
+        DB::readIntBinary(footer.meta_pack_info.column_stat_size, buf);
         DB::readIntBinary(footer.meta_pack_info.pack_stat_offset, buf);
         DB::readIntBinary(footer.meta_pack_info.pack_stat_size, buf);
         DB::readIntBinary(footer.sub_file_stat_offset, buf);
@@ -348,19 +385,26 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider)
     }
     else
     {
-        initializeIndices();
+        if (read_meta_mode.isAll())
+        {
+            initializeSubFileStatsForFolderMode();
+            initializeIndices();
+        }
         if (auto file = Poco::File(packPropertyPath()); file.exists())
             footer.meta_pack_info.pack_property_size = file.getSize();
 
-        footer.meta_pack_info.meta_size = Poco::File(metaPath()).getSize();
+        footer.meta_pack_info.column_stat_size = Poco::File(metaPath()).getSize();
         footer.meta_pack_info.pack_stat_size = Poco::File(packStatPath()).getSize();
     }
 
-    if (footer.meta_pack_info.pack_property_size != 0)
+    if (read_meta_mode.needPackProperty() && footer.meta_pack_info.pack_property_size != 0)
         readPackProperty(file_provider, footer.meta_pack_info);
 
-    readMeta(file_provider, footer.meta_pack_info);
-    readPackStat(file_provider, footer.meta_pack_info);
+    if (read_meta_mode.needColumnStat())
+        readColumnStat(file_provider, footer.meta_pack_info);
+
+    if (read_meta_mode.needPackStat())
+        readPackStat(file_provider, footer.meta_pack_info);
 }
 
 void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
@@ -385,6 +429,7 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
         LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removed: " << deleted_path);
     }
     old_file.renameTo(new_path);
+    initializeSubFileStatsForFolderMode();
     initializeIndices();
 }
 
@@ -392,7 +437,7 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
 {
     Footer footer;
     std::tie(footer.meta_pack_info.pack_property_offset, footer.meta_pack_info.pack_property_size) = writePackPropertyToBuffer(buffer);
-    std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size) = writeMetaToBuffer(buffer);
+    std::tie(footer.meta_pack_info.column_stat_offset, footer.meta_pack_info.column_stat_size) = writeMetaToBuffer(buffer);
     std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size) = writePackStatToBuffer(buffer);
 
     footer.sub_file_stat_offset = buffer.count();
@@ -405,8 +450,8 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
     }
     writeIntBinary(footer.meta_pack_info.pack_property_offset, buffer);
     writeIntBinary(footer.meta_pack_info.pack_property_size, buffer);
-    writeIntBinary(footer.meta_pack_info.meta_offset, buffer);
-    writeIntBinary(footer.meta_pack_info.meta_size, buffer);
+    writeIntBinary(footer.meta_pack_info.column_stat_offset, buffer);
+    writeIntBinary(footer.meta_pack_info.column_stat_size, buffer);
     writeIntBinary(footer.meta_pack_info.pack_stat_offset, buffer);
     writeIntBinary(footer.meta_pack_info.pack_stat_size, buffer);
     writeIntBinary(footer.sub_file_stat_offset, buffer);
@@ -431,7 +476,9 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
 }
 
 std::set<UInt64> DMFile::listAllInPath(
-    const FileProviderPtr & file_provider, const String & parent_path, const DMFile::ListOptions & options)
+    const FileProviderPtr & file_provider,
+    const String & parent_path,
+    const DMFile::ListOptions & options)
 {
     Poco::File folder(parent_path);
     if (!folder.exists())
@@ -439,7 +486,7 @@ std::set<UInt64> DMFile::listAllInPath(
     std::vector<std::string> file_names;
     folder.list(file_names);
     std::set<UInt64> file_ids;
-    Logger * log = &Logger::get("DMFile");
+    Poco::Logger * log = &Poco::Logger::get("DMFile");
 
     auto try_parse_file_id = [](const String & name) -> std::optional<UInt64> {
         std::vector<std::string> ss;
@@ -521,7 +568,10 @@ std::set<UInt64> DMFile::listAllInPath(
     return file_ids;
 }
 
-bool DMFile::canGC() { return !Poco::File(ngcPath()).exists(); }
+bool DMFile::canGC()
+{
+    return !Poco::File(ngcPath()).exists();
+}
 
 void DMFile::enableGC()
 {
@@ -556,9 +606,29 @@ void DMFile::remove(const FileProviderPtr & file_provider)
         }
     }
 }
+
+void DMFile::initializeSubFileStatsForFolderMode()
+{
+    if (isSingleFileMode())
+        return;
+
+    Poco::File directory{path()};
+    std::vector<std::string> sub_files{};
+    directory.list(sub_files);
+    for (const auto & name : sub_files)
+    {
+        if (endsWith(name, details::DATA_FILE_SUFFIX) || endsWith(name, details::INDEX_FILE_SUFFIX)
+            || endsWith(name, details::MARK_FILE_SUFFIX))
+        {
+            auto size = Poco::File(path() + "/" + name).getSize();
+            sub_file_stats.emplace(name, SubFileStat{0, size});
+        }
+    }
+}
+
 void DMFile::initializeIndices()
 {
-    auto decode = [](const std::string & data) {
+    auto decode = [](const StringRef & data) {
         try
         {
             auto original = unescapeForFileName(data);
@@ -566,11 +636,11 @@ void DMFile::initializeIndices()
         }
         catch (const std::invalid_argument & err)
         {
-            throw DB::Exception(fmt::format("invalid ColId:", err.what()));
+            throw DB::Exception(fmt::format("invalid ColId: {} from file: {}", err.what(), data));
         }
         catch (const std::out_of_range & err)
         {
-            throw DB::Exception(fmt::format("invalid ColId:", err.what()));
+            throw DB::Exception(fmt::format("invalid ColId: {} from file: {}", err.what(), data));
         }
     };
     if (isSingleFileMode())
@@ -579,11 +649,11 @@ void DMFile::initializeIndices()
     Poco::File directory{path()};
     std::vector<std::string> sub_files{};
     directory.list(sub_files);
-    for (const auto & i : sub_files)
+    for (const auto & name : sub_files)
     {
-        if (endsWith(i, ".idx"))
+        if (endsWith(name, details::INDEX_FILE_SUFFIX))
         {
-            column_indices.insert(decode(i.substr(0, i.size() - 4))); // strip tailing `.idx`
+            column_indices.insert(decode(removeSuffix(name, strlen(details::INDEX_FILE_SUFFIX)))); // strip tailing `.idx`
         }
     }
 }

@@ -1,14 +1,13 @@
 #pragma once
+#include <Common/RedactHelpers.h>
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/Types.h>
-#include <Common/RedactHelpers.h>
 
 namespace DB
 {
 namespace DM
 {
-
 template <typename T>
 struct Range;
 template <typename T>
@@ -23,8 +22,14 @@ struct Range
     T start;
     T end;
 
-    Range(T start_, T end_) : start(start_), end(end_) {}
-    Range() : start(0), end(0) {}
+    Range(T start_, T end_)
+        : start(start_)
+        , end(end_)
+    {}
+    Range()
+        : start(0)
+        , end(0)
+    {}
 
     void swap(Range & other)
     {
@@ -87,8 +92,8 @@ inline String rangeToDebugString(const Range<T> & range)
 }
 
 // DB::DM::Handle
-using Handle       = DB::HandleID;
-using HandleRange  = Range<Handle>;
+using Handle = DB::HandleID;
+using HandleRange = Range<Handle>;
 using HandleRanges = std::vector<HandleRange>;
 
 inline String toDebugString(const HandleRanges & ranges)

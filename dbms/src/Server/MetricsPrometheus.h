@@ -9,7 +9,6 @@
 
 namespace DB
 {
-
 class AsynchronousMetrics;
 class Context;
 
@@ -34,7 +33,7 @@ private:
 
     Timer timer;
     const AsynchronousMetrics & async_metrics;
-    Logger * log;
+    Poco::Logger * log;
 
     int metrics_interval;
     std::shared_ptr<prometheus::Gateway> gateway;

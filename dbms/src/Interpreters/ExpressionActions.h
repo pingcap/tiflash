@@ -1,21 +1,20 @@
 #pragma once
 
-#include <Interpreters/Settings.h>
-#include <Core/Names.h>
-#include <Core/ColumnWithTypeAndName.h>
 #include <Core/Block.h>
+#include <Core/ColumnWithTypeAndName.h>
+#include <Core/Names.h>
+#include <Interpreters/Settings.h>
 #include <Storages/Transaction/Collator.h>
 
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 using NameWithAlias = std::pair<std::string, std::string>;
@@ -75,7 +74,7 @@ public:
     FunctionBuilderPtr function_builder;
     FunctionBasePtr function;
     Names argument_names;
-    std::shared_ptr<TiDB::ITiDBCollator> collator;
+    TiDB::TiDBCollatorPtr collator;
 
     /// For ARRAY_JOIN
     NameSet array_joined_columns;
@@ -90,7 +89,10 @@ public:
 
     /// If result_name_ == "", as name "function_name(arguments separated by commas) is used".
     static ExpressionAction applyFunction(
-        const FunctionBuilderPtr & function_, const std::vector<std::string> & argument_names_, std::string result_name_ = "", std::shared_ptr<TiDB::ITiDBCollator> collator_ = nullptr);
+        const FunctionBuilderPtr & function_,
+        const std::vector<std::string> & argument_names_,
+        std::string result_name_ = "",
+        const TiDB::TiDBCollatorPtr & collator_ = nullptr);
 
     static ExpressionAction addColumn(const ColumnWithTypeAndName & added_column_);
     static ExpressionAction removeColumn(const std::string & removed_name);
@@ -122,7 +124,8 @@ public:
     using Actions = std::vector<ExpressionAction>;
 
     ExpressionActions(const NamesAndTypesList & input_columns_, const Settings & settings_)
-        : input_columns(input_columns_), settings(settings_)
+        : input_columns(input_columns_)
+        , settings(settings_)
     {
         for (const auto & input_elem : input_columns)
             sample_block.insert(ColumnWithTypeAndName(nullptr, input_elem.type, input_elem.name));
@@ -235,7 +238,9 @@ struct ExpressionActionsChain
         Names required_output;
 
         Step(const ExpressionActionsPtr & actions_ = nullptr, const Names & required_output_ = Names())
-            : actions(actions_), required_output(required_output_) {}
+            : actions(actions_)
+            , required_output(required_output_)
+        {}
     };
 
     using Steps = std::vector<Step>;
@@ -271,4 +276,4 @@ struct ExpressionActionsChain
     std::string dumpChain();
 };
 
-}
+} // namespace DB

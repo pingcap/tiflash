@@ -1,39 +1,42 @@
 #include <Common/TiFlashException.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
-#include <Storages/DeltaMerge/Index/MinMax.h>
 
 namespace DB
 {
 namespace DM
 {
-
-DMFileWriter::DMFileWriter(const DMFilePtr &             dmfile_,
-                           const ColumnDefines &         write_columns_,
-                           const FileProviderPtr &       file_provider_,
-                           const WriteLimiterPtr &        write_limiter_,
+DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
+                           const ColumnDefines & write_columns_,
+                           const FileProviderPtr & file_provider_,
+                           const WriteLimiterPtr & write_limiter_,
                            const DMFileWriter::Options & options_)
-    : dmfile(dmfile_),
-      write_columns(write_columns_),
-      options(options_, dmfile),
-      // assume pack_stat_file is the first file created inside DMFile
-      // it will create encryption info for the whole DMFile
-      pack_stat_file((options.flags.isSingleFile()) //
-                         ? nullptr
-                         : createWriteBufferFromFileBaseByFileProvider(file_provider_,
-                                                                       dmfile->packStatPath(),
-                                                                       dmfile->encryptionPackStatPath(),
-                                                                       true,
-                                                                       write_limiter_,
-                                                                       0,
-                                                                       0,
-                                                                       options.max_compress_block_size)),
-      single_file_stream((!options.flags.isSingleFile())
+    : dmfile(dmfile_)
+    , write_columns(write_columns_)
+    , options(options_, dmfile)
+    ,
+    // assume pack_stat_file is the first file created inside DMFile
+    // it will create encryption info for the whole DMFile
+    pack_stat_file((options.flags.isSingleFile()) //
+                       ? nullptr
+                       : createWriteBufferFromFileBaseByFileProvider(file_provider_,
+                                                                     dmfile->packStatPath(),
+                                                                     dmfile->encryptionPackStatPath(),
+                                                                     true,
+                                                                     write_limiter_,
+                                                                     0,
+                                                                     0,
+                                                                     options.max_compress_block_size))
+    , single_file_stream((!options.flags.isSingleFile())
                              ? nullptr
                              : new SingleFileStream(
-                                 dmfile_, options.compression_settings, options.max_compress_block_size, file_provider_, write_limiter_)),
-      file_provider(file_provider_),
-      write_limiter(write_limiter_)
+                                 dmfile_,
+                                 options.compression_settings,
+                                 options.max_compress_block_size,
+                                 file_provider_,
+                                 write_limiter_))
+    , file_provider(file_provider_)
+    , write_limiter(write_limiter_)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
@@ -70,14 +73,15 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
-        auto       stream      = std::make_unique<Stream>(dmfile, //
-                                               stream_name,
-                                               type,
-                                               options.compression_settings,
-                                               options.max_compress_block_size,
-                                               file_provider,
-                                               write_limiter,
-                                               IDataType::isNullMap(substream_path) ? false : do_index);
+        auto stream = std::make_unique<Stream>(
+            dmfile,
+            stream_name,
+            type,
+            options.compression_settings,
+            options.max_compress_block_size,
+            file_provider,
+            write_limiter,
+            IDataType::isNullMap(substream_path) ? false : do_index);
         column_streams.emplace(stream_name, std::move(stream));
     };
 
@@ -88,9 +92,9 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 void DMFileWriter::write(const Block & block, const BlockProperty & block_property)
 {
     DMFile::PackStat stat;
-    stat.rows      = block.rows();
+    stat.rows = block.rows();
     stat.not_clean = block_property.not_clean_rows;
-    stat.bytes     = block.bytes(); // This is bytes of pack data in memory.
+    stat.bytes = block.bytes(); // This is bytes of pack data in memory.
 
     auto del_mark_column = tryGetByColumnId(block, TAG_COLUMN_ID).column;
 
@@ -115,7 +119,7 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
     dmfile->addPack(stat);
 
     auto & properties = dmfile->getPackProperties();
-    auto * property   = properties.add_property();
+    auto * property = properties.add_property();
     property->set_num_rows(block_property.effective_num_rows);
     property->set_gc_hint_version(block_property.gc_hint_version);
 }
@@ -150,8 +154,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
     if (options.flags.isSingleFile())
     {
         auto callback = [&](const IDataType::SubstreamPath & substream) {
-            size_t     offset_in_compressed_file = single_file_stream->plain_layer.count();
-            const auto stream_name               = DMFile::getFileNameBase(col_id, substream);
+            size_t offset_in_compressed_file = single_file_stream->plain_layer.count();
+            const auto stream_name = DMFile::getFileNameBase(col_id, substream);
             if (unlikely(substream.size() > 1))
                 throw DB::TiFlashException("Substream_path shouldn't be more than one.", Errors::DeltaTree::Internal);
 
@@ -178,8 +182,9 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             else if (substream[0].type == IDataType::Substream::NullMap)
             {
                 if (unlikely(!type.isNullable()))
-                    throw DB::TiFlashException("Type shouldn be nullable when substream_path's type is NullMap.",
-                                               Errors::DeltaTree::Internal);
+                    throw DB::TiFlashException(
+                        "Type shouldn be nullable when substream_path's type is NullMap.",
+                        Errors::DeltaTree::Internal);
 
                 const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
                 col.checkConsistency();
@@ -188,22 +193,24 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             else if (substream[0].type == IDataType::Substream::NullableElements)
             {
                 if (unlikely(!type.isNullable()))
-                    throw DB::TiFlashException("Type shouldn be nullable when substream_path's type is NullableElements.",
-                                               Errors::DeltaTree::Internal);
+                    throw DB::TiFlashException(
+                        "Type shouldn be nullable when substream_path's type is NullableElements.",
+                        Errors::DeltaTree::Internal);
 
                 const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(type);
-                const ColumnNullable &   col           = static_cast<const ColumnNullable &>(column);
+                const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
                 nullable_type.getNestedType()->serializeBinaryBulk(col.getNestedColumn(), single_file_stream->original_layer, 0, rows);
             }
             else
             {
-                throw DB::TiFlashException("Unknown type of substream_path: " + std::to_string(substream[0].type),
-                                           Errors::DeltaTree::Internal);
+                throw DB::TiFlashException(
+                    "Unknown type of substream_path: " + std::to_string(substream[0].type),
+                    Errors::DeltaTree::Internal);
             }
             single_file_stream->flushCompressedData();
             size_t mark_size_in_file = single_file_stream->plain_layer.count() - offset_in_compressed_file;
             single_file_stream->column_mark_with_sizes.at(stream_name)
-                .push_back(MarkWithSizeInCompressedFile{MarkInCompressedFile{.offset_in_compressed_file    = offset_in_compressed_file,
+                .push_back(MarkWithSizeInCompressedFile{MarkInCompressedFile{.offset_in_compressed_file = offset_in_compressed_file,
                                                                              .offset_in_decompressed_block = offset_in_compressed_block},
                                                         mark_size_in_file});
             single_file_stream->column_data_sizes[stream_name] += mark_size_in_file;
@@ -214,8 +221,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
     {
         type.enumerateStreams(
             [&](const IDataType::SubstreamPath & substream) {
-                const auto name   = DMFile::getFileNameBase(col_id, substream);
-                auto &     stream = column_streams.at(name);
+                const auto name = DMFile::getFileNameBase(col_id, substream);
+                auto & stream = column_streams.at(name);
                 if (stream->minmaxes)
                     stream->minmaxes->addPack(column, del_mark);
 
@@ -230,21 +237,22 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             },
             {});
 
-        type.serializeBinaryBulkWithMultipleStreams(column, //
-                                                    [&](const IDataType::SubstreamPath & substream) {
-                                                        const auto stream_name = DMFile::getFileNameBase(col_id, substream);
-                                                        auto &     stream      = column_streams.at(stream_name);
-                                                        return &(stream->original_layer);
-                                                    },
-                                                    0,
-                                                    rows,
-                                                    true,
-                                                    {});
+        type.serializeBinaryBulkWithMultipleStreams(
+            column,
+            [&](const IDataType::SubstreamPath & substream) {
+                const auto stream_name = DMFile::getFileNameBase(col_id, substream);
+                auto & stream = column_streams.at(stream_name);
+                return &(stream->original_layer);
+            },
+            0,
+            rows,
+            true,
+            {});
 
         type.enumerateStreams(
             [&](const IDataType::SubstreamPath & substream) {
-                const auto name   = DMFile::getFileNameBase(col_id, substream);
-                auto &     stream = column_streams.at(name);
+                const auto name = DMFile::getFileNameBase(col_id, substream);
+                auto & stream = column_streams.at(name);
                 stream->original_layer.nextIfAtEnd();
             },
             {});
@@ -293,14 +301,18 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     {
         auto callback = [&](const IDataType::SubstreamPath & substream) {
             const auto stream_name = DMFile::getFileNameBase(col_id, substream);
-            auto &     stream      = column_streams.at(stream_name);
+            auto & stream = column_streams.at(stream_name);
             stream->flush();
             bytes_written += stream->getWrittenBytes();
 
             if (stream->minmaxes)
             {
                 WriteBufferFromFileProvider buf(
-                    file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name), false, write_limiter);
+                    file_provider,
+                    dmfile->colIndexPath(stream_name),
+                    dmfile->encryptionIndexPath(stream_name),
+                    false,
+                    write_limiter);
                 stream->minmaxes->write(*type, buf);
                 buf.sync();
                 bytes_written += buf.getPositionInFile();

@@ -1,16 +1,15 @@
-#include <Storages/MergeTree/MergeTreeSettings.h>
-#include <Parsers/ASTCreateQuery.h>
 #include <Common/Exception.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int INVALID_CONFIG_PARAMETER;
-    extern const int BAD_ARGUMENTS;
-}
+extern const int INVALID_CONFIG_PARAMETER;
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
 
 void MergeTreeSettings::loadFromConfig(const String & config_elem, Poco::Util::AbstractConfiguration & config)
 {
@@ -25,12 +24,13 @@ void MergeTreeSettings::loadFromConfig(const String & config_elem, Poco::Util::A
         String value = config.getString(config_elem + "." + key);
 
 #define SET(TYPE, NAME, DEFAULT) \
-        else if (key == #NAME) NAME.set(value);
+    else if (key == #NAME) NAME.set(value);
 
-        if (false) {}
+        if (false)
+        {
+        }
         APPLY_FOR_MERGE_TREE_SETTINGS(SET)
-        else
-            throw Exception("Unknown MergeTree setting " + key + " in config", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        else throw Exception("Unknown MergeTree setting " + key + " in config", ErrorCodes::INVALID_CONFIG_PARAMETER);
 #undef SET
     }
 }
@@ -42,14 +42,15 @@ void MergeTreeSettings::loadFromQuery(ASTStorage & storage_def)
         for (const ASTSetQuery::Change & setting : storage_def.settings->changes)
         {
 #define SET(TYPE, NAME, DEFAULT) \
-            else if (setting.name == #NAME) NAME.set(setting.value);
+    else if (setting.name == #NAME) NAME.set(setting.value);
 
-            if (false) {}
+            if (false)
+            {
+            }
             APPLY_FOR_MERGE_TREE_SETTINGS(SET)
-            else
-                throw Exception(
-                    "Unknown setting " + setting.name + " for storage " + storage_def.engine->name,
-                    ErrorCodes::BAD_ARGUMENTS);
+            else throw Exception(
+                "Unknown setting " + setting.name + " for storage " + storage_def.engine->name,
+                ErrorCodes::BAD_ARGUMENTS);
 #undef SET
         }
     }
@@ -62,14 +63,13 @@ void MergeTreeSettings::loadFromQuery(ASTStorage & storage_def)
 
     ASTSetQuery::Changes & changes = storage_def.settings->changes;
 
-#define ADD_IF_ABSENT(NAME)                                                                                   \
-    if (std::find_if(changes.begin(), changes.end(),                                                          \
-                  [](const ASTSetQuery::Change & c) { return c.name == #NAME; })                              \
-            == changes.end())                                                                                 \
+#define ADD_IF_ABSENT(NAME)                                                                                         \
+    if (std::find_if(changes.begin(), changes.end(), [](const ASTSetQuery::Change & c) { return c.name == #NAME; }) \
+        == changes.end())                                                                                           \
         changes.push_back(ASTSetQuery::Change{#NAME, NAME.value});
 
     APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(ADD_IF_ABSENT);
 #undef ADD_IF_ABSENT
 }
 
-}
+} // namespace DB

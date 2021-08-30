@@ -4,14 +4,14 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 class NotEqual : public ColCmpVal
 {
 public:
-    NotEqual(const Attr & attr_, const Field & value_) : ColCmpVal(attr_, value_, 0) {}
+    NotEqual(const Attr & attr_, const Field & value_)
+        : ColCmpVal(attr_, value_, 0)
+    {}
 
     String name() override { return "not_equal"; }
 
