@@ -967,7 +967,7 @@ void DiagnosticsService::processInfo(std::vector<diagnosticspb::ServerInfoItem> 
 try
 {
     (void)context;
-  
+
 #if defined(USE_PROXY_ENV_INFO)
     const TiFlashRaftProxyHelper * helper = server.context().getTMTContext().getKVStore()->getProxyHelper();
     if (helper)

@@ -54,24 +54,24 @@ bool LogIterator::next(::diagnosticspb::LogMessage & msg)
         LogLevel level;
         switch (entry.level)
         {
-            case LogEntry::Level::Trace:
-                level = LogLevel::Trace;
-                break;
-            case LogEntry::Level::Debug:
-                level = LogLevel::Debug;
-                break;
-            case LogEntry::Level::Info:
-                level = LogLevel::Info;
-                break;
-            case LogEntry::Level::Warn:
-                level = LogLevel::Warn;
-                break;
-            case LogEntry::Level::Error:
-                level = LogLevel::Error;
-                break;
-            default:
-                level = LogLevel::UNKNOWN;
-                break;
+        case LogEntry::Level::Trace:
+            level = LogLevel::Trace;
+            break;
+        case LogEntry::Level::Debug:
+            level = LogLevel::Debug;
+            break;
+        case LogEntry::Level::Info:
+            level = LogLevel::Info;
+            break;
+        case LogEntry::Level::Warn:
+            level = LogLevel::Warn;
+            break;
+        case LogEntry::Level::Error:
+            level = LogLevel::Error;
+            break;
+        default:
+            level = LogLevel::UNKNOWN;
+            break;
         }
         msg.set_level(level);
 
@@ -149,7 +149,7 @@ static inline bool read_sint(const char * s, size_t n, int & result)
     return true;
 }
 
-static inline bool read_level(size_t limit, const char * s, size_t & level_start, size_t & level_size)
+bool LogIterator::read_level(size_t limit, const char * s, size_t & level_start, size_t & level_size)
 {
     level_start = 33;
     level_size = 0;
@@ -171,8 +171,18 @@ static inline bool read_level(size_t limit, const char * s, size_t & level_start
     return true;
 }
 
-static inline bool read_date(
-    size_t limit, const char * s, int & y, int & m, int & d, int & H, int & M, int & S, int & MS, int & TZH, int & TZM)
+bool LogIterator::read_date(
+    size_t limit,
+    const char * s,
+    int & y,
+    int & m,
+    int & d,
+    int & H,
+    int & M,
+    int & S,
+    int & MS,
+    int & TZH,
+    int & TZM)
 {
     if (31 >= limit)
         return false;
@@ -225,7 +235,7 @@ LogIterator::Error LogIterator::readLog(LogEntry & entry)
         // If we can reuse prev_time
         entry.time = prev_time_t;
 
-        if (!read_level(line.size(), line.data(), loglevel_s, loglevel_size))
+        if (!LogIterator::read_level(line.size(), line.data(), loglevel_s, loglevel_size))
         {
             return Error{Error::Type::UNEXPECTED_LOG_HEAD};
         }
@@ -240,8 +250,8 @@ LogIterator::Error LogIterator::readLog(LogEntry & entry)
         int timezone_hour, timezone_min;
         std::tm time{};
         int year, month, day, hour, minute, second;
-        if (read_date(line.size(), line.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
-            && read_level(line.size(), line.data(), loglevel_s, loglevel_size))
+        if (LogIterator::read_date(line.size(), line.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
+            && LogIterator::read_level(line.size(), line.data(), loglevel_s, loglevel_size))
         {
             loglevel_start = line.data() + loglevel_s;
         }
@@ -256,7 +266,7 @@ LogIterator::Error LogIterator::readLog(LogEntry & entry)
         time.tm_min = minute;
         time.tm_sec = second;
         time_t ctime = fast_mktime(&time) * 1000; // milliseconds
-        ctime += milli_second;                    // truncate microseconds
+        ctime += milli_second; // truncate microseconds
         entry.time = ctime;
 
         memset(prev_time_buff, 0, sizeof prev_time_buff);

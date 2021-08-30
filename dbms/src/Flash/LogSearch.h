@@ -22,14 +22,13 @@ namespace DB
 class LogIterator : private boost::noncopyable
 {
 public:
-    explicit LogIterator(int64_t _start_time, int64_t _end_time, const std::vector<::diagnosticspb::LogLevel> & _levels,
-        const std::vector<std::string> & _patterns, std::unique_ptr<std::istream> && _log_file)
-        : start_time(_start_time),
-          end_time(_end_time),
-          levels(_levels),
-          patterns(_patterns),
-          log_file(std::move(_log_file)),
-          log(&Poco::Logger::get("LogIterator"))
+    explicit LogIterator(int64_t _start_time, int64_t _end_time, const std::vector<::diagnosticspb::LogLevel> & _levels, const std::vector<std::string> & _patterns, std::unique_ptr<std::istream> && _log_file)
+        : start_time(_start_time)
+        , end_time(_end_time)
+        , levels(_levels)
+        , patterns(_patterns)
+        , log_file(std::move(_log_file))
+        , log(&Poco::Logger::get("LogIterator"))
     {
         init();
     }
@@ -40,6 +39,19 @@ public:
 public:
     std::optional<::diagnosticspb::LogMessage> next();
     bool next(::diagnosticspb::LogMessage & msg);
+    static bool read_level(size_t limit, const char * s, size_t & level_start, size_t & level_size);
+    static bool read_date(
+        size_t limit,
+        const char * s,
+        int & y,
+        int & m,
+        int & d,
+        int & H,
+        int & M,
+        int & S,
+        int & MS,
+        int & TZH,
+        int & TZM);
 
 public:
     struct Error

@@ -17,9 +17,23 @@ TEST_F(LogSearch_Test, LogSearch)
     s = s + s;
     s.resize(s.size() - 1); // Trim \n
 
+    int milli_second;
+    int timezone_hour, timezone_min;
+    int year, month, day, hour, minute, second;
+    ASSERT_TRUE(LogIterator::read_date(s.size(), s.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
+                && LogIterator::read_level(s.size(), s.data(), loglevel_s, loglevel_size));
+    EXPECT_EQ(year, 2020);
+    EXPECT_EQ(month, 4);
+    EXPECT_EQ(day, 23);
+    EXPECT_EQ(hour, 13);
+    EXPECT_EQ(minute, 11);
+    EXPECT_EQ(second, 2);
+    EXPECT_EQ(milli_second, 329);
+    EXPECT_EQ(timezone_hour, 8);
+    EXPECT_EQ(timezone_min, 0);
+    EXPECT_EQ(loglevel_size, 5);
     for (int i = 0; i < 3; i++)
     {
-
         auto in = std::unique_ptr<std::istringstream>(new std::istringstream(s));
         LogIterator itr(0l, 1587830400000l, {::diagnosticspb::LogLevel::Debug}, {}, std::move(in));
         {
