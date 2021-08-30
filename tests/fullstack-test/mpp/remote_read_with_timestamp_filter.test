@@ -1,0 +1,69 @@
+# Preparation.
+=> DBGInvoke __init_fail_point()
+
+mysql> drop table if exists test.t;
+mysql> create table test.t (pk int(11) primary key, ts timestamp NOT NULL, enum_col enum('a','b'));
+mysql> SET time_zone = '+0:00'; insert into test.t values(1, '2000-01-01 10:00:00', 'a'),(2, '2000-01-01 00:00:00', 'b');
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+=> DBGInvoke __enable_fail_point(force_remote_read_for_batch_cop)
+mysql> SET time_zone = '+0:00'; set session tidb_enable_chunk_rpc = 1; set session tidb_enforce_mpp=on; select count(*), ts from test.t where ts > '2000-01-01 06:00:00' group by ts;
++----------+---------------------+
+| count(*) | ts                  |
++----------+---------------------+
+|        1 | 2000-01-01 10:00:00 |
++----------+---------------------+
+mysql> SET time_zone = '+0:00'; set session tidb_enable_chunk_rpc = 1; set session tidb_allow_batch_cop=2; select * from test.t where ts > '2000-01-01 06:00:00';
++----+---------------------+----------+
+| pk | ts                  | enum_col |
++----+---------------------+----------+
+|  1 | 2000-01-01 10:00:00 | a        |
++----+---------------------+----------+
+mysql> SET time_zone = '+0:00'; set session tidb_enable_chunk_rpc = 0; set session tidb_enforce_mpp=on; select count(*), ts from test.t where ts > '2000-01-01 06:00:00' group by ts;
++----------+---------------------+
+| count(*) | ts                  |
++----------+---------------------+
+|        1 | 2000-01-01 10:00:00 |
++----------+---------------------+
+mysql> SET time_zone = '+0:00'; set session tidb_enable_chunk_rpc = 0; set session tidb_allow_batch_cop=2; select * from test.t where ts > '2000-01-01 06:00:00';
++----+---------------------+----------+
+| pk | ts                  | enum_col |
++----+---------------------+----------+
+|  1 | 2000-01-01 10:00:00 | a        |
++----+---------------------+----------+
+
+mysql> SET time_zone = '+8:00'; set session tidb_enable_chunk_rpc = 1; set session tidb_enforce_mpp=on; select count(*), ts from test.t where ts > '2000-01-01 06:00:00' group by ts;
++----------+---------------------+
+| count(*) | ts                  |
++----------+---------------------+
+|        1 | 2000-01-01 18:00:00 |
+|        1 | 2000-01-01 08:00:00 |
++----------+---------------------+
+mysql> SET time_zone = '+8:00'; set session tidb_enable_chunk_rpc = 1; set session tidb_allow_batch_cop=2; select * from test.t where ts > '2000-01-01 06:00:00';
++----+---------------------+----------+
+| pk | ts                  | enum_col |
++----+---------------------+----------+
+|  1 | 2000-01-01 18:00:00 | a        |
+|  2 | 2000-01-01 08:00:00 | b        |
++----+---------------------+----------+
+
+mysql> SET time_zone = '+8:00'; set session tidb_enable_chunk_rpc = 0; set session tidb_enforce_mpp=on; select count(*), ts from test.t where ts > '2000-01-01 06:00:00' group by ts;
++----------+---------------------+
+| count(*) | ts                  |
++----------+---------------------+
+|        1 | 2000-01-01 18:00:00 |
+|        1 | 2000-01-01 08:00:00 |
++----------+---------------------+
+mysql> SET time_zone = '+8:00'; set session tidb_enable_chunk_rpc = 0; set session tidb_allow_batch_cop=2; select * from test.t where ts > '2000-01-01 06:00:00';
++----+---------------------+----------+
+| pk | ts                  | enum_col |
++----+---------------------+----------+
+|  1 | 2000-01-01 18:00:00 | a        |
+|  2 | 2000-01-01 08:00:00 | b        |
++----+---------------------+----------+
+=> DBGInvoke __disable_fail_point(force_remote_read_for_batch_cop)
+
+# Clean up.
+mysql> drop table if exists test.t
