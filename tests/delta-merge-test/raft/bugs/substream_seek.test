@@ -1,3 +1,4 @@
+# todo this should be a unit test on DTFile
 >> set dt_segment_stable_pack_rows = 5;
 
 >> drop table if exists A;
