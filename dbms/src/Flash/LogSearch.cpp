@@ -227,9 +227,7 @@ LogIterator::Error LogIterator::readLog(LogEntry & entry)
 
         if (!read_level(line.size(), line.data(), loglevel_s, loglevel_size))
         {
-            std::sscanf(line.data() + kLogLevelStartFinishOffset, "[%[^]]s]", level_buff);
-            loglevel_start = level_buff;
-            loglevel_size = strlen(level_buff);
+            return Error{Error::Type::UNEXPECTED_LOG_HEAD};
         }
         else
         {
@@ -249,14 +247,7 @@ LogIterator::Error LogIterator::readLog(LogEntry & entry)
         }
         else
         {
-            if (std::sscanf(line.data(), "[%d/%d/%d %d:%d:%d.%d %d:%d] [%20[^]]s]", &year, &month, &day, &hour, &minute, &second,
-                    &milli_second, &timezone_hour, &timezone_min, level_buff)
-                != 10)
-            {
-                return Error{Error::Type::UNEXPECTED_LOG_HEAD};
-            }
-            loglevel_start = level_buff;
-            loglevel_size = strlen(level_buff);
+            return Error{Error::Type::UNEXPECTED_LOG_HEAD};
         }
         time.tm_year = year - 1900;
         time.tm_mon = month - 1;
