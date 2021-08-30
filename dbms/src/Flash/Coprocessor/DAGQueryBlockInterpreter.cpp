@@ -95,8 +95,8 @@ struct AnalysisResult
     bool has_order_by = false;
 
     ExpressionActionsPtr timezone_cast;
-    NamesWithAliases project_after_timezone_cast;
-    NamesWithAliases project_after_timezone_cast_for_remote_read;
+    NamesWithAliases project_after_ts_and_filter;
+    NamesWithAliases project_after_ts_and_filter_for_remote_read;
     ExpressionActionsPtr before_where;
     ExpressionActionsPtr before_aggregation;
     ExpressionActionsPtr before_having;
@@ -151,8 +151,8 @@ AnalysisResult analyzeExpressions(
             size_t index = 0;
             for (const auto & col : analyzer.getCurrentInputColumns())
             {
-                res.project_after_timezone_cast.emplace_back(col.name, col.name);
-                res.project_after_timezone_cast_for_remote_read.emplace_back(original_source_columns[index].name, col.name);
+                res.project_after_ts_and_filter.emplace_back(col.name, col.name);
+                res.project_after_ts_and_filter_for_remote_read.emplace_back(original_source_columns[index].name, col.name);
                 index++;
             }
         }
@@ -163,6 +163,14 @@ AnalysisResult analyzeExpressions(
         res.has_where = true;
         res.before_where = chain.getLastActions();
         chain.addStep();
+        if (query_block.source->tp() == tipb::ExecType::TypeTableScan && res.project_after_ts_and_filter.empty())
+        {
+            for (const auto & col : analyzer.getCurrentInputColumns())
+            {
+                res.project_after_ts_and_filter.emplace_back(col.name, col.name);
+                res.project_after_ts_and_filter_for_remote_read.emplace_back(col.name, col.name);
+            }
+        }
     }
     // There will be either Agg...
     if (query_block.aggregation)
@@ -1025,37 +1033,46 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         keep_session_timezone_info,
         final_project);
 
-    if (res.need_timezone_cast_after_tablescan)
+    if (res.need_timezone_cast_after_tablescan || res.has_where)
     {
-        /// execute timezone cast
+        /// execute timezone cast and the selection
         ExpressionActionsPtr project;
         ExpressionActionsPtr project_for_cop_read;
         for (auto & stream : pipeline.streams)
         {
-            bool is_cop_stream = dynamic_cast<CoprocessorBlockInputStream *>(stream.get()) != nullptr;
-            if (is_cop_stream)
+            if (dynamic_cast<CoprocessorBlockInputStream *>(stream.get()) != nullptr)
             {
-                if (project_for_cop_read == nullptr)
+                /// for cop read, just execute the project is enough, because timezone cast and the selection are already done in remote TiFlash
+                if (!res.project_after_ts_and_filter_for_remote_read.empty())
                 {
-                    project_for_cop_read = generateProjectExpressionActions(stream, context, res.project_after_timezone_cast_for_remote_read);
+                    if (project_for_cop_read == nullptr)
+                    {
+                        project_for_cop_read = generateProjectExpressionActions(stream, context, res.project_after_ts_and_filter_for_remote_read);
+                    }
+                    stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read);
                 }
-                stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read);
             }
             else
             {
-                stream = std::make_shared<ExpressionBlockInputStream>(stream, res.timezone_cast);
-                if (project == nullptr)
+                /// execute timezone cast if needed
+                if (res.need_timezone_cast_after_tablescan)
+                    stream = std::make_shared<ExpressionBlockInputStream>(stream, res.timezone_cast);
+                /// execute selection if needed
+                if (res.has_where)
+                    stream = std::make_shared<FilterBlockInputStream>(stream, res.before_where, res.filter_column_name);
+                if (!res.project_after_ts_and_filter_for_remote_read.empty())
                 {
-                    project = generateProjectExpressionActions(stream, context, res.project_after_timezone_cast);
+                    if (project == nullptr)
+                    {
+                        project = generateProjectExpressionActions(stream, context, res.project_after_ts_and_filter);
+                    }
+                    stream = std::make_shared<ExpressionBlockInputStream>(stream, project);
                 }
-                stream = std::make_shared<ExpressionBlockInputStream>(stream, project);
             }
         }
     }
-    // execute selection
     if (res.has_where)
     {
-        executeWhere(pipeline, res.before_where, res.filter_column_name);
         recordProfileStreams(pipeline, query_block.selection_name);
     }
 
