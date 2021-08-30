@@ -196,7 +196,7 @@ protected:
         children.push_back(child);
     }
 
-    const std::shared_ptr<LogWithPrefix> getLogWithPrefix(const std::shared_ptr<LogWithPrefix> & log, String name = "name: N/A", Int64 mpp_task_id_ = -1)
+    const std::shared_ptr<LogWithPrefix> getLogWithPrefix(const std::shared_ptr<LogWithPrefix> & log, const String & name = "name: N/A", Int64 mpp_task_id_ = -1)
     {
         if (log == nullptr)
         {
