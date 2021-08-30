@@ -13,7 +13,6 @@
 namespace CurrentMetrics
 {
 extern const Metric Write;
-extern const Metric Read;
 } // namespace CurrentMetrics
 
 namespace ProfileEvents
@@ -267,7 +266,6 @@ private:
             ProfileEvents::increment(ProfileEvents::ChecksumBufferRead);
             ssize_t count;
             {
-                CurrentMetrics::Increment increment{CurrentMetrics::Read};
                 count = in->read(pos, expected);
             }
             if (count == 0)

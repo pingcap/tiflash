@@ -20,21 +20,14 @@ namespace ProfileEvents
 {
 extern const Event Seek;
 extern const Event PSMWritePages;
-extern const Event PSMWriteCalls;
 extern const Event PSMWriteIOCalls;
 extern const Event PSMWriteBytes;
 extern const Event PSMReadPages;
-extern const Event PSMReadCalls;
 extern const Event PSMReadIOCalls;
 extern const Event PSMReadBytes;
 extern const Event PSMWriteFailed;
 extern const Event PSMReadFailed;
 } // namespace ProfileEvents
-
-namespace CurrentMetrics
-{
-extern const Metric Write;
-} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -63,18 +56,17 @@ void writeFile(
 void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter)
 #endif
 {
-    ProfileEvents::increment(ProfileEvents::PSMWriteCalls);
     ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
 
     if (write_limiter)
         write_limiter->request(to_write);
     size_t bytes_written = 0;
+    size_t write_io_calls = 0;
     while (bytes_written != to_write)
     {
-        ProfileEvents::increment(ProfileEvents::PSMWriteIOCalls);
+        write_io_calls += 1;
         ssize_t res = 0;
         {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
             res = file->pwrite(data + bytes_written, to_write - bytes_written, offset + bytes_written);
         }
 
@@ -109,6 +101,7 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
         if (res > 0)
             bytes_written += res;
     }
+    ProfileEvents::increment(ProfileEvents::PSMWriteIOCalls, write_io_calls);
 }
 
 
@@ -116,8 +109,6 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
 {
     if (unlikely(expected_bytes == 0))
         return;
-
-    ProfileEvents::increment(ProfileEvents::PSMReadCalls);
 
     if (read_limiter != nullptr)
     {

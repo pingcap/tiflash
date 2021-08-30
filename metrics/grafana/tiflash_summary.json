@@ -3259,14 +3259,6 @@
               "refId": "A"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_PSMReadCalls{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
-              "format": "time_series",
-              "hide": true,
-              "intervalFactor": 2,
-              "legendFormat": "Page Calls",
-              "refId": "B"
-            },
-            {
               "expr": "sum(rate(tiflash_system_profile_event_PSMReadPages{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "hide": true,

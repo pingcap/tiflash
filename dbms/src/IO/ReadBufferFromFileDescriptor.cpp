@@ -17,11 +17,6 @@ namespace ProfileEvents
     extern const Event Seek;
 }
 
-namespace CurrentMetrics
-{
-    extern const Metric Read;
-}
-
 namespace DB
 {
 
@@ -53,7 +48,6 @@ bool ReadBufferFromFileDescriptor::nextImpl()
 
         ssize_t res = 0;
         {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
             res = ::read(fd, internal_buffer.begin(), internal_buffer.size());
         }
         if (!res)

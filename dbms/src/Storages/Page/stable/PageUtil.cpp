@@ -30,16 +30,15 @@ void syncFile(WritableFilePtr & file)
 
 void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write)
 {
-    ProfileEvents::increment(ProfileEvents::PSMWriteCalls);
     ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
 
     size_t bytes_written = 0;
+    size_t write_io_calls = 0;
     while (bytes_written != to_write)
     {
-        ProfileEvents::increment(ProfileEvents::PSMWriteIOCalls);
+        write_io_calls += 1;
         ssize_t res = 0;
         {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
             res = file->pwrite(data + bytes_written, to_write - bytes_written, offset + bytes_written);
         }
 
@@ -52,6 +51,7 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
         if (res > 0)
             bytes_written += res;
     }
+    ProfileEvents::increment(ProfileEvents::PSMWriteIOCalls, write_io_calls);
 }
 
 
@@ -59,8 +59,6 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
 {
     if (unlikely(expected_bytes == 0))
         return;
-
-    ProfileEvents::increment(ProfileEvents::PSMReadCalls);
 
     size_t bytes_read = 0;
     size_t read_io_calls = 0;

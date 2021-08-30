@@ -11,11 +11,6 @@ namespace ProfileEvents
     extern const Event ReadBufferFromFileDescriptorReadBytes;
 }
 
-namespace CurrentMetrics
-{
-    extern const Metric Read;
-}
-
 namespace DB
 {
 
@@ -46,7 +41,6 @@ bool ReadBufferFromFileProvider::nextImpl()
 
         ssize_t res = 0;
         {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
             res = file->read(internal_buffer.begin(), internal_buffer.size());
         }
         if (!res)
