@@ -567,6 +567,7 @@ void PageStorage::write(WriteBatch && wb, const RateLimiterPtr & rate_limiter)
                                        bytes_written,
                                        file_to_write->parentPath(),
                                        /*need_insert_location*/ false);
+        LOG_DEBUG(log, "page file " << file_to_write->fileIdLevel().first << "." << file_to_write->fileIdLevel().second << " write " << bytes_written << "bytes");
     }
     catch (...)
     {
@@ -1198,6 +1199,7 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
                 file.remove(true);
                 page_file.deleteEncryptionInfo();
                 delegator->removePageFile(page_file.fileIdLevel(), file_size, false);
+                LOG_DEBUG(log, "page file " << page_file.fileIdLevel().first << "." << page_file.fileIdLevel().second << " archive size " << file_size);
             }
         }
         LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
@@ -1267,6 +1269,7 @@ PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_file
             // work around by using a const_cast
             size_t bytes_removed = const_cast<PageFile &>(page_file).setLegacy();
             delegator->removePageFile(page_id_and_lvl, bytes_removed, true);
+            LOG_DEBUG(log, "page file " << page_id_and_lvl.first << "." << page_id_and_lvl.second << " archive size " << bytes_removed);
             num_data_removed += 1;
         }
     }
