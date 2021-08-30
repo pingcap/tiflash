@@ -14,6 +14,8 @@ public:
 TEST_F(LogSearch_Test, LogSearch)
 {
     std::string s = "[2020/04/23 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
+    std::string s_bad1 = "[2020/4/4 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
+    std::string s_bad2 = "[2020/04/23 13:11:02.329 +08:00] [\"Application : Load metadata done.\"]\n";
     s = s + s;
     s.resize(s.size() - 1); // Trim \n
 
@@ -22,6 +24,10 @@ TEST_F(LogSearch_Test, LogSearch)
     int year, month, day, hour, minute, second;
     size_t loglevel_size;
     size_t loglevel_s;
+    ASSERT_FALSE(LogIterator::read_date(s_bad1.size(), s_bad1.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
+                 && LogIterator::read_level(s_bad1.size(), s_bad1.data(), loglevel_s, loglevel_size));
+    ASSERT_FALSE(LogIterator::read_date(s_bad2.size(), s_bad2.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
+                 && LogIterator::read_level(s_bad2.size(), s_bad2.data(), loglevel_s, loglevel_size));
     ASSERT_TRUE(LogIterator::read_date(s.size(), s.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
                 && LogIterator::read_level(s.size(), s.data(), loglevel_s, loglevel_size));
     EXPECT_EQ(year, 2020);
