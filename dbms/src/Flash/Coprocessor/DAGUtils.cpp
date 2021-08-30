@@ -125,6 +125,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     case tipb::ExprType::Max:
     case tipb::ExprType::First:
     case tipb::ExprType::ApproxCountDistinct:
+    case tipb::ExprType::GroupConcat:
         func_name = getAggFunctionName(expr);
         break;
     case tipb::ExprType::ScalarFunc:
@@ -503,8 +504,8 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Max, "max"},
     {tipb::ExprType::First, "first_row"},
     {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
+    {tipb::ExprType::GroupConcat, "groupArray"},
     //{tipb::ExprType::Avg, ""},
-    //{tipb::ExprType::GroupConcat, ""},
     //{tipb::ExprType::Agg_BitAnd, ""},
     //{tipb::ExprType::Agg_BitOr, ""},
     //{tipb::ExprType::Agg_BitXor, ""},
@@ -521,7 +522,8 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
 
 std::unordered_map<tipb::ExprType, String> distinct_agg_func_map({
     {tipb::ExprType::Count, "countDistinct"},
-});
+    {tipb::ExprType::GroupConcat, "groupUniqArray"},
+                                                                 });
 
 std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastIntAsInt, "tidb_cast"},

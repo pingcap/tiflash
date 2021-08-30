@@ -421,11 +421,17 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         }
 
         AggregateDescription aggregate;
-        DataTypes types(expr.children_size());
-        aggregate.argument_names.resize(expr.children_size());
+        auto arg_size = expr.children_size();
+        if (expr.tp() == tipb::ExprType::GroupConcat) {
+            // the last parametric is the separator
+            --arg_size;
+        }
+        DataTypes types(arg_size);
+        aggregate.argument_names.resize(arg_size);
         TiDB::TiDBCollators arg_collators;
-        for (Int32 i = 0; i < expr.children_size(); i++)
+        for (Int32 i = 0; i < arg_size; i++)
         {
+
             String arg_name = getActions(expr.children(i), step.actions);
             types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
             if (removeNullable(types[i])->isString())
@@ -435,6 +441,13 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
             aggregate.argument_names[i] = arg_name;
             step.required_output.push_back(arg_name);
         }
+//        for (auto i=0; i< expr.order_by_size(); ++i)
+//        {
+//            String arg_name = getActions(expr.order_by(i).expr(), step.actions);
+//            types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+//            aggregate.argument_names[i] = arg_name;
+//            step.required_output.push_back(arg_name);
+//        }
         String func_string = genFuncString(agg_func_name, aggregate.argument_names);
         bool duplicate = false;
         for (const auto & pre_agg : aggregate_descriptions)
