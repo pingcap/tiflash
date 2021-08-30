@@ -1,15 +1,12 @@
 #pragma once
 
+#include <Common/PODArray.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
-#include <Common/PODArray.h>
+#include <IO/CompressedReadBufferFromFile.h>
 
 namespace DB
 {
-
-class CompressedReadBufferFromFile;
-
-
 /** The Native format can contain a separately located index,
   *  which allows you to understand where what column is located,
   *  and skip unnecessary columns.
@@ -70,9 +67,7 @@ public:
     NativeBlockInputStream(ReadBuffer & istr_, const Block & header_, UInt64 server_revision_);
 
     /// For cases when we have an index. It allows to skip columns. Only columns specified in the index will be read.
-    NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_,
-        IndexForNativeFormat::Blocks::const_iterator index_block_it_,
-        IndexForNativeFormat::Blocks::const_iterator index_block_end_);
+    NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_, IndexForNativeFormat::Blocks::const_iterator index_block_it_, IndexForNativeFormat::Blocks::const_iterator index_block_end_);
 
     String getName() const override { return "Native"; }
 
@@ -94,7 +89,7 @@ private:
     IndexOfBlockForNativeFormat::Columns::const_iterator index_column_it;
 
     /// If an index is specified, then `istr` must be CompressedReadBufferFromFile.
-    CompressedReadBufferFromFile * istr_concrete;
+    CompressedReadBufferFromFile<> * istr_concrete;
 
     PODArray<double> avg_value_size_hints;
 
@@ -103,4 +98,4 @@ private:
     void updateAvgValueSizeHints(const Block & block);
 };
 
-}
+} // namespace DB

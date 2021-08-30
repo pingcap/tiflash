@@ -1,44 +1,42 @@
-#include <Storages/MergeTree/DataPartsExchange.h>
-#include <Storages/IStorage.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/NetException.h>
 #include <Common/typeid_cast.h>
 #include <IO/ReadWriteBufferFromHTTP.h>
 #include <Poco/File.h>
-#include <ext/scope_guard.h>
-#include <Poco/Net/HTTPServerResponse.h>
 #include <Poco/Net/HTTPRequest.h>
+#include <Poco/Net/HTTPServerResponse.h>
+#include <Storages/IStorage.h>
+#include <Storages/MergeTree/DataPartsExchange.h>
+
+#include <ext/scope_guard.h>
 
 
 namespace CurrentMetrics
 {
-    extern const Metric ReplicatedSend;
-    extern const Metric ReplicatedFetch;
-}
+extern const Metric ReplicatedSend;
+extern const Metric ReplicatedFetch;
+} // namespace CurrentMetrics
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ABORTED;
-    extern const int BAD_SIZE_OF_FILE_IN_DATA_PART;
-    extern const int CANNOT_WRITE_TO_OSTREAM;
-    extern const int UNKNOWN_TABLE;
-}
+extern const int ABORTED;
+extern const int BAD_SIZE_OF_FILE_IN_DATA_PART;
+extern const int CANNOT_WRITE_TO_OSTREAM;
+extern const int UNKNOWN_TABLE;
+} // namespace ErrorCodes
 
 namespace DataPartsExchange
 {
-
 namespace
 {
-
 std::string getEndpointId(const std::string & node_id)
 {
     return "DataPartsExchange:" + node_id;
 }
 
-}
+} // namespace
 
 std::string Service::getId(const std::string & node_id) const
 {
@@ -52,7 +50,7 @@ void Service::processQuery(const Poco::Net::HTMLForm & params, ReadBuffer & /*bo
 
     String part_name = params.get("part");
 
-    static std::atomic_uint total_sends {0};
+    static std::atomic_uint total_sends{0};
 
     if ((data.settings.replicated_max_parallel_sends && total_sends >= data.settings.replicated_max_parallel_sends)
         || (data.settings.replicated_max_parallel_sends_for_table && data.current_table_sends >= data.settings.replicated_max_parallel_sends_for_table))
@@ -64,10 +62,10 @@ void Service::processQuery(const Poco::Net::HTMLForm & params, ReadBuffer & /*bo
         return;
     }
     ++total_sends;
-    SCOPE_EXIT({--total_sends;});
+    SCOPE_EXIT({ --total_sends; });
 
     ++data.current_table_sends;
-    SCOPE_EXIT({--data.current_table_sends;});
+    SCOPE_EXIT({ --data.current_table_sends; });
 
     StoragePtr owned_storage = storage.lock();
     if (!owned_storage)
@@ -117,8 +115,7 @@ void Service::processQuery(const Poco::Net::HTMLForm & params, ReadBuffer & /*bo
 
             writePODBinary(hashing_out.getHash(), out);
 
-            if (file_name != "checksums.txt" &&
-                file_name != "columns.txt")
+            if (file_name != "checksums.txt" && file_name != "columns.txt")
                 data_checksums.addFile(file_name, hashing_out.count(), hashing_out.getHash());
         }
 
@@ -147,7 +144,8 @@ MergeTreeData::DataPartPtr Service::findPart(const String & name)
     /// It is important to include PreCommitted and Outdated parts here because remote replicas cannot reliably
     /// determine the local state of the part, so queries for the parts in these states are completely normal.
     auto part = data.getPartIfExists(
-        name, {MergeTreeDataPartState::PreCommitted, MergeTreeDataPartState::Committed, MergeTreeDataPartState::Outdated});
+        name,
+        {MergeTreeDataPartState::PreCommitted, MergeTreeDataPartState::Committed, MergeTreeDataPartState::Outdated});
     if (part)
         return part;
 
@@ -167,11 +165,9 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     uri.setHost(host);
     uri.setPort(port);
     uri.setQueryParameters(
-    {
-        {"endpoint", getEndpointId(replica_path)},
-        {"part", part_name},
-        {"compress", "false"}
-    });
+        {{"endpoint", getEndpointId(replica_path)},
+         {"part", part_name},
+         {"compress", "false"}});
 
     ReadWriteBufferFromHTTP in{uri, Poco::Net::HTTPRequest::HTTP_POST, {}, timeouts};
 
@@ -220,8 +216,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
         if (expected_hash != hashing_out.getHash())
             throw Exception("Checksum mismatch for file " + absolute_part_path + file_name + " transferred from " + replica_path);
 
-        if (file_name != "checksums.txt" &&
-            file_name != "columns.txt")
+        if (file_name != "checksums.txt" && file_name != "columns.txt")
             checksums.addFile(file_name, file_size, expected_hash);
     }
 
@@ -234,6 +229,6 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     return new_data_part;
 }
 
-}
+} // namespace DataPartsExchange
 
-}
+} // namespace DB

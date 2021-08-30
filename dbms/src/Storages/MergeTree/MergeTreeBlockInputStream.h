@@ -1,14 +1,12 @@
 #pragma once
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Storages/MergeTree/MergeTreeThreadBlockInputStream.h>
-#include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MarkRange.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
+#include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergeTreeThreadBlockInputStream.h>
 
 namespace DB
 {
-
-
 /// Used to read data from single part.
 /// To read data from multiple parts, a Storage creates multiple such objects.
 /// TODO: Make special lightweight version of the reader for merges and other utilites, remove this from SelectExecutor.
@@ -45,7 +43,6 @@ public:
     void finish();
 
 protected:
-
     bool getNewTask() override;
 
 private:
@@ -76,4 +73,4 @@ private:
     Poco::Logger * log = &Poco::Logger::get("MergeTreeBlockInputStream");
 };
 
-}
+} // namespace DB
