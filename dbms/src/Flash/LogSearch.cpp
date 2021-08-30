@@ -43,11 +43,13 @@ bool LogIterator::next(::diagnosticspb::LogMessage & msg)
         Error err = readLog(entry);
         if (err.tp != Error::Type::OK)
         {
-            if (err.tp != Error::Type::EOI)
+            if (err.tp != Error::Type::EOI && err.tp != Error::Type::UNKNOWN)
             {
                 LOG_ERROR(log, "readLog error: " << err.extra_msg);
+                continue;
+            }else{
+                return false;
             }
-            return false;
         }
 
         msg.set_time(entry.time);
