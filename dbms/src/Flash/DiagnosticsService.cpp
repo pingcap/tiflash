@@ -17,6 +17,8 @@
 
 #endif
 
+#define USE_PROXY_ENV_INFO
+
 namespace DB
 {
 
@@ -945,8 +947,7 @@ try
 {
     (void)context;
 
-#if true
-    //defined(__APPLE__)
+#if defined(USE_PROXY_ENV_INFO)
     const TiFlashRaftProxyHelper * helper = server.context().getTMTContext().getKVStore()->getProxyHelper();
     if (helper)
     {
