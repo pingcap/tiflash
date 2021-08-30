@@ -125,6 +125,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     case tipb::ExprType::Max:
     case tipb::ExprType::First:
     case tipb::ExprType::ApproxCountDistinct:
+    case tipb::ExprType::GroupConcat:
         func_name = getAggFunctionName(expr);
         break;
     case tipb::ExprType::ScalarFunc:
@@ -444,11 +445,30 @@ void constructNULLLiteralTiExpr(tipb::Expr & expr)
     field_type->set_tp(TiDB::TypeNull);
 }
 
-TiDB::TiDBCollatorPtr getCollatorFromExpr(const tipb::Expr & expr)
+std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr)
 {
     if (expr.has_field_type())
         return getCollatorFromFieldType(expr.field_type());
     return nullptr;
+}
+
+SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns, const google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items)
+{
+    SortDescription order_descr;
+    order_descr.reserve(by_items.size());
+    for (int i = 0; i < by_items.size(); i++)
+    {
+        const auto & name = order_columns[i].name;
+        int direction = by_items[i].desc() ? -1 : 1;
+        // MySQL/TiDB treats NULL as "minimum".
+        int nulls_direction = -1;
+        std::shared_ptr<ICollator> collator = nullptr;
+        if (removeNullable(order_columns[i].type)->isString())
+            collator = getCollatorFromExpr(by_items[i].expr());
+
+        order_descr.emplace_back(name, direction, nulls_direction, collator);
+    }
+    return order_descr;
 }
 
 TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type)
@@ -503,8 +523,8 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Max, "max"},
     {tipb::ExprType::First, "first_row"},
     {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
+    {tipb::ExprType::GroupConcat, "groupArray"},
     //{tipb::ExprType::Avg, ""},
-    //{tipb::ExprType::GroupConcat, ""},
     //{tipb::ExprType::Agg_BitAnd, ""},
     //{tipb::ExprType::Agg_BitOr, ""},
     //{tipb::ExprType::Agg_BitXor, ""},
@@ -521,6 +541,7 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
 
 std::unordered_map<tipb::ExprType, String> distinct_agg_func_map({
     {tipb::ExprType::Count, "countDistinct"},
+    {tipb::ExprType::GroupConcat, "groupUniqArray"},
 });
 
 std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({

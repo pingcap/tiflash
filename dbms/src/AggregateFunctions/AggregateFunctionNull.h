@@ -1,14 +1,26 @@
 #pragma once
 
 #include <array>
+#include <map>
 #include <common/mem_utils.h>
+
 #include <AggregateFunctions/IAggregateFunction.h>
+#include <Columns/ColumnArray.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsCommon.h>
+#include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsHigherOrder.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-
+#include <Interpreters/sortBlock.h>
+#include <Interpreters/SetVariants.h>
 
 namespace DB
 {
