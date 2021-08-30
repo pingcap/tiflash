@@ -64,7 +64,6 @@ public:
             UNKNOWN
         };
         Type tp;
-        std::string extra_msg = "";
     };
 
     template <typename T>
