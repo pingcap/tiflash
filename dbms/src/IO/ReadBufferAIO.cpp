@@ -1,43 +1,41 @@
 #if !(defined(__FreeBSD__) || defined(__APPLE__) || defined(_MSC_VER))
 
-#include <IO/ReadBufferAIO.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Core/Defines.h>
-
-#include <sys/types.h>
+#include <IO/ReadBufferAIO.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #include <optional>
 
 
 namespace ProfileEvents
 {
-    extern const Event FileOpen;
-    extern const Event FileOpenFailed;
-    extern const Event ReadBufferAIORead;
-    extern const Event ReadBufferAIOReadBytes;
-}
+extern const Event FileOpen;
+extern const Event FileOpenFailed;
+extern const Event ReadBufferAIORead;
+extern const Event ReadBufferAIOReadBytes;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int FILE_DOESNT_EXIST;
-    extern const int CANNOT_OPEN_FILE;
-    extern const int LOGICAL_ERROR;
-    extern const int ARGUMENT_OUT_OF_BOUND;
-    extern const int AIO_READ_ERROR;
-}
+extern const int FILE_DOESNT_EXIST;
+extern const int CANNOT_OPEN_FILE;
+extern const int LOGICAL_ERROR;
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int AIO_READ_ERROR;
+} // namespace ErrorCodes
 
 
 /// Note: an additional page is allocated that will contain the data that
 /// does not fit into the main buffer.
 ReadBufferAIO::ReadBufferAIO(const std::string & filename_, size_t buffer_size_, int flags_, char * existing_memory_)
-    : ReadBufferFromFileBase(buffer_size_ + DEFAULT_AIO_FILE_BLOCK_SIZE, existing_memory_, DEFAULT_AIO_FILE_BLOCK_SIZE),
-      fill_buffer(BufferWithOwnMemory<ReadBuffer>(internalBuffer().size(), nullptr, DEFAULT_AIO_FILE_BLOCK_SIZE)),
-      filename(filename_)
+    : ReadBufferFromFileBase(buffer_size_ + DEFAULT_AIO_FILE_BLOCK_SIZE, existing_memory_, DEFAULT_AIO_FILE_BLOCK_SIZE)
+    , fill_buffer(BufferWithOwnMemory<ReadBuffer>(internalBuffer().size(), nullptr, DEFAULT_AIO_FILE_BLOCK_SIZE))
+    , filename(filename_)
 {
     ProfileEvents::increment(ProfileEvents::FileOpen);
 
@@ -59,7 +57,7 @@ ReadBufferAIO::~ReadBufferAIO()
     {
         try
         {
-            (void) waitForAIOCompletion();
+            (void)waitForAIOCompletion();
         }
         catch (...)
         {
@@ -80,8 +78,8 @@ void ReadBufferAIO::setMaxBytes(size_t max_bytes_read_)
 
 bool ReadBufferAIO::nextImpl()
 {
- /// If the end of the file has already been reached by calling this function,
- /// then the current call is wrong.
+    /// If the end of the file has already been reached by calling this function,
+    /// then the current call is wrong.
     if (is_eof)
         return false;
 
@@ -208,7 +206,7 @@ void ReadBufferAIO::skip()
     is_aio = false;
 
     /// @todo I presume this assignment is redundant since waitForAIOCompletion() performs a similar one
-//    bytes_read = future_bytes_read.get();
+    //    bytes_read = future_bytes_read.get();
     if ((bytes_read < 0) || (static_cast<size_t>(bytes_read) < region_left_padding))
         throw Exception("Asynchronous read error on file " + filename, ErrorCodes::AIO_READ_ERROR);
 }
@@ -234,8 +232,7 @@ void ReadBufferAIO::prepare()
     /// Region of the disk from which we want to read data.
     const off_t region_begin = first_unread_pos_in_file;
 
-    if ((requested_byte_count > std::numeric_limits<off_t>::max()) ||
-        (first_unread_pos_in_file > (std::numeric_limits<off_t>::max() - static_cast<off_t>(requested_byte_count))))
+    if ((requested_byte_count > std::numeric_limits<off_t>::max()) || (first_unread_pos_in_file > (std::numeric_limits<off_t>::max() - static_cast<off_t>(requested_byte_count))))
         throw Exception("An overflow occurred during file operation", ErrorCodes::LOGICAL_ERROR);
 
     const off_t region_end = first_unread_pos_in_file + requested_byte_count;
@@ -287,6 +284,6 @@ void ReadBufferAIO::finalize()
     std::swap(position(), fill_buffer.position());
 }
 
-}
+} // namespace DB
 
 #endif

@@ -85,7 +85,10 @@ const char * getDescription(Metric event)
     return descriptions[event];
 }
 
-Metric end() { return END; }
+Metric end()
+{
+    return END;
+}
 } // namespace CurrentMetrics
 
 #undef APPLY_FOR_METRICS

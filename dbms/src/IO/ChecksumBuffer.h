@@ -21,8 +21,6 @@ extern const Event Seek;
 
 namespace DB
 {
-
-
 /*
  * A frame consists of a header and a body that conforms the following structure:
  *
@@ -86,7 +84,7 @@ private:
                 else
                 {
                     throw TiFlashException(fmt::format("cannot flush checksum framed data to {} (errno = {})", out->getFileName(), errno),
-                        Errors::Checksum::IOFailure);
+                                           Errors::Checksum::IOFailure);
                 }
             }
             iter += count;
@@ -105,9 +103,12 @@ private:
 public:
     explicit FramedChecksumWriteBuffer(WritableFilePtr out_, size_t block_size_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE)
         : WriteBufferFromFileDescriptor(
-            out_->getFd(), sizeof(ChecksumFrame<Backend>) + block_size_ + 512, nullptr, alignof(ChecksumFrame<Backend>)),
-          out(std::move(out_)),
-          frame_size(block_size_)
+            out_->getFd(),
+            sizeof(ChecksumFrame<Backend>) + block_size_ + 512,
+            nullptr,
+            alignof(ChecksumFrame<Backend>))
+        , out(std::move(out_))
+        , frame_size(block_size_)
     {
         // adjust alignment, aligned memory boundary can make it fast for digesting
         auto shifted = this->working_buffer.begin() + sizeof(ChecksumFrame<Backend>);
@@ -146,12 +147,17 @@ class FramedChecksumReadBuffer : public ReadBufferFromFileDescriptor
 {
 public:
     explicit FramedChecksumReadBuffer(
-        RandomAccessFilePtr in_, size_t block_size = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, bool skip_checksum_ = false)
+        RandomAccessFilePtr in_,
+        size_t block_size = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE,
+        bool skip_checksum_ = false)
         : ReadBufferFromFileDescriptor(
-            in_->getFd(), sizeof(ChecksumFrame<Backend>) + block_size + 512, nullptr, alignof(ChecksumFrame<Backend>)),
-          frame_size(block_size),
-          skip_checksum(skip_checksum_),
-          in(std::move(in_))
+            in_->getFd(),
+            sizeof(ChecksumFrame<Backend>) + block_size + 512,
+            nullptr,
+            alignof(ChecksumFrame<Backend>))
+        , frame_size(block_size)
+        , skip_checksum(skip_checksum_)
+        , in(std::move(in_))
     {
         // adjust alignment, aligned memory boundary can make it fast for digesting
         auto shifted = this->working_buffer.begin() + sizeof(ChecksumFrame<Backend>);
@@ -176,9 +182,9 @@ public:
             if (unlikely(header_length != sizeof(ChecksumFrame<Backend>)))
             {
                 throw TiFlashException(fmt::format("readBig expects to read a new header, but only {}/{} bytes returned",
-                                           header_length,
-                                           sizeof(ChecksumFrame<Backend>)),
-                    Errors::Checksum::IOFailure);
+                                                   header_length,
+                                                   sizeof(ChecksumFrame<Backend>)),
+                                       Errors::Checksum::IOFailure);
             }
             return true;
         };
@@ -272,7 +278,7 @@ private:
                 else
                 {
                     throw TiFlashException(fmt::format("cannot load checksum framed data from {} (errno = {})", in->getFileName(), errno),
-                        Errors::Checksum::IOFailure);
+                                           Errors::Checksum::IOFailure);
                 }
             }
             expected -= count;
@@ -314,11 +320,11 @@ private:
         if (unlikely(length != sizeof(ChecksumFrame<Backend>) + frame.bytes))
         {
             throw TiFlashException(fmt::format("frame length (header = {}, body = {}, read = {}) mismatch for {}",
-                                       sizeof(ChecksumFrame<Backend>),
-                                       frame.bytes,
-                                       length,
-                                       in->getFileName()),
-                Errors::Checksum::DataCorruption);
+                                               sizeof(ChecksumFrame<Backend>),
+                                               frame.bytes,
+                                               length,
+                                               in->getFileName()),
+                                   Errors::Checksum::DataCorruption);
         }
 
         // body checksum examination
@@ -373,11 +379,11 @@ private:
             if (unlikely(length != sizeof(ChecksumFrame<Backend>) + frame.bytes))
             {
                 throw TiFlashException(fmt::format("frame length (header = {}, body = {}, read = {}) mismatch for {}",
-                                           sizeof(ChecksumFrame<Backend>),
-                                           frame.bytes,
-                                           length,
-                                           in->getFileName()),
-                    Errors::Checksum::DataCorruption);
+                                                   sizeof(ChecksumFrame<Backend>),
+                                                   frame.bytes,
+                                                   length,
+                                                   in->getFileName()),
+                                       Errors::Checksum::DataCorruption);
             }
 
             // body checksum examination
