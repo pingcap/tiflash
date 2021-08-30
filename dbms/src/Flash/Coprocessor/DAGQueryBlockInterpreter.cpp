@@ -954,7 +954,9 @@ DAGPipeline & pipeline,
 // Talking about projection, it has following rules.
 // 1. if the query block does not contain agg, then the final project is the same as the source Executor
 // 2. if the query block contains agg, then the final project is the same as agg Executor
-// 3. if the cop task may contains more then 1 query block, and the current query block is not the root query block, then the project should add an alias for each column that needs to be projected, something like final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
+// 3. if the cop task may contains more then 1 query block, and the current query block is not the root
+//    query block, then the project should add an alias for each column that needs to be projected, something
+//    like final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
 void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     if (query_block.isRemoteQuery())
