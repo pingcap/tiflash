@@ -33,7 +33,7 @@ TEST_F(LogSearch_Test, LogSearch)
     EXPECT_EQ(milli_second, 329);
     EXPECT_EQ(timezone_hour, 8);
     EXPECT_EQ(timezone_min, 0);
-    EXPECT_EQ(loglevel_size, 5);
+    EXPECT_EQ((int)loglevel_size, 5);
     for (int i = 0; i < 3; i++)
     {
         auto in = std::unique_ptr<std::istringstream>(new std::istringstream(s));
