@@ -717,7 +717,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
         }
     }
 
-    if (checkFormatValid(year, month, day, hour, minute, second))
+    if (!checkFormatValid(year, month, day, hour, minute, second))
     {
         throw Exception("Wrong datetime format");
     }
