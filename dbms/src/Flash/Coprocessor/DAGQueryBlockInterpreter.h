@@ -63,7 +63,6 @@ private:
         TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
 
-    SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
     void executeRemoteQueryImpl(DAGPipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
