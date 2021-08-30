@@ -1,5 +1,6 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionNull.h>
+#include <AggregateFunctions/AggregateFunctionGroupConcat.h>
 #include <Columns/ColumnSet.h>
 #include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>

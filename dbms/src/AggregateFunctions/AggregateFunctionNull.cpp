@@ -35,9 +35,9 @@ public:
     AggregateFunctionPtr transformAggregateFunction(
         const AggregateFunctionPtr & nested_function, const DataTypes & arguments, const Array &) const override
     {
-        /// group_concat reuses groupArray and groupUniqArray, it has the special warp function `AggregateFunctionGroupConcat` to process
-        /// the issues of null, but the warp function needs more complex arguments, it is specially added outside,
-        /// instead of being added here, so directly return in this function.
+        /// group_concat reuses groupArray and groupUniqArray with the special warp function `AggregateFunctionGroupConcat` to process,
+        /// the warp function needs more complex arguments, including collators, sort descriptions and others, which are hard to deliver via Array type,
+        /// so it is specially added outside, instead of being added here, so directly return in this function.
         if (nested_function && (nested_function->getName() == "groupArray" || nested_function->getName() == "groupUniqArray"))
             return nested_function;
         bool has_nullable_types = false;
