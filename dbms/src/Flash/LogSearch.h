@@ -18,7 +18,6 @@
 
 namespace DB
 {
-
 class LogIterator : private boost::noncopyable
 {
 public:
