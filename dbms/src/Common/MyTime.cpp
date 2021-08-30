@@ -507,7 +507,7 @@ bool checkFormatValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minu
 }
 
 // TODO: support parse time from float string
-Field parseMyDateTime(const String & str, int8_t fsp, bool checkValid)
+Field parseMyDateTime(const String & str, int8_t fsp)
 {
     // Since we only use DateLUTImpl as parameter placeholder of AddSecondsImpl::execute
     // and it's costly to construct a DateLUTImpl, a shared static instance is enough.
