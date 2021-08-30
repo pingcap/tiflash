@@ -650,27 +650,6 @@ void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const E
     }
 }
 
-SortDescription DAGQueryBlockInterpreter::getSortDescription(std::vector<NameAndTypePair> & order_columns)
-{
-    // construct SortDescription
-    SortDescription order_descr;
-    const tipb::TopN & topn = query_block.limitOrTopN->topn();
-    order_descr.reserve(topn.order_by_size());
-    for (int i = 0; i < topn.order_by_size(); i++)
-    {
-        const auto & name = order_columns[i].name;
-        int direction = topn.order_by(i).desc() ? -1 : 1;
-        // MySQL/TiDB treats NULL as "minimum".
-        int nulls_direction = -1;
-        std::shared_ptr<ICollator> collator = nullptr;
-        if (removeNullable(order_columns[i].type)->isString())
-            collator = getCollatorFromExpr(topn.order_by(i).expr());
-
-        order_descr.emplace_back(name, direction, nulls_direction, collator);
-    }
-    return order_descr;
-}
-
 void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_streams)
 {
     if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.size() == 0)
@@ -689,7 +668,7 @@ void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_s
 
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, std::vector<NameAndTypePair> & order_columns)
 {
-    SortDescription order_descr = getSortDescription(order_columns);
+    SortDescription order_descr = getSortDescription(order_columns, query_block.limitOrTopN->topn().order_by());
     const Settings & settings = context.getSettingsRef();
     Int64 limit = query_block.limitOrTopN->topn().limit();
 
