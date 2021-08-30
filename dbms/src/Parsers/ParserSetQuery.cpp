@@ -32,7 +32,6 @@ static bool parseNameValuePair(ASTSetQuery::Change & change, IParser::Pos & pos,
     return true;
 }
 
-
 bool ParserSetQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserToken s_comma(TokenType::Comma);
