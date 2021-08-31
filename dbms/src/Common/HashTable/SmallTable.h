@@ -5,12 +5,12 @@
 
 namespace DB
 {
-    namespace ErrorCodes
-    {
-        extern const int NO_AVAILABLE_DATA;
-        extern const int INCORRECT_DATA;
-    }
-}
+namespace ErrorCodes
+{
+extern const int NO_AVAILABLE_DATA;
+extern const int INCORRECT_DATA;
+} // namespace ErrorCodes
+} // namespace DB
 
 
 /** Replacement of the hash table for a small number (<10) of keys.
@@ -23,15 +23,12 @@ namespace DB
   *  you should check if the table is not full,
   *  and do a `fallback` in this case (for example, use a real hash table).
   */
-template
-<
+template <
     typename Key,
     typename Cell,
-    size_t capacity
->
-class SmallTable :
-    private boost::noncopyable,
-    protected Cell::State
+    size_t capacity>
+class SmallTable : private boost::noncopyable
+    , protected Cell::State
 {
 protected:
     friend class const_iterator;
@@ -40,8 +37,8 @@ protected:
 
     using Self = SmallTable;
 
-    size_t m_size = 0;        /// Amount of elements.
-    Cell buf[capacity];       /// A piece of memory for all elements.
+    size_t m_size = 0; /// Amount of elements.
+    Cell buf[capacity]; /// A piece of memory for all elements.
 
 
     /// Find a cell with the same key or an empty cell, starting from the specified position and then by the collision resolution chain.
@@ -138,10 +135,13 @@ public:
 
     public:
         iterator() {}
-        iterator(Self * container_, Cell * ptr_) : container(container_), ptr(ptr_) {}
+        iterator(Self * container_, Cell * ptr_)
+            : container(container_)
+            , ptr(ptr_)
+        {}
 
-        bool operator== (const iterator & rhs) const { return ptr == rhs.ptr; }
-        bool operator!= (const iterator & rhs) const { return ptr != rhs.ptr; }
+        bool operator==(const iterator & rhs) const { return ptr == rhs.ptr; }
+        bool operator!=(const iterator & rhs) const { return ptr != rhs.ptr; }
 
         iterator & operator++()
         {
@@ -149,7 +149,7 @@ public:
             return *this;
         }
 
-        Cell & operator* () const { return *ptr; }
+        Cell & operator*() const { return *ptr; }
         Cell * operator->() const { return ptr; }
 
         Cell * getPtr() const { return ptr; }
@@ -165,11 +165,17 @@ public:
 
     public:
         const_iterator() {}
-        const_iterator(const Self * container_, const Cell * ptr_) : container(container_), ptr(ptr_) {}
-        const_iterator(const iterator & rhs) : container(rhs.container), ptr(rhs.ptr) {}
+        const_iterator(const Self * container_, const Cell * ptr_)
+            : container(container_)
+            , ptr(ptr_)
+        {}
+        const_iterator(const iterator & rhs)
+            : container(rhs.container)
+            , ptr(rhs.ptr)
+        {}
 
-        bool operator== (const const_iterator & rhs) const { return ptr == rhs.ptr; }
-        bool operator!= (const const_iterator & rhs) const { return ptr != rhs.ptr; }
+        bool operator==(const const_iterator & rhs) const { return ptr == rhs.ptr; }
+        bool operator!=(const const_iterator & rhs) const { return ptr != rhs.ptr; }
 
         const_iterator & operator++()
         {
@@ -177,7 +183,7 @@ public:
             return *this;
         }
 
-        const Cell & operator* () const { return *ptr; }
+        const Cell & operator*() const { return *ptr; }
         const Cell * operator->() const { return ptr; }
 
         const Cell * getPtr() const { return ptr; }
@@ -185,15 +191,15 @@ public:
 
 
     const_iterator begin() const { return iteratorTo(buf); }
-    iterator begin()             { return iteratorTo(buf); }
+    iterator begin() { return iteratorTo(buf); }
 
-    const_iterator end() const   { return iteratorTo(buf + m_size); }
-    iterator end()               { return iteratorTo(buf + m_size); }
+    const_iterator end() const { return iteratorTo(buf + m_size); }
+    iterator end() { return iteratorTo(buf + m_size); }
 
 
 protected:
     const_iterator iteratorTo(const Cell * ptr) const { return const_iterator(this, ptr); }
-    iterator iteratorTo(Cell * ptr)                   { return iterator(this, ptr); }
+    iterator iteratorTo(Cell * ptr) { return iterator(this, ptr); }
 
 
 public:
@@ -242,7 +248,7 @@ public:
         inserted = res == buf + m_size;
         if (inserted)
         {
-            new(res) Cell(x, *this);
+            new (res) Cell(x, *this);
             ++m_size;
         }
     }
@@ -259,7 +265,7 @@ public:
             if (res == buf + capacity)
                 return false;
 
-            new(res) Cell(x, *this);
+            new (res) Cell(x, *this);
             ++m_size;
         }
         return true;
@@ -275,13 +281,13 @@ public:
 
     void ALWAYS_INLINE insertUnique(Key x)
     {
-        new(&buf[m_size]) Cell(x, *this);
+        new (&buf[m_size]) Cell(x, *this);
         ++m_size;
     }
 
 
-    iterator ALWAYS_INLINE find(Key x)                 { return iteratorTo(findCell(x)); }
-    const_iterator ALWAYS_INLINE find(Key x) const     { return iteratorTo(findCell(x)); }
+    iterator ALWAYS_INLINE find(Key x) { return iteratorTo(findCell(x)); }
+    const_iterator ALWAYS_INLINE find(Key x) const { return iteratorTo(findCell(x)); }
 
 
     void write(DB::WriteBuffer & wb) const
@@ -371,23 +377,21 @@ public:
 };
 
 
-struct HashUnused {};
+struct HashUnused
+{
+};
 
 
-template
-<
+template <
     typename Key,
-    size_t capacity
->
+    size_t capacity>
 using SmallSet = SmallTable<Key, HashTableCell<Key, HashUnused>, capacity>;
 
 
-template
-<
+template <
     typename Key,
     typename Cell,
-    size_t capacity
->
+    size_t capacity>
 class SmallMapTable : public SmallTable<Key, Cell, capacity>
 {
 public:
@@ -407,10 +411,8 @@ public:
 };
 
 
-template
-<
+template <
     typename Key,
     typename Mapped,
-    size_t capacity
->
+    size_t capacity>
 using SmallMap = SmallMapTable<Key, HashMapCell<Key, Mapped, HashUnused>, capacity>;

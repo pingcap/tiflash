@@ -3,12 +3,11 @@
 #include <Common/HashTable/Hash.h>
 #include <Common/HashTable/HashTable.h>
 #include <Common/HashTable/HashTableAllocator.h>
-
-#include <IO/WriteBuffer.h>
-#include <IO/WriteHelpers.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteHelpers.h>
 
 /** NOTE HashSet could only be used for memmoveable (position independent) types.
   * Example: std::string is not position independent in libstdc++ with C++11 ABI or in libc++.
@@ -16,14 +15,12 @@
   */
 
 
-template
-<
+template <
     typename Key,
     typename TCell,
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
-    typename Allocator = HashTableAllocator
->
+    typename Allocator = HashTableAllocator>
 class HashSetTable : public HashTable<Key, TCell, Hash, Grower, Allocator>
 {
 public:
@@ -73,8 +70,12 @@ struct HashSetCellWithSavedHash : public HashTableCell<Key, Hash, TState>
 
     size_t saved_hash;
 
-    HashSetCellWithSavedHash() : Base() {} //-V730
-    HashSetCellWithSavedHash(const Key & key_, const typename Base::State & state) : Base(key_, state) {} //-V730
+    HashSetCellWithSavedHash()
+        : Base()
+    {} //-V730
+    HashSetCellWithSavedHash(const Key & key_, const typename Base::State & state)
+        : Base(key_, state)
+    {} //-V730
 
     bool keyEquals(const Key & key_) const { return bitEquals(this->key, key_); }
     bool keyEquals(const Key & key_, size_t hash_) const { return saved_hash == hash_ && bitEquals(this->key, key_); }
@@ -84,13 +85,11 @@ struct HashSetCellWithSavedHash : public HashTableCell<Key, Hash, TState>
     size_t getHash(const Hash & /*hash_function*/) const { return saved_hash; }
 };
 
-template
-<
+template <
     typename Key,
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
-    typename Allocator = HashTableAllocator
->
+    typename Allocator = HashTableAllocator>
 using HashSet = HashSetTable<Key, HashTableCell<Key, Hash>, Hash, Grower, Allocator>;
 
 template <typename Key, typename Hash, size_t initial_size_degree>
@@ -102,13 +101,11 @@ using HashSetWithStackMemory = HashSet<
         (1ULL << initial_size_degree)
         * sizeof(HashTableCell<Key, Hash>)>>;
 
-template
-<
+template <
     typename Key,
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
-    typename Allocator = HashTableAllocator
->
+    typename Allocator = HashTableAllocator>
 using HashSetWithSavedHash = HashSetTable<Key, HashSetCellWithSavedHash<Key, Hash>, Hash, Grower, Allocator>;
 
 template <typename Key, typename Hash, size_t initial_size_degree>

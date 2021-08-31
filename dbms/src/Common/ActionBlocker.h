@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 /// An atomic variable that is used to block and interrupt certain actions
 /// If it is not zero then actions related with it should be considered as interrupted
 class ActionBlocker
@@ -28,7 +27,8 @@ public:
     /// Blocks related action while a BlockerHolder instance exists
     struct LockHolder
     {
-        explicit LockHolder(const ActionBlocker * var_ = nullptr) : var(var_)
+        explicit LockHolder(const ActionBlocker * var_ = nullptr)
+            : var(var_)
         {
             if (var)
                 ++var->counter;
@@ -60,4 +60,4 @@ public:
     };
 };
 
-}
+} // namespace DB
