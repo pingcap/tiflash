@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char exception_before_mpp_non_root_task_run[];
