@@ -321,6 +321,10 @@ void MPPTask::runImpl()
     try
     {
         preprocess();
+        if (status.load() != RUNNING)
+        {
+            throw Exception("task not in running state, maybe is cancelled");
+        }
         auto from = io.in;
         auto to = io.out;
         from->readPrefix();
