@@ -2,9 +2,8 @@
 
 namespace DB
 {
-
 class FunctionFactory;
 
 void registerFunctionArrayPopBack(FunctionFactory & factory);
 
-}
+} // namespace DB

@@ -2,9 +2,8 @@
 
 namespace DB
 {
-
 class FunctionFactory;
 
 void registerFunctionBitTestAny(FunctionFactory & factory);
 
-}
+} // namespace DB

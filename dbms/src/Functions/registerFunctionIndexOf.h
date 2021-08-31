@@ -2,9 +2,8 @@
 
 namespace DB
 {
-
 class FunctionFactory;
 
 void registerFunctionIndexOf(FunctionFactory & factory);
 
-}
+} // namespace DB

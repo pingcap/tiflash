@@ -2,9 +2,8 @@
 
 namespace DB
 {
-
 class FunctionFactory;
 
 void registerFunctionGreatest(FunctionFactory & factory);
 
-}
+} // namespace DB
