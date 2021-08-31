@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/LogWithPrefix.h>
 #include <Common/MemoryTracker.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -72,6 +73,8 @@ public:
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
 
+    std::shared_ptr<LogWithPrefix> getMPPTaskLog() const { return log; }
+
     ~MPPTask();
 
 private:
@@ -100,7 +103,7 @@ private:
 
     MPPTaskManager * manager = nullptr;
 
-    Poco::Logger * log;
+    const std::shared_ptr<LogWithPrefix> log;
 
     Exception err;
 
