@@ -9,7 +9,6 @@
 
 namespace DB
 {
-
 class Context;
 
 class KVStore;
