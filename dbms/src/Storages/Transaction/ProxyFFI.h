@@ -59,7 +59,10 @@ struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
 extern "C" {
 RawCppPtr GenCppRawString(BaseBuffView);
 EngineStoreApplyRes HandleAdminRaftCmd(
-    const EngineStoreServerWrap * server, BaseBuffView req_buff, BaseBuffView resp_buff, RaftCmdHeader header);
+    const EngineStoreServerWrap * server,
+    BaseBuffView req_buff,
+    BaseBuffView resp_buff,
+    RaftCmdHeader header);
 EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server, WriteCmdsView req_buff, RaftCmdHeader header);
 void AtomicUpdateProxy(EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy);
 void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id);
@@ -68,14 +71,19 @@ uint8_t HandleCheckTerminated(EngineStoreServerWrap * server);
 StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server);
 EngineStoreServerStatus HandleGetTiFlashStatus(EngineStoreServerWrap * server);
 RawCppPtr PreHandleSnapshot(
-    EngineStoreServerWrap * server, BaseBuffView region_buff, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term);
+    EngineStoreServerWrap * server,
+    BaseBuffView region_buff,
+    uint64_t peer_id,
+    SSTViewVec,
+    uint64_t index,
+    uint64_t term);
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppPtrType type);
 HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView);
 uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(EngineStoreServerWrap *, void * ptr, RawCppPtrType type);
 RawVoidPtr GenBatchReadIndexRes(uint64_t cap);
 void InsertBatchReadIndexResp(RawVoidPtr, BaseBuffView, uint64_t);
-void SetSetverInfoResp(BaseBuffView, RawVoidPtr);
+void SetServerInfoResp(BaseBuffView, RawVoidPtr);
 BaseBuffView strIntoView(const std::string & view);
 }
 } // namespace DB
