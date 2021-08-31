@@ -4,6 +4,7 @@
 #include <Columns/ColumnString.h>
 #include <Common/ColumnsHashing.h>
 #include <Common/typeid_cast.h>
+#include <Core/BlockTracker.h>
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -55,7 +56,21 @@ static bool isCrossJoin(ASTTableJoin::Kind kind)
 }
 
 
-Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_, const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_, const TiDB::TiDBCollators & collators_, const String & left_filter_column_, const String & right_filter_column_, const String & other_filter_column_, const String & other_eq_filter_from_in_column_, ExpressionActionsPtr other_condition_ptr_, size_t max_block_size_)
+Join::Join(
+    const Names & key_names_left_,
+    const Names & key_names_right_,
+    bool use_nulls_,
+    const SizeLimits & limits,
+    ASTTableJoin::Kind kind_,
+    ASTTableJoin::Strictness strictness_,
+    size_t build_concurrency_,
+    const TiDB::TiDBCollators & collators_,
+    const String & left_filter_column_,
+    const String & right_filter_column_,
+    const String & other_filter_column_,
+    const String & other_eq_filter_from_in_column_,
+    ExpressionActionsPtr other_condition_ptr_,
+    size_t max_block_size_)
     : kind(kind_)
     , strictness(strictness_)
     , key_names_left(key_names_left_)
@@ -739,6 +754,10 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
     }
     if (build_set_exceeded.load())
         return;
+
+    // thread_local BlockTracker tracker("build");
+    // tracker.track(block);
+
     if (!insertFromBlockInternal(stored_block, stream_index))
     {
         build_set_exceeded.store(true);
@@ -1624,6 +1643,9 @@ void Join::joinBlock(Block & block) const
 
         build_table_cv.wait(lk, [&]() { return have_finish_build; });
     }
+
+    // thread_local BlockTracker tracker("probe");
+    // tracker.track(block);
 
     std::shared_lock lock(rwlock);
 

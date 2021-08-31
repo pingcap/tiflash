@@ -1,28 +1,24 @@
 #pragma once
 
-#include <shared_mutex>
-
-#include <Parsers/ASTTablesInSelectQuery.h>
-
-#include <Interpreters/AggregationCommon.h>
-#include <Interpreters/SettingsCommon.h>
-
-#include <Common/Arena.h>
-#include <Common/HashTable/HashMap.h>
-
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
-
-#include <DataStreams/SizeLimits.h>
+#include <Common/Arena.h>
+#include <Common/HashTable/HashMap.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <DataStreams/NativeBlockOutputStream.h>
+#include <DataStreams/SizeLimits.h>
+#include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/SettingsCommon.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 #include <common/ThreadPool.h>
+
+#include <shared_mutex>
 
 
 namespace DB
 {
-
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -82,11 +78,19 @@ namespace DB
 class Join
 {
 public:
-    Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
-         const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency = 1,
-         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators, const String & left_filter_column = "",
-         const String & right_filter_column = "", const String & other_filter_column = "",
-         const String & other_eq_filter_from_in_column = "", ExpressionActionsPtr other_condition_ptr = nullptr,
+    Join(const Names & key_names_left_,
+         const Names & key_names_right_,
+         bool use_nulls_,
+         const SizeLimits & limits,
+         ASTTableJoin::Kind kind_,
+         ASTTableJoin::Strictness strictness_,
+         size_t build_concurrency = 1,
+         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
+         const String & left_filter_column = "",
+         const String & right_filter_column = "",
+         const String & other_filter_column = "",
+         const String & other_eq_filter_from_in_column = "",
+         ExpressionActionsPtr other_condition_ptr = nullptr,
          size_t max_block_size = 0);
 
     bool empty() { return type == Type::EMPTY; }
@@ -122,7 +126,10 @@ public:
       * Use only after all calls to joinBlock was done.
       * left_sample_block is passed without account of 'use_nulls' setting (columns will be converted to Nullable inside).
       */
-    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
+    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block,
+                                                      size_t index,
+                                                      size_t step,
+                                                      size_t max_block_size) const;
 
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
@@ -146,7 +153,10 @@ public:
         size_t row_num;
 
         RowRef() {}
-        RowRef(const Block * block_, size_t row_num_) : block(block_), row_num(row_num_) {}
+        RowRef(const Block * block_, size_t row_num_)
+            : block(block_)
+            , row_num(row_num_)
+        {}
     };
 
     /// Single linked list of references to rows. Used for ALL JOINs (non-unique JOINs)
@@ -155,9 +165,10 @@ public:
         RowRefList * next = nullptr;
 
         RowRefList() {}
-        RowRefList(const Block * block_, size_t row_num_) : RowRef(block_, row_num_) {}
+        RowRefList(const Block * block_, size_t row_num_)
+            : RowRef(block_, row_num_)
+        {}
     };
-
 
 
     /** Depending on template parameter, adds or doesn't add a flag, that element was used (row was joined).
@@ -170,10 +181,13 @@ public:
     template <typename Base>
     struct WithUsedFlag<true, Base> : Base
     {
-        mutable std::atomic<bool> used {};
+        mutable std::atomic<bool> used{};
         using Base::Base;
         using Base_t = Base;
-        void setUsed() const { used.store(true, std::memory_order_relaxed); }    /// Could be set simultaneously from different threads.
+        void setUsed() const
+        {
+            used.store(true, std::memory_order_relaxed);
+        } /// Could be set simultaneously from different threads.
         bool getUsed() const { return used; }
     };
 
@@ -187,25 +201,25 @@ public:
     };
 
 
-    /// Different types of keys for maps.
-    #define APPLY_FOR_JOIN_VARIANTS(M) \
-        M(key8)                        \
-        M(key16)                       \
-        M(key32)                       \
-        M(key64)                       \
-        M(key_string)                  \
-        M(key_fixed_string)            \
-        M(keys128)                     \
-        M(keys256)                     \
-        M(serialized)
+/// Different types of keys for maps.
+#define APPLY_FOR_JOIN_VARIANTS(M) \
+    M(key8)                        \
+    M(key16)                       \
+    M(key32)                       \
+    M(key64)                       \
+    M(key_string)                  \
+    M(key_fixed_string)            \
+    M(keys128)                     \
+    M(keys256)                     \
+    M(serialized)
 
     enum class Type
     {
         EMPTY,
         CROSS,
-        #define M(NAME) NAME,
-            APPLY_FOR_JOIN_VARIANTS(M)
-        #undef M
+#define M(NAME) NAME,
+        APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
     };
 
 
@@ -214,15 +228,17 @@ public:
     template <typename Mapped>
     struct MapsTemplate
     {
-        std::unique_ptr<ConcurrentHashMap<UInt8, Mapped, TrivialHash, HashTableFixedGrower<8>>>   key8;
-        std::unique_ptr<ConcurrentHashMap<UInt16, Mapped, TrivialHash, HashTableFixedGrower<16>>> key16;
-        std::unique_ptr<ConcurrentHashMap<UInt32, Mapped, HashCRC32<UInt32>>>                     key32;
-        std::unique_ptr<ConcurrentHashMap<UInt64, Mapped, HashCRC32<UInt64>>>                     key64;
-        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>>                        key_string;
-        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>>                        key_fixed_string;
-        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>>                   keys128;
-        std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>>                   keys256;
-        std::unique_ptr<ConcurrentHashMap<StringRef, Mapped>>                                     serialized;
+        std::unique_ptr<ConcurrentHashMap<UInt8, Mapped, TrivialHash, HashTableFixedGrower<8>>>
+            key8;
+        std::unique_ptr<ConcurrentHashMap<UInt16, Mapped, TrivialHash, HashTableFixedGrower<16>>>
+            key16;
+        std::unique_ptr<ConcurrentHashMap<UInt32, Mapped, HashCRC32<UInt32>>> key32;
+        std::unique_ptr<ConcurrentHashMap<UInt64, Mapped, HashCRC32<UInt64>>> key64;
+        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_string;
+        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_fixed_string;
+        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>> keys128;
+        std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>> keys256;
+        std::unique_ptr<ConcurrentHashMap<StringRef, Mapped>> serialized;
     };
 
     using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;
@@ -264,10 +280,10 @@ private:
     /// keep original block for concurrent build
     Blocks original_blocks;
 
-    MapsAny maps_any;            /// For ANY LEFT|INNER JOIN
-    MapsAll maps_all;            /// For ALL LEFT|INNER JOIN
-    MapsAnyFull maps_any_full;    /// For ANY RIGHT|FULL JOIN
-    MapsAllFull maps_all_full;    /// For ALL RIGHT|FULL JOIN
+    MapsAny maps_any; /// For ANY LEFT|INNER JOIN
+    MapsAll maps_all; /// For ALL LEFT|INNER JOIN
+    MapsAnyFull maps_any_full; /// For ANY RIGHT|FULL JOIN
+    MapsAllFull maps_all_full; /// For ALL RIGHT|FULL JOIN
 
     /// For right/full join, including
     /// 1. Rows with NULL join keys
@@ -318,7 +334,10 @@ private:
       *
       * @param block
       */
-    void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
+    void handleOtherConditions(Block & block,
+                               std::unique_ptr<IColumn::Filter> & filter,
+                               std::unique_ptr<IColumn::Offsets> & offsets_to_replicate,
+                               const std::vector<size_t> & right_table_column) const;
 
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
@@ -326,11 +345,10 @@ private:
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
     void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
-
 };
 
 using JoinPtr = std::shared_ptr<Join>;
 using Joins = std::vector<JoinPtr>;
 
 
-}
+} // namespace DB
