@@ -5,10 +5,11 @@
 
 namespace DB
 {
-
 struct Timer : Poco::Util::Timer
 {
-    Timer(const char * name) : thread_worker_name(name) {}
+    Timer(const char * name)
+        : thread_worker_name(name)
+    {}
 
 protected:
     void run() override

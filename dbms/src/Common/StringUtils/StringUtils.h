@@ -1,9 +1,9 @@
 #pragma once
 
+#include <cstddef>
+#include <cstring>
 #include <string>
 #include <string_view>
-#include <cstring>
-#include <cstddef>
 
 
 namespace detail
@@ -46,7 +46,7 @@ template <typename T>
 std::string getOrdinalSuffix(T n)
 {
     static_assert(std::is_integral_v<T> && std::is_unsigned_v<T>,
-        "Unsigned integer value required");
+                  "Unsigned integer value required");
 
     const auto last_digit = n % 10;
 
@@ -56,10 +56,14 @@ std::string getOrdinalSuffix(T n)
 
     switch (last_digit)
     {
-        case 1: return "st";
-        case 2: return "nd";
-        case 3: return "rd";
-        default: return "th";
+    case 1:
+        return "st";
+    case 2:
+        return "nd";
+    case 3:
+        return "rd";
+    default:
+        return "th";
     };
 }
 
@@ -131,4 +135,3 @@ inline bool equalsCaseInsensitive(char a, char b)
 {
     return a == b || (isAlphaASCII(a) && alternateCaseIfAlphaASCII(a) == b);
 }
-

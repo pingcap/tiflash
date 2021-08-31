@@ -1,23 +1,22 @@
 #pragma once
 
-#include <Core/Types.h>
 #include <Core/Names.h>
-#include <map>
+#include <Core/Types.h>
 
+#include <map>
 
 
 namespace Poco
 {
-    namespace Util
-    {
-        class AbstractConfiguration;
-    }
+namespace Util
+{
+class AbstractConfiguration;
 }
+} // namespace Poco
 
 
 namespace DB
 {
-
 /** Apply substitutions from the macros in config to the string.
   */
 class Macros
@@ -30,7 +29,7 @@ public:
       * level - the level of recursion.
       */
     String expand(const String & s, size_t level = 0) const;
-    
+
     /** Apply expand for the list.
       */
     Names expand(const Names & source_names, size_t level = 0) const;
@@ -43,4 +42,4 @@ private:
 };
 
 
-}
+} // namespace DB

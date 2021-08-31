@@ -11,7 +11,9 @@
   */
 
 
-struct NoInitTag {};
+struct NoInitTag
+{
+};
 
 /// A pair that does not initialize the elements, if not needed.
 template <typename First, typename Second>
@@ -24,11 +26,14 @@ struct PairNoInit
 
     template <typename First_>
     PairNoInit(First_ && first_, NoInitTag)
-        : first(std::forward<First_>(first_)) {}
+        : first(std::forward<First_>(first_))
+    {}
 
     template <typename First_, typename Second_>
     PairNoInit(First_ && first_, Second_ && second_)
-        : first(std::forward<First_>(first_)), second(std::forward<Second_>(second_)) {}
+        : first(std::forward<First_>(first_))
+        , second(std::forward<Second_>(second_))
+    {}
 };
 
 template <typename First, typename Second>
@@ -51,8 +56,12 @@ struct HashMapCell
     value_type value;
 
     HashMapCell() = default;
-    HashMapCell(const Key & key_, const State &) : value(key_, NoInitTag()) {}
-    HashMapCell(const value_type & value_, const State &) : value(value_) {}
+    HashMapCell(const Key & key_, const State &)
+        : value(key_, NoInitTag())
+    {}
+    HashMapCell(const value_type & value_, const State &)
+        : value(value_)
+    {}
 
     /// Get the key (externally).
     const Key & getKey() const { return value.first; }
@@ -114,37 +123,52 @@ struct HashMapCell
     static void move(HashMapCell * /* old_location */, HashMapCell * /* new_location */) {}
 
     template <size_t I>
-    auto & get() & {
-        if constexpr (I == 0) return value.first;
-        else if constexpr (I == 1) return value.second;
+    auto & get() &
+    {
+        if constexpr (I == 0)
+            return value.first;
+        else if constexpr (I == 1)
+            return value.second;
     }
 
     template <size_t I>
-    auto const & get() const & {
-        if constexpr (I == 0) return value.first;
-        else if constexpr (I == 1) return value.second;
+    auto const & get() const &
+    {
+        if constexpr (I == 0)
+            return value.first;
+        else if constexpr (I == 1)
+            return value.second;
     }
 
     template <size_t I>
-    auto && get() && {
-        if constexpr (I == 0) return std::move(value.first);
-        else if constexpr (I == 1) return std::move(value.second);
+    auto && get() &&
+    {
+        if constexpr (I == 0)
+            return std::move(value.first);
+        else if constexpr (I == 1)
+            return std::move(value.second);
     }
-
 };
 
 namespace std
 {
+template <typename Key, typename TMapped, typename Hash, typename TState>
+struct tuple_size<HashMapCell<Key, TMapped, Hash, TState>> : std::integral_constant<size_t, 2>
+{
+};
 
-    template <typename Key, typename TMapped, typename Hash, typename TState>
-    struct tuple_size<HashMapCell<Key, TMapped, Hash, TState>> : std::integral_constant<size_t, 2> { };
+template <typename Key, typename TMapped, typename Hash, typename TState>
+struct tuple_element<0, HashMapCell<Key, TMapped, Hash, TState>>
+{
+    using type = Key;
+};
 
-    template <typename Key, typename TMapped, typename Hash, typename TState>
-    struct tuple_element<0, HashMapCell<Key, TMapped, Hash, TState>> { using type = Key; };
-
-    template <typename Key, typename TMapped, typename Hash, typename TState>
-    struct tuple_element<1, HashMapCell<Key, TMapped, Hash, TState>> { using type = TMapped; };
-}
+template <typename Key, typename TMapped, typename Hash, typename TState>
+struct tuple_element<1, HashMapCell<Key, TMapped, Hash, TState>>
+{
+    using type = TMapped;
+};
+} // namespace std
 
 template <typename Key, typename TMapped, typename Hash, typename TState = HashTableNoState>
 struct HashMapCellWithSavedHash : public HashMapCell<Key, TMapped, Hash, TState>
@@ -164,14 +188,12 @@ struct HashMapCellWithSavedHash : public HashMapCell<Key, TMapped, Hash, TState>
 };
 
 
-template
-<
+template <
     typename KeyType,
     typename CellType,
     typename HashType = DefaultHash<KeyType>,
     typename GrowerType = HashTableGrower<>,
-    typename AllocatorType = HashTableAllocator
->
+    typename AllocatorType = HashTableAllocator>
 class HashMapTable : public HashTable<KeyType, CellType, HashType, GrowerType, AllocatorType>
 {
 public:
@@ -271,41 +293,43 @@ public:
 
 namespace std
 {
+template <typename Key, typename TMapped, typename Hash, typename TState>
+struct tuple_size<HashMapCellWithSavedHash<Key, TMapped, Hash, TState>> : std::integral_constant<size_t, 2>
+{
+};
 
-    template <typename Key, typename TMapped, typename Hash, typename TState>
-    struct tuple_size<HashMapCellWithSavedHash<Key, TMapped, Hash, TState>> : std::integral_constant<size_t, 2> { };
+template <typename Key, typename TMapped, typename Hash, typename TState>
+struct tuple_element<0, HashMapCellWithSavedHash<Key, TMapped, Hash, TState>>
+{
+    using type = Key;
+};
 
-    template <typename Key, typename TMapped, typename Hash, typename TState>
-    struct tuple_element<0, HashMapCellWithSavedHash<Key, TMapped, Hash, TState>> { using type = Key; };
-
-    template <typename Key, typename TMapped, typename Hash, typename TState>
-    struct tuple_element<1, HashMapCellWithSavedHash<Key, TMapped, Hash, TState>> { using type = TMapped; };
+template <typename Key, typename TMapped, typename Hash, typename TState>
+struct tuple_element<1, HashMapCellWithSavedHash<Key, TMapped, Hash, TState>>
+{
+    using type = TMapped;
+};
 } // namespace std
 
 
-template
-<
+template <
     typename Key,
     typename Mapped,
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
-    typename Allocator = HashTableAllocator
->
+    typename Allocator = HashTableAllocator>
 using HashMap = HashMapTable<Key, HashMapCell<Key, Mapped, Hash>, Hash, Grower, Allocator>;
 
 
-template
-<
+template <
     typename Key,
     typename Mapped,
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
-    typename Allocator = HashTableAllocator
->
+    typename Allocator = HashTableAllocator>
 using HashMapWithSavedHash = HashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator>;
 
-template <typename Key, typename Mapped, typename Hash,
-    size_t initial_size_degree>
+template <typename Key, typename Mapped, typename Hash, size_t initial_size_degree>
 using HashMapWithStackMemory = HashMapTable<
     Key,
     HashMapCellWithSavedHash<Key, Mapped, Hash>,
@@ -318,14 +342,12 @@ using HashMapWithStackMemory = HashMapTable<
 /// ConcurrentHashTable is the base class, it contains a vector of HashTableWithLock, ConcurrentHashMapTable is a derived
 /// class from ConcurrentHashTable, it makes hash table to be a hash map, and ConcurrentHashMap/ConcurrentHashMapWithSavedHash
 /// is just name alias for ConcurrentHashMapTable
-template
-<
+template <
     typename Key,
     typename Cell,
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
-    typename Allocator = HashTableAllocator
->
+    typename Allocator = HashTableAllocator>
 class ConcurrentHashMapTable : public ConcurrentHashTable<HashMapTable<Key, Cell, Hash, Grower, Allocator>>
 {
 public:
@@ -358,30 +380,26 @@ public:
           *  do not need extra lock here because even in multi-thread environment, it is guaranteed `inserted` to be true only in one thread
           */
         if (inserted)
-            new(&it->second) mapped_type();
+            new (&it->second) mapped_type();
 
         return it->second;
     }
 };
 
 
-template
-<
+template <
     typename Key,
     typename Mapped,
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
-    typename Allocator = HashTableAllocator
->
+    typename Allocator = HashTableAllocator>
 using ConcurrentHashMap = ConcurrentHashMapTable<Key, HashMapCell<Key, Mapped, Hash>, Hash, Grower, Allocator>;
 
 
-template
-<
+template <
     typename Key,
     typename Mapped,
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
-    typename Allocator = HashTableAllocator
->
+    typename Allocator = HashTableAllocator>
 using ConcurrentHashMapWithSavedHash = ConcurrentHashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator>;
