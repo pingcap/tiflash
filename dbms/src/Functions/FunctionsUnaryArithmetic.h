@@ -309,11 +309,26 @@ public:
 };
 
 
-struct NameNegate               { static constexpr auto name = "negate"; };
-struct NameAbs                  { static constexpr auto name = "abs"; };
-struct NameBitNot               { static constexpr auto name = "bitNot"; };
-struct NameIntExp2              { static constexpr auto name = "intExp2"; };
-struct NameIntExp10             { static constexpr auto name = "intExp10"; };
+struct NameNegate
+{
+    static constexpr auto name = "negate";
+};
+struct NameAbs
+{
+    static constexpr auto name = "abs";
+};
+struct NameBitNot
+{
+    static constexpr auto name = "bitNot";
+};
+struct NameIntExp2
+{
+    static constexpr auto name = "intExp2";
+};
+struct NameIntExp10
+{
+    static constexpr auto name = "intExp10";
+};
 
 using FunctionNegate = FunctionUnaryArithmetic<NegateImpl, NameNegate, true>;
 using FunctionAbs = FunctionUnaryArithmetic<AbsImpl, NameAbs, false>;

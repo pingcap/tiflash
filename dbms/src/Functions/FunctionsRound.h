@@ -115,21 +115,21 @@ struct RoundDurationImpl
     static inline ResultType apply(A x)
     {
         return x < 1 ? 0
-            : (x < 10 ? 1
-            : (x < 30 ? 10
-            : (x < 60 ? 30
-            : (x < 120 ? 60
-            : (x < 180 ? 120
-            : (x < 240 ? 180
-            : (x < 300 ? 240
-            : (x < 600 ? 300
-            : (x < 1200 ? 600
-            : (x < 1800 ? 1200
-            : (x < 3600 ? 1800
-            : (x < 7200 ? 3600
-            : (x < 18000 ? 7200
-            : (x < 36000 ? 18000
-            : 36000))))))))))))));
+                     : (x < 10 ? 1
+                               : (x < 30 ? 10
+                                         : (x < 60 ? 30
+                                                   : (x < 120 ? 60
+                                                              : (x < 180 ? 120
+                                                                         : (x < 240 ? 180
+                                                                                    : (x < 300 ? 240
+                                                                                               : (x < 600 ? 300
+                                                                                                          : (x < 1200 ? 600
+                                                                                                                      : (x < 1800 ? 1200
+                                                                                                                                  : (x < 3600 ? 1800
+                                                                                                                                              : (x < 7200 ? 3600
+                                                                                                                                                          : (x < 18000 ? 7200
+                                                                                                                                                                       : (x < 36000 ? 18000
+                                                                                                                                                                                    : 36000))))))))))))));
     }
 };
 
@@ -148,12 +148,12 @@ struct RoundAgeImpl
     static inline ResultType apply(A x)
     {
         return x < 1 ? 0
-            : (x < 18 ? 17
-            : (x < 25 ? 18
-            : (x < 35 ? 25
-            : (x < 45 ? 35
-            : (x < 55 ? 45
-            : 55)))));
+                     : (x < 18 ? 17
+                               : (x < 25 ? 18
+                                         : (x < 35 ? 25
+                                                   : (x < 45 ? 35
+                                                             : (x < 55 ? 45
+                                                                       : 55)))));
     }
 };
 
@@ -168,23 +168,23 @@ struct RoundAgeImpl<Decimal<T>>
   */
 enum class ScaleMode
 {
-    Positive,   // round to a number with N decimal places after the decimal point
-    Negative,   // round to an integer with N zero characters
-    Zero,       // round to an integer
+    Positive, // round to a number with N decimal places after the decimal point
+    Negative, // round to an integer with N zero characters
+    Zero, // round to an integer
 };
 
 enum class RoundingMode
 {
 #if __SSE4_1__
-    Round   = _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC,
-    Floor   = _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC,
-    Ceil    = _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC,
-    Trunc   = _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC,
+    Round = _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC,
+    Floor = _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC,
+    Ceil = _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC,
+    Trunc = _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC,
 #else
-    Round   = 8,    /// Values are correspond to above just in case.
-    Floor   = 9,
-    Ceil    = 10,
-    Trunc   = 11,
+    Round = 8, /// Values are correspond to above just in case.
+    Floor = 9,
+    Ceil = 10,
+    Trunc = 11,
 #endif
 };
 
@@ -343,7 +343,11 @@ public:
     static void store(ScalarType * out, VectorType val) { _mm_storeu_ps(out, val); }
     static VectorType multiply(VectorType val, VectorType scale) { return _mm_mul_ps(val, scale); }
     static VectorType divide(VectorType val, VectorType scale) { return _mm_div_ps(val, scale); }
-    template <RoundingMode mode> static VectorType apply(VectorType val) { return _mm_round_ps(val, int(mode)); }
+    template <RoundingMode mode>
+    static VectorType apply(VectorType val)
+    {
+        return _mm_round_ps(val, int(mode));
+    }
 
     static VectorType prepare(size_t scale)
     {
@@ -427,7 +431,11 @@ public:
     static VectorType store(ScalarType * out, ScalarType val) { return *out = val; }
     static VectorType multiply(VectorType val, VectorType scale) { return val * scale; }
     static VectorType divide(VectorType val, VectorType scale) { return val / scale; }
-    template <RoundingMode mode> static VectorType apply(VectorType val) { return roundWithMode(val, mode); }
+    template <RoundingMode mode>
+    static VectorType apply(VectorType val)
+    {
+        return roundWithMode(val, mode);
+    }
 
     static VectorType prepare(size_t scale)
     {
@@ -770,13 +778,13 @@ public:
     {
         if ((arguments.size() < 1) || (arguments.size() > 2))
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 1 or 2.",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be 1 or 2.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & type : arguments)
             if (!type->isNumber() && !type->isDecimal())
                 throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return arguments[0];
     }
@@ -802,8 +810,8 @@ public:
               || executeForType<Decimal256>(block, arguments, result)))
         {
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                    + " of argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN);
+                                + " of argument of function " + getName(),
+                            ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 
@@ -1523,19 +1531,52 @@ private:
     }
 };
 
-struct NameRoundToExp2 { static constexpr auto name = "roundToExp2"; };
-struct NameRoundDuration { static constexpr auto name = "roundDuration"; };
-struct NameRoundAge { static constexpr auto name = "roundAge"; };
+struct NameRoundToExp2
+{
+    static constexpr auto name = "roundToExp2";
+};
+struct NameRoundDuration
+{
+    static constexpr auto name = "roundDuration";
+};
+struct NameRoundAge
+{
+    static constexpr auto name = "roundAge";
+};
 
-struct NameRound { static constexpr auto name = "round"; };
-struct NameCeil { static constexpr auto name = "ceil"; };
-struct NameFloor { static constexpr auto name = "floor"; };
-struct NameTrunc { static constexpr auto name = "trunc"; };
+struct NameRound
+{
+    static constexpr auto name = "round";
+};
+struct NameCeil
+{
+    static constexpr auto name = "ceil";
+};
+struct NameFloor
+{
+    static constexpr auto name = "floor";
+};
+struct NameTrunc
+{
+    static constexpr auto name = "trunc";
+};
 
-struct NameRoundDecimalToInt { static constexpr auto name = "roundDecimalToInt"; };
-struct NameCeilDecimalToInt { static constexpr auto name = "ceilDecimalToInt"; };
-struct NameFloorDecimalToInt { static constexpr auto name = "floorDecimalToInt"; };
-struct NameTruncDecimalToInt { static constexpr auto name = "truncDecimalToInt"; };
+struct NameRoundDecimalToInt
+{
+    static constexpr auto name = "roundDecimalToInt";
+};
+struct NameCeilDecimalToInt
+{
+    static constexpr auto name = "ceilDecimalToInt";
+};
+struct NameFloorDecimalToInt
+{
+    static constexpr auto name = "floorDecimalToInt";
+};
+struct NameTruncDecimalToInt
+{
+    static constexpr auto name = "truncDecimalToInt";
+};
 
 using FunctionRoundToExp2 = FunctionUnaryArithmetic<RoundToExp2Impl, NameRoundToExp2, false>;
 using FunctionRoundDuration = FunctionUnaryArithmetic<RoundDurationImpl, NameRoundDuration, false>;
@@ -1561,8 +1602,17 @@ struct PositiveMonotonicity
     }
 };
 
-template <> struct FunctionUnaryArithmeticMonotonicity<NameRoundToExp2> : PositiveMonotonicity {};
-template <> struct FunctionUnaryArithmeticMonotonicity<NameRoundDuration> : PositiveMonotonicity {};
-template <> struct FunctionUnaryArithmeticMonotonicity<NameRoundAge> : PositiveMonotonicity {};
+template <>
+struct FunctionUnaryArithmeticMonotonicity<NameRoundToExp2> : PositiveMonotonicity
+{
+};
+template <>
+struct FunctionUnaryArithmeticMonotonicity<NameRoundDuration> : PositiveMonotonicity
+{
+};
+template <>
+struct FunctionUnaryArithmeticMonotonicity<NameRoundAge> : PositiveMonotonicity
+{
+};
 
 } // namespace DB
