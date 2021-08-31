@@ -29,8 +29,6 @@ public:
         , log_file(std::move(_log_file))
         , log(&Poco::Logger::get("LogIterator"))
         , cur_lineno(0)
-        , last_err_lineno(0)
-        , last_err_reason(Error::Type::OK)
     {
         init();
     }
@@ -62,7 +60,6 @@ public:
     {
         enum Type
         {
-            OK,
             EOI,
             INVALID_LOG_LEVEL,
             UNEXPECTED_LOG_HEAD,
@@ -97,7 +94,7 @@ private:
     bool match(const ::diagnosticspb::LogMessage & log_msg, const char * c, size_t sz) const;
     void init();
 
-    Error readLog(LogEntry &);
+    std::optional<Error> readLog(LogEntry &);
 
 private:
     int64_t start_time;
@@ -111,8 +108,7 @@ private:
     Poco::Logger * log;
 
     uint32_t cur_lineno;
-    uint32_t last_err_lineno;
-    int last_err_reason;
+    std::optional<std::pair<uint32_t, Error::Type>> err_info; // <lineno, Error::Type>
 };
 
 }; // namespace DB

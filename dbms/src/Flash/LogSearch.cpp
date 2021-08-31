@@ -40,16 +40,16 @@ bool LogIterator::next(::diagnosticspb::LogMessage & msg)
     for (;;)
     {
         LogEntry entry;
-        Error err = readLog(entry);
-        if (err.tp != Error::Type::OK)
+        std::optional<Error> maybe_err = readLog(entry);
+        if (maybe_err.has_value())
         {
-            if (last_err_reason != Error::Type::OK)
+            Error err = maybe_err.value();
+            if (!err_info.has_value())
             {
                 switch (err.tp)
                 {
                 case Error::Type::UNEXPECTED_LOG_HEAD:
-                    last_err_reason = err.tp;
-                    last_err_lineno = cur_lineno;
+                    err_info = std::make_pair(cur_lineno, err.tp);
                     break;
                 default:
                     break;
@@ -228,14 +228,14 @@ bool LogIterator::read_date(
 }
 
 
-LogIterator::Error LogIterator::readLog(LogEntry & entry)
+std::optional<LogIterator::Error> LogIterator::readLog(LogEntry & entry)
 {
     if (!*log_file)
     {
         if (log_file->eof())
-            return Error{Error::Type::EOI};
+            return std::optional<Error>(Error{Error::Type::EOI});
         else
-            return Error{Error::Type::UNKNOWN};
+            return std::optional<Error>(Error{Error::Type::UNKNOWN});
     }
 
     std::getline(*log_file, line);
@@ -257,7 +257,7 @@ LogIterator::Error LogIterator::readLog(LogEntry & entry)
 
         if (!LogIterator::read_level(line.size(), line.data(), loglevel_s, loglevel_size))
         {
-            return Error{Error::Type::UNEXPECTED_LOG_HEAD};
+            return std::optional<Error>(Error{Error::Type::UNEXPECTED_LOG_HEAD});
         }
         else
         {
@@ -277,7 +277,7 @@ LogIterator::Error LogIterator::readLog(LogEntry & entry)
         }
         else
         {
-            return Error{Error::Type::UNEXPECTED_LOG_HEAD};
+            return std::optional<Error>(Error{Error::Type::UNEXPECTED_LOG_HEAD});
         }
         time.tm_year = year - 1900;
         time.tm_mon = month - 1;
@@ -295,7 +295,7 @@ LogIterator::Error LogIterator::readLog(LogEntry & entry)
     }
 
     if (entry.time > end_time)
-        return Error{Error::Type::EOI};
+        return std::optional<Error>(Error{Error::Type::EOI});
 
     if (memcmp(loglevel_start, "TRACE", loglevel_size) == 0)
     {
@@ -318,16 +318,16 @@ LogIterator::Error LogIterator::readLog(LogEntry & entry)
         entry.level = LogEntry::Level::Error;
     }
     if (loglevel_size == 0)
-        return Error{Error::Type::INVALID_LOG_LEVEL};
+        return std::optional<Error>(Error{Error::Type::INVALID_LOG_LEVEL});
 
     size_t message_begin = kLogLevelStartFinishOffset + loglevel_size + 3; // [] and a space
     if (line.size() <= message_begin)
     {
-        return Error{Error::Type::UNEXPECTED_LOG_HEAD};
+        return std::optional<Error>(Error{Error::Type::UNEXPECTED_LOG_HEAD});
     }
     entry.message = std::string_view(line);
     entry.message = entry.message.substr(message_begin, std::string_view::npos);
-    return Error{Error::Type::OK};
+    return {};
 }
 
 void LogIterator::init()
@@ -346,9 +346,9 @@ void LogIterator::init()
 
 LogIterator::~LogIterator()
 {
-    if (last_err_reason != Error::Type::OK)
+    if (err_info.has_value())
     {
-        LOG_ERROR(log, "LogIterator search end with error " << std::to_string(last_err_reason) << " at line " << std::to_string(last_err_lineno));
+        LOG_ERROR(log, "LogIterator search end with error " << std::to_string(err_info->first) << " at line " << std::to_string(err_info->second));
     }
 }
 
