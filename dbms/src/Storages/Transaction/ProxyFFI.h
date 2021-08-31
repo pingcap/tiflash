@@ -16,7 +16,6 @@ class ReadIndexRequest;
 
 namespace DB
 {
-
 class TMTContext;
 struct EngineStoreServerWrap;
 struct TiFlashRaftProxyHelper;
