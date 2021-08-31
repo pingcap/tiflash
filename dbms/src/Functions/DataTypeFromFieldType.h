@@ -29,7 +29,6 @@
 
 namespace DB
 {
-
 /// Used to indicate undefined operation
 struct InvalidType;
 
@@ -45,10 +44,10 @@ struct DataTypeFromFieldType<NumberTraits::Error>
     using Type = InvalidType;
 };
 
-template<typename T>
+template <typename T>
 struct DataTypeFromFieldType<Decimal<T>>
 {
     using Type = DataTypeDecimal<T>;
 };
 
-}
+} // namespace DB

@@ -1,5 +1,5 @@
-#include <Functions/FunctionFactory.h>
 #include <Functions/FunctionBitTestMany.h>
+#include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctionBitTestAny.h>
 
 namespace DB

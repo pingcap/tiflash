@@ -33,7 +33,7 @@ namespace ErrorCodes
 {
 extern const int ILLEGAL_COLUMN;
 extern const int TOO_LESS_ARGUMENTS_FOR_FUNCTION;
-}
+} // namespace ErrorCodes
 
 template <typename Impl, typename Name>
 struct FunctionBitTestMany : public IFunction
@@ -253,4 +253,4 @@ struct NameBitTestAll           { static constexpr auto name = "bitTestAll"; };
 using FunctionBitTestAny = FunctionBitTestMany<BitTestAnyImpl, NameBitTestAny>;
 using FunctionBitTestAll = FunctionBitTestMany<BitTestAllImpl, NameBitTestAll>;
 
-}
+} // namespace DB

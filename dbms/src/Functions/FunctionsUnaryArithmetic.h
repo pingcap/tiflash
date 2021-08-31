@@ -35,7 +35,7 @@ namespace ErrorCodes
 extern const int ILLEGAL_COLUMN;
 extern const int TOO_LESS_ARGUMENTS_FOR_FUNCTION;
 extern const int DECIMAL_OVERFLOW;
-}
+} // namespace ErrorCodes
 
 template <typename A, typename Op>
 struct UnaryOperationImpl
@@ -393,4 +393,4 @@ struct FunctionUnaryArithmeticMonotonicity<NameIntExp10>
     }
 };
 
-}
+} // namespace DB

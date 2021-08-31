@@ -1,24 +1,24 @@
 #pragma once
 
-#include <DataTypes/DataTypesNumber.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
-#include <DataTypes/DataTypeNullable.h>
+#include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
-#include <IO/WriteHelpers.h>
-#include <Functions/IFunction.h>
-#include <Functions/FunctionsUnaryArithmetic.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsUnaryArithmetic.h>
+#include <Functions/IFunction.h>
+#include <IO/WriteHelpers.h>
+
 #include <type_traits>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 /** Behaviour in presence of NULLs:
@@ -64,7 +64,6 @@ struct AndImpl
     {
         return a && b;
     }
-
 };
 
 struct OrImpl
@@ -99,7 +98,6 @@ struct OrImpl
     {
         return a || b;
     }
-
 };
 
 struct XorImpl
@@ -114,17 +112,17 @@ struct XorImpl
         return false;
     }
 
-    static inline bool resNotNull(const Field & )
+    static inline bool resNotNull(const Field &)
     {
         return true;
     }
 
-    static inline bool resNotNull(UInt8 , UInt8 )
+    static inline bool resNotNull(UInt8, UInt8)
     {
         return true;
     }
 
-    static inline void adjustForNullValue(UInt8 & , UInt8 & )
+    static inline void adjustForNullValue(UInt8 &, UInt8 &)
     {
     }
 
@@ -276,8 +274,7 @@ private:
     }
 
     template <typename T>
-    bool convertNullableTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null,
-            UInt8Container & input_has_null)
+    bool convertNullableTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null)
     {
         auto col_nullable = checkAndGetColumn<ColumnNullable>(column);
 
@@ -396,12 +393,11 @@ public:
                 if (const_val_input_has_null && const_val_res_not_null)
                     Impl::adjustForNullValue(const_val, const_val_input_has_null);
                 if (const_val_input_has_null)
-                    block.getByPosition(result).column =
-                            block.getByPosition(result).type->createColumnConst(rows,Null());
+                    block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(rows, Null());
                 else
                     block.getByPosition(result).column = has_nullable_input_column ? makeNullable(
-                            DataTypeUInt8().createColumnConst(rows, toField(const_val))) :
-                                                         DataTypeUInt8().createColumnConst(rows, toField(const_val));
+                                                             DataTypeUInt8().createColumnConst(rows, toField(const_val)))
+                                                                                   : DataTypeUInt8().createColumnConst(rows, toField(const_val));
             }
             return;
         }
@@ -434,8 +430,8 @@ public:
             vec_res.resize(rows);
             if constexpr (special_impl_for_nulls)
             {
-                vec_input_has_null.assign(rows, (UInt8) 0);
-                vec_res_not_null.assign(rows, (UInt8) 0);
+                vec_input_has_null.assign(rows, (UInt8)0);
+                vec_res_not_null.assign(rows, (UInt8)0);
             }
         }
 
@@ -580,4 +576,4 @@ using FunctionOr = FunctionAnyArityLogical<OrImpl, NameOr, true>;
 using FunctionXor = FunctionAnyArityLogical<XorImpl, NameXor, false>;
 using FunctionNot = FunctionUnaryLogical<NotImpl, NameNot>;
 
-}
+} // namespace DB
