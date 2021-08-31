@@ -130,19 +130,15 @@ void MPPTask::unregisterTask()
     }
 }
 
-bool isRemoteRegion(const RegionInfo & region_info, const TMTContext & tmt_context)
+bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_context)
 {
-    bool is_remote_region = false;
     RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
     if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
-        is_remote_region = true;
-    else
-    {
-        auto meta_snap = current_region->dumpRegionMetaSnapshot();
-        if (meta_snap.ver != region_info.region_version)
-            is_remote_region = true;
-    }
-    return is_remote_region;
+        return true;
+    auto meta_snap = current_region->dumpRegionMetaSnapshot();
+    if (meta_snap.ver != region_info.region_version)
+        return true;
+    return false;
 }
 
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
@@ -180,7 +176,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         /// region id, only the first region will be treated as local region
         bool duplicated_region = local_regions.find(region_info.region_id) != local_regions.end();
 
-        if (duplicated_region || isRemoteRegion(region_info, tmt_context))
+        if (duplicated_region || needRemoteRead(region_info, tmt_context))
             remote_regions.push_back(region_info);
         else
             local_regions.insert(std::make_pair(region_info.region_id, region_info));
