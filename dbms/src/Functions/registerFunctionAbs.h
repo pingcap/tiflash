@@ -5,6 +5,6 @@ namespace DB
 
 class FunctionFactory;
 
-void register@FUNCTION@(FunctionFactory & factory);
+void registerFunctionAbs(FunctionFactory & factory);
 
 }
