@@ -90,5 +90,6 @@ function clean_data_log() {
 
 export -f show_env
 export -f wait_env
+export -f wait_tiflash_env
 export -f set_branch
 export -f clean_data_log
