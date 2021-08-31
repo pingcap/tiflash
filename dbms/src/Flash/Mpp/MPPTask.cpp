@@ -323,6 +323,9 @@ void MPPTask::runImpl()
         preprocess();
         if (status.load() != RUNNING)
         {
+            /// when task is in running state, cancel the task will call sendCancelToQuery to do the cancellation, however
+            /// if the task is cancelled during preprocess, sendCancelToQuery may just be ignored because the processlist of
+            /// current task is not registered yet, so need to check the task status explicitly
             throw Exception("task not in running state, maybe is cancelled");
         }
         auto from = io.in;
