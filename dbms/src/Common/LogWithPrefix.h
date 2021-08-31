@@ -1,17 +1,20 @@
 #pragma once
 
-#include <common/Exception.h>
+#include <Common/Exception.h>
 #include <common/logger_useful.h>
+#include <common/types.h>
 
 #include <boost/noncopyable.hpp>
-#include <string>
 
 namespace DB
 {
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+
 /** LogWithPrefix could print formalized logs.
   * For example, adding prefix for a Poco::Logger with "[task 1 query 2333]" could help us find logs with LogSearch.
   * 
-  * Moreover, we can append prefix at any time with the static function "append(const String & str)".
+  * Moreover, we can append prefix at any time with the function "append(const String & str)".
   * For example, call append("[InputStream]") could print logs with prefix "[task 1 query 2333] [InputStream]".
   * 
   * Interfaces in LogWithPrefix are definitely the same with the Poco::Logger, so that they could use the same
@@ -70,9 +73,7 @@ public:
 
     Poco::Logger * getLog() const { return log; }
 
-    using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
-
-    static LogWithPrefixPtr append(const String & str) { return std::make_shared<LogWithPrefix>(log, prefix + " " + str); }
+    LogWithPrefixPtr append(const String & str) const { return std::make_shared<LogWithPrefix>(log, prefix + " " + str); }
 
 private:
     Poco::Logger * log;

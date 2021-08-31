@@ -107,7 +107,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     const tipb::TableScan & ts,
     const std::vector<const tipb::Expr *> & conditions_,
     size_t max_streams_,
-    Poco::Logger * log_)
+    const std::shared_ptr<LogWithPrefix> & log_)
     : context(context_),
       dag(dag_),
       query_block(query_block_),
@@ -120,6 +120,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
       tmt(context.getTMTContext()),
       mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
 {
+    log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("DAGStorageInterpreter"), "");
 }
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
@@ -161,7 +162,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
     if (info_retry)
         throw RegionException({info_retry->begin()->get().region_id}, status);
 
-    return doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
+    return doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log->getLog());
 }
 
 /// Will assign region_retry
@@ -189,7 +190,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
             }
             if (mvcc_query_info->regions_query_info.empty())
                 return {};
-            return doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
+            return doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log->getLog());
         }
         catch (const LockException & e)
         {
@@ -258,7 +259,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                     region_ids.insert(info.region_id);
                 throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
             });
-            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
+            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log->getLog());
             break;
         }
         catch (RegionException & e)

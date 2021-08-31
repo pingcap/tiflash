@@ -43,7 +43,7 @@ String MPPTaskId::toString() const
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
     , meta(meta_)
-    , log(&Poco::Logger::get(fmt::format("task {}", meta_.task_id())))
+    , log(std::make_shared<LogWithPrefix>(&Poco::Logger::get(fmt::format("task {}", meta_.task_id())), fmt::format("[task {} query {}]", meta.task_id(), meta.start_ts())))
 {
     id.start_ts = meta.start_ts();
     id.task_id = meta.task_id();
@@ -235,7 +235,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
 
-    DAGQuerySource dag(context, regions, retry_regions, *dag_req, true);
+    DAGQuerySource dag(context, regions, retry_regions, *dag_req, log, true);
 
     // read index , this may take a long time.
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
@@ -377,7 +377,7 @@ void MPPTask::writeErrToAllTunnel(const String & e)
         catch (...)
         {
             it.second->close("Failed to write error msg to tunnel");
-            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->id());
+            tryLogCurrentException(log->getLog(), "Failed to write error " + e + " to tunnel: " + it.second->id());
         }
     }
 }
