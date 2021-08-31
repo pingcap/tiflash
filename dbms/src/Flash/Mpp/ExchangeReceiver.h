@@ -1,12 +1,12 @@
 #pragma once
 
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <common/logger_useful.h>
 
 #include <chrono>
 #include <mutex>
@@ -75,7 +75,8 @@ private:
     Int32 live_connections;
     State state;
     String err_msg;
-    Poco::Logger * log;
+
+    std::shared_ptr<LogWithPrefix> log;
 
     void setUpConnection();
 
@@ -108,7 +109,7 @@ private:
     }
 
 public:
-    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_)
+    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
         : cluster(context_.getTMTContext().getKVCluster())
         , pb_exchange_receiver(exc)
         , source_num(pb_exchange_receiver.encoded_task_meta_size())
@@ -116,14 +117,16 @@ public:
         , max_buffer_size(max_buffer_size_)
         , live_connections(pb_exchange_receiver.encoded_task_meta_size())
         , state(NORMAL)
-        , log(&Poco::Logger::get("exchange_receiver"))
     {
+        log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("ExchangeReceiver"), "");
+
         for (int i = 0; i < exc.field_types_size(); i++)
         {
             String name = "exchange_receiver_" + std::to_string(i);
             ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
             schema.push_back(std::make_pair(name, info));
         }
+
         setUpConnection();
     }
 
