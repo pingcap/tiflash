@@ -1,17 +1,13 @@
+#include <Common/typeid_cast.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSetQuery.h>
-
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ParserSetQuery.h>
-
-#include <Common/typeid_cast.h>
 
 
 namespace DB
 {
-
-
 /// Parse `name = value`.
 static bool parseNameValuePair(ASTSetQuery::Change & change, IParser::Pos & pos, Expected & expected)
 {
@@ -73,4 +69,4 @@ bool ParserSetQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-}
+} // namespace DB
