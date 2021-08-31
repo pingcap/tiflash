@@ -214,7 +214,13 @@ static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
-static String buildTupleFunctionForGroupConcat(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, SortDescription & sort_desc, NamesAndTypes & names_and_types, TiDB::TiDBCollators & collators, ExpressionActionsPtr & actions)
+static String buildTupleFunctionForGroupConcat(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    SortDescription & sort_desc,
+    NamesAndTypes & names_and_types,
+    TiDB::TiDBCollators & collators,
+    ExpressionActionsPtr & actions)
 {
     const String & func_name = "tuple";
     Names argument_names;
@@ -254,7 +260,12 @@ static String buildTupleFunctionForGroupConcat(DAGExpressionAnalyzer * analyzer,
 
 static const String tidb_cast_name = "tidb_cast";
 
-static String buildCastFunctionInternal(DAGExpressionAnalyzer * analyzer, const Names & argument_names, bool in_union, const tipb::FieldType & field_type, ExpressionActionsPtr & actions)
+static String buildCastFunctionInternal(
+    DAGExpressionAnalyzer * analyzer,
+    const Names & argument_names,
+    bool in_union,
+    const tipb::FieldType & field_type,
+    ExpressionActionsPtr & actions)
 {
     String result_name = genFuncString(tidb_cast_name, argument_names, {nullptr});
     if (actions->getSampleBlock().has(result_name))
@@ -294,14 +305,29 @@ struct DateAdd
     static constexpr auto name = "date_add";
     static const std::unordered_map<String, String> unit_to_func_name_map;
 };
-const std::unordered_map<String, String> DateAdd::unit_to_func_name_map = {{"DAY", "addDays"}, {"WEEK", "addWeeks"}, {"MONTH", "addMonths"}, {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}};
+const std::unordered_map<String, String> DateAdd::unit_to_func_name_map
+    = {
+        {"DAY", "addDays"},
+        {"WEEK", "addWeeks"},
+        {"MONTH", "addMonths"},
+        {"YEAR", "addYears"},
+        {"HOUR", "addHours"},
+        {"MINUTE", "addMinutes"},
+        {"SECOND", "addSeconds"}};
 struct DateSub
 {
     static constexpr auto name = "date_sub";
     static const std::unordered_map<String, String> unit_to_func_name_map;
 };
 const std::unordered_map<String, String> DateSub::unit_to_func_name_map
-    = {{"DAY", "subtractDays"}, {"WEEK", "subtractWeeks"}, {"MONTH", "subtractMonths"}, {"YEAR", "subtractYears"}, {"HOUR", "subtractHours"}, {"MINUTE", "subtractMinutes"}, {"SECOND", "subtractSeconds"}};
+    = {
+        {"DAY", "subtractDays"},
+        {"WEEK", "subtractWeeks"},
+        {"MONTH", "subtractMonths"},
+        {"YEAR", "subtractYears"},
+        {"HOUR", "subtractHours"},
+        {"MINUTE", "subtractMinutes"},
+        {"SECOND", "subtractSeconds"}};
 
 template <typename Impl>
 static String buildDateAddOrSubFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
@@ -458,7 +484,12 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> & sour
     settings = context.getSettings();
 }
 
-void DAGExpressionAnalyzer::buildGroupConcat(const tipb::Expr & expr, ExpressionActionsChain::Step & step, const String & agg_func_name, AggregateDescriptions & aggregate_descriptions, bool result_is_nullable)
+void DAGExpressionAnalyzer::buildGroupConcat(
+    const tipb::Expr & expr,
+    ExpressionActionsChain::Step & step,
+    const String & agg_func_name,
+    AggregateDescriptions & aggregate_descriptions,
+    bool result_is_nullable)
 {
     AggregateDescription aggregate;
     /// the last parametric is the separator
@@ -601,7 +632,13 @@ void DAGExpressionAnalyzer::buildGroupConcat(const tipb::Expr & expr, Expression
 
 extern const String CountSecondStage;
 
-void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregation_keys, TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions, bool group_by_collation_sensitive)
+void DAGExpressionAnalyzer::appendAggregation(
+    ExpressionActionsChain & chain,
+    const tipb::Aggregation & agg,
+    Names & aggregation_keys,
+    TiDB::TiDBCollators & collators,
+    AggregateDescriptions & aggregate_descriptions,
+    bool group_by_collation_sensitive)
 {
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
     {
@@ -958,14 +995,15 @@ void DAGExpressionAnalyzer::appendJoin(
     actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
 }
 /// return true if some actions is needed
-bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(ExpressionActionsChain & chain,
-                                                        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-                                                        const DataTypes & key_types,
-                                                        Names & key_names,
-                                                        bool left,
-                                                        bool is_right_out_join,
-                                                        const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-                                                        String & filter_column_name)
+bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
+    ExpressionActionsChain & chain,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+    const DataTypes & key_types,
+    Names & key_names,
+    bool left,
+    bool is_right_out_join,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
+    String & filter_column_name)
 {
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
@@ -1117,7 +1155,13 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     }
 }
 
-void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain, const std::vector<tipb::FieldType> & schema, const std::vector<Int32> & output_offsets, const String & column_prefix, bool keep_session_timezone_info, NamesWithAliases & final_project)
+void DAGExpressionAnalyzer::generateFinalProject(
+    ExpressionActionsChain & chain,
+    const std::vector<tipb::FieldType> & schema,
+    const std::vector<Int32> & output_offsets,
+    const String & column_prefix,
+    bool keep_session_timezone_info,
+    NamesWithAliases & final_project)
 {
     if (unlikely(!keep_session_timezone_info && output_offsets.empty()))
         throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
