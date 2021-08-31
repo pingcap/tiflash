@@ -1,9 +1,10 @@
 #pragma once
 
+#include <common/defines.h>
+
 #include <cmath>
 #include <limits>
 #include <type_traits>
-#include <common/defines.h>
 
 template <typename T>
 inline bool isNaN(T x)

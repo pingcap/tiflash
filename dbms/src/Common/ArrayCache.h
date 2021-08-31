@@ -1,21 +1,21 @@
 #pragma once
 
-#include <atomic>
-#include <mutex>
-#include <list>
-#include <memory>
-#include <random>
-#include <pcg_random.hpp>
-#include <unordered_map>
+#include <Common/Exception.h>
+#include <Common/formatReadable.h>
+#include <Common/randomSeed.h>
 #include <sys/mman.h>
+
+#include <atomic>
 #include <boost/intrusive/list.hpp>
 #include <boost/intrusive/set.hpp>
 #include <boost/noncopyable.hpp>
 #include <ext/scope_guard.h>
-
-#include <Common/Exception.h>
-#include <Common/randomSeed.h>
-#include <Common/formatReadable.h>
+#include <list>
+#include <memory>
+#include <mutex>
+#include <pcg_random.hpp>
+#include <random>
+#include <unordered_map>
 
 /// Required for older Darwin builds, that lack definition of MAP_ANONYMOUS
 #ifndef MAP_ANONYMOUS
@@ -25,12 +25,12 @@
 
 namespace DB
 {
-    namespace ErrorCodes
-    {
-        extern const int CANNOT_ALLOCATE_MEMORY;
-        extern const int CANNOT_MUNMAP;
-    }
-}
+namespace ErrorCodes
+{
+extern const int CANNOT_ALLOCATE_MEMORY;
+extern const int CANNOT_MUNMAP;
+} // namespace ErrorCodes
+} // namespace DB
 
 
 /** Cache for variable length memory regions (contiguous arrays of bytes).
@@ -89,7 +89,10 @@ private:
     using SizeMultimapHook = boost::intrusive::set_base_hook<boost::intrusive::tag<SizeMultimapTag>>;
     using KeyMapHook = boost::intrusive::set_base_hook<boost::intrusive::tag<KeyMapTag>>;
 
-    struct RegionMetadata : public LRUListHook, AdjacencyListHook, SizeMultimapHook, KeyMapHook
+    struct RegionMetadata : public LRUListHook
+        , AdjacencyListHook
+        , SizeMultimapHook
+        , KeyMapHook
     {
         Key key;
         Payload payload;
@@ -99,7 +102,7 @@ private:
         size_t refcount = 0;
         void * chunk;
 
-        bool operator< (const RegionMetadata & other) const { return size < other.size; }
+        bool operator<(const RegionMetadata & other) const { return size < other.size; }
 
         bool isFree() const { return SizeMultimapHook::is_linked(); }
 
@@ -114,32 +117,38 @@ private:
         }
 
     private:
-         RegionMetadata() = default;
-         ~RegionMetadata() = default;
+        RegionMetadata() = default;
+        ~RegionMetadata() = default;
     };
 
     struct RegionCompareBySize
     {
-        bool operator() (const RegionMetadata & a, const RegionMetadata & b) const { return a.size < b.size; }
-        bool operator() (const RegionMetadata & a, size_t size) const { return a.size < size; }
-        bool operator() (size_t size, const RegionMetadata & b) const { return size < b.size; }
+        bool operator()(const RegionMetadata & a, const RegionMetadata & b) const { return a.size < b.size; }
+        bool operator()(const RegionMetadata & a, size_t size) const { return a.size < size; }
+        bool operator()(size_t size, const RegionMetadata & b) const { return size < b.size; }
     };
 
     struct RegionCompareByKey
     {
-        bool operator() (const RegionMetadata & a, const RegionMetadata & b) const { return a.key < b.key; }
-        bool operator() (const RegionMetadata & a, Key key) const { return a.key < key; }
-        bool operator() (Key key, const RegionMetadata & b) const { return key < b.key; }
+        bool operator()(const RegionMetadata & a, const RegionMetadata & b) const { return a.key < b.key; }
+        bool operator()(const RegionMetadata & a, Key key) const { return a.key < key; }
+        bool operator()(Key key, const RegionMetadata & b) const { return key < b.key; }
     };
 
     using LRUList = boost::intrusive::list<RegionMetadata,
-        boost::intrusive::base_hook<LRUListHook>, boost::intrusive::constant_time_size<true>>;
+                                           boost::intrusive::base_hook<LRUListHook>,
+                                           boost::intrusive::constant_time_size<true>>;
     using AdjacencyList = boost::intrusive::list<RegionMetadata,
-        boost::intrusive::base_hook<AdjacencyListHook>, boost::intrusive::constant_time_size<true>>;
+                                                 boost::intrusive::base_hook<AdjacencyListHook>,
+                                                 boost::intrusive::constant_time_size<true>>;
     using SizeMultimap = boost::intrusive::multiset<RegionMetadata,
-        boost::intrusive::compare<RegionCompareBySize>, boost::intrusive::base_hook<SizeMultimapHook>, boost::intrusive::constant_time_size<true>>;
+                                                    boost::intrusive::compare<RegionCompareBySize>,
+                                                    boost::intrusive::base_hook<SizeMultimapHook>,
+                                                    boost::intrusive::constant_time_size<true>>;
     using KeyMap = boost::intrusive::set<RegionMetadata,
-        boost::intrusive::compare<RegionCompareByKey>, boost::intrusive::base_hook<KeyMapHook>, boost::intrusive::constant_time_size<true>>;
+                                         boost::intrusive::compare<RegionCompareByKey>,
+                                         boost::intrusive::base_hook<KeyMapHook>,
+                                         boost::intrusive::constant_time_size<true>>;
 
     /** Each region could be:
       * - free: not holding any data;
@@ -169,7 +178,8 @@ private:
         void * ptr;
         size_t size;
 
-        Chunk(size_t size_, void * address_hint) : size(size_)
+        Chunk(size_t size_, void * address_hint)
+            : size(size_)
         {
             ptr = mmap(address_hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             if (MAP_FAILED == ptr)
@@ -182,7 +192,9 @@ private:
                 DB::throwFromErrno("Allocator: Cannot munmap " + formatReadableSizeWithBinarySuffix(size) + ".", DB::ErrorCodes::CANNOT_MUNMAP);
         }
 
-        Chunk(Chunk && other) : ptr(other.ptr), size(other.size)
+        Chunk(Chunk && other)
+            : ptr(other.ptr)
+            , size(other.size)
         {
             other.ptr = nullptr;
         }
@@ -193,7 +205,7 @@ private:
 
     size_t total_chunks_size = 0;
     size_t total_allocated_size = 0;
-    std::atomic<size_t> total_size_currently_initialized {0};
+    std::atomic<size_t> total_size_currently_initialized{0};
     size_t total_size_in_use = 0;
 
     /// Max size of cache.
@@ -204,9 +216,9 @@ private:
     static constexpr size_t min_chunk_size = 64 * 1024 * 1024;
 
     /// Cache stats.
-    std::atomic<size_t> hits {0};            /// Value was in cache.
-    std::atomic<size_t> concurrent_hits {0}; /// Value was calculated by another thread and we was waiting for it. Also summed in hits.
-    std::atomic<size_t> misses {0};
+    std::atomic<size_t> hits{0}; /// Value was in cache.
+    std::atomic<size_t> concurrent_hits{0}; /// Value was calculated by another thread and we was waiting for it. Also summed in hits.
+    std::atomic<size_t> misses{0};
 
     /// For whole lifetime.
     size_t allocations = 0;
@@ -222,7 +234,9 @@ public:
     /// In destructor, decreases refcount and if it becomes zero, insert region to lru_list.
     struct Holder : private boost::noncopyable
     {
-        Holder(ArrayCache & cache_, RegionMetadata & region_) : cache(cache_), region(region_)
+        Holder(ArrayCache & cache_, RegionMetadata & region_)
+            : cache(cache_)
+            , region(region_)
         {
             if (++region.refcount == 1 && region.LRUListHook::is_linked())
                 cache.lru_list.erase(cache.lru_list.iterator_to(region));
@@ -250,12 +264,14 @@ public:
     };
 
     using HolderPtr = std::shared_ptr<Holder>;
-private:
 
+private:
     /// Represents pending insertion attempt.
     struct InsertToken
     {
-        InsertToken(ArrayCache & cache_) : cache(cache_) {}
+        InsertToken(ArrayCache & cache_)
+            : cache(cache_)
+        {}
 
         std::mutex mutex;
         bool cleaned_up = false; /// Protected by the token mutex
@@ -509,7 +525,7 @@ private:
             return allocateFromFreeRegion(*free_region, size);
         }
 
-//        std::cerr << "Requested size: " << size << "\n";
+        //        std::cerr << "Requested size: " << size << "\n";
 
         /// Evict something from cache and continue.
         while (true)
@@ -530,7 +546,8 @@ private:
 
 
 public:
-    ArrayCache(size_t max_total_size_) : max_total_size(max_total_size_)
+    ArrayCache(size_t max_total_size_)
+        : max_total_size(max_total_size_)
     {
     }
 
@@ -720,4 +737,5 @@ public:
     }
 };
 
-template <typename Key, typename Payload> constexpr size_t ArrayCache<Key, Payload>::min_chunk_size;
+template <typename Key, typename Payload>
+constexpr size_t ArrayCache<Key, Payload>::min_chunk_size;
