@@ -17,11 +17,8 @@ void MPPHandler::handleError(const MPPTaskPtr & task, String error)
 {
     try
     {
-        if (task != nullptr)
-        {
-            task->closeAllTunnel(error);
-            task->unregisterTask();
-        }
+        if (task)
+            task->cancel(error);
     }
     catch (...)
     {

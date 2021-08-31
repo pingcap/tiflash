@@ -50,19 +50,9 @@ public:
 
     bool isRootMPPTask() const { return dag_context->isRootMPPTask(); }
 
-    TaskStatus getStatus() const { return static_cast<TaskStatus>(status.load()); }
-
-    void unregisterTask();
+    TaskStatus getStatus() const { return status.load(); }
 
     void cancel(const String & reason);
-
-    /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
-    /// without waiting the tunnel to be connected
-    void closeAllTunnel(const String & reason);
-
-    void finishWrite();
-
-    void writeErrToAllTunnel(const String & e);
 
     std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
 
@@ -82,6 +72,18 @@ private:
 
     void runImpl();
 
+    void unregisterTask();
+
+    void writeErrToAllTunnels(const String & e);
+
+    /// Similar to `writeErrToAllTunnels`, but it just try to write the error message to tunnel
+    /// without waiting the tunnel to be connected
+    void closeAllTunnels(const String & reason);
+
+    void finishWrite();
+
+    bool switchStatus(TaskStatus from, TaskStatus to);
+
     Context context;
 
     std::unique_ptr<tipb::DAGRequest> dag_req;
@@ -94,7 +96,7 @@ private:
 
     MPPTaskId id;
 
-    std::atomic<Int32> status{INITIALIZING};
+    std::atomic<TaskStatus> status{INITIALIZING};
 
     mpp::TaskMeta meta;
 
