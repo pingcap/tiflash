@@ -3,8 +3,6 @@
 #include <Functions/FunctionFactory.h>
 
 
-#include <iostream>
-
 namespace DB
 {
 

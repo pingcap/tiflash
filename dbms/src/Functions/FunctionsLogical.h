@@ -8,7 +8,7 @@
 #include <Common/typeid_cast.h>
 #include <IO/WriteHelpers.h>
 #include <Functions/IFunction.h>
-#include <Functions/FunctionsArithmetic.h>
+#include <Functions/FunctionsUnaryArithmetic.h>
 #include <Functions/FunctionHelpers.h>
 #include <type_traits>
 

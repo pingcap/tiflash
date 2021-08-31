@@ -6,11 +6,14 @@
 #include <Functions/FunctionHelpers.h>
 #include <IO/WriteHelpers.h>
 
-#include "FunctionsArithmetic.h"
-
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+extern const int ILLEGAL_COLUMN;
+}
 
 const ColumnConst * checkAndGetColumnConstStringOrFixedString(const IColumn * column)
 {
