@@ -32,6 +32,7 @@ extern const int UNSUPPORTED_METHOD;
 
 static String genFuncString(const String & func_name, const Names & argument_names, const TiDB::TiDBCollators & collators)
 {
+    assert(!collators.empty());
     std::stringstream ss;
     ss << func_name << "(";
     bool first = true;
@@ -53,7 +54,7 @@ static String genFuncString(const String & func_name, const Names & argument_nam
         if (collator == nullptr)
             ss << "_0";
         else
-            ss << "_" << std::to_string(collator->getCollatorId());
+            ss << "_" << collator->getCollatorId();
     }
     ss << " ";
     return ss.str();
