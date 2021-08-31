@@ -30,7 +30,8 @@ public:
                                UInt64 max_version_,
                                size_t expected_block_size_,
                                bool is_raw_,
-                               bool do_range_filter_for_raw_)
+                               bool do_range_filter_for_raw_,
+                               const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
         : dm_context(dm_context_)
         , task_pool(task_pool_)
         , after_segment_read(after_segment_read_)
@@ -41,8 +42,8 @@ public:
         , expected_block_size(expected_block_size_)
         , is_raw(is_raw_)
         , do_range_filter_for_raw(do_range_filter_for_raw_)
-        , log(&Poco::Logger::get("DMSegmentThreadInputStream"))
     {
+        log = log_ != nullptr ? log_ : getLogWithPrefix(log_, getName());
     }
 
     String getName() const override { return "DeltaMergeSegmentThread"; }
@@ -128,7 +129,7 @@ private:
 
     SegmentPtr cur_segment;
 
-    Poco::Logger * log;
+    std::shared_ptr<LogWithPrefix> log;
 };
 
 } // namespace DM
