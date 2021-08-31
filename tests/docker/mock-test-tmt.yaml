@@ -6,7 +6,6 @@ services:
     image: hub.pingcap.net/tiflash/tiflash-ci-base
     volumes:
       - ./config/tics_tmt.toml:/config.toml:ro
-      - ./config/users.toml:/users.toml:ro
       - ./data/tics_tmt:/tmp/tiflash/data
       - ./log/tics_tmt:/tmp/tiflash/log
       - ..:/tests

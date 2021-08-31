@@ -105,3 +105,7 @@ http_port = 8123
     # The way to apply snapshot data
     # The value is one of "block" / "file1" / "file2".
     method = "file1"
+
+[profiles]
+[profiles.default]
+max_memory_usage = 10000000000
