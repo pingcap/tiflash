@@ -104,8 +104,8 @@ storage_engine = "dt"
 [raft.snapshot]
 # The way to apply snapshot data
 # The value is one of "block" / "file1" / "file2".
-method = "file1"
+# method = "file1"
 
 [profiles]
 [profiles.default]
-max_memory_usage = 10000000000
+# max_memory_usage = 0
