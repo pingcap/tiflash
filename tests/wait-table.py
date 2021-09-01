@@ -48,9 +48,8 @@ while True:
     if time_used >= timeout:
         break
     else:
-        # if it is near to timeout, it will not sleep any more.
-        if time_used + sleep_time < timeout:
-            time.sleep(sleep_time)
+        # if it is near to timeout, sleep time will be shorter and then give it the last try.
+        time.sleep(min(sleep_time, timeout - time_used))
 
 time_used = time.time() - start_time
 
