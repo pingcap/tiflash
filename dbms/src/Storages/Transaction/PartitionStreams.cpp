@@ -291,7 +291,7 @@ static inline std::pair<UInt64, UInt64> parseTS(UInt64 ts)
     return {physical, logical};
 }
 
-static inline void reportUpstreamLatency(const RegionDataReadInfoList & data_list_read)
+static inline void reportUpstreamLatency(const Context & context, const RegionDataReadInfoList & data_list_read)
 {
     if (unlikely(data_list_read.empty()))
     {
@@ -304,7 +304,8 @@ static inline void reportUpstreamLatency(const RegionDataReadInfoList & data_lis
     if (likely(curr_ms > physical_ms))
     {
         auto latency_ms = curr_ms - physical_ms;
-        GET_METRIC(tiflash_raft_upstream_latency, type_write).Observe(static_cast<double>(latency_ms) / 1000.0);
+        auto metrics = context.getTiFlashMetrics();
+        GET_METRIC(metrics, tiflash_raft_upstream_latency, type_write).Observe(static_cast<double>(latency_ms) / 1000.0);
     }
 }
 
@@ -325,7 +326,7 @@ void RegionTable::writeBlockByRegion(
     if (!data_list_read)
         return;
 
-    reportUpstreamLatency(*data_list_read);
+    reportUpstreamLatency(context, *data_list_read);
     writeRegionDataToStorage(context, region, *data_list_read, log);
 
     RemoveRegionCommitCache(region, *data_list_read, lock_region);

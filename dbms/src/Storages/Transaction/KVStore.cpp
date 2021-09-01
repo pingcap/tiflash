@@ -344,7 +344,8 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 {
     Stopwatch watch;
     SCOPE_EXIT({
-        GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin).Observe(watch.elapsedSeconds());
+        auto metrics = tmt.getContext().getTiFlashMetrics();
+        GET_METRIC(metrics, tiflash_raft_apply_write_command_duration_seconds, type_admin).Observe(watch.elapsedSeconds());
     });
     auto type = request.cmd_type();
     switch (request.cmd_type())
