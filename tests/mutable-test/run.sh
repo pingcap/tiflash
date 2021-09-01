@@ -11,6 +11,7 @@ docker-compose -f mock-test-tmt.yaml down
 clean_data_log
 
 docker-compose -f mock-test-tmt.yaml up -d
+wait_tiflash_env
 docker-compose -f mock-test-tmt.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh mutable-test'
 
 docker-compose -f mock-test-tmt.yaml down

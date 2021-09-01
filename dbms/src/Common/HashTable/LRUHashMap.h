@@ -1,29 +1,25 @@
 #pragma once
 
-#include <common/types.h>
-
-#include <boost/intrusive/trivial_value_traits.hpp>
-#include <boost/intrusive/list.hpp>
-#include <boost/noncopyable.hpp>
-
-#include <Core/Defines.h>
 #include <Common/Exception.h>
 #include <Common/HashTable/HashMap.h>
 #include <Common/PODArray.h>
+#include <Core/Defines.h>
+#include <common/types.h>
+
+#include <boost/intrusive/list.hpp>
+#include <boost/intrusive/trivial_value_traits.hpp>
+#include <boost/noncopyable.hpp>
 
 
 template <typename TKey, typename TMapped, typename Hash, bool save_hash_in_cell>
-struct LRUHashMapCell :
-    public std::conditional_t<save_hash_in_cell,
-        HashMapCellWithSavedHash<TKey, TMapped, Hash, HashTableNoState>,
-        HashMapCell<TKey, TMapped, Hash, HashTableNoState>>
+struct LRUHashMapCell : public std::conditional_t<save_hash_in_cell, HashMapCellWithSavedHash<TKey, TMapped, Hash, HashTableNoState>, HashMapCell<TKey, TMapped, Hash, HashTableNoState>>
 {
 public:
     using Key = TKey;
 
     using Base = std::conditional_t<save_hash_in_cell,
-        HashMapCellWithSavedHash<TKey, TMapped, Hash, HashTableNoState>,
-        HashMapCell<TKey, TMapped, Hash, HashTableNoState>>;
+                                    HashMapCellWithSavedHash<TKey, TMapped, Hash, HashTableNoState>,
+                                    HashMapCell<TKey, TMapped, Hash, HashTableNoState>>;
 
     using Mapped = typename Base::Mapped;
     using State = typename Base::State;
@@ -57,14 +53,14 @@ public:
     }
 
 private:
-    template<typename, typename, typename, bool>
+    template <typename, typename, typename, bool>
     friend class LRUHashMapCellNodeTraits;
 
     LRUHashMapCell * next = nullptr;
     LRUHashMapCell * prev = nullptr;
 };
 
-template<typename Key, typename Value, typename Hash, bool save_hash_in_cell>
+template <typename Key, typename Value, typename Hash, bool save_hash_in_cell>
 struct LRUHashMapCellNodeTraits
 {
     using node = LRUHashMapCell<Key, Value, Hash, save_hash_in_cell>;
@@ -78,13 +74,7 @@ struct LRUHashMapCellNodeTraits
 };
 
 template <typename TKey, typename TValue, typename Disposer, typename Hash, bool save_hash_in_cells>
-class LRUHashMapImpl :
-    private HashMapTable<
-        TKey,
-        LRUHashMapCell<TKey, TValue, Hash, save_hash_in_cells>,
-        Hash,
-        HashTableGrower<>,
-        HashTableAllocator>
+class LRUHashMapImpl : private HashMapTable<TKey, LRUHashMapCell<TKey, TValue, Hash, save_hash_in_cells>, Hash, HashTableGrower<>, HashTableAllocator>
 {
     using Base = HashMapTable<
         TKey,
@@ -92,16 +82,16 @@ class LRUHashMapImpl :
         Hash,
         HashTableGrower<>,
         HashTableAllocator>;
+
 public:
     using Key = TKey;
     using Value = TValue;
 
     using Cell = LRUHashMapCell<Key, Value, Hash, save_hash_in_cells>;
 
-    using LRUHashMapCellIntrusiveValueTraits =
-        boost::intrusive::trivial_value_traits<
-            LRUHashMapCellNodeTraits<Key, Value, Hash, save_hash_in_cells>,
-            boost::intrusive::link_mode_type::normal_link>;
+    using LRUHashMapCellIntrusiveValueTraits = boost::intrusive::trivial_value_traits<
+        LRUHashMapCellNodeTraits<Key, Value, Hash, save_hash_in_cells>,
+        boost::intrusive::link_mode_type::normal_link>;
 
     using LRUList = boost::intrusive::list<
         Cell,
@@ -139,8 +129,8 @@ public:
         return emplace(key, std::move(value));
     }
 
-    template<typename ...Args>
-    std::pair<Cell *, bool> emplace(const Key & key, Args&&... args)
+    template <typename... Args>
+    std::pair<Cell *, bool> emplace(const Key & key, Args &&... args)
     {
         size_t hash_value = Base::hash(key);
 

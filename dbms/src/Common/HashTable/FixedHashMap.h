@@ -17,8 +17,13 @@ struct FixedHashMapCell
     Mapped mapped;
 
     FixedHashMapCell() {} //-V730
-    FixedHashMapCell(const Key &, const State &) : full(true) {}
-    FixedHashMapCell(const value_type & value_, const State &) : full(true), mapped(value_.second) {}
+    FixedHashMapCell(const Key &, const State &)
+        : full(true)
+    {}
+    FixedHashMapCell(const value_type & value_, const State &)
+        : full(true)
+        , mapped(value_.second)
+    {}
 
     const VoidKey getKey() const { return {}; }
     Mapped & getMapped() { return mapped; }
@@ -32,7 +37,10 @@ struct FixedHashMapCell
     struct CellExt
     {
         CellExt() {} //-V730
-        CellExt(Key && key_, const FixedHashMapCell * ptr_) : key(key_), ptr(const_cast<FixedHashMapCell *>(ptr_)) {}
+        CellExt(Key && key_, const FixedHashMapCell * ptr_)
+            : key(key_)
+            , ptr(const_cast<FixedHashMapCell *>(ptr_))
+        {}
         void update(Key && key_, const FixedHashMapCell * ptr_)
         {
             key = key_;
@@ -63,7 +71,9 @@ struct FixedHashMapImplicitZeroCell
 
     FixedHashMapImplicitZeroCell() {}
     FixedHashMapImplicitZeroCell(const Key &, const State &) {}
-    FixedHashMapImplicitZeroCell(const value_type & value_, const State &) : mapped(value_.second) {}
+    FixedHashMapImplicitZeroCell(const value_type & value_, const State &)
+        : mapped(value_.second)
+    {}
 
     const VoidKey getKey() const { return {}; }
     Mapped & getMapped() { return mapped; }
@@ -77,7 +87,10 @@ struct FixedHashMapImplicitZeroCell
     struct CellExt
     {
         CellExt() {} //-V730
-        CellExt(Key && key_, const FixedHashMapImplicitZeroCell * ptr_) : key(key_), ptr(const_cast<FixedHashMapImplicitZeroCell *>(ptr_)) {}
+        CellExt(Key && key_, const FixedHashMapImplicitZeroCell * ptr_)
+            : key(key_)
+            , ptr(const_cast<FixedHashMapImplicitZeroCell *>(ptr_))
+        {}
         void update(Key && key_, const FixedHashMapImplicitZeroCell * ptr_)
         {
             key = key_;
