@@ -1,7 +1,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <DataTypes/DataTypeDecimal.h>
-#include <Functions/FunctionsArithmetic.h>
+#include <Functions/FunctionsBinaryArithmetic.h>
 #include <Interpreters/Context.h>
 
 namespace DB

@@ -15,13 +15,13 @@
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/NumberTraits.h>
+#include <Functions/DataTypeFromFieldType.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 #include <Functions/castTypeToEither.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/ExpressionActions.h>
-#include <common/intExp.h>
 
 #include <boost/integer/common_factor.hpp>
 #include <ext/range.h>
@@ -44,7 +44,7 @@ namespace ErrorCodes
 template <bool B, typename T1, typename T2> using If = std::conditional_t<B, T1, T2>;
 
 /** Arithmetic operations: +, -, *, /, %,
-  * intDiv (integer division), unary minus.
+  * intDiv (integer division).
   * Bitwise operations: |, &, ^, ~.
   * Etc.
   */
@@ -171,24 +171,6 @@ struct BinaryOperationImplBase
 template <typename A, typename B, typename Op, typename ResultType = typename Op::ResultType>
 struct BinaryOperationImpl : BinaryOperationImplBase<A, B, Op, ResultType>
 {
-};
-
-template <typename A, typename Op>
-struct UnaryOperationImpl
-{
-    using ResultType = typename Op::ResultType;
-
-    static void NO_INLINE vector(const PaddedPODArray<A> & a, PaddedPODArray<ResultType> & c)
-    {
-        size_t size = a.size();
-        for (size_t i = 0; i < size; ++i)
-            c[i] = Op::apply(a[i]);
-    }
-
-    static void constant(A a, ResultType & c)
-    {
-        c = Op::apply(a);
-    }
 };
 
 template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct PlusImpl;
@@ -1106,60 +1088,6 @@ template <typename A, typename B>
 using GreatestImpl = std::conditional_t<!NumberTraits::LeastGreatestSpecialCase<A, B>, GreatestBaseImpl<A, B>, GreatestSpecialImpl<A, B>>;
 
 
-template <typename A>
-struct NegateImpl
-{
-    using ResultType = typename NumberTraits::ResultOfNegate<A>::Type;
-
-    static inline ResultType apply(A a)
-    {
-        if constexpr (IsDecimal<A>) {
-            return static_cast<ResultType>(-a.value);
-        } else {
-            return -static_cast<ResultType>(a);
-        }
-    }
-};
-
-template <typename A>
-struct BitNotImpl
-{
-    using ResultType = typename NumberTraits::ResultOfBitNot<A>::Type;
-
-    static inline ResultType apply(A a [[maybe_unused]])
-    {
-        if constexpr (IsDecimal<A>)
-            throw Exception("unimplement");
-        else
-            return ~static_cast<ResultType>(a);
-    }
-};
-
-template <typename A>
-struct AbsImpl
-{
-    using ResultType = typename NumberTraits::ResultOfAbs<A>::Type;
-
-    static inline ResultType apply(A a)
-    {
-        if constexpr (std::is_integral_v<A> && std::is_signed_v<A>)
-        {
-            // keep the same behavior as mysql and tidb, even though error no is not the same.
-            if unlikely(a == INT64_MIN)
-            {
-                throw Exception("BIGINT value is out of range in 'abs(-9223372036854775808)'");
-            }
-            return a < 0 ? static_cast<ResultType>(~a) + 1 : a;
-        }
-        else if constexpr (std::is_integral_v<A> && std::is_unsigned_v<A>)
-            return static_cast<ResultType>(a);
-        else if constexpr (std::is_floating_point_v<A>)
-            return static_cast<ResultType>(std::abs(a));
-        else if constexpr (IsDecimal<A>)
-            return a.value < 0 ? -a.value : a.value;
-    }
-};
-
 template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct GCDImpl;
 template <typename A, typename B>
 struct GCDImpl<A, B, false>
@@ -1238,74 +1166,9 @@ struct LCMImpl<A,B,true>
     }
 };
 
-template <typename A>
-struct IntExp2Impl
-{
-    using ResultType = UInt64;
-
-    static inline ResultType apply(A a)
-    {
-        return intExp2(a);
-    }
-};
-
-template <typename A>
-struct IntExp2Impl<Decimal<A>>
-{
-    using ResultType = UInt64;
-
-    static inline ResultType apply(Decimal<A>)
-    {
-        return 0;
-    }
-};
-
-template <typename A>
-struct IntExp10Impl
-{
-    using ResultType = UInt64;
-
-    static inline ResultType apply(A a)
-    {
-        return intExp10(a);
-    }
-};
-
-template <typename A>
-struct IntExp10Impl<Decimal<A>>
-{
-    using ResultType = UInt64;
-
-    static inline ResultType apply(Decimal<A> a)
-    {
-        return intExp10(a);
-    }
-};
-
 /// these ones for better semantics
 template <typename T> using Then = T;
 template <typename T> using Else = T;
-
-/// Used to indicate undefined operation
-struct InvalidType;
-
-template <typename T>
-struct DataTypeFromFieldType
-{
-    using Type = DataTypeNumber<T>;
-};
-
-template <>
-struct DataTypeFromFieldType<NumberTraits::Error>
-{
-    using Type = InvalidType;
-};
-
-template<typename T>
-struct DataTypeFromFieldType<Decimal<T>>
-{
-    using Type = DataTypeDecimal<T>;
-};
 
 /// Binary operations for Decimals need scale args
 /// +|- scale one of args (which scale factor is not 1). ScaleR = oneof(Scale1, Scale2);
@@ -1886,7 +1749,7 @@ private:
         }
         if (typeid_cast<const T0 *>(left_type.get()))
         {
-            if (   checkRightType<T0, DataTypeDate>(arguments, type_res)
+            if (checkRightType<T0, DataTypeDate>(arguments, type_res)
                 || checkRightType<T0, DataTypeDateTime>(arguments, type_res)
                 || checkRightType<T0, DataTypeUInt8>(arguments, type_res)
                 || checkRightType<T0, DataTypeUInt16>(arguments, type_res)
@@ -1930,7 +1793,8 @@ private:
             return {};
 
         if (interval_arg == 0 && function_is_minus)
-            throw Exception("Wrong order of arguments for function " + getName() + ": argument of type Interval cannot be first.",
+            throw Exception(
+                "Wrong order of arguments for function " + getName() + ": argument of type Interval cannot be first.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         const DataTypeDate * date_data_type = checkAndGetDataType<DataTypeDate>(interval_arg == 0 ? type1.get() : type0.get());
@@ -1939,7 +1803,8 @@ private:
         {
             date_time_data_type = checkAndGetDataType<DataTypeDateTime>(interval_arg == 0 ? type1.get() : type0.get());
             if (!date_time_data_type)
-                throw Exception("Wrong argument types for function " + getName() + ": if one argument is Interval, then another must be Date or DateTime.",
+                throw Exception(
+                    "Wrong argument types for function " + getName() + ": if one argument is Interval, then another must be Date or DateTime.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
@@ -1994,7 +1859,7 @@ public:
                 return type_res;
         }
 
-        if (!( checkLeftType<DataTypeDate>(arguments, type_res)
+        if (!(checkLeftType<DataTypeDate>(arguments, type_res)
             || checkLeftType<DataTypeDateTime>(arguments, type_res)
             || checkLeftType<DataTypeUInt8>(arguments, type_res)
             || checkLeftType<DataTypeUInt16>(arguments, type_res)
@@ -2114,10 +1979,11 @@ public:
             using ResultDataType = std::decay_t<decltype(result_type)>;
             constexpr bool result_is_decimal = IsDecimal<typename ResultDataType::FieldType>;
             constexpr bool is_multiply [[maybe_unused]] = std::is_same_v<Op<UInt8, UInt8>, MultiplyImpl<UInt8, UInt8>>;
-            constexpr bool is_division [[maybe_unused]] = std::is_same_v<Op<UInt8, UInt8>, DivideFloatingImpl<UInt8, UInt8>> ||
-                                            std::is_same_v<Op<UInt8, UInt8>, TiDBDivideFloatingImpl<UInt8, UInt8>> ||
-                                            std::is_same_v<Op<UInt8, UInt8>, DivideIntegralImpl<UInt8, UInt8>> ||
-                                            std::is_same_v<Op<UInt8, UInt8>, DivideIntegralOrZeroImpl<UInt8, UInt8>>;
+            constexpr bool is_division [[maybe_unused]] =
+                std::is_same_v<Op<UInt8, UInt8>, DivideFloatingImpl<UInt8, UInt8>>
+                || std::is_same_v<Op<UInt8, UInt8>, TiDBDivideFloatingImpl<UInt8, UInt8>>
+                || std::is_same_v<Op<UInt8, UInt8>, DivideIntegralImpl<UInt8, UInt8>>
+                || std::is_same_v<Op<UInt8, UInt8>, DivideIntegralOrZeroImpl<UInt8, UInt8>>;
 
             using T0 = typename LeftDataType::FieldType;
             using T1 = typename RightDataType::FieldType;
@@ -2388,152 +2254,7 @@ public:
     }
 };
 
-template <typename FunctionName>
-struct FunctionUnaryArithmeticMonotonicity;
-
-
-template <template <typename> class Op, typename Name, bool is_injective>
-class FunctionUnaryArithmetic : public IFunction
-{
-public:
-    static constexpr auto name = Name::name;
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionUnaryArithmetic>(); }
-
-private:
-    template <typename T0>
-    bool checkType(const DataTypes & arguments, DataTypePtr & result) const
-    {
-        if (typeid_cast<const T0 *>(arguments[0].get()))
-        {
-            if constexpr (IsDecimal<typename T0::FieldType>) {
-                auto t = static_cast<const T0 *> (arguments[0].get());
-                result = std::make_shared<T0>(t->getPrec(), t->getScale());
-            } else {
-                result = std::make_shared<typename DataTypeFromFieldType<typename Op<typename T0::FieldType>::ResultType>::Type>();
-            }
-            return true;
-        }
-        return false;
-    }
-
-    template <typename T0>
-    bool executeType(Block & block, const ColumnNumbers & arguments, size_t result)
-    {
-        if (const ColumnVector<T0> * col = checkAndGetColumn<ColumnVector<T0>>(block.getByPosition(arguments[0]).column.get()))
-        {
-            using ResultType = typename Op<T0>::ResultType;
-
-            auto col_res = ColumnVector<ResultType>::create();
-
-            typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
-            vec_res.resize(col->getData().size());
-            UnaryOperationImpl<T0, Op<T0>>::vector(col->getData(), vec_res);
-
-            block.getByPosition(result).column = std::move(col_res);
-            return true;
-        }
-
-        return false;
-    }
-
-    template <typename T0>
-    bool executeDecimalType(Block & block, const ColumnNumbers & arguments, size_t result) {
-        if (const ColumnDecimal<T0> * col = checkAndGetColumn<ColumnDecimal<T0>>(block.getByPosition(arguments[0]).column.get()))
-        {
-            using ResultType = typename Op<T0>::ResultType;
-
-            if constexpr (IsDecimal<ResultType>) {
-                auto col_res = ColumnDecimal<ResultType>::create(0, col->getData().getScale());
-
-                typename ColumnDecimal<ResultType>::Container & vec_res = col_res->getData();
-                vec_res.resize(col->getData().size());
-                UnaryOperationImpl<T0, Op<T0>>::vector(col->getData(), vec_res);
-
-                block.getByPosition(result).column = std::move(col_res);
-                return true;
-            } else {
-                auto col_res = ColumnVector<ResultType>::create();
-
-                typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
-                vec_res.resize(col->getData().size());
-                UnaryOperationImpl<T0, Op<T0>>::vector(col->getData(), vec_res);
-
-                block.getByPosition(result).column = std::move(col_res);
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-public:
-    String getName() const override
-    {
-        return name;
-    }
-
-    size_t getNumberOfArguments() const override { return 1; }
-    bool isInjective(const Block &) override { return is_injective; }
-
-    bool useDefaultImplementationForConstants() const override { return true; }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        DataTypePtr result;
-
-        if (!( checkType<DataTypeUInt8>(arguments, result)
-            || checkType<DataTypeUInt16>(arguments, result)
-            || checkType<DataTypeUInt32>(arguments, result)
-            || checkType<DataTypeUInt64>(arguments, result)
-            || checkType<DataTypeInt8>(arguments, result)
-            || checkType<DataTypeInt16>(arguments, result)
-            || checkType<DataTypeInt32>(arguments, result)
-            || checkType<DataTypeInt64>(arguments, result)
-            || checkType<DataTypeFloat32>(arguments, result)
-            || checkType<DataTypeDecimal32>(arguments, result)
-            || checkType<DataTypeDecimal64>(arguments, result)
-            || checkType<DataTypeDecimal128>(arguments, result)
-            || checkType<DataTypeDecimal256>(arguments, result)
-            || checkType<DataTypeFloat64>(arguments, result)))
-            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        return result;
-    }
-
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
-    {
-        if (!( executeType<UInt8>(block, arguments, result)
-            || executeType<UInt16>(block, arguments, result)
-            || executeType<UInt32>(block, arguments, result)
-            || executeType<UInt64>(block, arguments, result)
-            || executeType<Int8>(block, arguments, result)
-            || executeType<Int16>(block, arguments, result)
-            || executeType<Int32>(block, arguments, result)
-            || executeType<Int64>(block, arguments, result)
-            || executeDecimalType<Decimal32>(block, arguments, result)
-            || executeDecimalType<Decimal64>(block, arguments, result)
-            || executeDecimalType<Decimal128>(block, arguments, result)
-            || executeDecimalType<Decimal256>(block, arguments, result)
-            || executeType<Float32>(block, arguments, result)
-            || executeType<Float64>(block, arguments, result)))
-           throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
-    }
-
-    bool hasInformationAboutMonotonicity() const override
-    {
-        return FunctionUnaryArithmeticMonotonicity<Name>::has();
-    }
-
-    Monotonicity getMonotonicityForRange(const IDataType &, const Field & left, const Field & right) const override
-    {
-        return FunctionUnaryArithmeticMonotonicity<Name>::get(left, right);
-    }
-};
-
-
+// clang-format off
 struct NamePlus                 { static constexpr auto name = "plus"; };
 struct NameMinus                { static constexpr auto name = "minus"; };
 struct NameMultiply             { static constexpr auto name = "multiply"; };
@@ -2542,25 +2263,19 @@ struct NameTiDBDivideFloating   { static constexpr auto name = "tidbDivide"; };
 struct NameDivideIntegral       { static constexpr auto name = "intDiv"; };
 struct NameDivideIntegralOrZero { static constexpr auto name = "intDivOrZero"; };
 struct NameModulo               { static constexpr auto name = "modulo"; };
-struct NameNegate               { static constexpr auto name = "negate"; };
-struct NameAbs                  { static constexpr auto name = "abs"; };
 struct NameBitAnd               { static constexpr auto name = "bitAnd"; };
 struct NameBitOr                { static constexpr auto name = "bitOr"; };
 struct NameBitXor               { static constexpr auto name = "bitXor"; };
-struct NameBitNot               { static constexpr auto name = "bitNot"; };
 struct NameBitShiftLeft         { static constexpr auto name = "bitShiftLeft"; };
 struct NameBitShiftRight        { static constexpr auto name = "bitShiftRight"; };
 struct NameBitRotateLeft        { static constexpr auto name = "bitRotateLeft"; };
 struct NameBitRotateRight       { static constexpr auto name = "bitRotateRight"; };
 struct NameBitTest              { static constexpr auto name = "bitTest"; };
-struct NameBitTestAny           { static constexpr auto name = "bitTestAny"; };
-struct NameBitTestAll           { static constexpr auto name = "bitTestAll"; };
 struct NameLeast                { static constexpr auto name = "least"; };
 struct NameGreatest             { static constexpr auto name = "greatest"; };
 struct NameGCD                  { static constexpr auto name = "gcd"; };
 struct NameLCM                  { static constexpr auto name = "lcm"; };
-struct NameIntExp2              { static constexpr auto name = "intExp2"; };
-struct NameIntExp10             { static constexpr auto name = "intExp10"; };
+// clang-format on
 
 template<typename A, typename B> using PlusImpl_t = PlusImpl<A, B>;
 using FunctionPlus = FunctionBinaryArithmetic<PlusImpl_t, NamePlus>;
@@ -2602,79 +2317,6 @@ template<typename A, typename B> using GCDImpl_t = GCDImpl<A, B>;
 using FunctionGCD = FunctionBinaryArithmetic<GCDImpl_t, NameGCD>;
 template<typename A, typename B> using LCMImpl_t = LCMImpl<A, B>;
 using FunctionLCM = FunctionBinaryArithmetic<LCMImpl_t, NameLCM>;
-
-using FunctionNegate = FunctionUnaryArithmetic<NegateImpl, NameNegate, true>;
-using FunctionAbs = FunctionUnaryArithmetic<AbsImpl, NameAbs, false>;
-using FunctionBitNot = FunctionUnaryArithmetic<BitNotImpl, NameBitNot, true>;
-
-/// Assumed to be injective for the purpose of query optimization, but in fact it is not injective because of possible overflow.
-using FunctionIntExp2 = FunctionUnaryArithmetic<IntExp2Impl, NameIntExp2, true>;
-using FunctionIntExp10 = FunctionUnaryArithmetic<IntExp10Impl, NameIntExp10, true>;
-
-/// Monotonicity properties for some functions.
-
-template <> struct FunctionUnaryArithmeticMonotonicity<NameNegate>
-{
-    static bool has() { return true; }
-    static IFunction::Monotonicity get(const Field &, const Field &)
-    {
-        return { true, false };
-    }
-};
-
-template <> struct FunctionUnaryArithmeticMonotonicity<NameAbs>
-{
-    static bool has() { return true; }
-    static IFunction::Monotonicity get(const Field & left, const Field & right)
-    {
-        Float64 left_float = left.isNull() ? -std::numeric_limits<Float64>::infinity() : applyVisitor(FieldVisitorConvertToNumber<Float64>(), left);
-        Float64 right_float = right.isNull() ? std::numeric_limits<Float64>::infinity() : applyVisitor(FieldVisitorConvertToNumber<Float64>(), right);
-
-        if ((left_float < 0 && right_float > 0) || (left_float > 0 && right_float < 0))
-            return {};
-
-        return { true, (left_float > 0) };
-    }
-};
-
-template <> struct FunctionUnaryArithmeticMonotonicity<NameBitNot>
-{
-    static bool has() { return false; }
-    static IFunction::Monotonicity get(const Field &, const Field &)
-    {
-        return {};
-    }
-};
-
-template <> struct FunctionUnaryArithmeticMonotonicity<NameIntExp2>
-{
-    static bool has() { return true; }
-    static IFunction::Monotonicity get(const Field & left, const Field & right)
-    {
-        Float64 left_float = left.isNull() ? -std::numeric_limits<Float64>::infinity() : applyVisitor(FieldVisitorConvertToNumber<Float64>(), left);
-        Float64 right_float = right.isNull() ? std::numeric_limits<Float64>::infinity() : applyVisitor(FieldVisitorConvertToNumber<Float64>(), right);
-
-        if (left_float < 0 || right_float > 63)
-            return {};
-
-        return { true };
-    }
-};
-
-template <> struct FunctionUnaryArithmeticMonotonicity<NameIntExp10>
-{
-    static bool has() { return true; }
-    static IFunction::Monotonicity get(const Field & left, const Field & right)
-    {
-        Float64 left_float = left.isNull() ? -std::numeric_limits<Float64>::infinity() : applyVisitor(FieldVisitorConvertToNumber<Float64>(), left);
-        Float64 right_float = right.isNull() ? std::numeric_limits<Float64>::infinity() : applyVisitor(FieldVisitorConvertToNumber<Float64>(), right);
-
-        if (left_float < 0 || right_float > 19)
-            return {};
-
-        return { true };
-    }
-};
 
 }
 
@@ -2781,6 +2423,7 @@ struct ModuloByConstantImpl
   * Can be expanded to all possible combinations, but more code is needed.
   */
 
+// clang-format off
 template <> struct BinaryOperationImpl<UInt64, UInt8, DivideIntegralImpl<UInt64, UInt8>> : DivideIntegralByConstantImpl<UInt64, UInt8> {};
 template <> struct BinaryOperationImpl<UInt64, UInt16, DivideIntegralImpl<UInt64, UInt16>> : DivideIntegralByConstantImpl<UInt64, UInt16> {};
 template <> struct BinaryOperationImpl<UInt64, UInt32, DivideIntegralImpl<UInt64, UInt32>> : DivideIntegralByConstantImpl<UInt64, UInt32> {};
@@ -2821,214 +2464,6 @@ template <> struct BinaryOperationImpl<Int32, Int8, ModuloImpl<Int32, Int8>> : M
 template <> struct BinaryOperationImpl<Int32, Int16, ModuloImpl<Int32, Int16>> : ModuloByConstantImpl<Int32, Int16> {};
 template <> struct BinaryOperationImpl<Int32, Int32, ModuloImpl<Int32, Int32>> : ModuloByConstantImpl<Int32, Int32> {};
 template <> struct BinaryOperationImpl<Int32, Int64, ModuloImpl<Int32, Int64>> : ModuloByConstantImpl<Int32, Int64> {};
-
-
-template <typename Impl, typename Name>
-struct FunctionBitTestMany : public IFunction
-{
-public:
-    static constexpr auto name = Name::name;
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionBitTestMany>(); }
-
-    String getName() const override { return name; }
-
-    bool isVariadic() const override { return true; }
-    size_t getNumberOfArguments() const override { return 0; }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        if (arguments.size() < 2)
-            throw Exception{
-                "Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be at least 2.",
-                ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
-
-        const auto first_arg = arguments.front().get();
-
-        if (!first_arg->isInteger())
-            throw Exception{
-                "Illegal type " + first_arg->getName() + " of first argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
-
-
-        for (const auto i : ext::range(1, arguments.size()))
-        {
-            const auto pos_arg = arguments[i].get();
-
-            if (!pos_arg->isUnsignedInteger())
-                throw Exception{
-                    "Illegal type " + pos_arg->getName() + " of " + toString(i) + " argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
-        }
-
-        return std::make_shared<DataTypeUInt8>();
-    }
-
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
-    {
-        const auto value_col = block.getByPosition(arguments.front()).column.get();
-
-        if (!execute<UInt8>(block, arguments, result, value_col)
-            && !execute<UInt16>(block, arguments, result, value_col)
-            && !execute<UInt32>(block, arguments, result, value_col)
-            && !execute<UInt64>(block, arguments, result, value_col)
-            && !execute<Int8>(block, arguments, result, value_col)
-            && !execute<Int16>(block, arguments, result, value_col)
-            && !execute<Int32>(block, arguments, result, value_col)
-            && !execute<Int64>(block, arguments, result, value_col))
-            throw Exception{
-                "Illegal column " + value_col->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN};
-    }
-
-private:
-    template <typename T>
-    bool execute(
-        Block & block, const ColumnNumbers & arguments, const size_t result,
-        const IColumn * const value_col_untyped)
-    {
-        if (const auto value_col = checkAndGetColumn<ColumnVector<T>>(value_col_untyped))
-        {
-            const auto size = value_col->size();
-            bool is_const;
-            const auto mask = createConstMask<T>(block, arguments, is_const);
-            const auto & val = value_col->getData();
-
-            auto out_col = ColumnVector<UInt8>::create(size);
-            auto & out = out_col->getData();
-
-            if (is_const)
-            {
-                for (const auto i : ext::range(0, size))
-                    out[i] = Impl::apply(val[i], mask);
-            }
-            else
-            {
-                const auto mask = createMask<T>(size, block, arguments);
-
-                for (const auto i : ext::range(0, size))
-                    out[i] = Impl::apply(val[i], mask[i]);
-            }
-
-            block.getByPosition(result).column = std::move(out_col);
-            return true;
-        }
-        else if (const auto value_col = checkAndGetColumnConst<ColumnVector<T>>(value_col_untyped))
-        {
-            const auto size = value_col->size();
-            bool is_const;
-            const auto mask = createConstMask<T>(block, arguments, is_const);
-            const auto val = value_col->template getValue<T>();
-
-            if (is_const)
-            {
-                block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(size, toField(Impl::apply(val, mask)));
-            }
-            else
-            {
-                const auto mask = createMask<T>(size, block, arguments);
-                auto out_col = ColumnVector<UInt8>::create(size);
-
-                auto & out = out_col->getData();
-
-                for (const auto i : ext::range(0, size))
-                    out[i] = Impl::apply(val, mask[i]);
-
-                block.getByPosition(result).column = std::move(out_col);
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
-    template <typename ValueType>
-    ValueType createConstMask(const Block & block, const ColumnNumbers & arguments, bool & is_const)
-    {
-        is_const = true;
-        ValueType mask = 0;
-
-        for (const auto i : ext::range(1, arguments.size()))
-        {
-            if (auto pos_col_const = checkAndGetColumnConst<ColumnVector<ValueType>>(block.getByPosition(arguments[i]).column.get()))
-            {
-                const auto pos = pos_col_const->template getValue<ValueType>();
-                mask = mask | (1 << pos);
-            }
-            else
-            {
-                is_const = false;
-                return {};
-            }
-        }
-
-        return mask;
-    }
-
-    template <typename ValueType>
-    PaddedPODArray<ValueType> createMask(const size_t size, const Block & block, const ColumnNumbers & arguments)
-    {
-        PaddedPODArray<ValueType> mask(size, ValueType{});
-
-        for (const auto i : ext::range(1, arguments.size()))
-        {
-            const auto pos_col = block.getByPosition(arguments[i]).column.get();
-
-            if (!addToMaskImpl<UInt8>(mask, pos_col)
-                && !addToMaskImpl<UInt16>(mask, pos_col)
-                && !addToMaskImpl<UInt32>(mask, pos_col)
-                && !addToMaskImpl<UInt64>(mask, pos_col))
-                throw Exception{
-                    "Illegal column " + pos_col->getName() + " of argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN};
-        }
-
-        return mask;
-    }
-
-    template <typename PosType, typename ValueType>
-    bool addToMaskImpl(PaddedPODArray<ValueType> & mask, const IColumn * const pos_col_untyped)
-    {
-        if (const auto pos_col = checkAndGetColumn<ColumnVector<PosType>>(pos_col_untyped))
-        {
-            const auto & pos = pos_col->getData();
-
-            for (const auto i : ext::range(0, mask.size()))
-                mask[i] = mask[i] | (1 << pos[i]);
-
-            return true;
-        }
-        else if (const auto pos_col = checkAndGetColumnConst<ColumnVector<PosType>>(pos_col_untyped))
-        {
-            const auto & pos = pos_col->template getValue<PosType>();
-            const auto new_mask = 1 << pos;
-
-            for (const auto i : ext::range(0, mask.size()))
-                mask[i] = mask[i] | new_mask;
-
-            return true;
-        }
-
-        return false;
-    }
-};
-
-
-struct BitTestAnyImpl
-{
-    template <typename A, typename B>
-    static inline UInt8 apply(A a, B b) { return (a & b) != 0; };
-};
-
-struct BitTestAllImpl
-{
-    template <typename A, typename B>
-    static inline UInt8 apply(A a, B b) { return (a & b) == b; };
-};
-
-
-using FunctionBitTestAny = FunctionBitTestMany<BitTestAnyImpl, NameBitTestAny>;
-using FunctionBitTestAll = FunctionBitTestMany<BitTestAllImpl, NameBitTestAll>;
+// clang-format on
 
 }
