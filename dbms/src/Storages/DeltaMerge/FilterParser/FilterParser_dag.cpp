@@ -84,6 +84,13 @@ ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const ColumnDefines &
     return columns_to_read[column_index].id;
 }
 
+enum class OperandType
+{
+    Unknown = 0,
+    Column,
+    Literal,
+};
+
 inline RSOperatorPtr parseTiCompareExpr( //
     const tipb::Expr &                          expr,
     const FilterParser::RSFilterType            filter_type,
@@ -99,14 +106,26 @@ inline RSOperatorPtr parseTiCompareExpr( //
 
     /// Only support `column` `op` `constant` now.
 
-    Attr             attr;
-    Field            value;
-    UInt32           state             = 0x0;
-    constexpr UInt32 state_has_column  = 0x1;
-    constexpr UInt32 state_has_literal = 0x2;
-    constexpr UInt32 state_finish      = state_has_column | state_has_literal;
-    for (const auto & child : expr.children())
+    // TODO: test cases:
+    // c1 < 100
+    // 100 < c1
+    // c1 + 1 < 100
+    // (c1 + 1) * c2 < 100
+    // c1 < 100 - 1
+    // 100 + 1 < c1
+    // c1 * c2 < 100
+    // 100 < c1 * c2
+    // ABS(c1) = 100
+    // 1 = 1
+    // c1 = c2
+
+    Attr        attr;
+    Field       value;
+    OperandType left                = OperandType::Unknown;
+    OperandType right               = OperandType::Unknown;
+    for (int32_t child_idx = 0; child_idx < expr.children_size(); child_idx++)
     {
+        const auto & child = expr.children(child_idx);
         if (isColumnExpr(child))
         {
             if (unlikely(!child.has_field_type()))
@@ -117,51 +136,84 @@ inline RSOperatorPtr parseTiCompareExpr( //
                 return createUnsupported(
                     expr.ShortDebugString(), "ColumnRef with field type(" + DB::toString(field_type) + ") is not supported", false);
 
-            state |= state_has_column;
             ColumnID id = getColumnIDForColumnExpr(child, columns_to_read);
             attr        = creator(id);
+            if (child_idx == 0)
+                left = OperandType::Column;
+            else if (child_idx == 1)
+                right = OperandType::Column;
         }
         else if (isLiteralExpr(child))
         {
-            state |= state_has_literal;
             value = decodeLiteral(child);
+            if (child_idx == 0)
+                left = OperandType::Literal;
+            else if (child_idx == 1)
+                right = OperandType::Literal;
         }
     }
 
-    if (unlikely(state != state_finish))
+    bool normal_cmp  = (left == OperandType::Column && right == OperandType::Literal);
+    bool inverse_cmp = (left == OperandType::Literal && right == OperandType::Column);
+    if (!(normal_cmp || inverse_cmp))
         return createUnsupported(expr.ShortDebugString(),
-                                 tipb::ScalarFuncSig_Name(expr.sig()) + " with state " + DB::toString(state) + " is not supported",
+                                 tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported [left=" + DB::toString(static_cast<int>(left))
+                                     + "] [right=" + DB::toString(static_cast<int>(right)) + "]",
                                  false);
-    else
+
+    // Correct the filter type by the direction of operands
+    auto filter_type_with_direction = filter_type;
+    if (inverse_cmp)
     {
-        // TODO: null_direction
-        RSOperatorPtr op;
         switch (filter_type)
         {
-        case FilterParser::RSFilterType::Equal:
-            op = createEqual(attr, value);
-            break;
-        case FilterParser::RSFilterType::NotEqual:
-            op = createNotEqual(attr, value);
-            break;
         case FilterParser::RSFilterType::Greater:
-            op = createGreater(attr, value, -1);
+            filter_type_with_direction = FilterParser::RSFilterType::Less;
             break;
         case FilterParser::RSFilterType::GreaterEqual:
-            op = createGreaterEqual(attr, value, -1);
+            filter_type_with_direction = FilterParser::RSFilterType::LessEuqal;
             break;
         case FilterParser::RSFilterType::Less:
-            op = createLess(attr, value, -1);
+            filter_type_with_direction = FilterParser::RSFilterType::Greater;
             break;
         case FilterParser::RSFilterType::LessEuqal:
-            op = createLessEqual(attr, value, -1);
+            filter_type_with_direction = FilterParser::RSFilterType::GreaterEqual;
             break;
+            // Commutative operators, ignored.
+            // case FilterParser::RSFilterType::Equal:
+            // case FilterParser::RSFilterType::NotEqual:
         default:
-            op = createUnsupported(expr.ShortDebugString(), "Unknown compare type: " + tipb::ExprType_Name(expr.tp()), false);
             break;
         }
-        return op;
     }
+
+    // TODO: null_direction
+    RSOperatorPtr op;
+    switch (filter_type_with_direction)
+    {
+    case FilterParser::RSFilterType::Equal:
+        op = createEqual(attr, value);
+        break;
+    case FilterParser::RSFilterType::NotEqual:
+        op = createNotEqual(attr, value);
+        break;
+    case FilterParser::RSFilterType::Greater:
+        op = createGreater(attr, value, -1);
+        break;
+    case FilterParser::RSFilterType::GreaterEqual:
+        op = createGreaterEqual(attr, value, -1);
+        break;
+    case FilterParser::RSFilterType::Less:
+        op = createLess(attr, value, -1);
+        break;
+    case FilterParser::RSFilterType::LessEuqal:
+        op = createLessEqual(attr, value, -1);
+        break;
+    default:
+        op = createUnsupported(expr.ShortDebugString(), "Unknown compare type: " + tipb::ExprType_Name(expr.tp()), false);
+        break;
+    }
+    return op;
 }
 
 RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,

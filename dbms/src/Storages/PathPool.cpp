@@ -461,14 +461,15 @@ String PSDiskDelegatorMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) 
     throw Exception("Can not find path for PageFile [id=" + toString(id_lvl.first) + "_" + toString(id_lvl.second) + "]");
 }
 
-void PSDiskDelegatorMulti::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size)
+void PSDiskDelegatorMulti::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left)
 {
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = page_path_map.find(id_lvl);
     if (unlikely(iter == page_path_map.end()))
         return;
     auto index = iter->second;
-    page_path_map.erase(iter);
+    if (!meta_left)
+        page_path_map.erase(iter);
 
     pool.global_capacity->freeUsedSize(pool.latest_path_infos[index].path, file_size);
 }
@@ -508,7 +509,7 @@ String PSDiskDelegatorSingle::getPageFilePath(const PageFileIdAndLevel & /*id_lv
     return pool.latest_path_infos[0].path + "/" + path_prefix;
 }
 
-void PSDiskDelegatorSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size)
+void PSDiskDelegatorSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size, bool /*meta_left*/)
 {
     pool.global_capacity->freeUsedSize(pool.latest_path_infos[0].path, file_size);
 }
@@ -587,14 +588,15 @@ String PSDiskDelegatorRaft::getPageFilePath(const PageFileIdAndLevel & id_lvl) c
     throw Exception("Can not find path for PageFile [id=" + toString(id_lvl.first) + "_" + toString(id_lvl.second) + "]");
 }
 
-void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size)
+void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left)
 {
     std::lock_guard<std::mutex> lock{mutex};
     auto iter = page_path_map.find(id_lvl);
     if (unlikely(iter == page_path_map.end()))
         return;
     auto index = iter->second;
-    page_path_map.erase(iter);
+    if (!meta_left)
+        page_path_map.erase(iter);
 
     pool.global_capacity->freeUsedSize(raft_path_infos[index].path, file_size);
 }
