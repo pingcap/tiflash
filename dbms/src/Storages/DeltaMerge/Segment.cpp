@@ -368,7 +368,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
 
         stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, read_range, 0);
         stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(
-            stream, columns_to_read, max_version, is_common_handle);
+            stream, columns_to_read, max_version, is_common_handle, dm_context.query_id);
 
         return stream;
     };
@@ -377,7 +377,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
     if (read_ranges.size() == 1)
     {
         LOG_TRACE(log,
-                  "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", 1"
+                  "Segment [" << segment_id << "] is read by max_version: " << max_version << ", 1"
                               << " range: " << DB::DM::toDebugString(read_ranges));
         RowKeyRange real_range = rowkey_range.shrink(read_ranges[0]);
         if (real_range.none())
@@ -396,8 +396,8 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
         }
 
         LOG_TRACE(log,
-                  "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", "
-                              << DB::toString(streams.size()) << " ranges: " << DB::DM::toDebugString(read_ranges));
+                  "Segment [" << segment_id << "] is read by max_version: " << max_version << ", " << streams.size()
+                              << " ranges: " << DB::DM::toDebugString(read_ranges));
 
         if (streams.empty())
             stream = std::make_shared<EmptyBlockInputStream>(toEmptyBlock(*read_info.read_columns));
