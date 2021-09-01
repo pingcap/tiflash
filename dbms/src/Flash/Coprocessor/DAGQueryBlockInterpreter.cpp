@@ -11,7 +11,6 @@
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
-#include <DataStreams/SimpleStreamBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
@@ -1166,9 +1165,7 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
         {
             BlockInputStreamPtr shared_query_block_input_stream
                 = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream());
-            pipeline.streams.clear();
-            for (size_t i = 0; i < concurrency; i++)
-                pipeline.streams.push_back(std::make_shared<SimpleBlockInputStream>(shared_query_block_input_stream));
+            pipeline.streams.assign(concurrency, shared_query_block_input_stream);
         }
     }
 
@@ -1178,9 +1175,7 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
         size_t concurrency = before_agg_streams;
         BlockInputStreamPtr shared_query_block_input_stream
             = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream());
-        pipeline.streams.clear();
-        for (size_t i = 0; i < concurrency; i++)
-            pipeline.streams.push_back(std::make_shared<SimpleBlockInputStream>(shared_query_block_input_stream));
+        pipeline.streams.assign(concurrency, shared_query_block_input_stream);
     }
 
     return pipeline.streams;
