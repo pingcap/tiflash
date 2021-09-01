@@ -26,7 +26,8 @@ query = "select sum(available) from information_schema.tiflash_replica where tab
 start_time = time.time()
 
 available = False
-for timestamp in range(timeout):
+retry_count = 0
+while True:
     for line in os.popen('{} "{}"'.format(client, query)).readlines():
         try:
             count = int(line.strip())
@@ -38,13 +39,20 @@ for timestamp in range(timeout):
 
     if available:
         break
-    if timestamp % 10 == 0:
+
+    retry_count += 1
+    if retry_count % 10 == 0:
         print('=> waiting for {} available'.format(table_full_names))
 
-    time.sleep(sleep_time)
+    time_used = time.time() - start_time
+    if time_used >= timeout:
+        break
+    else:
+        # if it is near to timeout, it will not sleep any more.
+        if time_used + sleep_time < timeout:
+            time.sleep(sleep_time)
 
-end_time = time.time()
-time_used = end_time - start_time
+time_used = time.time() - start_time
 
 if available:
     print('=> all tables are available now. time = {}s'.format(time_used))
