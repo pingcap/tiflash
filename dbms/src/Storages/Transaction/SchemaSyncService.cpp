@@ -18,7 +18,7 @@ extern const int DEADLOCK_AVOIDED;
 } // namespace ErrorCodes
 
 SchemaSyncService::SchemaSyncService(DB::Context & context_)
-    : context(context_), background_pool(context_.getBackgroundPool()), log(&Logger::get("SchemaSyncService"))
+    : context(context_), background_pool(context_.getBackgroundPool()), log(&Poco::Logger::get("SchemaSyncService"))
 {
     handle = background_pool.addTask(
         [&, this] {
@@ -34,7 +34,7 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
                 stage = "Sync schemas";
                 done_anything = syncSchemas();
                 if (done_anything)
-                    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_trigger_count, type_timer).Increment();
+                    GET_METRIC(tiflash_schema_trigger_count, type_timer).Increment();
 
                 stage = "GC";
                 done_anything = gc(gc_safe_point);

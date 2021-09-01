@@ -1,11 +1,10 @@
+#include <Interpreters/PartLog.h>
 #include <Storages/MergeTree/MergeTreeBlockOutputStream.h>
 #include <Storages/StorageMergeTree.h>
-#include <Interpreters/PartLog.h>
 
 
 namespace DB
 {
-
 Block MergeTreeBlockOutputStream::getHeader() const
 {
     return storage.getSampleBlock();
@@ -36,4 +35,4 @@ void MergeTreeBlockOutputStream::write(const Block & block)
     }
 }
 
-}
+} // namespace DB

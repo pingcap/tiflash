@@ -18,11 +18,8 @@
 
 namespace DB
 {
-
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
-class TiFlashMetrics;
-using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class PSDiskDelegator;
@@ -46,8 +43,8 @@ public:
 
         bool sync_on_write = true;
 
-        size_t file_roll_size  = PAGE_FILE_ROLL_SIZE;
-        size_t file_max_size   = PAGE_FILE_MAX_SIZE;
+        size_t file_roll_size = PAGE_FILE_ROLL_SIZE;
+        size_t file_max_size = PAGE_FILE_MAX_SIZE;
         size_t file_small_size = PAGE_FILE_SMALL_SIZE;
 
         size_t file_meta_roll_size = PAGE_META_ROLL_SIZE;
@@ -58,13 +55,13 @@ public:
         Float64 gc_force_hardlink_rate = 0.8;
 
         Float64 gc_max_valid_rate = 0.35;
-        size_t  gc_min_bytes      = PAGE_FILE_ROLL_SIZE;
-        size_t  gc_min_files      = 10;
+        size_t gc_min_bytes = PAGE_FILE_ROLL_SIZE;
+        size_t gc_min_files = 10;
         // Minimum number of legacy files to be selected for compaction
         size_t gc_min_legacy_num = 3;
 
-        size_t  gc_max_expect_legacy_files = 100;
-        Float64 gc_max_valid_rate_bound    = 1.0;
+        size_t gc_max_expect_legacy_files = 100;
+        Float64 gc_max_valid_rate_bound = 1.0;
 
         // Maximum write concurrency. Must not be changed once the PageStorage object is created.
         size_t num_write_slots = 1;
@@ -88,22 +85,22 @@ public:
     {
         ListPageFilesOption() {}
 
-        bool remove_tmp_files  = false;
-        bool ignore_legacy     = false;
+        bool remove_tmp_files = false;
+        bool ignore_legacy = false;
         bool ignore_checkpoint = false;
     };
 
     using VersionedPageEntries = PageEntriesVersionSetWithDelta;
 
-    using SnapshotPtr   = VersionedPageEntries::SnapshotPtr;
-    using WriterPtr     = std::unique_ptr<PageFile::Writer>;
-    using ReaderPtr     = std::shared_ptr<PageFile::Reader>;
+    using SnapshotPtr = VersionedPageEntries::SnapshotPtr;
+    using WriterPtr = std::unique_ptr<PageFile::Writer>;
+    using ReaderPtr = std::shared_ptr<PageFile::Reader>;
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
 
     using MetaMergingQueue
         = std::priority_queue<PageFile::MetaMergingReaderPtr, std::vector<PageFile::MetaMergingReaderPtr>, PageFile::MergingPtrComparator>;
 
-    using PathAndIdsVec        = std::vector<std::pair<String, std::set<PageId>>>;
+    using PathAndIdsVec = std::vector<std::pair<String, std::set<PageId>>>;
     using ExternalPagesScanner = std::function<PathAndIdsVec()>;
     using ExternalPagesRemover
         = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
@@ -111,23 +108,22 @@ public:
     // Statistics for write
     struct StatisticsInfo
     {
-        size_t puts    = 0;
-        size_t refs    = 0;
+        size_t puts = 0;
+        size_t refs = 0;
         size_t deletes = 0;
         size_t upserts = 0;
-        bool   empty() const { return puts == 0 && refs == 0 && deletes == 0 && upserts == 0; }
+        bool empty() const { return puts == 0 && refs == 0 && deletes == 0 && upserts == 0; }
         String toString() const;
-        void   mergeEdits(const PageEntriesEdit & edit);
+        void mergeEdits(const PageEntriesEdit & edit);
 
         bool equals(const StatisticsInfo & rhs);
     };
 
 public:
-    PageStorage(String                  name,
-                PSDiskDelegatorPtr      delegator, //
-                const Config &          config_,
-                const FileProviderPtr & file_provider_,
-                TiFlashMetricsPtr       metrics_ = nullptr);
+    PageStorage(String name,
+                PSDiskDelegatorPtr delegator, //
+                const Config & config_,
+                const FileProviderPtr & file_provider_);
 
     void restore();
 
@@ -143,14 +139,20 @@ public:
     std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
 
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {});
+<<<<<<< HEAD
     Page      read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
     PageMap   read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
     void      read(const std::vector<PageId> & page_ids,
                    const PageHandler &         handler,
                    const ReadLimiterPtr &      read_limiter = nullptr,
                    SnapshotPtr                 snapshot     = {});
+=======
+    Page read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
+    PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
+    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
+>>>>>>> master
 
-    using FieldIndices   = std::vector<size_t>;
+    using FieldIndices = std::vector<size_t>;
     using PageReadFields = std::pair<PageId, FieldIndices>;
     PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
 
@@ -173,9 +175,9 @@ public:
 
     FileProviderPtr getFileProvider() const { return file_provider; }
 
-    static PageFileSet listAllPageFiles(const FileProviderPtr &     file_provider,
-                                        PSDiskDelegatorPtr &        delegator,
-                                        Poco::Logger *              page_file_log,
+    static PageFileSet listAllPageFiles(const FileProviderPtr & file_provider,
+                                        PSDiskDelegatorPtr & delegator,
+                                        Poco::Logger * page_file_log,
                                         const ListPageFilesOption & option = ListPageFilesOption());
 
     static PageFormat::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
@@ -192,12 +194,12 @@ public:
     {
         using const_iterator = std::map<PageFileIdAndLevel, PersistState>::const_iterator;
 
-        PageFileIdAndLevel     minFileIDLevel() const;
+        PageFileIdAndLevel minFileIDLevel() const;
         WriteBatch::SequenceID minPersistedSequence() const;
 
         const_iterator find(const PageFileIdAndLevel & id) const { return states.find(id); }
         const_iterator end() const { return states.end(); }
-        bool           contains(const PageFileIdAndLevel & id) const { return states.count(id) > 0; }
+        bool contains(const PageFileIdAndLevel & id) const { return states.count(id) > 0; }
 
         std::map<PageFileIdAndLevel, PersistState> states;
     };
@@ -206,9 +208,9 @@ public:
 private:
 #endif
 
-    WriterPtr checkAndRenewWriter(PageFile &     page_file,
+    WriterPtr checkAndRenewWriter(PageFile & page_file,
                                   const String & parent_path_hint,
-                                  WriterPtr &&   old_writer  = nullptr,
+                                  WriterPtr && old_writer = nullptr,
                                   const String & logging_msg = "");
     ReaderPtr getReader(const PageFileIdAndLevel & file_id_level);
 
@@ -217,8 +219,8 @@ private:
     void archivePageFiles(const PageFileSet & page_files_to_archive);
 
     std::tuple<size_t, size_t> //
-    gcRemoveObsoleteData(PageFileSet &                        page_files,
-                         const PageFileIdAndLevel &           writing_file_id_level,
+    gcRemoveObsoleteData(PageFileSet & page_files,
+                         const PageFileIdAndLevel & writing_file_id_level,
                          const std::set<PageFileIdAndLevel> & live_files);
 
     void getWritingSnapshot(std::lock_guard<std::mutex> &, WritingFilesSnapshot & writing_snapshot) const;
@@ -232,30 +234,30 @@ private:
 private:
 #endif
 
-    String             storage_name; // Identify between different Storage
-    PSDiskDelegatorPtr delegator;    // Get paths for storing data
-    Config             config;
+    String storage_name; // Identify between different Storage
+    PSDiskDelegatorPtr delegator; // Get paths for storing data
+    Config config;
 
     FileProviderPtr file_provider;
 
     struct WritingPageFile
     {
-        PageFile     file;
+        PageFile file;
         PersistState persisted{};
     };
     std::mutex write_mutex; // A mutex protect `idle_writers`,`write_files` and `statistics`.
 
     // TODO: Wrap `write_mutex_cv`, `write_files`, `idle_writers` to be a standalone class
-    std::condition_variable      write_mutex_cv;
+    std::condition_variable write_mutex_cv;
     std::vector<WritingPageFile> write_files;
-    std::deque<WriterPtr>        idle_writers;
-    StatisticsInfo               statistics;
+    std::deque<WriterPtr> idle_writers;
+    StatisticsInfo statistics;
 
     // A sequence number to keep ordering between multi-writers.
     std::atomic<WriteBatch::SequenceID> write_batch_seq = 0;
 
     OpenReadFiles open_read_files;
-    std::mutex    open_read_files_mutex; // A mutex only used to protect open_read_files.
+    std::mutex open_read_files_mutex; // A mutex only used to protect open_read_files.
 
     Poco::Logger * page_file_log;
     Poco::Logger * log;
@@ -269,20 +271,18 @@ private:
 
     StatisticsInfo last_gc_statistics;
 
-    // For reporting metrics to prometheus
-    TiFlashMetricsPtr metrics;
-
 private:
     WriterPtr checkAndRenewWriter(WritingPageFile & page_file,
-                                  const String &    parent_path_hint,
-                                  WriterPtr &&      old_writer  = nullptr,
-                                  const String &    logging_msg = "");
+                                  const String & parent_path_hint,
+                                  WriterPtr && old_writer = nullptr,
+                                  const String & logging_msg = "");
 };
 
 class PageReader : private boost::noncopyable
 {
 public:
     /// Not snapshot read.
+<<<<<<< HEAD
     explicit PageReader(PageStorage & storage_, ReadLimiterPtr read_limiter_) : storage(storage_), snap(), read_limiter(read_limiter_) {}
     /// Snapshot read.
     PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
@@ -293,23 +293,41 @@ public:
         : storage(storage_), snap(std::move(snap_)), read_limiter(read_limiter_)
     {
     }
+=======
+    explicit PageReader(PageStorage & storage_, ReadLimiterPtr read_limiter_)
+        : storage(storage_)
+        , snap()
+        , read_limiter(read_limiter_)
+    {}
+    /// Snapshot read.
+    PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
+        : storage(storage_)
+        , snap(snap_)
+        , read_limiter(read_limiter_)
+    {}
+    PageReader(PageStorage & storage_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
+        : storage(storage_)
+        , snap(std::move(snap_))
+        , read_limiter(read_limiter_)
+    {}
+>>>>>>> master
 
-    Page    read(PageId page_id) const { return storage.read(page_id, read_limiter, snap); }
+    Page read(PageId page_id) const { return storage.read(page_id, read_limiter, snap); }
     PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, read_limiter, snap); }
-    void    read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, read_limiter, snap); }
+    void read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, read_limiter, snap); }
 
     using PageReadFields = PageStorage::PageReadFields;
     PageMap read(const std::vector<PageReadFields> & page_fields) const { return storage.read(page_fields, read_limiter, snap); }
 
-    PageId    getNormalPageId(PageId page_id) const { return storage.getNormalPageId(page_id, snap); }
-    UInt64    getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }
+    PageId getNormalPageId(PageId page_id) const { return storage.getNormalPageId(page_id, snap); }
+    UInt64 getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }
     PageEntry getPageEntry(PageId page_id) const { return storage.getEntry(page_id, snap); }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
 
-    PageStorage &            storage;
+    PageStorage & storage;
     PageStorage::SnapshotPtr snap;
     ReadLimiterPtr           read_limiter;
 };

@@ -1,25 +1,22 @@
 #pragma once
 
-#include <boost/core/noncopyable.hpp>
-
-#include <iostream>
-#include <string>
-#include <mutex>
-#include <functional>
-#include <unordered_set>
-#include <unordered_map>
-
-#include <common/logger_useful.h>
-
-#include <Core/Types.h>
 #include <Common/Exception.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SharedLibrary.h>
+#include <Core/Types.h>
 #include <common/ThreadPool.h>
+#include <common/logger_useful.h>
+
+#include <boost/core/noncopyable.hpp>
+#include <functional>
+#include <iostream>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace DB
 {
-
 /** Lets you compile a piece of code that uses the server's header files into the dynamic library.
   * Conducts statistic of calls, and initiates compilation only on the N-th call for one key.
   * Compilation is performed asynchronously, in separate threads, if there are free threads.
@@ -38,7 +35,7 @@ public:
     using HashedKey = UInt128;
 
     using CodeGenerator = std::function<std::string()>;
-    using ReadyCallback = std::function<void(SharedLibraryPtr&)>;
+    using ReadyCallback = std::function<void(SharedLibraryPtr &)>;
 
     /** Increase the counter for the given key `key` by one.
       * If the compilation result already exists (already open, or there is a file with the library),
@@ -74,7 +71,7 @@ private:
 
     std::mutex mutex;
 
-    Logger * log = &Logger::get("Compiler");
+    Poco::Logger * log = &Poco::Logger::get("Compiler");
 
 
     void compile(
@@ -85,4 +82,4 @@ private:
         ReadyCallback on_ready);
 };
 
-}
+} // namespace DB

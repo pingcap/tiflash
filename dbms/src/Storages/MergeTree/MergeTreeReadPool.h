@@ -1,14 +1,14 @@
 #pragma once
 
 #include <Core/NamesAndTypes.h>
-#include <Storages/MergeTree/RangesInDataPart.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
+#include <Storages/MergeTree/RangesInDataPart.h>
+
 #include <mutex>
 
 
 namespace DB
 {
-
 using MergeTreeReadTaskPtr = std::unique_ptr<MergeTreeReadTask>;
 
 /**    Provides read tasks for MergeTreeThreadBlockInputStream`s in fine-grained batches, allowing for more
@@ -37,14 +37,16 @@ public:
 
         /// Constants above is just an example.
         BackoffSettings(const Settings & settings)
-            : min_read_latency_ms(settings.read_backoff_min_latency_ms.totalMilliseconds()),
-            max_throughput(settings.read_backoff_max_throughput),
-            min_interval_between_events_ms(settings.read_backoff_min_interval_between_events_ms.totalMilliseconds()),
-            min_events(settings.read_backoff_min_events)
+            : min_read_latency_ms(settings.read_backoff_min_latency_ms.totalMilliseconds())
+            , max_throughput(settings.read_backoff_max_throughput)
+            , min_interval_between_events_ms(settings.read_backoff_min_interval_between_events_ms.totalMilliseconds())
+            , min_events(settings.read_backoff_min_events)
         {
         }
 
-        BackoffSettings() : min_read_latency_ms(0) {}
+        BackoffSettings()
+            : min_read_latency_ms(0)
+        {}
     };
 
     BackoffSettings backoff_settings;
@@ -55,20 +57,29 @@ private:
     struct BackoffState
     {
         size_t current_threads;
-        Stopwatch time_since_prev_event {CLOCK_MONOTONIC_COARSE};
+        Stopwatch time_since_prev_event{CLOCK_MONOTONIC_COARSE};
         size_t num_events = 0;
 
-        BackoffState(size_t threads) : current_threads(threads) {}
+        BackoffState(size_t threads)
+            : current_threads(threads)
+        {}
     };
 
     BackoffState backoff_state;
 
 public:
     MergeTreeReadPool(
-        const size_t threads, const size_t sum_marks, const size_t min_marks_for_concurrent_read,
-        RangesInDataParts parts, MergeTreeData & data, const ExpressionActionsPtr & prewhere_actions,
-        const String & prewhere_column_name, const bool check_columns, const Names & column_names,
-        const BackoffSettings & backoff_settings, size_t preferred_block_size_bytes,
+        const size_t threads,
+        const size_t sum_marks,
+        const size_t min_marks_for_concurrent_read,
+        RangesInDataParts parts,
+        MergeTreeData & data,
+        const ExpressionActionsPtr & prewhere_actions,
+        const String & prewhere_column_name,
+        const bool check_columns,
+        const Names & column_names,
+        const BackoffSettings & backoff_settings,
+        size_t preferred_block_size_bytes,
         const bool do_not_steal_tasks = false);
 
     MergeTreeReadTaskPtr getTask(const size_t min_marks_to_read, const size_t thread);
@@ -83,12 +94,17 @@ public:
 
 private:
     std::vector<size_t> fillPerPartInfo(
-        RangesInDataParts & parts, const ExpressionActionsPtr & prewhere_actions, const String & prewhere_column_name,
+        RangesInDataParts & parts,
+        const ExpressionActionsPtr & prewhere_actions,
+        const String & prewhere_column_name,
         const bool check_columns);
 
     void fillPerThreadInfo(
-        const size_t threads, const size_t sum_marks, std::vector<size_t> per_part_sum_marks,
-        RangesInDataParts & parts, const size_t min_marks_for_concurrent_read);
+        const size_t threads,
+        const size_t sum_marks,
+        std::vector<size_t> per_part_sum_marks,
+        RangesInDataParts & parts,
+        const size_t min_marks_for_concurrent_read);
 
     std::vector<std::shared_lock<std::shared_mutex>> per_part_columns_lock;
     MergeTreeData & data;
@@ -129,9 +145,9 @@ private:
 
     mutable std::mutex mutex;
 
-    Logger * log = &Logger::get("MergeTreeReadPool");
+    Poco::Logger * log = &Poco::Logger::get("MergeTreeReadPool");
 };
 
 using MergeTreeReadPoolPtr = std::shared_ptr<MergeTreeReadPool>;
 
-}
+} // namespace DB

@@ -6,7 +6,6 @@ namespace DB
 {
 namespace DM
 {
-
 /// A delta pack which contains a Block. It can be a cache pack (similar to mem-table in LSM-Tree)
 /// or a pack with data stored in the "log" area of PageStorage.
 class DeltaPackBlock : public DeltaPack
@@ -16,7 +15,7 @@ class DeltaPackBlock : public DeltaPack
 private:
     BlockPtr schema;
 
-    UInt64 rows  = 0;
+    UInt64 rows = 0;
     UInt64 bytes = 0;
 
     // The id of data page which stores the data of this pack.
@@ -32,7 +31,8 @@ private:
     ColIdToOffset colid_to_offset;
 
 private:
-    DeltaPackBlock(const BlockPtr & schema_) : schema(schema_)
+    DeltaPackBlock(const BlockPtr & schema_)
+        : schema(schema_)
     {
         colid_to_offset.clear();
         for (size_t i = 0; i < schema->columns(); ++i)
@@ -44,7 +44,7 @@ private:
     std::pair<DataTypePtr, MutableColumnPtr> getDataTypeAndEmptyColumn(ColId column_id) const
     {
         // Note that column_id must exist
-        auto index    = colid_to_offset.at(column_id);
+        auto index = colid_to_offset.at(column_id);
         auto col_type = schema->getByPosition(index).type;
         return {col_type, col_type->createColumn()};
     }
@@ -91,7 +91,7 @@ public:
 
     /// The page id which references the data of this pack.
     PageId getDataPageId() const { return data_page_id; }
-    void   setDataPageId(PageId page_id) { data_page_id = page_id; }
+    void setDataPageId(PageId page_id) { data_page_id = page_id; }
 
     void appendToCache(const Block data, size_t offset, size_t limit, size_t data_bytes);
 
@@ -122,11 +122,11 @@ public:
 
     String toString() const override
     {
-        String s = "{block,rows:" + DB::toString(rows)                 //
-            + ",bytes:" + DB::toString(bytes)                          //
-            + ",data_page_id:" + DB::toString(data_page_id)            //
-            + ",saved:" + DB::toString(saved)                          //
-            + ",disable_append:" + DB::toString(disable_append)        //
+        String s = "{block,rows:" + DB::toString(rows) //
+            + ",bytes:" + DB::toString(bytes) //
+            + ",data_page_id:" + DB::toString(data_page_id) //
+            + ",saved:" + DB::toString(saved) //
+            + ",disable_append:" + DB::toString(disable_append) //
             + ",schema:" + (schema ? schema->dumpStructure() : "none") //
             + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + "}";
         return s;
@@ -136,24 +136,29 @@ public:
 class DPBlockReader : public DeltaPackReader
 {
 private:
-    const DeltaPackBlock &   pack;
+    const DeltaPackBlock & pack;
     const StorageSnapshotPtr storage_snap;
-    const ColumnDefinesPtr   col_defs;
+    const ColumnDefinesPtr col_defs;
 
     Columns cols_data_cache;
-    bool    read_done = false;
+    bool read_done = false;
 
 public:
-    DPBlockReader(const DeltaPackBlock &     pack_,
+    DPBlockReader(const DeltaPackBlock & pack_,
                   const StorageSnapshotPtr & storage_snap_,
-                  const ColumnDefinesPtr &   col_defs_,
-                  const Columns &            cols_data_cache_)
-        : pack(pack_), storage_snap(storage_snap_), col_defs(col_defs_), cols_data_cache(cols_data_cache_)
+                  const ColumnDefinesPtr & col_defs_,
+                  const Columns & cols_data_cache_)
+        : pack(pack_)
+        , storage_snap(storage_snap_)
+        , col_defs(col_defs_)
+        , cols_data_cache(cols_data_cache_)
     {
     }
 
     DPBlockReader(const DeltaPackBlock & pack_, const StorageSnapshotPtr & storage_snap_, const ColumnDefinesPtr & col_defs_)
-        : pack(pack_), storage_snap(storage_snap_), col_defs(col_defs_)
+        : pack(pack_)
+        , storage_snap(storage_snap_)
+        , col_defs(col_defs_)
     {
     }
 

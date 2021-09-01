@@ -20,7 +20,6 @@ class Logger;
 
 namespace DB
 {
-
 class Context;
 
 /** Every two seconds checks configuration files for update.
@@ -70,7 +69,7 @@ protected:
 private:
     static constexpr auto reload_interval = std::chrono::seconds(2);
 
-    Poco::Logger * log = &Logger::get(name);
+    Poco::Logger * log = &Poco::Logger::get(name);
 
     std::string path;
     FilesChangesTracker files;

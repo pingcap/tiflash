@@ -31,7 +31,7 @@ protected:
 private:
     ssize_t version_column_number;
     ssize_t del_column_number;
-    Logger * log = &Logger::get("MvccTMTSortedBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("MvccTMTSortedBlockInputStream");
 
     bool finished = false;
 

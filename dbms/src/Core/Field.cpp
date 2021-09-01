@@ -308,38 +308,7 @@ template <> bool decimalLessOrEqual(Decimal256 x, Decimal256 y, UInt32 xs, UInt3
 
 String Field::toString() const
 {
-    switch (which)
-    {
-        case Types::Null:
-            return "Null()";
-        case Types::UInt64:
-            return fmt::format("UInt64({})", get<UInt64>());
-        case Types::UInt128:
-            return fmt::format("UInt128({}, {})", get<UInt128>().low, get<UInt128>().high);
-        case Types::Int64:
-            return fmt::format("Int64({})", get<Int64>());
-        case Types::Float64:
-            return fmt::format("Float64({})", get<Float64>());
-        case Types::String:
-            return fmt::format("String({})", get<String>());
-        case Types::Array:
-            // TODO: fill array content
-            return fmt::format("Array()");
-        case Types::Tuple:
-            // TODO: fill tuple content
-            return fmt::format("Tuple()");
-        case Types::Decimal32:
-            return fmt::format("Decimal32({})", get<DecimalField<Decimal32>>().toString());
-        case Types::Decimal64:
-            return fmt::format("Decimal64({})", get<DecimalField<Decimal64>>().toString());
-        case Types::Decimal128:
-            return fmt::format("Decimal128({})", get<DecimalField<Decimal128>>().toString());
-        case Types::Decimal256:
-            return fmt::format("Decimal256({})", get<DecimalField<Decimal256>>().toString());
-
-        default:
-            throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
-    }
+    return applyVisitor(DB::FieldVisitorDump(), *this);
 }
 
 } // namespace DB

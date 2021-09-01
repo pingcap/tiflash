@@ -1,20 +1,21 @@
-#include <Storages/MergeTree/MergeList.h>
 #include <Common/CurrentMetrics.h>
 #include <Poco/Ext/ThreadNumber.h>
+#include <Storages/MergeTree/MergeList.h>
 
 namespace CurrentMetrics
 {
-    extern const Metric MemoryTrackingForMerges;
+extern const Metric MemoryTrackingForMerges;
 }
 
 
 namespace DB
 {
-
-MergeListElement::MergeListElement(const std::string & database, const std::string & table, const std::string & result_part_name,
-    const MergeTreeData::DataPartsVector & source_parts)
-        : database{database}, table{table}, result_part_name{result_part_name}, num_parts{source_parts.size()},
-        thread_number{Poco::ThreadNumber::get()}
+MergeListElement::MergeListElement(const std::string & database, const std::string & table, const std::string & result_part_name, const MergeTreeData::DataPartsVector & source_parts)
+    : database{database}
+    , table{table}
+    , result_part_name{result_part_name}
+    , num_parts{source_parts.size()}
+    , thread_number{Poco::ThreadNumber::get()}
 {
     for (const auto & source_part : source_parts)
         source_part_names.emplace_back(source_part->name);
@@ -60,4 +61,4 @@ MergeListElement::~MergeListElement()
         background_pool_task_memory_tracker->setNext(nullptr);
 }
 
-}
+} // namespace DB

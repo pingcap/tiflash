@@ -25,7 +25,6 @@
 
 namespace DB
 {
-
 struct CoprocessorReaderResult
 {
     std::shared_ptr<tipb::SelectResponse> resp;
@@ -34,8 +33,14 @@ struct CoprocessorReaderResult
     bool eof;
     String req_info = "cop request";
     CoprocessorReaderResult(
-        std::shared_ptr<tipb::SelectResponse> resp_, bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
-        : resp(resp_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_)
+        std::shared_ptr<tipb::SelectResponse> resp_,
+        bool meet_error_ = false,
+        const String & error_msg_ = "",
+        bool eof_ = false)
+        : resp(resp_)
+        , meet_error(meet_error_)
+        , error_msg(error_msg_)
+        , eof(eof_)
     {}
 };
 
@@ -51,8 +56,12 @@ private:
 
 public:
     CoprocessorReader(
-        const DAGSchema & schema_, pingcap::kv::Cluster * cluster, std::vector<pingcap::coprocessor::copTask> tasks, int concurrency)
-        : schema(schema_), resp_iter(std::move(tasks), cluster, concurrency, &Logger::get("pingcap/coprocessor"))
+        const DAGSchema & schema_,
+        pingcap::kv::Cluster * cluster,
+        std::vector<pingcap::coprocessor::copTask> tasks,
+        int concurrency)
+        : schema(schema_)
+        , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"))
     {
         resp_iter.open();
     }

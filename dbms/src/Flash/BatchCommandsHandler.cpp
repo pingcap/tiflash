@@ -7,29 +7,32 @@
 
 namespace DB
 {
-
 BatchCommandsContext::BatchCommandsContext(
-    Context & db_context_, DBContextCreationFunc && db_context_creation_func_, grpc::ServerContext & grpc_server_context_)
-    : db_context(db_context_),
-      db_context_creation_func(std::move(db_context_creation_func_)),
-      grpc_server_context(grpc_server_context_),
-      metrics(db_context.getTiFlashMetrics())
+    Context & db_context_,
+    DBContextCreationFunc && db_context_creation_func_,
+    grpc::ServerContext & grpc_server_context_)
+    : db_context(db_context_)
+    , db_context_creation_func(std::move(db_context_creation_func_))
+    , grpc_server_context(grpc_server_context_)
 {}
 
-BatchCommandsHandler::BatchCommandsHandler(BatchCommandsContext & batch_commands_context_, const tikvpb::BatchCommandsRequest & request_,
-    tikvpb::BatchCommandsResponse & response_)
-    : batch_commands_context(batch_commands_context_), request(request_), response(response_), log(&Logger::get("BatchCommandsHandler"))
+BatchCommandsHandler::BatchCommandsHandler(BatchCommandsContext & batch_commands_context_, const tikvpb::BatchCommandsRequest & request_, tikvpb::BatchCommandsResponse & response_)
+    : batch_commands_context(batch_commands_context_)
+    , request(request_)
+    , response(response_)
+    , log(&Poco::Logger::get("BatchCommandsHandler"))
 {}
 
 ThreadPool::Job BatchCommandsHandler::handleCommandJob(
-    const tikvpb::BatchCommandsRequest::Request & req, tikvpb::BatchCommandsResponse::Response & resp, grpc::Status & ret) const
+    const tikvpb::BatchCommandsRequest::Request & req,
+    tikvpb::BatchCommandsResponse::Response & resp,
+    grpc::Status & ret) const
 {
     return [&]() {
         auto start_time = std::chrono::system_clock::now();
         SCOPE_EXIT({
             std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-            GET_METRIC(batch_commands_context.metrics, tiflash_coprocessor_request_handle_seconds, type_batch)
-                .Observe(duration_sec.count());
+            GET_METRIC(tiflash_coprocessor_request_handle_seconds, type_batch).Observe(duration_sec.count());
         });
 
         if (!req.has_coprocessor())
@@ -38,9 +41,9 @@ ThreadPool::Job BatchCommandsHandler::handleCommandJob(
             return;
         }
 
-        GET_METRIC(batch_commands_context.metrics, tiflash_coprocessor_request_count, type_batch_cop).Increment();
-        GET_METRIC(batch_commands_context.metrics, tiflash_coprocessor_handling_request_count, type_batch_cop).Increment();
-        SCOPE_EXIT({ GET_METRIC(batch_commands_context.metrics, tiflash_coprocessor_handling_request_count, type_batch_cop).Decrement(); });
+        GET_METRIC(tiflash_coprocessor_request_count, type_batch_cop).Increment();
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch_cop).Increment();
+        SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch_cop).Decrement(); });
 
         const auto & cop_req = req.coprocessor();
         auto cop_resp = resp.mutable_coprocessor();
@@ -85,7 +88,8 @@ grpc::Status BatchCommandsHandler::execute()
                                                          : static_cast<size_t>(settings.max_threads);
 
     LOG_DEBUG(
-        log, __PRETTY_FUNCTION__ << ": Handling " << request.requests_size() << " batch commands using " << max_threads << " threads.");
+        log,
+        __PRETTY_FUNCTION__ << ": Handling " << request.requests_size() << " batch commands using " << max_threads << " threads.");
 
     ThreadPool thread_pool(max_threads);
 

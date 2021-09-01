@@ -34,8 +34,18 @@ namespace DB
 
 extern const String UniqRawResName;
 
-struct AggregateFunctionUniqUniquesHashSetData
+struct AggregateFunctionUniqUniquesHashSetData : AggregationCollatorsWrapper<false>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeCollators(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        readCollators(buf);
+    }
     using Set = UniquesHashSet<DefaultHash<UInt64>>;
     Set set;
 
@@ -43,16 +53,36 @@ struct AggregateFunctionUniqUniquesHashSetData
 };
 
 /// For a function that takes multiple arguments. Such a function pre-hashes them in advance, so TrivialHash is used here.
-struct AggregateFunctionUniqUniquesHashSetDataForVariadic
+struct AggregateFunctionUniqUniquesHashSetDataForVariadic : AggregationCollatorsWrapper<false>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeCollators(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        readCollators(buf);
+    }
     using Set = UniquesHashSet<TrivialHash>;
     Set set;
 
     static String getName() { return "uniq"; }
 };
 
-struct AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes
+struct AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes : AggregationCollatorsWrapper<true>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeCollators(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        readCollators(buf);
+    }
     using Set = UniquesHashSet<TrivialHash, false>;
     Set set;
 
@@ -62,8 +92,18 @@ struct AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes
 /// uniqHLL12
 
 template <typename T>
-struct AggregateFunctionUniqHLL12Data
+struct AggregateFunctionUniqHLL12Data : AggregationCollatorsWrapper<false>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeCollators(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        readCollators(buf);
+    }
     using Set = HyperLogLogWithSmallSetOptimization<T, 16, 12>;
     Set set;
 
@@ -71,8 +111,18 @@ struct AggregateFunctionUniqHLL12Data
 };
 
 template <>
-struct AggregateFunctionUniqHLL12Data<String>
+struct AggregateFunctionUniqHLL12Data<String> : AggregationCollatorsWrapper<false>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeCollators(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        readCollators(buf);
+    }
     using Set = HyperLogLogWithSmallSetOptimization<UInt64, 16, 12>;
     Set set;
 
@@ -80,16 +130,36 @@ struct AggregateFunctionUniqHLL12Data<String>
 };
 
 template <>
-struct AggregateFunctionUniqHLL12Data<UInt128>
+struct AggregateFunctionUniqHLL12Data<UInt128> : AggregationCollatorsWrapper<false>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeCollators(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        readCollators(buf);
+    }
     using Set = HyperLogLogWithSmallSetOptimization<UInt64, 16, 12>;
     Set set;
 
     static String getName() { return "uniqHLL12"; }
 };
 
-struct AggregateFunctionUniqHLL12DataForVariadic
+struct AggregateFunctionUniqHLL12DataForVariadic : AggregationCollatorsWrapper<false>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeCollators(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        readCollators(buf);
+    }
     using Set = HyperLogLogWithSmallSetOptimization<UInt64, 16, 12, TrivialHash>;
     Set set;
 
@@ -100,8 +170,18 @@ struct AggregateFunctionUniqHLL12DataForVariadic
 /// uniqExact
 
 template <typename T>
-struct AggregateFunctionUniqExactData
+struct AggregateFunctionUniqExactData : AggregationCollatorsWrapper<false>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeCollators(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        readCollators(buf);
+    }
     using Key = T;
 
     /// When creating, the hash table must be small.
@@ -118,8 +198,18 @@ struct AggregateFunctionUniqExactData
 
 /// For rows, we put the SipHash values (128 bits) into the hash table.
 template <>
-struct AggregateFunctionUniqExactData<String>
+struct AggregateFunctionUniqExactData<String> : AggregationCollatorsWrapper<true>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeCollators(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        readCollators(buf);
+    }
     using Key = UInt128;
 
     /// When creating, the hash table must be small.
@@ -135,8 +225,18 @@ struct AggregateFunctionUniqExactData<String>
 };
 
 template <typename T>
-struct AggregateFunctionUniqCombinedData
+struct AggregateFunctionUniqCombinedData : AggregationCollatorsWrapper<false>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeCollators(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        readCollators(buf);
+    }
     using Key = UInt32;
     using Set = CombinedCardinalityEstimator<
         Key,
@@ -155,8 +255,18 @@ struct AggregateFunctionUniqCombinedData
 };
 
 template <>
-struct AggregateFunctionUniqCombinedData<String>
+struct AggregateFunctionUniqCombinedData<String> : AggregationCollatorsWrapper<true>
 {
+    void write(WriteBuffer & buf) const
+    {
+        set.write(buf);
+        writeCollators(buf);
+    }
+    void read(ReadBuffer & buf)
+    {
+        set.read(buf);
+        readCollators(buf);
+    }
     using Key = UInt64;
     using Set = CombinedCardinalityEstimator<
         Key,
@@ -268,6 +378,7 @@ struct OneAdder
             else
             {
                 StringRef value = column.getDataAt(row_num);
+                value = data.getUpdatedValueForCollator(value, 0);
                 data.set.insert(CityHash_v1_0_2::CityHash64(value.data, value.size));
             }
         }
@@ -281,6 +392,7 @@ struct OneAdder
             else
             {
                 StringRef value = column.getDataAt(row_num);
+                value = data.getUpdatedValueForCollator(value, 0);
                 data.set.insert(CityHash_v1_0_2::CityHash64(value.data, value.size));
             }
         }
@@ -293,6 +405,7 @@ struct OneAdder
             else
             {
                 StringRef value = column.getDataAt(row_num);
+                value = data.getUpdatedValueForCollator(value, 0);
 
                 UInt128 key;
                 SipHash hash;
@@ -310,7 +423,7 @@ struct OneAdder
 
 /// Calculates the number of different values approximately or exactly.
 template <typename T, typename Data>
-class AggregateFunctionUniq final : public IAggregateFunctionDataHelper<Data, AggregateFunctionUniq<T, Data>>
+class AggregateFunctionUniq final : public IAggregateFunctionDataHelper<Data, AggregateFunctionUniq<T, Data>, true>
 {
 public:
     String getName() const override { return Data::getName(); }
@@ -332,12 +445,12 @@ public:
 
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
     {
-        this->data(place).set.write(buf);
+        this->data(place).write(buf);
     }
 
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena *) const override
     {
-        this->data(place).set.read(buf);
+        this->data(place).read(buf);
     }
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
@@ -355,7 +468,7 @@ public:
   */
 template <typename Data, bool argument_is_tuple, bool raw_result = false>
 class AggregateFunctionUniqVariadic final
-    : public IAggregateFunctionDataHelper<Data, AggregateFunctionUniqVariadic<Data, argument_is_tuple, raw_result>>
+    : public IAggregateFunctionDataHelper<Data, AggregateFunctionUniqVariadic<Data, argument_is_tuple, raw_result>, true>
 {
 private:
     static constexpr bool is_exact = std::is_same_v<Data, AggregateFunctionUniqExactData<String>>;
@@ -383,7 +496,7 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        this->data(place).set.insert(UniqVariadicHash<is_exact, argument_is_tuple>::apply(num_args, columns, row_num));
+        this->data(place).set.insert(UniqVariadicHash<Data, is_exact, argument_is_tuple>::apply(this->data(place), num_args, columns, row_num));
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override

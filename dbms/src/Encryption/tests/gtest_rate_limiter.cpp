@@ -39,7 +39,7 @@ TEST(WriteLimiter_test, Rate)
     {
         UInt64 target = i * 1024 * 10;
         // refill ten times every second
-        auto write_limiter = std::make_shared<WriteLimiter>(nullptr, target, LimiterType::UNKNOW, 100);
+        auto write_limiter = std::make_shared<WriteLimiter>(target, LimiterType::UNKNOW, 100);
         AtomicStopwatch watch;
         std::vector<std::thread> threads;
         // create multiple threads to perform request command
@@ -62,7 +62,7 @@ TEST(WriteLimiter_test, Rate)
 
 TEST(WriteLimiter_test, LimiterStat_NotLimit)
 {
-    WriteLimiter write_limiter(nullptr, 0, LimiterType::UNKNOW, 100);
+    WriteLimiter write_limiter(0, LimiterType::UNKNOW, 100);
     try
     {
         write_limiter.getStat();
@@ -74,7 +74,7 @@ TEST(WriteLimiter_test, LimiterStat_NotLimit)
     }
 
     auto noop = []() { return 0; };
-    ReadLimiter read_limiter(noop, nullptr, 0, LimiterType::UNKNOW, 100);
+    ReadLimiter read_limiter(noop, 0, LimiterType::UNKNOW, 100);
     try
     {
         read_limiter.getStat();
@@ -89,7 +89,7 @@ TEST(WriteLimiter_test, LimiterStat_NotLimit)
 TEST(WriteLimiter_test, LimiterStat)
 {
 
-    WriteLimiter write_limiter(nullptr, 1000, LimiterType::UNKNOW, 100);
+    WriteLimiter write_limiter(1000, LimiterType::UNKNOW, 100);
     try
     {
         write_limiter.getStat();
@@ -167,7 +167,7 @@ TEST(ReadLimiter_test, GetIOStatPeroid_2000us)
     using TimePointMS = std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds>;
     Int64 bytes_per_sec = 1000;
     UInt64 refill_period_ms = 20;
-    ReadLimiter limiter(getStat, nullptr, bytes_per_sec, LimiterType::UNKNOW, get_io_stat_period_us, refill_period_ms);
+    ReadLimiter limiter(getStat, bytes_per_sec, LimiterType::UNKNOW, get_io_stat_period_us, refill_period_ms);
 
     TimePointMS t0 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     // Refill 20 every 20ms.
@@ -197,11 +197,13 @@ TEST(ReadLimiter_test, GetIOStatPeroid_2000us)
 
 void testSetStop(bool stop, int blocked_thread_cnt)
 {
-    auto write_limiter = std::make_shared<WriteLimiter>(nullptr, 1000, LimiterType::UNKNOW, 100);
+    auto write_limiter = std::make_shared<WriteLimiter>(1000, LimiterType::UNKNOW, 100);
     // All the bytes are consumed in this request, and next refill time is about 100ms later.
     write_limiter->request(100);
 
-    auto worker = [&]() { 
+    std::atomic<UInt32> counter{0};
+    auto worker = [&]() {
+        counter.fetch_add(1, std::memory_order_relaxed);
         write_limiter->request(1); 
     };
     std::vector<std::thread> threads;
@@ -214,6 +216,11 @@ void testSetStop(bool stop, int blocked_thread_cnt)
     
     if (stop)
     {
+        // Wait threads to be scheduled.
+        while (counter.load(std::memory_order_relaxed) < threads.size())
+        {
+            std::this_thread::sleep_for(1ms);
+        }
         std::this_thread::sleep_for(10ms);  // Roughly wait for threads to request limiter.
         auto sz = write_limiter->setStop(); // Stop the limiter and notify threads that blocked inside limiter.
         ASSERT_EQ(sz, threads.size()) << sz;
@@ -255,7 +262,7 @@ TEST(ReadLimiter_test, LimiterStat)
         consumed += bytes;
     };
     Int64 get_io_stat_period_us = 2000;
-    ReadLimiter read_limiter(getStat, nullptr, 1000, LimiterType::UNKNOW, get_io_stat_period_us, 100);
+    ReadLimiter read_limiter(getStat, 1000, LimiterType::UNKNOW, get_io_stat_period_us, 100);
     try
     {
         read_limiter.getStat();
@@ -512,13 +519,17 @@ TEST(IOLimitTuner_test, NotNeedTune)
     }
 }
 
-IOLimitTuner::Watermark watermarkOfBgWrite(const auto & tuner) { return tuner.getWatermark(tuner.bg_write_stat->pct()); }
+template <typename T>
+IOLimitTuner::Watermark watermarkOfBgWrite(const T & tuner) { return tuner.getWatermark(tuner.bg_write_stat->pct()); }
 
-IOLimitTuner::Watermark watermarkOfFgWrite(const auto & tuner) { return tuner.getWatermark(tuner.fg_write_stat->pct()); }
+template <typename T>
+IOLimitTuner::Watermark watermarkOfFgWrite(const T & tuner) { return tuner.getWatermark(tuner.fg_write_stat->pct()); }
 
-IOLimitTuner::Watermark watermarkOfBgRead(const auto & tuner) { return tuner.getWatermark(tuner.bg_read_stat->pct()); }
+template <typename T>
+IOLimitTuner::Watermark watermarkOfBgRead(const T & tuner) { return tuner.getWatermark(tuner.bg_read_stat->pct()); }
 
-IOLimitTuner::Watermark watermarkOfFgRead(const auto & tuner) { return tuner.getWatermark(tuner.fg_read_stat->pct()); }
+template <typename T>
+IOLimitTuner::Watermark watermarkOfFgRead(const T & tuner) { return tuner.getWatermark(tuner.fg_read_stat->pct()); }
 
 void updateWatermarkPct(StorageIORateLimitConfig & io_config, int emergency, int high, int medium)
 {

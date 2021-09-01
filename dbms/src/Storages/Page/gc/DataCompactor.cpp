@@ -37,15 +37,15 @@ static constexpr size_t GC_NUM_CANDIDATE_SIZE_LOWER_BOUND = 2;
 
 template <typename SnapshotPtr>
 std::tuple<typename DataCompactor<SnapshotPtr>::Result, PageEntriesEdit> //
-DataCompactor<SnapshotPtr>::tryMigrate(                                  //
-    const PageFileSet &          page_files,
-    SnapshotPtr &&               snapshot,
+DataCompactor<SnapshotPtr>::tryMigrate( //
+    const PageFileSet & page_files,
+    SnapshotPtr && snapshot,
     const WritingFilesSnapshot & writing_files)
 {
     ValidPages valid_pages = collectValidPagesInPageFile(snapshot);
 
     // Select gc candidate files
-    Result      result;
+    Result result;
     PageFileSet candidates;
     PageFileSet files_without_valid_pages;
     long        high_vaild_big_pf_index = -1;
@@ -54,7 +54,7 @@ DataCompactor<SnapshotPtr>::tryMigrate(                                  //
         = selectCandidateFiles(page_files, valid_pages, writing_files);
 
     result.candidate_size = candidates.size();
-    result.do_compaction  = result.candidate_size >= config.gc_min_files
+    result.do_compaction = result.candidate_size >= config.gc_min_files
         || (candidates.size() >= GC_NUM_CANDIDATE_SIZE_LOWER_BOUND && result.bytes_migrate >= config.gc_min_bytes);
 
     // Scan over all `candidates` and do migrate.
@@ -142,15 +142,15 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles(          // keep readable inde
                             ErrorCodes::LOGICAL_ERROR);
         }
 
-        const auto file_size        = page_file.getDataFileSize();
-        UInt64     valid_size       = 0;
-        float      valid_rate       = 0.0f;
-        size_t     valid_page_count = 0;
+        const auto file_size = page_file.getDataFileSize();
+        UInt64 valid_size = 0;
+        float valid_rate = 0.0f;
+        size_t valid_page_count = 0;
 
         if (auto it = files_valid_pages.find(page_file.fileIdLevel()); it != files_valid_pages.end())
         {
-            valid_size       = it->second.first;
-            valid_rate       = (float)valid_size / file_size;
+            valid_size = it->second.first;
+            valid_rate = (float)valid_size / file_size;
             valid_page_count = it->second.second.size();
         }
 
@@ -168,7 +168,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles(          // keep readable inde
         bool is_candidate = !writing_files.contains(page_file.fileIdLevel())
             && (valid_rate < config.gc_max_valid_rate //
                 || file_size < config.file_small_size //
-                || config.gc_max_valid_rate >= 1.0    // all page file will be picked
+                || config.gc_max_valid_rate >= 1.0 // all page file will be picked
             );
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
         LOG_TRACE(log,
@@ -228,7 +228,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles(          // keep readable inde
 }
 
 template <typename SnapshotPtr>
-std::tuple<PageEntriesEdit, size_t>       //
+std::tuple<PageEntriesEdit, size_t> //
 DataCompactor<SnapshotPtr>::migratePages( //
     const SnapshotPtr & snapshot,
     const ValidPages &  files_valid_pages,
@@ -300,8 +300,8 @@ DataCompactor<SnapshotPtr>::migratePages( //
     }
 
     PageEntriesEdit gc_file_edit;
-    size_t          bytes_written = 0;
-    MigrateInfos    migrate_infos;
+    size_t bytes_written = 0;
+    MigrateInfos migrate_infos;
     {
         for (auto & page_file : files_without_valid_pages)
         {
@@ -429,7 +429,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
 
     for (auto iter = files_valid_pages.cbegin(); iter != files_valid_pages.cend(); ++iter)
     {
-        const auto & file_id_level                          = iter->first;
+        const auto & file_id_level = iter->first;
         const auto & [_valid_bytes, valid_page_ids_in_file] = iter->second;
         (void)_valid_bytes;
 
@@ -446,7 +446,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
             auto migrate_entries =
                 [compact_sequence, &data_reader, &gc_file_id, &gc_file_writer, &gc_file_edit, this](PageIdAndEntries & entries) -> size_t {
                 const PageMap pages = data_reader->read(entries, read_limiter);
-                WriteBatch    wb;
+                WriteBatch wb;
                 wb.setSequence(compact_sequence);
                 for (const auto & [page_id, entry] : entries)
                 {

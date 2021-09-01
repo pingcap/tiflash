@@ -1,29 +1,24 @@
-#include <errno.h>
-#include <string.h>
-#include <cxxabi.h>
-
-#include <Poco/String.h>
-
-#include <common/logger_useful.h>
-
-#include <IO/WriteHelpers.h>
+#include <Common/Exception.h>
 #include <IO/Operators.h>
 #include <IO/ReadBufferFromString.h>
-
-#include <Common/Exception.h>
+#include <IO/WriteHelpers.h>
+#include <Poco/String.h>
 #include <common/demangle.h>
+#include <common/logger_useful.h>
+#include <cxxabi.h>
+#include <errno.h>
+#include <string.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int POCO_EXCEPTION;
-    extern const int STD_EXCEPTION;
-    extern const int UNKNOWN_EXCEPTION;
-    extern const int CANNOT_TRUNCATE_FILE;
-}
+extern const int POCO_EXCEPTION;
+extern const int STD_EXCEPTION;
+extern const int UNKNOWN_EXCEPTION;
+extern const int CANNOT_TRUNCATE_FILE;
+} // namespace ErrorCodes
 
 
 void throwFromErrno(const std::string & s, int code, int e)
@@ -53,7 +48,7 @@ void throwFromErrno(const std::string & s, int code, int e)
 
 void tryLogCurrentException(const char * log_name, const std::string & start_of_message)
 {
-    tryLogCurrentException(&Logger::get(log_name), start_of_message);
+    tryLogCurrentException(&Poco::Logger::get(log_name), start_of_message);
 }
 
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message)
@@ -84,9 +79,11 @@ std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded
         try
         {
             stream << "Poco::Exception. Code: " << ErrorCodes::POCO_EXCEPTION << ", e.code() = " << e.code()
-                << ", e.displayText() = " << e.displayText() << ", e.what() = " << e.what();
+                   << ", e.displayText() = " << e.displayText() << ", e.what() = " << e.what();
         }
-        catch (...) {}
+        catch (...)
+        {
+        }
     }
     catch (const std::exception & e)
     {
@@ -100,7 +97,9 @@ std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded
 
             stream << "std::exception. Code: " << ErrorCodes::STD_EXCEPTION << ", type: " << name << ", e.what() = " << e.what();
         }
-        catch (...) {}
+        catch (...)
+        {
+        }
     }
     catch (...)
     {
@@ -114,7 +113,9 @@ std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded
 
             stream << "Unknown exception. Code: " << ErrorCodes::UNKNOWN_EXCEPTION << ", type: " << name;
         }
-        catch (...) {}
+        catch (...)
+        {
+        }
     }
 
     return stream.str();
@@ -201,9 +202,12 @@ std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool 
         stream << "Code: " << e.code() << ", e.displayText() = " << text << ", e.what() = " << e.what();
 
         if (with_stacktrace && !has_embedded_stack_trace)
-            stream << ", Stack trace:\n\n" << e.getStackTrace().toString();
+            stream << ", Stack trace:\n\n"
+                   << e.getStackTrace().toString();
     }
-    catch (...) {}
+    catch (...)
+    {
+    }
 
     return stream.str();
 }
@@ -224,7 +228,8 @@ std::string getExceptionMessage(std::exception_ptr e, bool with_stacktrace)
 std::string ExecutionStatus::serializeText() const
 {
     WriteBufferFromOwnString wb;
-    wb << code << "\n" << escape << message;
+    wb << code << "\n"
+       << escape << message;
     return wb.str();
 }
 
@@ -255,4 +260,4 @@ ExecutionStatus ExecutionStatus::fromCurrentException(const std::string & start_
 }
 
 
-}
+} // namespace DB

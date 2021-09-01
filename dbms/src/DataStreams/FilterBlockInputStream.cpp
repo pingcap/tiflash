@@ -3,9 +3,8 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
-#include <Interpreters/ExpressionActions.h>
-
 #include <DataStreams/FilterBlockInputStream.h>
+#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
@@ -197,7 +196,7 @@ Block FilterBlockInputStream::readImpl()
             if (current_column.column->isColumnConst())
                 current_column.column = current_column.column->cut(0, filtered_rows);
             else
-                current_column.column = current_column.column->filter(*filter, -1);
+                current_column.column = current_column.column->filter(*filter, filtered_rows);
         }
 
         return res;

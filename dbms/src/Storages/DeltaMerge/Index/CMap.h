@@ -8,7 +8,6 @@ namespace DM
 {
 class CMap : public EqualIndex
 {
-
 };
 } // namespace DM
 } // namespace DB

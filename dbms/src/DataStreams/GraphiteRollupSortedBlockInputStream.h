@@ -141,7 +141,7 @@ protected:
     Block readImpl() override;
 
 private:
-    Logger * log = &Logger::get("GraphiteRollupSortedBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("GraphiteRollupSortedBlockInputStream");
 
     const Graphite::Params params;
 

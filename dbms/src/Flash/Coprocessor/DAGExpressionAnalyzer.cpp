@@ -336,6 +336,27 @@ static String buildBitwiseFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
 }
 
+static String buildRoundFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    // ROUND(x) -> ROUND(x, 0)
+
+    if (expr.children_size() != 1)
+        throw TiFlashException("Invalid arguments of ROUND function", Errors::Coprocessor::BadRequest);
+
+
+    auto input_arg_name = analyzer->getActions(expr.children(0), actions);
+
+    auto const_zero = tipb::Expr();
+    constructInt64LiteralTiExpr(const_zero, 0);
+    auto const_zero_arg_name = analyzer->getActions(const_zero, actions);
+
+    Names argument_names;
+    argument_names.push_back(std::move(input_arg_name));
+    argument_names.push_back(std::move(const_zero_arg_name));
+
+    return analyzer->applyFunction("tidbRoundWithFrac", argument_names, actions, getCollatorFromExpr(expr));
+}
+
 static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
@@ -354,7 +375,8 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"multiIf", buildMultiIfFunction}, {"tidb_cast", buildCastFunction}, {"and", buildLogicalFunction}, {"or", buildLogicalFunction},
         {"xor", buildLogicalFunction}, {"not", buildLogicalFunction}, {"bitAnd", buildBitwiseFunction}, {"bitOr", buildBitwiseFunction},
         {"bitXor", buildBitwiseFunction}, {"bitNot", buildBitwiseFunction}, {"leftUTF8", buildLeftUTF8Function},
-        {"date_add", buildDateAddOrSubFunction<DateAdd>}, {"date_sub", buildDateAddOrSubFunction<DateSub>}});
+        {"date_add", buildDateAddOrSubFunction<DateAdd>}, {"date_sub", buildDateAddOrSubFunction<DateSub>},
+        {"tidbRound", buildRoundFunction}});
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_)), context(context_), after_agg(false), implicit_cast_count(0)
@@ -401,10 +423,15 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         AggregateDescription aggregate;
         DataTypes types(expr.children_size());
         aggregate.argument_names.resize(expr.children_size());
+        TiDB::TiDBCollators arg_collators;
         for (Int32 i = 0; i < expr.children_size(); i++)
         {
             String arg_name = getActions(expr.children(i), step.actions);
             types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
+            if (removeNullable(types[i])->isString())
+                arg_collators.push_back(getCollatorFromExpr(expr.children(i)));
+            else
+                arg_collators.push_back(nullptr);
             aggregate.argument_names[i] = arg_name;
             step.required_output.push_back(arg_name);
         }
@@ -425,7 +452,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         aggregate.parameters = Array();
         /// if there is group by clause, there is no need to consider the empty input case
         aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, agg.group_by_size() == 0);
-        aggregate.function->setCollator(getCollatorFromExpr(expr));
+        aggregate.function->setCollators(arg_collators);
         aggregate_descriptions.push_back(aggregate);
         DataTypePtr result_type = aggregate.function->getReturnType();
         // this is a temp result since implicit cast maybe added on these aggregated_columns
@@ -452,7 +479,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         if (group_by_collation_sensitive)
         {
             auto type = step.actions->getSampleBlock().getByName(name).type;
-            std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr;
+            TiDB::TiDBCollatorPtr collator;
             if (removeNullable(type)->isString())
                 collator = getCollatorFromExpr(expr);
             if (!duplicated_key)
@@ -464,6 +491,8 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
                 /// extra aggregation function any(group_by_column) here as the output of the group by column
                 const String & agg_func_name = "any";
                 AggregateDescription aggregate;
+                TiDB::TiDBCollators arg_collators;
+                arg_collators.push_back(collator);
 
                 DataTypes types(1);
                 aggregate.argument_names.resize(1);
@@ -486,7 +515,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
                 aggregate.column_name = func_string;
                 aggregate.parameters = Array();
                 aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, false);
-                aggregate.function->setCollator(getCollatorFromExpr(expr));
+                aggregate.function->setCollators(arg_collators);
                 aggregate_descriptions.push_back(aggregate);
                 DataTypePtr result_type = aggregate.function->getReturnType();
                 // this is a temp result since implicit cast maybe added on these aggregated_columns
@@ -513,7 +542,7 @@ bool isUInt8Type(const DataTypePtr & type)
 }
 
 String DAGExpressionAnalyzer::applyFunction(
-    const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, std::shared_ptr<TiDB::ITiDBCollator> collator)
+    const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, const TiDB::TiDBCollatorPtr & collator)
 {
     String result_name = genFuncString(func_name, arg_names);
     if (actions->getSampleBlock().has(result_name))

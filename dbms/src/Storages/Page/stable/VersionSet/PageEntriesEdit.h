@@ -6,7 +6,6 @@
 
 namespace DB::stable
 {
-
 /// Page entries change to apply to version set.
 class PageEntriesEdit
 {
@@ -16,25 +15,25 @@ public:
     void put(PageId page_id, const PageEntry & entry)
     {
         EditRecord record;
-        record.type    = WriteBatch::WriteType::PUT;
+        record.type = WriteBatch::WriteType::PUT;
         record.page_id = page_id;
-        record.entry   = entry;
+        record.entry = entry;
         records.emplace_back(record);
     }
 
     void upsertPage(PageId page_id, const PageEntry & entry)
     {
         EditRecord record;
-        record.type    = WriteBatch::WriteType::UPSERT;
+        record.type = WriteBatch::WriteType::UPSERT;
         record.page_id = page_id;
-        record.entry   = entry;
+        record.entry = entry;
         records.emplace_back(record);
     }
 
     void del(PageId page_id)
     {
         EditRecord record;
-        record.type    = WriteBatch::WriteType::DEL;
+        record.type = WriteBatch::WriteType::DEL;
         record.page_id = page_id;
         records.emplace_back(record);
     }
@@ -42,8 +41,8 @@ public:
     void ref(PageId ref_id, PageId page_id)
     {
         EditRecord record;
-        record.type        = WriteBatch::WriteType::REF;
-        record.page_id     = ref_id;
+        record.type = WriteBatch::WriteType::REF;
+        record.page_id = ref_id;
         record.ori_page_id = page_id;
         records.emplace_back(record);
     }
@@ -55,13 +54,13 @@ public:
     struct EditRecord
     {
         WriteBatch::WriteType type;
-        PageId                page_id;
-        PageId                ori_page_id;
-        PageEntry             entry;
+        PageId page_id;
+        PageId ori_page_id;
+        PageEntry entry;
     };
     using EditRecords = std::vector<EditRecord>;
 
-    EditRecords &       getRecords() { return records; }
+    EditRecords & getRecords() { return records; }
     const EditRecords & getRecords() const { return records; }
 
 private:
@@ -72,7 +71,11 @@ public:
     PageEntriesEdit(const PageEntriesEdit &) = delete;
     PageEntriesEdit & operator=(const PageEntriesEdit &) = delete;
     // Only move allowed
-    PageEntriesEdit(PageEntriesEdit && rhs) noexcept : PageEntriesEdit() { *this = std::move(rhs); }
+    PageEntriesEdit(PageEntriesEdit && rhs) noexcept
+        : PageEntriesEdit()
+    {
+        *this = std::move(rhs);
+    }
     PageEntriesEdit & operator=(PageEntriesEdit && rhs) noexcept
     {
         if (this != &rhs)

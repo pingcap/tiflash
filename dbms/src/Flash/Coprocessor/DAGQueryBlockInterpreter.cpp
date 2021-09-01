@@ -50,7 +50,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
       dag(dag_),
       subqueriesForSets(subqueriesForSets_),
       exchange_receiver_map(exchange_receiver_map_),
-      log(&Logger::get("DAGQueryBlockInterpreter"))
+      log(&Poco::Logger::get("DAGQueryBlockInterpreter"))
 {
     if (query_block.selection != nullptr)
     {
@@ -596,15 +596,7 @@ void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const 
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
       */
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
-    bool has_collator = false;
-    for (auto & p : collators)
-    {
-        if (p != nullptr)
-        {
-            has_collator = true;
-            break;
-        }
-    }
+    bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
 
     Aggregator::Params params(header, keys, aggregates, false, settings.max_rows_to_group_by, settings.group_by_overflow_mode,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
@@ -892,7 +884,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(DAGPipeline & pipeline,
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-    auto all_tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, cop_key_ranges, req, store_type, &Logger::get("pingcap/coprocessor"));
+    auto all_tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, cop_key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
 
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
     size_t task_per_thread = all_tasks.size() / concurrent_num;

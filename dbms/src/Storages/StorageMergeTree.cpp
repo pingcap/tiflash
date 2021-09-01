@@ -1,51 +1,48 @@
-#include <optional>
 #include <Common/FailPoint.h>
 #include <Common/FieldVisitors.h>
-#include <Storages/StorageMergeTree.h>
-#include <Storages/MergeTree/MergeTreeBlockOutputStream.h>
-#include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
-#include <Storages/MergeTree/DiskSpaceMonitor.h>
-#include <Storages/MergeTree/MergeList.h>
-#include <Databases/IDatabase.h>
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
-#include <Interpreters/InterpreterAlterQuery.h>
-#include <Interpreters/PartLog.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTLiteral.h>
-#include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/MergeTree/ActiveDataPartSet.h>
-
-#include <Storages/MutableSupport.h>
-#include <Parsers/ASTInsertQuery.h>
-#include <Parsers/ASTDeleteQuery.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTOptimizeQuery.h>
-
-#include <DataStreams/RemoveColumnsBlockInputStream.h>
 #include <DataStreams/AdditionalColumnsBlockOutputStream.h>
 #include <DataStreams/DedupSortedBlockInputStream.h>
 #include <DataStreams/InBlockDedupBlockOutputStream.h>
-
+#include <DataStreams/RemoveColumnsBlockInputStream.h>
+#include <Databases/IDatabase.h>
+#include <Interpreters/InterpreterAlterQuery.h>
+#include <Interpreters/PartLog.h>
+#include <Parsers/ASTDeleteQuery.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTOptimizeQuery.h>
+#include <Parsers/ASTSelectQuery.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
+#include <Storages/MergeTree/ActiveDataPartSet.h>
+#include <Storages/MergeTree/DiskSpaceMonitor.h>
+#include <Storages/MergeTree/MergeList.h>
+#include <Storages/MergeTree/MergeTreeBlockOutputStream.h>
+#include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
+#include <Storages/MutableSupport.h>
+#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 
+#include <optional>
+
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ABORTED;
-    extern const int BAD_ARGUMENTS;
-    extern const int INCORRECT_DATA;
-    extern const int INCORRECT_FILE_NAME;
-    extern const int CANNOT_ASSIGN_OPTIMIZE;
-    extern const int FAIL_POINT_ERROR;
-}
+extern const int ABORTED;
+extern const int BAD_ARGUMENTS;
+extern const int INCORRECT_DATA;
+extern const int INCORRECT_FILE_NAME;
+extern const int CANNOT_ASSIGN_OPTIMIZE;
+extern const int FAIL_POINT_ERROR;
+} // namespace ErrorCodes
 
 namespace FailPoints
 {
@@ -54,37 +51,35 @@ extern const char exception_between_alter_data_and_meta[];
 
 
 StorageMergeTree::StorageMergeTree(const String & path_,
-    const String & db_engine_,
-    const String & database_name_,
-    const String & table_name_,
-    const ColumnsDescription & columns_,
-    bool attach,
-    Context & context_,
-    const TableInfo & table_info_,
-    const ASTPtr & primary_expr_ast_,
-    const ASTPtr & secondary_sorting_expr_list_,
-    const String & date_column_name,
-    const ASTPtr & partition_expr_ast_,
-    const ASTPtr & sampling_expression_, /// nullptr, if sampling is not supported.
-    const MergeTreeData::MergingParams & merging_params_,
-    const MergeTreeSettings & settings_,
-    bool has_force_restore_data_flag,
-    Timestamp tombstone)
-    : IManageableStorage{tombstone},
-      path(path_),
-      data_path_contains_database_name(db_engine_ != "TiFlash"),
-      database_name(database_name_),
-      table_name(table_name_),
-      full_path(path + escapeForFileName(table_name) + '/'),
-      context(context_),
-      background_pool(context_.getBackgroundPool()),
-      data(database_name, table_name, full_path, data_path_contains_database_name, columns_, context_, primary_expr_ast_,
-          secondary_sorting_expr_list_, date_column_name, partition_expr_ast_, sampling_expression_, merging_params_, settings_, false,
-          attach),
-      reader(data),
-      writer(data),
-      merger(data, context.getBackgroundPool()),
-      log(&Logger::get(database_name_ + "." + table_name + " (StorageMergeTree)"))
+                                   const String & db_engine_,
+                                   const String & database_name_,
+                                   const String & table_name_,
+                                   const ColumnsDescription & columns_,
+                                   bool attach,
+                                   Context & context_,
+                                   const TableInfo & table_info_,
+                                   const ASTPtr & primary_expr_ast_,
+                                   const ASTPtr & secondary_sorting_expr_list_,
+                                   const String & date_column_name,
+                                   const ASTPtr & partition_expr_ast_,
+                                   const ASTPtr & sampling_expression_, /// nullptr, if sampling is not supported.
+                                   const MergeTreeData::MergingParams & merging_params_,
+                                   const MergeTreeSettings & settings_,
+                                   bool has_force_restore_data_flag,
+                                   Timestamp tombstone)
+    : IManageableStorage{tombstone}
+    , path(path_)
+    , data_path_contains_database_name(db_engine_ != "TiFlash")
+    , database_name(database_name_)
+    , table_name(table_name_)
+    , full_path(path + escapeForFileName(table_name) + '/')
+    , context(context_)
+    , background_pool(context_.getBackgroundPool())
+    , data(database_name, table_name, full_path, data_path_contains_database_name, columns_, context_, primary_expr_ast_, secondary_sorting_expr_list_, date_column_name, partition_expr_ast_, sampling_expression_, merging_params_, settings_, false, attach)
+    , reader(data)
+    , writer(data)
+    , merger(data, context.getBackgroundPool())
+    , log(&Poco::Logger::get(database_name_ + "." + table_name + " (StorageMergeTree)"))
 {
     *data.table_info = table_info_;
     if (path_.empty())
@@ -155,8 +150,7 @@ BlockInputStreams StorageMergeTree::read(
     auto res = reader.read(column_names, query_info, context, processed_stage, max_block_size, num_streams, 0);
     const ASTSelectQuery * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get());
 
-    if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable ||
-        data.merging_params.mode == MergeTreeData::MergingParams::Txn)
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable || data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
         if (select_query && !select_query->raw_for_mutable)
         {
@@ -192,9 +186,15 @@ UInt64 StorageMergeTree::getVersionSeed(const Settings & /* settings */) const
     return (increment.value + 1) * 1000000;
 }
 
-const StorageMergeTree::TableInfo & StorageMergeTree::getTableInfo() const { return *data.table_info; }
+const StorageMergeTree::TableInfo & StorageMergeTree::getTableInfo() const
+{
+    return *data.table_info;
+}
 
-void StorageMergeTree::setTableInfo(const TableInfo & table_info_) { *data.table_info = table_info_; }
+void StorageMergeTree::setTableInfo(const TableInfo & table_info_)
+{
+    *data.table_info = table_info_;
+}
 
 BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Settings & settings)
 {
@@ -212,13 +212,11 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
             if (!insert_query->is_import)
             {
                 LOG_DEBUG(log, "TMT table writing, add version column and del-mark column.");
-                AdditionalBlockGenerators gens
-                {
+                AdditionalBlockGenerators gens{
                     std::make_shared<AdditionalBlockGeneratorPD>(MutableSupport::version_column_name,
-                        context.getTMTContext().getPDClient()),
+                                                                 context.getTMTContext().getPDClient()),
                     std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name,
-                        MutableSupport::DelMark::genDelMark(false))
-                };
+                                                                           MutableSupport::DelMark::genDelMark(false))};
                 res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
                 res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
             }
@@ -228,13 +226,11 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
         else if (delete_query)
         {
             LOG_DEBUG(log, "Delete from TMT table, add version column and del-mark column.");
-            AdditionalBlockGenerators gens
-            {
+            AdditionalBlockGenerators gens{
                 std::make_shared<AdditionalBlockGeneratorPD>(MutableSupport::version_column_name,
-                    context.getTMTContext().getPDClient()),
+                                                             context.getTMTContext().getPDClient()),
                 std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name,
-                    MutableSupport::DelMark::genDelMark(true))
-            };
+                                                                       MutableSupport::DelMark::genDelMark(true))};
             res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
             res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
         }
@@ -250,13 +246,11 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
             if (!insert_query->is_import)
             {
                 LOG_DEBUG(log, "Mutable table writing, add version column and del-mark column.");
-                AdditionalBlockGenerators gens
-                {
+                AdditionalBlockGenerators gens{
                     std::make_shared<AdditionalBlockGeneratorIncrease<UInt64>>(MutableSupport::version_column_name,
-                        getVersionSeed(settings)),
+                                                                               getVersionSeed(settings)),
                     std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name,
-                        MutableSupport::DelMark::genDelMark(false))
-                };
+                                                                           MutableSupport::DelMark::genDelMark(false))};
                 res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
                 // TODO: Dedup in MergeTreeDataWriter may be better, in case some one glue some blocks together
                 res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
@@ -267,13 +261,11 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
         else if (delete_query)
         {
             LOG_DEBUG(log, "Mutable table deleting.");
-            AdditionalBlockGenerators gens
-            {
+            AdditionalBlockGenerators gens{
                 std::make_shared<AdditionalBlockGeneratorConst<UInt64>>(MutableSupport::version_column_name,
-                    getVersionSeed(settings)),
+                                                                        getVersionSeed(settings)),
                 std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name,
-                    MutableSupport::DelMark::genDelMark(true))
-            };
+                                                                       MutableSupport::DelMark::genDelMark(true))};
             res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
             res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
         }
@@ -305,7 +297,10 @@ void StorageMergeTree::drop()
 }
 
 void StorageMergeTree::rename(
-    const String & new_path_to_db, const String & new_database_name, const String & new_table_name, const String & new_display_table_name)
+    const String & new_path_to_db,
+    const String & new_database_name,
+    const String & new_table_name,
+    const String & new_display_table_name)
 {
     std::string new_full_path = new_path_to_db + escapeForFileName(new_table_name) + '/';
 
@@ -324,8 +319,8 @@ void StorageMergeTree::rename(
         new_parts_path += escapeForFileName(new_table_name) + '/';
         if (data_path_contains_database_name && Poco::File{new_parts_path}.exists())
             throw Exception{"Target path already exists: " + new_parts_path,
-                /// @todo existing target can also be a file, not directory
-                ErrorCodes::DIRECTORY_ALREADY_EXISTS};
+                            /// @todo existing target can also be a file, not directory
+                            ErrorCodes::DIRECTORY_ALREADY_EXISTS};
         else
             Poco::File(orig_parts_path).renameTo(new_parts_path);
     }
@@ -338,7 +333,7 @@ void StorageMergeTree::rename(
     data.table_name = new_table_name;
     data.database_name = new_database_name;
     data.table_info->name = new_display_table_name; // update name in table info
-    /// NOTE: Logger names are not updated.
+    /// NOTE: Poco::Logger names are not updated.
 }
 
 void StorageMergeTree::alter(
@@ -435,8 +430,7 @@ void StorageMergeTree::alterInternal(
             transactions.push_back(std::move(transaction));
     }
 
-    IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, table_info, tombstone] (IAST & ast)
-    {
+    IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, table_info, tombstone](IAST & ast) {
         auto & storage_ast = typeid_cast<ASTStorage &>(ast);
 
         if (primary_key_is_modified)
@@ -516,7 +510,8 @@ struct CurrentlyMergingPartsTagger
     CurrentlyMergingPartsTagger() = default;
 
     CurrentlyMergingPartsTagger(const MergeTreeDataMerger::FuturePart & future_part, size_t total_size, StorageMergeTree & storage_)
-        : parts(future_part.parts), storage(&storage_)
+        : parts(future_part.parts)
+        , storage(&storage_)
     {
         /// Assume mutex is already locked, because this method is called from mergeTask.
         reserved_space = DiskSpaceMonitor::reserve(future_part.path, total_size); /// May throw.
@@ -577,8 +572,7 @@ bool StorageMergeTree::merge(
     {
         std::lock_guard<std::mutex> lock(currently_merging_mutex);
 
-        auto can_merge = [this] (const MergeTreeData::DataPartPtr & left, const MergeTreeData::DataPartPtr & right, String *)
-        {
+        auto can_merge = [this](const MergeTreeData::DataPartPtr & left, const MergeTreeData::DataPartPtr & right, String *) {
             return !currently_merging.count(left) && !currently_merging.count(right);
         };
 
@@ -607,8 +601,7 @@ bool StorageMergeTree::merge(
     Stopwatch stopwatch;
     MergeTreeData::MutableDataPartPtr new_part;
 
-    auto write_part_log = [&] (const ExecutionStatus & execution_status)
-    {
+    auto write_part_log = [&](const ExecutionStatus & execution_status) {
         try
         {
             auto part_log = context.getPartLog(database_name);
@@ -651,8 +644,7 @@ bool StorageMergeTree::merge(
 
     try
     {
-        new_part = merger.mergePartsToTemporaryPart(future_part, *merge_entry, aio_threshold, time(nullptr),
-                                                    merging_tagger->reserved_space.get(), deduplicate, final);
+        new_part = merger.mergePartsToTemporaryPart(future_part, *merge_entry, aio_threshold, time(nullptr), merging_tagger->reserved_space.get(), deduplicate, final);
         merger.renameMergedTemporaryPart(new_part, future_part.parts, nullptr);
 
         write_part_log({});
@@ -734,7 +726,11 @@ void StorageMergeTree::clearColumnInPartition(const ASTPtr & partition, const Fi
 
 
 bool StorageMergeTree::optimize(
-    const ASTPtr & query, const ASTPtr & partition, bool final, bool deduplicate, const Context & context)
+    const ASTPtr & query,
+    const ASTPtr & partition,
+    bool final,
+    bool deduplicate,
+    const Context & context)
 {
     std::ignore = query;
 
@@ -862,4 +858,4 @@ DataTypePtr StorageMergeTree::getPKTypeImpl() const
     return data.primary_key_data_types[0];
 }
 
-}
+} // namespace DB

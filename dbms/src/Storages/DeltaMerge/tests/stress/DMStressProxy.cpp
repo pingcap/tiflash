@@ -1,3 +1,4 @@
+#include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/tests/stress/DMStressProxy.h>
@@ -9,16 +10,15 @@ namespace DM
 {
 namespace tests
 {
-
 IDGenerator<Int64> pk{0};
 
-IDGenerator<UInt64> tso{0};
+IDGenerator<UInt64> tso{StopWatchDetail::nanoseconds(CLOCK_MONOTONIC)};
 
 template <typename T>
 void insertColumn(Block & block, const DataTypePtr & type, const String & name, Int64 col_id, const std::vector<T> & values)
 {
     ColumnWithTypeAndName col({}, type, name, col_id);
-    IColumn::MutablePtr   m_col = col.type->createColumn();
+    IColumn::MutablePtr m_col = col.type->createColumn();
     for (const T & v : values)
     {
         Field field = v;
@@ -26,6 +26,53 @@ void insertColumn(Block & block, const DataTypePtr & type, const String & name, 
     }
     col.column = std::move(m_col);
     block.insert(std::move(col));
+}
+
+DMStressProxy::DMStressProxy(const StressOptions & opts_)
+    : name(opts_.table_name)
+    , col_balance_define(2, "balance", std::make_shared<DataTypeUInt64>())
+    , col_random_define(3, "random_text", std::make_shared<DataTypeString>())
+    , log(&Poco::Logger::get("DMStressProxy"))
+    , opts(opts_)
+    , rnd(::time(nullptr))
+    , stop(false)
+{
+    context = std::make_unique<Context>(DMTestEnv::getContext());
+    auto cols = DMTestEnv::getDefaultColumns();
+    cols->emplace_back(col_balance_define);
+    cols->emplace_back(col_random_define);
+    auto handle_col = (*cols)[0];
+    store = std::make_shared<DeltaMergeStore>(*context, true, "test", name, *cols, handle_col, false, 1, DeltaMergeStore::Settings());
+    if (opts_.verify)
+    {
+        ColumnDefines columns;
+        columns.emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
+        BlockInputStreamPtr in = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ tso.get(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        while (Block block = in->read())
+        {
+            if (block.columns() != 1)
+            {
+                LOG_ERROR(log, "block columns must be 1.");
+                throw DB::Exception("block columns must be 1.", ErrorCodes::LOGICAL_ERROR);
+            }
+            // only one columns, so only need to fetch begin iterator.
+            auto itr = block.begin();
+            std::vector<Int64> ids;
+            ids.reserve(itr->column->size());
+            for (size_t i = 0; i < itr->column->size(); i++)
+            {
+                ids.emplace_back(itr->column->getInt(i));
+            }
+            pks.insert(ids);
+        }
+    }
 }
 
 void DMStressProxy::genMultiThread()
@@ -37,7 +84,7 @@ void DMStressProxy::genMultiThread()
     }
 
     UInt64 gen_rows_per_thread = opts.gen_total_rows / opts.gen_concurrency + 1;
-    UInt64 gen_total_rows      = gen_rows_per_thread * opts.gen_concurrency; // May large than opts.gen_total_row.
+    UInt64 gen_total_rows = gen_rows_per_thread * opts.gen_concurrency; // May large than opts.gen_total_row.
     LOG_INFO(log,
              "Generate concurrency: " << opts.gen_concurrency << " Generate rows per thread: " << gen_rows_per_thread
                                       << " Generate total rows: " << gen_total_rows);
@@ -56,7 +103,7 @@ void DMStressProxy::genData(UInt32 id, UInt64 rows)
     UInt64 generated_count = 0;
     while (generated_count < rows)
     {
-        auto c   = std::min(opts.gen_rows_per_block, rows - generated_count);
+        auto c = std::min(opts.gen_rows_per_block, rows - generated_count);
         auto ids = pk.get(c);
         write(ids);
         generated_count += c;
@@ -85,7 +132,7 @@ void DMStressProxy::genBlock(Block & block, const std::vector<Int64> & ids)
     insertColumn<UInt64>(block, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID, v_tag);
     std::vector<UInt64> v_balance(ids.size(), 1024);
     insertColumn<UInt64>(block, col_balance_define.type, col_balance_define.name, col_balance_define.id, v_balance);
-    std::string         s("C", 128);
+    std::string s("C", 128);
     std::vector<String> v_s(ids.size(), s);
     insertColumn<String>(block, col_random_define.type, col_random_define.name, col_random_define.id, v_s);
 }
@@ -226,9 +273,9 @@ void DMStressProxy::update()
 
 void DMStressProxy::deleteRange()
 {
-    Int64 id1   = rnd() % pk.max();
-    Int64 id2   = id1 + (rnd() % opts.write_rows_per_block) + 1;
-    auto  range = RowKeyRange::fromHandleRange(HandleRange{id1, id2});
+    Int64 id1 = rnd() % pk.max();
+    Int64 id2 = id1 + (rnd() % opts.write_rows_per_block) + 1;
+    auto range = RowKeyRange::fromHandleRange(HandleRange{id1, id2});
 
     std::vector<Int64> ids; // [id1, id2)
     ids.reserve(id2 - id1);
@@ -310,10 +357,10 @@ void DMStressProxy::waitVerifyThread()
 
 void DMStressProxy::verify()
 {
-    auto          locks = key_lock.getAllLocks(); // Prevent all keys being write.
+    auto locks = key_lock.getAllLocks(); // Prevent all keys being write.
     ColumnDefines columns;
     columns.emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
-    BlockInputStreamPtr in             = store->read(*context,
+    BlockInputStreamPtr in = store->read(*context,
                                          context->getSettingsRef(),
                                          columns,
                                          {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
@@ -321,7 +368,7 @@ void DMStressProxy::verify()
                                          /* max_version= */ tso.get(),
                                          EMPTY_FILTER,
                                          /* expected_block_size= */ 1024)[0];
-    UInt64              dm_total_count = 0;
+    UInt64 dm_total_count = 0;
     while (Block block = in->read())
     {
         dm_total_count += block.rows();
@@ -343,7 +390,7 @@ void DMStressProxy::verify()
             }
         }
     }
-    UInt64      pks_total_count = pks.count();
+    UInt64 pks_total_count = pks.count();
     std::string msg = "Verify dm_total_count: " + std::to_string(dm_total_count) + " pks_total_count: " + std::to_string(pks_total_count);
     if (pks_total_count != dm_total_count)
     {

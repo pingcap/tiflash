@@ -1,0 +1,9 @@
+set(XXHASH_BUILD_ENABLE_INLINE_API OFF CACHE BOOL "Change XXHASH_BUILD_ENABLE_INLINE_API" FORCE)
+set(XXHASH_BUILD_XXHSUM OFF CACHE BOOL "Change XXHASH_BUILD_XXHSUM" FORCE)
+if(NOT BUILD_SHARED_LIBS)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static library" FORCE)
+endif()
+add_subdirectory(
+        ${ClickHouse_SOURCE_DIR}/contrib/xxHash/cmake_unofficial EXCLUDE_FROM_ALL)
+set(XXHASH_INCLUDE_DIR ${ClickHouse_SOURCE_DIR}/contrib/xxHash)
+

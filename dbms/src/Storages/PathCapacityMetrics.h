@@ -11,8 +11,14 @@ namespace DB
 {
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
-
+using FSID = UInt32;
 struct FsStats;
+
+struct DiskCapacity
+{
+    struct statvfs vfs_info = {};
+    std::vector<FsStats> path_stats;
+};
 
 class PathCapacityMetrics : private boost::noncopyable
 {
@@ -21,13 +27,17 @@ public:
         const Strings & main_paths_, const std::vector<size_t> main_capacity_quota_, //
         const Strings & latest_paths_, const std::vector<size_t> latest_capacity_quota_);
 
+    virtual ~PathCapacityMetrics(){};
+
     void addUsedSize(std::string_view file_path, size_t used_bytes);
 
     void freeUsedSize(std::string_view file_path, size_t used_bytes);
 
-    FsStats getFsStats() const;
+    FsStats getFsStats();
 
-    FsStats getFsStatsOfPath(std::string_view file_path) const;
+    virtual std::map<FSID, DiskCapacity> getDiskStats();
+
+    std::tuple<FsStats, struct statvfs> getFsStatsOfPath(std::string_view file_path) const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -49,13 +59,11 @@ private:
         // Used bytes for this path
         std::atomic<uint64_t> used_bytes = 0;
 
-        FsStats getStats(Poco::Logger * log) const;
+        std::tuple<FsStats, struct statvfs> getStats(Poco::Logger * log) const;
 
         CapacityInfo() = default;
         CapacityInfo(String p, uint64_t c) : path(std::move(p)), capacity_bytes(c) {}
-        CapacityInfo(const CapacityInfo & rhs)
-            : path(rhs.path), capacity_bytes(rhs.capacity_bytes), used_bytes(rhs.used_bytes.load())
-        {}
+        CapacityInfo(const CapacityInfo & rhs) : path(rhs.path), capacity_bytes(rhs.capacity_bytes), used_bytes(rhs.used_bytes.load()) {}
     };
 
     // Max quota bytes can be use for this TiFlash instance.

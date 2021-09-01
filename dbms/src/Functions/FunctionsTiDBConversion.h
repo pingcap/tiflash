@@ -24,8 +24,8 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConversion.h>
@@ -48,7 +48,6 @@
 
 namespace DB
 {
-
 String trim(const StringRef & value);
 
 enum CastError
@@ -83,7 +82,12 @@ struct TiDBConvertToString
     }
 
     static void execute(
-        Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType & tp, const Context & context)
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        bool,
+        const tipb::FieldType & tp,
+        const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
         ColumnUInt8::MutablePtr col_null_map_to;
@@ -129,7 +133,9 @@ struct TiDBConvertToString
                     byte_length = tp.flen();
                     if (tp.charset() == "utf8" || tp.charset() == "utf8mb4")
                         byte_length = charLengthToByteLengthFromUTF8(
-                            reinterpret_cast<const char *>(&(*data_from)[current_offset]), org_length, byte_length);
+                            reinterpret_cast<const char *>(&(*data_from)[current_offset]),
+                            org_length,
+                            byte_length);
                     byte_length = std::min(byte_length, org_length);
                 }
                 if (byte_length < org_length)
@@ -438,7 +444,12 @@ struct TiDBConvertToInteger
     }
 
     static void execute(
-        Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType &, const Context & context)
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        bool,
+        const tipb::FieldType &,
+        const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
 
@@ -589,7 +600,11 @@ struct TiDBConvertToFloat
 
     template <typename T>
     static std::enable_if_t<std::is_floating_point_v<T> || std::is_integral_v<T>, Float64> toFloat(
-        const T & value, bool need_truncate, Float64 shift, Float64 max_f, const Context & context)
+        const T & value,
+        bool need_truncate,
+        Float64 shift,
+        Float64 max_f,
+        const Context & context)
     {
         Float64 float_value = static_cast<Float64>(value);
         return produceTargetFloat64(float_value, need_truncate, shift, max_f, context);
@@ -679,7 +694,12 @@ struct TiDBConvertToFloat
     }
 
     static void execute(
-        Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType & tp, const Context & context)
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        bool,
+        const tipb::FieldType & tp,
+        const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
 
@@ -727,10 +747,10 @@ struct TiDBConvertToFloat
                     MyDateTime date_time(vec_from[i]);
                     if (type.getFraction() > 0)
                         vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
+                                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
                     else
                         vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second);
+                                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second);
                 }
             }
         }
@@ -882,7 +902,11 @@ struct TiDBConvertToDecimal
 
     template <typename T, typename U>
     static std::enable_if_t<IsDecimal<T>, U> toTiDBDecimal(
-        const T & v, ScaleType v_scale, PrecType prec, ScaleType scale, const Context & context)
+        const T & v,
+        ScaleType v_scale,
+        PrecType prec,
+        ScaleType scale,
+        const Context & context)
     {
         using UType = typename U::NativeType;
         auto value = Int256(v.value);
@@ -1091,8 +1115,7 @@ struct TiDBConvertToDecimal
     }
 
     /// cast int/real/time/decimal as decimal
-    static void execute(Block & block, const ColumnNumbers & arguments, size_t result, PrecType prec [[maybe_unused]], ScaleType scale,
-        bool, const tipb::FieldType &, const Context & context)
+    static void execute(Block & block, const ColumnNumbers & arguments, size_t result, PrecType prec [[maybe_unused]], ScaleType scale, bool, const tipb::FieldType &, const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
         auto col_to = ColumnDecimal<ToFieldType>::create(size, static_cast<ToFieldType>(0), scale);
@@ -1157,7 +1180,7 @@ struct TiDBConvertToDecimal
             }
         }
         else if (const ColumnVector<FromFieldType> * col_from
-            = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
+                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
         {
             /// cast int/real as decimal
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
@@ -1188,7 +1211,12 @@ struct TiDBConvertToTime
     using ToFieldType = typename ToDataType::FieldType;
 
     static void execute(
-        Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType &, const Context & context)
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        bool,
+        const tipb::FieldType &,
+        const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
         auto col_to = ColumnUInt64::create(size, 0);
@@ -1329,7 +1357,8 @@ struct TiDBConvertToTime
                     // Cannot cast, fill with NULL
                     (*vec_null_map_to)[i] = 1;
                     context.getDAGContext()->handleInvalidTime(
-                        "Invalid time value: '" + toString(vec_from[i]) + "'", Errors::Types::WrongValue);
+                        "Invalid time value: '" + toString(vec_from[i]) + "'",
+                        Errors::Types::WrongValue);
                 }
             }
         }
@@ -1538,8 +1567,16 @@ public:
     using WrapperType = std::function<void(Block &, const ColumnNumbers &, size_t, bool, const tipb::FieldType &, const Context &)>;
 
     PreparedFunctionTiDBCast(
-        WrapperType && wrapper_function, const char * name_, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_)
-        : wrapper_function(std::move(wrapper_function)), name(name_), in_union(in_union_), tidb_tp(tidb_tp_), context(context_)
+        WrapperType && wrapper_function,
+        const char * name_,
+        bool in_union_,
+        const tipb::FieldType & tidb_tp_,
+        const Context & context_)
+        : wrapper_function(std::move(wrapper_function))
+        , name(name_)
+        , in_union(in_union_)
+        , tidb_tp(tidb_tp_)
+        , context(context_)
     {}
 
     String getName() const override { return name; }
@@ -1569,15 +1606,14 @@ public:
     using WrapperType = std::function<void(Block &, const ColumnNumbers &, size_t, bool, const tipb::FieldType &, const Context &)>;
     using MonotonicityForRange = std::function<Monotonicity(const IDataType &, const Field &, const Field &)>;
 
-    FunctionTiDBCast(const Context & context, const char * name, MonotonicityForRange && monotonicity_for_range,
-        const DataTypes & argument_types, const DataTypePtr & return_type, bool in_union_, const tipb::FieldType & tidb_tp_)
-        : context(context),
-          name(name),
-          monotonicity_for_range(monotonicity_for_range),
-          argument_types(argument_types),
-          return_type(return_type),
-          in_union(in_union_),
-          tidb_tp(tidb_tp_)
+    FunctionTiDBCast(const Context & context, const char * name, MonotonicityForRange && monotonicity_for_range, const DataTypes & argument_types, const DataTypePtr & return_type, bool in_union_, const tipb::FieldType & tidb_tp_)
+        : context(context)
+        , name(name)
+        , monotonicity_for_range(monotonicity_for_range)
+        , argument_types(argument_types)
+        , return_type(return_type)
+        , in_union(in_union_)
+        , tidb_tp(tidb_tp_)
     {}
 
     const DataTypes & getArgumentTypes() const override { return argument_types; }
@@ -1586,7 +1622,11 @@ public:
     PreparedFunctionPtr prepare(const Block & /*sample_block*/) const override
     {
         return std::make_shared<PreparedFunctionTiDBCast>(
-            prepare(getArgumentTypes()[0], getReturnType()), name, in_union, tidb_tp, context);
+            prepare(getArgumentTypes()[0], getReturnType()),
+            name,
+            in_union,
+            tidb_tp,
+            context);
     }
 
     String getName() const override { return name; }
@@ -1618,75 +1658,123 @@ private:
     {
         /// cast as int
         if (checkDataType<DataTypeUInt64>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
-                       const Context & context_) {
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToInteger<FromDataType, DataTypeUInt64, return_nullable>::execute(
-                    block, arguments, result, in_union_, tidb_tp_, context_);
+                    block,
+                    arguments,
+                    result,
+                    in_union_,
+                    tidb_tp_,
+                    context_);
             };
         if (checkDataType<DataTypeInt64>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
-                       const Context & context_) {
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToInteger<FromDataType, DataTypeInt64, return_nullable>::execute(
-                    block, arguments, result, in_union_, tidb_tp_, context_);
+                    block,
+                    arguments,
+                    result,
+                    in_union_,
+                    tidb_tp_,
+                    context_);
             };
         /// cast as decimal
         if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal32>(to_type.get()))
-            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_,
-                       const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable>::execute(
-                    block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                    block,
+                    arguments,
+                    result,
+                    decimal_type->getPrec(),
+                    decimal_type->getScale(),
+                    in_union_,
+                    tidb_tp_,
+                    context_);
             };
         if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal64>(to_type.get()))
-            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_,
-                       const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable>::execute(
-                    block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                    block,
+                    arguments,
+                    result,
+                    decimal_type->getPrec(),
+                    decimal_type->getScale(),
+                    in_union_,
+                    tidb_tp_,
+                    context_);
             };
         if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal128>(to_type.get()))
-            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_,
-                       const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable>::execute(
-                    block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                    block,
+                    arguments,
+                    result,
+                    decimal_type->getPrec(),
+                    decimal_type->getScale(),
+                    in_union_,
+                    tidb_tp_,
+                    context_);
             };
         if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal256>(to_type.get()))
-            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_,
-                       const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable>::execute(
-                    block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                    block,
+                    arguments,
+                    result,
+                    decimal_type->getPrec(),
+                    decimal_type->getScale(),
+                    in_union_,
+                    tidb_tp_,
+                    context_);
             };
         /// cast as real
         if (checkDataType<DataTypeFloat64>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
-                       const Context & context_) {
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 if (hasUnsignedFlag(tidb_tp_))
                 {
                     TiDBConvertToFloat<FromDataType, DataTypeFloat64, return_nullable, true>::execute(
-                        block, arguments, result, in_union_, tidb_tp_, context_);
+                        block,
+                        arguments,
+                        result,
+                        in_union_,
+                        tidb_tp_,
+                        context_);
                 }
                 else
                 {
                     TiDBConvertToFloat<FromDataType, DataTypeFloat64, return_nullable, false>::execute(
-                        block, arguments, result, in_union_, tidb_tp_, context_);
+                        block,
+                        arguments,
+                        result,
+                        in_union_,
+                        tidb_tp_,
+                        context_);
                 }
             };
         /// cast as string
         if (checkDataType<DataTypeString>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
-                       const Context & context_) {
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToString<FromDataType, return_nullable>::execute(block, arguments, result, in_union_, tidb_tp_, context_);
             };
         /// cast as time
         if (checkDataType<DataTypeMyDate>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
-                       const Context & context_) {
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToTime<FromDataType, DataTypeMyDate, return_nullable>::execute(
-                    block, arguments, result, in_union_, tidb_tp_, context_);
+                    block,
+                    arguments,
+                    result,
+                    in_union_,
+                    tidb_tp_,
+                    context_);
             };
         if (checkDataType<DataTypeMyDateTime>(to_type.get()))
-            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
-                       const Context & context_) {
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToTime<FromDataType, DataTypeMyDateTime, return_nullable>::execute(
-                    block, arguments, result, in_union_, tidb_tp_, context_);
+                    block,
+                    arguments,
+                    result,
+                    in_union_,
+                    tidb_tp_,
+                    context_);
             };
 
         // todo support convert to duration/json type
@@ -1742,7 +1830,8 @@ private:
 
         // todo support convert to duration/json type
         throw Exception{
-            "tidb_cast from " + from_type->getName() + " to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
+            "tidb_cast from " + from_type->getName() + " to " + to_type->getName() + " is not supported",
+            ErrorCodes::CANNOT_CONVERT_TYPE};
     }
 
     bool isIdentityCast(const DataTypePtr & from_type, const DataTypePtr & to_type) const
@@ -1772,17 +1861,17 @@ private:
         auto wrapper = prepareImpl(from_inner_type, to_inner_type, to_type->isNullable());
         if (from_type->isNullable())
         {
-            return [wrapper, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_,
-                       const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [wrapper, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 const auto & from_col = block.getByPosition(arguments[0]).column;
                 const auto & from_nullable_col = static_cast<const ColumnNullable &>(*from_col);
                 const auto & from_null_map = from_nullable_col.getNullMapData();
                 /// make sure if to_type is not nullable, then there is no null value in from_column
                 if (!to_type->isNullable())
                 {
-                    if (!memoryIsZero(from_null_map.data(), from_null_map.size()))
+                    if (!mem_utils::memoryIsZero(from_null_map.data(), from_null_map.size()))
                         throw Exception{
-                            "Cannot convert NULL value to non-Nullable type", ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
+                            "Cannot convert NULL value to non-Nullable type",
+                            ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
                 }
                 Block tmp_block = createBlockWithNestedColumns(block, arguments, result);
                 wrapper(tmp_block, arguments, result, in_union_, tidb_tp_, context_);
@@ -1822,8 +1911,7 @@ private:
             if (isIdentityCast(from_inner_type, to_inner_type) && to_type->isNullable())
             {
                 /// convert not_null type to nullable type
-                return [wrapper, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_,
-                           const tipb::FieldType & tidb_tp_, const Context & context_) {
+                return [wrapper, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                     auto & res = block.getByPosition(result);
                     const auto & ret_type = res.type;
                     const auto & nullable_type = static_cast<const DataTypeNullable &>(*ret_type);
@@ -1873,7 +1961,9 @@ public:
         return std::make_shared<FunctionBuilderTiDBCast>(context);
     }
 
-    FunctionBuilderTiDBCast(const Context & context) : context(context) {}
+    FunctionBuilderTiDBCast(const Context & context)
+        : context(context)
+    {}
 
     String getName() const override { return name; }
 
@@ -1885,7 +1975,9 @@ public:
 
 protected:
     FunctionBasePtr buildImpl(
-        const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type, std::shared_ptr<TiDB::ITiDBCollator>) const override
+        const ColumnsWithTypeAndName & arguments,
+        const DataTypePtr & return_type,
+        const TiDB::TiDBCollatorPtr &) const override
     {
         DataTypes data_types(arguments.size());
 
@@ -1901,7 +1993,8 @@ protected:
         const auto type_col = checkAndGetColumnConst<ColumnString>(arguments.back().column.get());
         if (!type_col)
             throw Exception(
-                "Second argument to " + getName() + " must be a constant string describing type", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                "Second argument to " + getName() + " must be a constant string describing type",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return DataTypeFactory::instance().get(type_col->getValue<String>());
     }

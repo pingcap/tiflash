@@ -11,10 +11,10 @@ namespace tests
 // class Diagnostics_Test : public ::testing::Test
 // {
 // public:
-//     Diagnostics_Test() : log(&Logger::get("Diagnostics")), service(DiagnosticsService(Server())) {}
+//     Diagnostics_Test() : log(&Poco::Logger::get("Diagnostics")), service(DiagnosticsService(Server())) {}
 
 //     DiagnosticsService service;
-//     Logger * log;
+//     Poco::Logger * log;
 
 //     void SetUp() override { return; };
 // };
