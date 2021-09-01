@@ -211,9 +211,9 @@ public:
 
     private:
         PageFile & page_file;
-        char *     meta_buffer      = nullptr;
-        size_t     meta_size        = 0;
-        size_t     meta_file_offset = 0;
+        char * meta_buffer = nullptr;
+        size_t meta_size = 0;
+        size_t meta_file_offset = 0;
     };
 
     struct MergingPtrComparator

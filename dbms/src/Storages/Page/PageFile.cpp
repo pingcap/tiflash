@@ -450,7 +450,9 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
 // PageFile::MetaLinkingReader
 // =========================================================
 
-PageFile::MetaLinkingReader::MetaLinkingReader(PageFile & page_file_) : page_file(page_file_) {}
+PageFile::MetaLinkingReader::MetaLinkingReader(PageFile & page_file_)
+    : page_file(page_file_)
+{}
 
 PageFile::MetaLinkingReader::~MetaLinkingReader()
 {
@@ -503,7 +505,7 @@ bool PageFile::MetaLinkingReader::hasNext() const
 void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level)
 {
     char * meta_data_end = meta_buffer + meta_size;
-    char * pos           = meta_buffer + meta_file_offset;
+    char * pos = meta_buffer + meta_file_offset;
     if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
     {
         LOG_WARNING(page_file.log,
@@ -513,7 +515,7 @@ void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID s
     }
 
     const char * wb_start_pos = pos;
-    const auto   wb_bytes     = PageUtil::get<PageMetaFormat::WBSize>(pos);
+    const auto wb_bytes = PageUtil::get<PageMetaFormat::WBSize>(pos);
     if (wb_start_pos + wb_bytes > meta_data_end)
     {
         LOG_WARNING(page_file.log,
@@ -522,9 +524,9 @@ void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID s
         return;
     }
 
-    WriteBatch::SequenceID wb_sequence    = 0;
-    const auto             binary_version = PageUtil::get<PageFormat::Version>(pos);
-    char *                 sequence_pos   = pos;
+    WriteBatch::SequenceID wb_sequence = 0;
+    const auto binary_version = PageUtil::get<PageFormat::Version>(pos);
+    char * sequence_pos = pos;
     switch (binary_version)
     {
     case PageFormat::V1:
@@ -545,8 +547,8 @@ void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID s
 
     // check the checksum of WriteBatch
     const auto wb_bytes_without_checksum = wb_bytes - sizeof(PageMetaFormat::Checksum);
-    const auto wb_checksum               = PageUtil::get<PageMetaFormat::Checksum, false>(wb_start_pos + wb_bytes_without_checksum);
-    const auto checksum_calc             = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
+    const auto wb_checksum = PageUtil::get<PageMetaFormat::Checksum, false>(wb_start_pos + wb_bytes_without_checksum);
+    const auto checksum_calc = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
     if (wb_checksum != checksum_calc)
     {
         std::stringstream ss;
@@ -567,23 +569,26 @@ void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID s
         switch (write_type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT: {
+        case WriteBatch::WriteType::UPSERT:
+        {
             PageMetaFormat::PageFlags flags;
-            auto                      page_id = PageUtil::get<PageId>(pos);
-            PageEntry                 entry;
+            auto page_id = PageUtil::get<PageId>(pos);
+            PageEntry entry;
             switch (binary_version)
             {
-            case PageFormat::V1: {
+            case PageFormat::V1:
+            {
                 entry.file_id = file_id;
-                entry.level   = level;
+                entry.level = level;
                 break;
             }
-            case PageFormat::V2: {
+            case PageFormat::V2:
+            {
                 PageUtil::put<PageFileId>(pos, file_id);
                 PageUtil::put<PageFileLevel>(pos, level);
                 entry.file_id = file_id;
-                entry.level   = level;
-                flags         = PageUtil::get<PageMetaFormat::PageFlags>(pos);
+                entry.level = level;
+                flags = PageUtil::get<PageMetaFormat::PageFlags>(pos);
                 break;
             }
             default:
@@ -592,9 +597,9 @@ void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID s
                                 ErrorCodes::LOGICAL_ERROR);
             }
 
-            entry.tag      = PageUtil::get<PageMetaFormat::PageTag>(pos);
-            entry.offset   = PageUtil::get<PageMetaFormat::PageOffset>(pos);
-            entry.size     = PageUtil::get<PageSize>(pos);
+            entry.tag = PageUtil::get<PageMetaFormat::PageTag>(pos);
+            entry.offset = PageUtil::get<PageMetaFormat::PageOffset>(pos);
+            entry.size = PageUtil::get<PageSize>(pos);
             entry.checksum = PageUtil::get<PageMetaFormat::Checksum>(pos);
 
             if (binary_version == PageFormat::V2)
@@ -603,7 +608,7 @@ void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID s
                 entry.field_offsets.reserve(num_fields);
                 for (size_t i = 0; i < num_fields; ++i)
                 {
-                    auto field_offset   = PageUtil::get<UInt64>(pos);
+                    auto field_offset = PageUtil::get<UInt64>(pos);
                     auto field_checksum = PageUtil::get<UInt64>(pos);
                     entry.field_offsets.emplace_back(field_offset, field_checksum);
                 }
@@ -613,11 +618,13 @@ void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID s
             edit.upsertPage(page_id, entry);
             break;
         }
-        case WriteBatch::WriteType::DEL: {
+        case WriteBatch::WriteType::DEL:
+        {
             pos += sizeof(PageId);
             break;
         }
-        case WriteBatch::WriteType::REF: {
+        case WriteBatch::WriteType::REF:
+        {
             // ref_id
             pos += sizeof(PageId);
             // page_id
@@ -679,7 +686,7 @@ void PageFile::Writer::pageFileLink(PageFile & linked_file, WriteBatch::Sequence
 {
     char * linked_meta_data;
     size_t linked_meta_size;
-    auto   reader = PageFile::MetaLinkingReader::createFrom(linked_file);
+    auto reader = PageFile::MetaLinkingReader::createFrom(linked_file);
 
     if (!reader)
     {

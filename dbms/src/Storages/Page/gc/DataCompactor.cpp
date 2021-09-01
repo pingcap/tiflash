@@ -15,18 +15,18 @@ extern const char force_set_page_data_compact_batch[];
 } // namespace FailPoints
 
 template <typename SnapshotPtr>
-DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage &     storage,
-                                          PageStorage::Config     gc_config,
+DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage,
+                                          PageStorage::Config gc_config,
                                           const WriteLimiterPtr & write_limiter_,
-                                          const ReadLimiterPtr &  read_limiter_)
-    : storage_name(storage.storage_name),
-      delegator(storage.delegator),
-      file_provider(storage.getFileProvider()),
-      config(std::move(gc_config)),
-      log(storage.log),
-      page_file_log(storage.page_file_log),
-      write_limiter(write_limiter_),
-      read_limiter(read_limiter_)
+                                          const ReadLimiterPtr & read_limiter_)
+    : storage_name(storage.storage_name)
+    , delegator(storage.delegator)
+    , file_provider(storage.getFileProvider())
+    , config(std::move(gc_config))
+    , log(storage.log)
+    , page_file_log(storage.page_file_log)
+    , write_limiter(write_limiter_)
+    , read_limiter(read_limiter_)
 {
 }
 
@@ -48,7 +48,7 @@ DataCompactor<SnapshotPtr>::tryMigrate( //
     Result result;
     PageFileSet candidates;
     PageFileSet files_without_valid_pages;
-    long        high_vaild_big_pf_index = -1;
+    long high_vaild_big_pf_index = -1;
 
     std::tie(candidates, files_without_valid_pages, result.bytes_migrate, result.num_migrate_pages, high_vaild_big_pf_index)
         = selectCandidateFiles(page_files, valid_pages, writing_files);
@@ -62,7 +62,13 @@ DataCompactor<SnapshotPtr>::tryMigrate( //
     if (result.do_compaction)
     {
         std::tie(migrate_entries_edit, result.bytes_written) = migratePages(
-            snapshot, valid_pages, page_files, candidates, files_without_valid_pages, result.num_migrate_pages, high_vaild_big_pf_index);
+            snapshot,
+            valid_pages,
+            page_files,
+            candidates,
+            files_without_valid_pages,
+            result.num_migrate_pages,
+            high_vaild_big_pf_index);
     }
     else
     {
@@ -98,9 +104,9 @@ DataCompactor<SnapshotPtr>::collectValidPagesInPageFile(const SnapshotPtr & snap
 
 template <typename SnapshotPtr>
 std::tuple<PageFileSet, PageFileSet, size_t, size_t, long> //
-DataCompactor<SnapshotPtr>::selectCandidateFiles(          // keep readable indent
-    const PageFileSet &          page_files,
-    const ValidPages &           files_valid_pages,
+DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
+    const PageFileSet & page_files,
+    const ValidPages & files_valid_pages,
     const WritingFilesSnapshot & writing_files) const
 {
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
@@ -124,14 +130,14 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles(          // keep readable inde
     PageFileSet candidates;
     // Those files without valid pages, we need to log them down later
     PageFileSet files_without_valid_pages;
-    size_t      candidate_total_size                 = 0;
-    size_t      num_migrate_pages                    = 0;
-    size_t      num_candidates_with_high_rate        = 0;
-    size_t      candidate_total_size_with_lower_rate = 0;
+    size_t candidate_total_size = 0;
+    size_t num_migrate_pages = 0;
+    size_t num_candidates_with_high_rate = 0;
+    size_t candidate_total_size_with_lower_rate = 0;
 
-    long   high_vaild_big_pf_index = -1;
-    size_t biggest_vaild_size      = 0;
-    long   current_index           = -1;
+    long high_vaild_big_pf_index = -1;
+    size_t biggest_vaild_size = 0;
+    long current_index = -1;
 
     for (auto & page_file : page_files)
     {
@@ -231,12 +237,12 @@ template <typename SnapshotPtr>
 std::tuple<PageEntriesEdit, size_t> //
 DataCompactor<SnapshotPtr>::migratePages( //
     const SnapshotPtr & snapshot,
-    const ValidPages &  files_valid_pages,
+    const ValidPages & files_valid_pages,
     const PageFileSet & page_files,
     const PageFileSet & candidates,
     const PageFileSet & files_without_valid_pages,
-    const size_t        migrate_page_count,
-    const long          high_vaild_big_pf_index) const
+    const size_t migrate_page_count,
+    const long high_vaild_big_pf_index) const
 {
     if (candidates.empty())
         return {PageEntriesEdit{}, 0};
@@ -319,7 +325,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
     }
 
     WriteBatch::SequenceID compact_seq = 0;
-    PageFile               gc_file;
+    PageFile gc_file;
     {
         PageStorage::OpenReadFiles data_readers;
 
@@ -355,8 +361,13 @@ DataCompactor<SnapshotPtr>::migratePages( //
 
         // Choose one path for creating a tmp PageFile for migration
         const String pf_parent_path = delegator->choosePath(migrate_file_id);
-        gc_file                     = PageFile::newPageFile(
-            migrate_file_id.first, migrate_file_id.second, pf_parent_path, file_provider, PageFile::Type::Temp, page_file_log);
+        gc_file = PageFile::newPageFile(
+            migrate_file_id.first,
+            migrate_file_id.second,
+            pf_parent_path,
+            file_provider,
+            PageFile::Type::Temp,
+            page_file_log);
 
         LOG_INFO(log,
                  storage_name << " GC decide to migrate " << candidates.size() << " files, containing " << migrate_page_count
@@ -404,20 +415,20 @@ DataCompactor<SnapshotPtr>::migratePages( //
 }
 
 template <typename SnapshotPtr>
-size_t                                       //
+size_t //
 DataCompactor<SnapshotPtr>::mergeValidPages( //
     PageStorage::OpenReadFiles && data_readers,
-    PageEntriesEdit &             gc_file_edit,
-    const ValidPages &            files_valid_pages,
-    const SnapshotPtr &           snapshot,
-    const WriteBatch::SequenceID  compact_sequence,
-    PageFile &                    gc_file,
-    MigrateInfos &                migrate_infos) const
+    PageEntriesEdit & gc_file_edit,
+    const ValidPages & files_valid_pages,
+    const SnapshotPtr & snapshot,
+    const WriteBatch::SequenceID compact_sequence,
+    PageFile & gc_file,
+    MigrateInfos & migrate_infos) const
 {
     const auto gc_file_id = gc_file.fileIdLevel();
     // No need to sync after each write. Do sync before closing is enough.
-    auto   gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false, false);
-    size_t bytes_written  = 0;
+    auto gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false, false);
+    size_t bytes_written = 0;
 
     // When all data of one PageFile is obsoleted, we just remove its data but leave its meta part on disk.
     // And all migrated data will be written as multiple WriteBatches(one WriteBatch for one candidate

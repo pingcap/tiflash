@@ -139,18 +139,9 @@ public:
     std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
 
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {});
-<<<<<<< HEAD
-    Page      read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
-    PageMap   read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
-    void      read(const std::vector<PageId> & page_ids,
-                   const PageHandler &         handler,
-                   const ReadLimiterPtr &      read_limiter = nullptr,
-                   SnapshotPtr                 snapshot     = {});
-=======
     Page read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
     PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
     void read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
->>>>>>> master
 
     using FieldIndices = std::vector<size_t>;
     using PageReadFields = std::pair<PageId, FieldIndices>;
@@ -282,18 +273,6 @@ class PageReader : private boost::noncopyable
 {
 public:
     /// Not snapshot read.
-<<<<<<< HEAD
-    explicit PageReader(PageStorage & storage_, ReadLimiterPtr read_limiter_) : storage(storage_), snap(), read_limiter(read_limiter_) {}
-    /// Snapshot read.
-    PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
-        : storage(storage_), snap(snap_), read_limiter(read_limiter_)
-    {
-    }
-    PageReader(PageStorage & storage_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
-        : storage(storage_), snap(std::move(snap_)), read_limiter(read_limiter_)
-    {
-    }
-=======
     explicit PageReader(PageStorage & storage_, ReadLimiterPtr read_limiter_)
         : storage(storage_)
         , snap()
@@ -310,7 +289,6 @@ public:
         , snap(std::move(snap_))
         , read_limiter(read_limiter_)
     {}
->>>>>>> master
 
     Page read(PageId page_id) const { return storage.read(page_id, read_limiter, snap); }
     PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, read_limiter, snap); }
@@ -329,7 +307,7 @@ private:
 
     PageStorage & storage;
     PageStorage::SnapshotPtr snap;
-    ReadLimiterPtr           read_limiter;
+    ReadLimiterPtr read_limiter;
 };
 
 } // namespace DB

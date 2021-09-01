@@ -28,10 +28,10 @@ public:
     };
 
 public:
-    DataCompactor(const PageStorage &     storage,
-                  PageStorage::Config     gc_config,
+    DataCompactor(const PageStorage & storage,
+                  PageStorage::Config gc_config,
                   const WriteLimiterPtr & write_limiter_,
-                  const ReadLimiterPtr &  read_limiter_);
+                  const ReadLimiterPtr & read_limiter_);
 
     /**
      * Take a snapshot from PageStorage and try to migrate data if some PageFiles used rate is low.
@@ -62,48 +62,27 @@ private:
      */
     static ValidPages collectValidPagesInPageFile(const SnapshotPtr & snapshot);
 
-<<<<<<< HEAD
     std::tuple<PageFileSet, PageFileSet, size_t, size_t, long> //
-    selectCandidateFiles(const PageFileSet &          page_files,
-                         const ValidPages &           files_valid_pages,
-=======
-    std::tuple<PageFileSet, PageFileSet, size_t, size_t> //
     selectCandidateFiles(const PageFileSet & page_files,
                          const ValidPages & files_valid_pages,
->>>>>>> master
                          const WritingFilesSnapshot & writing_files) const;
 
     std::tuple<PageEntriesEdit, size_t> //
     migratePages(const SnapshotPtr & snapshot,
-<<<<<<< HEAD
-                 const ValidPages &  files_valid_pages,
+                 const ValidPages & files_valid_pages,
                  const PageFileSet & page_files,
                  const PageFileSet & candidates,
                  const PageFileSet & files_without_valid_pages,
-                 const size_t        migrate_page_count,
-                 const long          high_vaild_big_pf_index) const;
+                 const size_t migrate_page_count,
+                 const long high_vaild_big_pf_index) const;
 
     size_t mergeValidPages(PageStorage::OpenReadFiles && data_readers,
-                           PageEntriesEdit &             gc_file_edit,
-                           const ValidPages &            files_valid_pages,
-                           const SnapshotPtr &           snapshot,
-                           const WriteBatch::SequenceID  compact_sequence,
-                           PageFile &                    gc_file,
-                           MigrateInfos &                migrate_infos) const;
-=======
-                 const ValidPages & files_valid_pages,
-                 const PageFileSet & candidates,
-                 const PageFileSet & files_without_valid_pages,
-                 const size_t migrate_page_count) const;
-
-    std::tuple<PageEntriesEdit, size_t> //
-    mergeValidPages(PageStorage::OpenReadFiles && data_readers,
-                    const ValidPages & files_valid_pages,
-                    const SnapshotPtr & snapshot,
-                    const WriteBatch::SequenceID compact_sequence,
-                    PageFile & gc_file,
-                    MigrateInfos & migrate_infos) const;
->>>>>>> master
+                           PageEntriesEdit & gc_file_edit,
+                           const ValidPages & files_valid_pages,
+                           const SnapshotPtr & snapshot,
+                           const WriteBatch::SequenceID compact_sequence,
+                           PageFile & gc_file,
+                           MigrateInfos & migrate_infos) const;
 
     static PageIdAndEntries collectValidEntries(const PageIdSet & valid_pages, const SnapshotPtr & snap);
 
@@ -124,7 +103,7 @@ private:
     Poco::Logger * page_file_log;
 
     const WriteLimiterPtr write_limiter;
-    const ReadLimiterPtr  read_limiter;
+    const ReadLimiterPtr read_limiter;
 };
 
 } // namespace DB
