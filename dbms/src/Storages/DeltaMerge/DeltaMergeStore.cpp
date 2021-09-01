@@ -567,7 +567,7 @@ void DeltaMergeStore::writeRegionSnapshot(const DMContextPtr & dm_context,
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
-    auto delegate      = dm_context->path_pool.getStableDiskDelegator();
+    auto delegator     = dm_context->path_pool.getStableDiskDelegator();
     auto file_provider = dm_context->db_context.getFileProvider();
 
     size_t rows          = 0;
@@ -577,7 +577,7 @@ void DeltaMergeStore::writeRegionSnapshot(const DMContextPtr & dm_context,
     DMFiles files;
     for (auto file_id : file_ids)
     {
-        auto file_parent_path = delegate.getDTFilePath(file_id);
+        auto file_parent_path = delegator.getDTFilePath(file_id);
 
         auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path);
         files.push_back(file);
@@ -650,7 +650,7 @@ void DeltaMergeStore::writeRegionSnapshot(const DMContextPtr & dm_context,
                 else
                 {
                     auto & file_parent_path = file->parentPath();
-                    auto   ref_id           = storage_pool.newDataPageId();
+                    auto   ref_id           = storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
 
                     auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path);
                     auto pack     = std::make_shared<DeltaPackFile>(*dm_context, ref_file, segment_range);
