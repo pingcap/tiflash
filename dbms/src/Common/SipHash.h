@@ -13,23 +13,34 @@
   * (~ 700 MB/sec, 15 million strings per second)
   */
 
-#include <common/types.h>
-#include <common/unaligned.h>
-#include <string>
-#include <type_traits>
 #include <Common/Decimal.h>
 #include <Core/Defines.h>
+#include <common/types.h>
+#include <common/unaligned.h>
+
+#include <string>
+#include <type_traits>
 
 #define ROTL(x, b) static_cast<UInt64>(((x) << (b)) | ((x) >> (64 - (b))))
 
-#define SIPROUND                                                  \
-    do                                                            \
-    {                                                             \
-        v0 += v1; v1 = ROTL(v1, 13); v1 ^= v0; v0 = ROTL(v0, 32); \
-        v2 += v3; v3 = ROTL(v3, 16); v3 ^= v2;                    \
-        v0 += v3; v3 = ROTL(v3, 21); v3 ^= v0;                    \
-        v2 += v1; v1 = ROTL(v1, 17); v1 ^= v2; v2 = ROTL(v2, 32); \
-    } while(0)
+#define SIPROUND           \
+    do                     \
+    {                      \
+        v0 += v1;          \
+        v1 = ROTL(v1, 13); \
+        v1 ^= v0;          \
+        v0 = ROTL(v0, 32); \
+        v2 += v3;          \
+        v3 = ROTL(v3, 16); \
+        v3 ^= v2;          \
+        v0 += v3;          \
+        v3 = ROTL(v3, 21); \
+        v3 ^= v0;          \
+        v2 += v1;          \
+        v1 = ROTL(v1, 17); \
+        v1 ^= v2;          \
+        v2 = ROTL(v2, 32); \
+    } while (0)
 
 
 class SipHash
@@ -124,14 +135,29 @@ public:
         current_word = 0;
         switch (end - data)
         {
-            case 7: current_bytes[6] = data[6]; [[fallthrough]];
-            case 6: current_bytes[5] = data[5]; [[fallthrough]];
-            case 5: current_bytes[4] = data[4]; [[fallthrough]];
-            case 4: current_bytes[3] = data[3]; [[fallthrough]];
-            case 3: current_bytes[2] = data[2]; [[fallthrough]];
-            case 2: current_bytes[1] = data[1]; [[fallthrough]];
-            case 1: current_bytes[0] = data[0]; [[fallthrough]];
-            case 0: break;
+        case 7:
+            current_bytes[6] = data[6];
+            [[fallthrough]];
+        case 6:
+            current_bytes[5] = data[5];
+            [[fallthrough]];
+        case 5:
+            current_bytes[4] = data[4];
+            [[fallthrough]];
+        case 4:
+            current_bytes[3] = data[3];
+            [[fallthrough]];
+        case 3:
+            current_bytes[2] = data[2];
+            [[fallthrough]];
+        case 2:
+            current_bytes[1] = data[1];
+            [[fallthrough]];
+        case 1:
+            current_bytes[0] = data[0];
+            [[fallthrough]];
+        case 0:
+            break;
         }
     }
 

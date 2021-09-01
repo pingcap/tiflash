@@ -1,12 +1,19 @@
 #include <Common/Exception.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+
 #include <thread>
 
 #if defined(__x86_64__)
-    #include <cpuid/libcpuid.h>
+#include <cpuid/libcpuid.h>
 #endif
 
-namespace DB { namespace ErrorCodes { extern const int CPUID_ERROR; }}
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int CPUID_ERROR;
+}
+} // namespace DB
 
 unsigned getNumberOfPhysicalCPUCores()
 {

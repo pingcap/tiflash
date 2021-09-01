@@ -6,8 +6,6 @@
 
 namespace DB
 {
-
-
 /** Unlike Arena, allows you to release (for later re-use)
   *  previously allocated (not necessarily just recently) chunks of memory.
   * For this, the requested size is rounded up to the power of two
@@ -17,7 +15,8 @@ namespace DB
   * When allocating, we take the head of the list of free blocks,
   *  or, if the list is empty - allocate a new block using Arena.
   */
-class ArenaWithFreeLists : private Allocator<false>, private boost::noncopyable
+class ArenaWithFreeLists : private Allocator<false>
+    , private boost::noncopyable
 {
 private:
     /// If the block is free, then the pointer to the next free block is stored at its beginning, or nullptr, if there are no more free blocks.
@@ -42,11 +41,12 @@ private:
 
     /// Lists of free blocks. Each element points to the head of the corresponding list, or is nullptr.
     /// The first two elements are not used, but are intended to simplify arithmetic.
-    Block * free_lists[16] {};
+    Block * free_lists[16]{};
 
 public:
     ArenaWithFreeLists(
-        const size_t initial_size = 4096, const size_t growth_factor = 2,
+        const size_t initial_size = 4096,
+        const size_t growth_factor = 2,
         const size_t linear_growth_threshold = 128 * 1024 * 1024)
         : pool{initial_size, growth_factor, linear_growth_threshold}
     {
@@ -96,4 +96,4 @@ public:
 };
 
 
-}
+} // namespace DB

@@ -1,17 +1,16 @@
 #pragma once
 
-#include <IO/ReadBuffer.h>
-#include <IO/WriteBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
 #include <Core/Defines.h>
+#include <IO/ReadBuffer.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NO_AVAILABLE_DATA;
+extern const int NO_AVAILABLE_DATA;
 }
 
 
@@ -22,7 +21,7 @@ namespace ErrorCodes
   * simulates an array of `content_width`-bit values.
   */
 template <typename BucketIndex, UInt8 content_width, size_t bucket_count>
-class __attribute__ ((packed)) CompactArray final
+class __attribute__((packed)) CompactArray final
 {
 public:
     class Reader;
@@ -78,7 +77,7 @@ public:
 private:
     /// number of bytes in bitset
     static constexpr size_t BITSET_SIZE = (static_cast<size_t>(bucket_count) * content_width + 7) / 8;
-    UInt8 bitset[BITSET_SIZE] = { 0 };
+    UInt8 bitset[BITSET_SIZE] = {0};
 };
 
 /** A class for sequentially reading cells from a compact array on a disk.
@@ -255,5 +254,4 @@ private:
     static_assert(bucket_count <= (std::numeric_limits<size_t>::max() / content_width), "Invalid parameter value");
 };
 
-}
-
+} // namespace DB

@@ -1,14 +1,13 @@
 #pragma once
 
-#include <memory>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
+
+#include <memory>
 
 
 namespace DB
 {
-
-
 /** Lets you run the command,
   *  read it stdout and stderr; write to stdin;
   *  wait for completion.
@@ -30,12 +29,15 @@ private:
     bool wait_called = false;
 
     ShellCommand(pid_t pid, int in_fd, int out_fd, int err_fd)
-        : pid(pid), in(in_fd), out(out_fd), err(err_fd) {};
+        : pid(pid)
+        , in(in_fd)
+        , out(out_fd)
+        , err(err_fd){};
 
     static std::unique_ptr<ShellCommand> executeImpl(const char * filename, char * const argv[], bool pipe_stdin_only);
 
 public:
-    WriteBufferFromFile in;        /// If the command reads from stdin, do not forget to call in.close() after writing all the data there.
+    WriteBufferFromFile in; /// If the command reads from stdin, do not forget to call in.close() after writing all the data there.
     ReadBufferFromFile out;
     ReadBufferFromFile err;
 
@@ -55,4 +57,4 @@ public:
 };
 
 
-}
+} // namespace DB
