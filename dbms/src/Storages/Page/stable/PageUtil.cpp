@@ -22,7 +22,6 @@ extern const Event FileFSync;
 
 namespace DB::stable::PageUtil
 {
-
 void syncFile(WritableFilePtr & file)
 {
     if (-1 == file->fsync())

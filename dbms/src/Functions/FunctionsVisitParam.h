@@ -1,20 +1,20 @@
 #pragma once
 
-#include <Poco/UTF8Encoding.h>
-#include <Poco/Unicode.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeFixedString.h>
-#include <DataTypes/DataTypeArray.h>
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
-#include <Common/hex.h>
+#include <Columns/ColumnString.h>
 #include <Common/Volnitsky.h>
-#include <Functions/IFunction.h>
+#include <Common/hex.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
+#include <Poco/UTF8Encoding.h>
+#include <Poco/Unicode.h>
 
 
 /** Functions for retrieving "visit parameters".
@@ -38,7 +38,6 @@
 
 namespace DB
 {
-
 struct HasParam
 {
     using ResultType = UInt8;
@@ -96,15 +95,15 @@ struct ExtractRaw
         UInt8 close_char = 0;
         switch (open_char)
         {
-            case '[':
-                close_char = ']';
-                break;
-            case '{':
-                close_char = '}';
-                break;
-            case '"':
-                close_char = '"';
-                break;
+        case '[':
+            close_char = ']';
+            break;
+        case '{':
+            close_char = '}';
+            break;
+        case '"':
+            close_char = '"';
+            break;
         }
 
         if (close_char != 0)
@@ -172,9 +171,7 @@ struct ExtractParamImpl
     using ResultType = typename ParamExtractor::ResultType;
 
     /// It is assumed that `res` is the correct size and initialized with zeros.
-    static void vector_constant(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets,
-        std::string needle, const UInt8 escape_char, std::shared_ptr<TiDB::ITiDBCollator> collator,
-        PaddedPODArray<ResultType> & res)
+    static void vector_constant(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets, std::string needle, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<ResultType> & res)
     {
         if (escape_char != '\\' || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -213,7 +210,7 @@ struct ExtractParamImpl
         memset(&res[i], 0, (res.size() - i) * sizeof(res[0]));
     }
 
-    static void constant_constant(const std::string & data, std::string needle, const UInt8 escape_char, std::shared_ptr<TiDB::ITiDBCollator> collator, ResultType & res)
+    static void constant_constant(const std::string & data, std::string needle, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, ResultType & res)
     {
         if (escape_char != '\\' || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -224,16 +221,17 @@ struct ExtractParamImpl
         else
             res = ParamExtractor::extract(
                 reinterpret_cast<const UInt8 *>(data.data() + pos + needle.size()),
-                reinterpret_cast<const UInt8 *>(data.data() + data.size())
-            );
+                reinterpret_cast<const UInt8 *>(data.data() + data.size()));
     }
 
-    template <typename... Args> static void vector_vector(Args &&...)
+    template <typename... Args>
+    static void vector_vector(Args &&...)
     {
         throw Exception("Functions 'visitParamHas' and 'visitParamExtract*' doesn't support non-constant needle argument", ErrorCodes::ILLEGAL_COLUMN);
     }
 
-    template <typename... Args> static void constant_vector(Args &&...)
+    template <typename... Args>
+    static void constant_vector(Args &&...)
     {
         throw Exception("Functions 'visitParamHas' and 'visitParamExtract*' doesn't support non-constant needle argument", ErrorCodes::ILLEGAL_COLUMN);
     }
@@ -245,12 +243,10 @@ struct ExtractParamImpl
 template <typename ParamExtractor>
 struct ExtractParamToStringImpl
 {
-    static void vector(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets,
-                       std::string needle,
-                       ColumnString::Chars_t & res_data, ColumnString::Offsets & res_offsets)
+    static void vector(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets, std::string needle, ColumnString::Chars_t & res_data, ColumnString::Offsets & res_offsets)
     {
         /// Constant 5 is taken from a function that performs a similar task FunctionsStringSearch.h::ExtractImpl
-        res_data.reserve(data.size()  / 5);
+        res_data.reserve(data.size() / 5);
         res_offsets.resize(offsets.size());
 
         /// We are looking for a parameter simply as a substring of the form "name"
@@ -297,5 +293,4 @@ struct ExtractParamToStringImpl
 };
 
 
-
-}
+} // namespace DB

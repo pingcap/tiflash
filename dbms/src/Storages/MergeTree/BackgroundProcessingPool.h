@@ -1,21 +1,21 @@
 #pragma once
 
-#include <thread>
-#include <set>
-#include <map>
-#include <list>
-#include <condition_variable>
-#include <mutex>
-#include <shared_mutex>
-#include <atomic>
-#include <functional>
+#include <Core/Types.h>
 #include <Poco/Event.h>
 #include <Poco/Timestamp.h>
-#include <Core/Types.h>
+
+#include <atomic>
+#include <condition_variable>
+#include <functional>
+#include <list>
+#include <map>
+#include <mutex>
+#include <set>
+#include <shared_mutex>
+#include <thread>
 
 namespace DB
 {
-
 class Context;
 
 /** Using a fixed number of threads, perform an arbitrary number of tasks in an infinite loop.
@@ -38,7 +38,10 @@ public:
         void wake();
 
         TaskInfo(BackgroundProcessingPool & pool_, const Task & function_, const bool multi_, const uint64_t interval_ms_)
-            : pool(pool_), function(function_), multi(multi_), interval_milliseconds(interval_ms_)
+            : pool(pool_)
+            , function(function_)
+            , multi(multi_)
+            , interval_milliseconds(interval_ms_)
         {}
 
     private:
@@ -49,11 +52,11 @@ public:
 
         /// Read lock is hold when task is executed.
         std::shared_mutex rwlock;
-        std::atomic<bool> removed {false};
+        std::atomic<bool> removed{false};
 
         /// only can be invoked by one thread at same time.
         const bool multi;
-        std::atomic_bool occupied {false};
+        std::atomic_bool occupied{false};
 
         const uint64_t interval_milliseconds;
 
@@ -65,10 +68,7 @@ public:
 
     BackgroundProcessingPool(int size_);
 
-    size_t getNumberOfThreads() const
-    {
-        return size;
-    }
+    size_t getNumberOfThreads() const { return size; }
 
     /// if multi == false, this task can only be called by one thread at same time.
     /// If interval_ms is zero, this task will be scheduled with `sleep_seconds`.
@@ -80,22 +80,23 @@ public:
 
     std::vector<pid_t> getThreadIds();
     void addThreadId(pid_t tid);
+
 private:
-    using Tasks = std::multimap<Poco::Timestamp, TaskHandle>;    /// key is desired next time to execute (priority).
+    using Tasks = std::multimap<Poco::Timestamp, TaskHandle>; /// key is desired next time to execute (priority).
     using Threads = std::vector<std::thread>;
 
     const size_t size;
     static constexpr double sleep_seconds = 10;
     static constexpr double sleep_seconds_random_part = 1.0;
 
-    Tasks tasks;         /// Ordered in priority.
+    Tasks tasks; /// Ordered in priority.
     std::mutex tasks_mutex;
 
     Threads threads;
-    std::vector<pid_t> thread_ids;  // Linux Thread ID
+    std::vector<pid_t> thread_ids; // Linux Thread ID
     std::mutex thread_ids_mtx;
 
-    std::atomic<bool> shutdown {false};
+    std::atomic<bool> shutdown{false};
     std::condition_variable wake_event;
 
 
@@ -104,4 +105,4 @@ private:
 
 using BackgroundProcessingPoolPtr = std::shared_ptr<BackgroundProcessingPool>;
 
-}
+} // namespace DB

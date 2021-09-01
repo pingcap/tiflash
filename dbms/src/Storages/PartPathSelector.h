@@ -3,6 +3,7 @@
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <common/logger_useful.h>
+
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -18,7 +19,8 @@ class PartPathSelector
 {
 public:
     PartPathSelector(std::vector<String> && all_normal_path, std::vector<std::string> && all_fast_path)
-        : normal_and_fast_path(all_normal_path), log(&Logger::get("PartPathSelector"))
+        : normal_and_fast_path(all_normal_path)
+        , log(&Poco::Logger::get("PartPathSelector"))
     {
         if (normal_and_fast_path.empty())
         {
@@ -77,7 +79,7 @@ private:
     std::vector<String> normal_and_fast_path;
     std::unordered_map<String, size_t> normal_path_to_index_map;
     size_t fast_path_start_index;
-    Logger * log;
+    Poco::Logger * log;
 
 private:
     const Settings settings;

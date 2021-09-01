@@ -1,13 +1,13 @@
 #pragma once
 
-#include <string>
-#include <common/logger_useful.h>
 #include <Poco/File.h>
+#include <common/logger_useful.h>
+
+#include <string>
 
 
 namespace DB
 {
-
 /// stores the sizes of all columns, and can check whether the columns are corrupted
 class FileChecker
 {
@@ -39,7 +39,7 @@ private:
     Map map;
     bool initialized = false;
 
-    Logger * log = &Logger::get("FileChecker");
+    Poco::Logger * log = &Poco::Logger::get("FileChecker");
 };
 
-}
+} // namespace DB

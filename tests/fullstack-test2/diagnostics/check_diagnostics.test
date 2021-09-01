@@ -1,0 +1,34 @@
+mysql> select distinct(NAME) from INFORMATION_SCHEMA.CLUSTER_HARDWARE where TYPE='tiflash' order by NAME;
++--------------------+
+| NAME               |
++--------------------+
+| capacity           |
+| cpu-arch           |
+| cpu-frequency      |
+| cpu-logical-cores  |
+| cpu-physical-cores |
+| cpu-vendor-id      |
+| flag               |
+| free               |
+| free-percent       |
+| fstype             |
+| index              |
+| ip                 |
+| is-broadcast       |
+| is-loopback        |
+| is-multicast       |
+| is-point-to-point  |
+| is-up              |
+| l1-cache-line-size |
+| l1-cache-size      |
+| l2-cache-line-size |
+| l2-cache-size      |
+| l3-cache-line-size |
+| l3-cache-size      |
+| mac                |
+| path               |
+| total              |
+| type               |
+| used               |
+| used-percent       |
++--------------------+

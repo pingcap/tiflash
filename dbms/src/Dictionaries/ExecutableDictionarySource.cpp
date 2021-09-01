@@ -40,7 +40,7 @@ public:
 ExecutableDictionarySource::ExecutableDictionarySource(const DictionaryStructure & dict_struct_,
     const Poco::Util::AbstractConfiguration & config, const std::string & config_prefix,
     Block & sample_block, const Context & context)
-    : log(&Logger::get("ExecutableDictionarySource")),
+    : log(&Poco::Logger::get("ExecutableDictionarySource")),
     update_time{std::chrono::system_clock::from_time_t(0)},
     dict_struct{dict_struct_},
     command{config.getString(config_prefix + ".command")},
@@ -52,7 +52,7 @@ ExecutableDictionarySource::ExecutableDictionarySource(const DictionaryStructure
 }
 
 ExecutableDictionarySource::ExecutableDictionarySource(const ExecutableDictionarySource & other)
-    : log(&Logger::get("ExecutableDictionarySource")),
+    : log(&Poco::Logger::get("ExecutableDictionarySource")),
     update_time{other.update_time},
     dict_struct{other.dict_struct},
     command{other.command},

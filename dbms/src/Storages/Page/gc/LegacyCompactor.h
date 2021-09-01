@@ -13,7 +13,6 @@
 
 namespace DB
 {
-
 class PSDiskDelegator;
 using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 
@@ -36,12 +35,12 @@ private:
     collectPageFilesToCompact(const PageFileSet & page_files, const WritingFilesSnapshot & writing_files);
 
     static WriteBatch prepareCheckpointWriteBatch(const PageStorage::SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence);
-    [[nodiscard]] static size_t writeToCheckpoint(const String &             storage_path,
+    [[nodiscard]] static size_t writeToCheckpoint(const String & storage_path,
                                                   const PageFileIdAndLevel & file_id,
-                                                  WriteBatch &&              wb,
-                                                  FileProviderPtr &          file_provider,
-                                                  Poco::Logger *             log,
-                                                  const WriteLimiterPtr &     write_limiter);
+                                                  WriteBatch && wb,
+                                                  FileProviderPtr & file_provider,
+                                                  Poco::Logger * log,
+                                                  const WriteLimiterPtr & write_limiter);
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -49,7 +48,7 @@ private:
     const String & storage_name;
 
     PSDiskDelegatorPtr delegator;
-    FileProviderPtr    file_provider;
+    FileProviderPtr file_provider;
 
     const PageStorage::Config & config;
 
@@ -57,7 +56,7 @@ private:
     Poco::Logger * page_file_log;
 
     PageStorage::VersionedPageEntries version_set;
-    PageStorage::StatisticsInfo       info;
+    PageStorage::StatisticsInfo info;
 
     const WriteLimiterPtr write_limiter;
     const ReadLimiterPtr read_limiter;

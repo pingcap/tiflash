@@ -15,7 +15,6 @@
 
 namespace DB
 {
-
 class Set;
 using DAGSetPtr = std::shared_ptr<DAGSet>;
 using DAGPreparedSets = std::unordered_map<const tipb::Expr *, DAGSetPtr>;
@@ -42,12 +41,9 @@ public:
     DAGExpressionAnalyzer(std::vector<NameAndTypePair> & source_columns_, const Context & context_);
     void appendWhere(ExpressionActionsChain & chain, const std::vector<const tipb::Expr *> & conditions, String & filter_column_name);
     void appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN, std::vector<NameAndTypePair> & order_columns);
-    void appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregate_keys,
-        TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions, bool group_by_collation_sensitive);
+    void appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregate_keys, TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions, bool group_by_collation_sensitive);
     void appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & agg);
-    void generateFinalProject(ExpressionActionsChain & chain, const std::vector<tipb::FieldType> & schema,
-        const std::vector<Int32> & output_offsets, const String & column_prefix, bool keep_session_timezone_info,
-        NamesWithAliases & final_project);
+    void generateFinalProject(ExpressionActionsChain & chain, const std::vector<tipb::FieldType> & schema, const std::vector<Int32> & output_offsets, const String & column_prefix, bool keep_session_timezone_info, NamesWithAliases & final_project);
     String appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool explicit_cast);
     String appendCast(const DataTypePtr & target_type, ExpressionActionsPtr & actions, const String & expr_name);
     String alignReturnType(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool force_uint8);
@@ -75,12 +71,13 @@ public:
     const std::vector<NameAndTypePair> & getCurrentInputColumns();
     void makeExplicitSet(const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name);
     String applyFunction(
-        const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, std::shared_ptr<TiDB::ITiDBCollator> collator);
+        const String & func_name,
+        const Names & arg_names,
+        ExpressionActionsPtr & actions,
+        const TiDB::TiDBCollatorPtr & collator);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
     bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, const BoolVec & is_ts_column);
-    bool appendJoinKeyAndJoinFilters(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types, Names & key_names, bool left, bool is_right_out_join,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, String & filter_column_name);
+    bool appendJoinKeyAndJoinFilters(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, Names & key_names, bool left, bool is_right_out_join, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, String & filter_column_name);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
     String convertToUInt8(ExpressionActionsPtr & actions, const String & column_name);

@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 class MergeTreeReader;
 class UncompressedCache;
 class MarkCache;
@@ -76,4 +75,4 @@ protected:
     size_t max_block_size_marks;
 };
 
-}
+} // namespace DB

@@ -8,7 +8,6 @@ namespace DB
 {
 namespace DM
 {
-
 /// The output stream for writing block to DTFile.
 ///
 /// Note that we will filter block by `RSOperatorPtr` while reading, so the
@@ -21,10 +20,10 @@ class DMFileBlockOutputStream
 public:
     using Flags = DMFileWriter::Flags;
 
-    DMFileBlockOutputStream(const Context &       context,
-                            const DMFilePtr &     dmfile,
+    DMFileBlockOutputStream(const Context & context,
+                            const DMFilePtr & dmfile,
                             const ColumnDefines & write_columns,
-                            const Flags           flags = Flags())
+                            const Flags flags = Flags())
         : writer(
             dmfile,
             write_columns,

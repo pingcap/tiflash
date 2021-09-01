@@ -1,14 +1,13 @@
-#include <Storages/MergeTree/MergeTreePartInfo.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/MergeTree/MergeTreePartInfo.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int BAD_DATA_PART_NAME;
+extern const int BAD_DATA_PART_NAME;
 }
 
 
@@ -153,4 +152,4 @@ String MergeTreePartInfo::getPartNameV0(DayNum left_date, DayNum right_date) con
     return wb.str();
 }
 
-}
+} // namespace DB

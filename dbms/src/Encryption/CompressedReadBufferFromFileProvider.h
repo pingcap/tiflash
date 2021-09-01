@@ -13,7 +13,8 @@ namespace DB
 
 
 /// Unlike CompressedReadBuffer, it can do seek.
-class CompressedReadBufferFromFileProvider : public CompressedReadBufferBase, public BufferWithOwnMemory<ReadBuffer>
+template <bool has_checksum = true>
+class CompressedReadBufferFromFileProvider : public CompressedReadBufferBase<has_checksum>, public BufferWithOwnMemory<ReadBuffer>
 {
 private:
     /** At any time, one of two things is true:

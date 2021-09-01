@@ -1,8 +1,3 @@
-#include <atomic>
-#include <iostream>
-#include <memory>
-#include <random>
-
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
@@ -11,9 +6,13 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+#include <Storages/Page/PageStorage.h>
 #include <common/logger_useful.h>
 
-#include <Storages/Page/PageStorage.h>
+#include <atomic>
+#include <iostream>
+#include <memory>
+#include <random>
 
 void Usage(const char * prog)
 {
@@ -40,9 +39,8 @@ void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
 
 class PSWriter : public Poco::Runnable
 {
-
 private:
-    PSPtr        ps;
+    PSPtr ps;
     std::mt19937 gen;
 
     std::string root;
@@ -51,12 +49,17 @@ private:
     enum State
     {
         FILLING_UP_DISK = 1,
-        HIT_DISK_FULL   = 2,
+        HIT_DISK_FULL = 2,
         REWRITE_TO_FILE = 3,
     } state;
 
 public:
-    PSWriter(const PSPtr & ps_, const std::string root_) : ps(ps_), gen(), root(root_), state(FILLING_UP_DISK) {}
+    PSWriter(const PSPtr & ps_, const std::string root_)
+        : ps(ps_)
+        , gen()
+        , root(root_)
+        , state(FILLING_UP_DISK)
+    {}
     void run() override
     {
         while (true)
@@ -67,23 +70,23 @@ public:
             }
             assert(ps != nullptr);
             std::normal_distribution<> d{MAX_PAGE_ID / 2, 150};
-            const DB::PageId           pageId = static_cast<DB::PageId>(std::round(d(gen))) % MAX_PAGE_ID;
+            const DB::PageId pageId = static_cast<DB::PageId>(std::round(d(gen))) % MAX_PAGE_ID;
 
             DB::WriteBatch wb;
             // fill page with random bytes
-            const size_t  buff_sz = 64 * 1024 * 1024 + random() % 3000;
-            char *        buff    = new char[buff_sz];
+            const size_t buff_sz = 64 * 1024 * 1024 + random() % 3000;
+            char * buff = new char[buff_sz];
             unsigned char buff_ch = pageId % 0xFF; //random() % 0xFF;
             memset(buff, buff_ch, buff_sz);
             wb.putPage(pageId, 0, std::make_shared<DB::ReadBufferFromMemory>(buff, buff_sz), buff_sz);
 
-            LOG_INFO(&Logger::get("root"),
+            LOG_INFO(&Poco::Logger::get("root"),
                      "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz)
                          + ", byte: " + DB::toString((DB::UInt32)(buff_ch)));
             try
             {
                 ps->write(wb);
-                LOG_INFO(&Logger::get("root"), "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz) + " done");
+                LOG_INFO(&Poco::Logger::get("root"), "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz) + " done");
                 delete[] buff;
             }
             catch (DB::Exception & e)
@@ -96,18 +99,18 @@ public:
                     // Disk is full, remove one PageFile to free some disk space,
                     // then continue to write one more page
                     const std::string fname = root + "/page_1_0";
-                    Poco::File        f(fname);
+                    Poco::File f(fname);
                     f.remove(true);
                 }
                 else
                 {
                     state = REWRITE_TO_FILE;
                 }
-                LOG_INFO(&Logger::get("root"),
+                LOG_INFO(&Poco::Logger::get("root"),
                          "writing page" + DB::toString(pageId) + " with size:" + DB::toString(buff_sz) + " error: " + e.displayText());
             }
         }
-        LOG_INFO(&Logger::get("root"), "writer exit");
+        LOG_INFO(&Poco::Logger::get("root"), "writer exit");
     }
 };
 
@@ -116,12 +119,12 @@ int main(int argc, char ** argv)
     (void)argc;
     (void)argv;
 
-    Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
+    Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
     Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
     formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-    Logger::root().setChannel(formatting_channel);
-    Logger::root().setLevel("trace");
+    Poco::Logger::root().setChannel(formatting_channel);
+    Poco::Logger::root().setLevel("trace");
 
     if (argc < 2)
     {
@@ -137,14 +140,14 @@ int main(int argc, char ** argv)
     // Create PageStorage
     DB::PageStorage::Config config;
     config.file_roll_size = 96UL * 1024 * 1024;
-    PSPtr ps              = std::make_shared<DB::PageStorage>(path, config);
+    PSPtr ps = std::make_shared<DB::PageStorage>(path, config);
 
     // Write until disk is full
     PSWriter writer(ps, path);
     writer.run();
 
     // Check if checksum in page is correct.
-    auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Logger::get("root"));
+    auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Poco::Logger::get("root"));
     for (auto & page_file : page_files)
     {
         DB::PageEntries page_entries;
@@ -153,7 +156,7 @@ int main(int argc, char ** argv)
         DB::PageIdAndEntries id_and_caches;
         for (auto iter = page_entries.cbegin(); iter != page_entries.cend(); ++iter)
         {
-            auto pid   = iter.pageId();
+            auto pid = iter.pageId();
             auto entry = iter.pageEntry();
             id_and_caches.emplace_back(pid, entry);
             printPageEntry(pid, entry);
