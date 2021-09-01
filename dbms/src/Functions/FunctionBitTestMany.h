@@ -247,14 +247,10 @@ struct BitTestAllImpl
     };
 };
 
-struct NameBitTestAny
-{
-    static constexpr auto name = "bitTestAny";
-};
-struct NameBitTestAll
-{
-    static constexpr auto name = "bitTestAll";
-};
+// clang-format off
+struct NameBitTestAny           { static constexpr auto name = "bitTestAny"; };
+struct NameBitTestAll           { static constexpr auto name = "bitTestAll"; };
+// clang-format on
 
 using FunctionBitTestAny = FunctionBitTestMany<BitTestAnyImpl, NameBitTestAny>;
 using FunctionBitTestAll = FunctionBitTestMany<BitTestAllImpl, NameBitTestAll>;
