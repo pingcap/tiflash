@@ -13,7 +13,6 @@ extern const Event FileFSync;
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int FILE_DOESNT_EXIST;
@@ -22,8 +21,13 @@ extern const int CANNOT_CLOSE_FILE;
 } // namespace ErrorCodes
 
 PosixWritableFile::PosixWritableFile(
-    const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode, const WriteLimiterPtr & write_limiter_)
-    : file_name{file_name_}, write_limiter{write_limiter_}
+    const std::string & file_name_,
+    bool truncate_when_exists_,
+    int flags,
+    mode_t mode,
+    const WriteLimiterPtr & write_limiter_)
+    : file_name{file_name_}
+    , write_limiter{write_limiter_}
 {
     doOpenFile(truncate_when_exists_, flags, mode);
 }
