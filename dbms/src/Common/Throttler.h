@@ -1,19 +1,19 @@
 #pragma once
 
-#include <time.h>   /// nanosleep
-#include <mutex>
-#include <memory>
-#include <Common/Stopwatch.h>
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <IO/WriteHelpers.h>
+#include <time.h> /// nanosleep
+
+#include <memory>
+#include <mutex>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LIMIT_EXCEEDED;
+extern const int LIMIT_EXCEEDED;
 }
 
 
@@ -28,11 +28,17 @@ class Throttler
 {
 public:
     Throttler(size_t max_speed_, const std::shared_ptr<Throttler> & parent = nullptr)
-            : max_speed(max_speed_), limit_exceeded_exception_message(""), parent(parent) {}
+        : max_speed(max_speed_)
+        , limit_exceeded_exception_message("")
+        , parent(parent)
+    {}
 
-    Throttler(size_t max_speed_, size_t limit_, const char * limit_exceeded_exception_message_,
-              const std::shared_ptr<Throttler> & parent = nullptr)
-        : max_speed(max_speed_), limit(limit_), limit_exceeded_exception_message(limit_exceeded_exception_message_), parent(parent) {}
+    Throttler(size_t max_speed_, size_t limit_, const char * limit_exceeded_exception_message_, const std::shared_ptr<Throttler> & parent = nullptr)
+        : max_speed(max_speed_)
+        , limit(limit_)
+        , limit_exceeded_exception_message(limit_exceeded_exception_message_)
+        , parent(parent)
+    {}
 
     void add(const size_t amount)
     {
@@ -71,7 +77,7 @@ public:
                 timespec sleep_ts;
                 sleep_ts.tv_sec = sleep_ns / 1000000000;
                 sleep_ts.tv_nsec = sleep_ns % 1000000000;
-                nanosleep(&sleep_ts, nullptr);    /// NOTE Returns early in case of a signal. This is considered normal.
+                nanosleep(&sleep_ts, nullptr); /// NOTE Returns early in case of a signal. This is considered normal.
             }
         }
 
@@ -96,9 +102,9 @@ public:
 private:
     size_t count = 0;
     const size_t max_speed = 0;
-    const size_t limit = 0;        /// 0 - not limited.
+    const size_t limit = 0; /// 0 - not limited.
     const char * limit_exceeded_exception_message = nullptr;
-    Stopwatch watch {CLOCK_MONOTONIC_COARSE};
+    Stopwatch watch{CLOCK_MONOTONIC_COARSE};
     std::mutex mutex;
 
     /// Used to implement a hierarchy of throttlers
@@ -108,4 +114,4 @@ private:
 
 using ThrottlerPtr = std::shared_ptr<Throttler>;
 
-}
+} // namespace DB

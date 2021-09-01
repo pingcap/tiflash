@@ -1,19 +1,18 @@
 #pragma once
 #include <Poco/Net/IPAddress.h>
 #include <Poco/Net/SocketAddress.h>
-#include <memory>
+
 #include <ext/singleton.h>
+#include <memory>
 
 
 namespace DB
 {
-
 /// A singleton implementing global and permanent DNS cache
 /// It could be updated only manually via drop() method
 class DNSCache : public ext::singleton<DNSCache>
 {
 public:
-
     DNSCache(const DNSCache &) = delete;
 
     /// Accepts host names like 'example.com' or '127.0.0.1' or '::1' and resolve its IP
@@ -28,7 +27,6 @@ public:
     ~DNSCache();
 
 protected:
-
     DNSCache();
 
     friend class ext::singleton<DNSCache>;
@@ -37,4 +35,4 @@ protected:
     std::unique_ptr<Impl> impl;
 };
 
-}
+} // namespace DB

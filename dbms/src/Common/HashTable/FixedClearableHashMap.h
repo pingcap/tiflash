@@ -17,8 +17,13 @@ struct FixedClearableHashMapCell
     Mapped mapped;
 
     FixedClearableHashMapCell() {}
-    FixedClearableHashMapCell(const Key &, const State & state) : version(state.version) {}
-    FixedClearableHashMapCell(const value_type & value_, const State & state) : version(state.version), mapped(value_.second) {}
+    FixedClearableHashMapCell(const Key &, const State & state)
+        : version(state.version)
+    {}
+    FixedClearableHashMapCell(const value_type & value_, const State & state)
+        : version(state.version)
+        , mapped(value_.second)
+    {}
 
     const VoidKey getKey() const { return {}; }
     Mapped & getMapped() { return mapped; }
@@ -30,7 +35,10 @@ struct FixedClearableHashMapCell
     struct CellExt
     {
         CellExt() {}
-        CellExt(Key && key_, FixedClearableHashMapCell * ptr_) : key(key_), ptr(ptr_) {}
+        CellExt(Key && key_, FixedClearableHashMapCell * ptr_)
+            : key(key_)
+            , ptr(ptr_)
+        {}
         void update(Key && key_, FixedClearableHashMapCell * ptr_)
         {
             key = key_;

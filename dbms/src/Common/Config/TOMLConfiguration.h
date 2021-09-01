@@ -1,9 +1,9 @@
 #pragma once
 
-#include <istream>
-
 #include <Poco/AutoPtr.h>
 #include <Poco/Util/MapConfiguration.h>
+
+#include <istream>
 
 namespace cpptoml
 {
@@ -11,7 +11,6 @@ class table;
 }
 namespace DB
 {
-
 using TOMLTablePtr = std::shared_ptr<cpptoml::table>;
 
 class TOMLConfiguration : public Poco::Util::AbstractConfiguration
