@@ -2,7 +2,7 @@
 
 function wait_table()
 {
-	python3 wait-table.py "$@"; return $?
+	python2 wait-table.py "$@"; return $?
 }
 export -f wait_table
 

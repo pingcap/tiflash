@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python2
 
 import os
 import time
@@ -7,7 +7,7 @@ from sys import argv
 
 
 if len(argv) < 4:
-    print(f'Usage: {argv[0]} [database] [tables...] [MySQL client]')
+    print('Usage: {} [database] [tables...] [MySQL client]'.format(argv[0]))
     exit(1)
 
 database = argv[1]
@@ -17,17 +17,17 @@ client = argv[-1]
 timeout = 600
 sleep_time = 1.0
 
-table_full_names = ', '.join(f'{database}.{table}' for table in tables)
-print(f'=> wait for {table_full_names} available in TiFlash')
+table_full_names = ', '.join('{}.{}'.format(database, table) for table in tables)
+print('=> wait for {} available in TiFlash'.format(table_full_names))
 
-table_names = ', '.join(f"'{table}'" for table in tables)
-query = f"select sum(available) from information_schema.tiflash_replica where table_schema='{database}' and table_name in ({table_names})"
+table_names = ', '.join("'{}'".format(table) for table in tables)
+query = "select sum(available) from information_schema.tiflash_replica where table_schema='{}' and table_name in ({})".format(database, table_names)
 
 start_time = time.time()
 
 available = False
 for timestamp in range(timeout):
-    for line in os.popen(f'{client} "{query}"').readlines():
+    for line in os.popen('{} "{}"'.format(client, query)).readlines():
         try:
             count = int(line.strip())
             if count == len(tables):
@@ -39,7 +39,7 @@ for timestamp in range(timeout):
     if available:
         break
     if timestamp % 10 == 0:
-        print(f'=> waiting for {table_full_names} available')
+        print('=> waiting for {} available'.format(table_full_names))
 
     time.sleep(sleep_time)
 
@@ -47,7 +47,7 @@ end_time = time.time()
 time_used = end_time - start_time
 
 if available:
-    print(f'=> all tables are available now. time = {time_used}s')
+    print('=> all tables are available now. time = {}s'.format(time_used))
 else:
-    print(f"=> cannot sync tables in {time_used}s")
+    print('=> cannot sync tables in {}s'.format(time_used))
     exit(1)
