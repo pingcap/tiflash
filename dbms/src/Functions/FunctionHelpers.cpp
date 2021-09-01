@@ -69,7 +69,7 @@ static Block createBlockWithNestedColumnsImpl(const Block & block, const std::un
             }
             else if (col.column->isColumnConst())
             {
-                const auto & nested_col = static_cast<const ColumnNullable &>( //
+                const auto & nested_col = static_cast<const ColumnNullable &>(
                                               static_cast<const ColumnConst &>(*col.column).getDataColumn())
                                               .getNestedColumnPtr();
 
