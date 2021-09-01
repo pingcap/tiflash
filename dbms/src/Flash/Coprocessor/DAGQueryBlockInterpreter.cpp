@@ -31,26 +31,31 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char pause_after_copr_streams_acquired[];
 extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
 
-DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
-    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_,
-    const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
-    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map_)
-    : context(context_),
-      input_streams_vec(input_streams_vec_),
-      query_block(query_block_),
-      keep_session_timezone_info(keep_session_timezone_info_),
-      rqst(rqst_),
-      dag(dag_),
-      subqueriesForSets(subqueriesForSets_),
-      exchange_receiver_map(exchange_receiver_map_),
-      log(&Poco::Logger::get("DAGQueryBlockInterpreter"))
+DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
+    Context & context_,
+    const std::vector<BlockInputStreams> & input_streams_vec_,
+    const DAGQueryBlock & query_block_,
+    bool keep_session_timezone_info_,
+    const tipb::DAGRequest & rqst_,
+    const DAGQuerySource & dag_,
+    std::vector<SubqueriesForSets> & subqueriesForSets_,
+    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map_,
+    const std::shared_ptr<LogWithPrefix> & log_)
+    : context(context_)
+    , input_streams_vec(input_streams_vec_)
+    , query_block(query_block_)
+    , keep_session_timezone_info(keep_session_timezone_info_)
+    , rqst(rqst_)
+    , dag(dag_)
+    , subqueriesForSets(subqueriesForSets_)
+    , exchange_receiver_map(exchange_receiver_map_)
+    , log(log_)
 {
     if (query_block.selection != nullptr)
     {
@@ -252,7 +257,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
         // do not have table id
         throw TiFlashException("Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
     }
-    if (dag.getRegions().empty())
+    if (dag.getRegions().empty() && dag.getRegionsForRemoteRead().empty())
     {
         throw TiFlashException("Dag Request does not have region to read. ", Errors::Coprocessor::BadRequest);
     }
@@ -279,7 +284,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
 #ifndef NDEBUG
         if (unlikely(!dag_req.has_value() || !schema.has_value()))
             throw TiFlashException(
-                "Try to read from remote but can not build DAG request. Should not happen!", Errors::Coprocessor::Internal);
+                "Try to read from remote but can not build DAG request. Should not happen!",
+                Errors::Coprocessor::Internal);
 #endif
         std::vector<pingcap::coprocessor::KeyRange> ranges;
         for (auto & info : region_retry)
@@ -303,9 +309,15 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
 }
 
-void DAGQueryBlockInterpreter::prepareJoin(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types,
-    DAGPipeline & pipeline, Names & key_names, bool left, bool is_right_out_join,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, String & filter_column_name)
+void DAGQueryBlockInterpreter::prepareJoin(
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+    const DataTypes & key_types,
+    DAGPipeline & pipeline,
+    Names & key_names,
+    bool left,
+    bool is_right_out_join,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
+    String & filter_column_name)
 {
     std::vector<NameAndTypePair> source_columns;
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
@@ -318,8 +330,10 @@ void DAGQueryBlockInterpreter::prepareJoin(const google::protobuf::RepeatedPtrFi
     }
 }
 
-ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(const tipb::Join & join,
-    std::vector<NameAndTypePair> & source_columns, String & filter_column_for_other_condition,
+ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
+    const tipb::Join & join,
+    std::vector<NameAndTypePair> & source_columns,
+    String & filter_column_for_other_condition,
     String & filter_column_for_other_eq_condition)
 {
     if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0)
@@ -369,45 +383,52 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 {
     // build
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{
-        {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner}, {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right}, {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Inner},
+        {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner},
+        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
+        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right},
+        {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Inner},
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Anti}};
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> cartesian_join_type_map{
-        {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Cross}, {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Cross_Left},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Cross_Right}, {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Cross},
+        {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Cross},
+        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Cross_Left},
+        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Cross_Right},
+        {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Cross},
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Cross_Anti}};
     if (input_streams_vec.size() != 2)
     {
         throw TiFlashException("Join query block must have 2 input streams", Errors::BroadcastJoin::Internal);
     }
-    bool is_cartesian_join = join.left_join_keys_size() == 0;
-    auto & join_type_map = is_cartesian_join ? cartesian_join_type_map : equal_join_type_map;
 
+    auto & join_type_map = join.left_join_keys_size() == 0 ? cartesian_join_type_map : equal_join_type_map;
     auto join_type_it = join_type_map.find(join.join_type());
     if (join_type_it == join_type_map.end())
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
+
     ASTTableJoin::Kind kind = join_type_it->second;
     ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
     bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin;
     if (is_semi_join)
         strictness = ASTTableJoin::Strictness::Any;
 
-    BlockInputStreams left_streams;
-    BlockInputStreams right_streams;
-    Names left_key_names;
-    Names right_key_names;
-    bool swap_join_side = false;
-    if (is_cartesian_join)
-    {
-        /// cartesian right join will always be converted to cartesian left join
-        swap_join_side = kind == ASTTableJoin::Kind::Cross_Right;
-    }
+    /// in DAG request, inner part is the build side, however for TiFlash implementation,
+    /// the build side must be the right side, so need to swap the join side if needed
+    /// 1. for (cross) inner join, there is no problem in this swap.
+    /// 2. for (cross) semi/anti-semi join, the build side is always right, needn't swap.
+    /// 3. for non-cross left/right join, there is no problem in this swap.
+    /// 4. for cross left join, the build side is always right, needn't and can't swap.
+    /// 5. for cross right join, the build side is always left, so it will always swap and change to cross left join.
+    /// note that whatever the build side is, we can't support cross-right join now.
+
+    bool swap_join_side;
+    if (kind == ASTTableJoin::Kind::Cross_Right)
+        swap_join_side = true;
+    else if (kind == ASTTableJoin::Kind::Cross_Left)
+        swap_join_side = false;
     else
-    {
-        /// in DAG request, inner part is the build side, however for TiFlash implementation,
-        /// the build side must be the right side, so need to swap the join side if needed
         swap_join_side = join.inner_idx() == 0;
-    }
+
+    DAGPipeline left_pipeline;
+    DAGPipeline right_pipeline;
 
     if (swap_join_side)
     {
@@ -417,13 +438,13 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
             kind = ASTTableJoin::Kind::Left;
         else if (kind == ASTTableJoin::Kind::Cross_Right)
             kind = ASTTableJoin::Kind::Cross_Left;
-        left_streams = input_streams_vec[1];
-        right_streams = input_streams_vec[0];
+        left_pipeline.streams = input_streams_vec[1];
+        right_pipeline.streams = input_streams_vec[0];
     }
     else
     {
-        left_streams = input_streams_vec[0];
-        right_streams = input_streams_vec[1];
+        left_pipeline.streams = input_streams_vec[0];
+        right_pipeline.streams = input_streams_vec[1];
     }
 
     std::vector<NameAndTypePair> join_output_columns;
@@ -462,7 +483,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     /// all the columns from right table should be added after join, even for the join key
     NamesAndTypesList columns_added_by_join;
     make_nullable = is_tiflash_left_join;
-    for (auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
+    for (auto const & p : right_pipeline.streams[0]->getHeader().getNamesAndTypesList())
     {
         columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
@@ -484,28 +505,38 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
                 collators.push_back(nullptr);
         }
 
-    /// add necessary transformation if the join key is an expression
-    DAGPipeline left_pipeline;
-    left_pipeline.streams = left_streams;
-    String left_filter_column_name = "";
-    prepareJoin(swap_join_side ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names, true,
-        is_tiflash_right_join, swap_join_side ? join.right_conditions() : join.left_conditions(), left_filter_column_name);
-    DAGPipeline right_pipeline;
-    right_pipeline.streams = right_streams;
-    String right_filter_column_name = "";
-    prepareJoin(swap_join_side ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names, false,
-        is_tiflash_right_join, swap_join_side ? join.left_conditions() : join.right_conditions(), right_filter_column_name);
+    Names left_key_names, right_key_names;
+    String left_filter_column_name = "", right_filter_column_name = "";
 
-    left_streams = left_pipeline.streams;
-    right_streams = right_pipeline.streams;
-    String other_filter_column_name = "";
-    String other_eq_filter_from_in_column_name = "";
-    for (auto const & p : left_streams[0]->getHeader().getNamesAndTypesList())
+    /// add necessary transformation if the join key is an expression
+
+    prepareJoin(
+        swap_join_side ? join.right_join_keys() : join.left_join_keys(),
+        join_key_types,
+        left_pipeline,
+        left_key_names,
+        true,
+        is_tiflash_right_join,
+        swap_join_side ? join.right_conditions() : join.left_conditions(),
+        left_filter_column_name);
+
+    prepareJoin(
+        swap_join_side ? join.left_join_keys() : join.right_join_keys(),
+        join_key_types,
+        right_pipeline,
+        right_key_names,
+        false,
+        is_tiflash_right_join,
+        swap_join_side ? join.left_conditions() : join.right_conditions(),
+        right_filter_column_name);
+
+    String other_filter_column_name = "", other_eq_filter_from_in_column_name = "";
+    for (auto const & p : left_pipeline.streams[0]->getHeader().getNamesAndTypesList())
     {
         if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
             columns_for_other_join_filter.emplace_back(p.name, p.type);
     }
-    for (auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
+    for (auto const & p : right_pipeline.streams[0]->getHeader().getNamesAndTypesList())
     {
         if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
             columns_for_other_join_filter.emplace_back(p.name, p.type);
@@ -518,44 +549,60 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, right_pipeline.streams.size()) : 1;
     size_t max_block_size_for_cross_join = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
-    JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness,
-        join_build_concurrency, collators, left_filter_column_name, right_filter_column_name, other_filter_column_name,
-        other_eq_filter_from_in_column_name, other_condition_expr, max_block_size_for_cross_join);
+
+    JoinPtr joinPtr = std::make_shared<Join>(
+        left_key_names,
+        right_key_names,
+        true,
+        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode),
+        kind,
+        strictness,
+        join_build_concurrency,
+        collators,
+        left_filter_column_name,
+        right_filter_column_name,
+        other_filter_column_name,
+        other_eq_filter_from_in_column_name,
+        other_condition_expr,
+        max_block_size_for_cross_join);
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
     right_pipeline.transform(
-        [&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++); });
+        [&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++, log); });
     executeUnion(right_pipeline, max_streams);
+
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
     dag.getDAGContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
     std::vector<NameAndTypePair> source_columns;
-    for (const auto & p : left_streams[0]->getHeader().getNamesAndTypesList())
+    for (const auto & p : left_pipeline.streams[0]->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
     ExpressionActionsChain chain;
     dag_analyzer.appendJoin(chain, right_query, columns_added_by_join);
-    pipeline.streams = left_streams;
+    pipeline.streams = left_pipeline.streams;
     /// add join input stream
     if (is_tiflash_right_join)
     {
         for (size_t i = 0; i < join_build_concurrency; i++)
             pipeline.streams_with_non_joined_data.push_back(chain.getLastActions()->createStreamWithNonJoinedDataIfFullOrRightJoin(
-                pipeline.firstStream()->getHeader(), i, join_build_concurrency, settings.max_block_size));
+                pipeline.firstStream()->getHeader(),
+                i,
+                join_build_concurrency,
+                settings.max_block_size));
     }
     for (auto & stream : pipeline.streams)
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions());
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log);
 
     /// add a project to remove all the useless column
     NamesWithAliases project_cols;
     for (auto & c : join_output_columns)
     {
         /// do not need to care about duplicated column names because
-        /// because it is guaranteed by its children query block
+        /// it is guaranteed by its children query block
         project_cols.emplace_back(c.name, c.name);
     }
     executeProject(pipeline, project_cols);
@@ -564,13 +611,12 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
 void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column)
 {
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column); });
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column, log); });
 }
 
-void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names,
-    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
+void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names, TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
 {
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr); });
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr, log); });
 
     Block header = pipeline.firstStream()->getHeader();
     ColumnNumbers keys;
@@ -598,10 +644,18 @@ void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const 
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
     bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
 
-    Aggregator::Params params(header, keys, aggregates, false, settings.max_rows_to_group_by, settings.group_by_overflow_mode,
+    Aggregator::Params params(
+        header,
+        keys,
+        aggregates,
+        false,
+        settings.max_rows_to_group_by,
+        settings.group_by_overflow_mode,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
-        settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath(),
+        settings.max_bytes_before_external_group_by,
+        settings.empty_result_for_aggregation_by_empty_set,
+        context.getTemporaryPath(),
         has_collator ? collators : TiDB::dummy_collators);
 
     /// If there are several sources, then we perform parallel aggregation
@@ -609,10 +663,14 @@ void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const 
     {
         before_agg_streams = pipeline.streams.size();
         BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams);
-        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams, stream_with_non_joined_data,
-            params, context.getFileProvider(), true, max_streams,
-            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
-                                                                : static_cast<size_t>(settings.max_threads));
+        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(
+            pipeline.streams,
+            stream_with_non_joined_data,
+            params,
+            context.getFileProvider(),
+            true,
+            max_streams,
+            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads));
         pipeline.streams.resize(1);
     }
     else
@@ -626,7 +684,10 @@ void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const 
         if (stream_with_non_joined_data)
             inputs.push_back(stream_with_non_joined_data);
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
-            std::make_shared<ConcatBlockInputStream>(inputs), params, context.getFileProvider(), true);
+            std::make_shared<ConcatBlockInputStream>(inputs),
+            params,
+            context.getFileProvider(),
+            true);
     }
     // add cast
 }
@@ -635,29 +696,8 @@ void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const E
 {
     if (!expressionActionsPtr->getActions().empty())
     {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr); });
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr, log); });
     }
-}
-
-SortDescription DAGQueryBlockInterpreter::getSortDescription(std::vector<NameAndTypePair> & order_columns)
-{
-    // construct SortDescription
-    SortDescription order_descr;
-    const tipb::TopN & topn = query_block.limitOrTopN->topn();
-    order_descr.reserve(topn.order_by_size());
-    for (int i = 0; i < topn.order_by_size(); i++)
-    {
-        const auto & name = order_columns[i].name;
-        int direction = topn.order_by(i).desc() ? -1 : 1;
-        // MySQL/TiDB treats NULL as "minimum".
-        int nulls_direction = -1;
-        std::shared_ptr<ICollator> collator = nullptr;
-        if (removeNullable(order_columns[i].type)->isString())
-            collator = getCollatorFromExpr(topn.order_by(i).expr());
-
-        order_descr.emplace_back(name, direction, nulls_direction, collator);
-    }
-    return order_descr;
 }
 
 void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_streams)
@@ -678,7 +718,7 @@ void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_s
 
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, std::vector<NameAndTypePair> & order_columns)
 {
-    SortDescription order_descr = getSortDescription(order_columns);
+    SortDescription order_descr = getSortDescription(order_columns, query_block.limitOrTopN->topn().order_by());
     const Settings & settings = context.getSettingsRef();
     Int64 limit = query_block.limitOrTopN->topn().limit();
 
@@ -698,8 +738,7 @@ void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, std::vector<
     executeUnion(pipeline, max_streams);
 
     /// Merge the sorted blocks.
-    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(pipeline.firstStream(), order_descr, settings.max_block_size,
-        limit, settings.max_bytes_before_external_sort, context.getTemporaryPath());
+    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(pipeline.firstStream(), order_descr, settings.max_block_size, limit, settings.max_bytes_before_external_sort, context.getTemporaryPath());
 }
 
 void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
@@ -714,7 +753,10 @@ void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, cons
 }
 
 void copyExecutorTreeWithLocalTableScan(
-    tipb::DAGRequest & dag_req, const tipb::Executor * root, tipb::EncodeType encode_type, const tipb::DAGRequest & org_req)
+    tipb::DAGRequest & dag_req,
+    const tipb::Executor * root,
+    tipb::EncodeType encode_type,
+    const tipb::DAGRequest & org_req)
 {
     const tipb::Executor * current = root;
     auto * exec = dag_req.mutable_root_executor();
@@ -863,7 +905,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
                     final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
             }
             pipeline.transform(
-                [&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
+                [&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log); });
             need_append_final_project = true;
         }
     }
@@ -872,10 +914,12 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
         executeProject(pipeline, final_project);
 }
 
-void DAGQueryBlockInterpreter::executeRemoteQueryImpl(DAGPipeline & pipeline,
-    const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges, ::tipb::DAGRequest & dag_req, const DAGSchema & schema)
+void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
+    DAGPipeline & pipeline,
+    const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
+    ::tipb::DAGRequest & dag_req,
+    const DAGSchema & schema)
 {
-
     pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
     dag_req.SerializeToString(&(req->data));
     req->tp = pingcap::coprocessor::ReqType::DAG;
@@ -899,7 +943,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(DAGPipeline & pipeline,
         std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
 
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, 1);
-        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader);
+        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log);
         pipeline.streams.push_back(input);
         dag.getDAGContext().getRemoteInputStreams().push_back(input);
         task_start = task_end;
@@ -935,9 +979,9 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         // todo choose a more reasonable stream number
         for (size_t i = 0; i < max_streams; i++)
         {
-            BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second);
+            BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log);
             dag.getDAGContext().getRemoteInputStreams().push_back(stream);
-            stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0);
+            stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log);
             pipeline.streams.push_back(stream);
         }
         std::vector<NameAndTypePair> source_columns;
@@ -971,7 +1015,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             output_columns.emplace_back(alias, col.type);
             project_cols.emplace_back(col.name, alias);
         }
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log); });
         executeProject(pipeline, project_cols);
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
         recordProfileStreams(pipeline, query_block.source_name);
@@ -1003,8 +1047,11 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         executeWhere(pipeline, res.before_where, res.filter_column_name);
         recordProfileStreams(pipeline, query_block.selection_name);
     }
+
+    // this log measures the concurrent degree in this mpp task
     LOG_INFO(log,
-        "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
+             "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
+
     dag.getDAGContext().final_concurrency = pipeline.streams.size();
     if (res.need_aggregate)
     {
@@ -1060,7 +1107,7 @@ void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithA
     }
     ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
     project->add(ExpressionAction::project(project_cols));
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project); });
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project, log); });
 }
 
 void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
@@ -1097,7 +1144,7 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     }
 
     /// expand concurrency after agg
-    if(!query_block.isRootQueryBlock() && before_agg_streams > 1 && pipeline.streams.size()==1)
+    if (!query_block.isRootQueryBlock() && before_agg_streams > 1 && pipeline.streams.size() == 1)
     {
         size_t concurrency = before_agg_streams;
         BlockInputStreamPtr shared_query_block_input_stream

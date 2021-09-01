@@ -1,7 +1,6 @@
 #include <Common/TiFlashException.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
-#include <Storages/DeltaMerge/Index/MinMax.h>
 
 namespace DB
 {
@@ -74,14 +73,15 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
-        auto stream = std::make_unique<Stream>(dmfile, //
-                                               stream_name,
-                                               type,
-                                               options.compression_settings,
-                                               options.max_compress_block_size,
-                                               file_provider,
-                                               write_limiter,
-                                               IDataType::isNullMap(substream_path) ? false : do_index);
+        auto stream = std::make_unique<Stream>(
+            dmfile,
+            stream_name,
+            type,
+            options.compression_settings,
+            options.max_compress_block_size,
+            file_provider,
+            write_limiter,
+            IDataType::isNullMap(substream_path) ? false : do_index);
         column_streams.emplace(stream_name, std::move(stream));
     };
 
@@ -182,8 +182,9 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             else if (substream[0].type == IDataType::Substream::NullMap)
             {
                 if (unlikely(!type.isNullable()))
-                    throw DB::TiFlashException("Type shouldn be nullable when substream_path's type is NullMap.",
-                                               Errors::DeltaTree::Internal);
+                    throw DB::TiFlashException(
+                        "Type shouldn be nullable when substream_path's type is NullMap.",
+                        Errors::DeltaTree::Internal);
 
                 const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
                 col.checkConsistency();
@@ -192,8 +193,9 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             else if (substream[0].type == IDataType::Substream::NullableElements)
             {
                 if (unlikely(!type.isNullable()))
-                    throw DB::TiFlashException("Type shouldn be nullable when substream_path's type is NullableElements.",
-                                               Errors::DeltaTree::Internal);
+                    throw DB::TiFlashException(
+                        "Type shouldn be nullable when substream_path's type is NullableElements.",
+                        Errors::DeltaTree::Internal);
 
                 const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(type);
                 const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
@@ -201,8 +203,9 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             }
             else
             {
-                throw DB::TiFlashException("Unknown type of substream_path: " + std::to_string(substream[0].type),
-                                           Errors::DeltaTree::Internal);
+                throw DB::TiFlashException(
+                    "Unknown type of substream_path: " + std::to_string(substream[0].type),
+                    Errors::DeltaTree::Internal);
             }
             single_file_stream->flushCompressedData();
             size_t mark_size_in_file = single_file_stream->plain_layer.count() - offset_in_compressed_file;
@@ -234,16 +237,17 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             },
             {});
 
-        type.serializeBinaryBulkWithMultipleStreams(column, //
-                                                    [&](const IDataType::SubstreamPath & substream) {
-                                                        const auto stream_name = DMFile::getFileNameBase(col_id, substream);
-                                                        auto & stream = column_streams.at(stream_name);
-                                                        return &(stream->original_layer);
-                                                    },
-                                                    0,
-                                                    rows,
-                                                    true,
-                                                    {});
+        type.serializeBinaryBulkWithMultipleStreams(
+            column,
+            [&](const IDataType::SubstreamPath & substream) {
+                const auto stream_name = DMFile::getFileNameBase(col_id, substream);
+                auto & stream = column_streams.at(stream_name);
+                return &(stream->original_layer);
+            },
+            0,
+            rows,
+            true,
+            {});
 
         type.enumerateStreams(
             [&](const IDataType::SubstreamPath & substream) {

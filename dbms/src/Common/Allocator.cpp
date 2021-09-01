@@ -4,14 +4,14 @@
 #include <malloc.h>
 #endif
 
-#include <cstdlib>
-#include <sys/mman.h>
-
-#include <common/mremap.h>
-#include <Common/MemoryTracker.h>
 #include <Common/Exception.h>
+#include <Common/MemoryTracker.h>
 #include <Common/formatReadable.h>
 #include <IO/WriteHelpers.h>
+#include <common/mremap.h>
+#include <sys/mman.h>
+
+#include <cstdlib>
 
 
 /// Required for older Darwin builds, that lack definition of MAP_ANONYMOUS
@@ -20,18 +20,17 @@
 #endif
 
 
-
 namespace DB
 {
 std::atomic_size_t allocator_mmap_counter;
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
-    extern const int CANNOT_ALLOCATE_MEMORY;
-    extern const int CANNOT_MUNMAP;
-    extern const int CANNOT_MREMAP;
-}
-}
+extern const int BAD_ARGUMENTS;
+extern const int CANNOT_ALLOCATE_MEMORY;
+extern const int CANNOT_MUNMAP;
+extern const int CANNOT_MREMAP;
+} // namespace ErrorCodes
+} // namespace DB
 
 
 /** Many modern allocators (for example, tcmalloc) do not do a mremap for realloc,
@@ -60,7 +59,8 @@ void * Allocator<clear_memory_>::alloc(size_t size, size_t alignment)
     {
         if (alignment > MMAP_MIN_ALIGNMENT)
             throw DB::Exception("Too large alignment " + formatReadableSizeWithBinarySuffix(alignment) + ": more than page size when allocating "
-                + formatReadableSizeWithBinarySuffix(size) + ".", DB::ErrorCodes::BAD_ARGUMENTS);
+                                    + formatReadableSizeWithBinarySuffix(size) + ".",
+                                DB::ErrorCodes::BAD_ARGUMENTS);
 
         buf = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (MAP_FAILED == buf)
