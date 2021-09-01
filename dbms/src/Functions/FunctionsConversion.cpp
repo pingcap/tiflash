@@ -158,7 +158,7 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToFloat32>();
     factory.registerFunction<FunctionToFloat64>();
 
-    factory.registerFunction<FunctionToDate>();
+    factory.registerFunction<FunctionToMyDate>();
     factory.registerFunction<FunctionToDateTime>();
     factory.registerFunction<FunctionToUUID>();
     factory.registerFunction<FunctionToString>();

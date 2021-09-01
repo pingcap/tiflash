@@ -125,7 +125,7 @@ public:
 
     virtual String getPageFilePath(const PageFileIdAndLevel & id_lvl) const = 0;
 
-    virtual void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size) = 0;
+    virtual void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left) = 0;
 };
 
 class PSDiskDelegatorMulti : public PSDiskDelegator
@@ -146,7 +146,7 @@ public:
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
 
-    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size) override;
+    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left) override;
 
 private:
     StoragePathPool & pool;
@@ -173,7 +173,7 @@ public:
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
 
-    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size) override;
+    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left) override;
 
 private:
     StoragePathPool & pool;
@@ -198,7 +198,7 @@ public:
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
 
-    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size) override;
+    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left) override;
 
 private:
     struct RaftPathInfo

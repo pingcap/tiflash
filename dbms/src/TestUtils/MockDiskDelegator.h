@@ -14,7 +14,7 @@ public:
     size_t numPaths() const { return 1; }
     String defaultPath() const { return path; }
     String getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const { return path; }
-    void removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/) {}
+    void removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/, bool /*meta_left*/) {}
     Strings listPaths() const
     {
         Strings paths;
@@ -44,7 +44,7 @@ public:
     size_t numPaths() const { return paths.size(); }
     String defaultPath() const { return paths[0]; }
     String getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const { throw Exception("Not implemented"); }
-    void removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/) {}
+    void removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/, bool /*meta_left*/) {}
     Strings listPaths() const { return paths; }
     String choosePath(const PageFileIdAndLevel & /*id_lvl*/)
     {
