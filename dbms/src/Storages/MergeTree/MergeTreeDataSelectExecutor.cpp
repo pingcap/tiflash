@@ -511,8 +511,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     }
                     else
                     {
-                        auto [ok, time_cost] = region->waitIndex(read_index_result.read_index, tmt);
-                        if (!ok)
+                        auto [wait_res, time_cost] = region->waitIndex(read_index_result.read_index, tmt);
+                        if (wait_res != WaitIndexResult::Finished)
                         {
                             region_status = RegionException::RegionReadStatus::NOT_FOUND;
                             continue;

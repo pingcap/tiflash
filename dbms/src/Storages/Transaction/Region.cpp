@@ -553,7 +553,7 @@ ReadIndexResult Region::learnerRead(UInt64 start_ts)
     return {};
 }
 
-std::tuple<bool, double> Region::waitIndex(UInt64 index, const TMTContext & tmt)
+std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const TMTContext & tmt)
 {
     if (proxy_helper != nullptr)
     {
@@ -569,23 +569,23 @@ std::tuple<bool, double> Region::waitIndex(UInt64 index, const TMTContext & tmt)
             case WaitIndexResult::Finished:
             {
                 LOG_DEBUG(log, toString(false) << " wait learner index " << index << " done");
-                return {true, elapsed_secs};
+                return {wait_idx_res, elapsed_secs};
             }
             case WaitIndexResult::Terminated:
             {
-                return {false, elapsed_secs};
+                return {wait_idx_res, elapsed_secs};
             }
             case WaitIndexResult::Timeout:
             {
                 ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
                 LOG_WARNING(log, toString(false) << " wait learner index " << index << " timeout");
-                return {false, elapsed_secs};
+                return {wait_idx_res, elapsed_secs};
             }
             }
             throw Exception("Unknown result of wait index:" + DB::toString(static_cast<int>(wait_idx_res)));
         }
     }
-    return {true, 0};
+    return {WaitIndexResult::Finished, 0};
 }
 
 UInt64 Region::version() const

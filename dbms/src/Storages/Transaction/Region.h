@@ -144,10 +144,8 @@ public:
 
     ReadIndexResult learnerRead(UInt64 start_ts);
 
-    // Return <success, time cost(seconds)> about wait-index.
-    // Return <`true`, time cost> if the Raft index has been applied.
-    // Return <`false`, time cost> if peer-state is NOT Normal or store-status is Terminated or timeout.
-    std::tuple<bool, double> waitIndex(UInt64 index, const TMTContext & tmt);
+    // Return <WaitIndexResult, time cost(seconds)> for wait-index.
+    std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const TMTContext & tmt);
 
     UInt64 appliedIndex() const;
 
