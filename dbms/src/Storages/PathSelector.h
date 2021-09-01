@@ -43,7 +43,7 @@ String choose(const std::vector<T> & paths, const P & global_capacity, std::func
     // some files be deleted later.
     if (unlikely(total_available_size == 0))
     {
-        LOG_WARNING(log, "No available space for all disks, choose randomly.");
+        LOG_WARNING(log, "No available space for all disks, choose the first one.");
         // If no available space. direct return the first one.
         // There is no need to calculate and choose.
         return path_generator(paths[0].path);
