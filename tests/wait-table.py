@@ -14,13 +14,6 @@ database = argv[1]
 tables = argv[2:-1]
 client = argv[-1]
 
-# ignore table names wrapped by "/* ... */"
-def is_comment_out(name):
-    name = name.strip()
-    return name.startswith('/*') and name.endswith("*/")
-
-tables = list(filter(lambda name: not is_comment_out(name), tables))
-
 timeout = 600
 sleep_time = 1.0
 
