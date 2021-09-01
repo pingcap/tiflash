@@ -3,10 +3,10 @@
 #include <IO/HashingWriteBuffer.h>
 #include <Poco/Base64Decoder.h>
 #include <Poco/Base64Encoder.h>
+#include <common/crc64.h>
 #include <xxh3.h>
 #include <zlib.h>
 
-#include <common/crc64.h>
 #include <cstddef>
 #include <cstdint>
 #include <sstream>
@@ -19,7 +19,6 @@ extern const Event ChecksumDigestBytes;
 
 namespace DB
 {
-
 enum class ChecksumAlgo : uint64_t
 {
     None,
@@ -31,7 +30,6 @@ enum class ChecksumAlgo : uint64_t
 
 namespace Digest
 {
-
 class None
 {
 public:
@@ -131,8 +129,13 @@ BASIC_CHECK_FOR_FRAME(None)
 BASIC_CHECK_FOR_FRAME(XXH3)
 #undef BASIC_CHECK_FOR_FRAME
 
-using FrameUnion = std::aligned_union_t<256, ChecksumFrame<Digest::None>, ChecksumFrame<Digest::CRC32>, ChecksumFrame<Digest::CRC64>,
-    ChecksumFrame<Digest::City128>, ChecksumFrame<Digest::XXH3>>;
+using FrameUnion = std::aligned_union_t<
+    256,
+    ChecksumFrame<Digest::None>,
+    ChecksumFrame<Digest::CRC32>,
+    ChecksumFrame<Digest::CRC64>,
+    ChecksumFrame<Digest::City128>,
+    ChecksumFrame<Digest::XXH3>>;
 
 
 struct UnifiedDigestBase

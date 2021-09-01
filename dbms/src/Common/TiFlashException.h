@@ -11,7 +11,6 @@
 
 namespace DB
 {
-
 /// A central place for defining your error class and error code.
 /// C(error_class, error...)
 /// E(error_code, description, workaround, message_template)
@@ -23,6 +22,7 @@ namespace DB
 ///   - Use clang-format to format your code
 ///   - Use semicolon(;) to split errors
 ///   - After adding an error, please execute `tiflash errgen <tics-dir>/errors.toml`
+// clang-format off
 #define ERROR_CLASS_LIST                                                                                                             \
     C(PageStorage,                                                                                                                   \
         E(FileSizeNotMatch, "Some files' size don't match their metadata.",                                                          \
@@ -136,6 +136,7 @@ namespace DB
             "Please contact with developer, \n"                                                                                      \
             "better providing information about your cluster(log, topology information etc.).",                                      \
             "");)
+// clang-format on
 
 /// TiFlashError is core struct of standard error,
 /// which contains all information about an error except message.
@@ -226,11 +227,9 @@ protected:
     TiFlashErrorRegistry() { initialize(); }
 
 private:
-    void registerError(const std::string & error_class, const std::string & error_code, const std::string & description,
-        const std::string & workaround, const std::string & message_template = "");
+    void registerError(const std::string & error_class, const std::string & error_code, const std::string & description, const std::string & workaround, const std::string & message_template = "");
 
-    void registerErrorWithNumericCode(const std::string & error_class, int error_code, const std::string & description,
-        const std::string & workaround, const std::string & message_template = "");
+    void registerErrorWithNumericCode(const std::string & error_class, int error_code, const std::string & description, const std::string & workaround, const std::string & message_template = "");
 
     void initialize();
 
@@ -243,7 +242,10 @@ private:
 class TiFlashException : public Exception
 {
 public:
-    TiFlashException(const std::string & _msg, const TiFlashError & _error) : Exception(_msg), error(_error) {}
+    TiFlashException(const std::string & _msg, const TiFlashError & _error)
+        : Exception(_msg)
+        , error(_error)
+    {}
 
     const char * name() const throw() override { return "DB::TiFlashException"; }
     const char * className() const throw() override { return "DB::TiFlashException"; }

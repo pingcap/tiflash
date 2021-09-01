@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Columns/IColumn.h>
-#include <Common/assert_cast.h>
 #include <Common/HashTable/HashTableKeyHolder.h>
+#include <Common/assert_cast.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/AggregationCommon.h>
 
@@ -11,15 +11,13 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 namespace ColumnsHashing
 {
-
 namespace columns_hashing_impl
 {
-
 template <typename Value, bool consecutive_keys_optimization_>
 struct LastElementCache
 {
@@ -31,7 +29,10 @@ struct LastElementCache
     bool check(const Value & value_) { return !empty && value == value_; }
 
     template <typename Key>
-    bool check(const Key & key) { return !empty && value.first == key; }
+    bool check(const Key & key)
+    {
+        return !empty && value.first == key;
+    }
 };
 
 template <typename Data>
@@ -49,7 +50,10 @@ class EmplaceResultImpl
 
 public:
     EmplaceResultImpl(Mapped & value_, Mapped & cached_value_, bool inserted_)
-            : value(value_), cached_value(cached_value_), inserted(inserted_) {}
+        : value(value_)
+        , cached_value(cached_value_)
+        , inserted(inserted_)
+    {}
 
     bool isInserted() const { return inserted; }
     auto & getMapped() const { return value; }
@@ -67,7 +71,9 @@ class EmplaceResultImpl<void>
     bool inserted;
 
 public:
-    explicit EmplaceResultImpl(bool inserted_) : inserted(inserted_) {}
+    explicit EmplaceResultImpl(bool inserted_)
+        : inserted(inserted_)
+    {}
     bool isInserted() const { return inserted; }
 };
 
@@ -78,7 +84,10 @@ class FindResultImpl
     bool found;
 
 public:
-    FindResultImpl(Mapped * value_, bool found_) : value(value_), found(found_) {}
+    FindResultImpl(Mapped * value_, bool found_)
+        : value(value_)
+        , found(found_)
+    {}
     bool isFound() const { return found; }
     Mapped & getMapped() const { return *value; }
 };
@@ -89,7 +98,9 @@ class FindResultImpl<void>
     bool found;
 
 public:
-    explicit FindResultImpl(bool found_) : found(found_) {}
+    explicit FindResultImpl(bool found_)
+        : found(found_)
+    {}
     bool isFound() const { return found; }
 };
 
@@ -238,10 +249,14 @@ protected:
 
 
 template <typename T>
-struct MappedCache : public PaddedPODArray<T> {};
+struct MappedCache : public PaddedPODArray<T>
+{
+};
 
 template <>
-struct MappedCache<void> {};
+struct MappedCache<void>
+{
+};
 
 
 /// This class is designed to provide the functionality that is required for
@@ -316,14 +331,17 @@ template <typename Key>
 class BaseStateKeysFixed<Key, false>
 {
 protected:
-    BaseStateKeysFixed(const ColumnRawPtrs & columns) : actual_columns(columns) {}
+    BaseStateKeysFixed(const ColumnRawPtrs & columns)
+        : actual_columns(columns)
+    {}
 
     const ColumnRawPtrs & getActualColumns() const { return actual_columns; }
 
     KeysNullMap<Key> createBitmap(size_t) const
     {
         throw Exception{"Internal error: calling createBitmap() for non-nullable keys"
-                        " is forbidden", ErrorCodes::LOGICAL_ERROR};
+                        " is forbidden",
+                        ErrorCodes::LOGICAL_ERROR};
     }
 
 private:

@@ -29,19 +29,19 @@
 
 namespace detail
 {
-    inline void memcpySmallAllowReadWriteOverflow15Impl(char * __restrict dst, const char * __restrict src, ssize_t n)
+inline void memcpySmallAllowReadWriteOverflow15Impl(char * __restrict dst, const char * __restrict src, ssize_t n)
+{
+    while (n > 0)
     {
-        while (n > 0)
-        {
-            _mm_storeu_si128(reinterpret_cast<__m128i *>(dst),
-                _mm_loadu_si128(reinterpret_cast<const __m128i *>(src)));
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(dst),
+                         _mm_loadu_si128(reinterpret_cast<const __m128i *>(src)));
 
-            dst += 16;
-            src += 16;
-            n -= 16;
-        }
+        dst += 16;
+        src += 16;
+        n -= 16;
     }
 }
+} // namespace detail
 
 /** Works under assumption, that it's possible to read up to 15 excessive bytes after end of 'src' region
   *  and to write any garbage into up to 15 bytes after end of 'dst' region.
@@ -55,7 +55,7 @@ inline void memcpySmallAllowReadWriteOverflow15(void * __restrict dst, const voi
   * This function was unused, and also it requires special handling for Valgrind and ASan.
   */
 
-#else    /// Implementation for other platforms.
+#else /// Implementation for other platforms.
 
 inline void memcpySmallAllowReadWriteOverflow15(void * __restrict dst, const void * __restrict src, size_t n)
 {
