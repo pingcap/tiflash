@@ -76,7 +76,8 @@ static Block createBlockWithNestedColumnsImpl(const Block & block, const std::un
                 res.insert({ColumnConst::create(nested_col, rows), nested_type, col.name});
             }
             else
-                throw Exception("Illegal column for DataTypeNullable:" + col.type->getName() + " [column_name=" + col.name
+                throw Exception(
+                    "Illegal column for DataTypeNullable:" + col.type->getName() + " [column_name=" + col.name
                                     + "] [created=" + DB::toString(bool(col.column))
                                     + "] [nullable=" + (col.column ? DB::toString(bool(col.column->isColumnNullable())) : "null")
                                     + "] [const=" + (col.column ? DB::toString(bool(col.column->isColumnConst())) : "null") + "]",
