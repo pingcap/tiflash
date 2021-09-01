@@ -388,7 +388,7 @@ void MPPTask::runImpl()
     }
     if (err_msg.empty())
     {
-        // todo when error happens, should try to update the metrics if it is available 
+        // todo when error happens, should try to update the metrics if it is available
         auto throughput = dag_context->getTableScanThroughput();
         if (throughput.first)
             GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
