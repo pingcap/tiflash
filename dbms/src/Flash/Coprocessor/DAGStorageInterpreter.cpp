@@ -82,10 +82,11 @@ MakeRegionQueryInfos(const RegionInfoMap & dag_region_infos, const std::unordere
                 TableID table_id_in_range = -1;
                 if (!computeMappedTableID(*p.first, table_id_in_range) || table_id_in_range != table_id)
                 {
-                    throw TiFlashException("Income key ranges is illegal for region: " + std::to_string(r.region_id)
-                                               + ", table id in key range is " + std::to_string(table_id_in_range) + ", table id in region is "
-                                               + std::to_string(table_id),
-                                           Errors::Coprocessor::BadRequest);
+                    throw TiFlashException(
+                        "Income key ranges is illegal for region: " + std::to_string(r.region_id)
+                            + ", table id in key range is " + std::to_string(table_id_in_range) + ", table id in region is "
+                            + std::to_string(table_id),
+                        Errors::Coprocessor::BadRequest);
                 }
                 if (p.first->compare(*info.range_in_table.first) < 0 || p.second->compare(*info.range_in_table.second) > 0)
                     throw TiFlashException(
@@ -514,7 +515,7 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
         executor->set_executor_id(query_block.selection->executor_id());
         auto * selection = executor->mutable_selection();
         for (auto & condition : query_block.selection->selection().conditions())
-            (*selection->add_conditions()) = condition;
+            *selection->add_conditions() = condition;
         executor = selection->mutable_child();
     }
 

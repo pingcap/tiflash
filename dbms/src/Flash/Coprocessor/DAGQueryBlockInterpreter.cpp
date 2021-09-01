@@ -266,7 +266,10 @@ void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
 
 } // namespace
 
-ExpressionActionsPtr generateProjectExpressionActions(const BlockInputStreamPtr & stream, const Context & context, NamesWithAliases & project_cols)
+ExpressionActionsPtr generateProjectExpressionActions(
+    const BlockInputStreamPtr & stream,
+    const Context & context,
+    const NamesWithAliases & project_cols)
 {
     auto columns = stream->getHeader();
     NamesAndTypesList input_column;
@@ -768,7 +771,13 @@ void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, std::vector<
     executeUnion(pipeline, max_streams);
 
     /// Merge the sorted blocks.
-    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(pipeline.firstStream(), order_descr, settings.max_block_size, limit, settings.max_bytes_before_external_sort, context.getTemporaryPath());
+    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
+        pipeline.firstStream(),
+        order_descr,
+        settings.max_block_size,
+        limit,
+        settings.max_bytes_before_external_sort,
+        context.getTemporaryPath());
 }
 
 void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
@@ -854,6 +863,7 @@ void copyExecutorTreeWithLocalTableScan(
     new_ts->set_next_read_engine(tipb::EngineType::Local);
     exec->set_allocated_tbl_scan(new_ts);
 
+    /// force the encode type to be TypeCHBlock, so the receiver side does not need to handle the timezone related issues
     dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
     dag_req.set_force_encode_type(true);
     if (org_req.has_time_zone_name() && !org_req.time_zone_name().empty())
@@ -912,10 +922,10 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
 }
 
 void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
-DAGPipeline & pipeline,
-                                                      const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
-                                                      ::tipb::DAGRequest & dag_req,
-                                                      const DAGSchema & schema)
+    DAGPipeline & pipeline,
+    const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
+    ::tipb::DAGRequest & dag_req,
+    const DAGSchema & schema)
 {
     pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
     dag_req.SerializeToString(&(req->data));
