@@ -22,8 +22,7 @@ using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 namespace PathSelector
 {
 template <typename T, typename P>
-String choose(const std::vector<T> & paths, const P & global_capacity, std::function<String(const String & path)> && path_generator,
-    Poco::Logger * log, const String & log_msg)
+String choose(const std::vector<T> & paths, const P & global_capacity, std::function<String(const String & path)> && path_generator, Poco::Logger * log, const String & log_msg)
 {
     assert(!paths.empty());
     if (paths.size() == 1)

@@ -3,13 +3,17 @@
 #include <Storages/MergeTree/MergeTreePartInfo.h>
 #include <Storages/PartPathSelector.h>
 #include <common/likely.h>
+
 #include <map>
 
 namespace DB
 {
 // TODO: Move this to MergeTree directory
 const String PartPathSelector::getPathForPart(
-    MergeTreeData & data, const String & part_name, const MergeTreePartInfo & info, size_t part_size) const
+    MergeTreeData & data,
+    const String & part_name,
+    const MergeTreePartInfo & info,
+    size_t part_size) const
 {
     // test whether this part can be put on fast path and return the path if it can
     if (hasFastPath())
@@ -69,8 +73,8 @@ const String PartPathSelector::getPathForPart(
         LOG_TRACE(log, "Path " << normal_and_fast_path[i] << " size is " << path_parts_size[i] << " bytes.");
     }
     LOG_TRACE(log,
-        "database: " << data.getDatabaseName() << " table: " << data.getTableName() << " part name: " << part_name
-                     << " path: " << normal_and_fast_path[result_path_index]);
+              "database: " << data.getDatabaseName() << " table: " << data.getTableName() << " part name: " << part_name
+                           << " path: " << normal_and_fast_path[result_path_index]);
 
     return normal_and_fast_path[result_path_index];
 }
