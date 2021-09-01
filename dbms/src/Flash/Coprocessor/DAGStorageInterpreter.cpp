@@ -143,7 +143,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     if (!mvcc_query_info->regions_query_info.empty())
         doLocalRead(pipeline, settings.max_block_size);
 
-    for (auto & region_info : dag.getRetryRegions())
+    for (auto & region_info : dag.getRegionsForRemoteRead())
         region_retry.emplace_back(region_info);
 
     null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage->getSampleBlockForColumns(required_columns));

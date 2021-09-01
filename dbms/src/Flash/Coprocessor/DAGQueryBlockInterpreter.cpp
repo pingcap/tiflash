@@ -257,7 +257,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
         // do not have table id
         throw TiFlashException("Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
     }
-    if (dag.getRegions().empty() && dag.getRetryRegions().empty())
+    if (dag.getRegions().empty() && dag.getRegionsForRemoteRead().empty())
     {
         throw TiFlashException("Dag Request does not have region to read. ", Errors::Coprocessor::BadRequest);
     }
