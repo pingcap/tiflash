@@ -35,9 +35,7 @@ class ShellFuncExecutor:
         self.dbc = dbc
 
     def exe(self, cmd):
-        result = os.popen((cmd + ' "' + self.dbc + '" 2>&1').strip()).readlines()
-        print(result)
-        return result
+        return os.popen((cmd + ' "' + self.dbc + '" 2>&1').strip()).readlines()
 
 
 class CurlTiDBExecutor:
