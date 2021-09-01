@@ -95,9 +95,9 @@ struct AnalysisResult
     bool has_order_by = false;
 
     ExpressionActionsPtr timezone_cast;
-    NamesWithAliases project_after_ts_and_filter;
     NamesWithAliases project_after_ts_and_filter_for_remote_read;
     ExpressionActionsPtr before_where;
+    ExpressionActionsPtr project_after_where;
     ExpressionActionsPtr before_aggregation;
     ExpressionActionsPtr before_having;
     ExpressionActionsPtr before_order_and_select;
@@ -151,7 +151,6 @@ AnalysisResult analyzeExpressions(
             size_t index = 0;
             for (const auto & col : analyzer.getCurrentInputColumns())
             {
-                res.project_after_ts_and_filter.emplace_back(col.name, col.name);
                 res.project_after_ts_and_filter_for_remote_read.emplace_back(original_source_columns[index].name, col.name);
                 index++;
             }
@@ -163,13 +162,16 @@ AnalysisResult analyzeExpressions(
         res.has_where = true;
         res.before_where = chain.getLastActions();
         chain.addStep();
-        if (query_block.source->tp() == tipb::ExecType::TypeTableScan && res.project_after_ts_and_filter.empty())
+        if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
         {
+            NamesWithAliases project_cols;
             for (const auto & col : analyzer.getCurrentInputColumns())
             {
-                res.project_after_ts_and_filter.emplace_back(col.name, col.name);
-                res.project_after_ts_and_filter_for_remote_read.emplace_back(col.name, col.name);
+                project_cols.emplace_back(col.name, col.name);
             }
+            chain.getLastActions()->add(ExpressionAction::project(project_cols));
+            res.project_after_where = chain.getLastActions();
+            chain.addStep();
         }
     }
     // There will be either Agg...
@@ -1048,7 +1050,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (res.need_timezone_cast_after_tablescan || res.has_where)
     {
         /// execute timezone cast and the selection
-        ExpressionActionsPtr project;
         ExpressionActionsPtr project_for_cop_read;
         for (auto & stream : pipeline.streams)
         {
@@ -1072,14 +1073,8 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                 /// execute selection if needed
                 if (res.has_where)
                     stream = std::make_shared<FilterBlockInputStream>(stream, res.before_where, res.filter_column_name);
-                if (!res.project_after_ts_and_filter_for_remote_read.empty())
-                {
-                    if (project == nullptr)
-                    {
-                        project = generateProjectExpressionActions(stream, context, res.project_after_ts_and_filter);
-                    }
-                    stream = std::make_shared<ExpressionBlockInputStream>(stream, project);
-                }
+                if (res.project_after_where)
+                    stream = std::make_shared<ExpressionBlockInputStream>(stream, res.project_after_where);
             }
         }
     }
