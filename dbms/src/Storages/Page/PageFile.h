@@ -33,13 +33,13 @@ public:
         Writer(PageFile &, bool sync_on_write, bool truncate_if_exists = true);
         ~Writer();
 
-        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
+        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & rate_limiter = nullptr);
         void                 tryCloseIdleFd(const Seconds & max_idle_time);
 
         const String &     parentPath() const;
         PageFileIdAndLevel fileIdLevel() const;
 
-        void pageFileLink(PageFile & linked_file, WriteBatch::SequenceID sid);
+        void pageFileLink(PageFile & linked_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit);
 
     private:
         void closeFd();
@@ -165,7 +165,6 @@ public:
         }
 
     private:
-
         void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter);
 
     private:
@@ -199,7 +198,7 @@ public:
 
         bool hasNext() const;
 
-        void linkToNewSequenceNext(WriteBatch::SequenceID sid);
+        void linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level);
 
         std::pair<char *, size_t> getMetaInfo() { return {meta_buffer, meta_size}; };
 
@@ -323,7 +322,7 @@ public:
     String folderPath() const;
 
 
-    bool linkPage(PageFile & page_file, WriteBatch::SequenceID sid);
+    bool linkPage(PageFile & page_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit);
 
     void createEncryptionInfo() const
     {

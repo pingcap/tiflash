@@ -226,7 +226,8 @@ PageFile::MetaMergingReader::~MetaMergingReader()
     page_file.free(meta_buffer, meta_size);
 }
 
-PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter)
+PageFile::MetaMergingReaderPtr
+PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter)
 {
     auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
     reader->initialize(max_meta_offset, read_limiter);
@@ -491,7 +492,7 @@ bool PageFile::MetaLinkingReader::hasNext() const
     return meta_file_offset < meta_size;
 }
 
-void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID sid)
+void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level)
 {
     char * meta_data_end = meta_buffer + meta_size;
     char * pos           = meta_buffer + meta_file_offset;
@@ -550,8 +551,6 @@ void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID s
     PageUtil::put<WriteBatch::SequenceID>(sequence_pos, sid);
     char * checksum_pos = meta_buffer + meta_file_offset;
     checksum_pos += wb_bytes_without_checksum;
-    const auto new_checksum = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
-    PageUtil::put<PageMetaFormat::Checksum>(checksum_pos, new_checksum);
 
     // recover WriteBatch
     while (pos < wb_start_pos + wb_bytes_without_checksum)
@@ -561,38 +560,49 @@ void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID s
         {
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT: {
-            pos += sizeof(PageId);
+            PageMetaFormat::PageFlags flags;
+            auto                      page_id = PageUtil::get<PageId>(pos);
+            PageEntry                 entry;
             switch (binary_version)
             {
             case PageFormat::V1: {
+                entry.file_id = file_id;
+                entry.level   = level;
                 break;
             }
             case PageFormat::V2: {
-                pos += sizeof(PageFileId);
-                pos += sizeof(PageFileLevel);
-                pos += sizeof(PageMetaFormat::PageFlags);
+                PageUtil::put<PageFileId>(pos, file_id);
+                PageUtil::put<PageFileLevel>(pos, level);
+                entry.file_id = file_id;
+                entry.level   = level;
+                flags         = PageUtil::get<PageMetaFormat::PageFlags>(pos);
                 break;
             }
             default:
-                throw Exception("[unknown_version=" + DB::toString(binary_version) + "] [file=" + page_file.metaPath() + "]",
+                throw Exception("PageFile binary version not match [unknown_version=" + DB::toString(binary_version)
+                                    + "] [file=" + page_file.metaPath() + "]",
                                 ErrorCodes::LOGICAL_ERROR);
             }
-            pos += sizeof(PageMetaFormat::PageTag);
-            pos += sizeof(PageMetaFormat::PageOffset);
-            pos += sizeof(PageSize);
-            pos += sizeof(PageMetaFormat::Checksum);
+
+            entry.tag      = PageUtil::get<PageMetaFormat::PageTag>(pos);
+            entry.offset   = PageUtil::get<PageMetaFormat::PageOffset>(pos);
+            entry.size     = PageUtil::get<PageSize>(pos);
+            entry.checksum = PageUtil::get<PageMetaFormat::Checksum>(pos);
 
             if (binary_version == PageFormat::V2)
             {
                 const UInt64 num_fields = PageUtil::get<UInt64>(pos);
+                entry.field_offsets.reserve(num_fields);
                 for (size_t i = 0; i < num_fields; ++i)
                 {
-                    // field_offset
-                    pos += sizeof(UInt64);
-                    // field_checksum
-                    pos += sizeof(UInt64);
+                    auto field_offset   = PageUtil::get<UInt64>(pos);
+                    auto field_checksum = PageUtil::get<UInt64>(pos);
+                    entry.field_offsets.emplace_back(field_offset, field_checksum);
                 }
             }
+
+            // Wheather put or upsert should change to upsert.
+            edit.upsertPage(page_id, entry);
             break;
         }
         case WriteBatch::WriteType::DEL: {
@@ -608,6 +618,10 @@ void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID s
         }
         }
     }
+
+    const auto new_checksum = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
+    PageUtil::put<PageMetaFormat::Checksum>(checksum_pos, new_checksum);
+
     // move `pos` over the checksum of WriteBatch
     pos += sizeof(PageMetaFormat::Checksum);
 
@@ -643,7 +657,7 @@ PageFile::Writer::~Writer()
     closeFd();
 }
 
-void PageFile::Writer::pageFileLink(PageFile & linked_file, WriteBatch::SequenceID sid)
+void PageFile::Writer::pageFileLink(PageFile & linked_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit)
 {
     char * linked_meta_data;
     size_t linked_meta_size;
@@ -662,7 +676,7 @@ void PageFile::Writer::pageFileLink(PageFile & linked_file, WriteBatch::Sequence
     // Move to the SequenceID item
     while (reader->hasNext())
     {
-        reader->linkToNewSequenceNext(sid);
+        reader->linkToNewSequenceNext(sid, edit, page_file.getFileId(), page_file.getLevel());
     }
 
     std::tie(linked_meta_data, linked_meta_size) = reader->getMetaInfo();
@@ -1220,12 +1234,13 @@ size_t PageFile::setCheckpoint()
     return removeDataIfExists();
 }
 
-bool PageFile::linkPage(PageFile & page_file, WriteBatch::SequenceID sid)
+bool PageFile::linkPage(PageFile & page_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit)
 {
     auto writer = this->createWriter(false, false);
     try
     {
-        writer->pageFileLink(page_file, sid);
+        writer->pageFileLink(page_file, sid, edit);
+        setFileAppendPos(page_file.getMetaFileSize(), page_file.getDataFileSize());
         return true;
     }
     catch (DB::Exception & e)

@@ -52,6 +52,11 @@ public:
 
         size_t file_meta_roll_size = PAGE_META_ROLL_SIZE;
 
+        // When the value of gc_force_hardlink_rate is less than 1,
+        // It means that candidates whose vaild rate is less than this value will be forced to hardlink(This will reduce the gc duration).
+        // Otherwise, if gc_force_hardlink_rate equal 1, hardlink won't happen
+        Float64 gc_force_hardlink_rate = 0.8;
+
         Float64 gc_max_valid_rate = 0.35;
         size_t  gc_min_bytes      = PAGE_FILE_ROLL_SIZE;
         size_t  gc_min_files      = 10;
@@ -140,7 +145,10 @@ public:
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {});
     Page      read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
     PageMap   read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
-    void      read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
+    void      read(const std::vector<PageId> & page_ids,
+                   const PageHandler &         handler,
+                   const ReadLimiterPtr &      read_limiter = nullptr,
+                   SnapshotPtr                 snapshot     = {});
 
     using FieldIndices   = std::vector<size_t>;
     using PageReadFields = std::pair<PageId, FieldIndices>;
@@ -275,13 +283,16 @@ class PageReader : private boost::noncopyable
 {
 public:
     /// Not snapshot read.
-    explicit PageReader(PageStorage & storage_, ReadLimiterPtr read_limiter_)
-        : storage(storage_), snap(), read_limiter(read_limiter_) {}
+    explicit PageReader(PageStorage & storage_, ReadLimiterPtr read_limiter_) : storage(storage_), snap(), read_limiter(read_limiter_) {}
     /// Snapshot read.
     PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
-        : storage(storage_), snap(snap_), read_limiter(read_limiter_) {}
+        : storage(storage_), snap(snap_), read_limiter(read_limiter_)
+    {
+    }
     PageReader(PageStorage & storage_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
-        : storage(storage_), snap(std::move(snap_)), read_limiter(read_limiter_) {}
+        : storage(storage_), snap(std::move(snap_)), read_limiter(read_limiter_)
+    {
+    }
 
     Page    read(PageId page_id) const { return storage.read(page_id, read_limiter, snap); }
     PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, read_limiter, snap); }
@@ -300,7 +311,7 @@ private:
 
     PageStorage &            storage;
     PageStorage::SnapshotPtr snap;
-    ReadLimiterPtr read_limiter;
+    ReadLimiterPtr           read_limiter;
 };
 
 } // namespace DB
