@@ -286,7 +286,7 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
 static inline std::pair<UInt64, UInt64> parseTS(UInt64 ts)
 {
     constexpr int physical_shift_bits = 18;
-    constexpr int logical_bits = (1 << physical_shift_bits) - 1;
+    constexpr UInt64 logical_bits = (1 << physical_shift_bits) - 1;
     auto logical = ts & logical_bits;
     auto physical = ts >> physical_shift_bits;
     return {physical, logical};
