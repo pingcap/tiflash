@@ -5,7 +5,6 @@
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ParserSetQuery.h>
 
-
 namespace DB
 {
 /// Parse `name = value`.
@@ -32,7 +31,6 @@ static bool parseNameValuePair(ASTSetQuery::Change & change, IParser::Pos & pos,
 
     return true;
 }
-
 
 bool ParserSetQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
