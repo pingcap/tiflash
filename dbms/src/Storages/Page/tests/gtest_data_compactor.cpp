@@ -108,7 +108,7 @@ try
     const PageFileIdAndLevel target_id_lvl{2, 1};
     {
         // Apply migration
-        auto [edits, bytes_written] = compactor.migratePages(snapshot, valid_pages, candidates, PageFileSet{}, 0);
+        auto [edits, bytes_written] = compactor.migratePages(snapshot, valid_pages, candidates, candidates, PageFileSet{}, 0, -1);
         std::ignore = bytes_written;
         ASSERT_EQ(edits.size(), 3); // page 1, 2, 6
         auto & records = edits.getRecords();
@@ -130,7 +130,7 @@ try
     {
         // Try to apply migration again, should be ignore because PageFile_2_1 exists
         size_t bytes_written = 0;
-        std::tie(std::ignore, bytes_written) = compactor.migratePages(snapshot, valid_pages, candidates, PageFileSet{}, 0);
+        std::tie(std::ignore, bytes_written) = compactor.migratePages(snapshot, valid_pages, candidates, candidates, PageFileSet{}, 0, -1);
         ASSERT_EQ(bytes_written, 0) << "should not apply migration";
     }
 
@@ -140,7 +140,7 @@ try
         FailPointHelper::enableFailPoint(FailPoints::force_formal_page_file_not_exists);
         FailPointHelper::enableFailPoint(FailPoints::force_legacy_or_checkpoint_page_file_exists);
         size_t bytes_written = 0;
-        std::tie(std::ignore, bytes_written) = compactor.migratePages(snapshot, valid_pages, candidates, PageFileSet{}, 0);
+        std::tie(std::ignore, bytes_written) = compactor.migratePages(snapshot, valid_pages, candidates, candidates, PageFileSet{}, 0, -1);
         ASSERT_EQ(bytes_written, 0) << "should not apply migration";
     }
 

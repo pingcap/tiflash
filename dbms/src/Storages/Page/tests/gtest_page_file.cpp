@@ -169,10 +169,10 @@ TEST(PageEntry_test, GetFieldInfo)
 
 TEST(PageFile_test, PageFileLink)
 {
-    Poco::Logger * log     = &Poco::Logger::get("PageFileLink");
-    PageId         page_id = 55;
-    UInt64         tag     = 0;
-    const String   path    = TiFlashTestEnv::getTemporaryPath("PageFileLink/");
+    Poco::Logger * log = &Poco::Logger::get("PageFileLink");
+    PageId page_id = 55;
+    UInt64 tag = 0;
+    const String path = TiFlashTestEnv::getTemporaryPath("PageFileLink/");
     {
         if (Poco::File p(path); p.exists())
         {
@@ -182,13 +182,13 @@ TEST(PageFile_test, PageFileLink)
     }
 
     const auto file_provider = TiFlashTestEnv::getGlobalContext().getFileProvider();
-    PageFile   pf0           = PageFile::newPageFile(page_id, 0, path, file_provider, PageFile::Type::Formal, log);
-    auto       writer        = pf0.createWriter(true, true);
+    PageFile pf0 = PageFile::newPageFile(page_id, 0, path, file_provider, PageFile::Type::Formal, log);
+    auto writer = pf0.createWriter(true, true);
 
     WriteBatch batch;
     {
         const size_t buf_sz = 1024;
-        char         c_buff1[buf_sz], c_buff2[buf_sz];
+        char c_buff1[buf_sz], c_buff2[buf_sz];
 
         for (size_t i = 0; i < buf_sz; ++i)
         {
@@ -200,39 +200,14 @@ TEST(PageFile_test, PageFileLink)
         ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff2, sizeof(c_buff2));
         batch.putPage(page_id, tag, buff1, buf_sz);
         batch.putPage(page_id + 1, tag, buff2, buf_sz);
-
-        batch.delPage(page_id + 1);
     }
 
     PageEntriesEdit edit;
-    {
-        PageEntry p0entry, p1entry, p2entry, p3entry;
-        p0entry.file_id  = 1;
-        p0entry.level    = 0;
-        p0entry.checksum = 0x123;
-
-        p1entry.file_id  = 2;
-        p1entry.level    = 0;
-        p1entry.checksum = 0x123;
-
-        p2entry.file_id  = 3;
-        p2entry.level    = 0;
-        p2entry.checksum = 0x123;
-
-        p3entry.file_id  = 4;
-        p3entry.level    = 0;
-        p3entry.checksum = 0x123;
-
-        edit.put(page_id, p0entry);
-        edit.put(page_id, p1entry);
-        edit.put(page_id, p2entry);
-        edit.put(page_id, p3entry);
-    }
 
     ASSERT_GT(writer->write(batch, edit), 0);
-    PageFile               pf1 = PageFile::newPageFile(page_id, 1, path, file_provider, PageFile::Type::Formal, log);
+    PageFile pf1 = PageFile::newPageFile(page_id, 1, path, file_provider, PageFile::Type::Formal, log);
     WriteBatch::SequenceID sid = 100;
-    ASSERT_TRUE(pf1.linkPage(pf0, sid));
+    ASSERT_TRUE(pf1.linkPage(pf0, sid, edit));
 
     auto reader = PageFile::MetaMergingReader::createFrom(pf1);
     while (reader->hasNext())

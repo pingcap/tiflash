@@ -249,7 +249,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
 
     // merge `candidates` to PageFile which PageId = max of all `candidates` and level = level + 1
     auto [largest_file_id, level] = candidates.rbegin()->fileIdLevel();
-    PageFileIdAndLevel migrate_file_id{largest_file_id, level + 1};
+    const PageFileIdAndLevel migrate_file_id{largest_file_id, level + 1};
 
     // In case that those files are hold by snapshot and do migratePages to same `migrate_file_id` again, we need to check
     // whether gc_file (and its legacy file) is already exist.
@@ -286,23 +286,6 @@ DataCompactor<SnapshotPtr>::migratePages( //
             }
         }
         // else the PageFile is not exists in all paths, continue migration.
-    }
-
-    // Have already checked that is candidates empty.
-    // It is safe to get pagefie from files_valid_pages.
-    auto & biggest_file = const_cast<PageFile &>(*page_files.begin());
-    if (high_vaild_big_pf_index != -1)
-    {
-        long index = 0;
-        for (auto & pf : page_files)
-        {
-            if (index == high_vaild_big_pf_index)
-            {
-                biggest_file = pf;
-                break;
-            }
-            index++;
-        }
     }
 
     PageEntriesEdit gc_file_edit;
@@ -375,6 +358,21 @@ DataCompactor<SnapshotPtr>::migratePages( //
 
         if (high_vaild_big_pf_index != -1)
         {
+            // Have already checked that is candidates empty.
+            // It is safe to get pagefie from files_valid_pages.
+            auto & biggest_file = const_cast<PageFile &>(*page_files.begin());
+
+            long index = 0;
+            for (auto & pf : page_files)
+            {
+                if (index == high_vaild_big_pf_index)
+                {
+                    biggest_file = pf;
+                    break;
+                }
+                index++;
+            }
+
             LOG_INFO(log,
                      "GC decide to link "
                          << "PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel() << " to "
