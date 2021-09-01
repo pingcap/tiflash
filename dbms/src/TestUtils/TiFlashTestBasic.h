@@ -46,17 +46,11 @@ namespace tests
     }
 
 /// helper functions for comparing DataType
-inline ::testing::AssertionResult DataTypeCompare( //
+::testing::AssertionResult DataTypeCompare( //
     const char * lhs_expr,
     const char * rhs_expr,
     const DataTypePtr & lhs,
-    const DataTypePtr & rhs)
-{
-    if (lhs->equals(*rhs))
-        return ::testing::AssertionSuccess();
-    else
-        return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs->getName(), rhs->getName(), false);
-}
+    const DataTypePtr & rhs);
 #define ASSERT_DATATYPE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::DataTypeCompare, val1, val2)
 #define EXPECT_DATATYPE_EQ(val1, val2) EXPECT_PRED_FORMAT2(::DB::tests::DataTypeCompare, val1, val2)
 
