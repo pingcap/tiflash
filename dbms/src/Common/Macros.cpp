@@ -1,14 +1,13 @@
-#include <Poco/Util/AbstractConfiguration.h>
-#include <Common/Macros.h>
 #include <Common/Exception.h>
+#include <Common/Macros.h>
+#include <Poco/Util/AbstractConfiguration.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int SYNTAX_ERROR;
+extern const int SYNTAX_ERROR;
 }
 
 Macros::Macros() {}
@@ -76,7 +75,7 @@ Names Macros::expand(const Names & source_names, size_t level) const
 
     for (const String & name : source_names)
         result_names.push_back(expand(name, level));
-    
+
     return result_names;
 }
-}
+} // namespace DB

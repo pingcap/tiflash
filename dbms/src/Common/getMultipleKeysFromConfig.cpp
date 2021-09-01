@@ -1,7 +1,6 @@
-#include <Common/getMultipleKeysFromConfig.h>
-
-#include <Poco/Util/AbstractConfiguration.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/getMultipleKeysFromConfig.h>
+#include <Poco/Util/AbstractConfiguration.h>
 
 namespace DB
 {
@@ -28,4 +27,4 @@ std::vector<std::string> getMultipleValuesFromConfig(const Poco::Util::AbstractC
     return values;
 }
 
-}
+} // namespace DB

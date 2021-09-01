@@ -2,23 +2,25 @@
 
 #include <Common/Arena.h>
 #include <common/likely.h>
+
+#include <cstdlib>
+#include <ext/bit_cast.h>
 #include <ext/range.h>
 #include <ext/size.h>
-#include <ext/bit_cast.h>
-#include <cstdlib>
 #include <memory>
 
 
 namespace DB
 {
-
-
 /** Can allocate memory objects of fixed size with deletion support.
  *    For small `object_size`s allocated no less than getMinAllocationSize() bytes. */
 class SmallObjectPool
 {
 private:
-    struct Block { Block * next; };
+    struct Block
+    {
+        Block * next;
+    };
     static constexpr auto getMinAllocationSize() { return sizeof(Block); }
 
     const size_t object_size;
@@ -27,10 +29,12 @@ private:
 
 public:
     SmallObjectPool(
-        const size_t object_size_, const size_t initial_size = 4096, const size_t growth_factor = 2,
+        const size_t object_size_,
+        const size_t initial_size = 4096,
+        const size_t growth_factor = 2,
         const size_t linear_growth_threshold = 128 * 1024 * 1024)
-        : object_size{std::max(object_size_, getMinAllocationSize())},
-          pool{initial_size, growth_factor, linear_growth_threshold}
+        : object_size{std::max(object_size_, getMinAllocationSize())}
+        , pool{initial_size, growth_factor, linear_growth_threshold}
     {
         if (pool.size() < object_size)
             return;
@@ -40,7 +44,7 @@ public:
 
         for (const auto i : ext::range(0, num_objects - 1))
         {
-            (void) i;
+            (void)i;
             head->next = ext::bit_cast<Block *>(ext::bit_cast<char *>(head) + object_size);
             head = head->next;
         }
@@ -79,8 +83,7 @@ public:
     {
         return pool.size();
     }
-
 };
 
 
-}
+} // namespace DB

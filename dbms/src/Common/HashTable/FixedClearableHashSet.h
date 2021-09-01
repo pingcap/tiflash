@@ -14,7 +14,9 @@ struct FixedClearableHashTableCell
     UInt32 version;
 
     FixedClearableHashTableCell() {}
-    FixedClearableHashTableCell(const Key &, const State & state) : version(state.version) {}
+    FixedClearableHashTableCell(const Key &, const State & state)
+        : version(state.version)
+    {}
 
     const VoidKey getKey() const { return {}; }
     VoidMapped getMapped() const { return {}; }
