@@ -4,11 +4,11 @@
 
 namespace DB
 {
-    namespace ErrorCodes
-    {
-        extern const int NO_AVAILABLE_DATA;
-    }
+namespace ErrorCodes
+{
+extern const int NO_AVAILABLE_DATA;
 }
+} // namespace DB
 
 template <typename Key, typename TState = HashTableNoState>
 struct FixedHashTableCell
@@ -20,7 +20,9 @@ struct FixedHashTableCell
     bool full;
 
     FixedHashTableCell() {} //-V730
-    FixedHashTableCell(const Key &, const State &) : full(true) {}
+    FixedHashTableCell(const Key &, const State &)
+        : full(true)
+    {}
 
     const VoidKey getKey() const { return {}; }
     VoidMapped getMapped() const { return {}; }
@@ -105,7 +107,10 @@ struct FixedHashTableCalculatedSize
   *  TwoLevelHashSet(Map) to contain different type of sets(maps).
   */
 template <typename Key, typename Cell, typename Size, typename Allocator>
-class FixedHashTable : private boost::noncopyable, protected Allocator, protected Cell::State, protected Size
+class FixedHashTable : private boost::noncopyable
+    , protected Allocator
+    , protected Cell::State
+    , protected Size
 {
     static constexpr size_t NUM_CELLS = 1ULL << (sizeof(Key) * 8);
 
@@ -150,7 +155,9 @@ protected:
 
     public:
         iterator_base() {}
-        iterator_base(Container * container_, cell_type * ptr_) : container(container_), ptr(ptr_)
+        iterator_base(Container * container_, cell_type * ptr_)
+            : container(container_)
+            , ptr(ptr_)
         {
             cell.update(ptr - container->buf, ptr);
         }
@@ -176,7 +183,7 @@ protected:
                 cell.update(ptr - container->buf, ptr);
             return cell;
         }
-        auto * operator-> ()
+        auto * operator->()
         {
             if (cell.key != ptr - container->buf)
                 cell.update(ptr - container->buf, ptr);
@@ -204,7 +211,11 @@ public:
 
     FixedHashTable() { alloc(); }
 
-    FixedHashTable(FixedHashTable && rhs) : buf(nullptr) { *this = std::move(rhs); }
+    FixedHashTable(FixedHashTable && rhs)
+        : buf(nullptr)
+    {
+        *this = std::move(rhs);
+    }
 
     ~FixedHashTable()
     {
@@ -229,7 +240,9 @@ public:
     class Reader final : private Cell::State
     {
     public:
-        Reader(DB::ReadBuffer & in_) : in(in_) {}
+        Reader(DB::ReadBuffer & in_)
+            : in(in_)
+        {}
 
         Reader(const Reader &) = delete;
         Reader & operator=(const Reader &) = delete;
@@ -491,6 +504,9 @@ public:
     Cell * data() { return buf; }
 
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-    size_t getCollisions() const { return 0; }
+    size_t getCollisions() const
+    {
+        return 0;
+    }
 #endif
 };

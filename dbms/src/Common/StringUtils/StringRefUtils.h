@@ -27,8 +27,14 @@ inline bool endsWithCI(const StringRef & view, const char * prefix)
 
 // n - number of characters to remove from the start of the view,
 //     The behavior is undefined if `n > view.size`
-inline StringRef removePrefix(const StringRef & view, size_t n) { return StringRef{view.data + n, view.size - n}; }
+inline StringRef removePrefix(const StringRef & view, size_t n)
+{
+    return StringRef{view.data + n, view.size - n};
+}
 
 // n - number of characters to remove from the end of the view,
 //     The behavior is undefined if `n > view.size`
-inline StringRef removeSuffix(const StringRef & view, size_t n) { return StringRef{view.data, view.size - n}; }
+inline StringRef removeSuffix(const StringRef & view, size_t n)
+{
+    return StringRef{view.data, view.size - n};
+}

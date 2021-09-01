@@ -1,20 +1,20 @@
 #pragma once
 
-#include <type_traits>
-#include <typeinfo>
-#include <typeindex>
-#include <string>
-
 #include <Common/Exception.h>
 #include <common/demangle.h>
+
+#include <string>
+#include <type_traits>
+#include <typeindex>
+#include <typeinfo>
 
 
 namespace DB
 {
-    namespace ErrorCodes
-    {
-        extern const int BAD_CAST;
-    }
+namespace ErrorCodes
+{
+extern const int BAD_CAST;
+}
 } // namespace DB
 
 /** Perform static_cast in release build.
@@ -44,7 +44,7 @@ To assert_cast(From && from)
     }
 
     throw DB::Exception("Bad cast from type " + demangle(typeid(from).name()) + " to " + demangle(typeid(To).name()),
-        DB::ErrorCodes::BAD_CAST);
+                        DB::ErrorCodes::BAD_CAST);
 #else
     return static_cast<To>(from);
 #endif
