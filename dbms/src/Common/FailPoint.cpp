@@ -61,6 +61,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_set_page_data_compact_batch)                     \
     M(force_set_dtfile_exist_when_acquire_id)
 
+
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_after_learner_read)                   \
     M(hang_in_execution)                          \
@@ -74,7 +75,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_when_reading_from_dt_stream)     \
     M(pause_when_writing_to_dt_store)        \
     M(pause_when_ingesting_to_dt_store)      \
-    M(pause_when_altering_dt_store)
+    M(pause_when_altering_dt_store)          \
+    M(pause_after_copr_streams_acquired)
 
 namespace FailPoints
 {
