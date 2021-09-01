@@ -16,6 +16,7 @@ namespace FailPoints
 extern const char region_exception_after_read_from_storage_some_error[];
 extern const char region_exception_after_read_from_storage_all_error[];
 extern const char pause_after_learner_read[];
+extern const char force_remote_read_for_batch_cop[];
 } // namespace FailPoints
 
 namespace
@@ -39,7 +40,7 @@ RegionException::RegionReadStatus GetRegionReadStatus(
 }
 
 std::tuple<std::optional<RegionRetryList>, RegionException::RegionReadStatus>
-MakeRegionQueryInfos(const RegionInfoMap & dag_region_infos, const std::unordered_set<RegionID> & region_force_retry, TMTContext & tmt, MvccQueryInfo & mvcc_info, TableID table_id)
+MakeRegionQueryInfos(const RegionInfoMap & dag_region_infos, const std::unordered_set<RegionID> & region_force_retry, TMTContext & tmt, MvccQueryInfo & mvcc_info, TableID table_id, bool batch_cop)
 {
     mvcc_info.regions_query_info.clear();
     RegionRetryList region_need_retry;
@@ -59,8 +60,12 @@ MakeRegionQueryInfos(const RegionInfoMap & dag_region_infos, const std::unordere
             continue;
         }
         ImutRegionRangePtr region_range{nullptr};
-        if (auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id), region_range);
-            status != RegionException::RegionReadStatus::OK)
+        auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id), region_range);
+        fiu_do_on(FailPoints::force_remote_read_for_batch_cop, {
+            if (batch_cop)
+                status = RegionException::RegionReadStatus::NOT_FOUND;
+        });
+        if (status != RegionException::RegionReadStatus::OK)
         {
             region_need_retry.emplace_back(r);
             status_res = status;
@@ -77,10 +82,11 @@ MakeRegionQueryInfos(const RegionInfoMap & dag_region_infos, const std::unordere
                 TableID table_id_in_range = -1;
                 if (!computeMappedTableID(*p.first, table_id_in_range) || table_id_in_range != table_id)
                 {
-                    throw TiFlashException("Income key ranges is illegal for region: " + std::to_string(r.region_id)
-                                               + ", table id in key range is " + std::to_string(table_id_in_range) + ", table id in region is "
-                                               + std::to_string(table_id),
-                                           Errors::Coprocessor::BadRequest);
+                    throw TiFlashException(
+                        "Income key ranges is illegal for region: " + std::to_string(r.region_id)
+                            + ", table id in key range is " + std::to_string(table_id_in_range) + ", table id in region is "
+                            + std::to_string(table_id),
+                        Errors::Coprocessor::BadRequest);
                 }
                 if (p.first->compare(*info.range_in_table.first) < 0 || p.second->compare(*info.range_in_table.second) > 0)
                     throw TiFlashException(
@@ -159,7 +165,8 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
         {},
         tmt,
         *mvcc_query_info,
-        table_id);
+        table_id,
+        false);
 
     if (info_retry)
         throw RegionException({info_retry->begin()->get().region_id}, status);
@@ -183,7 +190,8 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
                 force_retry,
                 tmt,
                 *mvcc_query_info,
-                table_id);
+                table_id,
+                true);
             UNUSED(status);
 
             if (retry)
@@ -500,10 +508,20 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
 
     DAGSchema schema;
     tipb::DAGRequest dag_req;
+    auto * executor = dag_req.mutable_root_executor();
+    if (query_block.selection != nullptr)
+    {
+        executor->set_tp(tipb::ExecType::TypeSelection);
+        executor->set_executor_id(query_block.selection->executor_id());
+        auto * selection = executor->mutable_selection();
+        for (auto & condition : query_block.selection->selection().conditions())
+            *selection->add_conditions() = condition;
+        executor = selection->mutable_child();
+    }
 
     {
         const auto & table_info = storage->getTableInfo();
-        tipb::Executor * ts_exec = dag_req.add_executors();
+        tipb::Executor * ts_exec = executor;
         ts_exec->set_tp(tipb::ExecType::TypeTableScan);
         ts_exec->set_executor_id(query_block.source->executor_id());
         *(ts_exec->mutable_tbl_scan()) = table_scan;
@@ -529,10 +547,15 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
             dag_req.add_output_offsets(i);
         }
         dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
+        dag_req.set_force_encode_type(true);
     }
     /// do not collect execution summaries because in this case because the execution summaries
     /// will be collected by CoprocessorBlockInputStream
     dag_req.set_collect_execution_summaries(false);
+    if (dag.getDAGRequest().has_time_zone_name() && !dag.getDAGRequest().time_zone_name().empty())
+        dag_req.set_time_zone_name(dag.getDAGRequest().time_zone_name());
+    if (dag.getDAGRequest().has_time_zone_offset())
+        dag_req.set_time_zone_offset(dag.getDAGRequest().time_zone_offset());
     return std::make_tuple(dag_req, schema);
 }
 
