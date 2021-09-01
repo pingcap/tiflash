@@ -1885,7 +1885,7 @@ using FunctionToInt32 = FunctionConvert<DataTypeInt32, NameToInt32, ToIntMonoton
 using FunctionToInt64 = FunctionConvert<DataTypeInt64, NameToInt64, ToIntMonotonicity<Int64>>;
 using FunctionToFloat32 = FunctionConvert<DataTypeFloat32, NameToFloat32, PositiveMonotonicity>;
 using FunctionToFloat64 = FunctionConvert<DataTypeFloat64, NameToFloat64, PositiveMonotonicity>;
-using FunctionToDate = FunctionConvert<DataTypeDate, NameToDate, ToIntMonotonicity<UInt16>>;
+//using FunctionToDate = FunctionConvert<DataTypeDate, NameToDate, ToIntMonotonicity<UInt16>>;
 using FunctionToDateTime = FunctionConvert<DataTypeDateTime, NameToDateTime, ToIntMonotonicity<UInt32>>;
 using FunctionToMyDate = FunctionConvert<DataTypeMyDate, NameToMyDate, ToIntMonotonicity<UInt64>>;
 using FunctionToMyDateTime = FunctionConvert<DataTypeMyDateTime, NameToMyDateTime, ToIntMonotonicity<UInt64>>;
@@ -1906,7 +1906,7 @@ template <> struct FunctionTo<DataTypeInt32> { using Type = FunctionToInt32; };
 template <> struct FunctionTo<DataTypeInt64> { using Type = FunctionToInt64; };
 template <> struct FunctionTo<DataTypeFloat32> { using Type = FunctionToFloat32; };
 template <> struct FunctionTo<DataTypeFloat64> { using Type = FunctionToFloat64; };
-template <> struct FunctionTo<DataTypeDate> { using Type = FunctionToDate; };
+//template <> struct FunctionTo<DataTypeDate> { using Type = FunctionToDate; };
 template <> struct FunctionTo<DataTypeDateTime> { using Type = FunctionToDateTime; };
 template <> struct FunctionTo<DataTypeMyDate> { using Type = FunctionToMyDate; };
 template <> struct FunctionTo<DataTypeMyDateTime> { using Type = FunctionToMyDateTime; };
@@ -2461,8 +2461,8 @@ private:
             return createDecimalWrapper<Decimal128>(decimal_type->getPrec(), decimal_type->getScale());
         else if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal256>(to_type.get()))
             return createDecimalWrapper<Decimal256>(decimal_type->getPrec(), decimal_type->getScale());
-        else if (const auto to_actual_type = checkAndGetDataType<DataTypeDate>(to_type.get()))
-            return createWrapper(from_type, to_actual_type);
+//        else if (const auto to_actual_type = checkAndGetDataType<DataTypeDate>(to_type.get()))
+//            return createWrapper(from_type, to_actual_type);
         else if (const auto to_actual_type = checkAndGetDataType<DataTypeMyDate>(to_type.get()))
             return createWrapper(from_type, to_actual_type);
         else if (const auto to_actual_type = checkAndGetDataType<DataTypeDateTime>(to_type.get()))
@@ -2557,8 +2557,8 @@ private:
             return monotonicityForType(type);
         else if (const auto type = checkAndGetDataType<DataTypeFloat64>(to_type))
             return monotonicityForType(type);
-        else if (const auto type = checkAndGetDataType<DataTypeDate>(to_type))
-            return monotonicityForType(type);
+//        else if (const auto type = checkAndGetDataType<DataTypeDate>(to_type))
+//            return monotonicityForType(type);
         else if (const auto type = checkAndGetDataType<DataTypeDateTime>(to_type))
             return monotonicityForType(type);
         else if (const auto type = checkAndGetDataType<DataTypeString>(to_type))
