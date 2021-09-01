@@ -144,6 +144,8 @@ public:
 
     ReadIndexResult learnerRead(UInt64 start_ts);
 
+    bool checkIndex(UInt64 index) const;
+
     // Return <WaitIndexResult, time cost(seconds)> for wait-index.
     std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const TMTContext & tmt);
 

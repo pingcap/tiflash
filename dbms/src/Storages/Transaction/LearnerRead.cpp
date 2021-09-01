@@ -177,7 +177,7 @@ LearnerReadSnapshot doLearnerRead(
     UnavailableRegions unavailable_regions;
     const auto batch_wait_index = [&](const size_t region_begin_idx) -> void {
         Stopwatch batch_wait_data_watch;
-        Stopwatch batch_wait_index_watch;
+        Stopwatch watch;
 
         const size_t region_end_idx = std::min(region_begin_idx + batch_size, num_regions);
         const size_t ori_batch_region_size = region_end_idx - region_begin_idx;
@@ -244,19 +244,20 @@ LearnerReadSnapshot doLearnerRead(
         }();
 
         {
-            GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(batch_wait_index_watch.elapsedSeconds());
+            auto read_index_elapsed_ms = watch.elapsedMilliseconds();
+            GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(read_index_elapsed_ms / 1000.0);
             const size_t cached_size = ori_batch_region_size - batch_read_index_req.size();
             LOG_DEBUG(
                 log,
                 "Batch read index, original size " << ori_batch_region_size << ", send & get " << batch_read_index_req.size()
-                                                   << " message, cost " << batch_wait_index_watch.elapsedMilliseconds() << "ms";
+                                                   << " message, cost " << read_index_elapsed_ms << "ms";
                 do {
                     if (cached_size)
                     {
                         oss_internal_rare << ", " << std::to_string(cached_size) << " in cache";
                     }
                 } while (0));
-            batch_wait_index_watch.restart();
+            watch.restart(); // restart to count the elapsed of wait index
         }
 
         // if size of batch_read_index_result is not equal with batch_read_index_req, there must be region_error/lock, find and return directly.
@@ -281,6 +282,7 @@ LearnerReadSnapshot doLearnerRead(
             }
         }
 
+        const auto wait_index_timeout_ms = tmt.waitIndexTimeout();
         for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < region_end_idx; ++region_idx, ++read_index_res_idx)
         {
             auto & region_to_query = regions_info[region_idx];
@@ -292,19 +294,38 @@ LearnerReadSnapshot doLearnerRead(
             auto & region = regions_snapshot.find(region_to_query.region_id)->second;
 
             {
-                auto [wait_res, time_cost] = region->waitIndex(batch_read_index_result.find(region_to_query.region_id)->second.read_index(), tmt);
-                // If server is being terminated / time-out, retry region to other store.
-                if (wait_res != WaitIndexResult::Finished)
+                auto total_wait_index_elapsed_ms = watch.elapsedMilliseconds();
+                auto index_to_wait = batch_read_index_result.find(region_to_query.region_id)->second.read_index();
+                if (wait_index_timeout_ms == 0 || total_wait_index_elapsed_ms <= wait_index_timeout_ms)
                 {
-                    unavailable_regions.add(region_to_query.region_id, RegionException::RegionReadStatus::NOT_FOUND);
-                    continue;
+                    // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
+                    // a specify Region.
+                    auto [wait_res, time_cost] = region->waitIndex(index_to_wait, tmt);
+                    if (wait_res != WaitIndexResult::Finished)
+                    {
+                        // If server is being terminated / time-out, retry region to other store.
+                        unavailable_regions.add(region_to_query.region_id, RegionException::RegionReadStatus::NOT_FOUND);
+                        continue;
+                    }
+                    if (time_cost > 0)
+                    {
+                        // Only record information if wait-index does happen
+                        GET_METRIC(tiflash_raft_wait_index_duration_seconds).Observe(time_cost);
+                    }
                 }
-                if (time_cost > 0)
+                else
                 {
-                    // Only record information if wait-index does happen
-                    GET_METRIC(tiflash_raft_wait_index_duration_seconds).Observe(time_cost);
+                    // Wait index timeout is enabled && timeout happens, simply check the Region index instead of wait index
+                    // for Regions one by one.
+                    if (!region->checkIndex(index_to_wait))
+                    {
+                        unavailable_regions.add(region_to_query.region_id, RegionException::RegionReadStatus::NOT_FOUND);
+                        continue;
+                    }
                 }
             }
+
+            // Try to resolve locks and flush data into storage layer
             if (mvcc_query_info->resolve_locks)
             {
                 auto res = RegionTable::resolveLocksAndWriteRegion(
@@ -334,10 +355,11 @@ LearnerReadSnapshot doLearnerRead(
                            res);
             }
         }
-        GET_METRIC(tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds());
+        GET_METRIC(tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds()); // For DBaaS SLI
+        auto wait_index_elapsed_ms = watch.elapsedMilliseconds();
         LOG_DEBUG(log,
                   "Finish wait index | resolve locks | check memory cache for " << batch_read_index_req.size() << " regions, cost "
-                                                                                << batch_wait_index_watch.elapsedMilliseconds() << "ms");
+                                                                                << wait_index_elapsed_ms << "ms");
     };
 
     auto start_time = Clock::now();

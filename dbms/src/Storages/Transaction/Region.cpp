@@ -553,6 +553,11 @@ ReadIndexResult Region::learnerRead(UInt64 start_ts)
     return {};
 }
 
+bool Region::checkIndex(UInt64 index) const
+{
+    return meta.checkIndex(index);
+}
+
 std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const TMTContext & tmt)
 {
     if (proxy_helper != nullptr)
